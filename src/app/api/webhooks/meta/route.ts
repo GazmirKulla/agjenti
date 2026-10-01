@@ -1,0 +1,56 @@
+import { after, NextResponse } from "next/server";
+import { handleInboundMessage } from "@/lib/conversations/handle-inbound";
+import {
+	getMetaVerifyToken,
+	handleMetaVerification,
+	verifyMetaSignatureAny,
+} from "@/lib/instagram/meta-webhook";
+import {
+	type InstagramWebhookPayload,
+	parseInstagramWebhookPayload,
+} from "@/lib/instagram/parse-webhook";
+
+export async function GET(request: Request) {
+	const result = handleMetaVerification(new URL(request.url), getMetaVerifyToken());
+	if (result.ok) {
+		return new NextResponse(result.challenge, {
+			status: 200,
+			headers: { "Content-Type": "text/plain" },
+		});
+	}
+	return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
+
+export async function POST(request: Request) {
+	try {
+		const rawBody = await request.text();
+		const signature = request.headers.get("x-hub-signature-256");
+		const verified = verifyMetaSignatureAny(rawBody, signature);
+		if (!verified.ok) {
+			return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+		}
+
+		let payload: InstagramWebhookPayload;
+		try {
+			payload = JSON.parse(rawBody) as InstagramWebhookPayload;
+		} catch {
+			return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+		}
+		if (payload.object !== "instagram") {
+			return NextResponse.json({ received: true, ignored: true });
+		}
+
+		const { messages } = parseInstagramWebhookPayload(payload);
+		after(async () => {
+			try {
+				await Promise.all(messages.map((message) => handleInboundMessage(message)));
+			} catch (err) {
+				console.error("[meta webhook] processing error:", err);
+			}
+		});
+		return NextResponse.json({ received: true });
+	} catch (err) {
+		console.error("[meta webhook]", err);
+		return NextResponse.json({ received: true, error: true });
+	}
+}

@@ -1,0 +1,21 @@
+{
+	"object": "instagram",
+	"entry": [
+		{
+			"id": "17841400008460056",
+			"time": 1758291000000,
+			"messaging": [
+				{
+					"sender": { "id": "1089304595302911" },
+					"recipient": { "id": "17841400008460056" },
+					"timestamp": 1758290999000,
+					"postback": {
+						"mid": "aWdfZG1fMTpwb3N0YmFjaw==",
+						"title": "Sa kushton dërgesa?",
+						"payload": "ICEBREAKER_SHIPPING_COST"
+					}
+				}
+			]
+		}
+	]
+}
