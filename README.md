@@ -12,11 +12,16 @@ Next.js 15, React 19, TypeScript, Tailwind, Supabase, Vitest. Deploy: Vercel, do
 2. Ekzekuto `supabase/migrations/20261001120000_init.sql`.
 3. Kopjo `.env.example` te `.env.local`.
 4. Shto rreshtin tënd te `platform_admins` pas regjistrimit të parë.
-5. `yarn install && yarn dev`.
+5. `yarn install && yarn dev` (gjithmonë porti `3003`).
 
 ## Env
 
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_APP_URL` (`http://localhost:3003` lokal, `https://agjenti.app` në prod)
+
+Auth (Supabase → Authentication → URL Configuration):
+- **Site URL** = `https://agjenti.app` (jo localhost)
+- **Redirect URLs** = `https://agjenti.app/**` dhe `http://localhost:3003/**`
 - `META_APP_ID`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`
 - `INSTAGRAM_OAUTH_REDIRECT_URI` = `https://agjenti.app/api/instagram/oauth/callback`
 - `TOKEN_ENCRYPTION_KEY` (64 hex ose frazë e gjatë)

@@ -4,9 +4,9 @@
   "private": true,
   "packageManager": "yarn@1.22.22",
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack --port 3003",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --port 3003",
     "lint": "eslint",
     "test": "vitest run"
   },
