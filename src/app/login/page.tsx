@@ -214,6 +214,8 @@ function LoginForm() {
               : "Ke llogari? Hyr"}
           </button>
           <p className="auth-footnote">
+            <Link href="/privacy">Politika e privatësisë</Link>
+            <br />
             Qasja në panel përcaktohet nga roli dhe biznesi i lidhur me
             llogarinë tënde.
           </p>

@@ -41,7 +41,12 @@ Inbox-i fillon bosh. Historia e Zana-s mbetet arkiv.
 
 ## Panelet
 
-- `/app`: zgjedhja e biznesit dhe hyrja në panelin e adminit.
+- `/auth/continue`: ridrejton adminin te `/admin` dhe klientin te biznesi ku ka qasje. `/app` është hequr.
+- `/account`: gjendja për llogaritë pa biznes të caktuar.
+- `/login`: hyrje, regjistrim dhe kërkesë për rikuperimin e fjalëkalimit.
+- `/auth/reset-password`: ndryshimi i fjalëkalimit pas lidhjes së rikuperimit.
+
+Në Supabase Auth, Redirect URLs duhet të lejojnë URL-në e aplikacionit me `/auth/callback` (përfshirë query-n e rikuperimit). Dërgimi i email-eve varet nga konfigurimi i email/SMTP në Supabase.
 - `/admin`: përmbledhje e platformës; `/admin/businesses` për bizneset dhe anëtarët; `/admin/conversations` për bisedat dhe lidhjet Instagram.
 - `/b/[slug]`: dashboard i biznesit; nënfaqet për Inbox, produkte, porosi, klientë, agjentë, njohuri, workflow, Instagram dhe cilësime.
 

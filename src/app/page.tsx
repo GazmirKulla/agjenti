@@ -469,6 +469,7 @@ export default function HomePage() {
           <div>
             <a href="#si-funksionon">Si funksionon</a>
             <a href="#pyetje">Pyetje të shpeshta</a>
+            <Link href="/privacy">Privatësia</Link>
             <Link href="/login">Hyr në platformë</Link>
           </div>
         </footer>

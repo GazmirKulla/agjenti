@@ -28,5 +28,5 @@ export async function POST(
     .from("instagram_connections")
     .update({ status: "disconnected", updated_at: new Date().toISOString() })
     .eq("business_id", id);
-  return NextResponse.redirect(new URL(`/app`, _request.url));
+  return NextResponse.redirect(new URL(`/auth/continue`, _request.url));
 }
