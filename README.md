@@ -22,7 +22,8 @@ Next.js 15, React 19, TypeScript, Tailwind, Supabase, Vitest. Deploy: Vercel, do
 Auth (Supabase → Authentication → URL Configuration):
 - **Site URL** = `https://agjenti.app` (jo localhost)
 - **Redirect URLs** = `https://agjenti.app/**` dhe `http://localhost:3003/**`
-- `META_APP_ID`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`
+- `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` (Instagram App ID/Secret nga Meta → Instagram, jo Facebook App ID)
+- `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`
 - `INSTAGRAM_OAUTH_REDIRECT_URI` = `https://agjenti.app/api/instagram/oauth/callback`
 - `TOKEN_ENCRYPTION_KEY` (64 hex ose frazë e gjatë)
 - `OPENAI_API_KEY`, `ZANA_AGENT_MODEL` (parazgjedhje `gpt-5.6-luna`)

@@ -7,7 +7,11 @@ type OAuthState = {
 };
 
 function secret(): string {
-	return process.env.META_APP_SECRET?.trim() || process.env.TOKEN_ENCRYPTION_KEY?.trim() || "";
+	return (
+		process.env.INSTAGRAM_APP_SECRET?.trim() ||
+		process.env.TOKEN_ENCRYPTION_KEY?.trim() ||
+		""
+	);
 }
 
 export function signOAuthState(payload: Omit<OAuthState, "exp">, ttlMs = 10 * 60 * 1000): string {
@@ -35,10 +39,10 @@ export function verifyOAuthState(raw: string | null): OAuthState | null {
 }
 
 export function instagramAuthorizeUrl(state: string): string {
-	const clientId = process.env.META_APP_ID?.trim();
+	const clientId = process.env.INSTAGRAM_APP_ID?.trim();
 	const redirect = process.env.INSTAGRAM_OAUTH_REDIRECT_URI?.trim();
 	if (!clientId || !redirect) {
-		throw new Error("Mungon META_APP_ID ose INSTAGRAM_OAUTH_REDIRECT_URI.");
+		throw new Error("Mungon INSTAGRAM_APP_ID ose INSTAGRAM_OAUTH_REDIRECT_URI.");
 	}
 	const params = new URLSearchParams({
 		client_id: clientId,
@@ -60,11 +64,11 @@ export async function exchangeInstagramCode(code: string): Promise<{
 	expiresAt: Date | null;
 	username: string | null;
 }> {
-	const clientId = process.env.META_APP_ID?.trim();
-	const clientSecret = process.env.INSTAGRAM_APP_SECRET?.trim() || process.env.META_APP_SECRET?.trim();
+	const clientId = process.env.INSTAGRAM_APP_ID?.trim();
+	const clientSecret = process.env.INSTAGRAM_APP_SECRET?.trim();
 	const redirect = process.env.INSTAGRAM_OAUTH_REDIRECT_URI?.trim();
 	if (!clientId || !clientSecret || !redirect) {
-		throw new Error("Mungojnë kredencialet e Instagram OAuth.");
+		throw new Error("Mungojnë INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET ose INSTAGRAM_OAUTH_REDIRECT_URI.");
 	}
 
 	const shortRes = await fetch("https://api.instagram.com/oauth/access_token", {
