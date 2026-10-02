@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/dashboard/action-form";
 import { PageHeading, EmptyState } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
@@ -30,9 +31,9 @@ export default async function WorkflowsPage({
   async function seedZana() {
     "use server";
     const session = await getSessionUser();
-    if (!session) return;
+    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
-    if (!acc) return;
+    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
     const businessId = acc.business.id;
     const supabase = createServiceSupabase();
     async function seed(
@@ -45,24 +46,31 @@ export default async function WorkflowsPage({
         .from("workflows")
         .insert({ business_id: businessId, name })
         .select("id")
-        .single();
-      if (!wf) return;
-      await supabase.from("workflow_steps").insert(
-        steps.map((s, i) => ({
+        .single()
+        .throwOnError();
+      if (!wf) throw new Error("Workflow nuk u krijua.");
+      await supabase
+        .from("workflow_steps")
+        .insert(
+          steps.map((s, i) => ({
+            workflow_id: wf.id,
+            key: s.key,
+            position: i,
+            kind: s.kind,
+            required: true,
+            config: { label: s.label },
+          })),
+        )
+        .throwOnError();
+      await supabase
+        .from("product_types")
+        .insert({
+          business_id: businessId,
+          name: typeName,
           workflow_id: wf.id,
-          key: s.key,
-          position: i,
-          kind: s.kind,
-          required: true,
-          config: { label: s.label },
-        })),
-      );
-      await supabase.from("product_types").insert({
-        business_id: businessId,
-        name: typeName,
-        workflow_id: wf.id,
-        external_key: externalKey,
-      });
+          external_key: externalKey,
+        })
+        .throwOnError();
     }
     await seed("Puzzle", PUZZLE_STEPS, "Puzzle", "puzzle");
     await seed("Bluzë", APPAREL_STEPS, "Bluzë", "tshirt");
@@ -72,32 +80,39 @@ export default async function WorkflowsPage({
   async function addSimple(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!session) return;
+    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
-    if (!acc) return;
+    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
     const name = String(formData.get("name") ?? "").trim() || "E thjeshtë";
     const supabase = createServiceSupabase();
     const { data: wf } = await supabase
       .from("workflows")
       .insert({ business_id: acc.business.id, name })
       .select("id")
-      .single();
-    if (!wf) return;
-    await supabase.from("workflow_steps").insert(
-      SIMPLE_STEPS.map((s, i) => ({
+      .single()
+      .throwOnError();
+    if (!wf) throw new Error("Workflow nuk u krijua.");
+    await supabase
+      .from("workflow_steps")
+      .insert(
+        SIMPLE_STEPS.map((s, i) => ({
+          workflow_id: wf.id,
+          key: s.key,
+          position: i,
+          kind: s.kind,
+          required: true,
+          config: { label: s.label },
+        })),
+      )
+      .throwOnError();
+    await supabase
+      .from("product_types")
+      .insert({
+        business_id: acc.business.id,
+        name,
         workflow_id: wf.id,
-        key: s.key,
-        position: i,
-        kind: s.kind,
-        required: true,
-        config: { label: s.label },
-      })),
-    );
-    await supabase.from("product_types").insert({
-      business_id: acc.business.id,
-      name,
-      workflow_id: wf.id,
-    });
+      })
+      .throwOnError();
     revalidatePath(`/b/${slug}/workflows`);
   }
 
@@ -160,7 +175,10 @@ export default async function WorkflowsPage({
           )}
         </div>
         <aside className="space-y-5">
-          <form action={addSimple} className="panel section-pad grid gap-4">
+          <ActionForm
+            action={addSimple}
+            className="panel section-pad grid gap-4"
+          >
             <h2 className="text-lg">Shto workflow të thjeshtë</h2>
             <p className="muted-copy">
               Krijon një lloj produkti dhe hapat bazë për mbledhjen e porosisë.
@@ -177,9 +195,9 @@ export default async function WorkflowsPage({
             <button className="btn btn-primary" type="submit">
               Krijo workflow
             </button>
-          </form>
+          </ActionForm>
           {access.business.catalog_source === "zana" && (
-            <form action={seedZana} className="panel section-pad">
+            <ActionForm action={seedZana} className="panel section-pad">
               <h2 className="text-lg">Workflow-t e Zana</h2>
               <p className="muted-copy mb-5">
                 Hapat për puzzle dhe bluza të personalizuara.
@@ -187,7 +205,7 @@ export default async function WorkflowsPage({
               <button className="btn btn-ghost" type="submit">
                 Importo workflow-t
               </button>
-            </form>
+            </ActionForm>
           )}
         </aside>
       </div>

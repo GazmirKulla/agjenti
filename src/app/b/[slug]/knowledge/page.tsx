@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/dashboard/action-form";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
@@ -26,16 +27,20 @@ export default async function KnowledgePage({
   async function importZanaFaq() {
     "use server";
     const session = await getSessionUser();
-    if (!session) return;
+    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
-    if (!acc) return;
+    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
     const base = process.env.ZANA_API_BASE_URL?.replace(/\/$/, "");
     const secret = process.env.ZANA_AGJENTI_SECRET?.trim();
-    if (!base || !secret) return;
+    if (acc.business.catalog_source !== "zana")
+      return { error: "Ky biznes nuk është i lidhur me Zana." };
+    if (!base || !secret)
+      return { error: "Lidhja me Zana nuk është konfiguruar." };
     const res = await fetch(`${base}/api/integrations/agjenti/knowledge`, {
       headers: { Authorization: `Bearer ${secret}` },
     });
-    if (!res.ok) return;
+    if (!res.ok)
+      return { error: "Njohuritë nuk u morën nga Zana. Provo përsëri." };
     const json = (await res.json()) as {
       entries: Array<{
         question: string;
@@ -46,13 +51,16 @@ export default async function KnowledgePage({
     };
     const db = createServiceSupabase();
     for (const entry of json.entries ?? []) {
-      await db.from("knowledge_entries").insert({
-        business_id: acc.business.id,
-        title: entry.question,
-        body: entry.answer,
-        intent_key: entry.intent_key,
-        sort_order: entry.sort_order ?? 0,
-      });
+      await db
+        .from("knowledge_entries")
+        .insert({
+          business_id: acc.business.id,
+          title: entry.question,
+          body: entry.answer,
+          intent_key: entry.intent_key,
+          sort_order: entry.sort_order ?? 0,
+        })
+        .throwOnError();
     }
     revalidatePath(`/b/${slug}/knowledge`);
   }
@@ -60,9 +68,14 @@ export default async function KnowledgePage({
   async function add(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!session) return;
+    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
-    if (!acc) return;
+    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
+    if (
+      !String(formData.get("title") || "").trim() ||
+      !String(formData.get("body") || "").trim()
+    )
+      return { error: "Vendos titullin dhe përmbajtjen e njohurisë." };
     await createServiceSupabase()
       .from("knowledge_entries")
       .insert({
@@ -70,7 +83,8 @@ export default async function KnowledgePage({
         title: String(formData.get("title") ?? "").trim(),
         body: String(formData.get("body") ?? "").trim(),
         intent_key: String(formData.get("intent_key") ?? "").trim() || null,
-      });
+      })
+      .throwOnError();
     revalidatePath(`/b/${slug}/knowledge`);
   }
 
@@ -82,11 +96,11 @@ export default async function KnowledgePage({
         description="Njohuritë e biznesit që Agjenti AI përdor për t’iu përgjigjur klientëve."
       >
         {access.business.catalog_source === "zana" && (
-          <form action={importZanaFaq}>
+          <ActionForm action={importZanaFaq}>
             <button className="btn btn-ghost" type="submit">
               Kopjo FAQ nga Zana
             </button>
-          </form>
+          </ActionForm>
         )}
       </PageHeading>
       <RecordBrowser
@@ -94,7 +108,7 @@ export default async function KnowledgePage({
         placeholder="Kërko në njohuri…"
         createLabel="Shto njohuri"
         createForm={
-          <form action={add} className="grid gap-4">
+          <ActionForm action={add} className="grid gap-4">
             <label className="form-label">
               Titulli
               <input name="title" className="field" required />
@@ -110,7 +124,7 @@ export default async function KnowledgePage({
             <button className="btn btn-primary" type="submit">
               Shto njohurinë
             </button>
-          </form>
+          </ActionForm>
         }
         records={(entries ?? []).map((e) => ({
           id: e.id,

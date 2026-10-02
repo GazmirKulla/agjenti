@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/dashboard/action-form";
 import Link from "next/link";
 import { PageHeading } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
@@ -26,33 +27,49 @@ export default async function AgentsPage({
   async function save(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!session) return;
+    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
-    if (!acc) return;
+    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
     const supabase = createServiceSupabase();
     const id = String(formData.get("id") ?? "");
     const name = String(formData.get("name") ?? "Agjent");
     const instructions = String(formData.get("instructions") ?? "");
     const isActive = formData.get("is_active") === "on";
+    if (!name.trim() || !instructions.trim())
+      return { error: "Vendos emrin dhe udhëzimet e agjentit." };
+    if (id) {
+      const { data: existing } = await supabase
+        .from("ai_agents")
+        .select("id")
+        .eq("id", id)
+        .eq("business_id", acc.business.id)
+        .maybeSingle();
+      if (!existing) return { error: "Agjenti nuk u gjet në këtë biznes." };
+    }
     if (isActive) {
       await supabase
         .from("ai_agents")
         .update({ is_active: false })
-        .eq("business_id", acc.business.id);
+        .eq("business_id", acc.business.id)
+        .throwOnError();
     }
     if (id) {
       await supabase
         .from("ai_agents")
         .update({ name, instructions, is_active: isActive })
         .eq("id", id)
-        .eq("business_id", acc.business.id);
+        .eq("business_id", acc.business.id)
+        .throwOnError();
     } else {
-      await supabase.from("ai_agents").insert({
-        business_id: acc.business.id,
-        name,
-        instructions,
-        is_active: isActive,
-      });
+      await supabase
+        .from("ai_agents")
+        .insert({
+          business_id: acc.business.id,
+          name,
+          instructions,
+          is_active: isActive,
+        })
+        .throwOnError();
     }
     revalidatePath(`/b/${slug}/agents`);
   }
@@ -63,7 +80,7 @@ export default async function AgentsPage({
     instructions: string;
     is_active: boolean;
   }) => (
-    <form action={save} className="panel section-pad grid gap-5">
+    <ActionForm action={save} className="panel section-pad grid gap-5">
       <div className="section-title">
         <h2>{a ? a.name : "Agjent i ri"}</h2>
         <span className="icon-tile">
@@ -108,7 +125,7 @@ export default async function AgentsPage({
       <button className="btn btn-primary w-fit" type="submit">
         {a ? "Ruaj ndryshimet" : "Krijo agjentin"}
       </button>
-    </form>
+    </ActionForm>
   );
   return (
     <>

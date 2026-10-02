@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/dashboard/action-form";
 import { PageHeading } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
@@ -19,46 +20,59 @@ export default async function SettingsPage({
   async function save(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!session) return;
+    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
-    if (!acc) return;
-    await createServiceSupabase()
+    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
+    const catalogSource = String(
+      formData.get("catalog_source") ?? acc.business.catalog_source,
+    );
+    if (!["internal", "zana", "external"].includes(catalogSource))
+      return { error: "Burimi i katalogut nuk është i vlefshëm." };
+    const catalogUrl = String(formData.get("catalog_url") ?? "").trim();
+    const ordersUrl = String(formData.get("orders_url") ?? "").trim();
+    for (const value of [catalogUrl, ordersUrl]) {
+      if (!value) continue;
+      try {
+        const url = new URL(value);
+        if (!["http:", "https:"].includes(url.protocol))
+          return { error: "URL-të duhet të fillojnë me https:// ose http://." };
+      } catch {
+        return { error: "Vendos URL të vlefshme për katalogun dhe porositë." };
+      }
+    }
+    const db = createServiceSupabase();
+    await db
+      .from("integrations")
+      .upsert(
+        {
+          business_id: acc.business.id,
+          kind: catalogSource === "zana" ? "zana" : "http",
+          catalog_url: catalogUrl || null,
+          orders_url: ordersUrl || null,
+        },
+        { onConflict: "business_id,kind" },
+      )
+      .throwOnError();
+    await db
       .from("businesses")
       .update({
         auto_reply: formData.get("auto_reply") === "on",
-        catalog_source: String(
-          formData.get("catalog_source") ?? acc.business.catalog_source,
-        ),
+        catalog_source: catalogSource,
       })
-      .eq("id", acc.business.id);
-    const catalog_url = String(formData.get("catalog_url") ?? "").trim();
-    const orders_url = String(formData.get("orders_url") ?? "").trim();
-    const kind =
-      String(formData.get("catalog_source") ?? acc.business.catalog_source) ===
-      "zana"
-        ? "zana"
-        : "http";
-    if (catalog_url || orders_url) {
-      await createServiceSupabase()
-        .from("integrations")
-        .upsert(
-          {
-            business_id: acc.business.id,
-            kind,
-            catalog_url: catalog_url || null,
-            orders_url: orders_url || null,
-          },
-          { onConflict: "business_id,kind" },
-        );
-    }
-    revalidatePath(`/b/${slug}/settings`);
+      .eq("id", acc.business.id)
+      .throwOnError();
+    revalidatePath(`/b/${slug}`, "layout");
+    return { success: "Cilësimet u ruajtën." };
   }
 
-  const { data: integration } = await createServiceSupabase()
-    .from("integrations")
-    .select("catalog_url,orders_url")
-    .eq("business_id", access.business.id)
-    .maybeSingle();
+  const { data: integration, error: integrationError } =
+    await createServiceSupabase()
+      .from("integrations")
+      .select("catalog_url,orders_url")
+      .eq("business_id", access.business.id)
+      .eq("kind", access.business.catalog_source === "zana" ? "zana" : "http")
+      .maybeSingle();
+  if (integrationError) throw new Error("Nuk u ngarkua integrimi i biznesit.");
 
   return (
     <>
@@ -74,7 +88,7 @@ export default async function SettingsPage({
         </span>
       </div>
       <div className="configuration-layout">
-        <form action={save} className="panel section-pad grid gap-5">
+        <ActionForm action={save} className="panel section-pad grid gap-5">
           <div className="section-title">
             <h2>Të dhënat e biznesit</h2>
             <button className="btn btn-primary" type="submit">
@@ -139,7 +153,7 @@ export default async function SettingsPage({
               className="field"
             />
           </label>
-        </form>
+        </ActionForm>
         <aside className="panel section-pad">
           <span className="icon-tile">
             <Icon name="workflows" size={25} />

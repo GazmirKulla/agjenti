@@ -4,50 +4,56 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
 
 async function canAccess(userId: string, businessId: string) {
-	if (await isPlatformAdmin(userId)) return true;
-	const service = createServiceSupabase();
-	const { data } = await service
-		.from("business_users")
-		.select("user_id")
-		.eq("user_id", userId)
-		.eq("business_id", businessId)
-		.maybeSingle();
-	return Boolean(data);
+  if (await isPlatformAdmin(userId)) return true;
+  const service = createServiceSupabase();
+  const { data } = await service
+    .from("business_users")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+  return Boolean(data);
 }
 
 export async function POST(
-	_request: Request,
-	context: { params: Promise<{ id: string; conversationId: string; action: string }> },
+  _request: Request,
+  context: {
+    params: Promise<{ id: string; conversationId: string; action: string }>;
+  },
 ) {
-	const { id: businessId, conversationId, action } = await context.params;
-	const supabase = await createServerSupabase();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-	if (!user || !(await canAccess(user.id, businessId))) {
-		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-	}
-	const service = createServiceSupabase();
-	if (action === "pause") {
-		await service
-			.from("conversations")
-			.update({ status: "paused", auto_reply: false, updated_at: new Date().toISOString() })
-			.eq("id", conversationId)
-			.eq("business_id", businessId);
-	} else if (action === "resume") {
-		await service
-			.from("conversations")
-			.update({ status: "active", auto_reply: true, updated_at: new Date().toISOString() })
-			.eq("id", conversationId)
-			.eq("business_id", businessId);
-	} else if (action === "complete") {
-		await service
-			.from("conversations")
-			.update({ status: "completed", auto_reply: false, updated_at: new Date().toISOString() })
-			.eq("id", conversationId)
-			.eq("business_id", businessId);
-	} else {
-		return NextResponse.json({ error: "Unknown action" }, { status: 404 });
-	}
-	return NextResponse.json({ ok: true });
+  const { id: businessId, conversationId, action } = await context.params;
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !(await canAccess(user.id, businessId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const states: Record<string, { status: string; auto_reply: boolean }> = {
+    pause: { status: "paused", auto_reply: false },
+    resume: { status: "active", auto_reply: true },
+    complete: { status: "completed", auto_reply: false },
+  };
+  const state = Object.hasOwn(states, action) ? states[action] : undefined;
+  if (!state)
+    return NextResponse.json({ error: "Veprim i panjohur." }, { status: 404 });
+  const service = createServiceSupabase();
+  const { data, error } = await service
+    .from("conversations")
+    .update({ ...state, updated_at: new Date().toISOString() })
+    .eq("id", conversationId)
+    .eq("business_id", businessId)
+    .select("id")
+    .maybeSingle();
+  if (error)
+    return NextResponse.json(
+      { error: "Statusi i bisedës nuk u ndryshua. Provo përsëri." },
+      { status: 500 },
+    );
+  if (!data)
+    return NextResponse.json(
+      { error: "Biseda nuk u gjet në këtë biznes." },
+      { status: 404 },
+    );
+  return NextResponse.json({ ok: true });
 }

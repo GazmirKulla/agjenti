@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/dashboard/action-form";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
@@ -19,25 +20,40 @@ export default async function AdminBusinessesPage() {
   async function createBusiness(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!session || !(await isPlatformAdmin(session.id))) return;
+    if (!session || !(await isPlatformAdmin(session.id)))
+      return { error: "Kërkohet qasja e administratorit." };
     const name = String(formData.get("name") ?? "").trim();
     const slug = String(formData.get("slug") ?? "")
       .trim()
       .toLowerCase();
     const catalog_source = String(formData.get("catalog_source") ?? "internal");
     const auto_reply = formData.get("auto_reply") === "on";
-    if (!name || !slug) return;
+    if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))
+      return {
+        error:
+          "Vendos emrin dhe një slug me shkronja të vogla, numra ose viza.",
+      };
+    if (!["internal", "zana", "external"].includes(catalog_source))
+      return { error: "Burimi i katalogut nuk është i vlefshëm." };
     const db = createServiceSupabase();
-    await db
+    const { error } = await db
       .from("businesses")
       .insert({ name, slug, catalog_source, auto_reply });
+    if (error)
+      return {
+        error:
+          error.code === "23505"
+            ? "Ky slug përdoret nga një biznes tjetër."
+            : "Biznesi nuk u krijua. Provo përsëri.",
+      };
     revalidatePath("/admin/businesses");
   }
 
   async function addMember(formData: FormData) {
     "use server";
     const session = await getSessionUser();
-    if (!session || !(await isPlatformAdmin(session.id))) return;
+    if (!session || !(await isPlatformAdmin(session.id)))
+      return { error: "Kërkohet qasja e administratorit." };
     const businessId = String(formData.get("business_id") ?? "");
     const email = String(formData.get("email") ?? "")
       .trim()
@@ -48,12 +64,23 @@ export default async function AdminBusinessesPage() {
       .select("id")
       .eq("email", email)
       .maybeSingle();
-    if (!profile) return;
-    await db.from("business_users").upsert({
-      business_id: businessId,
-      user_id: profile.id,
-      role: "staff",
-    });
+    if (!profile)
+      return {
+        error:
+          "Nuk u gjet një përdorues me këtë email. Përdoruesi duhet të regjistrohet fillimisht.",
+      };
+    const { error } = await db.from("business_users").upsert(
+      {
+        business_id: businessId,
+        user_id: profile.id,
+        role: "staff",
+      },
+      { onConflict: "business_id,user_id", ignoreDuplicates: true },
+    );
+    if (error)
+      return {
+        error: "Anëtari nuk u shtua. Kontrollo biznesin dhe provo përsëri.",
+      };
     revalidatePath("/admin/businesses");
   }
 
@@ -70,7 +97,7 @@ export default async function AdminBusinessesPage() {
         columns={["Biznesi", "Katalogu", "Përgjigje automatike"]}
         createLabel="Shto biznes"
         createForm={
-          <form action={createBusiness} className="grid gap-4">
+          <ActionForm action={createBusiness} className="grid gap-4">
             <label className="form-label">
               Emri i biznesit
               <input name="name" className="field" required />
@@ -103,7 +130,7 @@ export default async function AdminBusinessesPage() {
             <button className="btn btn-primary" type="submit">
               Krijo biznes
             </button>
-          </form>
+          </ActionForm>
         }
         records={(businesses ?? []).map((b) => ({
           id: b.id,
@@ -148,7 +175,7 @@ export default async function AdminBusinessesPage() {
                 <p className="muted-copy">
                   Përdoruesi duhet të ketë një llogari të regjistruar.
                 </p>
-                <form action={addMember} className="grid gap-3 mt-4">
+                <ActionForm action={addMember} className="grid gap-3 mt-4">
                   <input type="hidden" name="business_id" value={b.id} />
                   <label className="form-label">
                     Email
@@ -162,7 +189,7 @@ export default async function AdminBusinessesPage() {
                   <button className="btn btn-ghost" type="submit">
                     Shto në ekip
                   </button>
-                </form>
+                </ActionForm>
               </div>
             </>
           ),

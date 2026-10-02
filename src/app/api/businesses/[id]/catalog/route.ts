@@ -13,7 +13,8 @@ export async function GET(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!(await isPlatformAdmin(user.id))) {
     const { data } = await createServiceSupabase()
       .from("business_users")
@@ -21,8 +22,19 @@ export async function GET(
       .eq("business_id", id)
       .eq("user_id", user.id)
       .maybeSingle();
-    if (!data) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!data)
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const products = await fetchLinkedCatalog(id);
-  return NextResponse.json({ products });
+  try {
+    const products = await fetchLinkedCatalog(id);
+    return NextResponse.json({ products });
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "Katalogu i jashtëm nuk u ngarkua. Kontrollo konfigurimin e integrimit.",
+      },
+      { status: 502 },
+    );
+  }
 }
