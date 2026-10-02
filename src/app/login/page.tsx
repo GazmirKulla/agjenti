@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
@@ -35,9 +36,10 @@ function LoginForm() {
 					setError(err.message);
 					return;
 				}
-				// Nëse confirm email është ON, nuk ka session menjëherë.
 				if (!data.session) {
-					setMessage("Llogaria u krijua. Nëse kërkohet konfirmim, kontrollo email-in — ose fik Confirm email te Supabase.");
+					setMessage(
+						"Llogaria u krijua. Nëse kërkohet konfirmim, kontrollo email-in — ose fik Confirm email te Supabase.",
+					);
 					return;
 				}
 			}
@@ -50,47 +52,51 @@ function LoginForm() {
 	}
 
 	return (
-		<main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 p-8">
-			<div>
-				<p className="text-sm uppercase tracking-wide text-zinc-500">Agjenti.app</p>
-				<h1 className="text-3xl font-semibold">
+		<main className="relative mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
+			<div className="fade-up mb-8">
+				<Link href="/" className="brand-mark text-3xl text-ink">
+					Agjenti
+				</Link>
+				<h1 className="mt-6 text-2xl text-ink">
 					{mode === "signin" ? "Hyr në platformë" : "Krijo llogari"}
 				</h1>
-				<p className="mt-2 text-zinc-600">Stafi i biznesit dhe Platform Admin.</p>
+				<p className="mt-2 text-ink-muted">Stafi i biznesit dhe Platform Admin.</p>
 			</div>
 
-			<form onSubmit={onSubmit} className="flex flex-col gap-3">
-				<input
-					type="email"
-					required
-					autoComplete="email"
-					value={email}
-					onChange={(e) => setEmail(e.target.value)}
-					placeholder="email@biznesi.com"
-					className="rounded-lg border border-zinc-300 px-3 py-2"
-				/>
-				<input
-					type="password"
-					required
-					minLength={6}
-					autoComplete={mode === "signin" ? "current-password" : "new-password"}
-					value={password}
-					onChange={(e) => setPassword(e.target.value)}
-					placeholder="Fjalëkalimi"
-					className="rounded-lg border border-zinc-300 px-3 py-2"
-				/>
-				<button
-					type="submit"
-					disabled={busy}
-					className="rounded-lg bg-zinc-900 px-4 py-3 text-white disabled:opacity-60"
-				>
+			<form onSubmit={onSubmit} className="fade-up-delay flex flex-col gap-3">
+				<label className="grid gap-1.5 text-sm text-ink-muted">
+					Email
+					<input
+						type="email"
+						required
+						autoComplete="email"
+						value={email}
+						onChange={(e) => setEmail(e.target.value)}
+						placeholder="email@biznesi.com"
+						className="field"
+					/>
+				</label>
+				<label className="grid gap-1.5 text-sm text-ink-muted">
+					Fjalëkalimi
+					<input
+						type="password"
+						required
+						minLength={6}
+						autoComplete={mode === "signin" ? "current-password" : "new-password"}
+						value={password}
+						onChange={(e) => setPassword(e.target.value)}
+						placeholder="••••••••"
+						className="field"
+					/>
+				</label>
+				<button type="submit" disabled={busy} className="btn btn-primary mt-2">
 					{busy ? "Duke u përpunuar…" : mode === "signin" ? "Hyr" : "Regjistrohu"}
 				</button>
 			</form>
 
 			<button
 				type="button"
-				className="text-sm text-zinc-600 underline"
+				className="fade-up-delay-2 mt-5 text-left text-sm text-ink-muted underline decoration-line underline-offset-4 hover:text-ink"
 				onClick={() => {
 					setMode(mode === "signin" ? "signup" : "signin");
 					setError(null);
@@ -100,15 +106,17 @@ function LoginForm() {
 				{mode === "signin" ? "Nuk ke llogari? Regjistrohu" : "Ke llogari? Hyr"}
 			</button>
 
-			{message ? <p className="text-sm text-green-700">{message}</p> : null}
-			{error ? <p className="text-sm text-red-700">{error}</p> : null}
+			{message ? <p className="mt-4 text-sm text-success">{message}</p> : null}
+			{error ? (
+				<p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>
+			) : null}
 		</main>
 	);
 }
 
 export default function LoginPage() {
 	return (
-		<Suspense fallback={<main className="p-8">Duke ngarkuar…</main>}>
+		<Suspense fallback={<main className="p-8 text-ink-muted">Duke ngarkuar…</main>}>
 			<LoginForm />
 		</Suspense>
 	);

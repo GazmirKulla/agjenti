@@ -47,13 +47,13 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
     .maybeSingle();
 
   return (
-    <form action={save} className="grid max-w-lg gap-3 rounded-lg border bg-white p-4">
+    <form action={save} className="grid max-w-lg gap-3 panel p-4">
       <h1 className="text-xl font-semibold">Cilësimet</h1>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="auto_reply" defaultChecked={access.business.auto_reply} />
         Auto-reply
       </label>
-      <select name="catalog_source" defaultValue={access.business.catalog_source} className="rounded border px-3 py-2">
+      <select name="catalog_source" defaultValue={access.business.catalog_source} className="field">
         <option value="internal">Manual</option>
         <option value="zana">Zana</option>
         <option value="external">API e jashtme</option>
@@ -62,15 +62,15 @@ export default async function SettingsPage({ params }: { params: Promise<{ slug:
         name="catalog_url"
         defaultValue={integration?.catalog_url ?? ""}
         placeholder="URL e katalogut"
-        className="rounded border px-3 py-2"
+        className="field"
       />
       <input
         name="orders_url"
         defaultValue={integration?.orders_url ?? ""}
         placeholder="URL e porosive"
-        className="rounded border px-3 py-2"
+        className="field"
       />
-      <button className="rounded bg-zinc-900 px-4 py-2 text-white" type="submit">
+      <button className="btn btn-primary" type="submit">
         Ruaj
       </button>
     </form>

@@ -73,28 +73,30 @@ export function ThreadClient(props: {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_16rem]">
-      <section className="rounded-lg border bg-white p-4">
-        <div className="mb-3 flex flex-wrap gap-2">
-          <button className="rounded border px-3 py-1 text-sm" type="button" onClick={() => act("pause")}>
+      <section className="panel p-4">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <button className="btn btn-ghost px-3 py-1.5 text-sm" type="button" onClick={() => act("pause")}>
             Pauzo
           </button>
-          <button className="rounded border px-3 py-1 text-sm" type="button" onClick={() => act("resume")}>
+          <button className="btn btn-ghost px-3 py-1.5 text-sm" type="button" onClick={() => act("resume")}>
             Rifillo
           </button>
-          <button className="rounded border px-3 py-1 text-sm" type="button" onClick={() => act("complete")}>
+          <button className="btn btn-ghost px-3 py-1.5 text-sm" type="button" onClick={() => act("complete")}>
             Mbyll
           </button>
-          <button className="rounded border px-3 py-1 text-sm" type="button" onClick={confirmOrder}>
+          <button className="btn btn-ghost px-3 py-1.5 text-sm" type="button" onClick={confirmOrder}>
             Konfirmo porosinë
           </button>
-          <span className="text-sm text-zinc-500">{props.status}</span>
+          <span className="text-sm uppercase tracking-wide text-ink-muted">{props.status}</span>
         </div>
         <div className="mb-4 max-h-[28rem] space-y-2 overflow-y-auto">
           {props.messages.map((m) => (
             <div
               key={m.id}
-              className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-                m.direction === "inbound" ? "bg-zinc-100" : "ml-auto bg-zinc-900 text-white"
+              className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
+                m.direction === "inbound"
+                  ? "bg-accent-soft text-ink"
+                  : "ml-auto bg-ink text-paper-2"
               }`}
             >
               <p>{m.body}</p>
@@ -109,17 +111,17 @@ export function ThreadClient(props: {
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="flex-1 rounded border px-3 py-2"
+            className="field flex-1"
             placeholder="Përgjigju..."
           />
-          <button className="rounded bg-zinc-900 px-4 py-2 text-white" type="submit">
+          <button className="btn btn-primary" type="submit">
             Dërgo
           </button>
         </form>
-        {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+        {error ? <p className="mt-2 text-sm text-danger">{error}</p> : null}
       </section>
-      <aside className="rounded-lg border bg-white p-4 text-sm">
-        <h2 className="mb-2 font-medium">Logje</h2>
+      <aside className="panel p-4 text-sm text-ink-muted">
+        <h2 className="mb-2 font-display font-semibold text-ink">Logje</h2>
         <ul className="space-y-2">
           {props.logs.map((l) => (
             <li key={l.id}>

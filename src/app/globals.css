@@ -1,26 +1,238 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+	--ink: #13231c;
+	--ink-muted: #4a5c54;
+	--paper: #eef3f0;
+	--paper-2: #f7faf8;
+	--surface: #fcfdfc;
+	--line: #c9d5ce;
+	--line-strong: #9aada3;
+	--accent: #0b6b63;
+	--accent-2: #0f8a80;
+	--accent-soft: #d7f0ec;
+	--danger: #a61d24;
+	--danger-soft: #fce8e9;
+	--success: #1f6b45;
+	--success-soft: #dff3e8;
+	--shadow-soft: 0 1px 0 rgb(19 35 28 / 4%), 0 18px 40px -28px rgb(19 35 28 / 28%);
+	--radius: 0.75rem;
+	--font-display: var(--font-syne), ui-sans-serif, system-ui, sans-serif;
+	--font-body: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+	--color-ink: var(--ink);
+	--color-ink-muted: var(--ink-muted);
+	--color-paper: var(--paper);
+	--color-paper-2: var(--paper-2);
+	--color-surface: var(--surface);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-accent: var(--accent);
+	--color-accent-2: var(--accent-2);
+	--color-accent-soft: var(--accent-soft);
+	--color-danger: var(--danger);
+	--color-danger-soft: var(--danger-soft);
+	--color-success: var(--success);
+	--color-success-soft: var(--success-soft);
+	--font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+	--font-display: var(--font-syne), ui-sans-serif, system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@layer base {
+	* {
+		border-color: var(--line);
+	}
+
+	html {
+		scroll-behavior: smooth;
+	}
+
+	body {
+		margin: 0;
+		min-height: 100vh;
+		color: var(--ink);
+		font-family: var(--font-body);
+		background:
+			radial-gradient(1000px 520px at 12% -10%, rgb(11 107 99 / 16%), transparent 55%),
+			radial-gradient(800px 420px at 90% 0%, rgb(19 35 28 / 8%), transparent 50%),
+			linear-gradient(165deg, #e7efe9 0%, var(--paper-2) 42%, #f4f8f6 100%);
+		background-attachment: fixed;
+	}
+
+	h1,
+	h2,
+	h3 {
+		font-family: var(--font-display);
+		letter-spacing: -0.03em;
+		font-weight: 700;
+	}
+
+	a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	::selection {
+		background: var(--accent-soft);
+		color: var(--ink);
+	}
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+	.brand-mark {
+		font-family: var(--font-display);
+		font-weight: 800;
+		letter-spacing: -0.04em;
+		line-height: 1;
+	}
+
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		border-radius: 0.65rem;
+		padding: 0.75rem 1.15rem;
+		font-weight: 600;
+		font-size: 0.95rem;
+		transition:
+			transform 180ms ease,
+			background-color 180ms ease,
+			border-color 180ms ease,
+			opacity 180ms ease;
+	}
+
+	.btn:active {
+		transform: translateY(1px);
+	}
+
+	.btn:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+
+	.btn-primary {
+		background: var(--accent);
+		color: white;
+		border: 1px solid transparent;
+	}
+
+	.btn-primary:hover:not(:disabled) {
+		background: var(--accent-2);
+	}
+
+	.btn-ghost {
+		background: transparent;
+		color: var(--ink-muted);
+		border: 1px solid var(--line);
+	}
+
+	.btn-ghost:hover:not(:disabled) {
+		border-color: var(--line-strong);
+		color: var(--ink);
+		background: rgb(255 255 255 / 55%);
+	}
+
+	.field {
+		width: 100%;
+		border-radius: 0.65rem;
+		border: 1px solid var(--line);
+		background: rgb(255 255 255 / 82%);
+		padding: 0.7rem 0.9rem;
+		color: var(--ink);
+		outline: none;
+		transition:
+			border-color 160ms ease,
+			box-shadow 160ms ease;
+	}
+
+	.field:focus {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 3px rgb(11 107 99 / 16%);
+	}
+
+	.panel {
+		border: 1px solid var(--line);
+		background: rgb(252 253 252 / 88%);
+		backdrop-filter: blur(8px);
+		border-radius: var(--radius);
+		box-shadow: var(--shadow-soft);
+	}
+
+	.page {
+		margin-inline: auto;
+		width: 100%;
+		max-width: 64rem;
+		padding: 1.75rem 1.25rem 3rem;
+	}
+
+	.page-narrow {
+		max-width: 34rem;
+	}
+
+	.nav-link {
+		color: var(--ink-muted);
+		font-size: 0.875rem;
+		font-weight: 550;
+		padding: 0.35rem 0;
+		border-bottom: 2px solid transparent;
+		transition:
+			color 160ms ease,
+			border-color 160ms ease;
+	}
+
+	.nav-link:hover {
+		color: var(--ink);
+		border-bottom-color: var(--accent);
+	}
+
+	.fade-up {
+		animation: fade-up 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	}
+
+	.fade-up-delay {
+		animation: fade-up 640ms cubic-bezier(0.22, 1, 0.36, 1) 90ms both;
+	}
+
+	.fade-up-delay-2 {
+		animation: fade-up 700ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+	}
+
+	.list-row {
+		display: block;
+		padding: 1rem 1.1rem;
+		border-bottom: 1px solid var(--line);
+		transition: background-color 160ms ease;
+	}
+
+	.list-row:hover {
+		background: rgb(11 107 99 / 5%);
+	}
+
+	.list-row:last-child {
+		border-bottom: none;
+	}
+}
+
+@keyframes fade-up {
+	from {
+		opacity: 0;
+		transform: translateY(14px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fade-up,
+	.fade-up-delay,
+	.fade-up-delay-2,
+	.btn {
+		animation: none;
+		transition: none;
+	}
 }

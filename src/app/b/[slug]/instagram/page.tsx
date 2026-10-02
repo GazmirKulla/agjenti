@@ -20,16 +20,16 @@ export default async function InstagramPage({ params }: { params: Promise<{ slug
     <div className="max-w-lg space-y-4">
       <h1 className="text-xl font-semibold">Instagram</h1>
       {conn ? (
-        <div className="rounded-lg border bg-white p-4">
+        <div className="panel p-4">
           <p>@{conn.username || conn.ig_user_id}</p>
-          <p className="text-sm text-zinc-600">Status: {conn.status}</p>
+          <p className="text-sm text-ink-muted">Status: {conn.status}</p>
           {conn.last_error ? <p className="text-sm text-red-700">{conn.last_error}</p> : null}
         </div>
       ) : (
         <p>Nuk ka llogari të lidhur.</p>
       )}
       <a
-        className="inline-block rounded bg-zinc-900 px-4 py-2 text-white"
+        className="inline-block btn btn-primary"
         href={`/api/instagram/oauth/start?businessId=${access.business.id}`}
       >
         {conn ? "Rilidh Instagram" : "Connect Instagram"}

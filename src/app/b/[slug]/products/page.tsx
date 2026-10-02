@@ -71,11 +71,11 @@ export default async function ProductsPage({ params }: { params: Promise<{ slug:
   return (
     <div className="space-y-8">
       <h1 className="text-xl font-semibold">Produkte</h1>
-      <form action={addManual} className="grid max-w-lg gap-2 rounded-lg border bg-white p-4">
+      <form action={addManual} className="grid max-w-lg gap-2 panel p-4">
         <p className="font-medium">Shto me dorë</p>
-        <input name="name" placeholder="Emri" className="rounded border px-3 py-2" required />
-        <input name="price" placeholder="Çmimi" className="rounded border px-3 py-2" />
-        <select name="product_type_id" className="rounded border px-3 py-2">
+        <input name="name" placeholder="Emri" className="field" required />
+        <input name="price" placeholder="Çmimi" className="field" />
+        <select name="product_type_id" className="field">
           <option value="">Lloji</option>
           {(types ?? []).map((t) => (
             <option key={t.id} value={t.id}>
@@ -83,7 +83,7 @@ export default async function ProductsPage({ params }: { params: Promise<{ slug:
             </option>
           ))}
         </select>
-        <button className="rounded bg-zinc-900 px-4 py-2 text-white" type="submit">
+        <button className="btn btn-primary" type="submit">
           Ruaj
         </button>
       </form>
@@ -92,7 +92,7 @@ export default async function ProductsPage({ params }: { params: Promise<{ slug:
           <h2 className="mb-2 font-medium">Lidh nga faqja</h2>
           <ul className="space-y-2">
             {remote.map((p) => (
-              <li key={p.id} className="flex items-center justify-between rounded border bg-white px-3 py-2">
+              <li key={p.id} className="flex items-center justify-between panel px-3 py-2">
                 <span>
                   {p.name} {p.price != null ? `· ${p.price}` : ""}
                 </span>
@@ -100,7 +100,7 @@ export default async function ProductsPage({ params }: { params: Promise<{ slug:
                   <input type="hidden" name="name" value={p.name} />
                   <input type="hidden" name="external_id" value={p.id} />
                   <input type="hidden" name="price" value={p.price ?? ""} />
-                  <select name="product_type_id" className="rounded border px-2 py-1 text-sm">
+                  <select name="product_type_id" className="field py-1 text-sm">
                     <option value="">Lloji</option>
                     {(types ?? []).map((t) => (
                       <option key={t.id} value={t.id}>
@@ -108,7 +108,7 @@ export default async function ProductsPage({ params }: { params: Promise<{ slug:
                       </option>
                     ))}
                   </select>
-                  <button className="rounded border px-3 py-1 text-sm" type="submit">
+                  <button className="btn btn-ghost px-3 py-1 text-sm" type="submit">
                     Lidh
                   </button>
                 </form>
@@ -119,7 +119,7 @@ export default async function ProductsPage({ params }: { params: Promise<{ slug:
       ) : null}
       <ul className="space-y-2">
         {(products ?? []).map((p) => (
-          <li key={p.id} className="rounded border bg-white px-3 py-2">
+          <li key={p.id} className="panel px-3 py-2">
             {p.name} · {p.source}
             {p.external_id ? ` · ${p.external_id}` : ""}
           </li>

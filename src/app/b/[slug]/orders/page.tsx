@@ -20,7 +20,7 @@ export default async function OrdersPage({ params }: { params: Promise<{ slug: s
       <ul className="space-y-2">
         {(orders ?? []).length === 0 ? <li>Nuk ka porosi.</li> : null}
         {(orders ?? []).map((o) => (
-          <li key={o.id} className="rounded border bg-white px-3 py-2">
+          <li key={o.id} className="panel px-3 py-2">
             {o.id.slice(0, 8)} · {o.status}
             {o.external_order_id ? ` · jashtme ${o.external_order_id}` : ""}
           </li>

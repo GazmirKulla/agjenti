@@ -65,24 +65,24 @@ export default async function KnowledgePage({ params }: { params: Promise<{ slug
       <h1 className="text-xl font-semibold">Njohuri</h1>
       {access.business.catalog_source === "zana" ? (
         <form action={importZanaFaq}>
-          <button className="rounded border px-4 py-2" type="submit">
+          <button className="btn btn-ghost" type="submit">
             Kopjo FAQ-të nga Zana një herë
           </button>
         </form>
       ) : null}
-      <form action={add} className="grid max-w-lg gap-2 rounded-lg border bg-white p-4">
-        <input name="title" placeholder="Titulli" className="rounded border px-3 py-2" required />
-        <input name="intent_key" placeholder="intent_key" className="rounded border px-3 py-2" />
-        <textarea name="body" placeholder="Teksti" className="rounded border px-3 py-2" rows={4} required />
-        <button className="rounded bg-zinc-900 px-4 py-2 text-white" type="submit">
+      <form action={add} className="grid max-w-lg gap-2 panel p-4">
+        <input name="title" placeholder="Titulli" className="field" required />
+        <input name="intent_key" placeholder="intent_key" className="field" />
+        <textarea name="body" placeholder="Teksti" className="field" rows={4} required />
+        <button className="btn btn-primary" type="submit">
           Shto
         </button>
       </form>
       <ul className="space-y-2">
         {(entries ?? []).map((e) => (
-          <li key={e.id} className="rounded border bg-white p-3">
+          <li key={e.id} className="panel p-3">
             <p className="font-medium">{e.title}</p>
-            <p className="text-sm text-zinc-600">{e.body}</p>
+            <p className="text-sm text-ink-muted">{e.body}</p>
           </li>
         ))}
       </ul>

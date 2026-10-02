@@ -45,33 +45,33 @@ export default async function AgentsPage({ params }: { params: Promise<{ slug: s
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Agjentët</h1>
-      <p className="text-sm text-zinc-600">Një agjent aktiv për biznes. Modeli vendoset nga platforma.</p>
+      <p className="text-sm text-ink-muted">Një agjent aktiv për biznes. Modeli vendoset nga platforma.</p>
       {(agents ?? []).map((a) => (
-        <form key={a.id} action={save} className="grid gap-2 rounded-lg border bg-white p-4">
+        <form key={a.id} action={save} className="grid gap-2 panel p-4">
           <input type="hidden" name="id" value={a.id} />
-          <input name="name" defaultValue={a.name} className="rounded border px-3 py-2" />
-          <textarea name="instructions" defaultValue={a.instructions} rows={6} className="rounded border px-3 py-2" />
+          <input name="name" defaultValue={a.name} className="field" />
+          <textarea name="instructions" defaultValue={a.instructions} rows={6} className="field" />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="is_active" defaultChecked={a.is_active} /> Aktiv
           </label>
-          <button className="w-fit rounded bg-zinc-900 px-4 py-2 text-white" type="submit">
+          <button className="w-fit btn btn-primary" type="submit">
             Ruaj
           </button>
         </form>
       ))}
-      <form action={save} className="grid gap-2 rounded-lg border bg-white p-4">
+      <form action={save} className="grid gap-2 panel p-4">
         <p className="font-medium">Agjent i ri</p>
-        <input name="name" placeholder="Emri" className="rounded border px-3 py-2" defaultValue="Agjent shitjesh" />
+        <input name="name" placeholder="Emri" className="field" defaultValue="Agjent shitjesh" />
         <textarea
           name="instructions"
           rows={6}
-          className="rounded border px-3 py-2"
+          className="field"
           defaultValue="You are a customer support agent. Write in the customer's language. Do not invent prices. Ask only for the current workflow step."
         />
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="is_active" defaultChecked /> Aktiv
         </label>
-        <button className="w-fit rounded bg-zinc-900 px-4 py-2 text-white" type="submit">
+        <button className="w-fit btn btn-primary" type="submit">
           Krijo
         </button>
       </form>

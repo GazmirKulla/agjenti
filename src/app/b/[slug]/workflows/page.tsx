@@ -89,23 +89,23 @@ export default async function WorkflowsPage({ params }: { params: Promise<{ slug
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Workflow</h1>
       <form action={addSimple} className="flex gap-2">
-        <input name="name" placeholder="Emri i llojit" className="rounded border px-3 py-2" />
-        <button className="rounded bg-zinc-900 px-4 py-2 text-white" type="submit">
+        <input name="name" placeholder="Emri i llojit" className="field" />
+        <button className="btn btn-primary" type="submit">
           Shto workflow të thjeshtë
         </button>
       </form>
       {access.business.catalog_source === "zana" ? (
         <form action={seedZana}>
-          <button className="rounded border px-4 py-2" type="submit">
+          <button className="btn btn-ghost" type="submit">
             Importo workflow-et puzzle dhe bluzë
           </button>
         </form>
       ) : null}
       <ul className="space-y-3">
         {(workflows ?? []).map((w) => (
-          <li key={w.id} className="rounded border bg-white p-4">
+          <li key={w.id} className="panel p-4">
             <p className="font-medium">{w.name}</p>
-            <p className="text-sm text-zinc-600">
+            <p className="text-sm text-ink-muted">
               {(w.workflow_steps as { key: string; position: number }[] | null)
                 ?.sort((a, b) => a.position - b.position)
                 .map((s) => s.key)
