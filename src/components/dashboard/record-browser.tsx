@@ -172,7 +172,10 @@ export function RecordBrowser({
           </button>
         </div>
       </section>
-      <section className="panel record-detail">
+      <section
+        className="panel record-detail"
+        key={creating ? "create" : (active?.id ?? "empty")}
+      >
         {creating ? (
           <>
             <h2 className="detail-title">{createLabel}</h2>
