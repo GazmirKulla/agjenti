@@ -1,20 +1,31 @@
+import { PageHeading, EmptyState } from "@/components/dashboard/ui";
+import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { APPAREL_STEPS, PUZZLE_STEPS, SIMPLE_STEPS } from "@/lib/workflows/engine";
+import {
+  APPAREL_STEPS,
+  PUZZLE_STEPS,
+  SIMPLE_STEPS,
+} from "@/lib/workflows/engine";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
-export default async function WorkflowsPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function WorkflowsPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
   const { slug } = await params;
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/app");
   const db = createServiceSupabase();
-  const { data: workflows } = await db
+  const { data: workflows, error: loadError } = await db
     .from("workflows")
-    .select("id,name,workflow_steps(key,position,kind)")
+    .select("id,name,workflow_steps(key,position,kind,config)")
     .eq("business_id", access.business.id);
+  if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
 
   async function seedZana() {
     "use server";
@@ -24,7 +35,12 @@ export default async function WorkflowsPage({ params }: { params: Promise<{ slug
     if (!acc) return;
     const businessId = acc.business.id;
     const supabase = createServiceSupabase();
-    async function seed(name: string, steps: typeof PUZZLE_STEPS, typeName: string, externalKey: string) {
+    async function seed(
+      name: string,
+      steps: typeof PUZZLE_STEPS,
+      typeName: string,
+      externalKey: string,
+    ) {
       const { data: wf } = await supabase
         .from("workflows")
         .insert({ business_id: businessId, name })
@@ -86,34 +102,95 @@ export default async function WorkflowsPage({ params }: { params: Promise<{ slug
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Workflow</h1>
-      <form action={addSimple} className="flex gap-2">
-        <input name="name" placeholder="Emri i llojit" className="field" />
-        <button className="btn btn-primary" type="submit">
-          Shto workflow të thjeshtë
-        </button>
-      </form>
-      {access.business.catalog_source === "zana" ? (
-        <form action={seedZana}>
-          <button className="btn btn-ghost" type="submit">
-            Importo workflow-et puzzle dhe bluzë
-          </button>
-        </form>
-      ) : null}
-      <ul className="space-y-3">
-        {(workflows ?? []).map((w) => (
-          <li key={w.id} className="panel p-4">
-            <p className="font-medium">{w.name}</p>
-            <p className="text-sm text-ink-muted">
-              {(w.workflow_steps as { key: string; position: number }[] | null)
-                ?.sort((a, b) => a.position - b.position)
-                .map((s) => s.key)
-                .join(" → ")}
+    <>
+      <PageHeading
+        title="Workflow AI"
+        description="Përcakto rrugën që ndjek porosia sipas llojit të produktit."
+      />
+      <div className="configuration-layout">
+        <div className="space-y-5">
+          {(workflows ?? []).map((w) => (
+            <section key={w.id} className="panel section-pad">
+              <div className="section-title">
+                <h2>{w.name}</h2>
+                <span className="icon-tile">
+                  <Icon name="workflows" />
+                </span>
+              </div>
+              <div className="workflow-steps">
+                {(
+                  (w.workflow_steps as {
+                    key: string;
+                    position: number;
+                    kind: string;
+                    config: { label?: string };
+                  }[]) ?? []
+                )
+                  .sort((a, b) => a.position - b.position)
+                  .map((step, i) => (
+                    <div className="workflow-step" key={step.key}>
+                      <span>{i + 1}</span>
+                      <div>
+                        <h3>{step.config?.label || step.key}</h3>
+                        <p>
+                          {(
+                            {
+                              choice: "Zgjedhje",
+                              text: "Tekst",
+                              photo: "Foto",
+                              customer: "Të dhënat e klientit",
+                              confirm: "Konfirmim",
+                            } as Record<string, string>
+                          )[step.kind] || step.kind}
+                        </p>
+                      </div>
+                      <Icon name="arrow" size={18} />
+                    </div>
+                  ))}
+              </div>
+            </section>
+          ))}
+          {!workflows?.length && (
+            <section className="panel">
+              <EmptyState
+                title="Ende nuk ka workflow"
+                description="Krijo një workflow dhe lidhe me llojin e produktit."
+              />
+            </section>
+          )}
+        </div>
+        <aside className="space-y-5">
+          <form action={addSimple} className="panel section-pad grid gap-4">
+            <h2 className="text-lg">Shto workflow të thjeshtë</h2>
+            <p className="muted-copy">
+              Krijon një lloj produkti dhe hapat bazë për mbledhjen e porosisë.
             </p>
-          </li>
-        ))}
-      </ul>
-    </div>
+            <label className="form-label">
+              Emri i llojit të produktit
+              <input
+                name="name"
+                placeholder="P.sh. Aksesorë"
+                className="field"
+                required
+              />
+            </label>
+            <button className="btn btn-primary" type="submit">
+              Krijo workflow
+            </button>
+          </form>
+          {access.business.catalog_source === "zana" && (
+            <form action={seedZana} className="panel section-pad">
+              <h2 className="text-lg">Workflow-t e Zana</h2>
+              <p className="muted-copy mb-5">
+                Hapat për puzzle dhe bluza të personalizuara.
+              </p>
+              <button className="btn btn-ghost" type="submit">
+                Importo workflow-t
+              </button>
+            </form>
+          )}
+        </aside>
+      </div>
+    </>
   );
 }

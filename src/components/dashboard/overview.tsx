@@ -1,0 +1,262 @@
+import Link from "next/link";
+import { createServiceSupabase } from "@/lib/supabase/service";
+import { Icon } from "./icon";
+import {
+  EmptyState,
+  PageHeading,
+  SectionTitle,
+  StatCard,
+  StatusBadge,
+} from "./ui";
+import { TrendChart } from "./trend-chart";
+
+export async function Overview({
+  business,
+}: {
+  business?: { id: string; name: string; slug: string; auto_reply: boolean };
+}) {
+  const db = createServiceSupabase();
+  const base = business ? `/b/${business.slug}` : "/admin";
+  async function count(
+    table: string,
+    filter?: [string, string],
+    start?: string,
+    end?: string,
+  ) {
+    let query = db.from(table).select("id", { count: "exact", head: true });
+    if (business) query = query.eq("business_id", business.id);
+    if (filter) query = query.eq(filter[0], filter[1]);
+    if (start) query = query.gte("created_at", start);
+    if (end) query = query.lt("created_at", end);
+    const { count, error } = await query;
+    if (error) throw new Error("Nuk u ngarkuan statistikat e panelit.");
+    return count ?? 0;
+  }
+  const [
+    conversations,
+    orders,
+    customers,
+    connections,
+    agents,
+    paused,
+    totalBusinesses,
+  ] = await Promise.all([
+    count("conversations"),
+    count("orders"),
+    count("customers"),
+    count("instagram_connections", ["status", "connected"]),
+    count("ai_agents", ["is_active", "true"]),
+    count("conversations", ["status", "paused"]),
+    business ? Promise.resolve(0) : count("businesses"),
+  ]);
+  const now = new Date();
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now);
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - 6 + i);
+    return d;
+  });
+  const trend = await Promise.all(
+    days.map(async (day) => {
+      const end = new Date(day);
+      end.setUTCDate(end.getUTCDate() + 1);
+      const [conversations, orders] = await Promise.all([
+        count("conversations", undefined, day.toISOString(), end.toISOString()),
+        count("orders", undefined, day.toISOString(), end.toISOString()),
+      ]);
+      return { date: day.toISOString(), conversations, orders };
+    }),
+  );
+  let recentQuery = db
+    .from("conversations")
+    .select(
+      "id,business_id,last_message_preview,status,customers(display_name,username),businesses(name,slug)",
+    )
+    .order("last_message_at", { ascending: false })
+    .limit(5);
+  if (business) recentQuery = recentQuery.eq("business_id", business.id);
+  const { data: recent, error: recentError } = await recentQuery;
+  if (recentError) throw new Error("Nuk u ngarkuan bisedat.");
+  const { data: businesses, error: businessesError } = business
+    ? { data: null, error: null }
+    : await db
+        .from("businesses")
+        .select("id,name,slug,auto_reply")
+        .order("created_at", { ascending: false })
+        .limit(5);
+  if (businessesError) throw new Error("Nuk u ngarkuan bizneset.");
+  return (
+    <div className="overview-page">
+      <PageHeading
+        eyebrow={business ? "Mirë se erdhe," : "PLATFORMA"}
+        title={business ? business.name : "Përmbledhja e platformës"}
+        description={
+          business
+            ? "Ja si po ecën biznesi yt me Agjentin AI."
+            : "Bizneset, bisedat dhe porositë në një vend."
+        }
+      >
+        <span className="date-label">
+          <Icon name="calendar" size={17} />
+          Gjendja aktuale
+        </span>
+      </PageHeading>
+      <div className="stats-grid">
+        <StatCard
+          label={business ? "Biseda" : "Biznese"}
+          value={business ? conversations : totalBusinesses}
+          hint="Gjithsej në platformë"
+          icon={business ? "inbox" : "businesses"}
+        />
+        <StatCard
+          label="Porosi të krijuara"
+          value={orders}
+          hint="Të gjitha statuset"
+          icon="orders"
+        />
+        <StatCard
+          label={business ? "Klientë" : "Biseda"}
+          value={business ? customers : conversations}
+          hint={business ? "Klientë të regjistruar" : "Në të gjitha bizneset"}
+          icon="customers"
+          tone="blue"
+        />
+        <StatCard
+          label="Instagram i lidhur"
+          value={connections}
+          hint="Llogari me status të lidhur"
+          icon="instagram"
+          tone="pink"
+        />
+      </div>
+      <div className="overview-primary">
+        <section className="panel section-pad">
+          <SectionTitle title="Biseda dhe porosi" />
+          <p className="muted-copy">
+            Të krijuara gjatë 7 ditëve të fundit · sipas UTC
+          </p>
+          <TrendChart data={trend} />
+        </section>
+        <section className="panel section-pad agent-summary">
+          <SectionTitle title="Agjenti AI" />
+          <div className="agent-illustration">
+            <Icon name="agents" size={66} />
+          </div>
+          <p className="muted-copy">
+            {business
+              ? "Agjenti përdor katalogun, njohuritë dhe workflow-t e biznesit për t’iu përgjigjur klientëve."
+              : "Ndiq aktivizimin e agjentëve dhe bisedat që janë pauzuar në platformë."}
+          </p>
+          <div className="summary-line">
+            <span>Agjentë aktivë</span>
+            <strong className="status-badge status-connected">{agents}</strong>
+          </div>
+          <div className="summary-line">
+            <span>Biseda të pauzuara</span>
+            <strong>{paused}</strong>
+          </div>
+          {business && (
+            <div className="summary-line">
+              <span>Përgjigje automatike</span>
+              <StatusBadge
+                status={business.auto_reply ? "connected" : "paused"}
+              />
+            </div>
+          )}
+          <Link
+            className="soft-link"
+            href={`${base}/${business ? "agents" : "businesses"}`}
+          >
+            {business ? "Konfiguro Agjentin AI" : "Menaxho bizneset"}
+            <Icon name="arrow" size={17} />
+          </Link>
+        </section>
+      </div>
+      <div className="overview-secondary">
+        <section className="panel section-pad">
+          <SectionTitle
+            title="Bisedat e fundit"
+            href={business ? `${base}/inbox` : undefined}
+          />
+          {recent?.length ? (
+            recent.map((c) => {
+              const customer = c.customers as unknown as {
+                display_name: string | null;
+                username: string | null;
+              };
+              const tenant = c.businesses as unknown as {
+                name: string;
+                slug: string;
+              };
+              return (
+                <Link
+                  className="recent-row"
+                  key={c.id}
+                  href={`/b/${tenant.slug}/inbox/${c.id}`}
+                >
+                  <span className="profile-avatar">
+                    {(customer?.display_name || customer?.username || "K")
+                      .slice(0, 2)
+                      .toUpperCase()}
+                  </span>
+                  <div>
+                    <strong>
+                      {customer?.display_name ||
+                        customer?.username ||
+                        "Klient Instagram"}
+                    </strong>
+                    <p>{c.last_message_preview || "Pa mesazh"}</p>
+                    {!business && <small>{tenant.name}</small>}
+                  </div>
+                  <StatusBadge status={c.status} />
+                </Link>
+              );
+            })
+          ) : (
+            <EmptyState
+              title="Ende nuk ka biseda"
+              description="Bisedat do të shfaqen kur të mbërrijnë mesazhet nga Instagram."
+            />
+          )}
+        </section>
+        <section className="panel section-pad">
+          <SectionTitle
+            title={business ? "Veprime të shpejta" : "Bizneset e fundit"}
+          />
+          {business ? (
+            <div className="quick-actions">
+              {[
+                ["products", "Shto produkte", "products"],
+                ["orders", "Shiko porositë", "orders"],
+                ["knowledge", "Përditëso njohuritë", "knowledge"],
+                ["instagram", "Menaxho Instagram", "instagram"],
+              ].map(([path, label, icon]) => (
+                <Link key={path} href={`${base}/${path}`}>
+                  <Icon name={icon} size={25} />
+                  <span>{label}</span>
+                  <Icon name="arrow" size={16} />
+                </Link>
+              ))}
+            </div>
+          ) : businesses?.length ? (
+            businesses.map((b) => (
+              <Link className="recent-row" key={b.id} href={`/b/${b.slug}`}>
+                <span className="workspace-avatar">{b.name.slice(0, 2)}</span>
+                <div>
+                  <strong>{b.name}</strong>
+                  <p>/{b.slug}</p>
+                </div>
+                <Icon name="arrow" size={16} />
+              </Link>
+            ))
+          ) : (
+            <EmptyState
+              title="Nuk ka biznese"
+              description="Shto biznesin e parë për të nisur."
+            />
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}

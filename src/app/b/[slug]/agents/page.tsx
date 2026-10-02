@@ -1,19 +1,27 @@
+import Link from "next/link";
+import { PageHeading } from "@/components/dashboard/ui";
+import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
-export default async function AgentsPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function AgentsPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
   const { slug } = await params;
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/app");
   const db = createServiceSupabase();
-  const { data: agents } = await db
+  const { data: agents, error: loadError } = await db
     .from("ai_agents")
     .select("id,name,instructions,is_active")
     .eq("business_id", access.business.id);
+  if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
 
   async function save(formData: FormData) {
     "use server";
@@ -27,10 +35,17 @@ export default async function AgentsPage({ params }: { params: Promise<{ slug: s
     const instructions = String(formData.get("instructions") ?? "");
     const isActive = formData.get("is_active") === "on";
     if (isActive) {
-      await supabase.from("ai_agents").update({ is_active: false }).eq("business_id", acc.business.id);
+      await supabase
+        .from("ai_agents")
+        .update({ is_active: false })
+        .eq("business_id", acc.business.id);
     }
     if (id) {
-      await supabase.from("ai_agents").update({ name, instructions, is_active: isActive }).eq("id", id);
+      await supabase
+        .from("ai_agents")
+        .update({ name, instructions, is_active: isActive })
+        .eq("id", id)
+        .eq("business_id", acc.business.id);
     } else {
       await supabase.from("ai_agents").insert({
         business_id: acc.business.id,
@@ -42,39 +57,104 @@ export default async function AgentsPage({ params }: { params: Promise<{ slug: s
     revalidatePath(`/b/${slug}/agents`);
   }
 
-  return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Agjentët</h1>
-      <p className="text-sm text-ink-muted">Një agjent aktiv për biznes. Modeli vendoset nga platforma.</p>
-      {(agents ?? []).map((a) => (
-        <form key={a.id} action={save} className="grid gap-2 panel p-4">
-          <input type="hidden" name="id" value={a.id} />
-          <input name="name" defaultValue={a.name} className="field" />
-          <textarea name="instructions" defaultValue={a.instructions} rows={6} className="field" />
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="is_active" defaultChecked={a.is_active} /> Aktiv
-          </label>
-          <button className="w-fit btn btn-primary" type="submit">
-            Ruaj
-          </button>
-        </form>
-      ))}
-      <form action={save} className="grid gap-2 panel p-4">
-        <p className="font-medium">Agjent i ri</p>
-        <input name="name" placeholder="Emri" className="field" defaultValue="Agjent shitjesh" />
+  const agentForm = (a?: {
+    id: string;
+    name: string;
+    instructions: string;
+    is_active: boolean;
+  }) => (
+    <form action={save} className="panel section-pad grid gap-5">
+      <div className="section-title">
+        <h2>{a ? a.name : "Agjent i ri"}</h2>
+        <span className="icon-tile">
+          <Icon name="agents" />
+        </span>
+      </div>
+      {a && <input type="hidden" name="id" value={a.id} />}
+      <label className="form-label">
+        Emri i agjentit
+        <input
+          name="name"
+          defaultValue={a?.name || "Agjent shitjesh"}
+          className="field"
+          required
+        />
+      </label>
+      <label className="form-label">
+        Udhëzimet për Agjentin (Prompt)
         <textarea
           name="instructions"
-          rows={6}
+          defaultValue={
+            a?.instructions ||
+            "Përgjigju në gjuhën e klientit. Përdor çmimet nga katalogu dhe mos shpik informacion. Kërko vetëm të dhënat për hapin aktual të workflow-t."
+          }
+          rows={12}
           className="field"
-          defaultValue="You are a customer support agent. Write in the customer's language. Do not invent prices. Ask only for the current workflow step."
+          required
         />
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="is_active" defaultChecked /> Aktiv
-        </label>
-        <button className="w-fit btn btn-primary" type="submit">
-          Krijo
-        </button>
-      </form>
-    </div>
+      </label>
+      <label className="toggle-label">
+        <span>
+          Agjenti aktiv
+          <small>Vetëm një agjent mund të jetë aktiv për biznes.</small>
+        </span>
+        <input
+          className="switch-input"
+          type="checkbox"
+          name="is_active"
+          defaultChecked={a?.is_active ?? false}
+        />
+      </label>
+      <button className="btn btn-primary w-fit" type="submit">
+        {a ? "Ruaj ndryshimet" : "Krijo agjentin"}
+      </button>
+    </form>
+  );
+  return (
+    <>
+      <PageHeading
+        title={`Agjenti AI i ${access.business.name}`}
+        description="Konfiguro mënyrën si Agjenti AI komunikon me klientët."
+      />
+      <div className="configuration-layout">
+        <div className="space-y-5">
+          {(agents ?? []).map((a) => (
+            <div key={a.id}>{agentForm(a)}</div>
+          ))}
+          <details className="panel section-pad" open={!agents?.length}>
+            <summary className="cursor-pointer font-semibold">
+              + Krijo një agjent të ri
+            </summary>
+            <div className="mt-5">{agentForm()}</div>
+          </details>
+        </div>
+        <aside className="space-y-5">
+          <div className="panel section-pad">
+            <div className="agent-illustration">
+              <Icon name="agents" size={66} />
+            </div>
+            <h2 className="text-lg mt-5">Një asistent për biznesin tënd</h2>
+            <p className="muted-copy">
+              Përcakto tonin, rregullat dhe mënyrën e komunikimit në udhëzimet e
+              agjentit. Përgjigjet mbështeten te produktet dhe njohuritë e
+              biznesit.
+            </p>
+            <Link href={`/b/${slug}/knowledge`} className="soft-link">
+              Menaxho njohuritë →
+            </Link>
+          </div>
+          <div className="panel section-pad">
+            <h2 className="text-lg">Përgjigjet automatike</h2>
+            <p className="muted-copy">
+              Aktivizimi i agjentit zgjedh konfigurimin. Dërgimi automatik
+              kontrollohet edhe nga cilësimi i biznesit dhe statusi i bisedës.
+            </p>
+            <Link href={`/b/${slug}/settings`} className="soft-link">
+              Hap cilësimet →
+            </Link>
+          </div>
+        </aside>
+      </div>
+    </>
   );
 }

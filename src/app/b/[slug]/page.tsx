@@ -1,11 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { DashboardShell } from "@/components/dashboard/shell";
-export default async function BusinessLayout({
-  children,
+import { Overview } from "@/components/dashboard/overview";
+export default async function BusinessDashboard({
   params,
 }: {
-  children: React.ReactNode;
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
@@ -13,9 +11,5 @@ export default async function BusinessLayout({
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/app");
-  return (
-    <DashboardShell name={access.business.name} slug={slug}>
-      {children}
-    </DashboardShell>
-  );
+  return <Overview business={access.business} />;
 }
