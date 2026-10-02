@@ -128,7 +128,9 @@ function LoginForm() {
           <p>
             {mode === "reset"
               ? "Vendos email-in dhe do të të dërgojmë udhëzimet për rikuperim."
-              : "Hyr në hapësirën tënde për të menaxhuar biznesin."}
+              : mode === "signup"
+                ? "Krijo llogarinë dhe përgatit hapësirën e biznesit tënd në pak hapa."
+                : "Hyr në hapësirën tënde për të menaxhuar biznesin."}
           </p>
           <form onSubmit={submit}>
             <fieldset disabled={busy}>
@@ -216,8 +218,9 @@ function LoginForm() {
           <p className="auth-footnote">
             <Link href="/privacy">Politika e privatësisë</Link>
             <br />
-            Qasja në panel përcaktohet nga roli dhe biznesi i lidhur me
-            llogarinë tënde.
+            Pas regjistrimit mund të krijosh hapësirën e biznesit tënd. Nëse je
+            pjesë e një ekipi ekzistues, administratori mund të të lidhë me
+            biznesin.
           </p>
         </div>
       </section>

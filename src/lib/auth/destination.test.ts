@@ -10,5 +10,7 @@ describe("role destination", () => {
       "/b/own",
     ));
   it("does not expose a business to unassigned users", () =>
-    expect(homeForAccess({ admin: false, businesses: [] })).toBe("/account"));
+    expect(homeForAccess({ admin: false, businesses: [] })).toBe(
+      "/onboarding",
+    ));
 });

@@ -5,5 +5,5 @@ export function homeForAccess(access: {
   if (access.admin) return "/admin";
   return access.businesses.length
     ? `/b/${encodeURIComponent(access.businesses[0].slug)}`
-    : "/account";
+    : "/onboarding";
 }

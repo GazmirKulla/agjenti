@@ -9,7 +9,7 @@ Next.js 15, React 19, TypeScript, Tailwind, Supabase, Vitest. Deploy: Vercel, do
 ## Fillimi lokal
 
 1. Krijo një projekt të ri Supabase (i ndarë nga Zana).
-2. Ekzekuto `supabase/migrations/20261001120000_init.sql`.
+2. Ekzekuto migrimet në `supabase/migrations/` sipas rendit kronologjik.
 3. Kopjo `.env.example` te `.env.local`.
 4. Shto rreshtin tënd te `platform_admins` pas regjistrimit të parë.
 5. `yarn install && yarn dev` (gjithmonë porti `3003`).
@@ -43,7 +43,7 @@ Inbox-i fillon bosh. Historia e Zana-s mbetet arkiv.
 ## Panelet
 
 - `/auth/continue`: ridrejton adminin te `/admin` dhe klientin te biznesi ku ka qasje. `/app` është hequr.
-- `/account`: gjendja për llogaritë pa biznes të caktuar.
+- `/onboarding`: krijimi self-service i biznesit për përdoruesit pa anëtarësi. `/account` ridrejton te destinacioni sipas rolit.
 - `/login`: hyrje, regjistrim dhe kërkesë për rikuperimin e fjalëkalimit.
 - `/auth/reset-password`: ndryshimi i fjalëkalimit pas lidhjes së rikuperimit.
 
@@ -58,3 +58,16 @@ Planet/faturimi, Facebook/WhatsApp, statistikat e Instagram-it, transporti/pages
 Fontet Figtree dhe Syne ruhen në `src/app/fonts` bashkë me licencat OFL, pa shkarkim gjatë build-it.
 
 Kontrolle: `yarn lint`, `yarn test`, `yarn build`.
+
+
+## Onboarding self-service
+
+Apliko `supabase/migrations/20261003090000_self_service_onboarding.sql` në Supabase përpara aktivizimit të këtij versioni. Pa migrimin, onboarding shfaq një gjendje të rikuperueshme pa kryer krijime të pjesshme. Ky migrim nuk ndryshon bizneset ekzistuese.
+
+Pas regjistrimit dhe konfirmimit të email-it (kur kërkohet nga Supabase), `/auth/continue` dërgon adminët te `/admin`, anëtarët ekzistues te biznesi i tyre dhe përdoruesit e rinj te `/onboarding`. Mirëpritja mbledh emrin, pastaj shtatë hapa në shqip. Draftet ruhen në server kur shtypet Vazhdo, Prapa ose Ruaj për më vonë; një ngarkim tjetër vazhdon nga hapi i ruajtur.
+
+`business_onboarding` ruan përgjigjet dhe lidhjen me biznesin. RPC-të janë vetëm për service role; server action merr identitetin nga sesioni i verifikuar dhe validon përgjigjet me allow-list. Një lock mbi profilin serializon draftet, tab-et dhe kërkesat e përsëritura. Krijimi i biznesit, rolit owner, agjentit dhe shënimi i përfundimit kryhen në një transaksion. Një anëtarësi e caktuar ndërkohë nga administratori përdoret pa krijuar një biznes tjetër.
+
+Katalogu fillon bosh, `auto_reply=false` dhe agjenti fillestar joaktiv. Preferencat për AI-në përgatisin udhëzimet, pa premtuar funksione të paimplementuara si gjenerimi i drafteve për miratim. Nuk krijohen produkte ose politika të sajuara. Workflow vazhdon të lidhet me llojin e produktit. Checklist-i në dashboard përdor gjendjen reale të Instagram-it, katalogut, njohurive, agjentit, bisedave dhe workflow-ve. Madhësia e ekipit dhe vëllimi i mesazheve ndryshojnë vetëm këshillat; anëtarët shtohen nga mekanizmi ekzistues i adminit. Preferencat nuk përdoren për autorizime ose kufij funksionesh; konfigurimi operacional ndryshohet nga panelet ekzistuese.
+
+Kontrolle: `npm test`, `npm run lint`, `npm run build`. `supabase/tests/self_service_onboarding.sql` provon draftet, idempotencën, caktimin e pronarit, kufizimin e RPC-ve dhe rollback-un; ekzekutohet vetëm në databazë të izoluar testimi pas migrimeve dhe bën rollback.
