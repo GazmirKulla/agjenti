@@ -21,6 +21,7 @@ export default async function AppHome() {
 				<div>
 					<p className="brand-mark text-2xl text-ink">Agjenti</p>
 					<h1 className="mt-3 text-xl text-ink">Bizneset e tua</h1>
+					<p className="mt-1 text-xs text-ink-muted">{user.email}</p>
 					{admin ? (
 						<p className="mt-2 text-sm text-ink-muted">
 							Platform Admin ·{" "}

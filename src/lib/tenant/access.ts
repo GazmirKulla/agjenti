@@ -31,17 +31,39 @@ export async function listMemberships(userId: string) {
 	const supabase = createServiceSupabase();
 	const admin = await isPlatformAdmin(userId);
 	if (admin) {
-		const { data } = await supabase.from("businesses").select("id,name,slug,catalog_source,auto_reply").order("name");
+		const { data } = await supabase
+			.from("businesses")
+			.select("id,name,slug,catalog_source,auto_reply")
+			.order("name");
 		return { admin: true, businesses: (data ?? []) as BusinessRow[] };
 	}
-	const { data } = await supabase
+
+	// Query në dy hapa — më i besueshëm se embed nested.
+	const { data: links, error: linkErr } = await supabase
 		.from("business_users")
-		.select("role, businesses (id, name, slug, catalog_source, auto_reply)")
+		.select("business_id, role")
 		.eq("user_id", userId);
-	const businesses = (data ?? [])
-		.map((row) => row.businesses as unknown as BusinessRow | null)
-		.filter((row): row is BusinessRow => Boolean(row));
-	return { admin: false, businesses };
+	if (linkErr) {
+		console.error("[listMemberships] business_users", linkErr.message);
+		return { admin: false, businesses: [] as BusinessRow[] };
+	}
+
+	const ids = (links ?? []).map((row) => row.business_id).filter(Boolean);
+	if (ids.length === 0) {
+		return { admin: false, businesses: [] as BusinessRow[] };
+	}
+
+	const { data: businesses, error: bizErr } = await supabase
+		.from("businesses")
+		.select("id,name,slug,catalog_source,auto_reply")
+		.in("id", ids)
+		.order("name");
+	if (bizErr) {
+		console.error("[listMemberships] businesses", bizErr.message);
+		return { admin: false, businesses: [] as BusinessRow[] };
+	}
+
+	return { admin: false, businesses: (businesses ?? []) as BusinessRow[] };
 }
 
 export async function requireBusinessAccess(userId: string, slug: string) {
