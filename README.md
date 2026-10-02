@@ -12,7 +12,7 @@ Next.js 15, React 19, TypeScript, Tailwind, Supabase, Vitest. Deploy: Vercel, do
 2. Ekzekuto `supabase/migrations/20261001120000_init.sql`.
 3. Kopjo `.env.example` te `.env.local`.
 4. Shto rreshtin tënd te `platform_admins` pas regjistrimit të parë.
-5. `npm install && npm run dev`.
+5. `yarn install && yarn dev`.
 
 ## Env
 
