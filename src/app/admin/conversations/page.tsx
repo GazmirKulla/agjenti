@@ -10,7 +10,7 @@ import {
 } from "@/components/dashboard/ui";
 export default async function AdminConversations() {
   const user = await getSessionUser();
-  if (!user || !(await isPlatformAdmin(user.id))) redirect("/app");
+  if (!user || !(await isPlatformAdmin(user.id))) redirect("/auth/continue");
   const db = createServiceSupabase();
   const [conversations, connections] = await Promise.all([
     db

@@ -10,6 +10,6 @@ export default async function BusinessDashboard({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  if (!access) redirect("/auth/continue");
   return <Overview business={access.business} />;
 }

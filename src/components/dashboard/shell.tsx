@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { signOut } from "@/lib/auth/actions";
 import { Icon } from "./icon";
 const businessNav = [
   ["", "Dashboard", "dashboard"],
@@ -26,12 +27,16 @@ export function DashboardShell({
   slug,
   admin = false,
   email,
+  platformAdmin = false,
+  businesses = [],
 }: {
   children: React.ReactNode;
   name: string;
   slug?: string;
   admin?: boolean;
   email?: string;
+  platformAdmin?: boolean;
+  businesses?: { id: string; name: string; slug: string }[];
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -41,16 +46,39 @@ export function DashboardShell({
   return (
     <div className="dashboard-shell">
       <aside className={`dashboard-sidebar ${open ? "is-open" : ""}`}>
-        <Link href="/app" className="dashboard-brand">
+        <Link
+          href={platformAdmin || admin ? "/admin" : base}
+          className="dashboard-brand"
+        >
           <span className="brand-symbol">A</span> Agjenti.app
         </Link>
-        <Link href="/app" className="workspace-switch">
-          <span className="workspace-avatar">
-            {admin ? <Icon name="spark" /> : name.slice(0, 2).toUpperCase()}
-          </span>
-          <span>{name}</span>
-          <span className="ml-auto">⌄</span>
-        </Link>
+        <details className="workspace-picker">
+          <summary className="workspace-switch">
+            <span className="workspace-avatar">
+              {admin ? "A" : name.slice(0, 2).toUpperCase()}
+            </span>
+            <span>{name}</span>
+            <span className="ml-auto">⌄</span>
+          </summary>
+          <div className="workspace-options">
+            {(platformAdmin || admin) && (
+              <Link href="/admin" onClick={() => setOpen(false)}>
+                Platform Admin
+              </Link>
+            )}
+            {businesses.map((b) => (
+              <Link
+                key={b.id}
+                href={`/b/${b.slug}`}
+                aria-current={b.slug === slug ? "page" : undefined}
+                onClick={() => setOpen(false)}
+              >
+                {b.name}
+              </Link>
+            ))}
+            {admin && <Link href="/admin/businesses">+ Menaxho bizneset</Link>}
+          </div>
+        </details>
         <nav
           aria-label={admin ? "Menuja e administratorit" : "Menuja e biznesit"}
         >
@@ -143,18 +171,28 @@ export function DashboardShell({
               </div>
             )}
           </div>
-          <Link href="/app" className="topbar-profile">
-            <span className="profile-avatar">
-              {name.slice(0, 2).toUpperCase()}
-            </span>
-            <span>
-              <strong>{name}</strong>
-              <small>
-                {admin ? "Platform Admin" : email || "Hapësira e biznesit"}
-              </small>
-            </span>
-            <span>⌄</span>
-          </Link>
+          <details className="profile-menu">
+            <summary className="topbar-profile">
+              <span className="profile-avatar">
+                {name.slice(0, 2).toUpperCase()}
+              </span>
+              <span>
+                <strong>{name}</strong>
+                <small>
+                  {admin ? "Platform Admin" : email || "Hapësira e biznesit"}
+                </small>
+              </span>
+              <span>⌄</span>
+            </summary>
+            <div className="profile-options">
+              <p>{email}</p>
+              <form action={signOut}>
+                <button type="submit" className="btn btn-ghost">
+                  Dil nga llogaria
+                </button>
+              </form>
+            </div>
+          </details>
         </header>
         <main className="dashboard-content">{children}</main>
       </div>

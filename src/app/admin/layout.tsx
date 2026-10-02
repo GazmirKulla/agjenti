@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
+import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { DashboardShell } from "@/components/dashboard/shell";
 export default async function AdminLayout({
   children,
@@ -8,9 +8,16 @@ export default async function AdminLayout({
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  if (!(await isPlatformAdmin(user.id))) redirect("/app");
+  const access = await listMemberships(user.id);
+  if (!access.admin) redirect("/auth/continue");
   return (
-    <DashboardShell name="Platform Admin" admin>
+    <DashboardShell
+      name="Platform Admin"
+      admin
+      platformAdmin
+      businesses={access.businesses}
+      email={user.email}
+    >
       {children}
     </DashboardShell>
   );

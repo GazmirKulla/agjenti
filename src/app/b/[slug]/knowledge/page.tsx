@@ -15,7 +15,7 @@ export default async function KnowledgePage({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
   const { data: entries, error: loadError } = await db
     .from("knowledge_entries")

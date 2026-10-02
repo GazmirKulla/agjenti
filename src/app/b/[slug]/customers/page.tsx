@@ -13,7 +13,7 @@ export default async function CustomersPage({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  if (!access) redirect("/auth/continue");
   const { data: customers, error } = await createServiceSupabase()
     .from("customers")
     .select("id,display_name,username,phone,created_at")

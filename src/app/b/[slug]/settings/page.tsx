@@ -15,7 +15,7 @@ export default async function SettingsPage({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  if (!access) redirect("/auth/continue");
 
   async function save(formData: FormData) {
     "use server";

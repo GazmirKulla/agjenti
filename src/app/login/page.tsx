@@ -1,123 +1,231 @@
 "use client";
-
 import Link from "next/link";
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
-
+import "./auth.css";
 function LoginForm() {
-	const router = useRouter();
-	const searchParams = useSearchParams();
-	const next = searchParams.get("next") || "/app";
-	const [mode, setMode] = useState<"signin" | "signup">("signin");
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [busy, setBusy] = useState(false);
-	const [message, setMessage] = useState<string | null>(null);
-	const [error, setError] = useState<string | null>(null);
-
-	async function onSubmit(e: React.FormEvent) {
-		e.preventDefault();
-		setError(null);
-		setMessage(null);
-		setBusy(true);
-		const supabase = createBrowserSupabase();
-
-		try {
-			if (mode === "signin") {
-				const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-				if (err) {
-					setError(err.message);
-					return;
-				}
-			} else {
-				const { data, error: err } = await supabase.auth.signUp({ email, password });
-				if (err) {
-					setError(err.message);
-					return;
-				}
-				if (!data.session) {
-					setMessage(
-						"Llogaria u krijua. Nëse kërkohet konfirmim, kontrollo email-in — ose fik Confirm email te Supabase.",
-					);
-					return;
-				}
-			}
-
-			router.replace(next.startsWith("/") ? next : "/app");
-			router.refresh();
-		} finally {
-			setBusy(false);
-		}
-	}
-
-	return (
-		<main className="relative mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-			<div className="fade-up mb-8">
-				<Link href="/" className="brand-mark text-3xl text-ink">
-					Agjenti
-				</Link>
-				<h1 className="mt-6 text-2xl text-ink">
-					{mode === "signin" ? "Hyr në platformë" : "Krijo llogari"}
-				</h1>
-				<p className="mt-2 text-ink-muted">Stafi i biznesit dhe Platform Admin.</p>
-			</div>
-
-			<form onSubmit={onSubmit} className="fade-up-delay flex flex-col gap-3">
-				<label className="grid gap-1.5 text-sm text-ink-muted">
-					Email
-					<input
-						type="email"
-						required
-						autoComplete="email"
-						value={email}
-						onChange={(e) => setEmail(e.target.value)}
-						placeholder="email@biznesi.com"
-						className="field"
-					/>
-				</label>
-				<label className="grid gap-1.5 text-sm text-ink-muted">
-					Fjalëkalimi
-					<input
-						type="password"
-						required
-						minLength={6}
-						autoComplete={mode === "signin" ? "current-password" : "new-password"}
-						value={password}
-						onChange={(e) => setPassword(e.target.value)}
-						placeholder="••••••••"
-						className="field"
-					/>
-				</label>
-				<button type="submit" disabled={busy} className="btn btn-primary mt-2">
-					{busy ? "Duke u përpunuar…" : mode === "signin" ? "Hyr" : "Regjistrohu"}
-				</button>
-			</form>
-
-			<button
-				type="button"
-				className="fade-up-delay-2 mt-5 text-left text-sm text-ink-muted underline decoration-line underline-offset-4 hover:text-ink"
-				onClick={() => {
-					setMode(mode === "signin" ? "signup" : "signin");
-					setError(null);
-					setMessage(null);
-				}}
-			>
-				{mode === "signin" ? "Nuk ke llogari? Regjistrohu" : "Ke llogari? Hyr"}
-			</button>
-
-			{message ? <p className="mt-4 text-sm text-success">{message}</p> : null}
-			{error ? (
-				<p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>
-			) : null}
-		</main>
-	);
+  const params = useSearchParams();
+  const [mode, setMode] = useState<"signin" | "signup" | "reset">(
+    params.get("mode") === "signup" ? "signup" : "signin",
+  );
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState(
+    params.has("error")
+      ? "Lidhja e konfirmimit ka skaduar ose nuk është e vlefshme. Provo të hysh ose kërko një lidhje të re."
+      : "",
+  );
+  function changeMode(value: typeof mode) {
+    setMode(value);
+    setError("");
+    setMessage("");
+  }
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const supabase = createBrowserSupabase();
+      if (mode === "reset") {
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          email.trim(),
+          {
+            redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+          },
+        );
+        if (error) throw error;
+        setMessage(
+          "Nëse ekziston një llogari me këtë email, do të marrësh lidhjen për ndryshimin e fjalëkalimit. Kontrollo edhe dosjen Spam.",
+        );
+        return;
+      }
+      if (mode === "signin") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+        if (error) throw error;
+        if (!data.session) {
+          setMessage(
+            "Kontrollo email-in për të konfirmuar llogarinë, pastaj hyr në platformë.",
+          );
+          return;
+        }
+      }
+      window.location.assign("/auth/continue");
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      setError(
+        code === "invalid_credentials"
+          ? "Email-i ose fjalëkalimi nuk është i saktë."
+          : code === "email_not_confirmed"
+            ? "Konfirmo fillimisht email-in nga lidhja që të kemi dërguar."
+            : code === "user_already_exists"
+              ? "Ky email ka një llogari. Provo të hysh."
+              : code === "weak_password"
+                ? "Zgjidh një fjalëkalim më të fortë, me të paktën 8 karaktere."
+                : code?.includes("rate_limit")
+                  ? "Shumë tentativa. Prit pak dhe provo përsëri."
+                  : "Nuk u krye veprimi. Kontrollo lidhjen dhe provo përsëri.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="auth-page">
+      <aside className="auth-story">
+        <Link href="/" className="auth-brand">
+          <span>A</span> Agjenti.app
+        </Link>
+        <div>
+          <p className="auth-eyebrow">BIZNESI YT, GJITHMONË NË KONTAKT</p>
+          <h2>
+            Nga një bisedë,
+            <br />
+            te porosia e radhës.
+          </h2>
+          <p>
+            Bisedat, produktet dhe klientët në një hapësirë të vetme. Agjenti yt
+            AI kujdeset për hapin tjetër.
+          </p>
+          <div className="auth-preview">
+            <span>✦ Agjenti AI</span>
+            <p>Përshëndetje! Si mund t’ju ndihmoj sot?</p>
+            <small>Një panel për të gjithë ekipin tënd</small>
+          </div>
+        </div>
+        <small>Agjenti.app · Për bizneset që shesin në Instagram</small>
+      </aside>
+      <section className="auth-content">
+        <Link href="/" className="auth-back">
+          ← Kthehu te kryefaqja
+        </Link>
+        <div className="auth-card">
+          <span className="auth-icon">✦</span>
+          <h1>
+            {mode === "signin"
+              ? "Mirë se u ktheve"
+              : mode === "signup"
+                ? "Krijo llogarinë tënde"
+                : "Harrove fjalëkalimin?"}
+          </h1>
+          <p>
+            {mode === "reset"
+              ? "Vendos email-in dhe do të të dërgojmë udhëzimet për rikuperim."
+              : "Hyr në hapësirën tënde për të menaxhuar biznesin."}
+          </p>
+          <form onSubmit={submit}>
+            <fieldset disabled={busy}>
+              <label>
+                Email-i
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="emri@biznesi.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
+              {mode !== "reset" && (
+                <label>
+                  Fjalëkalimi
+                  <div className="auth-password">
+                    <input
+                      type={show ? "text" : "password"}
+                      required
+                      minLength={mode === "signup" ? 8 : undefined}
+                      autoComplete={
+                        mode === "signup" ? "new-password" : "current-password"
+                      }
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={
+                        mode === "signup"
+                          ? "Të paktën 8 karaktere"
+                          : "Fjalëkalimi yt"
+                      }
+                    />
+                    <button
+                      type="button"
+                      aria-label={
+                        show ? "Fshih fjalëkalimin" : "Shfaq fjalëkalimin"
+                      }
+                      onClick={() => setShow(!show)}
+                    >
+                      {show ? "Fshih" : "Shfaq"}
+                    </button>
+                  </div>
+                </label>
+              )}
+              {mode === "signin" && (
+                <button
+                  type="button"
+                  className="auth-text-button"
+                  onClick={() => changeMode("reset")}
+                >
+                  Harrove fjalëkalimin?
+                </button>
+              )}
+              {error && (
+                <p role="alert" className="auth-error">
+                  {error}
+                </p>
+              )}
+              {message && (
+                <p role="status" className="auth-success">
+                  {message}
+                </p>
+              )}
+              <button className="auth-submit" type="submit">
+                {busy
+                  ? "Duke u përpunuar…"
+                  : mode === "signin"
+                    ? "Hyr në panel →"
+                    : mode === "signup"
+                      ? "Krijo llogari →"
+                      : "Dërgo lidhjen"}
+              </button>
+            </fieldset>
+          </form>
+          <button
+            disabled={busy}
+            className="auth-toggle"
+            onClick={() => changeMode(mode === "signin" ? "signup" : "signin")}
+          >
+            {mode === "signin"
+              ? "Nuk ke llogari? Regjistrohu"
+              : "Ke llogari? Hyr"}
+          </button>
+          <p className="auth-footnote">
+            Qasja në panel përcaktohet nga roli dhe biznesi i lidhur me
+            llogarinë tënde.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
 }
-
 export default function LoginPage() {
-	return (
-		<Suspense fallback={<main className="p-8 text-ink-muted">Duke ngarkuar…</main>}>
-			<LoginForm />
-		</Suspense>
-	);
+  return (
+    <Suspense fallback={<main className="p-8">Duke ngarkuar…</main>}>
+      <LoginForm />
+    </Suspense>
+  );
 }

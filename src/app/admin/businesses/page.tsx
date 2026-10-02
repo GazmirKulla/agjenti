@@ -9,7 +9,7 @@ import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 
 export default async function AdminBusinessesPage() {
   const user = await getSessionUser();
-  if (!user || !(await isPlatformAdmin(user.id))) redirect("/app");
+  if (!user || !(await isPlatformAdmin(user.id))) redirect("/auth/continue");
   const service = createServiceSupabase();
   const { data: businesses, error: loadError } = await service
     .from("businesses")

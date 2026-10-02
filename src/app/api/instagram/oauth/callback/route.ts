@@ -7,7 +7,7 @@ export async function GET(request: Request) {
 	const url = new URL(request.url);
 	const err = url.searchParams.get("error");
 	if (err) {
-		return NextResponse.redirect(new URL(`/app?ig=denied`, url.origin));
+		return NextResponse.redirect(new URL(`/auth/continue?ig=denied`, url.origin));
 	}
 	const state = verifyOAuthState(url.searchParams.get("state"));
 	const code = url.searchParams.get("code");
@@ -49,6 +49,6 @@ export async function GET(request: Request) {
 		);
 	} catch (error) {
 		console.error("[instagram oauth]", error);
-		return NextResponse.redirect(new URL(`/app?ig=error`, url.origin));
+		return NextResponse.redirect(new URL(`/auth/continue?ig=error`, url.origin));
 	}
 }

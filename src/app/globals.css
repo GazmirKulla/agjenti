@@ -1519,3 +1519,56 @@
   font-weight: 600;
   white-space: nowrap;
 }
+.workspace-picker {
+  position: relative;
+  margin-bottom: 18px;
+}
+.workspace-picker summary {
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+}
+.workspace-options {
+  max-height: 300px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #e8e2ff;
+  border-radius: 12px;
+  padding: 6px;
+}
+.workspace-options a {
+  display: block;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.workspace-options a:hover,
+.workspace-options a[aria-current] {
+  background: #f0ebff;
+  color: #6535ff;
+}
+.profile-menu {
+  position: relative;
+  margin-left: auto;
+}
+.profile-menu summary {
+  cursor: pointer;
+  list-style: none;
+}
+.profile-options {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 30;
+  background: white;
+  padding: 16px;
+  border: 1px solid #e8e2ff;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px #25124f15;
+  min-width: 220px;
+}
+.profile-options p {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  margin-bottom: 12px;
+}

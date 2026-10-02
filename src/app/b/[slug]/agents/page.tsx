@@ -16,7 +16,7 @@ export default async function AgentsPage({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
   const { data: agents, error: loadError } = await db
     .from("ai_agents")

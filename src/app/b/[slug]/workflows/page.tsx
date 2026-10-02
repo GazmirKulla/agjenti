@@ -20,7 +20,7 @@ export default async function WorkflowsPage({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
   const { data: workflows, error: loadError } = await db
     .from("workflows")

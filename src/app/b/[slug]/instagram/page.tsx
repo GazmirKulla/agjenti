@@ -17,7 +17,7 @@ export default async function InstagramPage({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  if (!access) redirect("/auth/continue");
   const supabase = createServiceSupabase();
   const { data: conn, error: loadError } = await supabase
     .from("instagram_connections")

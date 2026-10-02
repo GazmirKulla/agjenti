@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { DashboardShell } from "@/components/dashboard/shell";
 export default async function BusinessLayout({
   children,
@@ -11,10 +11,17 @@ export default async function BusinessLayout({
   const { slug } = await params;
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  const access = await listMemberships(user.id);
+  const business = access.businesses.find((b) => b.slug === slug);
+  if (!business) redirect("/auth/continue");
   return (
-    <DashboardShell name={access.business.name} slug={slug}>
+    <DashboardShell
+      name={business.name}
+      slug={slug}
+      platformAdmin={access.admin}
+      businesses={access.businesses}
+      email={user.email}
+    >
       {children}
     </DashboardShell>
   );

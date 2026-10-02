@@ -19,7 +19,7 @@ export default async function OrdersPage({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  if (!access) redirect("/auth/continue");
   const { data: orders, error } = await createServiceSupabase()
     .from("orders")
     .select(

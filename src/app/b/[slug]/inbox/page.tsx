@@ -10,6 +10,6 @@ export default async function InboxPage({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
-  if (!access) redirect("/app");
+  if (!access) redirect("/auth/continue");
   return <InboxWorkspace businessId={access.business.id} slug={slug} />;
 }
