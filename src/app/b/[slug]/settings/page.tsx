@@ -40,7 +40,7 @@ export default async function SettingsPage({
     const catalogSource = String(
       formData.get("catalog_source") ?? acc.business.catalog_source,
     );
-    if (!["internal", "zana", "external"].includes(catalogSource))
+    if (!["internal", "external"].includes(catalogSource))
       return { error: "Burimi i katalogut nuk është i vlefshëm." };
     const catalogUrl = String(formData.get("catalog_url") ?? "").trim();
     const ordersUrl = String(formData.get("orders_url") ?? "").trim();
@@ -58,13 +58,12 @@ export default async function SettingsPage({
     if (apiSecret && apiSecret.length < 16)
       return { error: "API key duhet të ketë të paktën 16 karaktere." };
 
-    const kind = catalogSource === "zana" ? "zana" : "http";
     const db = createServiceSupabase();
     const { data: existing } = await db
       .from("integrations")
       .select("secret_ciphertext")
       .eq("business_id", acc.business.id)
-      .eq("kind", kind)
+      .eq("kind", "http")
       .maybeSingle();
 
     const row: {
@@ -75,7 +74,7 @@ export default async function SettingsPage({
       secret_ciphertext?: string | null;
     } = {
       business_id: acc.business.id,
-      kind,
+      kind: "http",
       catalog_url: catalogUrl || null,
       orders_url: ordersUrl || null,
     };
@@ -112,7 +111,7 @@ export default async function SettingsPage({
       .from("integrations")
       .select("catalog_url,orders_url,secret_ciphertext")
       .eq("business_id", access.business.id)
-      .eq("kind", access.business.catalog_source === "zana" ? "zana" : "http")
+      .eq("kind", "http")
       .maybeSingle();
   if (integrationError) throw new Error("Nuk u ngarkua integrimi i biznesit.");
 
@@ -182,9 +181,8 @@ export default async function SettingsPage({
               defaultValue={access.business.catalog_source}
               className="field"
             >
-              <option value="internal">Katalog manual</option>
-              <option value="zana">Zana Store</option>
-              <option value="external">API e jashtme</option>
+              <option value="internal">Katalog i brendshëm</option>
+              <option value="external">Katalog i jashtëm (API)</option>
             </select>
           </label>
           <label className="form-label">
@@ -223,8 +221,8 @@ export default async function SettingsPage({
             </span>
             <h2 className="text-lg mt-5">Katalogu dhe porositë</h2>
             <p className="muted-copy">
-              Me katalogun manual, produktet shtohen brenda panelit. Integrimet
-              e jashtme lidhen me HTTP + Bearer: URL-të + API key i biznesit.
+              Katalogu i brendshëm menaxhohet në panel. Katalogu i jashtëm lidhet
+              me HTTP + Bearer: URL-të + API key i biznesit.
             </p>
             <p className="muted-copy">
               Kopjo API key te env i sajtit të klientit, pastaj testo lidhjen.

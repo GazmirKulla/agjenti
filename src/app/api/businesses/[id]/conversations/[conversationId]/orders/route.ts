@@ -110,7 +110,7 @@ export async function POST(
 		unit_amount: product?.price_amount ?? null,
 	});
 
-	if (business?.catalog_source === "zana" || business?.catalog_source === "external") {
+	if (business?.catalog_source === "external") {
 		const submitted = await submitExternalOrder({
 			businessId,
 			payload: {

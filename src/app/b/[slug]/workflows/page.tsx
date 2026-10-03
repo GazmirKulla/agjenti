@@ -4,11 +4,7 @@ import { Icon } from "@/components/dashboard/icon";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import {
-  APPAREL_STEPS,
-  PUZZLE_STEPS,
-  SIMPLE_STEPS,
-} from "@/lib/workflows/engine";
+import { SIMPLE_STEPS } from "@/lib/workflows/engine";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
@@ -36,41 +32,6 @@ export default async function WorkflowsPage({
         .order("sort_order"),
     ]);
   if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
-
-  async function seedZana() {
-    "use server";
-    const session = await getSessionUser();
-    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
-    const acc = await requireBusinessAccess(session.id, slug);
-    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
-    const businessId = acc.business.id;
-    const supabase = createServiceSupabase();
-    async function seed(name: string, steps: typeof PUZZLE_STEPS) {
-      const { data: wf } = await supabase
-        .from("workflows")
-        .insert({ business_id: businessId, name })
-        .select("id")
-        .single()
-        .throwOnError();
-      if (!wf) throw new Error("Workflow nuk u krijua.");
-      await supabase
-        .from("workflow_steps")
-        .insert(
-          steps.map((s, i) => ({
-            workflow_id: wf.id,
-            key: s.key,
-            position: i,
-            kind: s.kind,
-            required: true,
-            config: { label: s.label },
-          })),
-        )
-        .throwOnError();
-    }
-    await seed("Puzzle", PUZZLE_STEPS);
-    await seed("Bluzë", APPAREL_STEPS);
-    revalidatePath(`/b/${slug}`, "layout");
-  }
 
   async function addSimple(formData: FormData) {
     "use server";
@@ -207,17 +168,6 @@ export default async function WorkflowsPage({
                 Hap produktet →
               </Link>
             </div>
-          )}
-          {access.business.catalog_source === "zana" && (
-            <ActionForm action={seedZana} className="panel section-pad">
-              <h2 className="text-lg">Workflow-t e Zana</h2>
-              <p className="muted-copy mb-5">
-                Importon hapat për puzzle dhe bluza (pa krijuar lloje).
-              </p>
-              <button className="btn btn-ghost" type="submit">
-                Importo workflow-t
-              </button>
-            </ActionForm>
           )}
         </aside>
       </div>

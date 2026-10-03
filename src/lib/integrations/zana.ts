@@ -16,10 +16,6 @@ export function generateIntegrationSecret(): string {
   return randomBytes(32).toString("hex");
 }
 
-function integrationKind(catalogSource: string): "zana" | "http" {
-  return catalogSource === "zana" ? "zana" : "http";
-}
-
 function parseAbsoluteUrl(value: string): URL | null {
   try {
     const url = new URL(value);
@@ -57,13 +53,13 @@ export function knowledgeUrlFromCatalog(catalogUrl: string): string | null {
   return null;
 }
 
-async function loadIntegrationRow(businessId: string, catalogSource: string) {
+async function loadIntegrationRow(businessId: string) {
   const supabase = createServiceSupabase();
   const { data, error } = await supabase
     .from("integrations")
     .select("catalog_url,orders_url,secret_ciphertext,kind")
     .eq("business_id", businessId)
-    .eq("kind", integrationKind(catalogSource))
+    .eq("kind", "http")
     .maybeSingle();
   if (error) throw new Error("Nuk u lexua lidhja e katalogut.");
   return data;
@@ -81,10 +77,7 @@ export async function fetchLinkedCatalog(
   if (businessError || !business)
     throw new Error("Nuk u lexua konfigurimi i katalogut.");
   if (business.catalog_source === "internal") return [];
-  const integration = await loadIntegrationRow(
-    businessId,
-    business.catalog_source,
-  );
+  const integration = await loadIntegrationRow(businessId);
   const configuredUrl = integration?.catalog_url?.trim() || null;
   if (!configuredUrl) {
     throw new Error(
@@ -190,7 +183,7 @@ export async function probeLinkedCatalog(params: {
   }
   let integration: Awaited<ReturnType<typeof loadIntegrationRow>> = null;
   try {
-    integration = await loadIntegrationRow(params.businessId, catalogSource);
+    integration = await loadIntegrationRow(params.businessId);
   } catch {
     return { ...empty, error: "Nuk u lexua lidhja e katalogut." };
   }
@@ -325,11 +318,12 @@ export async function submitExternalOrder(params: {
     .select("catalog_source")
     .eq("id", params.businessId)
     .maybeSingle();
-  const catalogSource = business?.catalog_source ?? "internal";
-  const integration = await loadIntegrationRow(
-    params.businessId,
-    catalogSource,
-  ).catch(() => null);
+  if ((business?.catalog_source ?? "internal") === "internal") {
+    return { ok: false, error: "Biznesi nuk ka API porosie të konfiguruar." };
+  }
+  const integration = await loadIntegrationRow(params.businessId).catch(
+    () => null,
+  );
   const url = integration?.orders_url?.trim() || null;
   if (!url || !parseAbsoluteUrl(url)) {
     return { ok: false, error: "Biznesi nuk ka API porosie të konfiguruar." };
@@ -379,9 +373,9 @@ export async function submitExternalOrder(params: {
 
 export async function loadBusinessApiSecret(
   businessId: string,
-  catalogSource: string,
+  _catalogSource?: string,
 ): Promise<string | null> {
-  const integration = await loadIntegrationRow(businessId, catalogSource);
+  const integration = await loadIntegrationRow(businessId);
   return (
     resolveBearerSecret({
       secretCiphertext: integration?.secret_ciphertext,
@@ -391,9 +385,9 @@ export async function loadBusinessApiSecret(
 
 export async function loadBusinessCatalogUrl(
   businessId: string,
-  catalogSource: string,
+  _catalogSource?: string,
 ): Promise<string | null> {
-  const integration = await loadIntegrationRow(businessId, catalogSource);
+  const integration = await loadIntegrationRow(businessId);
   const url = integration?.catalog_url?.trim() || null;
   return url && parseAbsoluteUrl(url) ? url : null;
 }

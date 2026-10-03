@@ -29,22 +29,16 @@ export default async function KnowledgePage({
     .order("sort_order");
   if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
 
-  async function importZanaFaq() {
+  async function importExternalFaq() {
     "use server";
     const session = await getSessionUser();
     if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
-    if (acc.business.catalog_source !== "zana")
-      return { error: "Ky biznes nuk është i lidhur me Zana." };
-    const catalogUrl = await loadBusinessCatalogUrl(
-      acc.business.id,
-      acc.business.catalog_source,
-    );
-    const secret = await loadBusinessApiSecret(
-      acc.business.id,
-      acc.business.catalog_source,
-    );
+    if (acc.business.catalog_source !== "external")
+      return { error: "Importi i FAQ është i disponueshëm vetëm me katalog të jashtëm." };
+    const catalogUrl = await loadBusinessCatalogUrl(acc.business.id);
+    const secret = await loadBusinessApiSecret(acc.business.id);
     const knowledgeUrl = catalogUrl
       ? knowledgeUrlFromCatalog(catalogUrl)
       : null;
@@ -112,10 +106,10 @@ export default async function KnowledgePage({
         title={access.business.name}
         description="Njohuritë e biznesit që Agjenti AI përdor për t’iu përgjigjur klientëve."
       >
-        {access.business.catalog_source === "zana" && (
-          <ActionForm action={importZanaFaq}>
+        {access.business.catalog_source === "external" && (
+          <ActionForm action={importExternalFaq}>
             <button className="btn btn-ghost" type="submit">
-              Kopjo FAQ nga Zana
+              Importo FAQ nga API
             </button>
           </ActionForm>
         )}

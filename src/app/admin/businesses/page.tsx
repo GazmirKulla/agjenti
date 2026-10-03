@@ -34,7 +34,7 @@ export default async function AdminBusinessesPage() {
         error:
           "Vendos emrin dhe një slug me shkronja të vogla, numra ose viza.",
       };
-    if (!["internal", "zana", "external"].includes(catalog_source))
+    if (!["internal", "external"].includes(catalog_source))
       return { error: "Burimi i katalogut nuk është i vlefshëm." };
     const db = createServiceSupabase();
     const { error } = await db
@@ -115,9 +115,8 @@ export default async function AdminBusinessesPage() {
             <label className="form-label">
               Burimi i katalogut
               <select name="catalog_source" className="field">
-                <option value="internal">Katalog manual</option>
-                <option value="zana">Zana Store API</option>
-                <option value="external">API e jashtme</option>
+                <option value="internal">Katalog i brendshëm</option>
+                <option value="external">Katalog i jashtëm (API)</option>
               </select>
             </label>
             <label className="toggle-label">
@@ -138,7 +137,9 @@ export default async function AdminBusinessesPage() {
           title: b.name,
           subtitle: `/${b.slug}`,
           cells: [
-            b.catalog_source,
+            b.catalog_source === "external"
+              ? "I jashtëm (API)"
+              : "I brendshëm",
             <StatusBadge
               key="ai"
               status={b.auto_reply ? "connected" : "paused"}
@@ -160,7 +161,11 @@ export default async function AdminBusinessesPage() {
                 <dl className="detail-fields">
                   <div>
                     <dt>Katalogu</dt>
-                    <dd>{b.catalog_source}</dd>
+                    <dd>
+                      {b.catalog_source === "external"
+                        ? "I jashtëm (API)"
+                        : "I brendshëm"}
+                    </dd>
                   </div>
                   <div>
                     <dt>Përgjigje automatike</dt>

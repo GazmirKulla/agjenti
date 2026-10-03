@@ -6,7 +6,7 @@ export type BusinessRow = {
   id: string;
   name: string;
   slug: string;
-  catalog_source: "internal" | "zana" | "external";
+  catalog_source: "internal" | "external";
   auto_reply: boolean;
 };
 

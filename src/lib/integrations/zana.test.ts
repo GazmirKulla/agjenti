@@ -48,21 +48,21 @@ function configure(
         catalog_url: url,
         orders_url: null,
         secret_ciphertext: secretCiphertext,
-        kind: source === "zana" ? "zana" : "http",
+        kind: "http",
       },
       error: null,
     });
 }
 describe("linked catalog", () => {
   it("rejects relative catalog URLs", async () => {
-    configure("zana", "/api/integrations/agjenti/catalog");
+    configure("external", "/api/integrations/agjenti/catalog");
     await expect(fetchLinkedCatalog("business-a")).rejects.toThrow(
       "URL-ja e katalogut",
     );
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
   it("requires a configured absolute catalog URL", async () => {
-    configure("zana", null);
+    configure("external", null);
     await expect(fetchLinkedCatalog("business-a")).rejects.toThrow(
       "nuk është konfiguruar",
     );
@@ -111,7 +111,7 @@ describe("linked catalog", () => {
 describe("catalog probe", () => {
   it("prefers the form API secret override", async () => {
     mocks.maybeSingle.mockResolvedValueOnce({
-      data: { catalog_source: "zana" },
+      data: { catalog_source: "external" },
       error: null,
     });
     mocks.maybeSingle.mockResolvedValueOnce({
@@ -119,7 +119,7 @@ describe("catalog probe", () => {
         catalog_url: null,
         orders_url: null,
         secret_ciphertext: null,
-        kind: "zana",
+        kind: "http",
       },
       error: null,
     });

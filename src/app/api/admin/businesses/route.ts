@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 		.insert({
 			name,
 			slug,
-			catalog_source: body.catalog_source === "zana" ? "zana" : body.catalog_source === "external" ? "external" : "internal",
+			catalog_source: body.catalog_source === "external" ? "external" : "internal",
 			auto_reply: body.auto_reply === true,
 		})
 		.select("id,slug")
