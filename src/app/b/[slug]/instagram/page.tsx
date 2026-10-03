@@ -4,16 +4,21 @@ import {
   formatDate,
 } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
+import { SecretReveal } from "@/components/dashboard/secret-reveal";
 import { redirect } from "next/navigation";
+import { decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
 export default async function InstagramPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ disconnected?: string }>;
 }) {
   const { slug } = await params;
+  const query = await searchParams;
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
@@ -21,11 +26,22 @@ export default async function InstagramPage({
   const supabase = createServiceSupabase();
   const { data: conn, error: loadError } = await supabase
     .from("instagram_connections")
-    .select("username,ig_user_id,status,expires_at,last_error,refreshed_at")
+    .select(
+      "username,ig_user_id,status,expires_at,last_error,refreshed_at,access_token_ciphertext",
+    )
     .eq("business_id", access.business.id)
     .neq("status", "disconnected")
     .maybeSingle();
   if (loadError) throw new Error("Nuk u ngarkua lidhja Instagram.");
+
+  let accessToken: string | null = null;
+  if (access.admin && conn?.access_token_ciphertext) {
+    try {
+      accessToken = decryptSecret(conn.access_token_ciphertext);
+    } catch {
+      accessToken = null;
+    }
+  }
 
   return (
     <>
@@ -33,6 +49,11 @@ export default async function InstagramPage({
         title="Instagram"
         description="Lidh llogarinë e biznesit për të menaxhuar bisedat me Agjentin AI."
       />
+      {query.disconnected === "1" && (
+        <p className="mb-5 rounded-lg bg-danger-soft p-4 text-sm text-danger">
+          Llogaria Instagram u shkëput.
+        </p>
+      )}
       <div className="panel section-pad mb-5 flex flex-wrap items-center gap-5">
         <span className="icon-tile tone-pink">
           <Icon name="instagram" size={29} />
@@ -80,6 +101,14 @@ export default async function InstagramPage({
                   <dd>{formatDate(conn.expires_at)}</dd>
                 </div>
               </dl>
+              {access.admin && accessToken && (
+                <SecretReveal value={accessToken} label="Access token (vetëm admin)" />
+              )}
+              {access.admin && conn.access_token_ciphertext && !accessToken && (
+                <p className="mt-4 text-sm text-danger">
+                  Token-i nuk u deshifrua. Kontrollo TOKEN_ENCRYPTION_KEY.
+                </p>
+              )}
             </div>
           )}
           {conn?.last_error && (

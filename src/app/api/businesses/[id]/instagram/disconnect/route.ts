@@ -4,7 +4,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
@@ -24,9 +24,22 @@ export async function POST(
       .maybeSingle();
     if (!data) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const { data: business } = await service
+    .from("businesses")
+    .select("slug")
+    .eq("id", id)
+    .maybeSingle();
+
   await service
     .from("instagram_connections")
     .update({ status: "disconnected", updated_at: new Date().toISOString() })
-    .eq("business_id", id);
-  return NextResponse.redirect(new URL(`/auth/continue`, _request.url));
+    .eq("business_id", id)
+    .neq("status", "disconnected");
+
+  const fallback = new URL("/admin/conversations", request.url);
+  const destination = business?.slug
+    ? new URL(`/b/${business.slug}/instagram?disconnected=1`, request.url)
+    : fallback;
+  return NextResponse.redirect(destination, 303);
 }

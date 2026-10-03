@@ -2,12 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { decryptSecret } from "@/lib/crypto/tokens";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
+import { SecretReveal } from "@/components/dashboard/secret-reveal";
 import {
   PageHeading,
   StatusBadge,
   formatDate,
 } from "@/components/dashboard/ui";
+
 export default async function AdminConversations() {
   const user = await getSessionUser();
   if (!user || !(await isPlatformAdmin(user.id))) redirect("/auth/continue");
@@ -23,7 +26,7 @@ export default async function AdminConversations() {
     db
       .from("instagram_connections")
       .select(
-        "id,username,status,last_error,refreshed_at,businesses(name,slug)",
+        "id,business_id,username,status,last_error,refreshed_at,access_token_ciphertext,businesses(name,slug)",
       )
       .neq("status", "disconnected")
       .order("created_at", { ascending: false })
@@ -97,6 +100,7 @@ export default async function AdminConversations() {
                 <th>Biznesi</th>
                 <th>Llogaria</th>
                 <th>Statusi</th>
+                <th>Access token</th>
                 <th>Rifreskimi i token-it</th>
                 <th>Veprimi</th>
               </tr>
@@ -107,6 +111,14 @@ export default async function AdminConversations() {
                   name: string;
                   slug: string;
                 };
+                let token: string | null = null;
+                if (c.access_token_ciphertext) {
+                  try {
+                    token = decryptSecret(c.access_token_ciphertext);
+                  } catch {
+                    token = null;
+                  }
+                }
                 return (
                   <tr key={c.id}>
                     <td>{b.name}</td>
@@ -117,14 +129,34 @@ export default async function AdminConversations() {
                         <p className="text-danger mt-2">{c.last_error}</p>
                       )}
                     </td>
+                    <td className="token-cell">
+                      {token ? (
+                        <SecretReveal value={token} label="Access token" />
+                      ) : (
+                        <span className="muted-copy">I padisponueshëm</span>
+                      )}
+                    </td>
                     <td>{formatDate(c.refreshed_at)}</td>
                     <td>
-                      <Link
-                        className="text-accent"
-                        href={`/b/${b.slug}/instagram`}
-                      >
-                        Menaxho →
-                      </Link>
+                      <div className="flex flex-col gap-3 items-start">
+                        <Link
+                          className="text-accent"
+                          href={`/b/${b.slug}/instagram`}
+                        >
+                          Menaxho →
+                        </Link>
+                        <form
+                          action={`/api/businesses/${c.business_id}/instagram/disconnect`}
+                          method="post"
+                        >
+                          <button
+                            className="btn btn-ghost text-danger"
+                            type="submit"
+                          >
+                            Shkëput llogarinë
+                          </button>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 );

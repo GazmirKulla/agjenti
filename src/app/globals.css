@@ -994,6 +994,34 @@
 .detail-fields dd {
   text-align: right;
 }
+.secret-reveal {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 55%);
+}
+.secret-reveal-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.secret-reveal-value {
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-all;
+  color: var(--ink);
+}
+.secret-reveal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.token-cell {
+  max-width: 280px;
+}
 .detail-block .field {
   font-size: 13px;
 }
