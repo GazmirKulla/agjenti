@@ -3,7 +3,11 @@ import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { loadBusinessApiSecret } from "@/lib/integrations/zana";
+import {
+  knowledgeUrlFromCatalog,
+  loadBusinessApiSecret,
+  loadBusinessCatalogUrl,
+} from "@/lib/integrations/zana";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
@@ -31,23 +35,29 @@ export default async function KnowledgePage({
     if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
-    const base = process.env.ZANA_API_BASE_URL?.replace(/\/$/, "");
+    if (acc.business.catalog_source !== "zana")
+      return { error: "Ky biznes nuk është i lidhur me Zana." };
+    const catalogUrl = await loadBusinessCatalogUrl(
+      acc.business.id,
+      acc.business.catalog_source,
+    );
     const secret = await loadBusinessApiSecret(
       acc.business.id,
       acc.business.catalog_source,
     );
-    if (acc.business.catalog_source !== "zana")
-      return { error: "Ky biznes nuk është i lidhur me Zana." };
-    if (!base || !secret)
+    const knowledgeUrl = catalogUrl
+      ? knowledgeUrlFromCatalog(catalogUrl)
+      : null;
+    if (!knowledgeUrl || !secret)
       return {
         error:
-          "Lidhja me Zana nuk është konfiguruar. Vendos URL base dhe API key te Cilësimet.",
+          "Lidhja nuk është konfiguruar. Vendos URL-në e katalogut (.../catalog) dhe API key te Cilësimet.",
       };
-    const res = await fetch(`${base}/api/integrations/agjenti/knowledge`, {
+    const res = await fetch(knowledgeUrl, {
       headers: { Authorization: `Bearer ${secret}` },
     });
     if (!res.ok)
-      return { error: "Njohuritë nuk u morën nga Zana. Provo përsëri." };
+      return { error: "Njohuritë nuk u morën nga API. Provo përsëri." };
     const json = (await res.json()) as {
       entries: Array<{
         question: string;

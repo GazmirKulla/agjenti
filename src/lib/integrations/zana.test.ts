@@ -16,7 +16,11 @@ vi.mock("@/lib/crypto/tokens", () => ({
   },
   encryptSecret: (value: string) => `cipher:${value}`,
 }));
-import { fetchLinkedCatalog, probeLinkedCatalog } from "./zana";
+import {
+  fetchLinkedCatalog,
+  knowledgeUrlFromCatalog,
+  probeLinkedCatalog,
+} from "./zana";
 beforeEach(() => {
   vi.resetAllMocks();
   const query = {
@@ -28,11 +32,8 @@ beforeEach(() => {
   mocks.eq.mockReturnValue(query);
   mocks.select.mockReturnValue(query);
   vi.stubGlobal("fetch", mocks.fetch);
-  vi.stubEnv("ZANA_API_BASE_URL", "");
-  vi.stubEnv("ZANA_AGJENTI_SECRET", "test-only-secret");
 });
 afterEach(() => {
-  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 function configure(
@@ -52,22 +53,22 @@ function configure(
       error: null,
     });
 }
-describe("linked catalog resilience", () => {
-  it("reports an unconfigured relative URL before attempting a request", async () => {
+describe("linked catalog", () => {
+  it("rejects relative catalog URLs", async () => {
     configure("zana", "/api/integrations/agjenti/catalog");
     await expect(fetchLinkedCatalog("business-a")).rejects.toThrow(
       "URL-ja e katalogut",
     );
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
-  it("does not build a URL from an empty base", async () => {
+  it("requires a configured absolute catalog URL", async () => {
     configure("zana", null);
     await expect(fetchLinkedCatalog("business-a")).rejects.toThrow(
       "nuk është konfiguruar",
     );
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
-  it("selects the external integration and uses the stored business secret", async () => {
+  it("uses the stored business secret with the absolute catalog URL", async () => {
     configure(
       "external",
       "https://catalog.example.test/products",
@@ -83,33 +84,23 @@ describe("linked catalog resilience", () => {
       }),
     );
   });
-  it("falls back to the legacy Zana env secret when no business secret is stored", async () => {
-    vi.stubEnv("ZANA_API_BASE_URL", "https://zana.example.test");
-    configure("zana", "/api/integrations/agjenti/catalog", null);
-    mocks.fetch.mockResolvedValue(
-      Response.json({
-        products: [
-          { id: "p1", name: "Puzzle", price: 2500, productType: null },
-        ],
-      }),
-    );
-    expect(await fetchLinkedCatalog("business-a")).toHaveLength(1);
-    expect(mocks.fetch).toHaveBeenCalledWith(
-      "https://zana.example.test/api/integrations/agjenti/catalog",
-      expect.objectContaining({
-        headers: { Authorization: "Bearer test-only-secret" },
-      }),
-    );
-  });
   it("reports network failures without exposing endpoint details", async () => {
-    configure("external", "https://catalog.example.test/products");
+    configure(
+      "external",
+      "https://catalog.example.test/products",
+      "cipher:business-secret",
+    );
     mocks.fetch.mockRejectedValue(new Error("private network details"));
     await expect(fetchLinkedCatalog("business-a")).rejects.toThrow(
       "nuk përgjigjet",
     );
   });
   it("rejects malformed upstream responses", async () => {
-    configure("external", "https://catalog.example.test/products");
+    configure(
+      "external",
+      "https://catalog.example.test/products",
+      "cipher:business-secret",
+    );
     mocks.fetch.mockResolvedValue(Response.json({ invalid: true }));
     await expect(fetchLinkedCatalog("business-a")).rejects.toThrow(
       "formatin e pritur",
@@ -157,7 +148,6 @@ describe("catalog probe", () => {
     });
     expect(result.ok).toBe(true);
     expect(result.productCount).toBe(1);
-    expect(result.products[0]?.name).toBe("Puzzle A4");
     expect(result.authSent).toBe(true);
     expect(mocks.fetch).toHaveBeenCalledWith(
       "https://zana.example.test/api/integrations/agjenti/catalog",
@@ -165,5 +155,15 @@ describe("catalog probe", () => {
         headers: { Authorization: "Bearer form-secret" },
       }),
     );
+  });
+});
+
+describe("knowledgeUrlFromCatalog", () => {
+  it("maps catalog paths to knowledge", () => {
+    expect(
+      knowledgeUrlFromCatalog(
+        "https://zana-store.com/api/integrations/agjenti/catalog",
+      ),
+    ).toBe("https://zana-store.com/api/integrations/agjenti/knowledge");
   });
 });

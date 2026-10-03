@@ -86,8 +86,8 @@ export function IntegrationApiKeyField({
         <div>
           <h3 id={titleId}>API key (Bearer secret)</h3>
           <p className="muted-copy">
-            I njëjti kod duhet të jetë te Agjenti dhe te env i sajtit të
-            biznesit.
+            I njëjti kod duhet te Agjenti dhe te env i sajtit si{" "}
+            <code>AGJENTI_APP_SECRET</code>.
           </p>
         </div>
         {hasStoredSecret && !editing && (
@@ -148,8 +148,8 @@ export function IntegrationApiKeyField({
           </p>
           <p className="muted-copy">
             Nëse ndryshon API key këtu dhe nuk e përditëson menjëherë te env i
-            sajtit (p.sh. <code>ZANA_AGJENTI_SECRET</code>), katalogu dhe
-            porositë do të kthejnë <strong>401 Unauthorized</strong>.
+            sajtit (<code>AGJENTI_APP_SECRET</code>), katalogu dhe porositë do
+            të kthejnë <strong>401 Unauthorized</strong>.
           </p>
           <label className="integration-api-key-check">
             <input

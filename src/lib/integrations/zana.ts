@@ -20,8 +20,17 @@ function integrationKind(catalogSource: string): "zana" | "http" {
   return catalogSource === "zana" ? "zana" : "http";
 }
 
+function parseAbsoluteUrl(value: string): URL | null {
+  try {
+    const url = new URL(value);
+    if (!["https:", "http:"].includes(url.protocol)) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 function resolveBearerSecret(params: {
-  catalogSource: string;
   secretCiphertext?: string | null;
   apiSecretOverride?: string | null;
 }): string | undefined {
@@ -31,14 +40,21 @@ function resolveBearerSecret(params: {
     try {
       return decryptSecret(params.secretCiphertext);
     } catch {
-      /* fall through */
+      return undefined;
     }
   }
-  // Legacy fallback for Zana-only global env.
-  if (params.catalogSource === "zana") {
-    return process.env.ZANA_AGJENTI_SECRET?.trim() || undefined;
-  }
   return undefined;
+}
+
+/** Derive knowledge endpoint from a full catalog URL when possible. */
+export function knowledgeUrlFromCatalog(catalogUrl: string): string | null {
+  const url = parseAbsoluteUrl(catalogUrl);
+  if (!url) return null;
+  if (url.pathname.endsWith("/catalog")) {
+    url.pathname = `${url.pathname.slice(0, -"/catalog".length)}/knowledge`;
+    return url.toString();
+  }
+  return null;
 }
 
 async function loadIntegrationRow(businessId: string, catalogSource: string) {
@@ -65,31 +81,23 @@ export async function fetchLinkedCatalog(
   if (businessError || !business)
     throw new Error("Nuk u lexua konfigurimi i katalogut.");
   if (business.catalog_source === "internal") return [];
-  const isZana = business.catalog_source === "zana";
   const integration = await loadIntegrationRow(
     businessId,
     business.catalog_source,
   );
-  const base = process.env.ZANA_API_BASE_URL?.trim().replace(/\/$/, "");
-  const configuredUrl =
-    integration?.catalog_url?.trim() ||
-    (isZana && base ? `${base}/api/integrations/agjenti/catalog` : null);
-  if (!configuredUrl)
+  const configuredUrl = integration?.catalog_url?.trim() || null;
+  if (!configuredUrl) {
     throw new Error(
       "Katalogu i jashtëm nuk është konfiguruar. Vendos URL-në e plotë te Cilësimet.",
     );
-  let url: URL;
-  try {
-    url = new URL(configuredUrl, isZana && base ? base : undefined);
-    if (!["https:", "http:"].includes(url.protocol))
-      throw new Error("Invalid protocol");
-  } catch {
+  }
+  const url = parseAbsoluteUrl(configuredUrl);
+  if (!url) {
     throw new Error(
       "URL-ja e katalogut nuk është e vlefshme. Vendos një adresë të plotë te Cilësimet.",
     );
   }
   const secret = resolveBearerSecret({
-    catalogSource: business.catalog_source,
     secretCiphertext: integration?.secret_ciphertext,
   });
   let response: Response;
@@ -180,22 +188,16 @@ export async function probeLinkedCatalog(params: {
       error: "Burimi është katalog manual — nuk ka API për të testuar.",
     };
   }
-  const isZana = catalogSource === "zana";
   let integration: Awaited<ReturnType<typeof loadIntegrationRow>> = null;
   try {
     integration = await loadIntegrationRow(params.businessId, catalogSource);
   } catch {
     return { ...empty, error: "Nuk u lexua lidhja e katalogut." };
   }
-  const base = process.env.ZANA_API_BASE_URL?.trim().replace(/\/$/, "");
   const configuredCatalog =
-    params.catalogUrl?.trim() ||
-    integration?.catalog_url?.trim() ||
-    (isZana && base ? `${base}/api/integrations/agjenti/catalog` : null);
+    params.catalogUrl?.trim() || integration?.catalog_url?.trim() || null;
   const configuredOrders =
-    params.ordersUrl?.trim() ||
-    integration?.orders_url?.trim() ||
-    (isZana && base ? `${base}/api/integrations/agjenti/orders` : null);
+    params.ordersUrl?.trim() || integration?.orders_url?.trim() || null;
   if (!configuredCatalog) {
     return {
       ...empty,
@@ -204,12 +206,8 @@ export async function probeLinkedCatalog(params: {
         "Katalogu i jashtëm nuk është konfiguruar. Vendos URL-në e plotë te Cilësimet.",
     };
   }
-  let url: URL;
-  try {
-    url = new URL(configuredCatalog, isZana && base ? base : undefined);
-    if (!["https:", "http:"].includes(url.protocol))
-      throw new Error("Invalid protocol");
-  } catch {
+  const url = parseAbsoluteUrl(configuredCatalog);
+  if (!url) {
     return {
       ...empty,
       ordersUrl: configuredOrders,
@@ -218,7 +216,6 @@ export async function probeLinkedCatalog(params: {
     };
   }
   const secret = resolveBearerSecret({
-    catalogSource,
     secretCiphertext: integration?.secret_ciphertext,
     apiSecretOverride: params.apiSecret,
   });
@@ -230,7 +227,7 @@ export async function probeLinkedCatalog(params: {
       ordersUrl: configuredOrders,
       authSent: false,
       error:
-        "Mungon API key / Bearer secret. Gjenero një kod te Cilësimet dhe vendose të njëjtin te env i sajtit të biznesit.",
+        "Mungon API key. Gjenero një kod te Cilësimet dhe vendose si AGJENTI_APP_SECRET te sajti i biznesit.",
     };
   }
   let response: Response;
@@ -267,7 +264,7 @@ export async function probeLinkedCatalog(params: {
       authSent,
       error:
         response.status === 401
-          ? `${baseError} API key te Agjenti duhet të jetë i njëjtë me secret-in te sajti i biznesit.`
+          ? `${baseError} API key te Agjenti duhet të jetë i njëjtë me AGJENTI_APP_SECRET te sajti.`
           : baseError,
     };
   }
@@ -333,16 +330,12 @@ export async function submitExternalOrder(params: {
     params.businessId,
     catalogSource,
   ).catch(() => null);
-  const base = process.env.ZANA_API_BASE_URL?.replace(/\/$/, "");
-  const url =
-    integration?.orders_url ||
-    (catalogSource === "zana" && base
-      ? `${base}/api/integrations/agjenti/orders`
-      : null);
-  if (!url) return { ok: false, error: "Biznesi nuk ka API porosie." };
+  const url = integration?.orders_url?.trim() || null;
+  if (!url || !parseAbsoluteUrl(url)) {
+    return { ok: false, error: "Biznesi nuk ka API porosie të konfiguruar." };
+  }
 
   const secret = resolveBearerSecret({
-    catalogSource,
     secretCiphertext: integration?.secret_ciphertext,
   });
   const response = await fetch(url, {
@@ -391,8 +384,16 @@ export async function loadBusinessApiSecret(
   const integration = await loadIntegrationRow(businessId, catalogSource);
   return (
     resolveBearerSecret({
-      catalogSource,
       secretCiphertext: integration?.secret_ciphertext,
     }) ?? null
   );
+}
+
+export async function loadBusinessCatalogUrl(
+  businessId: string,
+  catalogSource: string,
+): Promise<string | null> {
+  const integration = await loadIntegrationRow(businessId, catalogSource);
+  const url = integration?.catalog_url?.trim() || null;
+  return url && parseAbsoluteUrl(url) ? url : null;
 }

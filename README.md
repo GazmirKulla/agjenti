@@ -28,7 +28,7 @@ Auth (Supabase → Authentication → URL Configuration):
 - `TOKEN_ENCRYPTION_KEY` (64 hex ose frazë e gjatë)
 - `OPENAI_API_KEY`, `ZANA_AGENT_MODEL` (parazgjedhje `gpt-5.6-luna`)
 - `CRON_SECRET`
-- `ZANA_API_BASE_URL`, `ZANA_AGJENTI_SECRET`
+- Katalogu/porositë e jashtme: URL + API key për biznes te Cilësimet; te sajti i biznesit `AGJENTI_APP_SECRET`
 
 Webhook Meta: `https://agjenti.app/api/webhooks/meta`
 
