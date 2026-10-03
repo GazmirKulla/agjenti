@@ -26,7 +26,7 @@ Auth (Supabase → Authentication → URL Configuration):
 - `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`
 - `INSTAGRAM_OAUTH_REDIRECT_URI` = `https://agjenti.app/api/instagram/oauth/callback`
 - `TOKEN_ENCRYPTION_KEY` (64 hex ose frazë e gjatë)
-- `OPENAI_API_KEY`, `ZANA_AGENT_MODEL` (parazgjedhje `gpt-5.6-luna`)
+- `OPENAI_API_KEY`, `AGENT_MODEL` (parazgjedhje `gpt-5.6-luna`)
 - `CRON_SECRET`
 - Katalogu/porositë e jashtme: URL + API key për biznes te Cilësimet; te sajti i biznesit `AGJENTI_APP_SECRET`
 
