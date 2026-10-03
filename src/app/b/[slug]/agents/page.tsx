@@ -1,9 +1,11 @@
 import { ActionForm } from "@/components/dashboard/action-form";
+import { AiSuggestButton } from "@/components/dashboard/ai-suggest-button";
 import Link from "next/link";
 import { PageHeading } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { generateAgentInstructions } from "@/lib/agents/ai-actions";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
@@ -97,8 +99,15 @@ export default async function AgentsPage({
           required
         />
       </label>
-      <label className="form-label">
-        Udhëzimet për Agjentin (Prompt)
+      <div className="grid gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="form-label mb-0">Udhëzimet për Agjentin (Prompt)</span>
+          <AiSuggestButton
+            action={generateAgentInstructions.bind(null, slug)}
+            targetName="instructions"
+            label="Plotëso me AI nga produktet"
+          />
+        </div>
         <textarea
           name="instructions"
           defaultValue={
@@ -109,7 +118,11 @@ export default async function AgentsPage({
           className="field"
           required
         />
-      </label>
+        <p className="muted-copy">
+          AI vlerëson katalogun aktiv dhe propozon udhëzime; rishikoji para se
+          t’i ruash.
+        </p>
+      </div>
       <label className="toggle-label">
         <span>
           Agjenti aktiv

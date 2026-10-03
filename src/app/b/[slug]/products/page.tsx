@@ -4,8 +4,10 @@ import {
   linkExternalProduct,
   updateProduct,
 } from "@/lib/products/actions";
+import { generateProductDescription } from "@/lib/products/ai-actions";
 import { applyTypeSuggestion } from "@/lib/product-types/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
+import { AiSuggestButton } from "@/components/dashboard/ai-suggest-button";
 import Link from "next/link";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, StatusBadge, money } from "@/components/dashboard/ui";
@@ -39,11 +41,13 @@ function productStatus(p: ProductRow) {
 }
 
 function ProductFields({
+  slug,
   product,
   types,
   workflows,
   requireType = false,
 }: {
+  slug: string;
   product?: ProductRow;
   types: { id: string; name: string }[];
   workflows: { id: string; name: string }[];
@@ -72,16 +76,24 @@ function ProductFields({
             defaultValue={product?.sku ?? ""}
           />
         </label>
-        <label className="form-label">
-          Përshkrimi
+        <div className="grid gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="form-label mb-0">Përshkrimi</span>
+            <AiSuggestButton
+              action={generateProductDescription.bind(null, slug)}
+              targetName="description"
+              collect={["name", "product_type_id"]}
+              label="Gjenero me AI"
+            />
+          </div>
           <textarea
             name="description"
             className="field"
             rows={3}
-            placeholder="Çfarë është produkti, materiale, madhësi tipike…"
+            placeholder="Shkruaj ose gjenero me AI nga emri (p.sh. barriera mbyllëse për parking)."
             defaultValue={product?.description ?? ""}
           />
-        </label>
+        </div>
         <label className="form-label">
           URL e fotos
           <input
@@ -265,7 +277,7 @@ export default async function ProductsPage({
             action={createProduct.bind(null, slug)}
             className="grid gap-5"
           >
-            <ProductFields types={types} workflows={workflows} />
+            <ProductFields slug={slug} types={types} workflows={workflows} />
             <button className="btn btn-primary" type="submit">
               Ruaj produktin
             </button>
@@ -324,6 +336,7 @@ export default async function ProductsPage({
                   >
                     <input type="hidden" name="product_id" value={p.id} />
                     <ProductFields
+                      slug={slug}
                       product={p}
                       types={types}
                       workflows={workflows}
