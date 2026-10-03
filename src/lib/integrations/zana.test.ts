@@ -36,41 +36,32 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
-function configure(
-  source: string,
-  url: string | null,
-  secretCiphertext: string | null = null,
-) {
-  mocks.maybeSingle
-    .mockResolvedValueOnce({ data: { catalog_source: source }, error: null })
-    .mockResolvedValueOnce({
-      data: {
-        catalog_url: url,
-        orders_url: null,
-        secret_ciphertext: secretCiphertext,
-        kind: "http",
-      },
-      error: null,
-    });
+function configure(url: string | null, secretCiphertext: string | null = null) {
+  mocks.maybeSingle.mockResolvedValue({
+    data: {
+      catalog_url: url,
+      orders_url: null,
+      secret_ciphertext: secretCiphertext,
+      kind: "http",
+    },
+    error: null,
+  });
 }
 describe("linked catalog", () => {
   it("rejects relative catalog URLs", async () => {
-    configure("external", "/api/integrations/agjenti/catalog");
+    configure("/api/integrations/agjenti/catalog");
     await expect(fetchLinkedCatalog("business-a")).rejects.toThrow(
       "URL-ja e katalogut",
     );
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
-  it("requires a configured absolute catalog URL", async () => {
-    configure("external", null);
-    await expect(fetchLinkedCatalog("business-a")).rejects.toThrow(
-      "nuk është konfiguruar",
-    );
+  it("returns empty when no catalog URL is configured", async () => {
+    configure(null);
+    expect(await fetchLinkedCatalog("business-a")).toEqual([]);
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
   it("uses the stored business secret with the absolute catalog URL", async () => {
     configure(
-      "external",
       "https://catalog.example.test/products",
       "cipher:business-secret",
     );
@@ -86,7 +77,6 @@ describe("linked catalog", () => {
   });
   it("reports network failures without exposing endpoint details", async () => {
     configure(
-      "external",
       "https://catalog.example.test/products",
       "cipher:business-secret",
     );
@@ -97,7 +87,6 @@ describe("linked catalog", () => {
   });
   it("rejects malformed upstream responses", async () => {
     configure(
-      "external",
       "https://catalog.example.test/products",
       "cipher:business-secret",
     );
@@ -110,11 +99,7 @@ describe("linked catalog", () => {
 
 describe("catalog probe", () => {
   it("prefers the form API secret override", async () => {
-    mocks.maybeSingle.mockResolvedValueOnce({
-      data: { catalog_source: "external" },
-      error: null,
-    });
-    mocks.maybeSingle.mockResolvedValueOnce({
+    mocks.maybeSingle.mockResolvedValue({
       data: {
         catalog_url: null,
         orders_url: null,

@@ -65,23 +65,24 @@ async function loadIntegrationRow(businessId: string) {
   return data;
 }
 
+/** True when the business has a catalog API URL configured. */
+export async function isExternalCatalogLinked(
+  businessId: string,
+): Promise<boolean> {
+  const integration = await loadIntegrationRow(businessId).catch(() => null);
+  const url = integration?.catalog_url?.trim() || null;
+  return Boolean(url && parseAbsoluteUrl(url));
+}
+
 export async function fetchLinkedCatalog(
   businessId: string,
 ): Promise<ExternalCatalogProduct[]> {
-  const supabase = createServiceSupabase();
-  const { data: business, error: businessError } = await supabase
-    .from("businesses")
-    .select("catalog_source")
-    .eq("id", businessId)
-    .maybeSingle();
-  if (businessError || !business)
-    throw new Error("Nuk u lexua konfigurimi i katalogut.");
-  if (business.catalog_source === "internal") return [];
   const integration = await loadIntegrationRow(businessId);
   const configuredUrl = integration?.catalog_url?.trim() || null;
-  if (!configuredUrl) {
+  if (!configuredUrl) return [];
+  if (!parseAbsoluteUrl(configuredUrl)) {
     throw new Error(
-      "Katalogu i jashtëm nuk është konfiguruar. Vendos URL-në e plotë te Cilësimet.",
+      "URL-ja e katalogut nuk është e vlefshme. Vendos një adresë të plotë te Cilësimet.",
     );
   }
   const url = parseAbsoluteUrl(configuredUrl);
@@ -144,7 +145,6 @@ export type CatalogProbeResult = {
 
 export async function probeLinkedCatalog(params: {
   businessId: string;
-  catalogSource?: string | null;
   catalogUrl?: string | null;
   ordersUrl?: string | null;
   apiSecret?: string | null;
@@ -161,26 +161,6 @@ export async function probeLinkedCatalog(params: {
     productTypeCount: null,
     formatCount: null,
   };
-  const supabase = createServiceSupabase();
-  const { data: business, error: businessError } = await supabase
-    .from("businesses")
-    .select("catalog_source")
-    .eq("id", params.businessId)
-    .maybeSingle();
-  if (businessError || !business) {
-    return { ...empty, error: "Nuk u lexua konfigurimi i katalogut." };
-  }
-  const catalogSource = (
-    params.catalogSource?.trim() ||
-    business.catalog_source
-  ).toLowerCase();
-  if (catalogSource === "internal") {
-    return {
-      ...empty,
-      ok: true,
-      error: "Burimi është katalog manual — nuk ka API për të testuar.",
-    };
-  }
   let integration: Awaited<ReturnType<typeof loadIntegrationRow>> = null;
   try {
     integration = await loadIntegrationRow(params.businessId);
@@ -308,25 +288,18 @@ export async function submitExternalOrder(params: {
   payload: Record<string, unknown>;
 }): Promise<{
   ok: boolean;
+  skipped?: boolean;
   orderId?: string;
   orderNumber?: number;
   error?: string;
 }> {
   const supabase = createServiceSupabase();
-  const { data: business } = await supabase
-    .from("businesses")
-    .select("catalog_source")
-    .eq("id", params.businessId)
-    .maybeSingle();
-  if ((business?.catalog_source ?? "internal") === "internal") {
-    return { ok: false, error: "Biznesi nuk ka API porosie të konfiguruar." };
-  }
   const integration = await loadIntegrationRow(params.businessId).catch(
     () => null,
   );
   const url = integration?.orders_url?.trim() || null;
   if (!url || !parseAbsoluteUrl(url)) {
-    return { ok: false, error: "Biznesi nuk ka API porosie të konfiguruar." };
+    return { ok: true, skipped: true };
   }
 
   const secret = resolveBearerSecret({
@@ -373,7 +346,6 @@ export async function submitExternalOrder(params: {
 
 export async function loadBusinessApiSecret(
   businessId: string,
-  _catalogSource?: string,
 ): Promise<string | null> {
   const integration = await loadIntegrationRow(businessId);
   return (
@@ -385,7 +357,6 @@ export async function loadBusinessApiSecret(
 
 export async function loadBusinessCatalogUrl(
   businessId: string,
-  _catalogSource?: string,
 ): Promise<string | null> {
   const integration = await loadIntegrationRow(businessId);
   const url = integration?.catalog_url?.trim() || null;

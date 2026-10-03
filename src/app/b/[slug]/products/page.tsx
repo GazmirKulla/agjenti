@@ -14,6 +14,7 @@ import { PageHeading, StatusBadge, money } from "@/components/dashboard/ui";
 import { redirect } from "next/navigation";
 import {
   fetchLinkedCatalog,
+  isExternalCatalogLinked,
   type ExternalCatalogProduct,
 } from "@/lib/integrations/zana";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -198,6 +199,7 @@ export default async function ProductsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
+  const linked = await isExternalCatalogLinked(access.business.id);
   const [productResult, typeResult, workflowResult, remoteResult] =
     await Promise.all([
       db
@@ -218,12 +220,8 @@ export default async function ProductsPage({
         .select("id,name")
         .eq("business_id", access.business.id)
         .order("name"),
-      access.business.catalog_source === "internal"
-        ? Promise.resolve({
-            products: [] as ExternalCatalogProduct[],
-            error: null as string | null,
-          })
-        : fetchLinkedCatalog(access.business.id)
+      linked
+        ? fetchLinkedCatalog(access.business.id)
             .then((products) => ({ products, error: null as string | null }))
             .catch((error: unknown) => ({
               products: [] as ExternalCatalogProduct[],
@@ -231,7 +229,11 @@ export default async function ProductsPage({
                 error instanceof Error
                   ? error.message
                   : "Katalogu i jashtëm nuk u ngarkua.",
-            })),
+            }))
+        : Promise.resolve({
+            products: [] as ExternalCatalogProduct[],
+            error: null as string | null,
+          }),
     ]);
   if (productResult.error || typeResult.error || workflowResult.error)
     throw new Error("Nuk u ngarkuan të dhënat.");

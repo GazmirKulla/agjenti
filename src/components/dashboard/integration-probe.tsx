@@ -26,7 +26,6 @@ export function IntegrationProbe({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            catalog_source: data?.get("catalog_source") ?? undefined,
             catalog_url: data?.get("catalog_url") ?? undefined,
             orders_url: data?.get("orders_url") ?? undefined,
             api_secret: data?.get("api_secret") ?? undefined,

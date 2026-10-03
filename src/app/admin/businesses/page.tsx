@@ -12,11 +12,23 @@ export default async function AdminBusinessesPage() {
   const user = await getSessionUser();
   if (!user || !(await isPlatformAdmin(user.id))) redirect("/auth/continue");
   const service = createServiceSupabase();
-  const { data: businesses, error: loadError } = await service
-    .from("businesses")
-    .select("id,name,slug,catalog_source,auto_reply")
-    .order("name");
+  const [{ data: businesses, error: loadError }, { data: integrations }] =
+    await Promise.all([
+      service
+        .from("businesses")
+        .select("id,name,slug,auto_reply")
+        .order("name"),
+      service
+        .from("integrations")
+        .select("business_id,catalog_url")
+        .eq("kind", "http"),
+    ]);
   if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
+  const linkedIds = new Set(
+    (integrations ?? [])
+      .filter((i) => Boolean(i.catalog_url?.trim()))
+      .map((i) => i.business_id),
+  );
 
   async function createBusiness(formData: FormData) {
     "use server";
@@ -27,19 +39,16 @@ export default async function AdminBusinessesPage() {
     const slug = String(formData.get("slug") ?? "")
       .trim()
       .toLowerCase();
-    const catalog_source = String(formData.get("catalog_source") ?? "internal");
     const auto_reply = formData.get("auto_reply") === "on";
     if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))
       return {
         error:
           "Vendos emrin dhe një slug me shkronja të vogla, numra ose viza.",
       };
-    if (!["internal", "external"].includes(catalog_source))
-      return { error: "Burimi i katalogut nuk është i vlefshëm." };
     const db = createServiceSupabase();
     const { error } = await db
       .from("businesses")
-      .insert({ name, slug, catalog_source, auto_reply });
+      .insert({ name, slug, catalog_source: "internal", auto_reply });
     if (error)
       return {
         error:
@@ -112,13 +121,6 @@ export default async function AdminBusinessesPage() {
                 required
               />
             </label>
-            <label className="form-label">
-              Burimi i katalogut
-              <select name="catalog_source" className="field">
-                <option value="internal">Katalog i brendshëm</option>
-                <option value="external">Katalog i jashtëm (API)</option>
-              </select>
-            </label>
             <label className="toggle-label">
               <span>Përgjigje automatike</span>
               <input
@@ -137,9 +139,7 @@ export default async function AdminBusinessesPage() {
           title: b.name,
           subtitle: `/${b.slug}`,
           cells: [
-            b.catalog_source === "external"
-              ? "I jashtëm (API)"
-              : "I brendshëm",
+            linkedIds.has(b.id) ? "Lidhur me API" : "Produkte në panel",
             <StatusBadge
               key="ai"
               status={b.auto_reply ? "connected" : "paused"}
@@ -162,9 +162,9 @@ export default async function AdminBusinessesPage() {
                   <div>
                     <dt>Katalogu</dt>
                     <dd>
-                      {b.catalog_source === "external"
-                        ? "I jashtëm (API)"
-                        : "I brendshëm"}
+                      {linkedIds.has(b.id)
+                        ? "Lidhur me API të jashtme"
+                        : "Produkte në panel"}
                     </dd>
                   </div>
                   <div>

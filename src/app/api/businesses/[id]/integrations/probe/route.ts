@@ -27,7 +27,6 @@ export async function POST(
   }
 
   const body = (await request.json().catch(() => null)) as {
-    catalog_source?: string;
     catalog_url?: string;
     orders_url?: string;
     api_secret?: string;
@@ -35,7 +34,6 @@ export async function POST(
 
   const result = await probeLinkedCatalog({
     businessId: id,
-    catalogSource: body?.catalog_source,
     catalogUrl: body?.catalog_url,
     ordersUrl: body?.orders_url,
     apiSecret: body?.api_secret,

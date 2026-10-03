@@ -14,7 +14,6 @@ export async function POST(request: Request) {
 	const body = (await request.json()) as {
 		name?: string;
 		slug?: string;
-		catalog_source?: string;
 		auto_reply?: boolean;
 	};
 	const name = body.name?.trim();
@@ -26,7 +25,7 @@ export async function POST(request: Request) {
 		.insert({
 			name,
 			slug,
-			catalog_source: body.catalog_source === "external" ? "external" : "internal",
+			catalog_source: "internal",
 			auto_reply: body.auto_reply === true,
 		})
 		.select("id,slug")

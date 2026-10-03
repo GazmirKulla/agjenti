@@ -63,11 +63,6 @@ export async function POST(
 		return NextResponse.json({ error: ensured.error }, { status: ensured.status });
 	}
 
-	const { data: business } = await service
-		.from("businesses")
-		.select("catalog_source")
-		.eq("id", businessId)
-		.maybeSingle();
 	const { data: product } = state.product_id
 		? await service
 				.from("products")
@@ -110,43 +105,44 @@ export async function POST(
 		unit_amount: product?.price_amount ?? null,
 	});
 
-	if (business?.catalog_source === "external") {
-		const submitted = await submitExternalOrder({
-			businessId,
-			payload: {
-				channel: "instagram",
-				customer,
-				items: [
-					{
-						productId: product?.external_id ?? product?.id,
-						productType: productTypeKey,
-						formatId: state.fields.collect_size ?? null,
-						colorId: state.fields.collect_color ?? null,
-						quantity: 1,
-						character: state.fields.collect_theme ?? null,
-					},
-				],
-			},
-		});
-		if (!submitted.ok) {
-			await service.from("orders").update({ status: "failed" }).eq("id", order.id);
-			return NextResponse.json({ error: submitted.error }, { status: 502 });
-		}
+	const submitted = await submitExternalOrder({
+		businessId,
+		payload: {
+			channel: "instagram",
+			customer,
+			items: [
+				{
+					productId: product?.external_id ?? product?.id,
+					productType: productTypeKey,
+					formatId: state.fields.collect_size ?? null,
+					colorId: state.fields.collect_color ?? null,
+					quantity: 1,
+					character: state.fields.collect_theme ?? null,
+				},
+			],
+		},
+	});
+	if (!submitted.ok) {
+		await service.from("orders").update({ status: "failed" }).eq("id", order.id);
+		return NextResponse.json({ error: submitted.error }, { status: 502 });
+	}
+	if (!submitted.skipped) {
 		await service
 			.from("orders")
 			.update({
 				status: "submitted",
-				external_system: business.catalog_source,
+				external_system: "external",
 				external_order_id: submitted.orderId ?? null,
 			})
 			.eq("id", order.id);
-		await service
-			.from("conversation_states")
-			.update({ status: "submitted" })
-			.eq("conversation_id", conversationId);
-		return NextResponse.json({ ok: true, orderId: order.id, externalOrderId: submitted.orderId });
 	}
-
-	await service.from("conversation_states").update({ status: "submitted" }).eq("conversation_id", conversationId);
-	return NextResponse.json({ ok: true, orderId: order.id });
+	await service
+		.from("conversation_states")
+		.update({ status: "submitted" })
+		.eq("conversation_id", conversationId);
+	return NextResponse.json({
+		ok: true,
+		orderId: order.id,
+		externalOrderId: submitted.orderId,
+	});
 }

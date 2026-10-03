@@ -4,13 +4,26 @@ import { ActionForm } from "@/components/dashboard/action-form";
 import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { IntegrationApiKeyField } from "@/components/dashboard/integration-api-key";
 import { IntegrationProbe } from "@/components/dashboard/integration-probe";
-import { PageHeading } from "@/components/dashboard/ui";
+import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+
+function parseOptionalUrl(value: string): string | null | { error: string } {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (!["http:", "https:"].includes(url.protocol))
+      return { error: "URL-të duhet të fillojnë me https:// ose http://." };
+    return url.toString();
+  } catch {
+    return { error: "Vendos URL të vlefshme për katalogun dhe porositë." };
+  }
+}
 
 export default async function SettingsPage({
   params,
@@ -23,7 +36,7 @@ export default async function SettingsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
 
-  async function save(formData: FormData) {
+  async function saveBusiness(formData: FormData) {
     "use server";
     const session = await getSessionUser();
     if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
@@ -37,24 +50,45 @@ export default async function SettingsPage({
             "Përfundo konfigurimin dhe lidh Instagram-in nga Dashboard përpara aktivizimit.",
         };
     }
-    const catalogSource = String(
-      formData.get("catalog_source") ?? acc.business.catalog_source,
-    );
-    if (!["internal", "external"].includes(catalogSource))
-      return { error: "Burimi i katalogut nuk është i vlefshëm." };
-    const catalogUrl = String(formData.get("catalog_url") ?? "").trim();
-    const ordersUrl = String(formData.get("orders_url") ?? "").trim();
-    const apiSecret = String(formData.get("api_secret") ?? "").trim();
-    for (const value of [catalogUrl, ordersUrl]) {
-      if (!value) continue;
-      try {
-        const url = new URL(value);
-        if (!["http:", "https:"].includes(url.protocol))
-          return { error: "URL-të duhet të fillojnë me https:// ose http://." };
-      } catch {
-        return { error: "Vendos URL të vlefshme për katalogun dhe porositë." };
-      }
+    const db = createServiceSupabase();
+    if (formData.get("auto_reply") === "on" && !acc.business.auto_reply) {
+      const { error } = await db.rpc("launch_business", {
+        p_business_id: acc.business.id,
+        p_automatic: true,
+      });
+      if (error)
+        return {
+          error: "Konfigurimi ndryshoi. Kontrollo hapat nga Dashboard.",
+        };
     }
+    await db
+      .from("businesses")
+      .update({ auto_reply: formData.get("auto_reply") === "on" })
+      .eq("id", acc.business.id)
+      .throwOnError();
+    revalidatePath(`/b/${slug}`, "layout");
+    return { success: "Cilësimet e biznesit u ruajtën." };
+  }
+
+  async function saveExternalCatalog(formData: FormData) {
+    "use server";
+    const session = await getSessionUser();
+    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
+    const acc = await requireBusinessAccess(session.id, slug);
+    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
+
+    const catalogRaw = String(formData.get("catalog_url") ?? "").trim();
+    if (!catalogRaw)
+      return {
+        error:
+          "Vendos URL-në e katalogut. Për ta hequr lidhjen, përdor «Shkëput».",
+      };
+    const catalogUrl = parseOptionalUrl(catalogRaw);
+    if (catalogUrl && typeof catalogUrl === "object") return catalogUrl;
+    const ordersUrl = parseOptionalUrl(String(formData.get("orders_url") ?? ""));
+    if (ordersUrl && typeof ordersUrl === "object") return ordersUrl;
+
+    const apiSecret = String(formData.get("api_secret") ?? "").trim();
     if (apiSecret && apiSecret.length < 16)
       return { error: "API key duhet të ketë të paktën 16 karaktere." };
 
@@ -66,44 +100,55 @@ export default async function SettingsPage({
       .eq("kind", "http")
       .maybeSingle();
 
-    const row: {
-      business_id: string;
-      kind: string;
-      catalog_url: string | null;
-      orders_url: string | null;
-      secret_ciphertext?: string | null;
-    } = {
-      business_id: acc.business.id,
-      kind: "http",
-      catalog_url: catalogUrl || null,
-      orders_url: ordersUrl || null,
-    };
-    if (apiSecret) {
-      row.secret_ciphertext = encryptSecret(apiSecret);
-    } else if (existing?.secret_ciphertext) {
-      row.secret_ciphertext = existing.secret_ciphertext;
-    } else {
-      row.secret_ciphertext = null;
-    }
+    const secretCiphertext = apiSecret
+      ? encryptSecret(apiSecret)
+      : (existing?.secret_ciphertext ?? null);
+    if (!secretCiphertext)
+      return { error: "Vendos API key për katalogun e jashtëm." };
 
     await db
       .from("integrations")
-      .upsert(row, { onConflict: "business_id,kind" })
+      .upsert(
+        {
+          business_id: acc.business.id,
+          kind: "http",
+          catalog_url: catalogUrl,
+          orders_url: ordersUrl,
+          secret_ciphertext: secretCiphertext,
+        },
+        { onConflict: "business_id,kind" },
+      )
       .throwOnError();
-    if (formData.get("auto_reply") === "on" && !acc.business.auto_reply) {
-      const { error } = await db.rpc("launch_business", { p_business_id: acc.business.id, p_automatic: true });
-      if (error) return { error: "Konfigurimi ndryshoi. Kontrollo hapat nga Dashboard." };
-    }
+
     await db
       .from("businesses")
-      .update({
-        auto_reply: formData.get("auto_reply") === "on",
-        catalog_source: catalogSource,
-      })
+      .update({ catalog_source: "external" })
+      .eq("id", acc.business.id)
+      .throwOnError();
+
+    revalidatePath(`/b/${slug}`, "layout");
+    return { success: "Lidhja me katalogun e jashtëm u ruajt." };
+  }
+
+  async function disconnectExternalCatalog() {
+    "use server";
+    const session = await getSessionUser();
+    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
+    const acc = await requireBusinessAccess(session.id, slug);
+    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
+    const db = createServiceSupabase();
+    await db
+      .from("integrations")
+      .delete()
+      .eq("business_id", acc.business.id)
+      .eq("kind", "http");
+    await db
+      .from("businesses")
+      .update({ catalog_source: "internal" })
       .eq("id", acc.business.id)
       .throwOnError();
     revalidatePath(`/b/${slug}`, "layout");
-    return { success: "Cilësimet u ruajtën." };
+    return { success: "Lidhja me katalogun e jashtëm u shkëput." };
   }
 
   const { data: integration, error: integrationError } =
@@ -115,6 +160,7 @@ export default async function SettingsPage({
       .maybeSingle();
   if (integrationError) throw new Error("Nuk u ngarkua integrimi i biznesit.");
 
+  const linked = Boolean(integration?.catalog_url?.trim());
   let storedSecret: string | null = null;
   if (integration?.secret_ciphertext) {
     try {
@@ -129,7 +175,7 @@ export default async function SettingsPage({
       <PageHeading
         eyebrow="Cilësimet"
         title={access.business.name}
-        description="Menaxho përgjigjet automatike dhe lidhjet me katalogun e biznesit."
+        description="Produktet krijohen në panel, ose lidh një katalog të jashtëm — pa zgjedhur burim."
       />
       <div className="settings-tabs">
         <span>
@@ -138,94 +184,119 @@ export default async function SettingsPage({
         </span>
       </div>
       <div className="configuration-layout">
-        <ActionForm
-          action={save}
-          className="panel section-pad grid gap-5 business-settings-form"
-        >
-          <div className="section-title">
-            <h2>Të dhënat e biznesit</h2>
-            <button className="btn btn-primary" type="submit">
-              Ruaj ndryshimet
+        <div className="space-y-5">
+          <ActionForm
+            action={saveBusiness}
+            className="panel section-pad grid gap-5"
+          >
+            <div className="section-title">
+              <h2>Të dhënat e biznesit</h2>
+              <button className="btn btn-primary" type="submit">
+                Ruaj
+              </button>
+            </div>
+            <div className="detail-block">
+              <dl className="detail-fields">
+                <div>
+                  <dt>Emri i biznesit</dt>
+                  <dd>{access.business.name}</dd>
+                </div>
+                <div>
+                  <dt>Adresa në platformë</dt>
+                  <dd>/{slug}</dd>
+                </div>
+                <div>
+                  <dt>Katalogu</dt>
+                  <dd>
+                    {linked
+                      ? "Lidhur me API të jashtme"
+                      : "Produkte të krijuara në panel"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+            <label className="toggle-label">
+              <span>
+                Përgjigje automatike
+                <small>
+                  Agjenti u përgjigjet mesazheve të reja në bisedat aktive.
+                </small>
+              </span>
+              <input
+                type="checkbox"
+                name="auto_reply"
+                className="switch-input"
+                defaultChecked={access.business.auto_reply}
+              />
+            </label>
+          </ActionForm>
+
+          <ActionForm
+            action={saveExternalCatalog}
+            className="panel section-pad grid gap-5 business-settings-form"
+          >
+            <div className="section-title">
+              <h2>Katalog i jashtëm</h2>
+              <StatusBadge status={linked ? "connected" : "draft"} />
+            </div>
+            <p className="muted-copy">
+              Plotëso URL-të dhe API key për të lidhur katalogun. Pa këtë
+              lidhje, përdoren vetëm produktet e krijuara te Produktet.
+            </p>
+            <label className="form-label">
+              URL e katalogut
+              <input
+                type="url"
+                name="catalog_url"
+                defaultValue={integration?.catalog_url ?? ""}
+                placeholder="https://…/catalog"
+                className="field"
+                required
+              />
+            </label>
+            <label className="form-label">
+              URL e porosive
+              <input
+                type="url"
+                name="orders_url"
+                defaultValue={integration?.orders_url ?? ""}
+                placeholder="https://…/orders"
+                className="field"
+              />
+            </label>
+            <IntegrationApiKeyField
+              hasStoredSecret={Boolean(integration?.secret_ciphertext)}
+              storedSecret={storedSecret}
+            />
+            <IntegrationProbe
+              businessId={access.business.id}
+              formSelector="form.business-settings-form"
+            />
+            <button className="btn btn-primary w-fit" type="submit">
+              Ruaj lidhjen
             </button>
-          </div>
-          <div className="detail-block">
-            <dl className="detail-fields">
-              <div>
-                <dt>Emri i biznesit</dt>
-                <dd>{access.business.name}</dd>
-              </div>
-              <div>
-                <dt>Adresa në platformë</dt>
-                <dd>/{slug}</dd>
-              </div>
-            </dl>
-          </div>
-          <label className="toggle-label">
-            <span>
-              Përgjigje automatike
-              <small>
-                Agjenti u përgjigjet mesazheve të reja në bisedat aktive.
-              </small>
-            </span>
-            <input
-              type="checkbox"
-              name="auto_reply"
-              className="switch-input"
-              defaultChecked={access.business.auto_reply}
-            />
-          </label>
-          <label className="form-label">
-            Burimi i katalogut
-            <select
-              name="catalog_source"
-              defaultValue={access.business.catalog_source}
-              className="field"
-            >
-              <option value="internal">Katalog i brendshëm</option>
-              <option value="external">Katalog i jashtëm (API)</option>
-            </select>
-          </label>
-          <label className="form-label">
-            URL e katalogut
-            <input
-              type="url"
-              name="catalog_url"
-              defaultValue={integration?.catalog_url ?? ""}
-              placeholder="https://…"
-              className="field"
-            />
-          </label>
-          <label className="form-label">
-            URL e porosive
-            <input
-              type="url"
-              name="orders_url"
-              defaultValue={integration?.orders_url ?? ""}
-              placeholder="https://…"
-              className="field"
-            />
-          </label>
-          <IntegrationApiKeyField
-            hasStoredSecret={Boolean(integration?.secret_ciphertext)}
-            storedSecret={storedSecret}
-          />
-          <IntegrationProbe
-            businessId={access.business.id}
-            formSelector="form.business-settings-form"
-          />
-        </ActionForm>
+          </ActionForm>
+          {linked && (
+            <ActionForm action={disconnectExternalCatalog}>
+              <button className="btn btn-ghost" type="submit">
+                Shkëput katalogun e jashtëm
+              </button>
+            </ActionForm>
+          )}
+        </div>
         <aside className="settings-side">
           <section className="panel section-pad">
             <span className="icon-tile">
-              <Icon name="workflows" size={25} />
+              <Icon name="products" size={25} />
             </span>
-            <h2 className="text-lg mt-5">Katalogu dhe porositë</h2>
+            <h2 className="text-lg mt-5">Si funksionon</h2>
             <p className="muted-copy">
-              Katalogu i brendshëm menaxhohet në panel. Katalogu i jashtëm lidhet
-              me HTTP + Bearer: URL-të + API key i biznesit.
+              Dy mënyra: produkte të krijuara në panel, ose lidhje me katalog të
+              jashtëm. Nuk ka zgjedhës — mjafton të plotësosh këtë seksion.
             </p>
             <p className="muted-copy">
-              Kopjo API key te env i sajtit të klientit, pastaj testo lidhjen.
+              Vendos URL + API key, testo lidhjen, pastaj lidh produktet nga
+              faqja Produkte.
             </p>
           </section>
           <DeleteBusinessPanel

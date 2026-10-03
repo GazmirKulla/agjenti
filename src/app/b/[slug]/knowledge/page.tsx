@@ -4,6 +4,7 @@ import { PageHeading } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
+  isExternalCatalogLinked,
   knowledgeUrlFromCatalog,
   loadBusinessApiSecret,
   loadBusinessCatalogUrl,
@@ -28,6 +29,7 @@ export default async function KnowledgePage({
     .eq("business_id", access.business.id)
     .order("sort_order");
   if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
+  const linked = await isExternalCatalogLinked(access.business.id);
 
   async function importExternalFaq() {
     "use server";
@@ -35,8 +37,11 @@ export default async function KnowledgePage({
     if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
-    if (acc.business.catalog_source !== "external")
-      return { error: "Importi i FAQ është i disponueshëm vetëm me katalog të jashtëm." };
+    if (!(await isExternalCatalogLinked(acc.business.id)))
+      return {
+        error:
+          "Lidh më parë një katalog të jashtëm te Cilësimet për të importuar FAQ.",
+      };
     const catalogUrl = await loadBusinessCatalogUrl(acc.business.id);
     const secret = await loadBusinessApiSecret(acc.business.id);
     const knowledgeUrl = catalogUrl
@@ -106,7 +111,7 @@ export default async function KnowledgePage({
         title={access.business.name}
         description="Njohuritë e biznesit që Agjenti AI përdor për t’iu përgjigjur klientëve."
       >
-        {access.business.catalog_source === "external" && (
+        {linked && (
           <ActionForm action={importExternalFaq}>
             <button className="btn btn-ghost" type="submit">
               Importo FAQ nga API
