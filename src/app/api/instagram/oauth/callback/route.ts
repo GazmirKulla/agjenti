@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { encryptSecret } from "@/lib/crypto/tokens";
-import { exchangeInstagramCode, verifyOAuthState } from "@/lib/instagram/oauth";
+import {
+	exchangeInstagramCode,
+	subscribeInstagramAccountWebhooks,
+	verifyOAuthState,
+} from "@/lib/instagram/oauth";
 import { createServiceSupabase } from "@/lib/supabase/service";
 
 export async function GET(request: Request) {
@@ -19,6 +23,12 @@ export async function GET(request: Request) {
 		if (!exchanged.userId) {
 			throw new Error("Mungon ig user id.");
 		}
+
+		const subscription = await subscribeInstagramAccountWebhooks(exchanged.accessToken);
+		if (!subscription.ok) {
+			console.error("[instagram oauth] webhook subscription failed", subscription.error);
+		}
+
 		const supabase = createServiceSupabase();
 		await supabase
 			.from("instagram_connections")
@@ -34,7 +44,7 @@ export async function GET(request: Request) {
 				expires_at: exchanged.expiresAt?.toISOString() ?? null,
 				refreshed_at: new Date().toISOString(),
 				status: "connected",
-				last_error: null,
+				last_error: subscription.ok ? null : `subscribed_apps: ${subscription.error}`,
 				updated_at: new Date().toISOString(),
 			},
 			{ onConflict: "ig_user_id" },
@@ -44,8 +54,9 @@ export async function GET(request: Request) {
 			.select("slug")
 			.eq("id", state.businessId)
 			.maybeSingle();
+		const connectedQuery = subscription.ok ? "connected=1" : "connected=1&webhook_sub=error";
 		return NextResponse.redirect(
-			new URL(`/b/${business?.slug ?? "zana"}/instagram?connected=1`, url.origin),
+			new URL(`/b/${business?.slug ?? "zana"}/instagram?${connectedQuery}`, url.origin),
 		);
 	} catch (error) {
 		console.error("[instagram oauth]", error);

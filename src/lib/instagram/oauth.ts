@@ -135,3 +135,39 @@ export async function refreshLongLivedToken(token: string): Promise<{
 		expiresAt: new Date(Date.now() + expiresIn * 1000),
 	};
 }
+
+const DEFAULT_WEBHOOK_FIELDS =
+	"messages,messaging_postbacks,messaging_referral,message_reactions,message_edit";
+
+/**
+ * App-level webhook config is not enough for real DMs.
+ * Meta also requires enabling subscriptions on the Instagram account via this call.
+ * @see https://developers.facebook.com/docs/instagram-platform/webhooks/
+ */
+export async function subscribeInstagramAccountWebhooks(
+	accessToken: string,
+	subscribedFields: string = DEFAULT_WEBHOOK_FIELDS,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const url = new URL(
+		`https://graph.instagram.com/${graphVersion()}/me/subscribed_apps`,
+	);
+	url.searchParams.set("subscribed_fields", subscribedFields);
+	url.searchParams.set("access_token", accessToken);
+
+	const response = await fetch(url.toString(), {
+		method: "POST",
+		signal: AbortSignal.timeout(20_000),
+	});
+	const data = (await response.json()) as {
+		success?: boolean;
+		error?: { message?: string; type?: string; code?: number };
+	};
+	if (!response.ok || data.success !== true) {
+		const error =
+			data.error?.message || `subscribed_apps failed (${response.status})`;
+		console.error("[instagram oauth] subscribed_apps failed", data);
+		return { ok: false, error };
+	}
+	console.log("[instagram oauth] subscribed_apps ok", { subscribedFields });
+	return { ok: true };
+}
