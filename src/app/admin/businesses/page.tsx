@@ -37,16 +37,23 @@ export default async function AdminBusinessesPage() {
     if (!["internal", "zana", "external"].includes(catalog_source))
       return { error: "Burimi i katalogut nuk është i vlefshëm." };
     const db = createServiceSupabase();
-    const { error } = await db
+    const { data: created, error } = await db
       .from("businesses")
-      .insert({ name, slug, catalog_source, auto_reply });
-    if (error)
+      .insert({ name, slug, catalog_source, auto_reply })
+      .select("id")
+      .maybeSingle();
+    if (error || !created)
       return {
         error:
-          error.code === "23505"
+          error?.code === "23505"
             ? "Ky slug përdoret nga një biznes tjetër."
             : "Biznesi nuk u krijua. Provo përsëri.",
       };
+    const { error: seedError } = await db.rpc("seed_default_product_types", {
+      p_business_id: created.id,
+    });
+    if (seedError)
+      console.error("[admin createBusiness] seed types", seedError.code);
     revalidatePath("/admin/businesses");
   }
 

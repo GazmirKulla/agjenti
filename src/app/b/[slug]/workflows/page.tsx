@@ -1,6 +1,7 @@
 import { ActionForm } from "@/components/dashboard/action-form";
 import { PageHeading, EmptyState } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -121,7 +122,11 @@ export default async function WorkflowsPage({
       <PageHeading
         title="Workflow AI"
         description="Përcakto rrugën që ndjek porosia sipas llojit të produktit."
-      />
+      >
+        <Link href={`/b/${slug}/product-types`} className="btn btn-ghost">
+          Menaxho llojet →
+        </Link>
+      </PageHeading>
       <div className="configuration-layout">
         <div className="space-y-5">
           {(workflows ?? []).map((w) => (

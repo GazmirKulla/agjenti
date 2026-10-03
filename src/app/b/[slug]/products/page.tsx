@@ -150,7 +150,20 @@ export default async function ProductsPage({
         eyebrow="Produkte"
         title={`Produktet e ${access.business.name}`}
         description="Menaxho katalogun dhe lidh produktet me workflow-t sipas llojit."
-      />
+      >
+        <Link href={`/b/${slug}/product-types`} className="btn btn-ghost">
+          Menaxho llojet →
+        </Link>
+      </PageHeading>
+      {!types?.length && (
+        <div role="status" className="catalog-notice">
+          <p>
+            Nuk ka lloje produktesh. Shto lloje përpara se të lidhësh produktet
+            me workflow.
+          </p>
+          <Link href={`/b/${slug}/product-types`}>Hap llojet →</Link>
+        </div>
+      )}
       {catalogError && (
         <div role="status" className="catalog-notice">
           <p>{catalogError}</p>
