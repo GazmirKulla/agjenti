@@ -48,6 +48,8 @@ export function instagramAuthorizeUrl(state: string): string {
 		client_id: clientId,
 		redirect_uri: redirect,
 		response_type: "code",
+		force_authentication: "1",
+		enable_fb_login: "0",
 		scope: "instagram_business_basic,instagram_business_manage_messages",
 		state,
 	});

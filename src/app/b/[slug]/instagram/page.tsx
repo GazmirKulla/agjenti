@@ -120,6 +120,9 @@ export default async function InstagramPage({
             <a
               className="btn btn-primary"
               href={`/api/instagram/oauth/start?businessId=${access.business.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-describedby="instagram-browser-help"
             >
               {conn ? "Rilidh llogarinë" : "Lidh Instagram"}
             </a>
@@ -134,6 +137,11 @@ export default async function InstagramPage({
               </form>
             )}
           </div>
+          <p id="instagram-browser-help" className="muted-copy mt-3">
+            Autorizimi hapet në një skedë të re. Nëse je brenda Instagram-it ose Facebook-ut,
+            hape Agjenti.app në Safari ose Chrome dhe vazhdo lidhjen aty.
+            Pas lidhjes, rifresko këtë faqe për të parë statusin.
+          </p>
         </section>
         <aside className="panel section-pad">
           <span className="icon-tile">

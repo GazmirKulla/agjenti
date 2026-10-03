@@ -1756,3 +1756,14 @@
   overflow-wrap: anywhere;
   margin-bottom: 12px;
 }
+
+/* Prevent focus-triggered zoom on mobile without disabling pinch-to-zoom.
+   Important keeps route-specific auth/chat styles from shrinking controls. */
+@media (max-width: 1024px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]),
+  textarea,
+  select,
+  [contenteditable="true"] {
+    font-size: max(16px, 1rem) !important;
+  }
+}

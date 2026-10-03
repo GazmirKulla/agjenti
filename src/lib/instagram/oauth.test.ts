@@ -1,0 +1,17 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { instagramAuthorizeUrl, signOAuthState, verifyOAuthState } from "./oauth";
+afterEach(() => vi.unstubAllEnvs());
+it("uses HTTPS web authorization with explicit Instagram login and preserves the signed state", () => {
+  vi.stubEnv("INSTAGRAM_APP_ID", "app-id");
+  vi.stubEnv("INSTAGRAM_APP_SECRET", "test-only-secret");
+  vi.stubEnv("INSTAGRAM_OAUTH_REDIRECT_URI", "https://agjenti.app/api/instagram/oauth/callback");
+  const state = signOAuthState({ businessId: "business", userId: "user" });
+  const url = new URL(instagramAuthorizeUrl(state));
+  expect(url.origin).toBe("https://www.instagram.com");
+  expect(url.pathname).toBe("/oauth/authorize");
+  expect(url.searchParams.get("force_authentication")).toBe("1");
+  expect(url.searchParams.get("enable_fb_login")).toBe("0");
+  expect(url.searchParams.get("redirect_uri")).toBe("https://agjenti.app/api/instagram/oauth/callback");
+  expect(verifyOAuthState(url.searchParams.get("state"))).toMatchObject({ businessId: "business", userId: "user" });
+  expect(url.searchParams.get("scope")).toBe("instagram_business_basic,instagram_business_manage_messages");
+});
