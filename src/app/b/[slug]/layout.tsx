@@ -1,3 +1,5 @@
+import { SetupJourney } from "@/components/setup/journey";
+import { getSetupStatus } from "@/lib/setup/status";
 import { redirect } from "next/navigation";
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { DashboardShell } from "@/components/dashboard/shell";
@@ -15,7 +17,10 @@ export default async function BusinessLayout({
   const access = await listMemberships(user.id);
   const business = access.businesses.find((b) => b.slug === slug);
   if (!business) redirect("/auth/continue");
-  const settings = await getAppSettings();
+  const [settings, setup] = await Promise.all([
+    getAppSettings(),
+    getSetupStatus(business.id),
+  ]);
   return (
     <DashboardShell
       name={business.name}
@@ -32,6 +37,11 @@ export default async function BusinessLayout({
           {settings.announcement}
         </div>
       )}
+      <SetupJourney
+        status={setup}
+        slug={slug}
+        expanded={settings.checklist_enabled}
+      />
       {children}
     </DashboardShell>
   );

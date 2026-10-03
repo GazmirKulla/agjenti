@@ -1,3 +1,4 @@
+import { saveProductSetup } from "@/lib/setup/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
 import Link from "next/link";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
@@ -89,7 +90,7 @@ export default async function ProductsPage({
         source: "manual",
       })
       .throwOnError();
-    revalidatePath(`/b/${slug}/products`);
+    revalidatePath(`/b/${slug}`, "layout");
   }
 
   async function linkProduct(formData: FormData) {
@@ -140,7 +141,7 @@ export default async function ProductsPage({
         .eq("id", existing.id)
         .throwOnError();
     else await supabase.from("products").insert(row).throwOnError();
-    revalidatePath(`/b/${slug}/products`);
+    revalidatePath(`/b/${slug}`, "layout");
   }
 
   return (
@@ -244,7 +245,48 @@ export default async function ProductsPage({
                   Agjenti ndjek workflow-n e llojit të produktit për të mbledhur
                   informacionin e porosisë.
                 </p>
-                <Link className="soft-link" href={`/b/${slug}/workflows`}>
+                <ActionForm
+                  action={saveProductSetup.bind(null, slug)}
+                  className="grid gap-3 mt-4"
+                >
+                  <input type="hidden" name="product_id" value={p.id} />
+                  <label className="form-label">
+                    Çmimi ({p.currency})
+                    <input
+                      className="field"
+                      type="number"
+                      name="price"
+                      min="0"
+                      step="0.01"
+                      defaultValue={p.price_amount ?? ""}
+                      required
+                    />
+                  </label>
+                  <label className="form-label">
+                    Lloji dhe procesi i porosisë
+                    <select
+                      className="field"
+                      name="product_type_id"
+                      defaultValue={p.product_type_id ?? ""}
+                      required
+                    >
+                      <option value="">Zgjidh llojin</option>
+                      {(types ?? []).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={!types?.length}
+                  >
+                    Ruaj lidhjen
+                  </button>
+                </ActionForm>
+                <Link className="soft-link mt-4" href={`/b/${slug}/workflows`}>
                   Shiko workflow-t
                 </Link>
               </div>

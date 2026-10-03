@@ -1,5 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
+  setup: vi.fn(),
+  record: vi.fn(),
   user: vi.fn(),
   access: vi.fn(),
   process: vi.fn(),
@@ -13,12 +15,17 @@ vi.mock("@/lib/conversations/process-agent-turn", () => ({
   processAgentTurn: mocks.process,
 }));
 vi.mock("@/lib/instagram/send", () => ({ sendInstagramText: mocks.send }));
+vi.mock("@/lib/setup/status", () => ({ loadSetupStatus: mocks.setup }));
+vi.mock("@/lib/setup/record-test", () => ({ recordSetupTest: mocks.record }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { simulateAgentTurn } from "./actions";
 import { readTestSession, sealTestSession, MAX_TEST_TURNS } from "./session";
 import { emptyState } from "@/lib/workflows/engine";
 const input = { slug: "zana", message: "Bluzë" };
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.setup.mockResolvedValue({ available: true, signature: "config-a" });
+  mocks.record.mockResolvedValue(true);
   vi.stubEnv("TOKEN_ENCRYPTION_KEY", "a".repeat(64));
   mocks.user.mockResolvedValue({ id: "user-a" });
   mocks.access.mockResolvedValue({
@@ -30,7 +37,7 @@ beforeEach(() => {
     nextState: { ...emptyState(), step_key: "collect_size" },
     previousResponseId: "resp_1",
     workflowId: null,
-    debug: { source: "ai" },
+    debug: { source: "ai", agentConfigured: true },
   });
 });
 afterEach(() => {
@@ -155,4 +162,42 @@ describe("test chat action", () => {
         "Prova nuk u përfundua. Kontrollo konfigurimin e agjentit dhe provo përsëri.",
     });
   });
+});
+
+it("records only a completed AI workflow, never inbox or CRM data", async () => {
+  const first = await simulateAgentTurn(input);
+  if ("error" in first) throw Error(first.error);
+  mocks.process.mockResolvedValue({
+    reply: "Gati",
+    nextState: {
+      ...emptyState(),
+      product_id: "product-a",
+      step_key: "order_ready",
+      customer: { name: "Test", phone: "000", city: "Test", address: "Test" },
+    },
+    previousResponseId: "resp_2",
+    workflowId: "workflow-a",
+    debug: { source: "ai", agentConfigured: true },
+  });
+  const result = await simulateAgentTurn({ ...input, session: first.session });
+  expect(result).toHaveProperty("setupTestPassed", true);
+  expect(mocks.record).toHaveBeenCalledWith("business-a", "config-a");
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+it("requires a fresh test after configuration changes or a fallback", async () => {
+  const first = await simulateAgentTurn(input);
+  if ("error" in first) throw Error(first.error);
+  mocks.setup.mockResolvedValue({ available: true, signature: "changed" });
+  const second = await simulateAgentTurn({ ...input, session: first.session });
+  if ("error" in second) throw Error(second.error);
+  expect(second.setupNotice).toBeTruthy();
+  expect(
+    readTestSession(second.session, "user-a", "business-a").setupSignature,
+  ).toBeNull();
+  expect(mocks.record).not.toHaveBeenCalled();
+});
+it("never certifies fallback replies or incomplete customer details", async () => {
+  mocks.process.mockResolvedValue({ reply: "Fallback", nextState: { ...emptyState(), product_id: "product-a", step_key: "order_ready" }, previousResponseId: null, workflowId: "wf", debug: { source: "fallback", agentConfigured: true } });
+  expect(await simulateAgentTurn(input)).toHaveProperty("setupTestPassed", false);
+  expect(mocks.record).not.toHaveBeenCalled();
 });

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
+  setup: vi.fn(),
   getUser: vi.fn(),
   admin: vi.fn(),
   from: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({ from: mocks.from }),
 }));
 vi.mock("@/lib/tenant/access", () => ({ isPlatformAdmin: mocks.admin }));
+vi.mock("@/lib/setup/status", () => ({ loadSetupStatus: mocks.setup }));
 import { POST } from "./route";
 const request = (action = "pause") =>
   POST(new Request("https://example.test/api/action", { method: "POST" }), {
@@ -27,6 +29,7 @@ const request = (action = "pause") =>
   });
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.setup.mockResolvedValue({ connected: true, launched: true });
   const query = {
     update: mocks.update,
     delete: mocks.delete,
@@ -110,4 +113,14 @@ describe("conversation status actions", () => {
       expect(mocks.delete).not.toHaveBeenCalled();
     },
   );
+});
+
+it("cannot resume automatic replies before required setup", async () => {
+  mocks.setup.mockResolvedValue({
+    available: true,
+    connected: false,
+    launched: false,
+  });
+  expect((await request("resume")).status).toBe(409);
+  expect(mocks.update).not.toHaveBeenCalled();
 });

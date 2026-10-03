@@ -79,7 +79,7 @@ export default async function KnowledgePage({
         })
         .throwOnError();
     }
-    revalidatePath(`/b/${slug}/knowledge`);
+    revalidatePath(`/b/${slug}`, "layout");
   }
 
   async function add(formData: FormData) {
@@ -102,7 +102,7 @@ export default async function KnowledgePage({
         intent_key: String(formData.get("intent_key") ?? "").trim() || null,
       })
       .throwOnError();
-    revalidatePath(`/b/${slug}/knowledge`);
+    revalidatePath(`/b/${slug}`, "layout");
   }
 
   return (

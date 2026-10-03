@@ -119,3 +119,15 @@ Ndryshimet zbatohen kur hapet ose rifreskohet faqja. Një pyetësor i hapur më 
 - Katalogu lokal, llojet e produkteve dhe katalogu i jashtëm ngarkohen paralelisht. Navigimi ka loading boundaries; checklist-i nuk bllokon statistikat. Listat e bisedave dhe zgjedhësi i bizneseve nuk bëjnë prefetch masiv.
 
 Për matje përdor production build (`npm run build`, `npm run start`), jo dev mode. Krahaso Network/TTFB dhe madhësinë e RSC payload me të njëjtin përdorues e dataset; provo klientët me mbi 1,000 rreshta, kërkimin dhe kalimin midis dy bizneseve. Testet mbulojnë parametrat e tenant-it në statistika, fallback gjatë migrimit, pagination dhe ruajtjen e kontrolleve në middleware. Migrimi SQL duhet verifikuar në databazën e synuar; nuk aplikohen ndryshime automatikisht në prodhim.
+
+### Konfigurimi progresiv i biznesit
+
+Apliko `supabase/migrations/20261004120000_business_setup.sql` për rrjedhën e re. Çdo biznes merr pesë hapa të nxjerrë nga konfigurimi real: Instagram, produkte, agjent aktiv me udhëzime, workflow të lidhura sipas llojit, dhe test. Pyetësori personalizon udhëzimet; çaktivizimi i tij nuk anashkalon gatishmërinë. `checklist_enabled=false` shfaq një shirit kompakt, por nuk fsheh kërkesën për Instagram ose zgjedhjen përfundimtare manuale/automatike.
+
+- Produkte: të paktën një produkt me emër, çmim dhe monedhë. Çdo produkt në katalog duhet të lidhet me një lloj të biznesit dhe workflow me hapa, me mbledhjen e të dhënave të klientit si hap final. Lidhja dhe çmimi mund të ndryshohen te Produktet.
+- Prova: nga Agjenti AI → Provo Agjentin, nis sesion të ri, zgjidh produktin me emrin e saktë dhe përfundo workflow-n deri te `order_ready`, me të katër fushat e klientit. Përdor të dhëna prove. Çdo përgjigje duhet të vijë nga AI e konfiguruar; fallback-i nuk certifikon testin. Testi mund të bëhet pa Meta Live dhe pa Instagram të lidhur, por fillimi i përdorimit real kërkon lidhjen.
+- Ruhet vetëm fingerprint-i i konfigurimit dhe data e provës në `business_setup`, jo mesazhet, klientët ose porositë e simuluara. Ndryshimet në katalog, agjent, njohuri ose workflow kërkojnë një provë të re. Një editim gjatë sesionit kërkon Rifillo. Shkëputja/rilidhja e Instagram-it nuk fshin provën ose konfigurimin.
+- Kur pesë hapat përfundojnë, zgjedhja manuale/automatike kalon dashboard-in në statistika. `launch_business` rikontrollon gatishmërinë në DB. Aktivizimi nga Cilësimet dhe rifillimi AI në Inbox kanë gjithashtu kontroll server-side. Bizneset tashmë të aktivizuara nuk fiken automatikisht nga ndryshime në konfigurim; marrin sugjerim për ritestim.
+- UI ruan navigimin e lirë. Në mobile shfaqet fillimisht hapi aktual, me listën e hapave të palosur. Progresi rifreskohet pas ruajtjes dhe kur kthehesh nga skeda e autorizimit Instagram.
+
+Pa migrimin shfaqet njoftim i qartë; nuk pretendohet se konfigurimi ose aktivizimi u ruajt.

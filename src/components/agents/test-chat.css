@@ -296,3 +296,19 @@
     max-width: 94%;
   }
 }
+.agent-test-setup-guide {
+  grid-column: 1 / -1;
+  border: 1px solid #e3e7e5;
+  background: #f5faf7;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.agent-test-setup-guide p {
+  margin-top: 8px;
+}
+.agent-test-setup-guide a {
+  text-decoration: underline;
+  font-weight: 600;
+}

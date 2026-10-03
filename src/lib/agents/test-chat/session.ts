@@ -7,6 +7,7 @@ const PURPOSE = "agjenti-agent-test-v1";
 const TTL = 60 * 60 * 1000;
 export const MAX_TEST_TURNS = 40;
 type TestSession = {
+  setupSignature?: string | null;
   purpose: typeof PURPOSE;
   userId: string;
   businessId: string;

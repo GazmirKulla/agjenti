@@ -105,17 +105,17 @@ export function DashboardShell({
           <span className="icon-tile">
             <Icon name="spark" size={25} />
           </span>
-          <h3>{admin ? "Platform Admin" : "Rrit shitjet me Agjentin AI"}</h3>
+          <h3>{admin ? "Platform Admin" : "Hapësira e biznesit"}</h3>
           <p>
             {admin
               ? "Menaxho bizneset dhe ndiq aktivitetin e platformës."
-              : "Njohuritë e biznesit tënd, në çdo bisedë me klientët."}
+              : "Ndiq konfigurimin dhe aktivitetin e biznesit nga Dashboard."}
           </p>
           <Link
-            href={admin ? "/admin/businesses" : `${base}/agents`}
+            href={admin ? "/admin/businesses" : base}
             className="btn btn-primary"
           >
-            {admin ? "Menaxho bizneset" : "Konfiguro agjentin"}
+            {admin ? "Menaxho bizneset" : "Hap Dashboard-in"}
             <Icon name="arrow" size={16} />
           </Link>
         </div>

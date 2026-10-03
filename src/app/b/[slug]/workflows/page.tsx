@@ -74,7 +74,7 @@ export default async function WorkflowsPage({
     }
     await seed("Puzzle", PUZZLE_STEPS, "Puzzle", "puzzle");
     await seed("Bluzë", APPAREL_STEPS, "Bluzë", "tshirt");
-    revalidatePath(`/b/${slug}/workflows`);
+    revalidatePath(`/b/${slug}`, "layout");
   }
 
   async function addSimple(formData: FormData) {
@@ -113,7 +113,7 @@ export default async function WorkflowsPage({
         workflow_id: wf.id,
       })
       .throwOnError();
-    revalidatePath(`/b/${slug}/workflows`);
+    revalidatePath(`/b/${slug}`, "layout");
   }
 
   return (

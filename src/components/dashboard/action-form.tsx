@@ -41,7 +41,8 @@ export function ActionForm({
       onSubmit={(event) => {
         event.preventDefault();
         if (pending) return;
-        const data = new FormData(event.currentTarget);
+        const submitter = (event.nativeEvent as SubmitEvent).submitter;
+        const data = new FormData(event.currentTarget, submitter);
         startTransition(() => submit(data));
       }}
     >

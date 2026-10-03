@@ -93,6 +93,23 @@ export function AgentTestChat({
   }
   return (
     <section className="agent-test">
+      <div className="agent-test-setup-guide">
+        <strong>Provo një porosi nga fillimi deri në fund</strong>
+        <p>
+          Shkruaj emrin e saktë të një produkti, përgjigju kërkesave dhe përdor
+          emër, telefon e adresë prove. Hapi përfundon kur workflow arrin
+          “order_ready” me përgjigje AI. Mos ndrysho konfigurimin gjatë provës.
+        </p>
+        {last?.setupTestPassed && (
+          <p role="status">
+            ✓ Testi u ruajt.{" "}
+            <Link href={`/b/${slug}`}>
+              Kthehu te Dashboard për të filluar →
+            </Link>
+          </p>
+        )}
+        {last?.setupNotice && <p role="status">{last.setupNotice}</p>}
+      </div>
       <header className="agent-test-header">
         <div>
           <span className="agent-test-label">

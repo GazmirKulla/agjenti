@@ -96,7 +96,7 @@ export function OnboardingWizard({
               </div>
             </div>
           ) : (
-            <ol aria-label="Hapat e konfigurimit">
+            <ol aria-label="Pyetjet e personalizimit">
               {questions.map((q, i) => (
                 <li
                   key={q.key}
@@ -123,7 +123,7 @@ export function OnboardingWizard({
             <progress
               max={7}
               value={step}
-              aria-label="Progresi i konfigurimit"
+              aria-label="Progresi i personalizimit"
             />
             <span>{step === 0 ? "Rreth 2 minuta" : `${step} / 7`}</span>
           </div>
@@ -240,7 +240,7 @@ export function OnboardingWizard({
                   {busy
                     ? "Duke ruajtur…"
                     : step === 0
-                      ? "Fillo konfigurimin →"
+                      ? "Fillo personalizimin →"
                       : step === 7
                         ? "Krijo hapësirën →"
                         : "Vazhdo →"}

@@ -1,3 +1,5 @@
+import { loadSetupStatus } from "@/lib/setup/status";
+import { isReady } from "@/lib/setup/model";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { IntegrationApiKeyField } from "@/components/dashboard/integration-api-key";
@@ -27,6 +29,14 @@ export default async function SettingsPage({
     if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
+    if (formData.get("auto_reply") === "on" && !acc.business.auto_reply) {
+      const setup = await loadSetupStatus(acc.business.id);
+      if (!isReady(setup))
+        return {
+          error:
+            "Përfundo konfigurimin dhe lidh Instagram-in nga Dashboard përpara aktivizimit.",
+        };
+    }
     const catalogSource = String(
       formData.get("catalog_source") ?? acc.business.catalog_source,
     );
@@ -81,6 +91,10 @@ export default async function SettingsPage({
       .from("integrations")
       .upsert(row, { onConflict: "business_id,kind" })
       .throwOnError();
+    if (formData.get("auto_reply") === "on" && !acc.business.auto_reply) {
+      const { error } = await db.rpc("launch_business", { p_business_id: acc.business.id, p_automatic: true });
+      if (error) return { error: "Konfigurimi ndryshoi. Kontrollo hapat nga Dashboard." };
+    }
     await db
       .from("businesses")
       .update({

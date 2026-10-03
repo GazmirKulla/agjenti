@@ -71,7 +71,7 @@ export default async function AgentsPage({
         })
         .throwOnError();
     }
-    revalidatePath(`/b/${slug}/agents`);
+    revalidatePath(`/b/${slug}`, "layout");
   }
 
   const agentForm = (a?: {
@@ -135,7 +135,7 @@ export default async function AgentsPage({
       />
       <div className="panel section-pad mb-5 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="font-semibold">Provo përgjigjet para aktivizimit</h2>
+          <h2 className="font-semibold">Provo përgjigjet para dërgimit automatik</h2>
           <p className="muted-copy">
             Bisedë e përkohshme, pa Instagram dhe pa porosi reale.
           </p>

@@ -1,4 +1,7 @@
 "use server";
+import { loadSetupStatus } from "@/lib/setup/status";
+import { recordSetupTest } from "@/lib/setup/record-test";
+import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import {
   processAgentTurn,
@@ -14,6 +17,8 @@ export type TestChatInput = {
 export type TestChatResult =
   | { error: string }
   | (AgentTurnResult & {
+      setupTestPassed?: boolean;
+      setupNotice?: string;
       session: string;
       turns: number;
       autoReplyEnabled: boolean;
@@ -60,6 +65,10 @@ export async function simulateAgentTurn(
         error:
           "Administratori duhet të konfigurojë çelësin e sesioneve të provës.",
       };
+    // Read before the turn so a concurrent config edit cannot certify a stale test.
+    const setup = await loadSetupStatus(access.business.id).catch(() => null);
+    const expectedSignature =
+      session.turns === 0 ? setup?.signature : session.setupSignature;
     const turn = await processAgentTurn({
       businessId: access.business.id,
       message: text,
@@ -67,8 +76,36 @@ export async function simulateAgentTurn(
       state: session.state,
       previousResponseId: session.previousResponseId,
     });
+    const validTest = Boolean(
+      setup?.available &&
+      expectedSignature &&
+      setup.signature === expectedSignature &&
+      turn.debug.source === "ai" &&
+      turn.debug.agentConfigured,
+    );
+    session.setupSignature = validTest ? expectedSignature : null;
+    let setupTestPassed = false;
+    if (
+      validTest &&
+      turn.workflowId &&
+      turn.nextState.product_id &&
+      turn.nextState.step_key === "order_ready" &&
+      Object.values(turn.nextState.customer).every(Boolean)
+    ) {
+      setupTestPassed = await recordSetupTest(
+        access.business.id,
+        expectedSignature!,
+      ).catch(() => false);
+      if (setupTestPassed) revalidatePath(`/b/${input.slug}`, "layout");
+    }
     return {
       ...turn,
+      setupTestPassed,
+      setupNotice: !validTest
+        ? "Kjo bisedë nuk numërohet si test konfigurimi. Kontrollo agjentin dhe rifillo pasi të ruash ndryshimet."
+        : turn.nextState.step_key === "order_ready" && !setupTestPassed
+          ? "Prova përfundoi, por progresi nuk u ruajt. Kontrollo konfigurimin dhe rifillo."
+          : undefined,
       session: sealTestSession(
         session,
         turn.nextState,

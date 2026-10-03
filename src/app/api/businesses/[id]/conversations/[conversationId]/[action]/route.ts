@@ -1,3 +1,5 @@
+import { loadSetupStatus } from "@/lib/setup/status";
+import { isReady } from "@/lib/setup/model";
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -30,6 +32,14 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const service = createServiceSupabase();
+  if (action === "resume") {
+    const setup = await loadSetupStatus(businessId);
+    if (!setup.connected || (!setup.launched && !isReady(setup)))
+      return NextResponse.json(
+        { error: "Lidh Instagram-in dhe përfundo konfigurimin nga Dashboard." },
+        { status: 409 },
+      );
+  }
 
   if (action === "delete") {
     const { data, error } = await service

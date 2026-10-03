@@ -1,0 +1,164 @@
+.setup-journey,
+.setup-strip,
+.setup-notice {
+  background: #fff;
+  border: 1px solid #e7e4ef;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  color: #19152d;
+}
+.setup-journey header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+.setup-journey h1 {
+  font-size: 26px !important;
+  margin: 6px 0 10px;
+}
+.setup-journey p,
+.setup-strip p {
+  color: #69647b;
+  line-height: 1.6;
+  font-size: 14px;
+}
+.setup-journey .setup-eyebrow {
+  font-size: 12px;
+  font-weight: 650;
+  color: #7445d6;
+}
+.setup-journey progress {
+  width: 100%;
+  height: 6px;
+  accent-color: #7445d6;
+  margin: 24px 0;
+}
+.setup-grid {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 28px;
+}
+.setup-step-list summary {
+  display: none;
+}
+.setup-step-list ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.setup-step-list button {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  width: 100%;
+  padding: 14px;
+  border-radius: 10px;
+}
+.setup-step-list button[aria-current="step"] {
+  background: #f2edff;
+  color: #6434cb;
+}
+.setup-step-list button > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: #f0edf6;
+  border-radius: 50%;
+}
+.setup-step-list button .done {
+  background: #e4f7ed !important;
+  color: #148157;
+}
+.setup-step-list small {
+  display: block;
+  color: #777080;
+  margin-top: 3px;
+  font-size: 12px;
+}
+.setup-current {
+  padding: 26px;
+  background: #faf9fc;
+  border: 1px solid #efedf4;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+}
+.setup-current h2 {
+  font-size: 23px;
+  font-weight: 650;
+}
+.setup-current .setup-help {
+  font-size: 12px;
+}
+.setup-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+}
+.setup-strip > div {
+  flex: 1;
+}
+.setup-strip p {
+  font-size: 12px;
+  margin-top: 4px;
+}
+.setup-launch .action-form-fields {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+@media (max-width: 760px) {
+  .setup-journey,
+  .setup-strip {
+    padding: 18px;
+  }
+  .setup-journey header {
+    display: block;
+  }
+  .setup-journey header > button {
+    margin-top: 12px;
+  }
+  .setup-journey h1 {
+    font-size: 24px !important;
+  }
+  .setup-grid {
+    display: flex;
+    flex-direction: column;
+  }
+  .setup-current {
+    order: -1;
+    padding: 20px;
+  }
+  .setup-current .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+  .setup-step-list summary {
+    display: block;
+    padding: 12px 0;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .setup-strip {
+    flex-wrap: wrap;
+  }
+  .setup-strip > div {
+    flex-basis: 100%;
+  }
+  .setup-strip > .btn-primary {
+    flex: 1;
+    min-height: 46px;
+  }
+  .setup-launch .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+}
