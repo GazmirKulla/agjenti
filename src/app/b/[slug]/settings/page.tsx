@@ -1,4 +1,5 @@
 import { ActionForm } from "@/components/dashboard/action-form";
+import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { IntegrationApiKeyField } from "@/components/dashboard/integration-api-key";
 import { IntegrationProbe } from "@/components/dashboard/integration-probe";
 import { PageHeading } from "@/components/dashboard/ui";
@@ -201,18 +202,26 @@ export default async function SettingsPage({
             formSelector="form.business-settings-form"
           />
         </ActionForm>
-        <aside className="panel section-pad">
-          <span className="icon-tile">
-            <Icon name="workflows" size={25} />
-          </span>
-          <h2 className="text-lg mt-5">Katalogu dhe porositë</h2>
-          <p className="muted-copy">
-            Me katalogun manual, produktet shtohen brenda panelit. Integrimet
-            e jashtme lidhen me HTTP + Bearer: URL-të + API key i biznesit.
-          </p>
-          <p className="muted-copy">
-            Kopjo API key te env i sajtit të klientit, pastaj testo lidhjen.
-          </p>
+        <aside className="settings-side">
+          <section className="panel section-pad">
+            <span className="icon-tile">
+              <Icon name="workflows" size={25} />
+            </span>
+            <h2 className="text-lg mt-5">Katalogu dhe porositë</h2>
+            <p className="muted-copy">
+              Me katalogun manual, produktet shtohen brenda panelit. Integrimet
+              e jashtme lidhen me HTTP + Bearer: URL-të + API key i biznesit.
+            </p>
+            <p className="muted-copy">
+              Kopjo API key te env i sajtit të klientit, pastaj testo lidhjen.
+            </p>
+          </section>
+          <DeleteBusinessPanel
+            businessId={access.business.id}
+            slug={slug}
+            businessName={access.business.name}
+            redirectTo="/auth/continue"
+          />
         </aside>
       </div>
     </>

@@ -1,4 +1,5 @@
 import { ActionForm } from "@/components/dashboard/action-form";
+import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
@@ -191,6 +192,13 @@ export default async function AdminBusinessesPage() {
                   </button>
                 </ActionForm>
               </div>
+              <DeleteBusinessPanel
+                businessId={b.id}
+                slug={b.slug}
+                businessName={b.name}
+                redirectTo="/admin/businesses"
+                embedded
+              />
             </>
           ),
         }))}
