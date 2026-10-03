@@ -71,3 +71,20 @@ Pas regjistrimit dhe konfirmimit të email-it (kur kërkohet nga Supabase), `/au
 Katalogu fillon bosh, `auto_reply=false` dhe agjenti fillestar joaktiv. Preferencat për AI-në përgatisin udhëzimet, pa premtuar funksione të paimplementuara si gjenerimi i drafteve për miratim. Nuk krijohen produkte ose politika të sajuara. Workflow vazhdon të lidhet me llojin e produktit. Checklist-i në dashboard përdor gjendjen reale të Instagram-it, katalogut, njohurive, agjentit, bisedave dhe workflow-ve. Madhësia e ekipit dhe vëllimi i mesazheve ndryshojnë vetëm këshillat; anëtarët shtohen nga mekanizmi ekzistues i adminit. Preferencat nuk përdoren për autorizime ose kufij funksionesh; konfigurimi operacional ndryshohet nga panelet ekzistuese.
 
 Kontrolle: `npm test`, `npm run lint`, `npm run build`. `supabase/tests/self_service_onboarding.sql` provon draftet, idempotencën, caktimin e pronarit, kufizimin e RPC-ve dhe rollback-un; ekzekutohet vetëm në databazë të izoluar testimi pas migrimeve dhe bën rollback.
+
+## Provo Agjentin (Test Chat)
+
+Hyr si anëtar i biznesit ose Platform Admin. Në panelin e biznesit hap **Agjenti AI → Provo Agjentin**, ose `/b/<slug>/agents/test` (lokalisht `http://localhost:3003/b/<slug>/agents/test`, në prodhim `https://agjenti.app/b/<slug>/agents/test`). Nuk kërkon lidhje Instagram, webhook apo Meta Live.
+
+1. Ruaj udhëzimet dhe aktivizo agjentin që dëshiron të provosh; nuk është e nevojshme të aktivizosh dërgimin automatik të biznesit.
+2. Shto produkte në katalogun e biznesit, njohuri aktive dhe, nëse duhen, lidh llojet e produkteve me workflow-t ekzistuese.
+3. Shkruaj si klient. Për të zgjedhur produktin, fillo me emrin e tij të saktë nga katalogu. Vazhdo me madhësinë, ngjyrën ose të dhënat që kërkon workflow. **Simulo foto** kalon vetëm sinjalin e fotos, pa ngarkim apo analizë imazhi.
+4. Shiko hapin aktual, gjendjen e mbledhur, modelin, burimin e përgjigjes, workflow-n dhe response ID te paneli i diagnostikimit. **Rifillo** pastron bisedën, gjendjen dhe kontekstin AI, përfshirë rezultatet e një kërkese ende në proces.
+
+Për demo në Meta App Review, shfaq konfigurimin e biznesit dhe më pas disa mesazhe prove nga kjo faqe. Etiketa “SESION PROVE” e dallon qartë nga Inbox-i. Kjo demonstron sjelljen e agjentit; nuk provon autorizimin, webhook-et ose dorëzimin e mesazheve të Meta dhe nuk zëvendëson verifikimin e integrimit real.
+
+Simulatori dhe webhook-u thërrasin të njëjtin `processAgentTurn`: produktet nga tabela `products` e biznesit (përfshirë produktet linked të ruajtura aty), agjentin aktiv, deri në 12 njohuri aktive sipas `sort_order`, workflow-n dhe `generateAgentReply`. Katalogët e jashtëm nuk shkarkohen nga simulatori; kjo është e njëjta sjellje si rrjedha reale. Vetëm `handleInboundMessage` ruan bisedën/gjendjen dhe thërret `sendInstagramText`. Simulatori nuk shkruan në Inbox, `conversation_states`, porosi apo log-e të mesazheve, dhe nuk thërret Meta.
+
+Mesazhet dhe gjendja mbahen në memorie në klient. Konteksti i sesionit është i enkriptuar me `TOKEN_ENCRYPTION_KEY`, i lidhur me përdoruesin/biznesin dhe i verifikuar në çdo kërkesë; skadon pas një ore pa aktivitet ose pas 40 mesazhesh. Ndryshimi i biznesit, rifreskimi i faqes ose **Rifillo** fillon sesion të ri. `OPENAI_API_KEY` aktivizon përgjigjet AI; mungesa e tij ose gabimet e ofruesit shfaqen si përgjigje rezervë, jo si sukses AI. Teksti dhe konteksti dërgohen te OpenAI sipas të njëjtave rregulla si përgjigjet reale; mungesa e ruajtjes në Inbox nuk do të thotë mungesë përpunimi/ruajtjeje nga ofruesi AI. Përdor të dhëna shembull.
+
+Nuk kërkohet migrim i ri i databazës për Test Chat. Testet mbulojnë pipeline-n e përbashkët, transportin real, turnet e shumëfishta, autorizimin, izolimin e sesionit, reset-in dhe fallback-un.

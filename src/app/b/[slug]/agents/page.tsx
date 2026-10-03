@@ -133,6 +133,17 @@ export default async function AgentsPage({
         title={`Agjenti AI i ${access.business.name}`}
         description="Konfiguro mënyrën si Agjenti AI komunikon me klientët."
       />
+      <div className="panel section-pad mb-5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="font-semibold">Provo përgjigjet para aktivizimit</h2>
+          <p className="muted-copy">
+            Bisedë e përkohshme, pa Instagram dhe pa porosi reale.
+          </p>
+        </div>
+        <Link href={`/b/${slug}/agents/test`} className="btn btn-ghost">
+          Provo Agjentin →
+        </Link>
+      </div>
       <div className="configuration-layout">
         <div className="space-y-5">
           {(agents ?? []).map((a) => (

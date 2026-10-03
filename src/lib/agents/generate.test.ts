@@ -1,0 +1,66 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+const mocks = vi.hoisted(() => ({ create: vi.fn() }));
+vi.mock("openai", () => ({
+  default: class {
+    responses = { create: mocks.create };
+  },
+}));
+import { generateAgentReply } from "./generate";
+import { emptyState } from "@/lib/workflows/engine";
+const params = {
+  instructions: "Use tenant instructions",
+  state: emptyState(),
+  knowledge: "Tenant facts",
+  customerMessage: "Hi",
+  previousResponseId: "resp_previous",
+  catalogSummary: "Tenant products",
+};
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubEnv("OPENAI_API_KEY", "test-key");
+});
+afterEach(() => vi.unstubAllEnvs());
+describe("reply source diagnostics", () => {
+  it("reports AI with the response id and carries its context", async () => {
+    mocks.create.mockResolvedValue({
+      output_text: "Përshëndetje",
+      id: "resp_new",
+    });
+    expect(await generateAgentReply(params)).toMatchObject({
+      reply: "Përshëndetje",
+      source: "ai",
+      responseId: "resp_new",
+      fallbackReason: null,
+    });
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        previous_response_id: "resp_previous",
+        instructions: params.instructions,
+        input: expect.stringContaining("Tenant facts"),
+      }),
+    );
+  });
+  it("reports missing configuration without making a request", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    expect(await generateAgentReply(params)).toMatchObject({
+      source: "fallback",
+      fallbackReason: "missing_api_key",
+    });
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it("reports provider failure and preserves the prior context", async () => {
+    mocks.create.mockRejectedValue(Error("unavailable"));
+    expect(await generateAgentReply(params)).toMatchObject({
+      source: "fallback",
+      fallbackReason: "provider_error",
+      responseId: "resp_previous",
+    });
+  });
+  it("reports empty replies as fallback", async () => {
+    mocks.create.mockResolvedValue({ output_text: "", id: "resp_new" });
+    expect(await generateAgentReply(params)).toMatchObject({
+      source: "fallback",
+      fallbackReason: "empty_reply",
+    });
+  });
+});
