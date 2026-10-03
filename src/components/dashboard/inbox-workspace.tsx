@@ -117,6 +117,7 @@ export async function InboxWorkspace({
           key={selected}
           businessId={businessId}
           conversationId={selected}
+          slug={slug}
           status={conversation.status}
           customerName={name}
           messages={(messageResult.data ?? []).reverse()}

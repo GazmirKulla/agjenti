@@ -1301,6 +1301,10 @@
   background: #f5f1ff;
   border-radius: 5px;
 }
+.chat-actions button.chat-action-danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
 .chat-actions button:disabled {
   opacity: 0.4;
   cursor: not-allowed;

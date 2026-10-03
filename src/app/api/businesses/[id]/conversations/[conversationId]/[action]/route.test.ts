@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   admin: vi.fn(),
   from: vi.fn(),
   update: vi.fn(),
+  delete: vi.fn(),
   eq: vi.fn(),
   select: vi.fn(),
   maybeSingle: vi.fn(),
@@ -28,12 +29,14 @@ beforeEach(() => {
   vi.resetAllMocks();
   const query = {
     update: mocks.update,
+    delete: mocks.delete,
     eq: mocks.eq,
     select: mocks.select,
     maybeSingle: mocks.maybeSingle,
   };
   mocks.from.mockReturnValue(query);
   mocks.update.mockReturnValue(query);
+  mocks.delete.mockReturnValue(query);
   mocks.eq.mockReturnValue(query);
   mocks.select.mockReturnValue(query);
   mocks.getUser.mockResolvedValue({ data: { user: { id: "user-a" } } });
@@ -65,11 +68,13 @@ describe("conversation status actions", () => {
     mocks.maybeSingle.mockResolvedValue({ data: null, error: null });
     expect((await request()).status).toBe(403);
     expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.delete).not.toHaveBeenCalled();
   });
   it("rejects unauthenticated requests", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } });
     expect((await request()).status).toBe(403);
     expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.delete).not.toHaveBeenCalled();
   });
   it.each(["pause", "resume", "complete"])(
     "persists %s only within the requested business",
@@ -81,11 +86,28 @@ describe("conversation status actions", () => {
       );
     },
   );
+  it("deletes the conversation only within the requested business", async () => {
+    expect((await request("delete")).status).toBe(200);
+    expect(mocks.delete).toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.eq).toHaveBeenCalledWith("id", "conversation-a");
+    expect(mocks.eq).toHaveBeenCalledWith("business_id", "business-a");
+  });
+  it("does not claim success when the database rejects the delete", async () => {
+    mocks.maybeSingle.mockResolvedValue({
+      data: null,
+      error: { message: "database unavailable" },
+    });
+    const response = await request("delete");
+    expect(response.status).toBe(500);
+    expect(await response.json()).toHaveProperty("error");
+  });
   it.each(["unknown", "__proto__"])(
     "rejects the invalid action %s without writing",
     async (action) => {
       expect((await request(action)).status).toBe(404);
       expect(mocks.update).not.toHaveBeenCalled();
+      expect(mocks.delete).not.toHaveBeenCalled();
     },
   );
 });

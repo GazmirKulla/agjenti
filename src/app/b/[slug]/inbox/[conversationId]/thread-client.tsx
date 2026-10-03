@@ -25,6 +25,7 @@ type Log = {
 export function ThreadClient(props: {
   businessId: string;
   conversationId: string;
+  slug: string;
   status: string;
   customerName: string;
   messages: Message[];
@@ -60,6 +61,11 @@ export function ThreadClient(props: {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Veprimi dështoi.");
       if (path === "messages") setText("");
+      if (path === "delete") {
+        router.push(`/b/${props.slug}/inbox`);
+        router.refresh();
+        return;
+      }
       router.refresh();
     } catch (e) {
       setError(
@@ -68,6 +74,16 @@ export function ThreadClient(props: {
     } finally {
       setPending(false);
     }
+  }
+  function confirmDelete() {
+    if (
+      !window.confirm(
+        "Fshi këtë bisedë dhe të gjitha mesazhet e saj? Ky veprim nuk kthehet mbrapsht.",
+      )
+    ) {
+      return;
+    }
+    void request("delete");
   }
   return (
     <section className="panel chat-panel">
@@ -114,6 +130,14 @@ export function ThreadClient(props: {
           onClick={() => request("orders")}
         >
           Konfirmo porosinë
+        </button>
+        <button
+          type="button"
+          className="chat-action-danger"
+          disabled={pending}
+          onClick={confirmDelete}
+        >
+          Fshi bisedën
         </button>
       </div>
       <div className="chat-messages" ref={messageList}>

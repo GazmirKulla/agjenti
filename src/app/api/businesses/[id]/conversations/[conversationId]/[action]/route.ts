@@ -29,6 +29,29 @@ export async function POST(
   if (!user || !(await canAccess(user.id, businessId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const service = createServiceSupabase();
+
+  if (action === "delete") {
+    const { data, error } = await service
+      .from("conversations")
+      .delete()
+      .eq("id", conversationId)
+      .eq("business_id", businessId)
+      .select("id")
+      .maybeSingle();
+    if (error)
+      return NextResponse.json(
+        { error: "Biseda nuk u fshi. Provo përsëri." },
+        { status: 500 },
+      );
+    if (!data)
+      return NextResponse.json(
+        { error: "Biseda nuk u gjet në këtë biznes." },
+        { status: 404 },
+      );
+    return NextResponse.json({ ok: true });
+  }
+
   const states: Record<string, { status: string; auto_reply: boolean }> = {
     pause: { status: "paused", auto_reply: false },
     resume: { status: "active", auto_reply: true },
@@ -37,7 +60,6 @@ export async function POST(
   const state = Object.hasOwn(states, action) ? states[action] : undefined;
   if (!state)
     return NextResponse.json({ error: "Veprim i panjohur." }, { status: 404 });
-  const service = createServiceSupabase();
   const { data, error } = await service
     .from("conversations")
     .update({ ...state, updated_at: new Date().toISOString() })
