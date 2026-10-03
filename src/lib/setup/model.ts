@@ -43,8 +43,8 @@ export function setupSteps(s: SetupStatus) {
       title: "Përcakto procesin e porosisë",
       description:
         s.unconfiguredProducts > 0
-          ? `${s.unconfiguredProducts} produkte kërkojnë një lloj me workflow dhe hapin e të dhënave të klientit. Krijoje këtu dhe lidhe nga Produktet.`
-          : "Përdor një model sipas llojit të produktit dhe përcakto të dhënat që duhen mbledhur.",
+          ? `${s.unconfiguredProducts} produkte kërkojnë lloj global dhe workflow të biznesit (me hapin e klientit në fund). Lidhi nga Produktet.`
+          : "Zgjidh llojin global dhe lidh ose sugjero një workflow të biznesit për çdo produkt.",
       action: "Konfiguro procesin",
       path: "workflows",
       done: s.productCount > 0 && s.unconfiguredProducts === 0,

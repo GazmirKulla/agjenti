@@ -1,115 +1,123 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { getSessionUser, isPlatformAdmin, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { SIMPLE_STEPS } from "@/lib/workflows/engine";
 import { normalizeExternalKey } from "./keys";
 
-async function assertWorkflowInBusiness(
-  businessId: string,
-  workflowId: string | null,
-) {
-  if (!workflowId) return null;
-  const { data } = await createServiceSupabase()
-    .from("workflows")
-    .select("id")
-    .eq("id", workflowId)
-    .eq("business_id", businessId)
-    .maybeSingle();
-  return data?.id ?? null;
+type StepInput = {
+  key: string;
+  position: number;
+  kind: "choice" | "text" | "photo" | "customer" | "confirm";
+  label: string;
+};
+
+function parseStepsJson(raw: string): StepInput[] | { error: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw || "[]");
+  } catch {
+    return { error: "Hapat e template-it nuk janë JSON i vlefshëm." };
+  }
+  if (!Array.isArray(parsed) || !parsed.length)
+    return { error: "Shto të paktën një hap në template." };
+  const kinds = new Set(["choice", "text", "photo", "customer", "confirm"]);
+  const steps: StepInput[] = [];
+  for (const [i, item] of parsed.entries()) {
+    if (!item || typeof item !== "object")
+      return { error: "Çdo hap duhet të jetë objekt." };
+    const row = item as Record<string, unknown>;
+    const key = String(row.key ?? "").trim();
+    const kind = String(row.kind ?? "").trim();
+    const label = String(row.label ?? "").trim();
+    if (!key || !kinds.has(kind) || !label)
+      return {
+        error: `Hapi ${i + 1} ka key/kind/label të pavlefshëm.`,
+      };
+    steps.push({
+      key,
+      kind: kind as StepInput["kind"],
+      label,
+      position: i,
+    });
+  }
+  if (!steps.some((s) => s.kind === "customer"))
+    return { error: "Template-i duhet të përfundojë me hapin e klientit." };
+  if (steps[steps.length - 1]?.kind !== "customer")
+    return { error: "Hapi i fundit i template-it duhet të jetë i tipit customer." };
+  return steps;
 }
 
-export async function createProductType(slug: string, form: FormData) {
+async function requireAdmin() {
   const user = await getSessionUser();
-  if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
-  const access = await requireBusinessAccess(user.id, slug);
-  if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+  if (!user || !(await isPlatformAdmin(user.id)))
+    return { error: "Kërkohet qasja e administratorit." as const };
+  return { user };
+}
 
+export async function createGlobalProductType(form: FormData) {
+  const admin = await requireAdmin();
+  if ("error" in admin) return admin;
   const name = String(form.get("name") ?? "").trim();
   if (name.length < 2) return { error: "Vendos emrin e llojit (të paktën 2 karaktere)." };
   const description = String(form.get("description") ?? "").trim() || null;
-  const externalKey = normalizeExternalKey(
-    String(form.get("external_key") ?? "") || name,
-  );
-  const workflowIdRaw = String(form.get("workflow_id") ?? "").trim();
-  const createWorkflow = form.get("create_workflow") === "on";
+  const externalKey =
+    normalizeExternalKey(String(form.get("external_key") ?? "") || name) || null;
+  const sortOrder = Number(String(form.get("sort_order") ?? "0")) || 0;
+  const steps = parseStepsJson(String(form.get("steps_json") ?? "[]"));
+  if ("error" in steps) return steps;
 
   const db = createServiceSupabase();
-  let workflowId: string | null = null;
-
-  if (workflowIdRaw) {
-    workflowId = await assertWorkflowInBusiness(
-      access.business.id,
-      workflowIdRaw,
-    );
-    if (!workflowId) return { error: "Workflow-i i zgjedhur nuk u gjet." };
-  } else if (createWorkflow) {
-    const { data: wf } = await db
-      .from("workflows")
-      .insert({
-        business_id: access.business.id,
-        name: `Workflow – ${name}`,
-      })
-      .select("id")
-      .single()
-      .throwOnError();
-    if (!wf) return { error: "Workflow-i nuk u krijua." };
-    await db
-      .from("workflow_steps")
-      .insert(
-        SIMPLE_STEPS.map((s, i) => ({
-          workflow_id: wf.id,
-          key: s.key,
-          position: i,
-          kind: s.kind,
-          required: true,
-          config: { label: s.label },
-        })),
-      )
-      .throwOnError();
-    workflowId = wf.id;
-  }
-
-  const { error } = await db.from("product_types").insert({
-    business_id: access.business.id,
-    name,
-    description,
-    external_key: externalKey,
-    workflow_id: workflowId,
-    updated_at: new Date().toISOString(),
-  });
-  if (error) {
+  const { data: type, error } = await db
+    .from("product_types")
+    .insert({
+      name,
+      description,
+      external_key: externalKey,
+      sort_order: sortOrder,
+      is_active: form.get("is_active") === "on",
+      updated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .maybeSingle();
+  if (error || !type) {
     return {
       error:
-        error.code === "23505"
-          ? "Ky çelës i jashtëm përdoret tashmë nga një lloj tjetër."
-          : "Lloji nuk u krijua. Provo përsëri.",
+        error?.code === "23505"
+          ? "Ky çelës i jashtëm përdoret tashmë."
+          : "Lloji nuk u krijua.",
     };
   }
-  revalidatePath(`/b/${slug}`, "layout");
-  return { success: "Lloji i produktit u krijua." };
+  await db
+    .from("product_type_steps")
+    .insert(
+      steps.map((s) => ({
+        product_type_id: type.id,
+        key: s.key,
+        position: s.position,
+        kind: s.kind,
+        required: true,
+        config: { label: s.label },
+      })),
+    )
+    .throwOnError();
+  revalidatePath("/admin/product-types");
+  return { success: "Lloji global u krijua." };
 }
 
-export async function updateProductType(slug: string, form: FormData) {
-  const user = await getSessionUser();
-  if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
-  const access = await requireBusinessAccess(user.id, slug);
-  if (!access) return { error: "Nuk ke qasje në këtë biznes." };
-
+export async function updateGlobalProductType(form: FormData) {
+  const admin = await requireAdmin();
+  if ("error" in admin) return admin;
   const id = String(form.get("id") ?? "");
   const name = String(form.get("name") ?? "").trim();
   if (!id || name.length < 2)
     return { error: "Vendos emrin e llojit (të paktën 2 karaktere)." };
   const description = String(form.get("description") ?? "").trim() || null;
-  const externalKey = normalizeExternalKey(String(form.get("external_key") ?? ""));
-  const workflowIdRaw = String(form.get("workflow_id") ?? "").trim() || null;
-  const workflowId = await assertWorkflowInBusiness(
-    access.business.id,
-    workflowIdRaw,
-  );
-  if (workflowIdRaw && !workflowId)
-    return { error: "Workflow-i i zgjedhur nuk u gjet." };
+  const externalKey =
+    normalizeExternalKey(String(form.get("external_key") ?? "")) || null;
+  const sortOrder = Number(String(form.get("sort_order") ?? "0")) || 0;
+  const steps = parseStepsJson(String(form.get("steps_json") ?? "[]"));
+  if ("error" in steps) return steps;
 
   const db = createServiceSupabase();
   const { data, error } = await db
@@ -118,74 +126,141 @@ export async function updateProductType(slug: string, form: FormData) {
       name,
       description,
       external_key: externalKey,
-      workflow_id: workflowId,
+      sort_order: sortOrder,
+      is_active: form.get("is_active") === "on",
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("business_id", access.business.id)
     .select("id")
     .maybeSingle();
   if (error) {
     return {
       error:
         error.code === "23505"
-          ? "Ky çelës i jashtëm përdoret tashmë nga një lloj tjetër."
+          ? "Ky çelës i jashtëm përdoret tashmë."
           : "Lloji nuk u përditësua.",
     };
   }
-  if (!data) return { error: "Lloji nuk u gjet në këtë biznes." };
-  revalidatePath(`/b/${slug}`, "layout");
+  if (!data) return { error: "Lloji nuk u gjet." };
+  await db.from("product_type_steps").delete().eq("product_type_id", id).throwOnError();
+  await db
+    .from("product_type_steps")
+    .insert(
+      steps.map((s) => ({
+        product_type_id: id,
+        key: s.key,
+        position: s.position,
+        kind: s.kind,
+        required: true,
+        config: { label: s.label },
+      })),
+    )
+    .throwOnError();
+  revalidatePath("/admin/product-types");
   return { success: "Ndryshimet u ruajtën." };
 }
 
-export async function deleteProductType(slug: string, form: FormData) {
-  const user = await getSessionUser();
-  if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
-  const access = await requireBusinessAccess(user.id, slug);
-  if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+export async function deleteGlobalProductType(form: FormData) {
+  const admin = await requireAdmin();
+  if ("error" in admin) return admin;
   const id = String(form.get("id") ?? "");
   if (!id) return { error: "Lloji nuk është i vlefshëm." };
-
   const db = createServiceSupabase();
   const { count } = await db
     .from("products")
     .select("id", { count: "exact", head: true })
-    .eq("business_id", access.business.id)
     .eq("product_type_id", id);
   if ((count ?? 0) > 0)
     return {
-      error: `Ky lloj është i lidhur me ${count} produkte. Hiq lidhjen te Produktet përpara fshirjes.`,
+      error: `Ky lloj përdoret nga ${count} produkte. Hiq lidhjen te produktet përpara fshirjes.`,
     };
-
   const { data, error } = await db
     .from("product_types")
     .delete()
     .eq("id", id)
-    .eq("business_id", access.business.id)
     .select("id")
     .maybeSingle();
   if (error || !data) return { error: "Lloji nuk u fshi." };
-  revalidatePath(`/b/${slug}`, "layout");
+  revalidatePath("/admin/product-types");
   return { success: "Lloji u fshi." };
 }
 
-export async function seedDefaultProductTypes(slug: string) {
+/** Copy global type template steps into a new business workflow and link the product. */
+export async function applyTypeSuggestion(slug: string, form: FormData) {
   const user = await getSessionUser();
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) return { error: "Nuk ke qasje në këtë biznes." };
 
-  const { data, error } = await createServiceSupabase().rpc(
-    "seed_default_product_types",
-    { p_business_id: access.business.id },
-  );
-  if (error) return { error: "Llojet tipike nuk u shtuan. Provo përsëri." };
+  const productId = String(form.get("product_id") ?? "");
+  const typeId = String(form.get("product_type_id") ?? "");
+  if (!productId || !typeId)
+    return { error: "Zgjidh produktin dhe llojin." };
+
+  const db = createServiceSupabase();
+  const [{ data: product }, { data: type }, { data: templateSteps }] =
+    await Promise.all([
+      db
+        .from("products")
+        .select("id,name")
+        .eq("id", productId)
+        .eq("business_id", access.business.id)
+        .maybeSingle(),
+      db
+        .from("product_types")
+        .select("id,name")
+        .eq("id", typeId)
+        .eq("is_active", true)
+        .maybeSingle(),
+      db
+        .from("product_type_steps")
+        .select("key,position,kind,config")
+        .eq("product_type_id", typeId)
+        .order("position"),
+    ]);
+  if (!product) return { error: "Produkti nuk u gjet në këtë biznes." };
+  if (!type) return { error: "Lloji global nuk u gjet." };
+  if (!templateSteps?.length)
+    return { error: "Ky lloj nuk ka template workflow për t’u kopjuar." };
+
+  const { data: wf } = await db
+    .from("workflows")
+    .insert({
+      business_id: access.business.id,
+      name: `Workflow – ${type.name}`,
+    })
+    .select("id")
+    .single()
+    .throwOnError();
+  if (!wf) return { error: "Workflow-i nuk u krijua." };
+
+  await db
+    .from("workflow_steps")
+    .insert(
+      templateSteps.map((s) => ({
+        workflow_id: wf.id,
+        key: s.key,
+        position: s.position,
+        kind: s.kind,
+        required: true,
+        config: s.config ?? {},
+      })),
+    )
+    .throwOnError();
+
+  await db
+    .from("products")
+    .update({
+      product_type_id: typeId,
+      workflow_id: wf.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", productId)
+    .eq("business_id", access.business.id)
+    .throwOnError();
+
   revalidatePath(`/b/${slug}`, "layout");
-  const created = typeof data === "number" ? data : 0;
   return {
-    success:
-      created > 0
-        ? `U shtuan ${created} lloje tipike me workflow.`
-        : "Llojet tipike ekzistojnë tashmë për këtë biznes.",
+    success: `Sugjerimi u aplikua: workflow “${type.name}” u lidh me produktin.`,
   };
 }

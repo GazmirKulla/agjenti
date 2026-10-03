@@ -23,10 +23,18 @@ export default async function WorkflowsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const { data: workflows, error: loadError } = await db
-    .from("workflows")
-    .select("id,name,workflow_steps(key,position,kind,config)")
-    .eq("business_id", access.business.id);
+  const [{ data: workflows, error: loadError }, { data: types }] =
+    await Promise.all([
+      db
+        .from("workflows")
+        .select("id,name,workflow_steps(key,position,kind,config)")
+        .eq("business_id", access.business.id),
+      db
+        .from("product_types")
+        .select("id,name,external_key")
+        .eq("is_active", true)
+        .order("sort_order"),
+    ]);
   if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
 
   async function seedZana() {
@@ -37,12 +45,7 @@ export default async function WorkflowsPage({
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
     const businessId = acc.business.id;
     const supabase = createServiceSupabase();
-    async function seed(
-      name: string,
-      steps: typeof PUZZLE_STEPS,
-      typeName: string,
-      externalKey: string,
-    ) {
+    async function seed(name: string, steps: typeof PUZZLE_STEPS) {
       const { data: wf } = await supabase
         .from("workflows")
         .insert({ business_id: businessId, name })
@@ -63,18 +66,9 @@ export default async function WorkflowsPage({
           })),
         )
         .throwOnError();
-      await supabase
-        .from("product_types")
-        .insert({
-          business_id: businessId,
-          name: typeName,
-          workflow_id: wf.id,
-          external_key: externalKey,
-        })
-        .throwOnError();
     }
-    await seed("Puzzle", PUZZLE_STEPS, "Puzzle", "puzzle");
-    await seed("Bluzë", APPAREL_STEPS, "Bluzë", "tshirt");
+    await seed("Puzzle", PUZZLE_STEPS);
+    await seed("Bluzë", APPAREL_STEPS);
     revalidatePath(`/b/${slug}`, "layout");
   }
 
@@ -106,14 +100,6 @@ export default async function WorkflowsPage({
         })),
       )
       .throwOnError();
-    await supabase
-      .from("product_types")
-      .insert({
-        business_id: acc.business.id,
-        name,
-        workflow_id: wf.id,
-      })
-      .throwOnError();
     revalidatePath(`/b/${slug}`, "layout");
   }
 
@@ -121,10 +107,10 @@ export default async function WorkflowsPage({
     <>
       <PageHeading
         title="Workflow AI"
-        description="Përcakto rrugën që ndjek porosia sipas llojit të produktit."
+        description="Proceset e porosisë janë të biznesit. Llojet globale japin vetëm sugjerime nga faqja e Produkteve."
       >
-        <Link href={`/b/${slug}/product-types`} className="btn btn-ghost">
-          Menaxho llojet →
+        <Link href={`/b/${slug}/products`} className="btn btn-ghost">
+          Lidh te produktet →
         </Link>
       </PageHeading>
       <div className="configuration-layout">
@@ -174,7 +160,7 @@ export default async function WorkflowsPage({
             <section className="panel">
               <EmptyState
                 title="Ende nuk ka workflow"
-                description="Krijo një workflow dhe lidhe me llojin e produktit."
+                description="Krijo një workflow të thjeshtë, ose aplikó sugjerimin e një lloji nga Produktet."
               />
             </section>
           )}
@@ -186,13 +172,14 @@ export default async function WorkflowsPage({
           >
             <h2 className="text-lg">Shto workflow të thjeshtë</h2>
             <p className="muted-copy">
-              Krijon një lloj produkti dhe hapat bazë për mbledhjen e porosisë.
+              Krijon hapat bazë (konfirmim + adresë). Lidhe më pas te një
+              produkt.
             </p>
             <label className="form-label">
-              Emri i llojit të produktit
+              Emri i workflow-t
               <input
                 name="name"
-                placeholder="P.sh. Aksesorë"
+                placeholder="P.sh. Porosi standarde"
                 className="field"
                 required
               />
@@ -201,11 +188,31 @@ export default async function WorkflowsPage({
               Krijo workflow
             </button>
           </ActionForm>
+          {(types ?? []).length > 0 && (
+            <div className="panel section-pad">
+              <h2 className="text-lg">Sugjerime nga llojet</h2>
+              <p className="muted-copy mb-3">
+                Llojet globale ofrojnë template. Aplikimi bëhet nga faqja e
+                produktit.
+              </p>
+              <ul className="space-y-2">
+                {(types ?? []).map((t) => (
+                  <li key={t.id} className="muted-copy">
+                    {t.name}
+                    {t.external_key ? ` (${t.external_key})` : ""}
+                  </li>
+                ))}
+              </ul>
+              <Link className="soft-link mt-4" href={`/b/${slug}/products`}>
+                Hap produktet →
+              </Link>
+            </div>
+          )}
           {access.business.catalog_source === "zana" && (
             <ActionForm action={seedZana} className="panel section-pad">
               <h2 className="text-lg">Workflow-t e Zana</h2>
               <p className="muted-copy mb-5">
-                Hapat për puzzle dhe bluza të personalizuara.
+                Importon hapat për puzzle dhe bluza (pa krijuar lloje).
               </p>
               <button className="btn btn-ghost" type="submit">
                 Importo workflow-t

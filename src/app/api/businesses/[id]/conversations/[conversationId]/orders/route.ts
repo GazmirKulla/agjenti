@@ -69,8 +69,21 @@ export async function POST(
 		.eq("id", businessId)
 		.maybeSingle();
 	const { data: product } = state.product_id
-		? await service.from("products").select("id,name,external_id,product_type_id,price_amount").eq("id", state.product_id).maybeSingle()
+		? await service
+				.from("products")
+				.select("id,name,external_id,product_type_id,price_amount")
+				.eq("id", state.product_id)
+				.maybeSingle()
 		: { data: null };
+	const { data: productType } = product?.product_type_id
+		? await service
+				.from("product_types")
+				.select("external_key")
+				.eq("id", product.product_type_id)
+				.maybeSingle()
+		: { data: null };
+	const productTypeKey =
+		productType?.external_key ?? product?.product_type_id ?? null;
 
 	const { data: order } = await service
 		.from("orders")
@@ -90,7 +103,7 @@ export async function POST(
 	await service.from("order_items").insert({
 		order_id: order.id,
 		product_id: product?.id ?? null,
-		product_type_key: product?.product_type_id ?? null,
+		product_type_key: productTypeKey,
 		external_format_id: typeof state.fields.collect_size === "string" ? state.fields.collect_size : null,
 		quantity: 1,
 		options: state.fields,
@@ -106,7 +119,7 @@ export async function POST(
 				items: [
 					{
 						productId: product?.external_id ?? product?.id,
-						productType: product?.product_type_id,
+						productType: productTypeKey,
 						formatId: state.fields.collect_size ?? null,
 						colorId: state.fields.collect_color ?? null,
 						quantity: 1,

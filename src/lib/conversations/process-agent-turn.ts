@@ -40,7 +40,7 @@ export async function processAgentTurn(params: {
   const [productResult, agentResult, knowledgeResult] = await Promise.all([
     db
       .from("products")
-      .select("id,name,product_type_id,price_amount,currency")
+      .select("id,name,product_type_id,workflow_id,price_amount,currency")
       .eq("business_id", params.businessId),
     db
       .from("ai_agents")
@@ -81,42 +81,33 @@ export async function processAgentTurn(params: {
       state.product_id = selected.id;
     }
   }
-  // Product type is derived from this tenant's product, never from client state.
+  // Type and workflow come from this tenant's product, never from client state.
   state.product_type_id = selected?.product_type_id ?? null;
   let workflowId: string | null = null;
   let steps: { key: string; kind: WorkflowStepKind }[] = [
     { key: "collect_customer", kind: "customer" },
   ];
-  if (state.product_type_id) {
-    const typeResult = await db
-      .from("product_types")
-      .select("workflow_id")
-      .eq("id", state.product_type_id)
+  if (selected?.workflow_id) {
+    const workflow = await db
+      .from("workflows")
+      .select("id")
+      .eq("id", selected.workflow_id)
       .eq("business_id", params.businessId)
       .maybeSingle();
-    if (typeResult.error) throw new Error("Nuk u ngarkua lloji i produktit.");
-    if (typeResult.data?.workflow_id) {
-      const workflow = await db
-        .from("workflows")
-        .select("id")
-        .eq("id", typeResult.data.workflow_id)
-        .eq("business_id", params.businessId)
-        .maybeSingle();
-      if (workflow.error) throw new Error("Nuk u ngarkua workflow.");
-      if (workflow.data) {
-        workflowId = workflow.data.id;
-        const result = await db
-          .from("workflow_steps")
-          .select("key,kind,position")
-          .eq("workflow_id", workflowId)
-          .order("position");
-        if (result.error) throw new Error("Nuk u ngarkuan hapat e workflow-t.");
-        if (result.data?.length)
-          steps = result.data.map((s) => ({
-            key: s.key,
-            kind: s.kind as WorkflowStepKind,
-          }));
-      }
+    if (workflow.error) throw new Error("Nuk u ngarkua workflow.");
+    if (workflow.data) {
+      workflowId = workflow.data.id;
+      const result = await db
+        .from("workflow_steps")
+        .select("key,kind,position")
+        .eq("workflow_id", workflowId)
+        .order("position");
+      if (result.error) throw new Error("Nuk u ngarkuan hapat e workflow-t.");
+      if (result.data?.length)
+        steps = result.data.map((s) => ({
+          key: s.key,
+          kind: s.kind as WorkflowStepKind,
+        }));
     }
   }
   if (justSelected) {

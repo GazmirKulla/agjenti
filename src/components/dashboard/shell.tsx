@@ -8,7 +8,6 @@ const businessNav = [
   ["", "Dashboard", "dashboard"],
   ["inbox", "Inbox", "inbox"],
   ["products", "Produkte", "products"],
-  ["product-types", "Llojet", "products"],
   ["orders", "Porosi", "orders"],
   ["customers", "Klientë", "customers"],
   ["agents", "Agjenti AI", "agents"],
@@ -20,6 +19,7 @@ const businessNav = [
 const adminNav = [
   ["", "Dashboard", "dashboard"],
   ["businesses", "Bizneset", "businesses"],
+  ["product-types", "Llojet", "products"],
   ["conversations", "Biseda & Integrime", "inbox"],
   ["app", "App", "settings"],
 ];

@@ -42,6 +42,7 @@ export async function saveProductSetup(slug: string, form: FormData) {
   if (!access) return { error: "Nuk ke qasje në këtë biznes." };
   const id = String(form.get("product_id") ?? "");
   const typeId = String(form.get("product_type_id") ?? "");
+  const workflowId = String(form.get("workflow_id") ?? "").trim() || null;
   const rawPrice = String(form.get("price") ?? "").trim();
   const price = Number(rawPrice);
   if (!id || !typeId || !rawPrice || !Number.isFinite(price) || price < 0)
@@ -51,18 +52,32 @@ export async function saveProductSetup(slug: string, form: FormData) {
     .from("product_types")
     .select("id")
     .eq("id", typeId)
-    .eq("business_id", access.business.id)
+    .eq("is_active", true)
     .maybeSingle();
-  if (type.error || !type.data)
-    return { error: "Lloji nuk u gjet në këtë biznes." };
+  if (type.error || !type.data) return { error: "Lloji global nuk u gjet." };
+  if (workflowId) {
+    const workflow = await db
+      .from("workflows")
+      .select("id")
+      .eq("id", workflowId)
+      .eq("business_id", access.business.id)
+      .maybeSingle();
+    if (workflow.error || !workflow.data)
+      return { error: "Workflow-i nuk u gjet në këtë biznes." };
+  }
   const { data, error } = await db
     .from("products")
-    .update({ product_type_id: typeId, price_amount: price })
+    .update({
+      product_type_id: typeId,
+      workflow_id: workflowId,
+      price_amount: price,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id)
     .eq("business_id", access.business.id)
     .select("id")
     .maybeSingle();
   if (error || !data) return { error: "Produkti nuk u përditësua." };
   revalidatePath(`/b/${slug}`, "layout");
-  return { success: "Produkti u lidh me procesin e porosisë." };
+  return { success: "Produkti u lidh me llojin dhe procesin e porosisë." };
 }

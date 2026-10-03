@@ -22,13 +22,13 @@ beforeEach(() => {
         id: "product-a",
         name: "Bluzë",
         product_type_id: "type-a",
+        workflow_id: "workflow-a",
         price_amount: 1800,
         currency: "ALL",
       },
     ],
     ai_agents: { instructions: "Udhëzimet vetëm të biznesit A" },
     knowledge_entries: [{ title: "Dërgesa", body: "Brenda dy ditësh" }],
-    product_types: { workflow_id: "workflow-a" },
     workflows: { id: "workflow-a" },
     workflow_steps: [
       { key: "collect_size", kind: "choice", position: 0 },
@@ -65,7 +65,7 @@ beforeEach(() => {
   });
 });
 describe("shared business turn processor", () => {
-  it("uses tenant agent, active knowledge, catalog prices and first workflow step", async () => {
+  it("uses tenant agent, active knowledge, catalog prices and product workflow", async () => {
     const result = await processAgentTurn({
       businessId: "business-a",
       message: "Bluzë",
@@ -86,17 +86,12 @@ describe("shared business turn processor", () => {
         previousResponseId: null,
       }),
     );
-    for (const table of [
-      "products",
-      "ai_agents",
-      "knowledge_entries",
-      "product_types",
-      "workflows",
-    ])
+    for (const table of ["products", "ai_agents", "knowledge_entries", "workflows"])
       expect(queries.find((q) => q.table === table)?.filters).toContainEqual([
         "business_id",
         "business-a",
       ]);
+    expect(queries.some((q) => q.table === "product_types")).toBe(false);
     for (const table of ["ai_agents", "knowledge_entries"])
       expect(queries.find((q) => q.table === table)?.filters).toContainEqual([
         "is_active",
@@ -149,7 +144,7 @@ describe("shared business turn processor", () => {
     });
     expect(result.nextState.product_id).toBeNull();
     expect(result.nextState.step_key).toBe("choose_product");
-    expect(queries.some((q) => q.table === "product_types")).toBe(false);
+    expect(queries.some((q) => q.table === "workflows")).toBe(false);
   });
   it("does not load steps for a workflow outside the business", async () => {
     fixtures.workflows = null;
