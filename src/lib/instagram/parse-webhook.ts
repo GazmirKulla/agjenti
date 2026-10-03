@@ -70,6 +70,9 @@ const SHARE_TYPES = new Set([
 	"ig_story",
 ]);
 
+/** Meta dashboard "Test" payloads use placeholder IDs like entry id "0". */
+const META_TEST_DUMMY_IDS = new Set(["0", "12334", "23245", "<IGID>", "<IGSID>", "MESSAGE_ID"]);
+
 function mapAttachmentKind(type: string): NormalizedAttachmentKind | null {
 	if (type === "image" || type === "media") return "image";
 	if (type === "video") return "video";
@@ -91,6 +94,15 @@ function asStringId(value: unknown): string {
 	if (typeof value === "string") return value;
 	if (typeof value === "number" && Number.isFinite(value)) return String(value);
 	return "";
+}
+
+function parseTimestamp(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (typeof value === "string" && value.trim()) {
+		const n = Number(value);
+		if (Number.isFinite(n)) return n;
+	}
+	return undefined;
 }
 
 function buildAttachments(raw: InstagramWebhookAttachment[] | undefined): {
@@ -136,6 +148,194 @@ function ignore(reason: string, externalMessageId?: string): IgnoredInstagramEve
 	return externalMessageId ? { reason, externalMessageId } : { reason };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Meta dashboard field test uses entry.changes[{ field: "messages", value: {...} }]
+ * instead of entry.messaging[].
+ */
+export function changeValueToMessagingEvent(
+	value: unknown,
+): InstagramWebhookMessagingEvent | null {
+	if (!isRecord(value)) return null;
+	const sender = isRecord(value.sender) ? value.sender : undefined;
+	const recipient = isRecord(value.recipient) ? value.recipient : undefined;
+	const message = isRecord(value.message)
+		? (value.message as InstagramWebhookMessage)
+		: undefined;
+	const postback = isRecord(value.postback)
+		? (value.postback as InstagramWebhookMessagingEvent["postback"])
+		: undefined;
+	if (!message && !postback) return null;
+	return {
+		sender: sender ? { id: asStringId(sender.id) || undefined } : undefined,
+		recipient: recipient ? { id: asStringId(recipient.id) || undefined } : undefined,
+		timestamp: parseTimestamp(value.timestamp),
+		message,
+		postback,
+		referral: isRecord(value.referral) ? value.referral : undefined,
+	};
+}
+
+export function isMetaDashboardTestEvent(
+	accountId: string,
+	event: InstagramWebhookMessagingEvent,
+): boolean {
+	const senderId = asStringId(event.sender?.id);
+	const recipientId = asStringId(event.recipient?.id);
+	const mid = (event.message?.mid ?? event.postback?.mid ?? "").trim();
+	if (accountId === "0") return true;
+	if (META_TEST_DUMMY_IDS.has(senderId) || META_TEST_DUMMY_IDS.has(recipientId)) return true;
+	if (META_TEST_DUMMY_IDS.has(mid)) return true;
+	if (mid.toUpperCase() === "TEST" || mid.startsWith("TEST_")) return true;
+	return false;
+}
+
+export function isMetaDashboardTestMessage(message: NormalizedIncomingMessage): boolean {
+	return message.contextMetadata?.metaDashboardTest === true;
+}
+
+function collectMessagingEvents(
+	entry: NonNullable<InstagramWebhookPayload["entry"]>[number],
+	ignored: IgnoredInstagramEvent[],
+): InstagramWebhookMessagingEvent[] {
+	const events: InstagramWebhookMessagingEvent[] = [...(entry.messaging ?? [])];
+	const otherChangeFields: string[] = [];
+
+	for (const change of entry.changes ?? []) {
+		const field = change.field?.trim() || "";
+		if (field === "messages") {
+			const converted = changeValueToMessagingEvent(change.value);
+			if (converted) {
+				events.push(converted);
+			} else {
+				ignored.push(ignore("changes_messages_invalid"));
+			}
+			continue;
+		}
+		if (field) otherChangeFields.push(field);
+	}
+
+	if (
+		otherChangeFields.length > 0 &&
+		(entry.messaging == null || entry.messaging.length === 0) &&
+		events.length === 0
+	) {
+		ignored.push(ignore(`changes_only:${otherChangeFields.join(",")}`));
+	}
+
+	return events;
+}
+
+function normalizeMessagingEvent(
+	accountId: string,
+	event: InstagramWebhookMessagingEvent,
+): { message?: NormalizedIncomingMessage; ignored?: IgnoredInstagramEvent } {
+	const hasInbound = Boolean(event.message || event.postback);
+	if (event.reaction && !hasInbound) {
+		return { ignored: ignore("reaction", event.reaction.mid) };
+	}
+	if (event.read && !hasInbound) {
+		return { ignored: ignore("read", event.read.mid) };
+	}
+	if (event.message_edit != null && !hasInbound) {
+		return { ignored: ignore("message_edit") };
+	}
+
+	const senderId = asStringId(event.sender?.id);
+	const recipientId = asStringId(event.recipient?.id);
+	const msg = event.message;
+	const postback = event.postback;
+	const mid = (msg?.mid ?? postback?.mid)?.trim() ?? "";
+	const metaDashboardTest = isMetaDashboardTestEvent(accountId, event);
+
+	// For Meta test payloads entry.id is often "0"; prefer recipient as business account.
+	const resolvedAccountId =
+		accountId && accountId !== "0" ? accountId : recipientId || accountId;
+
+	const fromBusiness = Boolean(
+		resolvedAccountId && senderId && senderId === resolvedAccountId,
+	);
+	const testerInbound = msg?.is_self === true;
+	if (!metaDashboardTest && !testerInbound && (fromBusiness || msg?.is_echo === true)) {
+		return { ignored: ignore("echo", mid || undefined) };
+	}
+	if (msg?.is_deleted === true) {
+		return { ignored: ignore("deleted", mid || undefined) };
+	}
+	if (msg?.is_unsupported === true) {
+		return { ignored: ignore("unsupported", mid || undefined) };
+	}
+
+	const { attachments, onlyEphemeral, unknownTypes } = buildAttachments(msg?.attachments);
+	if (onlyEphemeral) {
+		return { ignored: ignore("ephemeral", mid || undefined) };
+	}
+
+	const isPostback = Boolean(postback);
+	if (!msg && !isPostback && event.referral) {
+		return { ignored: ignore("referral_only") };
+	}
+	if (!msg && !isPostback) {
+		return { ignored: ignore("empty_event") };
+	}
+
+	const participantId = senderId;
+	if (!mid || !participantId) {
+		return { ignored: ignore("missing_id_or_sender", mid || undefined) };
+	}
+
+	const quickReplyPayload = msg?.quick_reply?.payload?.trim() || null;
+	const postbackPayload = postback?.payload?.trim() || null;
+	const postbackTitle = postback?.title?.trim() || null;
+	const interactiveId = quickReplyPayload || postbackPayload;
+	const interactiveTitle = postbackTitle || msg?.text?.trim() || interactiveId;
+
+	let text: string | null = msg?.text?.trim() || null;
+	if (isPostback) {
+		text = postbackTitle || postbackPayload;
+	} else if (quickReplyPayload && !text) {
+		text = quickReplyPayload;
+	}
+
+	const contextMetadata: Record<string, unknown> = {
+		instagramAccountId: resolvedAccountId || null,
+		metaDashboardTest,
+	};
+	if (interactiveId) {
+		contextMetadata.interactiveReply = {
+			id: interactiveId,
+			title: interactiveTitle || interactiveId,
+		};
+	}
+	if (quickReplyPayload) contextMetadata.quickReply = { payload: quickReplyPayload };
+	if (postback) contextMetadata.postback = postback;
+	const referral = event.referral ?? msg?.referral ?? null;
+	if (referral) contextMetadata.referral = referral;
+	if (msg?.reply_to) contextMetadata.replyTo = msg.reply_to;
+	if (unknownTypes.length > 0) {
+		contextMetadata.unsupportedType = unknownTypes[0];
+	}
+
+	return {
+		message: {
+			channel: "instagram",
+			externalMessageId: mid,
+			externalParticipantId: participantId,
+			phone: null,
+			senderUsername: null,
+			senderDisplayName: null,
+			text,
+			attachments,
+			timestamp: timestampFrom(event.timestamp),
+			contextMetadata,
+			rawPayload: event,
+		},
+	};
+}
+
 export function parseInstagramWebhookPayload(
 	payload: InstagramWebhookPayload,
 ): ParsedInstagramWebhook {
@@ -151,115 +351,12 @@ export function parseInstagramWebhookPayload(
 		if (entry.standby != null) ignored.push(ignore("standby"));
 		if (entry.messaging_handover != null) ignored.push(ignore("messaging_handover"));
 		if (entry.messaging_optins != null) ignored.push(ignore("messaging_optins"));
-		if (entry.changes != null && (entry.messaging == null || entry.messaging.length === 0)) {
-			ignored.push(
-				ignore(
-					`changes_only:${(entry.changes ?? []).map((c) => c.field ?? "?").join(",") || "empty"}`,
-				),
-			);
-		}
 
-		for (const event of entry.messaging ?? []) {
-			const hasInbound = Boolean(event.message || event.postback);
-			if (event.reaction && !hasInbound) {
-				ignored.push(ignore("reaction", event.reaction.mid));
-				continue;
-			}
-			if (event.read && !hasInbound) {
-				ignored.push(ignore("read", event.read.mid));
-				continue;
-			}
-			if (event.message_edit != null && !hasInbound) {
-				ignored.push(ignore("message_edit"));
-				continue;
-			}
-
-			const senderId = asStringId(event.sender?.id);
-			const msg = event.message;
-			const postback = event.postback;
-			const mid = (msg?.mid ?? postback?.mid)?.trim() ?? "";
-
-			const fromBusiness = Boolean(accountId && senderId && senderId === accountId);
-			const testerInbound = msg?.is_self === true;
-			if (!testerInbound && (fromBusiness || msg?.is_echo === true)) {
-				ignored.push(ignore("echo", mid || undefined));
-				continue;
-			}
-			if (msg?.is_deleted === true) {
-				ignored.push(ignore("deleted", mid || undefined));
-				continue;
-			}
-			if (msg?.is_unsupported === true) {
-				ignored.push(ignore("unsupported", mid || undefined));
-				continue;
-			}
-
-			const { attachments, onlyEphemeral, unknownTypes } = buildAttachments(msg?.attachments);
-			if (onlyEphemeral) {
-				ignored.push(ignore("ephemeral", mid || undefined));
-				continue;
-			}
-
-			const isPostback = Boolean(postback);
-			if (!msg && !isPostback && event.referral) {
-				ignored.push(ignore("referral_only"));
-				continue;
-			}
-			if (!msg && !isPostback) {
-				ignored.push(ignore("empty_event"));
-				continue;
-			}
-
-			const participantId = senderId;
-			if (!mid || !participantId) {
-				ignored.push(ignore("missing_id_or_sender", mid || undefined));
-				continue;
-			}
-
-			const quickReplyPayload = msg?.quick_reply?.payload?.trim() || null;
-			const postbackPayload = postback?.payload?.trim() || null;
-			const postbackTitle = postback?.title?.trim() || null;
-			const interactiveId = quickReplyPayload || postbackPayload;
-			const interactiveTitle = postbackTitle || msg?.text?.trim() || interactiveId;
-
-			let text: string | null = msg?.text?.trim() || null;
-			if (isPostback) {
-				text = postbackTitle || postbackPayload;
-			} else if (quickReplyPayload && !text) {
-				text = quickReplyPayload;
-			}
-
-			const contextMetadata: Record<string, unknown> = {
-				instagramAccountId: accountId || null,
-			};
-			if (interactiveId) {
-				contextMetadata.interactiveReply = {
-					id: interactiveId,
-					title: interactiveTitle || interactiveId,
-				};
-			}
-			if (quickReplyPayload) contextMetadata.quickReply = { payload: quickReplyPayload };
-			if (postback) contextMetadata.postback = postback;
-			const referral = event.referral ?? msg?.referral ?? null;
-			if (referral) contextMetadata.referral = referral;
-			if (msg?.reply_to) contextMetadata.replyTo = msg.reply_to;
-			if (unknownTypes.length > 0) {
-				contextMetadata.unsupportedType = unknownTypes[0];
-			}
-
-			messages.push({
-				channel: "instagram",
-				externalMessageId: mid,
-				externalParticipantId: participantId,
-				phone: null,
-				senderUsername: null,
-				senderDisplayName: null,
-				text,
-				attachments,
-				timestamp: timestampFrom(event.timestamp),
-				contextMetadata,
-				rawPayload: event,
-			});
+		const events = collectMessagingEvents(entry, ignored);
+		for (const event of events) {
+			const result = normalizeMessagingEvent(accountId, event);
+			if (result.ignored) ignored.push(result.ignored);
+			if (result.message) messages.push(result.message);
 		}
 	}
 

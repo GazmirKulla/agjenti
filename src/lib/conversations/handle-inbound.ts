@@ -1,6 +1,7 @@
 import { generateAgentReply } from "@/lib/agents/generate";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { sendInstagramText } from "@/lib/instagram/send";
+import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import {
@@ -42,6 +43,31 @@ export async function handleInboundMessage(message: NormalizedIncomingMessage): 
 		typeof message.contextMetadata?.instagramAccountId === "string"
 			? message.contextMetadata.instagramAccountId
 			: null;
+
+	if (isMetaDashboardTestMessage(message)) {
+		console.log("[inbound] meta dashboard synthetic test — log only, skip conversation", {
+			externalMessageId: message.externalMessageId,
+			instagramAccountId: accountId,
+			externalParticipantId: message.externalParticipantId,
+			textPreview: message.text?.slice(0, 80) ?? null,
+		});
+		const supabase = createServiceSupabase();
+		const { data: webhookEvent, error: webhookEventError } = await supabase
+			.from("webhook_events")
+			.insert({
+				external_event_id: message.externalMessageId,
+				status: "meta_test",
+			})
+			.select("id")
+			.maybeSingle();
+		console.log("[inbound] webhook_events insert (meta_test)", {
+			ok: !webhookEventError,
+			id: webhookEvent?.id ?? null,
+			error: webhookEventError?.message ?? null,
+		});
+		return;
+	}
+
 	if (!accountId) {
 		console.warn("[inbound] early return: missing instagramAccountId");
 		return;
