@@ -258,7 +258,11 @@ export default function PrivacyPage() {
       </main>
       <footer className="privacy-footer">
         <Link href="/">← Kthehu te kryefaqja</Link>
-        <span>Agjenti.app · Politika e privatësisë</span>
+        <span>
+          <Link href="/terms">Kushtet</Link>
+          {" · "}
+          <Link href="/data-deletion">Fshirja e të dhënave</Link>
+        </span>
       </footer>
     </div>
   );
