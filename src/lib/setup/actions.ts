@@ -35,49 +35,5 @@ export async function launchBusiness(slug: string, form: FormData) {
   };
 }
 
-export async function saveProductSetup(slug: string, form: FormData) {
-  const user = await getSessionUser();
-  if (!user) return { error: "Hyr në llogari për të vazhduar." };
-  const access = await requireBusinessAccess(user.id, slug);
-  if (!access) return { error: "Nuk ke qasje në këtë biznes." };
-  const id = String(form.get("product_id") ?? "");
-  const typeId = String(form.get("product_type_id") ?? "");
-  const workflowId = String(form.get("workflow_id") ?? "").trim() || null;
-  const rawPrice = String(form.get("price") ?? "").trim();
-  const price = Number(rawPrice);
-  if (!id || !typeId || !rawPrice || !Number.isFinite(price) || price < 0)
-    return { error: "Zgjidh llojin dhe vendos çmim të vlefshëm." };
-  const db = createServiceSupabase();
-  const type = await db
-    .from("product_types")
-    .select("id")
-    .eq("id", typeId)
-    .eq("is_active", true)
-    .maybeSingle();
-  if (type.error || !type.data) return { error: "Lloji global nuk u gjet." };
-  if (workflowId) {
-    const workflow = await db
-      .from("workflows")
-      .select("id")
-      .eq("id", workflowId)
-      .eq("business_id", access.business.id)
-      .maybeSingle();
-    if (workflow.error || !workflow.data)
-      return { error: "Workflow-i nuk u gjet në këtë biznes." };
-  }
-  const { data, error } = await db
-    .from("products")
-    .update({
-      product_type_id: typeId,
-      workflow_id: workflowId,
-      price_amount: price,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("business_id", access.business.id)
-    .select("id")
-    .maybeSingle();
-  if (error || !data) return { error: "Produkti nuk u përditësua." };
-  revalidatePath(`/b/${slug}`, "layout");
-  return { success: "Produkti u lidh me llojin dhe procesin e porosisë." };
-}
+/** @deprecated Use updateProduct from @/lib/products/actions */
+export { updateProduct as saveProductSetup } from "@/lib/products/actions";

@@ -21,6 +21,7 @@ beforeEach(() => {
       {
         id: "product-a",
         name: "Bluzë",
+        description: "Pambuk i butë",
         product_type_id: "type-a",
         workflow_id: "workflow-a",
         price_amount: 1800,
@@ -82,7 +83,7 @@ describe("shared business turn processor", () => {
       expect.objectContaining({
         instructions: "Udhëzimet vetëm të biznesit A",
         knowledge: "Dërgesa: Brenda dy ditësh",
-        catalogSummary: "Bluzë — 1800 ALL",
+        catalogSummary: "Bluzë — 1800 ALL — Pambuk i butë",
         previousResponseId: null,
       }),
     );
@@ -92,7 +93,7 @@ describe("shared business turn processor", () => {
         "business-a",
       ]);
     expect(queries.some((q) => q.table === "product_types")).toBe(false);
-    for (const table of ["ai_agents", "knowledge_entries"])
+    for (const table of ["products", "ai_agents", "knowledge_entries"])
       expect(queries.find((q) => q.table === table)?.filters).toContainEqual([
         "is_active",
         true,

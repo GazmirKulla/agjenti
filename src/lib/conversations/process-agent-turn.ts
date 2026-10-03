@@ -1,4 +1,5 @@
 import { agentModel, generateAgentReply } from "@/lib/agents/generate";
+import { shortenDescription } from "@/lib/products/parse";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import {
   applyInboundToState,
@@ -40,8 +41,11 @@ export async function processAgentTurn(params: {
   const [productResult, agentResult, knowledgeResult] = await Promise.all([
     db
       .from("products")
-      .select("id,name,product_type_id,workflow_id,price_amount,currency")
-      .eq("business_id", params.businessId),
+      .select(
+        "id,name,description,product_type_id,workflow_id,price_amount,currency",
+      )
+      .eq("business_id", params.businessId)
+      .eq("is_active", true),
     db
       .from("ai_agents")
       .select("instructions")
@@ -128,10 +132,12 @@ export async function processAgentTurn(params: {
     customerMessage: text || "[media]",
     previousResponseId: params.previousResponseId ?? null,
     catalogSummary: products
-      .map(
-        (p) =>
-          `${p.name}${p.price_amount == null ? "" : ` — ${p.price_amount} ${p.currency}`}`,
-      )
+      .map((p) => {
+        const price =
+          p.price_amount == null ? "" : ` — ${p.price_amount} ${p.currency}`;
+        const desc = shortenDescription(p.description);
+        return desc ? `${p.name}${price} — ${desc}` : `${p.name}${price}`;
+      })
       .join("\n"),
   });
   return {
