@@ -109,3 +109,13 @@ Hap `/admin/app` (menuja **App**). Cilësimet ruhen në `app_settings` dhe lexoh
 - **Njoftimi:** tekst deri në 500 karaktere në panelet e bizneseve; bosh e heq.
 
 Ndryshimet zbatohen kur hapet ose rifreskohet faqja. Një pyetësor i hapur më parë rishikon cilësimin në server gjatë ruajtjes. `updated_by` dhe `updated_at` regjistrojnë ndryshimin e fundit.
+
+### Përmirësimet e performancës
+
+- Auth, anëtarësitë dhe cilësimet App ripërdoren me React `cache` vetëm brenda një kërkese server-render; nuk ruhen globalisht ndërmjet përdoruesve ose kërkesave.
+- Faqet publike dhe callback-et me verifikimin e tyre nuk bëjnë kërkesë shtesë te Supabase Auth në middleware. Faqet e mbrojtura dhe hyrja ruajnë kontrollin/rifreskimin e sesionit.
+- Apliko `supabase/migrations/20261004110000_dashboard_performance.sql` për RPC `dashboard_stats` dhe indekset. Statistikat e dashboard-it përdorin 1 kërkesë HTTP në vend të 20–21; dy listat e shkurtra ngarkohen paralelisht me statistikat. Funksioni SQL është i aksesueshëm vetëm nga service role pas authz në faqet server. Pa migrimin përdoren përkohësisht numërimet e mëparshme të sakta.
+- Klientët përdorin kërkim në server dhe 25 rreshta për faqe, pa kufirin e vjetër prej 1,000 klientësh në listën e ngarkuar. Kërkimi dërgohet me butonin Kërko/Enter.
+- Katalogu lokal, llojet e produkteve dhe katalogu i jashtëm ngarkohen paralelisht. Navigimi ka loading boundaries; checklist-i nuk bllokon statistikat. Listat e bisedave dhe zgjedhësi i bizneseve nuk bëjnë prefetch masiv.
+
+Për matje përdor production build (`npm run build`, `npm run start`), jo dev mode. Krahaso Network/TTFB dhe madhësinë e RSC payload me të njëjtin përdorues e dataset; provo klientët me mbi 1,000 rreshta, kërkimin dhe kalimin midis dy bizneseve. Testet mbulojnë parametrat e tenant-it në statistika, fallback gjatë migrimit, pagination dhe ruajtjen e kontrolleve në middleware. Migrimi SQL duhet verifikuar në databazën e synuar; nuk aplikohen ndryshime automatikisht në prodhim.

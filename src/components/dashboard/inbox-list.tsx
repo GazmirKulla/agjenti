@@ -60,6 +60,7 @@ export function InboxList({
         {filtered.map((r) => (
           <Link
             key={r.id}
+            prefetch={false}
             href={`/b/${slug}/inbox/${r.id}`}
             aria-current={selected === r.id ? "page" : undefined}
             className={`inbox-row ${selected === r.id ? "selected" : ""}`}

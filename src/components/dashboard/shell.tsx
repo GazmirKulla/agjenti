@@ -70,6 +70,7 @@ export function DashboardShell({
             {businesses.map((b) => (
               <Link
                 key={b.id}
+                prefetch={false}
                 href={`/b/${b.slug}`}
                 aria-current={b.slug === slug ? "page" : undefined}
                 onClick={() => setOpen(false)}
