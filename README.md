@@ -32,6 +32,11 @@ Auth (Supabase → Authentication → URL Configuration):
 
 Webhook Meta: `https://agjenti.app/api/webhooks/meta`
 
+Meta App Dashboard (Instagram / Settings):
+- Deauthorize Callback URL: `https://agjenti.app/api/meta/deauthorize`
+- Data Deletion Request URL: `https://agjenti.app/api/meta/data-deletion`
+- Status check (auto-returned to Meta): `https://agjenti.app/api/meta/data-deletion?code=<confirmation_code>`
+
 ## Cutover Instagram
 
 1. Në Zana, fik `instagram_messaging_enabled`.
