@@ -6,10 +6,14 @@ export async function recordSetupTest(businessId: string, signature: string) {
   if (!current.available || current.signature !== signature) return false;
   const { error } = await createServiceSupabase()
     .from("business_setup")
-    .upsert({
-      business_id: businessId,
-      tested_signature: signature,
-      tested_at: new Date().toISOString(),
-    });
-  return !error;
+    .upsert(
+      {
+        business_id: businessId,
+        tested_signature: signature,
+        tested_at: new Date().toISOString(),
+      },
+      { onConflict: "business_id" },
+    );
+  if (error) throw new Error("Nuk u ruajt prova e konfigurimit.");
+  return true;
 }

@@ -1,5 +1,5 @@
 import { loadSetupStatus } from "@/lib/setup/status";
-import { isReady } from "@/lib/setup/model";
+import { setupGateMessage } from "@/lib/setup/model";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { IntegrationApiKeyField } from "@/components/dashboard/integration-api-key";
@@ -43,12 +43,8 @@ export default async function SettingsPage({
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
     if (formData.get("auto_reply") === "on" && !acc.business.auto_reply) {
-      const setup = await loadSetupStatus(acc.business.id);
-      if (!isReady(setup))
-        return {
-          error:
-            "Përfundo konfigurimin dhe lidh Instagram-in nga Dashboard përpara aktivizimit.",
-        };
+      const blocked = setupGateMessage(await loadSetupStatus(acc.business.id));
+      if (blocked) return { error: blocked };
     }
     const db = createServiceSupabase();
     if (formData.get("auto_reply") === "on" && !acc.business.auto_reply) {
@@ -169,6 +165,9 @@ export default async function SettingsPage({
       storedSecret = null;
     }
   }
+  const autoReplyBlocked = access.business.auto_reply
+    ? null
+    : setupGateMessage(await loadSetupStatus(access.business.id));
 
   return (
     <>
@@ -229,6 +228,14 @@ export default async function SettingsPage({
                 defaultChecked={access.business.auto_reply}
               />
             </label>
+            {autoReplyBlocked && (
+              <p className="muted-copy" role="status">
+                {autoReplyBlocked}{" "}
+                <a className="soft-link" href={`/b/${slug}`}>
+                  Hap Dashboard →
+                </a>
+              </p>
+            )}
           </ActionForm>
 
           <ActionForm

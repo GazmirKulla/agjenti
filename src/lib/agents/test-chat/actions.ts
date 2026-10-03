@@ -23,6 +23,21 @@ export type TestChatResult =
       turns: number;
       autoReplyEnabled: boolean;
     });
+
+function customerComplete(customer: {
+  name: string | null;
+  phone: string | null;
+  city: string | null;
+  address: string | null;
+}) {
+  return Boolean(
+    customer.name?.trim() &&
+      customer.phone?.trim() &&
+      customer.city?.trim() &&
+      customer.address?.trim(),
+  );
+}
+
 export async function simulateAgentTurn(
   input: TestChatInput,
 ): Promise<TestChatResult> {
@@ -67,8 +82,17 @@ export async function simulateAgentTurn(
       };
     // Read before the turn so a concurrent config edit cannot certify a stale test.
     const setup = await loadSetupStatus(access.business.id).catch(() => null);
-    const expectedSignature =
-      session.turns === 0 ? setup?.signature : session.setupSignature;
+
+    // Sticky fingerprint: keep across turns unless the live config hash changes.
+    let setupSignature = session.setupSignature ?? null;
+    if (!setup?.available) {
+      setupSignature = null;
+    } else if (!setupSignature && session.turns === 0) {
+      setupSignature = setup.signature;
+    } else if (setupSignature && setup.signature !== setupSignature) {
+      setupSignature = null;
+    }
+
     const turn = await processAgentTurn({
       businessId: access.business.id,
       message: text,
@@ -76,36 +100,46 @@ export async function simulateAgentTurn(
       state: session.state,
       previousResponseId: session.previousResponseId,
     });
-    const validTest = Boolean(
+
+    const configAligned = Boolean(
       setup?.available &&
-      expectedSignature &&
-      setup.signature === expectedSignature &&
-      turn.debug.source === "ai" &&
-      turn.debug.agentConfigured,
+        setupSignature &&
+        setup.signature === setupSignature &&
+        turn.debug.agentConfigured,
     );
-    session.setupSignature = validTest ? expectedSignature : null;
+    // One AI reply in the session is enough; the last turn may be fallback.
+    const sawAi =
+      configAligned &&
+      (session.sawAi === true || turn.debug.source === "ai");
+
+    session.setupSignature = configAligned ? setupSignature : null;
+    session.sawAi = sawAi;
+
     let setupTestPassed = false;
     if (
-      validTest &&
+      configAligned &&
+      sawAi &&
       turn.workflowId &&
       turn.nextState.product_id &&
       turn.nextState.step_key === "order_ready" &&
-      Object.values(turn.nextState.customer).every(Boolean)
+      customerComplete(turn.nextState.customer)
     ) {
       setupTestPassed = await recordSetupTest(
         access.business.id,
-        expectedSignature!,
+        setupSignature!,
       ).catch(() => false);
       if (setupTestPassed) revalidatePath(`/b/${input.slug}`, "layout");
     }
     return {
       ...turn,
       setupTestPassed,
-      setupNotice: !validTest
+      setupNotice: !configAligned
         ? "Kjo bisedë nuk numërohet si test konfigurimi. Kontrollo agjentin dhe rifillo pasi të ruash ndryshimet."
-        : turn.nextState.step_key === "order_ready" && !setupTestPassed
-          ? "Prova përfundoi, por progresi nuk u ruajt. Kontrollo konfigurimin dhe rifillo."
-          : undefined,
+        : !sawAi
+          ? "Prova ka nevojë për të paktën një përgjigje AI. Rifillo dhe provo përsëri."
+          : turn.nextState.step_key === "order_ready" && !setupTestPassed
+            ? "Prova përfundoi, por progresi nuk u ruajt. Kontrollo konfigurimin dhe rifillo."
+            : undefined,
       session: sealTestSession(
         session,
         turn.nextState,

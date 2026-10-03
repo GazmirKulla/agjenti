@@ -1,5 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { isReady, setupSteps, type SetupStatus } from "./model";
+import {
+  isReady,
+  setupGateMessage,
+  setupSteps,
+  type SetupStatus,
+} from "./model";
 const m = vi.hoisted(() => ({
   user: vi.fn(),
   access: vi.fn(),
@@ -87,8 +92,19 @@ it("requires Instagram even when every other step and the test are complete", as
   m.status.mockResolvedValue({ ...ready, connected: false });
   const f = new FormData();
   f.set("mode", "automatic");
-  expect((await launchBusiness("shop", f)).error).toBeTruthy();
+  const result = await launchBusiness("shop", f);
+  expect(result.error).toMatch(/Instagram/);
   expect(m.rpc).not.toHaveBeenCalled();
+});
+it("names the first incomplete setup step in the gate message", () => {
+  expect(setupGateMessage(ready)).toBeNull();
+  expect(setupGateMessage({ ...ready, connected: false })).toMatch(
+    /Instagram/,
+  );
+  expect(setupGateMessage({ ...ready, usableProducts: 0 })).toMatch(
+    /produkt/,
+  );
+  expect(setupGateMessage({ ...ready, tested: false })).toMatch(/provën/i);
 });
 it("reports concurrent launch failure instead of success", async () => {
   m.rpc.mockResolvedValue({ error: { message: "Setup incomplete" } });
@@ -101,9 +117,12 @@ it("records only matching configuration signatures, without overwriting launch m
   expect(await recordSetupTest("business-a", "old")).toBe(false);
   expect(m.upsert).not.toHaveBeenCalled();
   expect(await recordSetupTest("business-a", "signature")).toBe(true);
-  expect(m.upsert).toHaveBeenCalledWith({
-    business_id: "business-a",
-    tested_signature: "signature",
-    tested_at: expect.any(String),
-  });
+  expect(m.upsert).toHaveBeenCalledWith(
+    {
+      business_id: "business-a",
+      tested_signature: "signature",
+      tested_at: expect.any(String),
+    },
+    { onConflict: "business_id" },
+  );
 });

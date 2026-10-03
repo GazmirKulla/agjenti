@@ -8,6 +8,8 @@ const TTL = 60 * 60 * 1000;
 export const MAX_TEST_TURNS = 40;
 type TestSession = {
   setupSignature?: string | null;
+  /** True once any turn in this session got a real AI reply under a stable config. */
+  sawAi?: boolean;
   purpose: typeof PURPOSE;
   userId: string;
   businessId: string;

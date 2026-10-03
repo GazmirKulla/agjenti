@@ -184,7 +184,7 @@ it("records only a completed AI workflow, never inbox or CRM data", async () => 
   expect(mocks.record).toHaveBeenCalledWith("business-a", "config-a");
   expect(mocks.send).not.toHaveBeenCalled();
 });
-it("requires a fresh test after configuration changes or a fallback", async () => {
+it("requires a fresh test after configuration changes", async () => {
   const first = await simulateAgentTurn(input);
   if ("error" in first) throw Error(first.error);
   mocks.setup.mockResolvedValue({ available: true, signature: "changed" });
@@ -196,8 +196,38 @@ it("requires a fresh test after configuration changes or a fallback", async () =
   ).toBeNull();
   expect(mocks.record).not.toHaveBeenCalled();
 });
-it("never certifies fallback replies or incomplete customer details", async () => {
-  mocks.process.mockResolvedValue({ reply: "Fallback", nextState: { ...emptyState(), product_id: "product-a", step_key: "order_ready" }, previousResponseId: null, workflowId: "wf", debug: { source: "fallback", agentConfigured: true } });
+it("still certifies when the final turn is fallback after an earlier AI reply", async () => {
+  const first = await simulateAgentTurn(input);
+  if ("error" in first) throw Error(first.error);
+  mocks.process.mockResolvedValue({
+    reply: "Fallback",
+    nextState: {
+      ...emptyState(),
+      product_id: "product-a",
+      step_key: "order_ready",
+      customer: { name: "Test", phone: "000", city: "Test", address: "Test" },
+    },
+    previousResponseId: null,
+    workflowId: "wf",
+    debug: { source: "fallback", agentConfigured: true },
+  });
+  const result = await simulateAgentTurn({ ...input, session: first.session });
+  expect(result).toHaveProperty("setupTestPassed", true);
+  expect(mocks.record).toHaveBeenCalledWith("business-a", "config-a");
+});
+it("never certifies a session with only fallback replies or incomplete customer details", async () => {
+  mocks.process.mockResolvedValue({
+    reply: "Fallback",
+    nextState: {
+      ...emptyState(),
+      product_id: "product-a",
+      step_key: "order_ready",
+      customer: { name: "Test", phone: "000", city: "Test", address: "Test" },
+    },
+    previousResponseId: null,
+    workflowId: "wf",
+    debug: { source: "fallback", agentConfigured: true },
+  });
   expect(await simulateAgentTurn(input)).toHaveProperty("setupTestPassed", false);
   expect(mocks.record).not.toHaveBeenCalled();
 });

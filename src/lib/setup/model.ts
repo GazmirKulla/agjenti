@@ -63,3 +63,24 @@ export function setupSteps(s: SetupStatus) {
 export function isReady(s: SetupStatus) {
   return s.available && setupSteps(s).every((step) => step.done);
 }
+
+/** Mesazh i qartë kur aktivizimi bllokohet nga hapat e konfigurimit. */
+export function setupGateMessage(s: SetupStatus): string | null {
+  if (isReady(s)) return null;
+  if (!s.available)
+    return "Konfigurimi nuk është gati në databazë. Apliko migrimet e fundit, pastaj provo përsëri.";
+  const next = setupSteps(s).find((step) => !step.done);
+  if (!next) return "Përfundo konfigurimin nga Dashboard përpara aktivizimit.";
+  const tips: Record<string, string> = {
+    instagram:
+      "Lidh Instagram-in nga Dashboard → Instagram përpara aktivizimit të përgjigjeve automatike.",
+    products:
+      "Shto të paktën një produkt me emër dhe çmim te Produktet përpara aktivizimit.",
+    agents:
+      "Aktivizo një agjent me udhëzime te Agjentët përpara aktivizimit.",
+    workflows:
+      "Lidh llojin dhe workflow-in për çdo produkt te Produktet / Workflow përpara aktivizimit.",
+    test: "Përfundo provën te Provo Agjentin (deri te porosia gati) përpara aktivizimit.",
+  };
+  return tips[next.key] ?? `Përfundo hapin «${next.title}» nga Dashboard përpara aktivizimit.`;
+}
