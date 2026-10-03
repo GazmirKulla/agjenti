@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { DashboardLoading } from "@/components/dashboard/loading";
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { OnboardingChecklist } from "@/components/onboarding/checklist";
@@ -14,8 +16,12 @@ export default async function BusinessDashboard({
   if (!access) redirect("/auth/continue");
   return (
     <>
-      <OnboardingChecklist businessId={access.business.id} slug={slug} />
-      <Overview business={access.business} />
+      <Suspense fallback={null}>
+        <OnboardingChecklist businessId={access.business.id} slug={slug} />
+      </Suspense>
+      <Suspense fallback={<DashboardLoading />}>
+        <Overview business={access.business} />
+      </Suspense>
     </>
   );
 }

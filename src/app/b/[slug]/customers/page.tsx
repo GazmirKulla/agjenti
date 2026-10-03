@@ -1,3 +1,4 @@
+import { PAGE_SIZE, parseListParams } from "@/lib/dashboard/pagination";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -6,20 +7,32 @@ import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, formatDate } from "@/components/dashboard/ui";
 export default async function CustomersPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
-  const { data: customers, error } = await createServiceSupabase()
+  const paging = parseListParams(await searchParams);
+  let query = createServiceSupabase()
     .from("customers")
-    .select("id,display_name,username,phone,created_at")
+    .select("id,display_name,username,phone,created_at", { count: "exact" })
     .eq("business_id", access.business.id)
     .order("created_at", { ascending: false })
-    .limit(1000);
+    .order("id", { ascending: false });
+  if (paging.filter)
+    query = query.or(
+      `display_name.ilike.%${paging.filter}%,username.ilike.%${paging.filter}%`,
+    );
+  const {
+    data: customers,
+    error,
+    count,
+  } = await query.range(paging.from, paging.to);
   if (error) throw new Error("Nuk u ngarkuan klientët.");
   return (
     <>
@@ -29,6 +42,14 @@ export default async function CustomersPage({
         description="Klientët CRM krijohen kur konfirmohet një porosi ose kur menaxheri i shton nga Inbox."
       />
       <RecordBrowser
+        key={`${paging.page}:${paging.search}`}
+        serverPage={{
+          page: paging.page,
+          pageSize: PAGE_SIZE,
+          total: count ?? 0,
+          search: paging.search,
+          path: `/b/${slug}/customers`,
+        }}
         listTitle="Lista e klientëve"
         placeholder="Kërko emër ose Instagram…"
         columns={["Klienti", "Telefoni", "Klient që nga"]}
@@ -76,9 +97,6 @@ export default async function CustomersPage({
           ),
         }))}
       />
-      {customers?.length === 1000 && (
-        <p className="muted-copy">Po shfaqen 1 000 klientët më të fundit.</p>
-      )}
     </>
   );
 }

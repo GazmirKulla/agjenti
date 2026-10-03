@@ -1,3 +1,4 @@
+import { getDashboardStats } from "@/lib/dashboard/stats";
 import Link from "next/link";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { Icon } from "./icon";
@@ -17,56 +18,6 @@ export async function Overview({
 }) {
   const db = createServiceSupabase();
   const base = business ? `/b/${business.slug}` : "/admin";
-  async function count(
-    table: string,
-    filter?: [string, string],
-    start?: string,
-    end?: string,
-  ) {
-    let query = db.from(table).select("id", { count: "exact", head: true });
-    if (business) query = query.eq("business_id", business.id);
-    if (filter) query = query.eq(filter[0], filter[1]);
-    if (start) query = query.gte("created_at", start);
-    if (end) query = query.lt("created_at", end);
-    const { count, error } = await query;
-    if (error) throw new Error("Nuk u ngarkuan statistikat e panelit.");
-    return count ?? 0;
-  }
-  const [
-    conversations,
-    orders,
-    customers,
-    connections,
-    agents,
-    paused,
-    totalBusinesses,
-  ] = await Promise.all([
-    count("conversations"),
-    count("orders"),
-    count("customers"),
-    count("instagram_connections", ["status", "connected"]),
-    count("ai_agents", ["is_active", "true"]),
-    count("conversations", ["status", "paused"]),
-    business ? Promise.resolve(0) : count("businesses"),
-  ]);
-  const now = new Date();
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now);
-    d.setUTCHours(0, 0, 0, 0);
-    d.setUTCDate(d.getUTCDate() - 6 + i);
-    return d;
-  });
-  const trend = await Promise.all(
-    days.map(async (day) => {
-      const end = new Date(day);
-      end.setUTCDate(end.getUTCDate() + 1);
-      const [conversations, orders] = await Promise.all([
-        count("conversations", undefined, day.toISOString(), end.toISOString()),
-        count("orders", undefined, day.toISOString(), end.toISOString()),
-      ]);
-      return { date: day.toISOString(), conversations, orders };
-    }),
-  );
   let recentQuery = db
     .from("conversations")
     .select(
@@ -75,16 +26,31 @@ export async function Overview({
     .order("last_message_at", { ascending: false })
     .limit(5);
   if (business) recentQuery = recentQuery.eq("business_id", business.id);
-  const { data: recent, error: recentError } = await recentQuery;
-  if (recentError) throw new Error("Nuk u ngarkuan bisedat.");
-  const { data: businesses, error: businessesError } = business
-    ? { data: null, error: null }
-    : await db
-        .from("businesses")
-        .select("id,name,slug,auto_reply")
-        .order("created_at", { ascending: false })
-        .limit(5);
-  if (businessesError) throw new Error("Nuk u ngarkuan bizneset.");
+  const [stats, recentResult, businessesResult] = await Promise.all([
+    getDashboardStats(business?.id),
+    recentQuery,
+    business
+      ? Promise.resolve({ data: null, error: null })
+      : db
+          .from("businesses")
+          .select("id,name,slug,auto_reply")
+          .order("created_at", { ascending: false })
+          .limit(5),
+  ]);
+  if (recentResult.error || businessesResult.error)
+    throw new Error("Nuk u ngarkuan të dhënat e panelit.");
+  const recent = recentResult.data;
+  const businesses = businessesResult.data;
+  const {
+    conversations,
+    orders,
+    customers,
+    connections,
+    agents,
+    paused,
+    totalBusinesses,
+    trend,
+  } = stats;
   return (
     <div className="overview-page">
       <PageHeading

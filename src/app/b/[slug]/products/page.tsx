@@ -22,28 +22,39 @@ export default async function ProductsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const { data: products, error: loadError } = await db
-    .from("products")
-    .select("id,name,source,external_id,price_amount,currency,product_type_id")
-    .eq("business_id", access.business.id)
-    .order("name");
-  if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
-  const { data: types } = await db
-    .from("product_types")
-    .select("id,name")
-    .eq("business_id", access.business.id);
-  let remote: ExternalCatalogProduct[] = [];
-  let catalogError: string | null = null;
-  if (access.business.catalog_source !== "internal") {
-    try {
-      remote = await fetchLinkedCatalog(access.business.id);
-    } catch (error) {
-      catalogError =
-        error instanceof Error
-          ? error.message
-          : "Katalogu i jashtëm nuk u ngarkua.";
-    }
-  }
+  const [productResult, typeResult, remoteResult] = await Promise.all([
+    db
+      .from("products")
+      .select(
+        "id,name,source,external_id,price_amount,currency,product_type_id",
+      )
+      .eq("business_id", access.business.id)
+      .order("name"),
+    db
+      .from("product_types")
+      .select("id,name")
+      .eq("business_id", access.business.id),
+    access.business.catalog_source === "internal"
+      ? Promise.resolve({
+          products: [] as ExternalCatalogProduct[],
+          error: null as string | null,
+        })
+      : fetchLinkedCatalog(access.business.id)
+          .then((products) => ({ products, error: null as string | null }))
+          .catch((error: unknown) => ({
+            products: [] as ExternalCatalogProduct[],
+            error:
+              error instanceof Error
+                ? error.message
+                : "Katalogu i jashtëm nuk u ngarkua.",
+          })),
+  ]);
+  if (productResult.error || typeResult.error)
+    throw new Error("Nuk u ngarkuan të dhënat.");
+  const products = productResult.data;
+  const types = typeResult.data;
+  const remote = remoteResult.products;
+  const catalogError = remoteResult.error;
 
   async function addManual(formData: FormData) {
     "use server";

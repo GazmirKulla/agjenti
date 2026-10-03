@@ -3,8 +3,15 @@ import { type NextRequest, NextResponse } from "next/server";
 
 export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  // Public legal pages must work without an auth session.
+  // Public content and independently authenticated callbacks need no session lookup.
+  // Keep login and protected pages on the session-refresh path.
   if (
+    path === "/" ||
+    path === "/api/webhooks/meta" ||
+    path === "/api/cron/refresh-instagram-tokens" ||
+    path === "/api/instagram/oauth/callback" ||
+    path === "/api/meta/data-deletion" ||
+    path === "/api/meta/deauthorize" ||
     path === "/privacy" ||
     path === "/terms" ||
     path === "/data-deletion"

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Icon } from "./icon";
@@ -13,6 +14,7 @@ export type BrowserRecord = {
 };
 export function RecordBrowser({
   records,
+  serverPage,
   columns,
   placeholder = "Kërko…",
   emptyTitle = "Nuk ka të dhëna",
@@ -21,6 +23,13 @@ export function RecordBrowser({
   createForm,
   createLabel = "Shto të re",
 }: {
+  serverPage?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    search: string;
+    path: string;
+  };
   records: BrowserRecord[];
   columns?: string[];
   placeholder?: string;
@@ -34,23 +43,30 @@ export function RecordBrowser({
   const [selected, setSelected] = useState(records[0]?.id ?? "");
   const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(0);
-  const matches = records.filter((r) =>
-    `${r.title} ${r.subtitle ?? ""}`
-      .toLocaleLowerCase()
-      .includes(query.toLocaleLowerCase()),
-  );
+  const matches = serverPage
+    ? records
+    : records.filter((r) =>
+        `${r.title} ${r.subtitle ?? ""}`
+          .toLocaleLowerCase()
+          .includes(query.toLocaleLowerCase()),
+      );
   const safePage = Math.min(
     page,
     Math.max(0, Math.ceil(matches.length / 10) - 1),
   );
-  const rows = matches.slice(safePage * 10, safePage * 10 + 10);
+  const rows = serverPage
+    ? matches
+    : matches.slice(safePage * 10, safePage * 10 + 10);
+  function pageHref(page: number) {
+    return `${serverPage!.path}?${new URLSearchParams({ page: String(page), q: serverPage!.search })}`;
+  }
   const active = rows.find((r) => r.id === selected) ?? rows[0];
   return (
     <div className={`record-browser ${columns ? "table-browser" : ""}`}>
       <section className="panel record-list">
         <div className="record-toolbar">
           <h2>
-            {listTitle} <span>{records.length}</span>
+            {listTitle} <span>{serverPage?.total ?? records.length}</span>
           </h2>
           {createForm && (
             <button
@@ -62,18 +78,38 @@ export function RecordBrowser({
             </button>
           )}
         </div>
-        <div className="record-search">
-          <Icon name="search" size={18} />
-          <input
-            aria-label={placeholder}
-            placeholder={placeholder}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(0);
-            }}
-          />
-        </div>
+        {serverPage ? (
+          <form
+            action={serverPage.path}
+            className="record-search"
+            key={serverPage.search}
+          >
+            <Icon name="search" size={18} />
+            <input
+              name="q"
+              aria-label={placeholder}
+              placeholder={placeholder}
+              defaultValue={serverPage.search}
+              maxLength={100}
+            />
+            <button className="btn btn-ghost" type="submit">
+              Kërko
+            </button>
+          </form>
+        ) : (
+          <div className="record-search">
+            <Icon name="search" size={18} />
+            <input
+              aria-label={placeholder}
+              placeholder={placeholder}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(0);
+              }}
+            />
+          </div>
+        )}
         {rows.length ? (
           columns ? (
             <div className="table-scroll">
@@ -142,35 +178,76 @@ export function RecordBrowser({
           )
         ) : (
           <EmptyState
-            title={query ? "Nuk u gjet asnjë rezultat" : emptyTitle}
+            title={
+              serverPage?.search || query
+                ? "Nuk u gjet asnjë rezultat"
+                : emptyTitle
+            }
             description={
-              query ? "Provo një emër ose term tjetër." : emptyDescription
+              serverPage?.search || query
+                ? "Provo një emër ose term tjetër."
+                : emptyDescription
             }
           />
         )}
-        <div className="pagination">
-          <span>
-            {matches.length ? safePage * 10 + 1 : 0}–
-            {Math.min((safePage + 1) * 10, matches.length)} nga {matches.length}
-          </span>
-          <button
-            type="button"
-            aria-label="Faqja e mëparshme"
-            disabled={safePage === 0}
-            onClick={() => setPage(safePage - 1)}
-          >
-            ‹
-          </button>
-          <span className="page-number">{safePage + 1}</span>
-          <button
-            type="button"
-            aria-label="Faqja tjetër"
-            disabled={(safePage + 1) * 10 >= matches.length}
-            onClick={() => setPage(safePage + 1)}
-          >
-            ›
-          </button>
-        </div>
+        {serverPage ? (
+          <div className="pagination">
+            <span>
+              {rows.length
+                ? (serverPage.page - 1) * serverPage.pageSize + 1
+                : 0}
+              –
+              {rows.length
+                ? (serverPage.page - 1) * serverPage.pageSize + rows.length
+                : 0}{" "}
+              nga {serverPage.total}
+            </span>
+            {serverPage.page > 1 && (
+              <Link
+                prefetch={false}
+                href={pageHref(serverPage.page - 1)}
+                aria-label="Faqja e mëparshme"
+              >
+                ‹
+              </Link>
+            )}
+            <span className="page-number">{serverPage.page}</span>
+            {serverPage.page * serverPage.pageSize < serverPage.total && (
+              <Link
+                prefetch={false}
+                href={pageHref(serverPage.page + 1)}
+                aria-label="Faqja tjetër"
+              >
+                ›
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="pagination">
+            <span>
+              {matches.length ? safePage * 10 + 1 : 0}–
+              {Math.min((safePage + 1) * 10, matches.length)} nga{" "}
+              {matches.length}
+            </span>
+            <button
+              type="button"
+              aria-label="Faqja e mëparshme"
+              disabled={safePage === 0}
+              onClick={() => setPage(safePage - 1)}
+            >
+              ‹
+            </button>
+            <span className="page-number">{safePage + 1}</span>
+            <button
+              type="button"
+              aria-label="Faqja tjetër"
+              disabled={(safePage + 1) * 10 >= matches.length}
+              onClick={() => setPage(safePage + 1)}
+            >
+              ›
+            </button>
+          </div>
+        )}
       </section>
       <section
         className="panel record-detail"
