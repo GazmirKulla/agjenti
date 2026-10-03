@@ -3,6 +3,7 @@ import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { loadBusinessApiSecret } from "@/lib/integrations/zana";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
@@ -31,11 +32,17 @@ export default async function KnowledgePage({
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
     const base = process.env.ZANA_API_BASE_URL?.replace(/\/$/, "");
-    const secret = process.env.ZANA_AGJENTI_SECRET?.trim();
+    const secret = await loadBusinessApiSecret(
+      acc.business.id,
+      acc.business.catalog_source,
+    );
     if (acc.business.catalog_source !== "zana")
       return { error: "Ky biznes nuk është i lidhur me Zana." };
     if (!base || !secret)
-      return { error: "Lidhja me Zana nuk është konfiguruar." };
+      return {
+        error:
+          "Lidhja me Zana nuk është konfiguruar. Vendos URL base dhe API key te Cilësimet.",
+      };
     const res = await fetch(`${base}/api/integrations/agjenti/knowledge`, {
       headers: { Authorization: `Bearer ${secret}` },
     });

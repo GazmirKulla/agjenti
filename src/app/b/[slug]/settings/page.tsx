@@ -1,8 +1,11 @@
 import { ActionForm } from "@/components/dashboard/action-form";
+import { IntegrationApiKeyField } from "@/components/dashboard/integration-api-key";
+import { IntegrationProbe } from "@/components/dashboard/integration-probe";
 import { PageHeading } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { decryptSecret, encryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
@@ -30,6 +33,7 @@ export default async function SettingsPage({
       return { error: "Burimi i katalogut nuk është i vlefshëm." };
     const catalogUrl = String(formData.get("catalog_url") ?? "").trim();
     const ordersUrl = String(formData.get("orders_url") ?? "").trim();
+    const apiSecret = String(formData.get("api_secret") ?? "").trim();
     for (const value of [catalogUrl, ordersUrl]) {
       if (!value) continue;
       try {
@@ -40,18 +44,41 @@ export default async function SettingsPage({
         return { error: "Vendos URL të vlefshme për katalogun dhe porositë." };
       }
     }
+    if (apiSecret && apiSecret.length < 16)
+      return { error: "API key duhet të ketë të paktën 16 karaktere." };
+
+    const kind = catalogSource === "zana" ? "zana" : "http";
     const db = createServiceSupabase();
+    const { data: existing } = await db
+      .from("integrations")
+      .select("secret_ciphertext")
+      .eq("business_id", acc.business.id)
+      .eq("kind", kind)
+      .maybeSingle();
+
+    const row: {
+      business_id: string;
+      kind: string;
+      catalog_url: string | null;
+      orders_url: string | null;
+      secret_ciphertext?: string | null;
+    } = {
+      business_id: acc.business.id,
+      kind,
+      catalog_url: catalogUrl || null,
+      orders_url: ordersUrl || null,
+    };
+    if (apiSecret) {
+      row.secret_ciphertext = encryptSecret(apiSecret);
+    } else if (existing?.secret_ciphertext) {
+      row.secret_ciphertext = existing.secret_ciphertext;
+    } else {
+      row.secret_ciphertext = null;
+    }
+
     await db
       .from("integrations")
-      .upsert(
-        {
-          business_id: acc.business.id,
-          kind: catalogSource === "zana" ? "zana" : "http",
-          catalog_url: catalogUrl || null,
-          orders_url: ordersUrl || null,
-        },
-        { onConflict: "business_id,kind" },
-      )
+      .upsert(row, { onConflict: "business_id,kind" })
       .throwOnError();
     await db
       .from("businesses")
@@ -68,11 +95,20 @@ export default async function SettingsPage({
   const { data: integration, error: integrationError } =
     await createServiceSupabase()
       .from("integrations")
-      .select("catalog_url,orders_url")
+      .select("catalog_url,orders_url,secret_ciphertext")
       .eq("business_id", access.business.id)
       .eq("kind", access.business.catalog_source === "zana" ? "zana" : "http")
       .maybeSingle();
   if (integrationError) throw new Error("Nuk u ngarkua integrimi i biznesit.");
+
+  let storedSecret: string | null = null;
+  if (integration?.secret_ciphertext) {
+    try {
+      storedSecret = decryptSecret(integration.secret_ciphertext);
+    } catch {
+      storedSecret = null;
+    }
+  }
 
   return (
     <>
@@ -88,7 +124,10 @@ export default async function SettingsPage({
         </span>
       </div>
       <div className="configuration-layout">
-        <ActionForm action={save} className="panel section-pad grid gap-5">
+        <ActionForm
+          action={save}
+          className="panel section-pad grid gap-5 business-settings-form"
+        >
           <div className="section-title">
             <h2>Të dhënat e biznesit</h2>
             <button className="btn btn-primary" type="submit">
@@ -153,6 +192,14 @@ export default async function SettingsPage({
               className="field"
             />
           </label>
+          <IntegrationApiKeyField
+            hasStoredSecret={Boolean(integration?.secret_ciphertext)}
+            storedSecret={storedSecret}
+          />
+          <IntegrationProbe
+            businessId={access.business.id}
+            formSelector="form.business-settings-form"
+          />
         </ActionForm>
         <aside className="panel section-pad">
           <span className="icon-tile">
@@ -161,11 +208,10 @@ export default async function SettingsPage({
           <h2 className="text-lg mt-5">Katalogu dhe porositë</h2>
           <p className="muted-copy">
             Me katalogun manual, produktet shtohen brenda panelit. Integrimet
-            Zana dhe API e jashtme ruajnë lidhjen me sistemin ekzistues të
-            shitjeve.
+            e jashtme lidhen me HTTP + Bearer: URL-të + API key i biznesit.
           </p>
           <p className="muted-copy">
-            Workflow-t mbeten të lidhura me llojin e produktit.
+            Kopjo API key te env i sajtit të klientit, pastaj testo lidhjen.
           </p>
         </aside>
       </div>
