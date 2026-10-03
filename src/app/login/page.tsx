@@ -27,27 +27,13 @@ function LoginForm() {
     setError("");
     setMessage("");
   }
-  async function signInWithGoogle() {
+  function signInWithGoogle() {
     if (busy) return;
     setBusy(true);
     setError("");
     setMessage("");
-    try {
-      const supabase = createBrowserSupabase();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/auth/continue`,
-          queryParams: {
-            prompt: "select_account",
-          },
-        },
-      });
-      if (error) throw error;
-    } catch {
-      setError("Nuk u hap hyrja me Google. Provo përsëri.");
-      setBusy(false);
-    }
+    // Server route sets the PKCE verifier cookie on the redirect to Google.
+    window.location.assign("/auth/google");
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -163,7 +149,7 @@ function LoginForm() {
                 type="button"
                 className="auth-google"
                 disabled={busy}
-                onClick={() => void signInWithGoogle()}
+                onClick={signInWithGoogle}
               >
                 <svg
                   aria-hidden="true"

@@ -28,7 +28,8 @@ Google / Gmail login (Supabase → Authentication → Providers → Google):
 2. Authorized JavaScript origins: `https://agjenti.app`, `https://www.agjenti.app`, `http://localhost:3003`
 3. Authorized redirect URI: `https://<PROJECT_REF>.supabase.co/auth/v1/callback`
 4. Vendos Client ID + Client Secret te Supabase Google provider dhe aktivizoje.
-5. Opsional: aktivizo “Skip nonce check” vetëm nëse Google e kërkon për klientin tënd.
+5. `NEXT_PUBLIC_APP_URL` në Vercel duhet të jetë saktësisht domain-i publik (p.sh. `https://www.agjenti.app`) — i njëjti origin ku përdoruesi hap login-in, që cookie e sesionit të përputhet.
+6. Redirect URLs në Supabase Auth duhet të përfshijnë `https://www.agjenti.app/auth/callback**` (dhe variantin pa www nëse e përdorni).
 - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` (Instagram App ID/Secret nga Meta → Instagram, jo Facebook App ID)
 - `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`
 - `INSTAGRAM_OAUTH_REDIRECT_URI` = `https://agjenti.app/api/instagram/oauth/callback`
