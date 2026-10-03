@@ -2,6 +2,7 @@ import { processAgentTurn } from "./process-agent-turn";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { sendInstagramText } from "@/lib/instagram/send";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
+import { fetchInstagramUserProfile } from "@/lib/instagram/user-profile";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import {
@@ -129,6 +130,17 @@ export async function handleInboundMessage(
   }
   const conn = connection as ConnectionRow;
   const businessId = conn.business_id;
+  let accessToken: string;
+  try {
+    accessToken = decryptSecret(conn.access_token_ciphertext);
+  } catch (error) {
+    console.error("[inbound] token decrypt failed", error);
+    await supabase
+      .from("instagram_connections")
+      .update({ status: "revoked", last_error: "decrypt_failed" })
+      .eq("id", conn.id);
+    return;
+  }
 
   const { data: existingCustomer, error: existingCustomerError } =
     await supabase
@@ -144,6 +156,17 @@ export async function handleInboundMessage(
     error: existingCustomerError?.message ?? null,
   });
 
+  let username = message.senderUsername;
+  let displayName = message.senderDisplayName;
+  if (!username && !displayName) {
+    const profile = await fetchInstagramUserProfile(
+      message.externalParticipantId,
+      accessToken,
+    );
+    username = profile.username;
+    displayName = profile.name;
+  }
+
   let customerId = existingCustomer?.id as string | undefined;
   if (!customerId) {
     const { data: created, error: createCustomerError } = await supabase
@@ -151,8 +174,8 @@ export async function handleInboundMessage(
       .insert({
         business_id: businessId,
         instagram_user_id: message.externalParticipantId,
-        username: message.senderUsername,
-        display_name: message.senderDisplayName,
+        username,
+        display_name: displayName,
       })
       .select("id")
       .single();
@@ -162,6 +185,17 @@ export async function handleInboundMessage(
       customerId: customerId ?? null,
       error: createCustomerError?.message ?? null,
     });
+  } else if (
+    (username || displayName) &&
+    (!existingCustomer?.username || !existingCustomer?.display_name)
+  ) {
+    await supabase
+      .from("customers")
+      .update({
+        username: existingCustomer?.username || username,
+        display_name: existingCustomer?.display_name || displayName,
+      })
+      .eq("id", customerId);
   }
   if (!customerId) {
     console.warn("[inbound] early return: no customerId after lookup/insert");
@@ -311,20 +345,9 @@ export async function handleInboundMessage(
     })
     .throwOnError();
 
-  let token: string;
-  try {
-    token = decryptSecret(conn.access_token_ciphertext);
-  } catch {
-    await supabase
-      .from("instagram_connections")
-      .update({ status: "revoked", last_error: "decrypt_failed" })
-      .eq("id", conn.id);
-    return;
-  }
-
   const send = await sendInstagramText({
     accountId: conn.ig_user_id,
-    token,
+    token: accessToken,
     to: message.externalParticipantId,
     body: generated.reply || promptForStep(state.step_key),
   });

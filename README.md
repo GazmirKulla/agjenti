@@ -30,7 +30,8 @@ Auth (Supabase → Authentication → URL Configuration):
 - `CRON_SECRET`
 - Katalogu/porositë e jashtme: URL + API key për biznes te Cilësimet; te sajti i biznesit `AGJENTI_APP_SECRET`
 
-Webhook Meta: `https://agjenti.app/api/webhooks/meta`
+Webhook Meta: `https://www.agjenti.app/api/webhooks/meta`  
+(Përdor **www** — `agjenti.app` pa www kthen 308 redirect dhe Meta nuk dorëzon DM reale.)
 
 Meta App Dashboard → Settings → Basic:
 - Privacy Policy URL: `https://agjenti.app/privacy`

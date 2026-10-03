@@ -12,6 +12,13 @@ vi.mock("@/lib/crypto/tokens", () => ({
   decryptSecret: () => "fake-meta-token",
 }));
 vi.mock("@/lib/instagram/send", () => ({ sendInstagramText: mocks.send }));
+vi.mock("@/lib/instagram/user-profile", () => ({
+  fetchInstagramUserProfile: async () => ({
+    username: "customer_ig",
+    name: "Klient Test",
+  }),
+}));
+
 import { handleInboundMessage } from "./handle-inbound";
 import { emptyState } from "@/lib/workflows/engine";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";

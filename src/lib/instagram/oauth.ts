@@ -105,14 +105,25 @@ export async function exchangeInstagramCode(code: string): Promise<{
 			? new Date(Date.now() + longJson.expires_in * 1000)
 			: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
 
+	// `user_id` = Instagram professional account ID (IG_ID) used in webhooks/messaging.
+	// `id` alone is an app-scoped ID and will NOT match webhook entry/recipient ids.
 	const meRes = await fetch(
-		`https://graph.instagram.com/${graphVersion()}/me?fields=id,username&access_token=${encodeURIComponent(token)}`,
+		`https://graph.instagram.com/${graphVersion()}/me?fields=id,user_id,username,name&access_token=${encodeURIComponent(token)}`,
 		{ signal: AbortSignal.timeout(20_000) },
 	);
-	const me = (await meRes.json()) as { id?: string; username?: string };
+	const me = (await meRes.json()) as {
+		id?: string;
+		user_id?: string | number;
+		username?: string;
+		name?: string;
+	};
+	const igProfessionalId = String(me.user_id || shortJson.user_id || "").trim();
+	if (!igProfessionalId) {
+		throw new Error("Mungon Instagram professional account ID (user_id).");
+	}
 	return {
 		accessToken: token,
-		userId: String(me.id || shortJson.user_id || ""),
+		userId: igProfessionalId,
 		expiresAt,
 		username: me.username ?? null,
 	};
