@@ -20,6 +20,7 @@ const adminNav = [
   ["", "Dashboard", "dashboard"],
   ["businesses", "Bizneset", "businesses"],
   ["conversations", "Biseda & Integrime", "inbox"],
+  ["app", "App", "settings"],
 ];
 export function DashboardShell({
   children,

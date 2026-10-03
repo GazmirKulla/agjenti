@@ -5,6 +5,8 @@ import { homeForAccess } from "@/lib/auth/destination";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { emptyAnswers, parseAnswers } from "@/lib/onboarding/model";
 import { OnboardingWizard } from "@/components/onboarding/wizard";
+import { getAppSettings } from "@/lib/platform/settings";
+import { BasicWorkspaceForm } from "@/components/onboarding/basic-workspace";
 import { signOut } from "@/lib/auth/actions";
 import "./onboarding.css";
 export const metadata = { title: "Konfiguro biznesin | Agjenti.app" };
@@ -38,6 +40,26 @@ export default async function OnboardingPage() {
           <Link className="btn btn-primary" href="/onboarding">
             Provo përsëri
           </Link>
+          <form action={signOut}>
+            <button className="btn btn-ghost">Dil nga llogaria</button>
+          </form>
+        </section>
+      </main>
+    );
+  const settings = await getAppSettings();
+  if (!settings.onboarding_enabled)
+    return (
+      <main className="onboarding-page">
+        <section className="onboarding-unavailable">
+          <Link href="/" className="onboarding-brand">
+            <span>A</span>Agjenti.app
+          </Link>
+          <h1>Krijo hapësirën e biznesit</h1>
+          <p>
+            Vendos emrin e biznesit. Produktet, njohuritë dhe agjentin mund t’i
+            konfigurosh nga paneli.
+          </p>
+          <BasicWorkspaceForm />
           <form action={signOut}>
             <button className="btn btn-ghost">Dil nga llogaria</button>
           </form>

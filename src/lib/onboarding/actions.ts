@@ -2,7 +2,8 @@
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { homeForAccess } from "@/lib/auth/destination";
-import { parseAnswers, initialInstructions } from "./model";
+import { getAppSettings } from "@/lib/platform/settings";
+import { emptyAnswers, parseAnswers, initialInstructions } from "./model";
 export type OnboardingResult = {
   error?: string;
   destination?: string;
@@ -24,14 +25,17 @@ export async function saveOnboarding(
       typeof complete !== "boolean"
     )
       return { error: "Hapi nuk është i vlefshëm." };
+    const settings = await getAppSettings();
     let answers;
     try {
-      answers = parseAnswers(input, complete);
+      answers = parseAnswers(input, complete && settings.onboarding_enabled);
     } catch (e) {
       return {
         error: e instanceof Error ? e.message : "Kontrollo përgjigjet.",
       };
     }
+    if (complete && answers.name.length < 2)
+      return { error: "Vendos emrin e biznesit (të paktën 2 karaktere)." };
     const access = await listMemberships(user.id);
     if (access.admin || access.businesses.length)
       return { destination: homeForAccess(access) };
@@ -52,7 +56,9 @@ export async function saveOnboarding(
       const { data, error } = await db.rpc("complete_business_onboarding", {
         p_user_id: user.id,
         p_answers: answers,
-        p_instructions: initialInstructions(answers),
+        p_instructions: settings.onboarding_enabled
+          ? initialInstructions(answers)
+          : `Je asistenti i biznesit ${answers.name}. Përgjigju në gjuhën e klientit me ton miqësor dhe profesional. Përdor vetëm katalogun dhe njohuritë e biznesit. Mos shpik çmime, stok ose politika. Kur mungon informacioni, kërko ndihmën e stafit.`,
       });
       if (error) {
         console.error("[onboarding complete]", error.code);
@@ -71,4 +77,12 @@ export async function saveOnboarding(
       error: "Nuk u lidhëm me shërbimin. Provo përsëri pa mbyllur faqen.",
     };
   }
+}
+
+export async function createBasicWorkspace(form: FormData) {
+  return saveOnboarding(
+    { ...emptyAnswers, name: String(form.get("name") ?? "") },
+    7,
+    true,
+  );
 }

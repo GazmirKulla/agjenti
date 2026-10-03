@@ -99,3 +99,13 @@ Simulatori dhe webhook-u thërrasin të njëjtin `processAgentTurn`: produktet n
 Mesazhet dhe gjendja mbahen në memorie në klient. Konteksti i sesionit është i enkriptuar me `TOKEN_ENCRYPTION_KEY`, i lidhur me përdoruesin/biznesin dhe i verifikuar në çdo kërkesë; skadon pas një ore pa aktivitet ose pas 40 mesazhesh. Ndryshimi i biznesit, rifreskimi i faqes ose **Rifillo** fillon sesion të ri. `OPENAI_API_KEY` aktivizon përgjigjet AI; mungesa e tij ose gabimet e ofruesit shfaqen si përgjigje rezervë, jo si sukses AI. Teksti dhe konteksti dërgohen te OpenAI sipas të njëjtave rregulla si përgjigjet reale; mungesa e ruajtjes në Inbox nuk do të thotë mungesë përpunimi/ruajtjeje nga ofruesi AI. Përdor të dhëna shembull.
 
 Nuk kërkohet migrim i ri i databazës për Test Chat. Testet mbulojnë pipeline-n e përbashkët, transportin real, turnet e shumëfishta, autorizimin, izolimin e sesionit, reset-in dhe fallback-un.
+
+### Cilësimet App për administratorin
+
+Hap `/admin/app` (menuja **App**). Cilësimet ruhen në `app_settings` dhe lexohen në server; vetëm administratorët e platformës mund t’i ndryshojnë. Apliko migrimin `supabase/migrations/20261004100000_app_settings.sql` përpara ruajtjes së parë. Pa migrimin, leximet mbajnë sjelljen ekzistuese, ndërsa ruajtja shfaq gabimin e migrimit.
+
+- **Pyetësori i onboarding-ut:** kur është i fikur, përdoruesit pa biznes japin vetëm emrin. Përdoret funksioni ekzistues atomik `complete_business_onboarding`; pronësia dhe mbrojtja nga krijimi i dyfishtë ruhen, agjenti dhe përgjigjet automatike nisin të fikura. Bizneset ekzistuese nuk ndryshojnë.
+- **Hapat e konfigurimit:** shfaq ose fsheh checklist-in për bizneset e regjistruara vetë, pa ndryshuar lejet.
+- **Njoftimi:** tekst deri në 500 karaktere në panelet e bizneseve; bosh e heq.
+
+Ndryshimet zbatohen kur hapet ose rifreskohet faqja. Një pyetësor i hapur më parë rishikon cilësimin në server gjatë ruajtjes. `updated_by` dhe `updated_at` regjistrojnë ndryshimin e fundit.

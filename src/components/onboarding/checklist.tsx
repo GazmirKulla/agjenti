@@ -1,3 +1,4 @@
+import { getAppSettings } from "@/lib/platform/settings";
 import Link from "next/link";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import {
@@ -14,6 +15,7 @@ export async function OnboardingChecklist({
   businessId: string;
   slug: string;
 }) {
+  if (!(await getAppSettings()).checklist_enabled) return null;
   const db = createServiceSupabase();
   const { data, error } = await db
     .from("business_onboarding")
@@ -29,7 +31,7 @@ export async function OnboardingChecklist({
   if (!data?.completed_at) return null;
   let answers;
   try {
-    answers = parseAnswers(data.answers, true);
+    answers = parseAnswers(data.answers);
   } catch {
     return null;
   }
@@ -97,7 +99,9 @@ export async function OnboardingChecklist({
     {
       id: "agent",
       title: "Rishiko dhe aktivizo agjentin",
-      description: "Udhëzimet fillestare janë përgatitur nga përgjigjet e tua.",
+      description: answers.aiMode
+        ? "Udhëzimet fillestare janë përgatitur nga përgjigjet e tua."
+        : "Përshtat udhëzimet me biznesin përpara aktivizimit.",
       href: "agents",
       done: agent,
       icon: "agents",
@@ -144,7 +148,10 @@ export async function OnboardingChecklist({
         </span>
         <div>
           <p>
-            {answerLabel("businessType", answers.businessType)} · Hapat e parë
+            {answers.businessType
+              ? `${answerLabel("businessType", answers.businessType)} · `
+              : ""}
+            Hapat e parë
           </p>
           <h2 id="setup-heading">
             {done === steps.length
@@ -194,7 +201,13 @@ export async function OnboardingChecklist({
               <Icon name="spark" size={18} /> Rekomanduar për ty
             </h3>
             <ul>
-              {recommendations(answers).map((text) => (
+              {(answers.businessType
+                ? recommendations(answers)
+                : [
+                    "Shto katalogun dhe njohuritë e biznesit për përgjigje të sakta.",
+                    "Rishiko dhe provo agjentin përpara se të aktivizosh përgjigjet automatike.",
+                  ]
+              ).map((text) => (
                 <li key={text}>{text}</li>
               ))}
             </ul>

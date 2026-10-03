@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
+  settings: vi.fn(),
   user: vi.fn(),
   memberships: vi.fn(),
   rpc: vi.fn(),
@@ -11,6 +12,7 @@ vi.mock("@/lib/tenant/access", () => ({
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({ rpc: mocks.rpc }),
 }));
+vi.mock("@/lib/platform/settings", () => ({ getAppSettings: mocks.settings }));
 import { saveOnboarding } from "./actions";
 const answers = {
   name: "Dyqani",
@@ -24,6 +26,7 @@ const answers = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.settings.mockResolvedValue({ onboarding_enabled: true });
   mocks.user.mockResolvedValue({ id: "verified-user" });
   mocks.memberships.mockResolvedValue({ admin: false, businesses: [] });
   mocks.rpc.mockResolvedValue({ data: null, error: null });
@@ -89,4 +92,21 @@ describe("self-service onboarding boundary", () => {
       (await saveOnboarding(answers, 7, true)).destination,
     ).toBeUndefined();
   });
+});
+
+it("creates a basic workspace without fabricated questionnaire answers when onboarding is off", async () => {
+  mocks.settings.mockResolvedValue({ onboarding_enabled: false });
+  mocks.rpc.mockResolvedValue({ data: "biznes-basic", error: null });
+  const { emptyAnswers } = await import("./model");
+  expect(
+    await saveOnboarding({ ...emptyAnswers, name: "Biznesi" }, 7, true),
+  ).toEqual({ destination: "/b/biznes-basic?welcome=1" });
+  expect(mocks.rpc).toHaveBeenCalledWith(
+    "complete_business_onboarding",
+    expect.objectContaining({
+      p_answers: { ...emptyAnswers, name: "Biznesi" },
+      p_instructions: expect.stringContaining("Mos shpik"),
+    }),
+  );
+  expect((await saveOnboarding(emptyAnswers, 7, true)).error).toBeTruthy();
 });
