@@ -53,7 +53,9 @@ export function instagramAuthorizeUrl(state: string): string {
 		scope: "instagram_business_basic,instagram_business_manage_messages",
 		state,
 	});
-	return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
+	// #weblink is excluded in Instagram's apple-app-site-association, so iOS
+	// stays in Safari instead of opening the Instagram app (which breaks OAuth).
+	return `https://www.instagram.com/oauth/authorize?${params.toString()}#weblink`;
 }
 
 export function graphVersion(): string {

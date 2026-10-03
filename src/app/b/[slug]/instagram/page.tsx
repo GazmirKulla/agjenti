@@ -138,9 +138,9 @@ export default async function InstagramPage({
             )}
           </div>
           <p id="instagram-browser-help" className="muted-copy mt-3">
-            Autorizimi hapet në një skedë të re. Nëse je brenda Instagram-it ose Facebook-ut,
-            hape Agjenti.app në Safari ose Chrome dhe vazhdo lidhjen aty.
-            Pas lidhjes, rifresko këtë faqe për të parë statusin.
+            Autorizimi hapet në Instagram web (Safari/Chrome), jo në app-in Instagram.
+            Nëse je brenda Instagram-it ose Facebook-ut, hape Agjenti.app në Safari
+            dhe lidhu aty. Pas lidhjes, rifresko këtë faqe për të parë statusin.
           </p>
         </section>
         <aside className="panel section-pad">
