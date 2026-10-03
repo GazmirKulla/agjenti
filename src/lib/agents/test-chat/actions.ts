@@ -132,6 +132,8 @@ export async function simulateAgentTurn(
     }
     return {
       ...turn,
+      productName: turn.productName,
+      workflowProgress: turn.workflowProgress,
       setupTestPassed,
       setupNotice: !configAligned
         ? "Kjo bisedë nuk numërohet si test konfigurimi. Kontrollo agjentin dhe rifillo pasi të ruash ndryshimet."

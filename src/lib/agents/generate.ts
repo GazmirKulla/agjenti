@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import {
   promptForStep,
   type ConversationStatePayload,
+  type WorkflowProgressItem,
 } from "@/lib/workflows/engine";
 
 export const DEFAULT_AGENT_MODEL = "gpt-5.6-luna";
@@ -17,6 +18,7 @@ export async function generateAgentReply(params: {
   customerMessage: string;
   previousResponseId: string | null;
   catalogSummary: string;
+  workflowProgress?: WorkflowProgressItem[];
 }): Promise<{
   reply: string;
   responseId: string | null;
@@ -33,13 +35,22 @@ export async function generateAgentReply(params: {
     };
   }
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const progress =
+    params.workflowProgress
+      ?.map(
+        (s) =>
+          `- [${s.status}] ${s.label}${s.value ? ` = ${s.value}` : ""}`,
+      )
+      .join("\n") || "(none)";
   const input = [
     `Customer message: ${params.customerMessage}`,
     `Current step: ${params.state.step_key}`,
-    `Collected: ${JSON.stringify(params.state)}`,
+    `Order workflow progress:\n${progress}`,
+    `Collected state (source of truth): ${JSON.stringify(params.state)}`,
     `Knowledge:\n${params.knowledge || "(none)"}`,
     `Catalog:\n${params.catalogSummary || "(none)"}`,
-    "Write the entire customer-facing reply. Do not invent prices. Ask only for the current step.",
+    "The workflow state above is authoritative. Do not invent completed steps or customer data that is missing.",
+    "Write the entire customer-facing reply. Do not invent prices. Ask only for the current incomplete step.",
   ].join("\n");
 
   try {

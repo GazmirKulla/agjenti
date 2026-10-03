@@ -37,6 +37,8 @@ beforeEach(() => {
     nextState: { ...emptyState(), step_key: "collect_size" },
     previousResponseId: "resp_1",
     workflowId: null,
+    productName: null,
+    workflowProgress: [],
     debug: { source: "ai", agentConfigured: true },
   });
 });

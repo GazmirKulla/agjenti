@@ -96,9 +96,9 @@ export function AgentTestChat({
       <div className="agent-test-setup-guide">
         <strong>Provo një porosi nga fillimi deri në fund</strong>
         <p>
-          Shkruaj emrin e saktë të një produkti, përgjigju kërkesave dhe përdor
-          emër, telefon e adresë prove. Hapi përfundon kur workflow arrin
-          “order_ready” me përgjigje AI. Mos ndrysho konfigurimin gjatë provës.
+          Fillo me emrin e produktit. Në të djathtë sheh hapat e workflow-it:
+          çfarë u plotësua dhe çfarë mungon. Të dhënat e klientit mund t’i
+          dërgosh edhe në një mesazh (emër, tel, qytet, adresë).
         </p>
         {last?.setupTestPassed && (
           <p role="status">
@@ -213,8 +213,46 @@ export function AgentTestChat({
           </form>
         </div>
         <aside className="agent-test-debug">
-          <h3>Gjendja e provës</h3>
+          <h3>Workflow i porosisë</h3>
+          {!last ? (
+            <p className="agent-test-disclaimer">
+              Pas mesazhit të parë shfaqen hapat: çfarë u plotësua dhe çfarë
+              mungon.
+            </p>
+          ) : (
+            <ol className="agent-test-steps" aria-label="Hapat e porosisë">
+              {(last.workflowProgress ?? []).map((step) => (
+                <li
+                  key={step.key}
+                  className={`agent-test-step is-${step.status}`}
+                >
+                  <span className="agent-test-step-mark" aria-hidden>
+                    {step.status === "done"
+                      ? "✓"
+                      : step.status === "current"
+                        ? "●"
+                        : "○"}
+                  </span>
+                  <div>
+                    <strong>{step.label}</strong>
+                    <small>
+                      {step.status === "done"
+                        ? "U plotësua"
+                        : step.status === "current"
+                          ? "Hapi aktual — përgjigju këtu"
+                          : "Në pritje"}
+                      {step.value ? ` · ${step.value}` : ""}
+                    </small>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
           <dl>
+            <div>
+              <dt>Produkti</dt>
+              <dd>{last?.productName || "—"}</dd>
+            </div>
             <div>
               <dt>Hapi aktual</dt>
               <dd>{last?.nextState.step_key || "choose_product"}</dd>
@@ -233,29 +271,16 @@ export function AgentTestChat({
                   : "—"}
               </dd>
             </div>
-            <div>
-              <dt>Modeli i konfiguruar</dt>
-              <dd>{last?.debug.model || "Pas mesazhit të parë"}</dd>
-            </div>
             {last && (
               <>
-                <div>
-                  <dt>Njohuri të përfshira</dt>
-                  <dd>{last.debug.knowledgeCount}</dd>
-                </div>
-                <div>
-                  <dt>Produkte në katalog</dt>
-                  <dd>{last.debug.productCount}</dd>
-                </div>
                 <div>
                   <dt>Koha e përgjigjes</dt>
                   <dd>{(last.debug.elapsedMs / 1000).toFixed(1)} sek</dd>
                 </div>
                 <div>
-                  <dt>Dërgimi automatik në biznes</dt>
+                  <dt>Dërgimi automatik</dt>
                   <dd>
-                    {last.autoReplyEnabled ? "Aktiv" : "Joaktiv"} · nuk përdoret
-                    në provë
+                    {last.autoReplyEnabled ? "Aktiv" : "Joaktiv"} · jo në provë
                   </dd>
                 </div>
               </>
@@ -273,33 +298,25 @@ export function AgentTestChat({
                 "U përdor përgjigjja rezervë."}
             </p>
           )}
+          {last && !last.nextState.product_id && (
+            <p className="agent-test-notice">
+              Produkti nuk u njoh ende. Shkruaj emrin e saktë nga katalogu (p.sh.
+              emri i produktit).
+            </p>
+          )}
           {last?.turns === 40 && (
             <p className="agent-test-notice">
               U arritën 40 mesazhe. Shtyp Rifillo për një provë të re.
             </p>
           )}
-          <details open>
-            <summary>Të dhënat e mbledhura</summary>
+          <details>
+            <summary>Të dhënat e mbledhura (JSON)</summary>
             <pre>
               {JSON.stringify(
                 last?.nextState ?? {
                   step_key: "choose_product",
                   fields: {},
                   customer: {},
-                },
-                null,
-                2,
-              )}
-            </pre>
-          </details>
-          <details>
-            <summary>Detaje të përpunimit</summary>
-            <pre>
-              {JSON.stringify(
-                {
-                  workflowId: last?.workflowId ?? null,
-                  steps: last?.debug.workflowSteps ?? [],
-                  responseId: last?.previousResponseId ?? null,
                 },
                 null,
                 2,

@@ -114,9 +114,9 @@ describe("shared business turn processor", () => {
     });
     expect(second.nextState).toMatchObject({
       step_key: "awaiting_photo",
-      fields: { collect_size: "M" },
+      fields: { product_query: "Bluzë", collect_size: "M" },
     });
-    expect(first.nextState.fields).toEqual({});
+    expect(first.nextState.fields).toEqual({ product_query: "Bluzë" });
     expect(mocks.generate).toHaveBeenLastCalledWith(
       expect.objectContaining({ previousResponseId: "resp_1" }),
     );
@@ -128,7 +128,7 @@ describe("shared business turn processor", () => {
     });
     expect(third.nextState).toMatchObject({
       step_key: "collect_customer",
-      fields: { photo: true },
+      fields: { product_query: "Bluzë", photo: true },
     });
   });
   it("does not accept a product/type injected from another business", async () => {
@@ -205,5 +205,20 @@ describe("shared business turn processor", () => {
       hasPhoto: false,
     });
     expect(r.nextState.step_key).toBe("choose_product");
+  });
+  it("matches a product mentioned inside a natural sentence", async () => {
+    const r = await processAgentTurn({
+      businessId: "business-a",
+      message: "Pershendetje, dua nje Bluze ju lutem",
+      hasPhoto: false,
+    });
+    expect(r.nextState).toMatchObject({
+      product_id: "product-a",
+      step_key: "collect_size",
+    });
+    expect(r.productName).toBe("Bluzë");
+    expect(r.workflowProgress.some((s) => s.key === "collect_size" && s.status === "current")).toBe(
+      true,
+    );
   });
 });

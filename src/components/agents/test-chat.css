@@ -196,6 +196,66 @@
   color: #34474e;
   margin-bottom: 16px;
 }
+.agent-test-steps {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.agent-test-step {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid #e7ecee;
+  border-radius: 10px;
+  background: #fbfcfc;
+}
+.agent-test-step strong {
+  display: block;
+  font-size: 13px;
+  color: #31454e;
+}
+.agent-test-step small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #7a878e;
+  overflow-wrap: anywhere;
+}
+.agent-test-step-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+.agent-test-step.is-done {
+  border-color: #cfe3dc;
+  background: #f4faf7;
+}
+.agent-test-step.is-done .agent-test-step-mark {
+  background: #377668;
+  color: #fff;
+}
+.agent-test-step.is-current {
+  border-color: #9fcabf;
+  background: #eef7f3;
+}
+.agent-test-step.is-current .agent-test-step-mark {
+  background: #4e9885;
+  color: #fff;
+}
+.agent-test-step.is-pending .agent-test-step-mark {
+  background: #e8ecee;
+  color: #8a959b;
+}
 .agent-test-debug dl > div {
   display: flex;
   justify-content: space-between;
