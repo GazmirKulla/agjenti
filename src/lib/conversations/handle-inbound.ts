@@ -142,20 +142,6 @@ export async function handleInboundMessage(
     return;
   }
 
-  const { data: existingCustomer, error: existingCustomerError } =
-    await supabase
-      .from("customers")
-      .select("id,username,display_name")
-      .eq("business_id", businessId)
-      .eq("instagram_user_id", message.externalParticipantId)
-      .maybeSingle();
-  console.log("[inbound] customer lookup", {
-    businessId,
-    instagramUserId: message.externalParticipantId,
-    found: Boolean(existingCustomer?.id),
-    error: existingCustomerError?.message ?? null,
-  });
-
   let username = message.senderUsername;
   let displayName = message.senderDisplayName;
   if (!username && !displayName) {
@@ -167,45 +153,11 @@ export async function handleInboundMessage(
     displayName = profile.name;
   }
 
-  let customerId = existingCustomer?.id as string | undefined;
-  if (!customerId) {
-    const { data: created, error: createCustomerError } = await supabase
-      .from("customers")
-      .insert({
-        business_id: businessId,
-        instagram_user_id: message.externalParticipantId,
-        username,
-        display_name: displayName,
-      })
-      .select("id")
-      .single();
-    customerId = created?.id;
-    console.log("[inbound] customer insert", {
-      ok: !createCustomerError,
-      customerId: customerId ?? null,
-      error: createCustomerError?.message ?? null,
-    });
-  } else if (
-    (username || displayName) &&
-    (!existingCustomer?.username || !existingCustomer?.display_name)
-  ) {
-    await supabase
-      .from("customers")
-      .update({
-        username: existingCustomer?.username || username,
-        display_name: existingCustomer?.display_name || displayName,
-      })
-      .eq("id", customerId);
-  }
-  if (!customerId) {
-    console.warn("[inbound] early return: no customerId after lookup/insert");
-    return;
-  }
-
   const { data: open } = await supabase
     .from("conversations")
     .select("id,status,auto_reply,openai_previous_response_id")
-    .eq("customer_id", customerId)
+    .eq("business_id", businessId)
+    .eq("instagram_participant_id", message.externalParticipantId)
     .in("status", ["active", "paused"])
     .order("created_at", { ascending: false })
     .limit(1)
@@ -217,7 +169,8 @@ export async function handleInboundMessage(
     const { data: last } = await supabase
       .from("conversations")
       .select("id")
-      .eq("customer_id", customerId)
+      .eq("business_id", businessId)
+      .eq("instagram_participant_id", message.externalParticipantId)
       .eq("status", "completed")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -227,7 +180,10 @@ export async function handleInboundMessage(
       .from("conversations")
       .insert({
         business_id: businessId,
-        customer_id: customerId,
+        customer_id: null,
+        instagram_participant_id: message.externalParticipantId,
+        participant_username: username,
+        participant_display_name: displayName,
         instagram_connection_id: conn.id,
         status: "active",
         previous_conversation_id: previousId,
@@ -259,14 +215,17 @@ export async function handleInboundMessage(
       });
     }
   } else {
+    const conversationPatch: Record<string, unknown> = {
+      last_inbound_at: message.timestamp.toISOString(),
+      last_message_at: message.timestamp.toISOString(),
+      last_message_preview: message.text?.slice(0, 140) ?? "[media]",
+      unread_count: 1,
+    };
+    if (username) conversationPatch.participant_username = username;
+    if (displayName) conversationPatch.participant_display_name = displayName;
     const { error: updateConversationError } = await supabase
       .from("conversations")
-      .update({
-        last_inbound_at: message.timestamp.toISOString(),
-        last_message_at: message.timestamp.toISOString(),
-        last_message_preview: message.text?.slice(0, 140) ?? "[media]",
-        unread_count: open ? 1 : 1,
-      })
+      .update(conversationPatch)
       .eq("id", conversationId);
     console.log("[inbound] conversation update", {
       conversationId,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ensureCustomerForConversation } from "@/lib/conversations/ensure-customer";
 import { submitExternalOrder } from "@/lib/integrations/zana";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -32,10 +33,13 @@ export async function POST(
 	const service = createServiceSupabase();
 	const { data: conversation } = await service
 		.from("conversations")
-		.select("customer_id")
+		.select("id,customer_id,instagram_participant_id,participant_username")
 		.eq("id", conversationId)
 		.eq("business_id", businessId)
 		.maybeSingle();
+	if (!conversation) {
+		return NextResponse.json({ error: "Biseda nuk u gjet." }, { status: 404 });
+	}
 	const { data: stateRow } = await service
 		.from("conversation_states")
 		.select("collected")
@@ -45,6 +49,18 @@ export async function POST(
 	const customer = state.customer ?? { name: null, phone: null, city: null, address: null };
 	if (!customer.name || !customer.phone || !customer.address) {
 		return NextResponse.json({ error: "Mungojnë të dhënat e klientit." }, { status: 400 });
+	}
+
+	const ensured = await ensureCustomerForConversation({
+		businessId,
+		conversationId,
+		displayName: customer.name,
+		phone: customer.phone,
+		username: conversation.participant_username,
+		instagramUserId: conversation.instagram_participant_id,
+	});
+	if (!ensured.ok) {
+		return NextResponse.json({ error: ensured.error }, { status: ensured.status });
 	}
 
 	const { data: business } = await service
@@ -61,7 +77,7 @@ export async function POST(
 		.insert({
 			business_id: businessId,
 			conversation_id: conversationId,
-			customer_id: conversation?.customer_id,
+			customer_id: ensured.customerId,
 			status: "confirmed",
 			currency: "ALL",
 			total_amount: product?.price_amount ?? null,

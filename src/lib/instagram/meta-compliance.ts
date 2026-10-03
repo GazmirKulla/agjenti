@@ -112,6 +112,9 @@ export async function deleteInstagramUserData(params: {
 					last_message_preview: null,
 					openai_previous_response_id: null,
 					unread_count: 0,
+					instagram_participant_id: null,
+					participant_username: null,
+					participant_display_name: null,
 					updated_at: now,
 				})
 				.in("id", conversationIds)

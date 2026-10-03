@@ -67,9 +67,7 @@ beforeEach(() => {
                 access_token_ciphertext: "sealed",
                 status: "connected",
               }
-            : table === "customers"
-              ? { id: "customer-a" }
-              : table === "conversations"
+            : table === "conversations"
                 ? {
                     id: "conversation-a",
                     status: paused ? "paused" : "active",
@@ -123,6 +121,7 @@ describe("real inbound integration with shared processor", () => {
       state: emptyState(),
       previousResponseId: "resp_old",
     });
+    expect(writes.some((w) => w.table === "customers")).toBe(false);
     expect(writes).toContainEqual({
       table: "conversation_states",
       operation: "upsert",
@@ -144,6 +143,89 @@ describe("real inbound integration with shared processor", () => {
       operation: "update",
       data: expect.objectContaining({
         openai_previous_response_id: "resp_new",
+      }),
+    });
+  });
+  it("does not create a CRM customer on first inbound message", async () => {
+    // Force new conversation path: open lookup returns null.
+    mocks.from.mockImplementation((table: string) => {
+      let op = "select";
+      let selectCount = 0;
+      const result = () => {
+        if (table === "webhook_events") {
+          return {
+            error: null,
+            data: op === "select" ? null : { id: "event-a" },
+          };
+        }
+        if (table === "instagram_connections") {
+          return {
+            error: null,
+            data: {
+              id: "connection-a",
+              business_id: "business-a",
+              ig_user_id: "ig-a",
+              access_token_ciphertext: "sealed",
+              status: "connected",
+            },
+          };
+        }
+        if (table === "conversations") {
+          selectCount += 1;
+          // first open lookup + completed lookup => null; insert returns id
+          if (op === "insert") {
+            return { error: null, data: { id: "conversation-new" } };
+          }
+          return { error: null, data: null };
+        }
+        if (table === "businesses") {
+          return { error: null, data: { auto_reply: false } };
+        }
+        return { error: null, data: { id: "row-a" } };
+      };
+      const chain = {
+        select: vi.fn(() => {
+          op = "select";
+          return chain;
+        }),
+        eq: vi.fn(() => chain),
+        neq: vi.fn(() => chain),
+        in: vi.fn(() => chain),
+        order: vi.fn(() => chain),
+        limit: vi.fn(() => chain),
+        maybeSingle: async () => result(),
+        single: async () => result(),
+        insert: (data: unknown) => {
+          op = "insert";
+          writes.push({ table, operation: "insert", data });
+          return chain;
+        },
+        update: (data: unknown) => {
+          op = "update";
+          writes.push({ table, operation: "update", data });
+          return chain;
+        },
+        upsert: (data: unknown) => {
+          op = "upsert";
+          writes.push({ table, operation: "upsert", data });
+          return chain;
+        },
+      };
+      void selectCount;
+      return chain;
+    });
+    await handleInboundMessage({
+      ...message,
+      externalMessageId: "msg-new-thread",
+    });
+    expect(writes.some((w) => w.table === "customers")).toBe(false);
+    expect(writes).toContainEqual({
+      table: "conversations",
+      operation: "insert",
+      data: expect.objectContaining({
+        customer_id: null,
+        instagram_participant_id: "customer-ig",
+        participant_username: "customer_ig",
       }),
     });
   });

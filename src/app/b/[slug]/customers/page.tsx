@@ -26,14 +26,14 @@ export default async function CustomersPage({
       <PageHeading
         eyebrow="Klientët e mi"
         title={access.business.name}
-        description="Informacionet e kontaktit të klientëve nga bisedat e biznesit."
+        description="Klientët CRM krijohen kur konfirmohet një porosi ose kur menaxheri i shton nga Inbox."
       />
       <RecordBrowser
         listTitle="Lista e klientëve"
         placeholder="Kërko emër ose Instagram…"
         columns={["Klienti", "Telefoni", "Klient që nga"]}
         emptyTitle="Ende nuk ka klientë"
-        emptyDescription="Klientët regjistrohen kur dërgojnë mesazhin e parë në Instagram."
+        emptyDescription="Një bisedë Instagram nuk krijon klient automatikisht. Shtoje nga Inbox ose konfirmo porosinë pasi workflow-i të jetë plotësuar."
         records={(customers ?? []).map((c) => ({
           id: c.id,
           title: c.display_name || c.username || "Klient Instagram",

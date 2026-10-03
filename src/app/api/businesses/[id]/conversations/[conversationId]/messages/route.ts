@@ -37,7 +37,9 @@ export async function POST(
 	const service = createServiceSupabase();
 	const { data: conversation } = await service
 		.from("conversations")
-		.select("id,business_id,customer_id,instagram_connection_id,last_inbound_at,status")
+		.select(
+			"id,business_id,customer_id,instagram_participant_id,instagram_connection_id,last_inbound_at,status",
+		)
 		.eq("id", conversationId)
 		.eq("business_id", businessId)
 		.maybeSingle();
@@ -46,17 +48,21 @@ export async function POST(
 		return NextResponse.json(instagramWindowClosedError(), { status: 409 });
 	}
 
-	const { data: customer } = await service
-		.from("customers")
-		.select("instagram_user_id")
-		.eq("id", conversation.customer_id)
-		.maybeSingle();
+	let recipientId = conversation.instagram_participant_id as string | null;
+	if (!recipientId && conversation.customer_id) {
+		const { data: customer } = await service
+			.from("customers")
+			.select("instagram_user_id")
+			.eq("id", conversation.customer_id)
+			.maybeSingle();
+		recipientId = customer?.instagram_user_id ?? null;
+	}
 	const { data: conn } = await service
 		.from("instagram_connections")
 		.select("ig_user_id,access_token_ciphertext,status")
 		.eq("id", conversation.instagram_connection_id)
 		.maybeSingle();
-	if (!customer?.instagram_user_id || !conn || conn.status !== "connected") {
+	if (!recipientId || !conn || conn.status !== "connected") {
 		return NextResponse.json({ error: "Instagram nuk është i lidhur." }, { status: 400 });
 	}
 
@@ -70,7 +76,7 @@ export async function POST(
 	const send = await sendInstagramText({
 		accountId: conn.ig_user_id,
 		token,
-		to: customer.instagram_user_id,
+		to: recipientId,
 		body: text,
 	});
 	if (!send.ok) {

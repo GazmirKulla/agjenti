@@ -19,7 +19,7 @@ export default async function AdminConversations() {
     db
       .from("conversations")
       .select(
-        "id,status,last_message_preview,last_message_at,customers(display_name,username),businesses(name,slug)",
+        "id,status,last_message_preview,last_message_at,participant_display_name,participant_username,customers(display_name,username),businesses(name,slug)",
       )
       .order("last_message_at", { ascending: false })
       .limit(1000),
@@ -50,12 +50,15 @@ export default async function AdminConversations() {
             username: string | null;
           } | null;
           const b = c.businesses as unknown as { name: string; slug: string };
+          const title =
+            customer?.display_name ||
+            customer?.username ||
+            c.participant_display_name ||
+            c.participant_username ||
+            "Bisedë Instagram";
           return {
             id: c.id,
-            title:
-              customer?.display_name ||
-              customer?.username ||
-              "Klient Instagram",
+            title,
             subtitle: b.name,
             cells: [
               <StatusBadge key="status" status={c.status} />,
@@ -65,11 +68,7 @@ export default async function AdminConversations() {
               <>
                 <div className="detail-header">
                   <div>
-                    <h2>
-                      {customer?.display_name ||
-                        customer?.username ||
-                        "Klient Instagram"}
-                    </h2>
+                    <h2>{title}</h2>
                     <p>{b.name}</p>
                   </div>
                   <StatusBadge status={c.status} />
