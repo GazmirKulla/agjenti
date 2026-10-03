@@ -34,6 +34,3 @@ export async function launchBusiness(slug: string, form: FormData) {
         : "Hapësira është gati. Përgjigjet mbeten manuale.",
   };
 }
-
-/** @deprecated Use updateProduct from @/lib/products/actions */
-export { updateProduct as saveProductSetup } from "@/lib/products/actions";
