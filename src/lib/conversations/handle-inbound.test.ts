@@ -158,4 +158,32 @@ describe("real inbound integration with shared processor", () => {
     expect(mocks.send).not.toHaveBeenCalled();
     expect(writes.every((w) => w.table === "webhook_events")).toBe(true);
   });
+  it("ignores repeated Meta dashboard tests with the same mid", async () => {
+    let seen = false;
+    mocks.from.mockImplementation((table: string) => {
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        maybeSingle: async () =>
+          table === "webhook_events" && seen
+            ? { error: null, data: { id: "event-existing" } }
+            : { error: null, data: null },
+        insert: (data: unknown) => {
+          seen = true;
+          writes.push({ table, operation: "insert", data });
+          return chain;
+        },
+      };
+      return chain;
+    });
+    const synthetic = {
+      ...message,
+      externalMessageId: "random_mid",
+      contextMetadata: { metaDashboardTest: true },
+    };
+    await handleInboundMessage(synthetic);
+    await handleInboundMessage(synthetic);
+    expect(writes).toHaveLength(1);
+    expect(mocks.process).not.toHaveBeenCalled();
+  });
 });

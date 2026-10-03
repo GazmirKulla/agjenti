@@ -31,45 +31,40 @@ async function alreadyHandled(externalId: string): Promise<boolean> {
 export async function handleInboundMessage(
   message: NormalizedIncomingMessage,
 ): Promise<void> {
-  console.log("[inbound] start", {
-    externalMessageId: message.externalMessageId,
-    externalParticipantId: message.externalParticipantId,
-    textPreview: message.text?.slice(0, 80) ?? null,
-    attachmentCount: message.attachments.length,
-    contextMetadata: message.contextMetadata,
-  });
-
   const accountId =
     typeof message.contextMetadata?.instagramAccountId === "string"
       ? message.contextMetadata.instagramAccountId
       : null;
 
   if (isMetaDashboardTestMessage(message)) {
-    console.log(
-      "[inbound] meta dashboard synthetic test — log only, skip conversation",
-      {
-        externalMessageId: message.externalMessageId,
-        instagramAccountId: accountId,
-        externalParticipantId: message.externalParticipantId,
-        textPreview: message.text?.slice(0, 80) ?? null,
-      },
-    );
+    if (await alreadyHandled(message.externalMessageId)) {
+      return;
+    }
     const supabase = createServiceSupabase();
-    const { data: webhookEvent, error: webhookEventError } = await supabase
+    const { error: webhookEventError } = await supabase
       .from("webhook_events")
       .insert({
         external_event_id: message.externalMessageId,
         status: "meta_test",
-      })
-      .select("id")
-      .maybeSingle();
-    console.log("[inbound] webhook_events insert (meta_test)", {
-      ok: !webhookEventError,
-      id: webhookEvent?.id ?? null,
-      error: webhookEventError?.message ?? null,
-    });
+      });
+    // Meta always reuses mid "random_mid" — treat unique races as success.
+    if (
+      webhookEventError &&
+      !webhookEventError.message.includes("duplicate key")
+    ) {
+      console.warn("[inbound] meta_test insert failed", {
+        error: webhookEventError.message,
+      });
+    }
     return;
   }
+
+  console.log("[inbound] start", {
+    externalMessageId: message.externalMessageId,
+    externalParticipantId: message.externalParticipantId,
+    textPreview: message.text?.slice(0, 80) ?? null,
+    attachmentCount: message.attachments.length,
+  });
 
   if (!accountId) {
     console.warn("[inbound] early return: missing instagramAccountId");
