@@ -105,7 +105,47 @@
   margin-top: 12px;
 }
 .auth-card form {
-  margin-top: 30px;
+  margin-top: 0;
+}
+.auth-google {
+  margin-top: 28px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid #e1ddea;
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #17132f;
+}
+.auth-google:hover {
+  background: #fcfbff;
+  border-color: #cfc6e4;
+}
+.auth-google:disabled {
+  opacity: 0.65;
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 22px 0;
+  color: #8a849c;
+  font-size: 12px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #eeeaf3;
+}
+.auth-divider span {
+  white-space: nowrap;
 }
 .auth-card fieldset {
   border: 0;

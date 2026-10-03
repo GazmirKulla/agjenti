@@ -21,7 +21,14 @@ Next.js 15, React 19, TypeScript, Tailwind, Supabase, Vitest. Deploy: Vercel, do
 
 Auth (Supabase → Authentication → URL Configuration):
 - **Site URL** = `https://agjenti.app` (jo localhost)
-- **Redirect URLs** = `https://agjenti.app/**` dhe `http://localhost:3003/**`
+- **Redirect URLs** = `https://agjenti.app/**`, `https://www.agjenti.app/**` dhe `http://localhost:3003/**`
+
+Google / Gmail login (Supabase → Authentication → Providers → Google):
+1. Në [Google Cloud Console](https://console.cloud.google.com/) krijo OAuth Client ID (Web).
+2. Authorized JavaScript origins: `https://agjenti.app`, `https://www.agjenti.app`, `http://localhost:3003`
+3. Authorized redirect URI: `https://<PROJECT_REF>.supabase.co/auth/v1/callback`
+4. Vendos Client ID + Client Secret te Supabase Google provider dhe aktivizoje.
+5. Opsional: aktivizo “Skip nonce check” vetëm nëse Google e kërkon për klientin tënd.
 - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` (Instagram App ID/Secret nga Meta → Instagram, jo Facebook App ID)
 - `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`
 - `INSTAGRAM_OAUTH_REDIRECT_URI` = `https://agjenti.app/api/instagram/oauth/callback`
