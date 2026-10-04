@@ -1765,6 +1765,57 @@
   background: #f0ebff;
   color: #6535ff;
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+.topbar-actions .profile-menu {
+  margin-left: 0;
+}
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+.theme-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.theme-switch button.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+@media (max-width: 900px) {
+  .theme-switch button span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .theme-switch button {
+    padding: 7px;
+  }
+}
 .profile-menu {
   position: relative;
   margin-left: auto;
@@ -1793,6 +1844,155 @@
 
 /* Prevent focus-triggered zoom on mobile without disabling pinch-to-zoom.
    Important keeps route-specific auth/chat styles from shrinking controls. */
+html[data-resolved="light"] {
+  color-scheme: light;
+}
+html[data-resolved="dark"] {
+  color-scheme: dark;
+  --ink: #e7f3ee;
+  --ink-muted: #a9c0b6;
+  --paper: #101916;
+  --paper-2: #16211c;
+  --surface: #1c2924;
+  --line: #2d4038;
+  --line-strong: #4d6a5e;
+  --accent: #3ecfb8;
+  --accent-2: #6ee0d0;
+  --accent-soft: #163832;
+  --danger: #ff9aa2;
+  --danger-soft: #3d1a1e;
+  --success: #5dcca0;
+  --success-soft: #143528;
+  --shadow-soft: 0 18px 40px -28px rgb(0 0 0 / 55%);
+}
+html[data-resolved="dark"] body {
+  background: #101916;
+  color: var(--ink);
+}
+html[data-resolved="dark"] .field {
+  background: #1a2621;
+  color: var(--ink);
+  border-color: var(--line);
+}
+html[data-resolved="dark"] .panel {
+  background: #18241f;
+}
+html[data-resolved="dark"] .btn-ghost:hover:not(:disabled) {
+  background: rgb(255 255 255 / 6%);
+  color: var(--ink);
+}
+html[data-resolved="dark"] .dashboard-shell {
+  --ink: #f4f0ff;
+  --ink-muted: #b3aacb;
+  --paper: #100e18;
+  --paper-2: #171322;
+  --surface: #221e30;
+  --line: #342d48;
+  --line-strong: #514868;
+  --accent: #c4a6ff;
+  --accent-2: #d7c4ff;
+  --accent-soft: #2c2444;
+  --danger: #ff9aa8;
+  --danger-soft: #3d1c24;
+  --success: #4dcf9e;
+  --success-soft: #123528;
+  --shadow-soft: 0 12px 32px rgb(0 0 0 / 35%);
+  background: #100e18;
+  color: var(--ink);
+}
+html[data-resolved="dark"] .dashboard-sidebar,
+html[data-resolved="dark"] .dashboard-sidebar.is-open,
+html[data-resolved="dark"] .dashboard-topbar {
+  background: #161222f2;
+}
+html[data-resolved="dark"] .dashboard-nav {
+  color: #c9c0de;
+}
+html[data-resolved="dark"] .dashboard-nav.active {
+  background: #2a2144;
+  color: #e2d4ff;
+}
+html[data-resolved="dark"] .dashboard-nav:hover,
+html[data-resolved="dark"] .dashboard-content .list-row:hover {
+  background: #241e36;
+}
+html[data-resolved="dark"] .sidebar-promo,
+html[data-resolved="dark"] .import-link {
+  background: #1d1830;
+  border-color: #3d3260;
+}
+html[data-resolved="dark"] .dashboard-search,
+html[data-resolved="dark"] .record-search {
+  background: #221c32;
+  color: var(--ink-muted);
+}
+html[data-resolved="dark"] .dashboard-search input,
+html[data-resolved="dark"] .record-search input,
+html[data-resolved="dark"] .dashboard-shell .field,
+html[data-resolved="dark"] .dashboard-shell select,
+html[data-resolved="dark"] .dashboard-shell textarea {
+  color: var(--ink);
+  background-color: transparent;
+}
+html[data-resolved="dark"] .dashboard-shell .field,
+html[data-resolved="dark"] .dashboard-shell select,
+html[data-resolved="dark"] .dashboard-shell textarea {
+  background-color: #1b1728;
+}
+html[data-resolved="dark"] .search-results,
+html[data-resolved="dark"] .workspace-options,
+html[data-resolved="dark"] .profile-options,
+html[data-resolved="dark"] .settings-tabs,
+html[data-resolved="dark"] .dashboard-content .panel {
+  background: #221e30;
+  border-color: var(--line);
+  color: var(--ink);
+}
+html[data-resolved="dark"] .workspace-options a:hover,
+html[data-resolved="dark"] .workspace-options a[aria-current],
+html[data-resolved="dark"] .record-item.selected,
+html[data-resolved="dark"] .data-table tr.selected td {
+  background: #2c2444;
+  color: #e4d8ff;
+  border-color: #5b4b86;
+}
+html[data-resolved="dark"] .data-table th {
+  color: #b3aacb;
+  background: #1b1728;
+}
+html[data-resolved="dark"] .form-label,
+html[data-resolved="dark"] .chat-message small {
+  color: var(--ink-muted);
+}
+html[data-resolved="dark"] .chat-messages {
+  background: #171322;
+}
+html[data-resolved="dark"] .chat-message {
+  background: #261f38;
+  border-color: #3a3154;
+  color: var(--ink);
+}
+html[data-resolved="dark"] .chat-message.outbound {
+  background: #34265a;
+  border-color: #34265a;
+}
+html[data-resolved="dark"] .chat-actions button {
+  background: #2a2144;
+}
+html[data-resolved="dark"] .switch-input {
+  background: #3a3450;
+}
+html[data-resolved="dark"] .switch-input:before {
+  background: #f4f0ff;
+}
+html[data-resolved="dark"] .integration-api-key,
+html[data-resolved="dark"] .secret-reveal {
+  background: rgb(255 255 255 / 4%);
+}
+html[data-resolved="dark"] .dashboard-shell ::placeholder {
+  color: #8d84a8;
+}
+
 @media (max-width: 1024px), (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="submit"]):not([type="button"]),
   textarea,

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Script from "next/script";
+import { themeBootScript } from "@/lib/theme/theme";
 import "./globals.css";
 
 const syne = localFont({
@@ -27,10 +29,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="sq">
+    <html lang="sq" suppressHydrationWarning>
       <body
         className={`${syne.variable} ${figtree.variable} min-h-screen antialiased`}
       >
+        <Script id="theme-boot" strategy="beforeInteractive">
+          {themeBootScript}
+        </Script>
         {children}
       </body>
     </html>

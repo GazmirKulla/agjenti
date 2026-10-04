@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { ThemeSwitch } from "@/components/theme/theme-switch";
 import "./auth.css";
 function LoginForm() {
   const params = useSearchParams();
@@ -124,9 +125,12 @@ function LoginForm() {
         <small>Agjenti.app · Për bizneset që shesin në Instagram</small>
       </aside>
       <section className="auth-content">
-        <Link href="/" className="auth-back">
-          ← Kthehu te kryefaqja
-        </Link>
+        <div className="auth-top">
+          <Link href="/" className="auth-back">
+            ← Kthehu te kryefaqja
+          </Link>
+          <ThemeSwitch />
+        </div>
         <div className="auth-card">
           <span className="auth-icon">✦</span>
           <h1>

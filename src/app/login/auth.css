@@ -71,6 +71,23 @@
   display: flex;
   flex-direction: column;
 }
+.auth-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.auth-page .theme-switch {
+  border-color: #e1ddea;
+  background: #fff;
+}
+.auth-page .theme-switch button {
+  color: #777088;
+}
+.auth-page .theme-switch button.is-active {
+  background: #efe9ff;
+  color: #6839ff;
+}
 .auth-back {
   font-size: 13px;
   color: #777088;
@@ -239,6 +256,59 @@
 .auth-page a:focus-visible {
   outline: 3px solid #bda7ff;
   outline-offset: 4px;
+}
+html[data-resolved="dark"] .auth-page {
+  background: #12101a;
+  color: #f4f0ff;
+}
+html[data-resolved="dark"] .auth-story {
+  background:
+    radial-gradient(ellipse at 10% 80%, #3a2770, transparent 65%), #1a1528;
+}
+html[data-resolved="dark"] .auth-story p:not(.auth-eyebrow),
+html[data-resolved="dark"] .auth-story small,
+html[data-resolved="dark"] .auth-back,
+html[data-resolved="dark"] .auth-card > p,
+html[data-resolved="dark"] .auth-divider {
+  color: #b7aed0;
+}
+html[data-resolved="dark"] .auth-preview {
+  background: #241e36;
+  border-color: #3a3154;
+  box-shadow: none;
+}
+html[data-resolved="dark"] .auth-preview p {
+  background: #2c2544;
+  color: #f4f0ff;
+}
+html[data-resolved="dark"] .auth-icon {
+  background: #2a2144;
+  color: #d4c2ff;
+}
+html[data-resolved="dark"] .auth-google,
+html[data-resolved="dark"] .auth-card input {
+  background: #1b1728;
+  border-color: #3a3154;
+  color: #f4f0ff;
+}
+html[data-resolved="dark"] .auth-google:hover {
+  background: #241e36;
+  border-color: #514868;
+}
+html[data-resolved="dark"] .auth-divider::before,
+html[data-resolved="dark"] .auth-divider::after {
+  background: #3a3154;
+}
+html[data-resolved="dark"] .auth-page .theme-switch {
+  border-color: #3a3154;
+  background: #1b1728;
+}
+html[data-resolved="dark"] .auth-page .theme-switch button {
+  color: #c4bdd6;
+}
+html[data-resolved="dark"] .auth-page .theme-switch button.is-active {
+  background: #2a2144;
+  color: #e2d4ff;
 }
 @media (max-width: 760px) {
   .auth-page {

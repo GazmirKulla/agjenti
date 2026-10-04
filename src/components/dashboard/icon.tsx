@@ -21,6 +21,9 @@ const paths: Record<string, string> = {
   search: "M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0",
   arrow: "M5 12h14 M14 7l5 5-5 5",
   spark: "m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3z",
+  sun: "M12 4v2M12 18v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4M4 12H2M22 12h-2M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8",
+  moon: "M21 14.5A8.5 8.5 0 1 1 9.5 3 6.5 6.5 0 0 0 21 14.5z",
+  display: "M4 5h16v10H4zM8 19h8M12 15v4",
   calendar: "M5 5h14v16H5z M8 2v6 M16 2v6 M5 11h14",
 };
 export function Icon({

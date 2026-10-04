@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "@/lib/auth/actions";
+import { ThemeSwitch } from "@/components/theme/theme-switch";
 import { Icon } from "./icon";
 const businessNav = [
   ["", "Dashboard", "dashboard"],
@@ -174,7 +175,9 @@ export function DashboardShell({
               </div>
             )}
           </div>
-          <details className="profile-menu">
+          <div className="topbar-actions">
+            <ThemeSwitch />
+            <details className="profile-menu">
             <summary className="topbar-profile">
               <span className="profile-avatar">
                 {name.slice(0, 2).toUpperCase()}
@@ -196,6 +199,7 @@ export function DashboardShell({
               </form>
             </div>
           </details>
+          </div>
         </header>
         <main className="dashboard-content">{children}</main>
       </div>
