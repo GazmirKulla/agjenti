@@ -1703,6 +1703,40 @@
   font-weight: 600;
   white-space: nowrap;
 }
+.import-link {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e4dcff;
+  border-radius: 12px;
+  background: #faf8ff;
+}
+.import-link legend {
+  padding: 0 6px;
+  font-size: 13px;
+}
+.import-link .muted-copy {
+  margin-top: 0;
+  font-size: 13px;
+}
+.import-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.import-link-row .field {
+  flex: 1 1 12rem;
+  width: auto;
+  min-width: 0;
+}
+.import-link .btn {
+  padding: 0.7rem 1rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
 .workspace-picker {
   position: relative;
   margin-bottom: 18px;

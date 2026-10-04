@@ -5,9 +5,11 @@ import {
   updateProduct,
 } from "@/lib/products/actions";
 import { generateProductDescription } from "@/lib/products/ai-actions";
+import { previewProductFromUrl } from "@/lib/products/import-actions";
 import { applyTypeSuggestion } from "@/lib/product-types/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { AiSuggestButton } from "@/components/dashboard/ai-suggest-button";
+import { ImportProductLink } from "@/components/dashboard/import-product-link";
 import Link from "next/link";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, StatusBadge, money } from "@/components/dashboard/ui";
@@ -248,7 +250,7 @@ export default async function ProductsPage({
       <PageHeading
         eyebrow="Produkte"
         title={`Produktet e ${access.business.name}`}
-        description="Katalogu që sheh Agjenti AI: emër, përshkrim, çmim, lloj dhe workflow i porosisë."
+        description="Katalogu që sheh Agjenti AI. Shto një produkt dorazi, ose skano linkun e faqes së tij dhe kontrolloje para se ta ruash."
       >
         <Link href={`/b/${slug}/workflows`} className="btn btn-ghost">
           Hap workflow-t →
@@ -272,13 +274,14 @@ export default async function ProductsPage({
         placeholder="Kërko emër, SKU…"
         columns={["Emri", "Çmimi", "Lloji", "Workflow", "Status"]}
         emptyTitle="Ende nuk ka produkte"
-        emptyDescription="Shto produktin e parë me emër, çmim dhe lloj."
+        emptyDescription="Shto produktin e parë, ose skano linkun e faqes së tij."
         createLabel="Shto produkt"
         createForm={
           <ActionForm
             action={createProduct.bind(null, slug)}
             className="grid gap-5"
           >
+            <ImportProductLink action={previewProductFromUrl.bind(null, slug)} />
             <ProductFields slug={slug} types={types} workflows={workflows} />
             <button className="btn btn-primary" type="submit">
               Ruaj produktin
