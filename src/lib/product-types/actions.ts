@@ -223,36 +223,49 @@ export async function applyTypeSuggestion(slug: string, form: FormData) {
   if (!templateSteps?.length)
     return { error: "Ky lloj nuk ka template workflow për t’u kopjuar." };
 
-  const { data: wf } = await db
+  const workflowName = `Workflow – ${type.name}`;
+  const { data: existing } = await db
     .from("workflows")
-    .insert({
-      business_id: access.business.id,
-      name: `Workflow – ${type.name}`,
-    })
     .select("id")
-    .single()
-    .throwOnError();
-  if (!wf) return { error: "Workflow-i nuk u krijua." };
+    .eq("business_id", access.business.id)
+    .eq("name", workflowName)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
-  await db
-    .from("workflow_steps")
-    .insert(
-      templateSteps.map((s) => ({
-        workflow_id: wf.id,
-        key: s.key,
-        position: s.position,
-        kind: s.kind,
-        required: true,
-        config: s.config ?? {},
-      })),
-    )
-    .throwOnError();
+  let workflowId = existing?.id ?? null;
+  if (!workflowId) {
+    const { data: wf } = await db
+      .from("workflows")
+      .insert({
+        business_id: access.business.id,
+        name: workflowName,
+      })
+      .select("id")
+      .single()
+      .throwOnError();
+    if (!wf) return { error: "Workflow-i nuk u krijua." };
+    workflowId = wf.id;
+    await db
+      .from("workflow_steps")
+      .insert(
+        templateSteps.map((s) => ({
+          workflow_id: workflowId!,
+          key: s.key,
+          position: s.position,
+          kind: s.kind,
+          required: true,
+          config: s.config ?? {},
+        })),
+      )
+      .throwOnError();
+  }
 
   await db
     .from("products")
     .update({
       product_type_id: typeId,
-      workflow_id: wf.id,
+      workflow_id: workflowId,
       updated_at: new Date().toISOString(),
     })
     .eq("id", productId)
@@ -261,6 +274,8 @@ export async function applyTypeSuggestion(slug: string, form: FormData) {
 
   revalidatePath(`/b/${slug}`, "layout");
   return {
-    success: `Sugjerimi u aplikua: workflow “${type.name}” u lidh me produktin.`,
+    success: existing
+      ? `Sugjerimi u aplikua: u ripërdor workflow “${type.name}”.`
+      : `Sugjerimi u aplikua: workflow “${type.name}” u lidh me produktin.`,
   };
 }

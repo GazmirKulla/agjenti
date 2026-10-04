@@ -258,7 +258,6 @@ export default async function SettingsPage({
                 defaultValue={integration?.catalog_url ?? ""}
                 placeholder="https://…/catalog"
                 className="field"
-                required
               />
             </label>
             <label className="form-label">
