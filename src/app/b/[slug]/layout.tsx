@@ -28,14 +28,25 @@ export default async function BusinessLayout({
       .eq("business_id", business.id)
       .maybeSingle(),
   ]);
-  const savedProfile = onboarding.data?.answers?.businessProfile as
-    BusinessProfileAnswers | undefined;
-  const profile =
-    savedProfile &&
-    typeof savedProfile === "object" &&
-    savedProfile.recommendedConfiguration
-      ? savedProfile
+  const storedAnswers = onboarding.data?.answers;
+  const storedProfile =
+    storedAnswers &&
+    typeof storedAnswers === "object" &&
+    !Array.isArray(storedAnswers)
+      ? (storedAnswers as Record<string, unknown>).businessProfile
       : null;
+  const profile = (() => {
+    if (!storedProfile || typeof storedProfile !== "object") return null;
+    const config = (storedProfile as BusinessProfileAnswers)
+      .recommendedConfiguration;
+    if (
+      !config ||
+      typeof config.workflow !== "string" ||
+      !Array.isArray(config.checklist)
+    )
+      return null;
+    return storedProfile as BusinessProfileAnswers;
+  })();
   return (
     <DashboardShell
       name={business.name}
