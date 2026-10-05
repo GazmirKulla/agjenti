@@ -15,10 +15,7 @@ import {
   type AnswerKey,
   type Answers,
 } from "@/lib/onboarding/model";
-import {
-  buildBusinessProfile,
-  normalizeConditionalAnswers,
-} from "@/lib/onboarding/rules";
+import { normalizeConditionalAnswers } from "@/lib/onboarding/rules";
 export function OnboardingWizard({
   initial,
   initialStep,

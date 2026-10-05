@@ -324,7 +324,6 @@ export function allowedCapabilities(
   selectedUseCases: readonly string[],
 ) {
   const rules = rulesFor(businessType);
-  const selected = new Set(selectedUseCases);
   const allowed = new Set<string>(rules.allowedCapabilities);
   const hasProducts = offerings.some((item) => item !== "services");
   const useCaseCapabilities: Record<string, readonly string[]> = {
