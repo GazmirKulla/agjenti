@@ -1,15 +1,15 @@
 import {
   createProduct,
   deleteProduct,
+  importProductBatch,
   linkExternalProduct,
   updateProduct,
 } from "@/lib/products/actions";
-import { generateProductDescription } from "@/lib/products/ai-actions";
-import { previewProductFromUrl } from "@/lib/products/import-actions";
+import { previewProductFromUrl, scanInstagramProducts } from "@/lib/products/import-actions";
 import { applyTypeSuggestion } from "@/lib/product-types/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
-import { AiSuggestButton } from "@/components/dashboard/ai-suggest-button";
-import { ImportProductLink } from "@/components/dashboard/import-product-link";
+import { ProductFields } from "@/components/dashboard/product-fields";
+import { ProductIntake } from "@/components/dashboard/product-intake";
 import Link from "next/link";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, StatusBadge, money } from "@/components/dashboard/ui";
@@ -43,153 +43,6 @@ function productStatus(p: ProductRow) {
   return "draft";
 }
 
-function ProductFields({
-  slug,
-  product,
-  types,
-  workflows,
-  requireType = false,
-}: {
-  slug: string;
-  product?: ProductRow;
-  types: { id: string; name: string }[];
-  workflows: { id: string; name: string }[];
-  requireType?: boolean;
-}) {
-  return (
-    <>
-      <fieldset className="grid gap-3">
-        <legend className="font-semibold">Identiteti</legend>
-        <label className="form-label">
-          Emri i produktit
-          <input
-            name="name"
-            className="field"
-            required
-            minLength={2}
-            defaultValue={product?.name ?? ""}
-          />
-        </label>
-        <label className="form-label">
-          SKU / kodi
-          <input
-            name="sku"
-            className="field"
-            placeholder="opsional"
-            defaultValue={product?.sku ?? ""}
-          />
-        </label>
-        <div className="grid gap-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="form-label mb-0">Përshkrimi</span>
-            <AiSuggestButton
-              action={generateProductDescription.bind(null, slug)}
-              targetName="description"
-              collect={["name", "product_type_id"]}
-              label="Gjenero me AI"
-            />
-          </div>
-          <textarea
-            name="description"
-            className="field"
-            rows={3}
-            placeholder="Shkruaj ose gjenero me AI nga emri (p.sh. barriera mbyllëse për parking)."
-            defaultValue={product?.description ?? ""}
-          />
-        </div>
-        <label className="form-label">
-          URL e fotos
-          <input
-            name="image_url"
-            type="url"
-            className="field"
-            placeholder="https://"
-            defaultValue={product?.image_url ?? ""}
-          />
-        </label>
-      </fieldset>
-
-      <fieldset className="grid gap-3">
-        <legend className="font-semibold">Çmimi</legend>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="form-label">
-            Shuma
-            <input
-              name="price"
-              type="number"
-              min="0"
-              step="0.01"
-              className="field"
-              defaultValue={product?.price_amount ?? ""}
-              required={Boolean(product)}
-            />
-          </label>
-          <label className="form-label">
-            Monedha
-            <input
-              name="currency"
-              className="field"
-              maxLength={3}
-              defaultValue={product?.currency ?? "ALL"}
-              required
-            />
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset className="grid gap-3">
-        <legend className="font-semibold">Procesi i porosisë</legend>
-        <label className="form-label">
-          Lloji i produktit
-          <select
-            name="product_type_id"
-            className="field"
-            defaultValue={product?.product_type_id ?? ""}
-            required={requireType}
-          >
-            <option value="">
-              {requireType ? "Zgjidh llojin" : "Pa lloj"}
-            </option>
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="form-label">
-          Workflow i biznesit
-          <select
-            name="workflow_id"
-            className="field"
-            defaultValue={product?.workflow_id ?? ""}
-          >
-            <option value="">Pa workflow</option>
-            {workflows.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </fieldset>
-
-      <label className="toggle-label">
-        <span>
-          Aktiv në katalog
-          <small>Produktet joaktive nuk i sheh Agjenti AI.</small>
-        </span>
-        <input
-          className="switch-input"
-          type="checkbox"
-          name="is_active"
-          defaultChecked={product?.is_active ?? true}
-        />
-      </label>
-    </>
-  );
-}
-
 export default async function ProductsPage({
   params,
 }: {
@@ -202,7 +55,7 @@ export default async function ProductsPage({
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
   const linked = await isExternalCatalogLinked(access.business.id);
-  const [productResult, typeResult, workflowResult, remoteResult] =
+  const [productResult, typeResult, workflowResult, remoteResult, igResult] =
     await Promise.all([
       db
         .from("products")
@@ -236,6 +89,12 @@ export default async function ProductsPage({
             products: [] as ExternalCatalogProduct[],
             error: null as string | null,
           }),
+      db
+        .from("instagram_connections")
+        .select("username,status")
+        .eq("business_id", access.business.id)
+        .neq("status", "disconnected")
+        .maybeSingle(),
     ]);
   if (productResult.error || typeResult.error || workflowResult.error)
     throw new Error("Nuk u ngarkuan të dhënat.");
@@ -244,13 +103,15 @@ export default async function ProductsPage({
   const workflows = workflowResult.data ?? [];
   const remote = remoteResult.products;
   const catalogError = remoteResult.error;
+  const instagramStatus = igResult.error ? null : (igResult.data?.status ?? null);
+  const instagramUsername = igResult.error ? null : (igResult.data?.username ?? null);
 
   return (
     <>
       <PageHeading
         eyebrow="Produkte"
         title={`Produktet e ${access.business.name}`}
-        description="Katalogu që sheh Agjenti AI. Shto një produkt dorazi, ose skano linkun e faqes së tij dhe kontrolloje para se ta ruash."
+        description="Zgjidh si i shton produktet: dorazi, nga linku i faqes, nga një skedar CSV, ose nga postimet e Instagram. Asgjë nuk hyn në katalog para se ta ruash."
       >
         <Link href={`/b/${slug}/workflows`} className="btn btn-ghost">
           Hap workflow-t →
@@ -269,25 +130,23 @@ export default async function ProductsPage({
           </p>
         </div>
       )}
+      <ProductIntake
+        slug={slug}
+        types={types}
+        workflows={workflows}
+        instagramStatus={instagramStatus}
+        instagramUsername={instagramUsername}
+        createAction={createProduct.bind(null, slug)}
+        previewAction={previewProductFromUrl.bind(null, slug)}
+        scanAction={scanInstagramProducts.bind(null, slug)}
+        importAction={importProductBatch.bind(null, slug)}
+      />
       <RecordBrowser
-        listTitle="Produktet"
+        listTitle="Katalogu"
         placeholder="Kërko emër, SKU…"
         columns={["Emri", "Çmimi", "Lloji", "Workflow", "Status"]}
         emptyTitle="Ende nuk ka produkte"
-        emptyDescription="Shto produktin e parë, ose skano linkun e faqes së tij."
-        createLabel="Shto produkt"
-        createForm={
-          <ActionForm
-            action={createProduct.bind(null, slug)}
-            className="grid gap-5"
-          >
-            <ImportProductLink action={previewProductFromUrl.bind(null, slug)} />
-            <ProductFields slug={slug} types={types} workflows={workflows} />
-            <button className="btn btn-primary" type="submit">
-              Ruaj produktin
-            </button>
-          </ActionForm>
-        }
+        emptyDescription="Shto produktin e parë me një nga mënyrat më sipër."
         records={products.map((p) => {
           const type = types.find((t) => t.id === p.product_type_id);
           const workflow = workflows.find((w) => w.id === p.workflow_id);

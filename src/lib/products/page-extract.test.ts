@@ -5,6 +5,7 @@ import {
   extractProductFromHtml,
   isAppShell,
   parseAmount,
+  productFromCaption,
   productSlugFromUrl,
 } from "./page-extract";
 
@@ -160,6 +161,33 @@ describe("discoverPublicCatalog", () => {
       se.from("products").eq("slug", id)
     `;
     expect(discoverPublicCatalog(source)).toBeNull();
+  });
+});
+
+describe("productFromCaption", () => {
+  it("reads the name, the later price, and the remaining text", () => {
+    expect(productFromCaption("#oferta\nBluza e re\nishte 2.000 Lekë\ntani 1.490 Lekë\nPambuk", null)).toEqual({
+      name: "Bluza e re",
+      description: "Pambuk",
+      price: 1490,
+      currency: "ALL",
+      imageUrl: null,
+      sku: null,
+    });
+  });
+
+  it("ignores captions without a currency price", () => {
+    expect(productFromCaption("Bluza e bukur pa çmim", null)).toBeNull();
+    expect(productFromCaption("790 Lekë", "https://cdn.example/a.jpg")).toBeNull();
+  });
+
+  it("keeps only a real image address", () => {
+    expect(productFromCaption("Karrige\n12.50 EUR", "javascript:alert(1)")).toMatchObject({
+      name: "Karrige",
+      price: 12.5,
+      currency: "EUR",
+      imageUrl: null,
+    });
   });
 });
 

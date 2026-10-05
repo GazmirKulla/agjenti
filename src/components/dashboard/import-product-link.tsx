@@ -19,8 +19,10 @@ type PreviewResult = {
 
 export function ImportProductLink({
   action,
+  quiet = false,
 }: {
   action: (data: FormData) => Promise<PreviewResult>;
+  quiet?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<PreviewResult | null>(null);
@@ -58,12 +60,14 @@ export function ImportProductLink({
   }
 
   return (
-    <fieldset className="import-link">
-      <legend className="font-semibold">Nga linku i produktit</legend>
-      <p className="muted-copy">
-        Ngjit linkun e faqes së produktit, nga çdo dyqan. Lexohen emri, çmimi dhe
-        përshkrimi. I sheh këtu dhe i ruan vetëm kur klikon Ruaj produktin.
-      </p>
+    <fieldset className={quiet ? "import-link is-quiet" : "import-link"}>
+      {quiet ? null : <legend className="font-semibold">Nga linku i produktit</legend>}
+      {quiet ? null : (
+        <p className="muted-copy">
+          Ngjit linkun e faqes së produktit, nga çdo dyqan. Lexohen emri, çmimi dhe
+          përshkrimi. I sheh këtu dhe i ruan vetëm kur klikon Ruaj produktin.
+        </p>
+      )}
       <div className="import-link-row">
         <input
           name="source_url"

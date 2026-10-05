@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { batchSummary, optionalUuid, parseProductBatch } from "./batch";
 import { parseProductForm } from "./parse";
 
 async function assertTypeAndWorkflow(
@@ -188,4 +189,84 @@ export async function linkExternalProduct(slug: string, form: FormData) {
   }
   revalidatePath(`/b/${slug}`, "layout");
   return { success: "Produkti u lidh nga katalogu i jashtëm." };
+}
+
+export async function importProductBatch(
+  slug: string,
+  payload: {
+    items?: unknown;
+    productTypeId?: string | null;
+    workflowId?: string | null;
+  },
+) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
+  const access = await requireBusinessAccess(user.id, slug);
+  if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+
+  const parsed = parseProductBatch(payload?.items);
+  if ("error" in parsed) return parsed;
+  const productTypeId = optionalUuid(payload?.productTypeId);
+  if (typeof productTypeId !== "string" && productTypeId !== null) return productTypeId;
+  const workflowId = optionalUuid(payload?.workflowId);
+  if (typeof workflowId !== "string" && workflowId !== null) return workflowId;
+
+  const check = await assertTypeAndWorkflow(access.business.id, productTypeId, workflowId);
+  if ("error" in check) return check;
+
+  const db = createServiceSupabase();
+  const externalIds = parsed.items.flatMap((item) => (item.externalId ? [item.externalId] : []));
+  const existing = new Map<string, string>();
+  if (externalIds.length) {
+    const { data, error } = await db
+      .from("products")
+      .select("id, external_id")
+      .eq("business_id", access.business.id)
+      .in("external_id", externalIds);
+    if (error) return { error: "Produktet ekzistuese nuk u verifikuan. Provo përsëri." };
+    for (const row of (data ?? []) as { id: string; external_id: string | null }[]) {
+      if (row.external_id && row.id) existing.set(row.external_id, row.id);
+    }
+  }
+
+  let created = 0;
+  let updated = 0;
+  let skipped = parsed.skipped;
+  let reason = "";
+  const now = new Date().toISOString();
+
+  for (const item of parsed.items) {
+    const fields = {
+      name: item.name,
+      description: item.description,
+      image_url: item.imageUrl,
+      price_amount: item.price,
+      currency: item.currency,
+      updated_at: now,
+      ...(productTypeId ? { product_type_id: productTypeId } : {}),
+      ...(workflowId ? { workflow_id: workflowId } : {}),
+      ...(item.sku ? { sku: item.sku } : {}),
+    };
+    const currentId = item.externalId ? existing.get(item.externalId) : undefined;
+    const result = currentId
+      ? await db.from("products").update(fields).eq("id", currentId).eq("business_id", access.business.id)
+      : await db.from("products").insert({
+          ...fields,
+          business_id: access.business.id,
+          is_active: true,
+          source: "manual",
+          ...(item.externalId ? { external_id: item.externalId } : {}),
+        });
+    if (result.error) {
+      skipped += 1;
+      if (!reason) {
+        reason = result.error.code === "23505" ? "Një SKU është i zënë." : "Një produkt nuk u ruajt.";
+      }
+    } else if (currentId) updated += 1;
+    else created += 1;
+  }
+
+  if (!created && !updated) return { error: reason || "Asnjë produkt nuk u ruajt." };
+  revalidatePath(`/b/${slug}`, "layout");
+  return { success: batchSummary(created, updated, skipped) };
 }

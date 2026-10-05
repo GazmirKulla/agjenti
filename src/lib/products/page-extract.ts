@@ -523,6 +523,58 @@ function findPrices(text: string): MoneyHit[] {
   return hits;
 }
 
+export function productFromCaption(
+  caption: string | null | undefined,
+  imageUrl?: string | null,
+): ProductDraft | null {
+  const text = stripControls(String(caption ?? ""))
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .slice(0, 8000);
+  if (text.length < 2) return null;
+  const prices = findPrices(text);
+  const price = prices.at(-1);
+  if (!price) return null;
+
+  const lines = text
+    .split("\n")
+    .map((line) => line.replace(/#[\p{L}\p{N}_]+/gu, " ").replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 2 && !/^https?:\/\//i.test(line));
+  const nameLine = lines.find((line) => !isPriceLine(line));
+  const name = tidyCaptionName(nameLine ? withoutPrices(nameLine) : "");
+  if (!name) return null;
+  const description = cleanCopy(
+    lines
+      .filter((line) => line !== nameLine && !isPriceLine(line))
+      .join("\n"),
+  );
+
+  return {
+    name,
+    description,
+    price: price.amount,
+    currency: price.currency,
+    imageUrl: imageUrl ? absoluteHttp(imageUrl) : null,
+    sku: null,
+  };
+}
+
+function withoutPrices(line: string): string {
+  return line.replace(new RegExp(PRICE_RE.source, "giu"), " ").replace(/\s+/g, " ").trim();
+}
+
+function isPriceLine(line: string): boolean {
+  const without = line
+    .replace(/(?:€|\$|£|\b(?:EUR|USD|ALL|GBP|Lekë|Leke|Lek)\b)/giu, " ")
+    .replace(/\b(?:çmimi|cmimi|price|çmim|cmim|vetëm|vetem|tani|now|ishte)\b[:\s]*/giu, " ");
+  const letters = without.replace(/[\d\s.,:;|/+\-–—]/g, "");
+  return /\d/.test(line) && letters.length < 2;
+}
+
+function tidyCaptionName(value: string): string {
+  return cleanName(value.replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/gu, ""));
+}
+
 function solePrice(text: string): MoneyHit | null {
   const hits = findPrices(text);
   if (!hits.length) return null;
