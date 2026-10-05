@@ -83,7 +83,7 @@ export async function fetchInstagramMedia(
 	while (next && pages < MAX_PAGES && posts.length < MAX_POSTS) {
 		const target = safeGraphUrl(next);
 		if (!target) break;
-		const result = await readJson(fetchImpl, target);
+		const result = await fetchGraph(fetchImpl, target);
 		if ("error" in result) {
 			if (pages === 0 && posts.length === 0 && result.retry && fieldIndex === 0) {
 				fieldIndex = 1;
@@ -93,9 +93,10 @@ export async function fetchInstagramMedia(
 			if (!posts.length) return { error: result.error };
 			break;
 		}
+		const page = postsFromMediaPage(result.body);
 		pages += 1;
-		posts.push(...result.posts);
-		next = result.next;
+		posts.push(...page.posts);
+		next = page.next;
 	}
 
 	const truncated = posts.length > MAX_POSTS || (posts.length >= MAX_POSTS && Boolean(next));
@@ -111,10 +112,12 @@ function mediaUrl(fields: string, token: string): string {
 	return `https://graph.instagram.com/${graphVersion()}/me/media?${params}`;
 }
 
+const GRAPH_HOSTS = new Set(["graph.instagram.com", "graph.facebook.com"]);
+
 function safeGraphUrl(value: string): URL | null {
 	try {
 		const url = new URL(value);
-		if (url.protocol !== "https:" || url.hostname !== "graph.instagram.com") return null;
+		if (url.protocol !== "https:" || !GRAPH_HOSTS.has(url.hostname)) return null;
 		if (url.username || url.password) return null;
 		return url;
 	} catch {
@@ -122,10 +125,10 @@ function safeGraphUrl(value: string): URL | null {
 	}
 }
 
-async function readJson(
+async function fetchGraph(
 	fetchImpl: typeof fetch,
 	url: URL,
-): Promise<{ posts: InstagramPost[]; next: string | null } | { error: string; retry?: boolean }> {
+): Promise<{ body: unknown } | { error: string; code: number | null; retry: boolean }> {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), 6000);
 	try {
@@ -137,11 +140,11 @@ async function readJson(
 		const body: unknown = await response.json().catch(() => null);
 		if (!response.ok) {
 			const code = errorCode(body);
-			return { error: mediaError(code), retry: code === 100 };
+			return { error: mediaError(code), code, retry: code === 100 };
 		}
-		return postsFromMediaPage(body);
+		return { body };
 	} catch {
-		return { error: "Instagram nuk u përgjigj. Provo përsëri." };
+		return { error: "Instagram nuk u përgjigj. Provo përsëri.", code: null, retry: false };
 	} finally {
 		clearTimeout(timer);
 	}
@@ -167,6 +170,156 @@ function pickImage(row: Record<string, unknown>, mediaType: string): string | nu
 	if (mediaType === "VIDEO") return thumb || null;
 	if (media && !/\.(mp4|mov|m4v)(\?|$)/i.test(media)) return media;
 	return thumb || null;
+}
+
+const DISCOVERY_FIELDS = [
+	"id,caption,media_type,media_url,permalink,thumbnail_url,timestamp",
+	"id,caption,media_type,media_url,permalink,timestamp",
+];
+const DISCOVERY_HOSTS = ["graph.instagram.com", "graph.facebook.com"] as const;
+
+export function parseInstagramUsername(raw: string): string | null {
+	const text = raw.trim();
+	if (!text) return null;
+	let candidate = text.replace(/^@+/, "");
+	if (/^https?:\/\//i.test(candidate)) {
+		try {
+			const url = new URL(candidate);
+			const host = url.hostname.replace(/^www\./, "").toLowerCase();
+			if (host !== "instagram.com") return null;
+			const parts = url.pathname.split("/").filter(Boolean);
+			if (!parts.length) return null;
+			if (["p", "reel", "reels", "stories", "explore", "tv"].includes(parts[0].toLowerCase())) return null;
+			candidate = decodeURIComponent(parts[0]);
+		} catch {
+			return null;
+		}
+	}
+	candidate = candidate.replace(/\/+$/, "");
+	if (!/^[A-Za-z0-9._]{1,30}$/.test(candidate)) return null;
+	if (candidate.startsWith(".") || candidate.endsWith(".") || candidate.includes("..")) return null;
+	return candidate;
+}
+
+export function postsFromDiscovery(payload: unknown): { posts: InstagramPost[]; next: string | null; after: string | null } {
+	if (!payload || typeof payload !== "object") return { posts: [], next: null, after: null };
+	const discovery = (payload as { business_discovery?: unknown }).business_discovery;
+	if (!discovery || typeof discovery !== "object") return { posts: [], next: null, after: null };
+	const media = (discovery as { media?: unknown }).media;
+	const page = postsFromMediaPage(media);
+	const afterRaw =
+		media && typeof media === "object"
+			? (media as { paging?: { cursors?: { after?: unknown } } }).paging?.cursors?.after
+			: null;
+	const after = typeof afterRaw === "string" && safeCursor(afterRaw) ? afterRaw : null;
+	return { posts: page.posts, next: page.next, after };
+}
+
+export async function fetchPublicInstagramMedia(
+	token: string,
+	igUserId: string,
+	username: string,
+	fetchImpl: typeof fetch = fetch,
+): Promise<{ posts: InstagramPost[]; truncated: boolean } | { error: string }> {
+	const clean = token.trim();
+	const id = igUserId.trim();
+	const handle = parseInstagramUsername(username);
+	if (!clean) return { error: "Lidhja e Instagram nuk lexohet. Lidhe përsëri llogarinë." };
+	if (!/^[0-9]{5,40}$/.test(id)) {
+		return { error: "Lidhja e Instagram nuk është e plotë. Lidhe përsëri llogarinë." };
+	}
+	if (!handle) return { error: "Shkruaj një llogari publike, p.sh. @dyqani ose linkun e profilit." };
+
+	let lastError = "Postimet e kësaj llogarie nuk u lexuan. Provo përsëri.";
+	for (const host of DISCOVERY_HOSTS) {
+		const result = await readDiscovery(fetchImpl, clean, id, handle, host);
+		if (!("error" in result)) return result;
+		lastError = result.error;
+		if (!result.tryOtherHost) return { error: result.error };
+	}
+	return { error: lastError };
+}
+
+async function readDiscovery(
+	fetchImpl: typeof fetch,
+	token: string,
+	igUserId: string,
+	username: string,
+	host: (typeof DISCOVERY_HOSTS)[number],
+): Promise<{ posts: InstagramPost[]; truncated: boolean } | { error: string; tryOtherHost: boolean }> {
+	const posts: InstagramPost[] = [];
+	let fieldIndex = 0;
+	let nextUrl: string | null = discoveryUrl(host, igUserId, username, DISCOVERY_FIELDS[0], token, null);
+	let pages = 0;
+
+	while (nextUrl && pages < MAX_PAGES && posts.length < MAX_POSTS) {
+		const target = safeGraphUrl(nextUrl);
+		if (!target || target.hostname !== host) break;
+		const result = await fetchGraph(fetchImpl, target);
+		if ("error" in result) {
+			if (pages === 0 && posts.length === 0 && result.retry && fieldIndex === 0) {
+				fieldIndex = 1;
+				nextUrl = discoveryUrl(host, igUserId, username, DISCOVERY_FIELDS[1], token, null);
+				continue;
+			}
+			if (!posts.length) {
+				return {
+					error: discoveryError(result.code),
+					tryOtherHost: result.code === 10 || result.code === 100 || result.code === 200,
+				};
+			}
+			break;
+		}
+		const parsed = postsFromDiscovery(result.body);
+		if (pages === 0 && parsed.posts.length === 0 && !parsed.after && !parsed.next) {
+			const missing = !result.body || typeof result.body !== "object" || !("business_discovery" in result.body);
+			if (missing) {
+				return {
+					error: "Kjo llogari nuk u gjet, ose nuk është profesionale dhe publike.",
+					tryOtherHost: false,
+				};
+			}
+		}
+		pages += 1;
+		posts.push(...parsed.posts);
+		if (parsed.next && safeGraphUrl(parsed.next)?.hostname === host) nextUrl = parsed.next;
+		else if (parsed.after) nextUrl = discoveryUrl(host, igUserId, username, DISCOVERY_FIELDS[fieldIndex], token, parsed.after);
+		else nextUrl = null;
+	}
+
+	const truncated = posts.length > MAX_POSTS || (posts.length >= MAX_POSTS && Boolean(nextUrl));
+	return { posts: posts.slice(0, MAX_POSTS), truncated };
+}
+
+function discoveryUrl(
+	host: string,
+	igUserId: string,
+	username: string,
+	mediaFields: string,
+	token: string,
+	after: string | null,
+): string {
+	const media = after
+		? `media.limit(${PAGE_LIMIT}).after(${after}){${mediaFields}}`
+		: `media.limit(${PAGE_LIMIT}){${mediaFields}}`;
+	const params = new URLSearchParams({
+		fields: `business_discovery.username(${username}){${media}}`,
+		access_token: token,
+	});
+	return `https://${host}/${graphVersion()}/${igUserId}?${params}`;
+}
+
+function safeCursor(value: string): boolean {
+	return value.length > 0 && value.length <= 500 && /^[A-Za-z0-9_\-+/=]+$/.test(value);
+}
+
+function discoveryError(code: number | null): string {
+	if (code === 190) return "Lidhja e Instagram ka skaduar. Lidhe përsëri llogarinë.";
+	if (code === 110) return "Kjo llogari nuk u gjet, ose nuk është profesionale dhe publike.";
+	if (code === 10 || code === 100 || code === 200) {
+		return "Instagram nuk lejoi leximin e kësaj llogarie. Duhet të jetë profesionale, publike, dhe aplikacioni të ketë lejen për ta kërkuar.";
+	}
+	return "Postimet e kësaj llogarie nuk u lexuan. Provo përsëri.";
 }
 
 function instagramPermalink(value: string | null): string | null {
