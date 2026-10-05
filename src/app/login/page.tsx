@@ -132,7 +132,6 @@ function LoginForm() {
           <ThemeSwitch />
         </div>
         <div className="auth-card">
-          <span className="auth-icon">✦</span>
           <h1>
             {mode === "signin"
               ? "Mirë se u ktheve"

@@ -98,17 +98,6 @@
   margin: auto;
   padding: 50px 0;
 }
-.auth-icon {
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 16px;
-  background: #efe9ff;
-  color: #6c38ff;
-  font-size: 30px;
-  margin-bottom: 25px;
-}
 .auth-card h1 {
   font-size: 32px;
   line-height: 1.2;
@@ -280,10 +269,6 @@ html[data-resolved="dark"] .auth-preview {
 html[data-resolved="dark"] .auth-preview p {
   background: #2c2544;
   color: #f4f0ff;
-}
-html[data-resolved="dark"] .auth-icon {
-  background: #2a2144;
-  color: #d4c2ff;
 }
 html[data-resolved="dark"] .auth-google,
 html[data-resolved="dark"] .auth-card input {
