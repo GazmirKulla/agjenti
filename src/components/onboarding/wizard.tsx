@@ -71,11 +71,19 @@ export function OnboardingWizard({
             : question.key === "aiMode"
               ? current.agentCapabilities
               : [];
-      const selected = multiKey
+      let selected = multiKey
         ? currentValues.includes(value)
           ? currentValues.filter((item) => item !== value)
           : [...currentValues, value]
         : currentValues;
+      if (question.key === "productType") {
+        if (["services", "mixed"].includes(value))
+          selected = currentValues.includes(value) ? [] : [value];
+        else
+          selected = selected.filter(
+            (item) => !["services", "mixed"].includes(item),
+          );
+      }
       const next = { ...current };
       if (question.key === "productType") next.offeringTypes = selected;
       else if (question.key === "useCases") next.useCases = selected;

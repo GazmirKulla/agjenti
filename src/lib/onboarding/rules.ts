@@ -381,9 +381,13 @@ export function normalizeConditionalAnswers<
   const offerings = new Set(
     allowedOfferings(answers.businessType).map(([value]) => value),
   );
-  const offeringTypes = answers.offeringTypes.filter((value) =>
+  let offeringTypes = answers.offeringTypes.filter((value) =>
     offerings.has(value),
   );
+  const serviceMode = offeringTypes.findLast((value) =>
+    ["services", "mixed"].includes(value),
+  );
+  if (serviceMode) offeringTypes = [serviceMode];
   const cases = new Set(
     allowedUseCases(answers.businessType, offeringTypes).map(
       ([value]) => value,

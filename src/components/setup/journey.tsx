@@ -4,16 +4,19 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { setupSteps, isReady, type SetupStatus } from "@/lib/setup/model";
 import { launchBusiness } from "@/lib/setup/actions";
+import type { BusinessProfileAnswers } from "@/lib/onboarding/rules";
 import { ActionForm } from "@/components/dashboard/action-form";
 import "./setup.css";
 export function SetupJourney({
   status,
   slug,
   expanded = true,
+  profile,
 }: {
   status: SetupStatus;
   slug: string;
   expanded?: boolean;
+  profile?: BusinessProfileAnswers | null;
 }) {
   const [mobile, setMobile] = useState(false);
   useEffect(() => {
@@ -49,6 +52,14 @@ export function SetupJourney({
     setChosen(null);
   }, [status.signature, count]);
   const home = `/b/${slug}`;
+  const recommendedWorkflow: Record<string, string> = {
+    "product-orders": "porosi produktesh",
+    "personalized-order": "porosi me personalizim",
+    "variant-order": "porosi me variante",
+    "service-or-product-request": "kërkesa për shërbim ose produkt",
+    "service-request": "kërkesa për shërbim",
+    "business-defined": "proces sipas biznesit",
+  };
   const onHome = pathname === home;
   // Bisedat janë rrjedhë pune e përditshme; checklist-i i konfigurimit
   // nuk duhet të zërë hapësirë në ekranin e një bisede.
@@ -180,6 +191,18 @@ export function SetupJourney({
             </span>
             <h2>{active.title}</h2>
             <p>{active.description}</p>
+            {profile && (
+              <p className="setup-help">
+                Rekomandim për konfigurimin tënd:{" "}
+                {recommendedWorkflow[
+                  profile.recommendedConfiguration.workflow
+                ] ?? "proces sipas biznesit"}
+                . Hapat kryesorë:{" "}
+                {profile.recommendedConfiguration.checklist
+                  .slice(0, 3)
+                  .join(" · ")}
+              </p>
+            )}
             <Link className="btn btn-primary" href={`${home}/${active.path}`}>
               {active.done ? "Rishiko konfigurimin" : active.action} →
             </Link>

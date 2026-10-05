@@ -269,15 +269,17 @@ export function parseAnswers(
   const offeringAllow = new Set(
     allowedOfferings(businessType || "other").map(([value]) => value),
   );
-  if (
-    (offeringInput as string[]).some((value) => !offeringAllow.has(value))
-  )
+  if ((offeringInput as string[]).some((value) => !offeringAllow.has(value)))
     throw new Error("Zgjidh vetëm ofertat që vlejnë për llojin e biznesit.");
-  const offeringTypes = [
+  let offeringTypes = [
     ...new Set(
       (offeringInput as string[]).filter((value) => offeringAllow.has(value)),
     ),
   ];
+  const serviceMode = offeringTypes.findLast((value) =>
+    ["services", "mixed"].includes(value),
+  );
+  if (serviceMode) offeringTypes = [serviceMode];
 
   const caseInput = raw.useCases ?? raw.selectedUseCases ?? [];
   if (
@@ -305,10 +307,10 @@ export function parseAnswers(
     : legacyCapabilities(raw.aiMode);
   if (capabilityInput.some((value) => typeof value !== "string"))
     throw new Error("Zgjidh aftësi të vlefshme për Agjentin.");
-  const knownCapabilities = new Set(
-    capabilityChoices.map(([value]) => value),
-  );
-  if ((capabilityInput as string[]).some((value) => !knownCapabilities.has(value)))
+  const knownCapabilities = new Set(capabilityChoices.map(([value]) => value));
+  if (
+    (capabilityInput as string[]).some((value) => !knownCapabilities.has(value))
+  )
     throw new Error("Zgjidh aftësi të vlefshme për Agjentin.");
   const capabilityAllow = new Set(
     allowedCapabilities(businessType || "other", offeringTypes, useCases).map(

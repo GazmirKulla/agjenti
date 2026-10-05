@@ -20,10 +20,12 @@ Next.js 15, React 19, TypeScript, Tailwind, Supabase, Vitest. Deploy: Vercel, do
 - `NEXT_PUBLIC_APP_URL` (`http://localhost:3003` lokal, `https://agjenti.app` në prod)
 
 Auth (Supabase → Authentication → URL Configuration):
+
 - **Site URL** = `https://agjenti.app` (jo localhost)
 - **Redirect URLs** = `https://agjenti.app/**`, `https://www.agjenti.app/**` dhe `http://localhost:3003/**`
 
 Google / Gmail login (Supabase → Authentication → Providers → Google):
+
 1. Në [Google Cloud Console](https://console.cloud.google.com/) krijo OAuth Client ID (Web).
 2. Authorized JavaScript origins: `https://agjenti.app`, `https://www.agjenti.app`, `http://localhost:3003`
 3. Authorized redirect URI: `https://<PROJECT_REF>.supabase.co/auth/v1/callback`
@@ -32,6 +34,7 @@ Google / Gmail login (Supabase → Authentication → Providers → Google):
 6. Redirect URLs në Supabase Auth duhet të përfshijnë `https://www.agjenti.app/auth/callback**` (dhe variantin pa www nëse e përdorni).
 
 Apple login (Supabase → Authentication → Providers → Apple):
+
 1. Në [Apple Developer](https://developer.apple.com/account) → Identifiers krijo një **App ID** me “Sign in with Apple”.
 2. Krijo një **Services ID** (p.sh. `app.agjenti.web`) dhe aktivizo Sign in with Apple.
 3. Configure → Domains: `<PROJECT_REF>.supabase.co` · Return URL: `https://<PROJECT_REF>.supabase.co/auth/v1/callback`
@@ -39,6 +42,7 @@ Apple login (Supabase → Authentication → Providers → Apple):
 5. Në Supabase Apple provider: Client IDs = Services ID (i pari në listë), pastaj Secret Key (JWT nga `.p8` / generatori i Supabase). Aktivizo.
 6. Secret Key skadon çdo **6 muaj** — rinovoje përpara skadimit ose login-i Apple ndalon së funksionuari.
 7. Testo `/auth/apple` (butoni “Vazhdo me Apple” te `/login`).
+
 - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` (Instagram App ID/Secret nga Meta → Instagram, jo Facebook App ID)
 - `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`
 - `INSTAGRAM_OAUTH_REDIRECT_URI` = `https://agjenti.app/api/instagram/oauth/callback`
@@ -51,11 +55,13 @@ Webhook Meta: `https://www.agjenti.app/api/webhooks/meta`
 (Përdor **www** — `agjenti.app` pa www kthen 308 redirect dhe Meta nuk dorëzon DM reale.)
 
 Meta App Dashboard → Settings → Basic:
+
 - Privacy Policy URL: `https://agjenti.app/privacy`
 - Terms of Service URL: `https://agjenti.app/terms`
 - User data deletion → **Data deletion instructions URL**: `https://agjenti.app/data-deletion`
 
 Meta App Dashboard (Instagram / callbacks):
+
 - Deauthorize Callback URL: `https://agjenti.app/api/meta/deauthorize`
 - Data Deletion Request / Callback URL: `https://agjenti.app/api/meta/data-deletion`
 - Status check (auto-returned to Meta): `https://agjenti.app/api/meta/data-deletion?code=<confirmation_code>`
@@ -76,6 +82,7 @@ Inbox-i fillon bosh. Historia e Zana-s mbetet arkiv.
 - `/auth/reset-password`: ndryshimi i fjalëkalimit pas lidhjes së rikuperimit.
 
 Në Supabase Auth, Redirect URLs duhet të lejojnë URL-në e aplikacionit me `/auth/callback` (përfshirë query-n e rikuperimit). Dërgimi i email-eve varet nga konfigurimi i email/SMTP në Supabase.
+
 - `/admin`: përmbledhje e platformës; `/admin/businesses` për bizneset dhe anëtarët; `/admin/conversations` për bisedat dhe lidhjet Instagram.
 - `/b/[slug]`: dashboard i biznesit; nënfaqet për Inbox, produkte, porosi, klientë, agjentë, njohuri, workflow, Instagram dhe cilësime.
 
@@ -86,7 +93,6 @@ Planet/faturimi, Facebook/WhatsApp, statistikat e Instagram-it, transporti/pages
 Fontet Figtree dhe Syne ruhen në `src/app/fonts` bashkë me licencat OFL, pa shkarkim gjatë build-it.
 
 Kontrolle: `yarn lint`, `yarn test`, `yarn build`.
-
 
 ## Onboarding self-service
 

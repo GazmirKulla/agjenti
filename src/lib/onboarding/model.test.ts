@@ -129,15 +129,12 @@ describe("onboarding answers", () => {
     ).toThrow(/ofert/);
   });
   it("maps resume progress across disabled steps", () => {
-    const active = activeQuestions(
-      ["businessType", "aiMode", "teamSize"],
-      {
-        ...emptyAnswers,
-        businessType: "ecommerce",
-        offeringTypes: ["variants"],
-        useCases: ["sales"],
-      },
-    );
+    const active = activeQuestions(["businessType", "aiMode", "teamSize"], {
+      ...emptyAnswers,
+      businessType: "ecommerce",
+      offeringTypes: ["variants"],
+      useCases: ["sales"],
+    });
     expect(resumeWizardStep(0, active)).toBe(0);
     expect(resumeWizardStep(1, active)).toBe(1);
     expect(resumeWizardStep(4, active)).toBe(2);
@@ -156,10 +153,11 @@ describe("onboarding answers", () => {
     expect(cases).toContain("customers");
     expect(cases).not.toContain("recommendations");
     expect(cases).not.toContain("orders");
-    const capabilities = allowedCapabilities("services", ["services"], [
-      "support",
-      "booking",
-    ]).map(([value]) => value);
+    const capabilities = allowedCapabilities(
+      "services",
+      ["services"],
+      ["support", "booking"],
+    ).map(([value]) => value);
     expect(capabilities).toContain("answer_questions");
     expect(capabilities).toContain("handle_bookings");
     expect(capabilities).not.toContain("recommend_products");
@@ -174,6 +172,17 @@ describe("onboarding answers", () => {
     });
     expect(changed.useCases).toEqual(["booking"]);
     expect(changed.agentCapabilities).toEqual(["handle_bookings"]);
+  });
+  it("keeps service-only and mixed offerings mutually exclusive", () => {
+    const changed = normalizeConditionalAnswers({
+      ...emptyAnswers,
+      businessType: "services",
+      offeringTypes: ["services", "mixed"],
+      useCases: ["booking", "orders"],
+      agentCapabilities: ["handle_bookings", "collect_order_details"],
+    });
+    expect(changed.offeringTypes).toEqual(["mixed"]);
+    expect(changed.useCases).toEqual(["booking", "orders"]);
   });
   it("stores a unified business profile with recommendations", () => {
     const parsed = parseAnswers(completeAnswers, true);

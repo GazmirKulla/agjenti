@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { DashboardShell } from "@/components/dashboard/shell";
 import { getAppSettings } from "@/lib/platform/settings";
+import { createServiceSupabase } from "@/lib/supabase/service";
+import type { BusinessProfileAnswers } from "@/lib/onboarding/rules";
 export default async function BusinessLayout({
   children,
   params,
@@ -17,10 +19,23 @@ export default async function BusinessLayout({
   const access = await listMemberships(user.id);
   const business = access.businesses.find((b) => b.slug === slug);
   if (!business) redirect("/auth/continue");
-  const [settings, setup] = await Promise.all([
+  const [settings, setup, onboarding] = await Promise.all([
     getAppSettings(),
     getSetupStatus(business.id),
+    createServiceSupabase()
+      .from("business_onboarding")
+      .select("answers")
+      .eq("business_id", business.id)
+      .maybeSingle(),
   ]);
+  const savedProfile = onboarding.data?.answers?.businessProfile as
+    BusinessProfileAnswers | undefined;
+  const profile =
+    savedProfile &&
+    typeof savedProfile === "object" &&
+    savedProfile.recommendedConfiguration
+      ? savedProfile
+      : null;
   return (
     <DashboardShell
       name={business.name}
@@ -48,6 +63,7 @@ export default async function BusinessLayout({
         status={setup}
         slug={slug}
         expanded={settings.checklist_enabled}
+        profile={profile}
       />
       {children}
     </DashboardShell>
