@@ -19,6 +19,13 @@ export type InstagramProductCandidate = {
 	permalink: string | null;
 };
 
+export type InstagramScanFrame = {
+	id: string;
+	imageUrl: string | null;
+	preview: string;
+	found: { name: string; price: number; currency: string } | null;
+};
+
 const FIELD_SETS = [
 	"id,caption,media_type,media_url,thumbnail_url,permalink,timestamp",
 	"id,caption,media_type,media_url,permalink",
@@ -48,6 +55,20 @@ export function postsFromMediaPage(payload: unknown): { posts: InstagramPost[]; 
 		});
 	}
 	return { posts, next };
+}
+
+export function scanFramesFromPosts(posts: InstagramPost[]): InstagramScanFrame[] {
+	return posts.map((post) => {
+		const product = productsFromPosts([post])[0] ?? null;
+		return {
+			id: post.id,
+			imageUrl: product?.imageUrl || safeImage(post.imageUrl),
+			preview: captionPreview(post.caption),
+			found: product
+				? { name: product.name, price: product.price, currency: product.currency }
+				: null,
+		};
+	});
 }
 
 export function productsFromPosts(posts: InstagramPost[]): InstagramProductCandidate[] {
@@ -167,6 +188,29 @@ function pickImage(row: Record<string, unknown>, mediaType: string): string | nu
 	if (mediaType === "VIDEO") return thumb || null;
 	if (media && !/\.(mp4|mov|m4v)(\?|$)/i.test(media)) return media;
 	return thumb || null;
+}
+
+function captionPreview(caption: string | null): string {
+	const line =
+		(caption ?? "")
+			.replace(/#[\p{L}\p{N}_]+/gu, " ")
+			.split("\n")
+			.map((part) => part.replace(/\s+/g, " ").trim())
+			.find((part) => part.length >= 2) ?? "";
+	if (line.length <= 90) return line;
+	return `${line.slice(0, 89).trimEnd()}…`;
+}
+
+function safeImage(value: string | null): string | null {
+	if (!value) return null;
+	try {
+		const url = new URL(value);
+		if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+		if (url.username || url.password) return null;
+		return url.toString();
+	} catch {
+		return null;
+	}
 }
 
 function instagramPermalink(value: string | null): string | null {

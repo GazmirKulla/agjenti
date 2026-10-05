@@ -1,7 +1,7 @@
 "use server";
 
 import { decryptSecret } from "@/lib/crypto/tokens";
-import { fetchInstagramMedia, productsFromPosts } from "@/lib/instagram/media";
+import { fetchInstagramMedia, productsFromPosts, scanFramesFromPosts } from "@/lib/instagram/media";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { importProductFromUrl } from "./import-url";
@@ -51,18 +51,21 @@ export async function scanInstagramProducts(slug: string) {
   if ("error" in media) return media;
   if (!media.posts.length) return { error: "Nuk u gjetën postime në këtë llogari." };
 
+  const frames = scanFramesFromPosts(media.posts).slice(0, 100);
   const products = productsFromPosts(media.posts).slice(0, 100);
+  const scope = media.truncated
+    ? `U lexuan ${frames.length} postime më të reja`
+    : `U lexuan ${frames.length} postime`;
   if (!products.length) {
     return {
-      error: `U lexuan ${media.posts.length} postime, por asnjë nuk kishte çmim në tekst (p.sh. 790 Lekë).`,
+      frames,
+      error: `${scope}, por asnjë nuk kishte çmim në tekst (p.sh. 790 Lekë).`,
     };
   }
 
-  const scope = media.truncated
-    ? `U lexuan ${media.posts.length} postime më të reja`
-    : `U lexuan ${media.posts.length} postime`;
   const found = products.length === 1 ? "1 duket si produkt me çmim" : `${products.length} duken si produkte me çmim`;
   return {
+    frames,
     products,
     success: `${scope}. ${found}. Kontrolloje listën, pastaj ruaji.`,
   };

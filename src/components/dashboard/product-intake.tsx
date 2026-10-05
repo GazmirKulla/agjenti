@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { Icon } from "@/components/dashboard/icon";
 import { ImportProductLink } from "@/components/dashboard/import-product-link";
 import { ProductFields } from "@/components/dashboard/product-fields";
+import { InstagramScanner, type ScanFrame } from "@/components/dashboard/instagram-scanner";
 import { ProductReview, type ReviewDraft } from "@/components/dashboard/product-review";
 import { parseProductCsv, type CsvProduct } from "@/lib/products/csv";
 
@@ -64,13 +65,26 @@ export function ProductIntake({
       sku: string | null;
     };
   }>;
-  scanAction: () => Promise<{ error?: string; success?: string; products?: ScanProduct[] }>;
+  scanAction: () => Promise<{
+    error?: string;
+    success?: string;
+    products?: ScanProduct[];
+    frames?: ScanFrame[];
+  }>;
   importAction: ImportAction;
 }) {
   const [method, setMethod] = useState<MethodId>("manual");
   const csv = useBatchSave(importAction);
   const instagram = useBatchSave(importAction);
   const [scanning, setScanning] = useState(false);
+  const [scanner, setScanner] = useState<{ loading: boolean; frames: ScanFrame[] | null } | null>(null);
+  const scanResultRef = useRef<{
+    error?: string;
+    success?: string;
+    products?: ScanProduct[];
+  } | null>(null);
+  const instagramRef = useRef(instagram);
+  instagramRef.current = instagram;
   const connected = instagramStatus === "connected";
 
   function onTabsKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -83,22 +97,43 @@ export function ProductIntake({
     document.getElementById(`product-tab-${next.id}`)?.focus();
   }
 
+  function finishInstagramScan() {
+    const result = scanResultRef.current;
+    if (!result) return;
+    scanResultRef.current = null;
+    setScanner(null);
+    setScanning(false);
+    const batch = instagramRef.current;
+    if (result.error || !result.products?.length) {
+      batch.setRows([]);
+      batch.setNotice({ error: result.error || "Nuk gjeta produkte në postime." });
+      return;
+    }
+    batch.setRows(result.products.map(draftFromInstagram));
+    batch.setNotice({ success: result.success || "Kontrolloje listën, pastaj ruaji." });
+  }
+
   async function scanInstagram() {
     setScanning(true);
+    setScanner({ loading: true, frames: null });
     instagram.setNotice(null);
+    instagram.setRows([]);
+    scanResultRef.current = null;
     try {
       const result = await scanAction();
-      if (result.error || !result.products?.length) {
-        instagram.setRows([]);
+      if (!result.frames?.length) {
+        setScanner(null);
+        setScanning(false);
         instagram.setNotice({ error: result.error || "Nuk gjeta produkte në postime." });
-      } else {
-        instagram.setRows(result.products.map(draftFromInstagram));
-        instagram.setNotice({ success: result.success || "Kontrolloje listën, pastaj ruaji." });
+        return;
       }
+      scanResultRef.current = result;
+      setScanner({ loading: false, frames: result.frames });
     } catch {
-      instagram.setNotice({ error: "Skanimi dështoi. Provo përsëri." });
-    } finally {
+      scanResultRef.current = null;
+      setScanner(null);
       setScanning(false);
+      instagram.setNotice({ error: "Skanimi dështoi. Provo përsëri." });
     }
   }
 
@@ -248,15 +283,18 @@ export function ProductIntake({
             disabled={scanning || instagram.saving}
             onClick={scanInstagram}
           >
-            {scanning ? "Duke lexuar…" : "Skano postimet"}
+            {scanning ? "Duke skanuar…" : "Skano postimet"}
           </button>
         ) : (
           <Link href={`/b/${slug}/instagram`} className="btn btn-primary">
             Hap Instagram
           </Link>
         )}
-        <Notice notice={instagram.notice} />
-        {instagram.rows.length > 0 ? (
+        {scanner ? (
+          <InstagramScanner loading={scanner.loading} frames={scanner.frames} onFinished={finishInstagramScan} />
+        ) : null}
+        {scanner ? null : <Notice notice={instagram.notice} />}
+        {!scanner && instagram.rows.length > 0 ? (
           <ProductReview
             rows={instagram.rows}
             onChange={instagram.setRows}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fetchInstagramMedia, postsFromMediaPage, productsFromPosts } from "./media";
+import { fetchInstagramMedia, postsFromMediaPage, productsFromPosts, scanFramesFromPosts } from "./media";
 
 function jsonResponse(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), {
@@ -56,6 +56,41 @@ describe("productsFromPosts", () => {
 			imageUrl: "https://cdn.example/a.jpg",
 			permalink: "https://www.instagram.com/p/abc/",
 		});
+	});
+});
+
+describe("scanFramesFromPosts", () => {
+	it("keeps a short preview and marks only posts that have a price", () => {
+		const frames = scanFramesFromPosts([
+			{
+				id: "123456",
+				caption: "#oferta\nBluza e re\n790 Lekë",
+				mediaType: "IMAGE",
+				imageUrl: "https://cdn.example/a.jpg",
+				permalink: "https://www.instagram.com/p/abc/",
+			},
+			{
+				id: "234567",
+				caption: "Vetem foto",
+				mediaType: "IMAGE",
+				imageUrl: "javascript:alert(1)",
+				permalink: null,
+			},
+		]);
+		expect(frames).toEqual([
+			{
+				id: "123456",
+				imageUrl: "https://cdn.example/a.jpg",
+				preview: "Bluza e re",
+				found: { name: "Bluza e re", price: 790, currency: "ALL" },
+			},
+			{
+				id: "234567",
+				imageUrl: null,
+				preview: "Vetem foto",
+				found: null,
+			},
+		]);
 	});
 });
 

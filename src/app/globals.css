@@ -1820,6 +1820,177 @@
 .product-method-panel .form-feedback {
   margin-top: 12px;
 }
+.ig-scanner {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #1c6b45;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(80, 255, 170, 0.16), transparent 42%),
+    #07140f;
+  color: #d9ffe8;
+  box-shadow: 0 18px 40px rgba(4, 20, 14, 0.28);
+}
+.ig-scanner-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8dffb0;
+}
+.ig-scan-stage {
+  position: relative;
+  width: min(100%, 380px);
+  aspect-ratio: 4 / 5;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #04110c;
+}
+.ig-scan-photo,
+.ig-scan-fallback {
+  position: absolute;
+  inset: 0;
+}
+.ig-scan-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ig-scan-fallback {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 28px;
+  text-align: center;
+  color: #b7ffd2;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.ig-scan-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 3px,
+    rgba(90, 255, 170, 0.09) 3px 4px
+  );
+  pointer-events: none;
+}
+.ig-scan-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 2;
+  height: 22%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(80, 255, 170, 0.08) 36%,
+    rgba(140, 255, 196, 0.9) 49%,
+    #f4fff8 50%,
+    rgba(140, 255, 196, 0.9) 51%,
+    rgba(80, 255, 170, 0.08) 64%,
+    transparent
+  );
+  filter: drop-shadow(0 0 14px #39f08a);
+  animation-name: ig-scan-sweep;
+  animation-duration: 1.2s;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  pointer-events: none;
+}
+.ig-scan-beam.is-waiting {
+  animation-duration: 1.7s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-fill-mode: none;
+}
+.ig-scan-beam.is-steady {
+  animation: none;
+  transform: translateY(170%);
+}
+@keyframes ig-scan-sweep {
+  from { transform: translateY(-120%); }
+  to { transform: translateY(460%); }
+}
+.ig-scan-corner {
+  position: absolute;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #8dffb0;
+}
+.ig-scan-corner.is-tl { top: 10px; left: 10px; border-right: 0; border-bottom: 0; }
+.ig-scan-corner.is-tr { top: 10px; right: 10px; border-left: 0; border-bottom: 0; }
+.ig-scan-corner.is-bl { bottom: 10px; left: 10px; border-right: 0; border-top: 0; }
+.ig-scan-corner.is-br { bottom: 10px; right: 10px; border-left: 0; border-top: 0; }
+.ig-scan-status {
+  min-height: 2.6em;
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.ig-scan-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.ig-scan-thumb {
+  display: grid;
+  place-items: center;
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #0c2418;
+  color: #8dffb0;
+  font-size: 12px;
+  opacity: 0.4;
+}
+.ig-scan-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ig-scan-thumb.is-current {
+  opacity: 1;
+  outline: 2px solid #8dffb0;
+  outline-offset: 2px;
+}
+.ig-scan-thumb.is-done {
+  opacity: 0.78;
+}
+.ig-scan-thumb.is-done.is-product {
+  box-shadow: inset 0 0 0 2px #3dff9a;
+  opacity: 1;
+}
+.ig-scanner .btn-ghost {
+  justify-self: center;
+  color: #d9ffe8;
+  border-color: #1c6b45;
+  background: transparent;
+}
+.ig-scanner .btn-ghost:hover:not(:disabled) {
+  color: #07140f;
+  background: #8dffb0;
+  border-color: #8dffb0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ig-scan-beam {
+    animation: none;
+    transform: translateY(170%);
+  }
+}
 .import-review-wrap {
   display: grid;
   gap: 12px;
