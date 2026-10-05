@@ -7,6 +7,7 @@ import {
   mobileBusinessNav,
   mobileAdminNav,
 } from "./navigation";
+import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
 const businessNav = [
   ["", "Dashboard", "dashboard"],
@@ -161,7 +162,7 @@ export function DashboardShell({
           className="dashboard-brand"
           onClick={() => setOpen(false)}
         >
-          <span className="brand-symbol">A</span> Agjenti.app
+          <BrandLogo size={36} priority />
         </Link>
         <details className="workspace-picker">
           <summary className="workspace-switch">

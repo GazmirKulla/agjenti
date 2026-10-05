@@ -22,10 +22,6 @@
   font-size: 26px;
   font-weight: 800;
 }
-.auth-brand span {
-  color: #6839ff;
-  font-size: 42px;
-}
 .auth-eyebrow {
   font-size: 11px;
   letter-spacing: 1.8px;
@@ -309,9 +305,6 @@ html[data-resolved="dark"] .auth-page .theme-switch button.is-active {
   }
   .auth-brand {
     font-size: 22px;
-  }
-  .auth-brand span {
-    font-size: 32px;
   }
   .auth-content {
     padding: 24px;

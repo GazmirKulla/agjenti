@@ -287,6 +287,36 @@
   letter-spacing: -0.8px;
   padding: 0 12px;
 }
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+}
+.brand-logo-mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.brand-logo-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.brand-logo-dark {
+  display: none;
+}
+html[data-resolved="dark"] .brand-logo-light {
+  display: none;
+}
+html[data-resolved="dark"] .brand-logo-dark {
+  display: block;
+}
+.brand-logo-text {
+  font-weight: inherit;
+  letter-spacing: inherit;
+}
 .brand-symbol {
   font-size: 34px;
   font-weight: 900;
@@ -2756,9 +2786,6 @@ html[data-resolved="dark"] .chat-message small {
   gap: 8px;
   font-size: 20px;
   font-weight: 800;
-}
-.account-brand .brand-symbol {
-  font-size: 30px;
 }
 .account-page-title {
   margin: 48px 0 24px;

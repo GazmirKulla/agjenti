@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "@/components/dashboard/icon";
 import {
   LandingHeader,
@@ -80,7 +81,7 @@ export default function HomePage() {
               <div className="lp-desktop-preview">
                 <div className="lp-preview-sidebar">
                   <span className="lp-logo mini">
-                    <span>A</span>Agjenti.app
+                    <BrandLogo size={22} />
                   </span>
                   <div className="lp-store">
                     <Icon name="instagram" size={14} />
@@ -297,7 +298,7 @@ export default function HomePage() {
             <div className="lp-analytics-heading">
               <div>
                 <span className="lp-logo mini">
-                  <span>A</span>Agjenti.app
+                  <BrandLogo size={24} />
                 </span>
                 <h3>Biznesi yt, në një vështrim</h3>
               </div>
@@ -463,7 +464,7 @@ export default function HomePage() {
         </section>
         <footer className="lp-footer">
           <a className="lp-logo" href="#">
-            <span>A</span>Agjenti.app
+            <BrandLogo size={34} />
           </a>
           <p>Asistenti i biznesit tënd në Instagram.</p>
           <div>

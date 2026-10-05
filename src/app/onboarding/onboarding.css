@@ -35,10 +35,6 @@
   font-weight: 800;
   letter-spacing: -1px;
 }
-.onboarding-brand > span {
-  font-size: 33px;
-  color: #7443ff;
-}
 .onboarding-welcome {
   margin-top: 52px;
 }
@@ -428,9 +424,6 @@
   }
   .onboarding-brand {
     font-size: 19px;
-  }
-  .onboarding-brand > span {
-    font-size: 28px;
   }
   .onboarding-user {
     border: 0;

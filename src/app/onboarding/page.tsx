@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/logo";
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { homeForAccess } from "@/lib/auth/destination";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -25,7 +26,7 @@ export default async function OnboardingPage() {
       <main className="onboarding-page">
         <section className="onboarding-unavailable">
           <Link href="/" className="onboarding-brand">
-            <span>A</span>Agjenti.app
+            <BrandLogo size={34} />
           </Link>
           <h1>
             {data?.completed_at
@@ -52,7 +53,7 @@ export default async function OnboardingPage() {
       <main className="onboarding-page">
         <section className="onboarding-unavailable">
           <Link href="/" className="onboarding-brand">
-            <span>A</span>Agjenti.app
+            <BrandLogo size={34} />
           </Link>
           <h1>Krijo hapësirën e biznesit</h1>
           <p>

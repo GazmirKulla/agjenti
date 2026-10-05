@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "@/components/dashboard/icon";
 import { signOut } from "@/lib/auth/actions";
 import { saveOnboarding } from "@/lib/onboarding/actions";
@@ -75,7 +76,7 @@ export function OnboardingWizard({
       <div className="onboarding-shell">
         <aside className="onboarding-sidebar">
           <Link href="/" className="onboarding-brand">
-            <span>A</span>Agjenti.app
+            <BrandLogo size={34} />
           </Link>
           {step === 0 ? (
             <div className="onboarding-welcome">

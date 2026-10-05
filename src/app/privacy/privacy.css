@@ -21,10 +21,6 @@
   align-items: center;
   gap: 10px;
 }
-.privacy-brand span {
-  font-size: 38px;
-  color: #7041f5;
-}
 .privacy-login {
   font-size: 14px;
   background: #eee7ff;

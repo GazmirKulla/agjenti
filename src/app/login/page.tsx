@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { BrandLogo } from "@/components/brand/logo";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
 import "./auth.css";
 function LoginForm() {
@@ -103,7 +104,7 @@ function LoginForm() {
     <main className="auth-page">
       <aside className="auth-story">
         <Link href="/" className="auth-brand">
-          <span>A</span> Agjenti.app
+          <BrandLogo size={40} priority />
         </Link>
         <div>
           <p className="auth-eyebrow">BIZNESI YT, GJITHMONË NË KONTAKT</p>

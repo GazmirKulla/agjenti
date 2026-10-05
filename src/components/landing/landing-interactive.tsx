@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "@/components/dashboard/icon";
 export function LandingHeader() {
   const [open, setOpen] = useState(false);
   return (
     <header className="lp-header">
       <a className="lp-logo" href="#">
-        <span>A</span>Agjenti.app
+        <BrandLogo size={36} priority />
       </a>
       <nav
         className={open ? "lp-navigation open" : "lp-navigation"}
@@ -103,7 +104,7 @@ export function DemoInbox({ compact = false }: { compact?: boolean }) {
     <div className={`lp-inbox-demo ${compact ? "compact" : ""}`}>
       <div className="lp-demo-top">
         <span className="lp-logo mini">
-          <span>A</span>Agjenti.app
+          <BrandLogo size={24} />
         </span>
         <span className="lp-demo-label">Pamje ilustruese</span>
         <Icon name="search" size={15} />

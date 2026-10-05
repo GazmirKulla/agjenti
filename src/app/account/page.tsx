@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BrandLogo } from "@/components/brand/logo";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
 import { signOut } from "@/lib/auth/actions";
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
@@ -26,7 +27,7 @@ export default async function AccountPage() {
       <div className="account-page-inner">
         <header className="account-page-header">
           <Link href={returnHref} className="account-brand">
-            <span className="brand-symbol">A</span> Agjenti.app
+            <BrandLogo size={32} />
           </Link>
           <Link href={returnHref} className="btn btn-ghost">
             ← Kthehu te paneli

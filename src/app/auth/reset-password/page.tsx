@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { BrandLogo } from "@/components/brand/logo";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import "../../login/auth.css";
 export default function ResetPasswordPage() {
@@ -50,7 +51,7 @@ export default function ResetPasswordPage() {
         style={{ width: "100%", maxWidth: 560 }}
       >
         <Link href="/" className="auth-brand">
-          Agjenti.app
+          <BrandLogo size={40} />
         </Link>
         <div className="auth-card">
           <h1>Fjalëkalimi i ri</h1>

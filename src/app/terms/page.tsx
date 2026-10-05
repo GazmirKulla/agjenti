@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/logo";
 import "../privacy/privacy.css";
 
 export const metadata: Metadata = {
@@ -27,7 +28,7 @@ export default function TermsPage() {
     <div className="privacy-page">
       <header className="privacy-header">
         <Link href="/" className="privacy-brand">
-          <span>A</span>Agjenti.app
+          <BrandLogo size={36} />
         </Link>
         <Link href="/login" className="privacy-login">
           Hyr në platformë →
