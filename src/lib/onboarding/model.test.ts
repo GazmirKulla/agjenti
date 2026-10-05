@@ -204,6 +204,13 @@ describe("onboarding answers", () => {
     expect(result).toContain("Mos shpik");
     expect(result).toContain("personalizime");
   });
+  it("uses recommended agent defaults when optional capability choices are skipped", () => {
+    const result = initialInstructions(
+      parseAnswers({ ...completeAnswers, agentCapabilities: [] }),
+    );
+    expect(result).toContain("Aftësitë e kërkuara");
+    expect(result).toContain("rekomandon produkte nga katalogu");
+  });
   it("uses inventory size, offering, automation, volume and team for advice", () => {
     const small = recommendations({
       ...completeAnswers,

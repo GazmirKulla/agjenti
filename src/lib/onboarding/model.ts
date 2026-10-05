@@ -394,13 +394,21 @@ export function answerLabel(key: AnswerKey, value: string) {
 export function initialInstructions(a: Answers) {
   const business =
     answerLabel("businessType", a.businessType) || "e përgjithshme";
-  const capabilities = a.agentCapabilities
+  const capabilities = (
+    a.agentCapabilities.length
+      ? a.agentCapabilities
+      : (a.businessProfile?.recommendedConfiguration.capabilities ?? [])
+  )
     .map((key) => answerLabel("aiMode", key).toLocaleLowerCase())
     .join(", ");
   const offer = a.offeringTypes
     .map((key) => answerLabel("productType", key))
     .join(", ");
-  const goals = a.useCases
+  const goals = (
+    a.useCases.length
+      ? a.useCases
+      : (a.businessProfile?.recommendedConfiguration.useCases ?? [])
+  )
     .map((key) => answerLabel("useCases", key))
     .join(", ");
   return [
