@@ -44,6 +44,20 @@ export function OnboardingWizard({
     setError("");
     setSaved(false);
   }
+  function toggleAllUseCases() {
+    if (!question || question.key !== "useCases") return;
+    const all = question.options.map(([value]) => value);
+    setAnswers((a) => ({
+      ...a,
+      useCases: a.useCases.length === all.length ? [] : [...all],
+    }));
+    setError("");
+    setSaved(false);
+  }
+  function skipStep() {
+    if (step < 1 || step >= 7 || busy) return;
+    void persist(step + 1);
+  }
   async function persist(target: number, complete = false, advance = true) {
     if (busy) return;
     setBusy(true);
@@ -175,39 +189,57 @@ export function OnboardingWizard({
                   </div>
                 </div>
               ) : (
-                <div
-                  className={`onboarding-options ${question.key === "aiMode" ? "is-list" : ""}`}
-                  role="group"
-                  aria-label={question.title}
-                >
-                  {question.options.map(([value, label, icon]) => {
-                    const checked =
-                      question.key === "useCases"
-                        ? answers.useCases.includes(value)
-                        : answers[question.key] === value;
-                    return (
-                      <label
-                        key={value}
-                        className={`onboarding-option ${checked ? "selected" : ""}`}
+                <>
+                  {question.key === "useCases" && (
+                    <div className="onboarding-multi-tools">
+                      <button
+                        type="button"
+                        className="onboarding-select-all"
+                        onClick={toggleAllUseCases}
                       >
-                        <input
-                          type={
-                            question.key === "useCases" ? "checkbox" : "radio"
-                          }
-                          name={question.key}
-                          value={value}
-                          checked={checked}
-                          onChange={() => choose(value)}
-                        />
-                        <Icon name={icon} size={25} />
-                        <span>{label}</span>
-                        <span className="onboarding-choice" aria-hidden="true">
-                          {checked ? "✓" : ""}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+                        {answers.useCases.length === question.options.length
+                          ? "Hiq të gjitha"
+                          : "Zgjidh të gjitha"}
+                      </button>
+                    </div>
+                  )}
+                  <div
+                    className={`onboarding-options ${question.key === "aiMode" ? "is-list" : ""}`}
+                    role="group"
+                    aria-label={question.title}
+                  >
+                    {question.options.map(([value, label, icon]) => {
+                      const checked =
+                        question.key === "useCases"
+                          ? answers.useCases.includes(value)
+                          : answers[question.key] === value;
+                      return (
+                        <label
+                          key={value}
+                          className={`onboarding-option ${checked ? "selected" : ""}`}
+                        >
+                          <input
+                            type={
+                              question.key === "useCases" ? "checkbox" : "radio"
+                            }
+                            name={question.key}
+                            value={value}
+                            checked={checked}
+                            onChange={() => choose(value)}
+                          />
+                          <Icon name={icon} size={25} />
+                          <span>{label}</span>
+                          <span
+                            className="onboarding-choice"
+                            aria-hidden="true"
+                          >
+                            {checked ? "✓" : ""}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
               )}
               {step === 7 && (
                 <p className="onboarding-final-note">
@@ -233,19 +265,30 @@ export function OnboardingWizard({
                 ) : (
                   <Link href="/privacy">Privatësia</Link>
                 )}
-                <button
-                  className="onboarding-next"
-                  type="submit"
-                  disabled={!valid || busy}
-                >
-                  {busy
-                    ? "Duke ruajtur…"
-                    : step === 0
-                      ? "Fillo personalizimin →"
-                      : step === 7
-                        ? "Krijo hapësirën →"
-                        : "Vazhdo →"}
-                </button>
+                <div className="onboarding-actions-end">
+                  {step > 0 && step < 7 && (
+                    <button
+                      className="onboarding-skip"
+                      type="button"
+                      onClick={skipStep}
+                    >
+                      Anashkalo hapin
+                    </button>
+                  )}
+                  <button
+                    className="onboarding-next"
+                    type="submit"
+                    disabled={!valid || busy}
+                  >
+                    {busy
+                      ? "Duke ruajtur…"
+                      : step === 0
+                        ? "Fillo personalizimin →"
+                        : step === 7
+                          ? "Krijo hapësirën →"
+                          : "Vazhdo →"}
+                  </button>
+                </div>
               </div>
             </fieldset>
           </form>
