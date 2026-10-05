@@ -13,23 +13,29 @@ export const completeAnswers: Answers = {
   name: "Zana",
   businessType: "personalized",
   useCases: ["sales", "collection"],
+  selectedUseCases: ["sales", "collection"],
   productCount: "11-50",
-  productType: "personalized",
-  aiMode: "workflow",
+  productType: "photo",
+  offeringTypes: ["photo", "text"],
+  aiMode: "recommend_products",
+  agentCapabilities: [
+    "recommend_products",
+    "collect_order_details",
+    "follow_workflow",
+  ],
   messageVolume: "2000+",
   teamSize: "2-5",
+  businessProfile: null,
 };
 describe("onboarding answers", () => {
   it("allows incomplete drafts but rejects incomplete completion", () => {
-    expect(parseAnswers(emptyAnswers)).toEqual(emptyAnswers);
+    expect(parseAnswers(emptyAnswers)).toMatchObject(emptyAnswers);
     expect(() => parseAnswers(emptyAnswers, true)).toThrow();
   });
   it("validates every categorical answer", () => {
     for (const key of [
       "businessType",
       "productCount",
-      "productType",
-      "aiMode",
       "messageVolume",
       "teamSize",
     ]) {
@@ -37,10 +43,19 @@ describe("onboarding answers", () => {
         parseAnswers({ ...completeAnswers, [key]: "forged" }, true),
       ).toThrow();
     }
+    expect(() =>
+      parseAnswers({ ...completeAnswers, offeringTypes: ["forged"] }, true),
+    ).toThrow();
+    expect(() =>
+      parseAnswers({ ...completeAnswers, agentCapabilities: ["forged"] }, true),
+    ).toThrow();
   });
   it("rejects invalid use cases and oversized business names", () => {
     expect(() =>
-      parseAnswers({ ...completeAnswers, useCases: ["admin"] }, true),
+      parseAnswers(
+        { ...completeAnswers, useCases: ["products-only-invalid"] },
+        true,
+      ),
     ).toThrow();
     expect(() =>
       parseAnswers({ ...completeAnswers, name: "x".repeat(101) }, true),
@@ -58,7 +73,7 @@ describe("onboarding answers", () => {
         },
         true,
       ),
-    ).toEqual(completeAnswers);
+    ).toMatchObject(completeAnswers);
   });
   it("normalizes whitespace and duplicate choices", () => {
     expect(
@@ -66,7 +81,11 @@ describe("onboarding answers", () => {
         { ...completeAnswers, name: " Zana ", useCases: ["sales", "sales"] },
         true,
       ),
-    ).toEqual({ ...completeAnswers, useCases: ["sales"] });
+    ).toMatchObject({
+      ...completeAnswers,
+      useCases: ["sales"],
+      selectedUseCases: ["sales"],
+    });
   });
   it("skips disabled questionnaire steps on completion", () => {
     expect(
@@ -75,7 +94,7 @@ describe("onboarding answers", () => {
         true,
         ["businessType"],
       ),
-    ).toEqual({ ...emptyAnswers, name: "Zana", businessType: "fashion" });
+    ).toMatchObject({ name: "Zana", businessType: "fashion" });
     expect(() =>
       parseAnswers(
         { ...emptyAnswers, name: "Zana", businessType: "fashion" },
@@ -104,7 +123,10 @@ describe("onboarding answers", () => {
       ...completeAnswers,
       productCount: "0",
       productType: "services",
-      aiMode: "review",
+      offeringTypes: ["services"],
+      businessType: "services",
+      useCases: ["support", "booking"],
+      agentCapabilities: ["handoff"],
       messageVolume: "under100",
       teamSize: "solo",
     });

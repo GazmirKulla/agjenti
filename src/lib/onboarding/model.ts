@@ -1,40 +1,46 @@
+import {
+  allowedCapabilities,
+  allowedOfferings,
+  allowedUseCases,
+  buildBusinessProfile,
+  capabilityChoices,
+  offeringChoices,
+  normalizeConditionalAnswers,
+  useCaseChoices,
+  type Choice,
+} from "./rules";
+
+const businessTypeOptions = [
+  ["ecommerce", "Dyqan online", "products"],
+  ["personalized", "Produkte të personalizuara", "spark"],
+  ["fashion", "Veshje dhe modë", "products"],
+  ["beauty", "Bukuri dhe kujdes", "spark"],
+  ["electronics", "Elektronikë", "settings"],
+  ["services", "Shërbime", "businesses"],
+  ["other", "Tjetër", "dashboard"],
+] as const;
+
 export const questions = [
   {
     key: "businessType",
     label: "Lloji i biznesit",
     title: "Çfarë lloj biznesi ke?",
     description: "Do ta përshtatim hapësirën me mënyrën si punon.",
-    options: [
-      ["ecommerce", "Dyqan online", "products"],
-      ["personalized", "Produkte të personalizuara", "spark"],
-      ["fashion", "Veshje dhe modë", "products"],
-      ["beauty", "Bukuri dhe kujdes", "spark"],
-      ["electronics", "Elektronikë", "settings"],
-      ["services", "Shërbime", "businesses"],
-      ["other", "Tjetër", "dashboard"],
-    ],
+    options: businessTypeOptions,
   },
   {
     key: "useCases",
     label: "Qëllimet",
     title: "Për çfarë do ta përdorësh Agjentin?",
     description: "Mund të zgjedhësh disa mundësi.",
-    options: [
-      ["messages", "Menaxhim mesazhesh në Instagram", "instagram"],
-      ["support", "Mbështetje për klientët", "inbox"],
-      ["sales", "Asistent shitjesh", "spark"],
-      ["products", "Menaxhim produktesh", "products"],
-      ["orders", "Menaxhim porosish", "orders"],
-      ["customers", "Menaxhim klientësh", "customers"],
-      ["recommendations", "Rekomandime produktesh", "agents"],
-      ["collection", "Mbledhje të dhënash për porosi", "workflows"],
-    ],
+    options: useCaseChoices,
   },
   {
     key: "productCount",
-    label: "Numri i produkteve",
+    label: "Numri i produkteve ose shërbimeve",
     title: "Afërsisht sa produkte ose shërbime ofron?",
-    description: "Një vlerësim mjafton. Mund ta zgjerosh katalogun më vonë.",
+    description: "Një vlerësim mjafton. Mund ta ndryshosh më vonë.",
+    optional: true,
     options: [
       ["0", "Sapo po filloj", "products"],
       ["1-10", "1–10", "products"],
@@ -45,36 +51,27 @@ export const questions = [
   },
   {
     key: "productType",
-    label: "Produktet dhe shërbimet",
-    title: "Çfarë shet ose ofron?",
-    description: "Kjo na ndihmon të sugjerojmë konfigurimin e duhur.",
-    options: [
-      ["standard", "Produkte standarde", "products"],
-      ["variants", "Produkte me masa ose ngjyra", "dashboard"],
-      ["personalized", "Produkte me personalizim", "spark"],
-      ["services", "Shërbime", "settings"],
-      ["mixed", "Produkte dhe shërbime", "businesses"],
-    ],
+    label: "Lloji i ofertës",
+    title: "Çfarë ofron biznesi yt?",
+    description:
+      "Zgjidh të gjitha format që përdor. Opsionet përshtaten sipas biznesit.",
+    options: offeringChoices,
   },
   {
     key: "aiMode",
-    label: "Agjenti AI",
-    title: "Si dëshiron të punojë Agjenti AI?",
+    label: "Aftësitë e Agjentit AI",
+    title: "Çfarë dëshiron të bëjë Agjenti?",
     description:
-      "Kjo është preferenca fillestare. Aktivizimin e kontrollon vetë nga cilësimet.",
-    options: [
-      ["review", "Me mbikëqyrjen time", "customers"],
-      ["support", "T’u përgjigjet pyetjeve të zakonshme", "inbox"],
-      ["sales", "Të ndihmojë me shitje dhe rekomandime", "spark"],
-      ["collect", "Të mbledhë detajet e porosisë", "orders"],
-      ["workflow", "Të ndjekë procesin e plotë të porosisë", "workflows"],
-    ],
+      "Sugjerimet krijohen nga qëllimet që zgjodhe. Mund t’i ndryshosh më vonë.",
+    optional: true,
+    options: capabilityChoices,
   },
   {
     key: "messageVolume",
     label: "Vëllimi i mesazheve",
     title: "Sa mesazhe merr afërsisht në muaj?",
     description: "Do të sugjerojmë mënyrën e organizimit të Inbox-it.",
+    optional: true,
     options: [
       ["under100", "Më pak se 100", "inbox"],
       ["100-500", "100–500", "inbox"],
@@ -87,6 +84,7 @@ export const questions = [
     label: "Madhësia e ekipit",
     title: "Sa persona do ta përdorin Agjentin?",
     description: "Nuk vendosim kufizime funksionesh sipas madhësisë së ekipit.",
+    optional: true,
     options: [
       ["solo", "Vetëm unë", "customers"],
       ["2-5", "2–5 persona", "customers"],
@@ -95,29 +93,55 @@ export const questions = [
     ],
   },
 ] as const;
+
 export type AnswerKey = (typeof questions)[number]["key"];
-export type OnboardingQuestion = (typeof questions)[number];
+export type OnboardingQuestion = {
+  key: AnswerKey;
+  label: string;
+  title: string;
+  description: string;
+  options: readonly Choice[];
+  optional?: boolean;
+};
 export const allQuestionKeys = questions.map((q) => q.key) as AnswerKey[];
+const wizardOrder: AnswerKey[] = [
+  "businessType",
+  "productType",
+  "useCases",
+  "aiMode",
+  "productCount",
+  "messageVolume",
+  "teamSize",
+];
 export type Answers = {
   name: string;
   businessType: string;
   useCases: string[];
+  selectedUseCases: string[];
   productCount: string;
   productType: string;
+  offeringTypes: string[];
   aiMode: string;
+  agentCapabilities: string[];
   messageVolume: string;
   teamSize: string;
+  businessProfile: ReturnType<typeof buildBusinessProfile> | null;
 };
 export const emptyAnswers: Answers = {
   name: "",
   businessType: "",
   useCases: [],
+  selectedUseCases: [],
   productCount: "",
   productType: "",
+  offeringTypes: [],
   aiMode: "",
+  agentCapabilities: [],
   messageVolume: "",
   teamSize: "",
+  businessProfile: null,
 };
+
 export function normalizeOnboardingSteps(input: unknown): AnswerKey[] {
   if (!Array.isArray(input)) return [...allQuestionKeys];
   const allowed = new Set<string>(allQuestionKeys);
@@ -132,16 +156,49 @@ export function normalizeOnboardingSteps(input: unknown): AnswerKey[] {
   }
   return result;
 }
-export function activeQuestions(enabled: readonly AnswerKey[]): OnboardingQuestion[] {
+
+export function activeQuestions(
+  enabled: readonly AnswerKey[],
+  answers: Answers = emptyAnswers,
+): OnboardingQuestion[] {
   const set = new Set(enabled);
-  return questions.filter((q) => set.has(q.key));
+  const conditional = normalizeConditionalAnswers(answers);
+  return wizardOrder
+    .map((key) => questions.find((question) => question.key === key)!)
+    .filter((q) => set.has(q.key))
+    .filter((q) => q.key !== "aiMode" || conditional.useCases.length > 0)
+    .map((question) => {
+      let options: readonly Choice[] = question.options;
+      if (question.key === "productType")
+        options = allowedOfferings(answers.businessType);
+      if (question.key === "useCases")
+        options = allowedUseCases(
+          answers.businessType,
+          conditional.offeringTypes,
+        );
+      if (question.key === "aiMode")
+        options = allowedCapabilities(
+          answers.businessType,
+          answers.offeringTypes,
+          conditional.useCases,
+        );
+      const title =
+        question.key === "productCount" &&
+        answers.businessType === "services" &&
+        answers.offeringTypes.length === 1 &&
+        answers.offeringTypes[0] === "services"
+          ? "Afërsisht sa shërbime ofron?"
+          : question.title;
+      return { ...question, title, options } as OnboardingQuestion;
+    });
 }
-/** Map a stored full-questionnaire step onto the admin-enabled subset. */
+
 export function resumeWizardStep(
   storedStep: number,
   active: readonly OnboardingQuestion[],
 ): number {
-  if (!Number.isInteger(storedStep) || storedStep <= 0 || !active.length) return 0;
+  if (!Number.isInteger(storedStep) || storedStep <= 0 || !active.length)
+    return 0;
   const key = questions[storedStep - 1]?.key;
   if (key) {
     const idx = active.findIndex((q) => q.key === key);
@@ -154,6 +211,7 @@ export function resumeWizardStep(
   }
   return Math.min(storedStep, active.length);
 }
+
 export function wizardStepToStored(
   wizardStep: number,
   active: readonly OnboardingQuestion[],
@@ -163,7 +221,19 @@ export function wizardStepToStored(
   if (!question) return questions.length;
   return questions.findIndex((q) => q.key === question.key) + 1;
 }
-// Allow-list every field. Never persist arbitrary client-supplied JSON or permission flags.
+
+function legacyCapabilities(mode: unknown): string[] {
+  if (typeof mode !== "string") return [];
+  const map: Record<string, string[]> = {
+    review: ["handoff"],
+    support: ["answer_questions", "ask_missing"],
+    sales: ["understand_needs", "recommend_products"],
+    collect: ["collect_order_details"],
+    workflow: ["follow_workflow", "create_order"],
+  };
+  return map[mode] ?? [];
+}
+
 export function parseAnswers(
   input: unknown,
   complete = false,
@@ -172,107 +242,195 @@ export function parseAnswers(
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("Përgjigjet nuk janë të vlefshme.");
   const raw = input as Record<string, unknown>;
-  const result = { ...emptyAnswers, useCases: [] as string[] };
   if (typeof raw.name !== "string" || raw.name.trim().length > 100)
     throw new Error("Emri i biznesit duhet të ketë deri në 100 karaktere.");
-  result.name = raw.name.trim();
-  if (complete && result.name.length < 2)
+  const name = raw.name.trim();
+  if (complete && name.length < 2)
     throw new Error("Vendos emrin e biznesit (të paktën 2 karaktere).");
+
   const required = new Set(normalizeOnboardingSteps(enabledSteps));
-  for (const q of questions) {
-    const allowed: string[] = q.options.map((o) => o[0]);
-    const mustHave = complete && required.has(q.key);
-    if (q.key === "useCases") {
-      if (raw.useCases === undefined || raw.useCases === null) {
-        result.useCases = [];
-      } else if (
-        !Array.isArray(raw.useCases) ||
-        raw.useCases.some((v) => typeof v !== "string" || !allowed.includes(v))
-      ) {
-        throw new Error("Zgjidh qëllime të vlefshme.");
-      } else {
-        result.useCases = [...new Set(raw.useCases as string[])];
-      }
-      if (mustHave && !result.useCases.length)
-        throw new Error("Zgjidh të paktën një qëllim.");
-    } else {
-      const value = raw[q.key];
-      if (value === undefined || value === null || value === "") {
-        result[q.key] = "";
-      } else if (typeof value !== "string" || !allowed.includes(value)) {
-        throw new Error(`Plotëso fushën: ${q.label}.`);
-      } else {
-        result[q.key] = value;
-      }
-      if (mustHave && !result[q.key])
-        throw new Error(`Plotëso fushën: ${q.label}.`);
-    }
-  }
-  return result;
-}
-export function answerLabel(key: AnswerKey, value: string) {
-  return (
-    questions
-      .find((q) => q.key === key)
-      ?.options.find((o) => o[0] === value)?.[1] || value
+  const allowedTypes = new Set<string>(
+    businessTypeOptions.map(([value]) => value),
   );
-}
-export function initialInstructions(a: Answers) {
-  const modes: Record<string, string> = {
-    review:
-      "Përparësi ka mbikëqyrja nga stafi. Kërko ndihmën e stafit për paqartësi dhe mos premto veprime të pakonfirmuara.",
-    support:
-      "Përqendrohu te përgjigjet e qarta për pyetjet e zakonshme, bazuar vetëm te njohuritë e biznesit.",
-    sales:
-      "Ndihmo klientin të zgjedhë dhe rekomando produkte reale nga katalogu sipas nevojës së tij.",
-    collect:
-      "Mblidh vetëm të dhënat që kërkon hapi aktual i porosisë. Përmblidh detajet për konfirmim.",
-    workflow:
-      "Ndiq hapat e workflow-t të produktit dhe kërko konfirmimet përkatëse. Mos thuaj se porosia u krye pa konfirmim nga sistemi.",
-  };
-  const field = a.businessType
-    ? answerLabel("businessType", a.businessType)
-    : "e përgjithshme";
-  const parts = [
-    `Je asistenti i biznesit ${a.name}. Fusha: ${field}.`,
-    "Përgjigju në shqip ose në gjuhën e klientit, me ton miqësor dhe profesional. Mos shpik çmime, stok ose politika. Përdor katalogun dhe njohuritë e biznesit. Nëse informacioni mungon, kërko ndihmën e stafit.",
+  const businessType =
+    typeof raw.businessType === "string" && allowedTypes.has(raw.businessType)
+      ? raw.businessType
+      : "";
+  if (complete && required.has("businessType") && !businessType)
+    throw new Error("Zgjidh llojin e biznesit.");
+
+  const offeringInput = Array.isArray(raw.offeringTypes)
+    ? raw.offeringTypes
+    : raw.productType
+      ? [raw.productType]
+      : [];
+  if (offeringInput.some((value) => typeof value !== "string"))
+    throw new Error("Zgjidh lloje oferte të vlefshme.");
+  const offeringAllow = new Set(
+    allowedOfferings(businessType || "other").map(([value]) => value),
+  );
+  const offeringTypes = [
+    ...new Set(
+      (offeringInput as string[]).filter((value) => offeringAllow.has(value)),
+    ),
   ];
-  if (a.aiMode && modes[a.aiMode]) parts.push(modes[a.aiMode]);
-  const goals = a.useCases.map((v) => answerLabel("useCases", v)).join(", ");
-  const offer = a.productType
-    ? `Oferta: ${answerLabel("productType", a.productType)}. `
-    : "";
-  if (offer || goals)
-    parts.push(`${offer}Qëllimet: ${goals || "të përgjithshme"}.`);
-  parts.push(
-    a.productType === "personalized" || a.businessType === "personalized"
-      ? "Për personalizime ndiq kërkesat e workflow-t për foto, tekst dhe miratim; mos premto gjenerim ose prodhim që nuk është konfirmuar."
-      : "Kërko sqarime për zgjedhjet e produktit ose shërbimit kur nevojiten.",
+
+  const caseInput = raw.useCases ?? raw.selectedUseCases ?? [];
+  if (
+    !Array.isArray(caseInput) ||
+    caseInput.some((value) => typeof value !== "string")
+  )
+    throw new Error("Zgjidh qëllime të vlefshme.");
+  const caseAllow = new Set(
+    allowedUseCases(businessType || "other", offeringTypes).map(
+      ([value]) => value,
+    ),
   );
-  return parts.join("\n\n");
+  const useCases = [
+    ...new Set((caseInput as string[]).filter((value) => caseAllow.has(value))),
+  ];
+  if (complete && required.has("useCases") && useCases.length === 0)
+    throw new Error(
+      "Zgjidh të paktën një qëllim të vlefshëm për biznesin tënd.",
+    );
+
+  const capabilityInput = Array.isArray(raw.agentCapabilities)
+    ? raw.agentCapabilities
+    : legacyCapabilities(raw.aiMode);
+  if (capabilityInput.some((value) => typeof value !== "string"))
+    throw new Error("Zgjidh aftësi të vlefshme për Agjentin.");
+  const capabilityAllow = new Set(
+    allowedCapabilities(businessType || "other", offeringTypes, useCases).map(
+      ([value]) => value,
+    ),
+  );
+  const agentCapabilities = [
+    ...new Set(
+      (capabilityInput as string[]).filter((value) =>
+        capabilityAllow.has(value),
+      ),
+    ),
+  ];
+
+  const scalarValues: Record<
+    "productCount" | "messageVolume" | "teamSize",
+    string
+  > = {
+    productCount: "",
+    messageVolume: "",
+    teamSize: "",
+  };
+  for (const key of Object.keys(
+    scalarValues,
+  ) as (keyof typeof scalarValues)[]) {
+    const question = questions.find(
+      (item) => item.key === key,
+    )! as OnboardingQuestion;
+    const value = raw[key];
+    const allowed = question.options.map(([choice]) => choice);
+    if (value == null || value === "") {
+      if (complete && required.has(key) && !question.optional)
+        throw new Error(`Plotëso fushën: ${question.label}.`);
+      continue;
+    }
+    if (typeof value !== "string" || !allowed.includes(value))
+      throw new Error(`Plotëso fushën: ${question.label}.`);
+    scalarValues[key] = value;
+  }
+  if (complete && required.has("productType") && offeringTypes.length === 0)
+    throw new Error("Zgjidh të paktën një lloj oferte.");
+  if (
+    complete &&
+    required.has("aiMode") &&
+    !questions.find((q) => q.key === "aiMode")?.optional &&
+    agentCapabilities.length === 0
+  )
+    throw new Error("Zgjidh aftësitë e Agjentit.");
+
+  const normalized = normalizeConditionalAnswers({
+    ...emptyAnswers,
+    name,
+    businessType,
+    offeringTypes,
+    productType: offeringTypes[0] ?? "",
+    useCases,
+    selectedUseCases: [...useCases],
+    agentCapabilities,
+    aiMode: agentCapabilities[0] ?? "",
+    ...scalarValues,
+  });
+  normalized.selectedUseCases = [...normalized.useCases];
+  normalized.productType = normalized.offeringTypes[0] ?? "";
+  normalized.aiMode = normalized.agentCapabilities[0] ?? "";
+  normalized.businessProfile = buildBusinessProfile(normalized);
+  return normalized;
 }
+
+export function answerLabel(key: AnswerKey, value: string) {
+  const options: readonly Choice[] =
+    key === "productType"
+      ? offeringChoices
+      : key === "useCases"
+        ? useCaseChoices
+        : key === "aiMode"
+          ? capabilityChoices
+          : (questions.find((q) => q.key === key)?.options ?? []);
+  return options.find((option) => option[0] === value)?.[1] || value;
+}
+
+export function initialInstructions(a: Answers) {
+  const business =
+    answerLabel("businessType", a.businessType) || "e përgjithshme";
+  const capabilities = a.agentCapabilities
+    .map((key) => answerLabel("aiMode", key).toLocaleLowerCase())
+    .join(", ");
+  const offer = a.offeringTypes
+    .map((key) => answerLabel("productType", key))
+    .join(", ");
+  const goals = a.useCases
+    .map((key) => answerLabel("useCases", key))
+    .join(", ");
+  return [
+    `Je asistenti i biznesit ${a.name}. Fusha: ${business}.`,
+    "Përgjigju në shqip ose në gjuhën e klientit, me ton miqësor dhe profesional. Mos shpik çmime, stok ose politika. Përdor katalogun dhe njohuritë e biznesit. Nëse informacioni mungon, kërko ndihmën e stafit.",
+    offer ? `Oferta e biznesit: ${offer}.` : "",
+    goals ? `Qëllimet e Agjentit: ${goals}.` : "",
+    capabilities ? `Aftësitë e kërkuara: ${capabilities}.` : "",
+    a.offeringTypes.some((item) =>
+      ["photo", "text", "personalized"].includes(item),
+    )
+      ? "Për personalizimet kërko dhe përcjell të dhënat që kërkon workflow, si foto, tekst ose variante; mos premto veprime të pakonfirmuara."
+      : "Kërko sqarime për zgjedhjet e produktit ose shërbimit kur nevojiten.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function recommendations(a: Answers) {
+  const hasProducts = a.offeringTypes.some((item) => item !== "services");
   return [
     a.productCount === "0"
-      ? "Fillo me një produkt ose shërbim; katalogun mund ta zgjerosh gradualisht."
+      ? `Fillo duke shtuar ${hasProducts ? "një produkt" : "një shërbim"}; katalogun mund ta zgjerosh gradualisht.`
       : ["51-200", "200+"].includes(a.productCount)
         ? "Organizo katalogun sipas llojeve dhe shqyrto lidhjen e një katalogu të jashtëm te Cilësimet."
-        : "Shto fillimisht produktet ose shërbimet që kërkohen më shpesh.",
-    a.productType === "personalized"
-      ? "Përdor workflow sipas llojit të produktit për foto, tekst dhe miratim."
-      : a.productType === "services"
-        ? "Shto shërbimet në katalog dhe shpjego kushtet e rezervimit te Njohuria."
-        : a.productType === "variants"
-          ? "Përshkruaj masat dhe ngjyrat në katalog dhe përshtat workflow-n sipas llojit."
+        : `Shto fillimisht ${hasProducts ? "produktet" : "shërbimet"} që kërkohen më shpesh.`,
+    a.offeringTypes.includes("photo") ||
+    a.offeringTypes.includes("text") ||
+    a.offeringTypes.includes("personalized")
+      ? "Përdor workflow-t për të mbledhur personalizimet dhe për të kërkuar miratim."
+      : a.offeringTypes.includes("services") && !hasProducts
+        ? "Shto kushtet dhe mënyrën e rezervimit te Njohuria e biznesit."
+        : a.offeringTypes.includes("variants")
+          ? "Përshkruaj masat, ngjyrat ose variantet në katalog dhe përshtat workflow-n për porositë."
           : "Plotëso përshkrimet dhe çmimet përpara se të aktivizosh përgjigjet automatike.",
-    a.aiMode === "review"
-      ? "Mbaj përgjigjet automatike të fikura dhe përgjigju manualisht nga Inbox-i. Preferenca nuk aktivizon një gjenerator sugjerimesh."
-      : "Rishiko udhëzimet e përgatitura, aktivizo agjentin dhe më pas vendos nëse do dërgim automatik te Cilësimet.",
+    a.agentCapabilities.includes("handoff")
+      ? "Rishiko si dhe kur bisedat duhet t’i kalojnë stafit."
+      : "Rishiko udhëzimet, testo agjentin dhe vendos vetë nëse do të aktivizosh përgjigjet automatike.",
     ["501-2000", "2000+"].includes(a.messageVolume)
       ? "Për vëllimin tënd të mesazheve, përdor statuset e bisedave për të ndjekur rastet që kërkojnë staf."
       : "Kontrollo bisedat e para në Inbox për të përmirësuar përgjigjet dhe njohuritë.",
     a.teamSize === "solo"
       ? "Inbox-i dhe porositë janë të gjitha në hapësirën tënde."
-      : "Për të shtuar ekipin, anëtarët regjistrohen dhe administratori i platformës i lidh me biznesin nga paneli ekzistues.",
+      : "Mund të shtosh anëtarë të ekipit më vonë nga menaxhimi i biznesit.",
   ];
 }

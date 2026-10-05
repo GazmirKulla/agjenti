@@ -26,9 +26,9 @@ export async function saveOnboarding(
     )
       return { error: "Hapi nuk është i vlefshëm." };
     const settings = await getAppSettings();
-    let answers;
+    let parsedAnswers: ReturnType<typeof parseAnswers>;
     try {
-      answers = parseAnswers(
+      parsedAnswers = parseAnswers(
         input,
         complete && settings.onboarding_enabled,
         settings.onboarding_steps,
@@ -38,6 +38,9 @@ export async function saveOnboarding(
         error: e instanceof Error ? e.message : "Kontrollo përgjigjet.",
       };
     }
+    const answers = settings.onboarding_enabled
+      ? parsedAnswers
+      : { ...emptyAnswers, name: parsedAnswers.name };
     if (complete && answers.name.length < 2)
       return { error: "Vendos emrin e biznesit (të paktën 2 karaktere)." };
     const access = await listMemberships(user.id);

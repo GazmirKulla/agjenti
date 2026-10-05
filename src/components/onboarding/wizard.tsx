@@ -8,11 +8,17 @@ import { saveOnboarding } from "@/lib/onboarding/actions";
 import {
   activeQuestions,
   allQuestionKeys,
+  answerLabel,
+  recommendations,
   resumeWizardStep,
   wizardStepToStored,
   type AnswerKey,
   type Answers,
 } from "@/lib/onboarding/model";
+import {
+  buildBusinessProfile,
+  normalizeConditionalAnswers,
+} from "@/lib/onboarding/rules";
 export function OnboardingWizard({
   initial,
   initialStep,
@@ -26,13 +32,18 @@ export function OnboardingWizard({
   enabledSteps?: AnswerKey[];
   onSave?: typeof saveOnboarding;
 }) {
+  const [answers, setAnswers] = useState(initial);
   const active = useMemo(
-    () => activeQuestions(enabledSteps),
-    [enabledSteps],
+    () => activeQuestions(enabledSteps, answers),
+    [enabledSteps, answers],
   );
   const total = active.length;
-  const [answers, setAnswers] = useState(initial);
-  const [step, setStep] = useState(() => resumeWizardStep(initialStep, active));
+  const startingQuestions = activeQuestions(enabledSteps, initial);
+  const [stepKey, setStepKey] = useState<AnswerKey | null>(() => {
+    const index = resumeWizardStep(initialStep, startingQuestions);
+    return startingQuestions[index - 1]?.key ?? null;
+  });
+  const step = stepKey ? active.findIndex((q) => q.key === stepKey) + 1 : 0;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -41,45 +52,89 @@ export function OnboardingWizard({
   const valid =
     step === 0
       ? answers.name.trim().length >= 2
-      : question?.key === "useCases"
-        ? answers.useCases.length > 0
-        : Boolean(question && answers[question.key]);
+      : question?.optional
+        ? true
+        : question?.key === "useCases"
+          ? answers.useCases.length > 0
+          : question?.key === "productType"
+            ? answers.offeringTypes.length > 0
+            : Boolean(question && answers[question.key]);
   function choose(value: string) {
     if (!question) return;
-    setAnswers((a) => ({
-      ...a,
-      [question.key]:
-        question.key === "useCases"
-          ? a.useCases.includes(value)
-            ? a.useCases.filter((v) => v !== value)
-            : [...a.useCases, value]
-          : value,
-    }));
+    setAnswers((current) => {
+      const multiKey =
+        question.key === "productType" ||
+        question.key === "useCases" ||
+        question.key === "aiMode";
+      const currentValues =
+        question.key === "productType"
+          ? current.offeringTypes
+          : question.key === "useCases"
+            ? current.useCases
+            : question.key === "aiMode"
+              ? current.agentCapabilities
+              : [];
+      const selected = multiKey
+        ? currentValues.includes(value)
+          ? currentValues.filter((item) => item !== value)
+          : [...currentValues, value]
+        : currentValues;
+      const next = { ...current };
+      if (question.key === "productType") next.offeringTypes = selected;
+      else if (question.key === "useCases") next.useCases = selected;
+      else if (question.key === "aiMode") next.agentCapabilities = selected;
+      else if (question.key === "businessType") next.businessType = value;
+      else if (question.key === "productCount") next.productCount = value;
+      else if (question.key === "messageVolume") next.messageVolume = value;
+      else if (question.key === "teamSize") next.teamSize = value;
+      const normalized = normalizeConditionalAnswers(next);
+      return {
+        ...normalized,
+        selectedUseCases: [...normalized.useCases],
+        productType: normalized.offeringTypes[0] ?? "",
+        aiMode: normalized.agentCapabilities[0] ?? "",
+      };
+    });
     setError("");
     setSaved(false);
   }
   function toggleAllUseCases() {
     if (!question || question.key !== "useCases") return;
     const all = question.options.map(([value]) => value);
-    setAnswers((a) => ({
-      ...a,
-      useCases: a.useCases.length === all.length ? [] : [...all],
-    }));
+    setAnswers((current) => {
+      const normalized = normalizeConditionalAnswers({
+        ...current,
+        useCases: current.useCases.length === all.length ? [] : [...all],
+      });
+      return { ...normalized, selectedUseCases: [...normalized.useCases] };
+    });
     setError("");
     setSaved(false);
   }
   function skipStep() {
-    if (step < 1 || step >= total || busy) return;
-    void persist(step + 1);
+    if (step < 1 || !question?.optional || busy) return;
+    const next = active[step]?.key ?? null;
+    void persist(next, next === null);
   }
-  async function persist(target: number, complete = false, advance = true) {
+  async function persist(
+    target: AnswerKey | null,
+    complete = false,
+    advance = true,
+  ) {
     if (busy) return;
     setBusy(true);
     setError("");
     try {
       const result = await onSave(
         answers,
-        wizardStepToStored(complete ? total : target, active),
+        complete
+          ? wizardStepToStored(total, active)
+          : target
+            ? wizardStepToStored(
+                active.findIndex((q) => q.key === target) + 1,
+                active,
+              )
+            : 0,
         complete,
       );
       if (result.error) {
@@ -92,7 +147,7 @@ export function OnboardingWizard({
       }
       setSaved(true);
       if (advance) {
-        setStep(target);
+        setStepKey(target);
         requestAnimationFrame(() => heading.current?.focus());
       }
     } catch {
@@ -168,8 +223,8 @@ export function OnboardingWizard({
             onSubmit={(e) => {
               e.preventDefault();
               if (!valid) return;
-              if (step >= total) void persist(step, true);
-              else void persist(step + 1);
+              if (step >= total) void persist(question?.key ?? null, true);
+              else void persist(active[step]?.key ?? null);
             }}
           >
             <fieldset disabled={busy}>
@@ -214,14 +269,41 @@ export function OnboardingWizard({
                 </div>
               ) : (
                 <>
-                  {question.key === "useCases" && (
+                  {(question.key === "useCases" ||
+                    question.key === "productType") && (
                     <div className="onboarding-multi-tools">
                       <button
                         type="button"
                         className="onboarding-select-all"
-                        onClick={toggleAllUseCases}
+                        onClick={() => {
+                          if (question.key === "useCases") toggleAllUseCases();
+                          else {
+                            const all = question.options.map(
+                              ([value]) => value,
+                            );
+                            setAnswers((current) => {
+                              const normalized = normalizeConditionalAnswers({
+                                ...current,
+                                offeringTypes:
+                                  current.offeringTypes.length === all.length
+                                    ? []
+                                    : all,
+                              });
+                              return {
+                                ...normalized,
+                                productType: normalized.offeringTypes[0] ?? "",
+                                selectedUseCases: [...normalized.useCases],
+                              };
+                            });
+                            setError("");
+                            setSaved(false);
+                          }
+                        }}
                       >
-                        {answers.useCases.length === question.options.length
+                        {(question.key === "useCases"
+                          ? answers.useCases.length
+                          : answers.offeringTypes.length) ===
+                        question.options.length
                           ? "Hiq të gjitha"
                           : "Zgjidh të gjitha"}
                       </button>
@@ -233,19 +315,36 @@ export function OnboardingWizard({
                     aria-label={question.title}
                   >
                     {question.options.map(([value, label, icon]) => {
-                      const checked =
-                        question.key === "useCases"
-                          ? answers.useCases.includes(value)
-                          : answers[question.key] === value;
+                      const multi =
+                        question.key === "useCases" ||
+                        question.key === "productType" ||
+                        question.key === "aiMode";
+                      const selectedValues =
+                        question.key === "productType"
+                          ? answers.offeringTypes
+                          : question.key === "useCases"
+                            ? answers.useCases
+                            : question.key === "aiMode"
+                              ? answers.agentCapabilities
+                              : [];
+                      const checked = multi
+                        ? selectedValues.includes(value)
+                        : question.key === "businessType"
+                          ? answers.businessType === value
+                          : question.key === "productCount"
+                            ? answers.productCount === value
+                            : question.key === "messageVolume"
+                              ? answers.messageVolume === value
+                              : question.key === "teamSize"
+                                ? answers.teamSize === value
+                                : false;
                       return (
                         <label
                           key={value}
                           className={`onboarding-option ${checked ? "selected" : ""}`}
                         >
                           <input
-                            type={
-                              question.key === "useCases" ? "checkbox" : "radio"
-                            }
+                            type={multi ? "checkbox" : "radio"}
                             name={question.key}
                             value={value}
                             checked={checked}
@@ -272,6 +371,38 @@ export function OnboardingWizard({
                   Instagram-in dhe të rishikosh rekomandimet.
                 </p>
               )}
+              {step > 0 && step === total && (
+                <div className="onboarding-profile-preview">
+                  <h2>Përmbledhja e konfigurimit fillestar</h2>
+                  <p>
+                    <strong>Biznesi:</strong>{" "}
+                    {answerLabel("businessType", answers.businessType)}
+                  </p>
+                  <p>
+                    <strong>Oferta:</strong>{" "}
+                    {answers.offeringTypes
+                      .map((value) => answerLabel("productType", value))
+                      .join(", ") || "Pa përcaktuar"}
+                  </p>
+                  <p>
+                    <strong>Qëllimet:</strong>{" "}
+                    {answers.useCases
+                      .map((value) => answerLabel("useCases", value))
+                      .join(", ") || "Pa përcaktuar"}
+                  </p>
+                  <p>
+                    <strong>Aftësitë:</strong>{" "}
+                    {answers.agentCapabilities
+                      .map((value) => answerLabel("aiMode", value))
+                      .join(", ") || "Do të përcaktohen më vonë"}
+                  </p>
+                  <ul>
+                    {recommendations(answers).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {step === 0 && total === 0 && (
                 <p className="onboarding-final-note">
                   Hapësira do të krijohet në emër të{" "}
@@ -288,7 +419,11 @@ export function OnboardingWizard({
                   <button
                     className="onboarding-back"
                     type="button"
-                    onClick={() => void persist(step - 1)}
+                    onClick={() =>
+                      void persist(
+                        step <= 1 ? null : (active[step - 2]?.key ?? null),
+                      )
+                    }
                   >
                     ← Prapa
                   </button>
@@ -296,7 +431,7 @@ export function OnboardingWizard({
                   <Link href="/privacy">Privatësia</Link>
                 )}
                 <div className="onboarding-actions-end">
-                  {step > 0 && step < total && (
+                  {step > 0 && question?.optional && (
                     <button
                       className="onboarding-skip"
                       type="button"
@@ -331,7 +466,7 @@ export function OnboardingWizard({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void persist(step, false, false)}
+              onClick={() => void persist(question?.key ?? null, false, false)}
             >
               Ruaj për më vonë
             </button>
