@@ -21,6 +21,9 @@ const figtree = localFont({
 export const metadata: Metadata = {
   title: "Agjenti.app",
   description: "Platformë qendrore e suportit me AI për Instagram.",
+  verification: {
+    google: "6mP2ZNmj6uyMtBjZnqqOIEmkSQJbc0p802Gdhfdp9zs",
+  },
 };
 
 export default function RootLayout({
