@@ -154,3 +154,18 @@ Apliko `supabase/migrations/20261004120000_business_setup.sql` për rrjedhën e 
 - UI ruan navigimin e lirë. Në mobile shfaqet fillimisht hapi aktual, me listën e hapave të palosur. Progresi rifreskohet pas ruajtjes dhe kur kthehesh nga skeda e autorizimit Instagram.
 
 Pa migrimin shfaqet njoftim i qartë; nuk pretendohet se konfigurimi ose aktivizimi u ruajt.
+
+
+### Onboarding me audio
+
+Në `/onboarding`, përdoruesit e rinj mund të zgjedhin “Na trego shkurt për biznesin tënd” ose të vazhdojnë manualisht. Regjistrimi përdor mikrofonin e browser-it (HTTPS ose localhost), zgjat deri në dy minuta dhe mbështet WebM/Opus dhe MP4 në browser-at përkatës. Audioja mund të dëgjohet dhe të regjistrohet përsëri para dërgimit. Nëse mikrofoni ose AI nuk janë të disponueshëm, pyetësori manual vazhdon të funksionojë.
+
+**Aktivizimi:** apliko `supabase/migrations/20261006090000_audio_onboarding.sql`. Përdoret `OPENAI_API_KEY`; `ONBOARDING_TRANSCRIPTION_MODEL` ka default `gpt-4o-mini-transcribe`, kurse `ONBOARDING_EXTRACTION_MODEL` përdor modelin ekzistues të agjentit kur lihet bosh. Modeli i analizës duhet të mbështesë Responses API me strict JSON Schema. Kontratat ndjekin dokumentacionin zyrtar për [transkriptimin](https://developers.openai.com/api/docs/guides/speech-to-text) dhe [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
+
+`POST /api/onboarding/audio` verifikon sesionin, origjinën, mungesën e një anëtarësie ekzistuese, cilësimin e onboarding-ut dhe formatin/madhësinë e audios. Kufiri është 3 MiB për regjistrim, 12 tentativa në 24 orë për llogari dhe një analizë aktive. Kufiri i kërkesave zbatohet atomikisht në databazë; një lease i braktisur skadon pas tre minutash. Audioja nuk ruhet në storage: dërgohet për transkriptim, pastaj lirohet nga memoria e kërkesës. Ruajtja/përpunimi nga ofruesi AI i nënshtrohet konfigurimit dhe politikave të tij.
+
+`onboarding_audio_attempts` ruan transkriptin, daljen e strukturuar, profilin para/pas analizës dhe identifikuesin e përgjigjes. Transkripti ruhet edhe nëse analiza pasuese dështon. Leximi lejohet vetëm për pronarin dhe shkrimi vetëm për service role; fshirja e onboarding-ut ose e profilit fshin edhe historikun audio. `answers.audioReview` ruan confidence, fushat e konfirmuara dhe korrigjimet manuale. `answers.confirmedProfile` llogaritet në server vetëm gjatë përfundimit. Produktet e përmendura janë përshkrime, jo rreshta të krijuar në katalog.
+
+AI prodhon një ndryshim të pjesshëm të profilit, vetëm me identifikuesit nga rules layer-i ekzistues. Çdo fakt kërkon një citim nga transkripti i ri; fushat e papërmendura mbeten null. Confidence është vlerësim i modelit, jo probabilitet i kalibruar. Audioja shtesë bashkon listat dhe plotëson tekstin pa zëvendësuar korrigjimet manuale. Të dhënat kalojnë përsëri në rregullat kushtore; rekomandimet gjenerohen në kod. Fushat me confidence nën 0.8 kërkojnë konfirmim individual, konfliktet kërkojnë korrigjim dhe krijimi i biznesit kërkon rishikimin përfundimtar. Një draft i ndryshuar në një tab tjetër nuk mbishkruhet nga një analizë e vonuar.
+
+Kontrollo në desktop dhe mobile: audio → dëgjo → analizo → korrigjo/sqaro → konfirmo; provo edhe refuzimin e mikrofonit, një regjistrim plotësues, rifreskimin e faqes dhe kalimin në manual. Testet me Vitest mbulojnë auth, upload-et, kufijtë, bashkimin, të dhënat e panjohura, provat nga transkripti dhe konfirmimin. `supabase/tests/audio_onboarding.sql` teston izolimin dhe ruajtjen atomike në një databazë testimi; nuk duhet ekzekutuar në prodhim.

@@ -5,7 +5,7 @@ import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { homeForAccess } from "@/lib/auth/destination";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { emptyAnswers, parseAnswers } from "@/lib/onboarding/model";
-import { OnboardingWizard } from "@/components/onboarding/wizard";
+import { OnboardingExperience } from "@/components/onboarding/experience";
 import { getAppSettings } from "@/lib/platform/settings";
 import { BasicWorkspaceForm } from "@/components/onboarding/basic-workspace";
 import { signOut } from "@/lib/auth/actions";
@@ -69,12 +69,21 @@ export default async function OnboardingPage() {
     );
   let initial = emptyAnswers;
   try {
-    if (data) initial = parseAnswers(data.answers, false, settings.onboarding_steps);
+    if (data)
+      initial = parseAnswers(data.answers, false, settings.onboarding_steps);
   } catch {
     /* A malformed old draft can be safely restarted. */
   }
+  const { data: audioHistory } = await createServiceSupabase()
+    .from("onboarding_audio_attempts")
+    .select("id,transcript")
+    .eq("user_id", user.id)
+    .not("transcript", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(12);
   return (
-    <OnboardingWizard
+    <OnboardingExperience
+      history={(audioHistory ?? []).reverse()}
       initial={initial}
       initialStep={data?.step ?? 0}
       email={user.email || ""}

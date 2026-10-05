@@ -1,4 +1,14 @@
 import {
+  audioFields,
+  detailFields,
+  detailConflicts,
+  parseDetails,
+  parseAudioReview,
+  pendingConfirmations,
+  type BusinessDetails,
+  type AudioReview,
+} from "./audio-fields";
+import {
   allowedCapabilities,
   allowedOfferings,
   allowedUseCases,
@@ -115,6 +125,12 @@ const wizardOrder: AnswerKey[] = [
 ];
 export type Answers = {
   name: string;
+  missingInformation?: string[];
+  details?: BusinessDetails;
+  audioReview?: AudioReview;
+  confirmedProfile?: ReturnType<typeof buildBusinessProfile> & {
+    details?: BusinessDetails;
+  };
   businessType: string;
   useCases: string[];
   selectedUseCases: string[];
@@ -375,7 +391,35 @@ export function parseAnswers(
   normalized.selectedUseCases = [...normalized.useCases];
   normalized.productType = normalized.offeringTypes[0] ?? "";
   normalized.aiMode = normalized.agentCapabilities[0] ?? "";
+  if (raw.details) normalized.details = parseDetails(raw.details);
+  const audioReview = parseAudioReview(raw.audioReview);
+  if (audioReview) {
+    normalized.audioReview = audioReview;
+    normalized.missingInformation = audioFields.filter((key) => {
+      const value =
+        key in detailFields
+          ? normalized.details?.[key as keyof BusinessDetails]
+          : (normalized as unknown as Record<string, unknown>)[key];
+      return (
+        value == null || value === "" || (Array.isArray(value) && !value.length)
+      );
+    });
+    if (
+      complete &&
+      (!audioReview.reviewed || pendingConfirmations(audioReview).length)
+    )
+      throw new Error(
+        "Rishiko dhe konfirmo të dhënat e sugjeruara para krijimit të hapësirës.",
+      );
+  }
+  if (complete && detailConflicts(normalized).length)
+    throw new Error(detailConflicts(normalized)[0].message);
   normalized.businessProfile = buildBusinessProfile(normalized);
+  if (complete && audioReview)
+    normalized.confirmedProfile = {
+      ...normalized.businessProfile,
+      details: normalized.details,
+    };
   return normalized;
 }
 
@@ -414,6 +458,9 @@ export function initialInstructions(a: Answers) {
   return [
     `Je asistenti i biznesit ${a.name}. Fusha: ${business}.`,
     "Përgjigju në shqip ose në gjuhën e klientit, me ton miqësor dhe profesional. Mos shpik çmime, stok ose politika. Përdor katalogun dhe njohuritë e biznesit. Nëse informacioni mungon, kërko ndihmën e stafit.",
+    a.details?.businessDescription
+      ? `Përshkrimi i konfirmuar i biznesit: ${a.details.businessDescription}`
+      : "",
     offer ? `Oferta e biznesit: ${offer}.` : "",
     goals ? `Qëllimet e Agjentit: ${goals}.` : "",
     capabilities ? `Aftësitë e kërkuara: ${capabilities}.` : "",

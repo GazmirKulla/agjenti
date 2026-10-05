@@ -1,3 +1,4 @@
+import type { BusinessDetails } from "./audio-fields";
 export type Choice = readonly [value: string, label: string, icon: string];
 
 export const offeringChoices: readonly Choice[] = [
@@ -279,7 +280,8 @@ export const businessProfiles = {
 } as const;
 
 export type BusinessType = keyof typeof businessProfiles;
-export type BusinessProfileAnswers = {
+export type BusinessProfileAnswers = Partial<BusinessDetails> & {
+  missingInformation?: string[];
   businessType: string;
   offeringTypes: string[];
   selectedUseCases: string[];
@@ -406,6 +408,8 @@ export function normalizeConditionalAnswers<
 }
 
 export function buildBusinessProfile(answers: {
+  missingInformation?: string[];
+  details?: BusinessDetails;
   businessType: string;
   offeringTypes: string[];
   useCases: string[];
@@ -415,6 +419,21 @@ export function buildBusinessProfile(answers: {
   teamSize: string;
 }): BusinessProfileAnswers {
   const defaults = rulesFor(answers.businessType).recommendedDefaults;
+  const validCases = new Set(
+    allowedUseCases(answers.businessType, answers.offeringTypes).map(
+      ([value]) => value,
+    ),
+  );
+  const recommendedCases = defaults.useCases.filter((value) =>
+    validCases.has(value),
+  );
+  const validCaps = new Set(
+    allowedCapabilities(
+      answers.businessType,
+      answers.offeringTypes,
+      answers.useCases.length ? answers.useCases : recommendedCases,
+    ).map(([value]) => value),
+  );
   const checklist = [
     "Lidh Instagram-in",
     answers.offeringTypes.some((item) => item !== "services")
@@ -425,15 +444,19 @@ export function buildBusinessProfile(answers: {
     "Provo një bisedë para aktivizimit",
   ];
   return {
+    ...answers.details,
+    ...(answers.missingInformation
+      ? { missingInformation: answers.missingInformation }
+      : {}),
     businessType: answers.businessType || "other",
     offeringTypes: [...answers.offeringTypes],
     selectedUseCases: [...answers.useCases],
     agentCapabilities: [...answers.agentCapabilities],
     recommendedConfiguration: {
-      useCases: defaults.useCases,
+      useCases: recommendedCases,
       capabilities: answers.agentCapabilities.length
         ? [...answers.agentCapabilities]
-        : defaults.capabilities,
+        : defaults.capabilities.filter((value) => validCaps.has(value)),
       workflow: defaults.workflow,
       checklist,
     },

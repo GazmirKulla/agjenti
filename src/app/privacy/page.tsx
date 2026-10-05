@@ -39,7 +39,7 @@ export default function PrivacyPage() {
             Një shpjegim i qartë për të dhënat që përpunohen kur përdor
             Agjenti.app ose komunikon me një biznes që përdor platformën.
           </p>
-          <span className="privacy-date">Përditësuar më 3 tetor 2026</span>
+          <span className="privacy-date">Përditësuar më 5 tetor 2026</span>
         </div>
         <div className="privacy-layout">
           <aside>
@@ -76,9 +76,19 @@ export default function PrivacyPage() {
                 <li>
                   <strong>Llogaria dhe biznesi:</strong> email-i, emri i
                   profilit, emri i biznesit, anëtarësia dhe roli i përdoruesit.
-                  Gjatë konfigurimit ruajmë edhe përgjigjet për fushën e biznesit,
-                  qëllimet, katalogun, mënyrën e AI-së, vëllimin e mesazheve dhe
-                  madhësinë e ekipit, për të përshtatur konfigurimin dhe rekomandimet.
+                  Gjatë konfigurimit ruajmë edhe përgjigjet për fushën e
+                  biznesit, qëllimet, katalogun, mënyrën e AI-së, vëllimin e
+                  mesazheve dhe madhësinë e ekipit, për të përshtatur
+                  konfigurimin dhe rekomandimet.
+                </li>
+                <li>
+                  <strong>Konfigurimi me audio (opsional):</strong> kur zgjedh
+                  analizën e regjistrimit, audioja dërgohet te OpenAI për
+                  transkriptim dhe teksti analizohet për të propozuar profilin e
+                  biznesit. Agjenti.app ruan transkriptin, rezultatet e
+                  analizës, korrigjimet dhe profilin e konfirmuar; nuk ruan
+                  skedarin audio në storage. Mund të zgjedhësh konfigurimin
+                  manual.
                 </li>
                 <li>
                   <strong>Lidhja me Instagram:</strong> identifikuesi i

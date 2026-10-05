@@ -22,12 +22,14 @@ export function OnboardingWizard({
   email,
   enabledSteps = allQuestionKeys,
   onSave = saveOnboarding,
+  onAudio,
 }: {
   initial: Answers;
   initialStep: number;
   email: string;
   enabledSteps?: AnswerKey[];
   onSave?: typeof saveOnboarding;
+  onAudio?: (answers: Answers) => void;
 }) {
   const [answers, setAnswers] = useState(initial);
   const active = useMemo(
@@ -212,6 +214,16 @@ export function OnboardingWizard({
           </div>
         </aside>
         <section className="onboarding-body">
+          {onAudio && (
+            <button
+              type="button"
+              className="onboarding-skip"
+              disabled={busy}
+              onClick={() => onAudio(answers)}
+            >
+              Na trego me audio →
+            </button>
+          )}
           <div className="onboarding-progress">
             <progress
               max={Math.max(total, 1)}

@@ -517,3 +517,183 @@
     padding: 13px 18px;
   }
 }
+
+/* Audio and review reuse the existing onboarding palette and controls. */
+.onboarding-hybrid {
+  gap: 20px;
+}
+.onboarding-hybrid .onboarding-progress {
+  margin-bottom: 5px;
+}
+.onboarding-audio-box {
+  padding: 28px 20px;
+  border: 1px solid #e7e1ee;
+  border-radius: 16px;
+  background: #faf8ff;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+}
+.onboarding-audio-box p {
+  color: #786c8d;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.onboarding-mic {
+  display: grid;
+  place-items: center;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(130deg, #6533ee, #9865ff);
+  box-shadow: 0 0 0 13px #eee7ff;
+  margin: 18px;
+}
+.onboarding-mic.is-recording {
+  animation: onboarding-recording 1.5s ease-in-out infinite;
+}
+@keyframes onboarding-recording {
+  50% {
+    box-shadow: 0 0 0 22px #eee7ff;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-mic.is-recording {
+    animation: none;
+  }
+}
+.onboarding-audio-box audio {
+  width: 100%;
+  max-width: 450px;
+}
+.onboarding-audio-time {
+  font-variant-numeric: tabular-nums;
+}
+.onboarding-audio-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.onboarding-clarifications {
+  border: 1px solid #e3d5fc;
+  border-radius: 12px;
+  background: #f7f2ff;
+  padding: 20px;
+}
+.onboarding-clarifications h2 {
+  font-size: 17px;
+  font-weight: 650;
+}
+.onboarding-clarifications > div {
+  margin: 15px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.onboarding-review-field {
+  border: 1px solid #e7e1ee;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 7px 0;
+}
+.onboarding-review-field summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.onboarding-review-field summary::-webkit-details-marker {
+  display: none;
+}
+.onboarding-review-field summary strong {
+  font-size: 14px;
+}
+.onboarding-review-field summary small {
+  display: block;
+  font-size: 13px;
+  color: #786c8d;
+  line-height: 1.5;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.onboarding-confidence {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #edf8f1;
+  color: #386349;
+}
+.onboarding-confidence.is-low {
+  background: #fff3dd;
+  color: #8b5d18;
+}
+.onboarding-detail-input {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+  font-size: 13px;
+}
+.onboarding-detail-input input,
+.onboarding-detail-input textarea,
+.onboarding-detail-input select {
+  font-size: 16px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dfd7eb;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+  color: #1d1732;
+}
+.onboarding-review-confirm {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 24px 0;
+}
+.onboarding-review-confirm input {
+  margin-top: 5px;
+  accent-color: #7541ff;
+}
+.onboarding-transcripts {
+  border-top: 1px solid #e7e1ee;
+  padding-top: 16px;
+  font-size: 13px;
+  color: #786c8d;
+}
+.onboarding-transcripts summary {
+  cursor: pointer;
+}
+.onboarding-transcripts p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  margin-top: 14px;
+}
+@media (max-width: 580px) {
+  .onboarding-audio-box {
+    padding: 22px 14px;
+  }
+  .onboarding-audio-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  .onboarding-audio-buttons button {
+    width: 100%;
+  }
+  .onboarding-review-field summary {
+    align-items: flex-start;
+  }
+  .onboarding-confidence {
+    max-width: 90px;
+    text-align: center;
+  }
+}
