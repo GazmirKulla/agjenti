@@ -14,7 +14,7 @@ const METHODS = [
   { id: "manual", title: "Dorazi", hint: "Shkruaj emrin dhe çmimin", icon: "spark" },
   { id: "url", title: "Nga linku", hint: "Skano faqen e produktit", icon: "search" },
   { id: "csv", title: "Skedar CSV", hint: "Ngarko një listë", icon: "orders" },
-  { id: "instagram", title: "Instagram", hint: "Një llogari publike", icon: "instagram" },
+  { id: "instagram", title: "Instagram", hint: "Nxirr nga postimet", icon: "instagram" },
 ] as const;
 
 type MethodId = (typeof METHODS)[number]["id"];
@@ -64,14 +64,13 @@ export function ProductIntake({
       sku: string | null;
     };
   }>;
-  scanAction: (account: string) => Promise<{ error?: string; success?: string; products?: ScanProduct[] }>;
+  scanAction: () => Promise<{ error?: string; success?: string; products?: ScanProduct[] }>;
   importAction: ImportAction;
 }) {
   const [method, setMethod] = useState<MethodId>("manual");
   const csv = useBatchSave(importAction);
   const instagram = useBatchSave(importAction);
   const [scanning, setScanning] = useState(false);
-  const [publicAccount, setPublicAccount] = useState("");
   const connected = instagramStatus === "connected";
 
   function onTabsKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -85,15 +84,10 @@ export function ProductIntake({
   }
 
   async function scanInstagram() {
-    const account = publicAccount.trim();
-    if (!account) {
-      instagram.setNotice({ error: "Shkruaj llogarinë publike, p.sh. @dyqani." });
-      return;
-    }
     setScanning(true);
     instagram.setNotice(null);
     try {
-      const result = await scanAction(account);
+      const result = await scanAction();
       if (result.error || !result.products?.length) {
         instagram.setRows([]);
         instagram.setNotice({ error: result.error || "Nuk gjeta produkte në postime." });
@@ -248,32 +242,14 @@ export function ProductIntake({
       >
         <p className="muted-copy">{instagramIntro(instagramStatus, instagramUsername)}</p>
         {connected ? (
-          <div className="import-link-row">
-            <input
-              className="field"
-              value={publicAccount}
-              onChange={(event) => setPublicAccount(event.target.value)}
-              placeholder="@dyqani ose https://instagram.com/dyqani"
-              aria-label="Llogaria publike e Instagram"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              maxLength={200}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" || scanning || instagram.saving) return;
-                event.preventDefault();
-                void scanInstagram();
-              }}
-            />
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={scanning || instagram.saving}
-              onClick={scanInstagram}
-            >
-              {scanning ? "Duke lexuar…" : "Skano llogarinë"}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={scanning || instagram.saving}
+            onClick={scanInstagram}
+          >
+            {scanning ? "Duke lexuar…" : "Skano postimet"}
+          </button>
         ) : (
           <Link href={`/b/${slug}/instagram`} className="btn btn-primary">
             Hap Instagram
@@ -386,14 +362,12 @@ function draftFromInstagram(product: ScanProduct): ReviewDraft {
 function instagramIntro(status: string | null, username: string | null): string {
   if (status === "connected") {
     const handle = username?.replace(/^@/, "").trim();
-    const linked = handle ? ` Lidhja @${handle} qëndron vetëm që Instagram ta pranojë kërkimin.` : "";
-    return `Shkruaj një llogari publike. Lexohen postimet e asaj llogarie, jo të llogarisë sate. Duhet të jetë Business ose Creator dhe publike. Një postim bëhet produkt kur në tekst ka çmim.${linked}`;
+    const who = handle ? `@${handle}` : "llogarisë së lidhur";
+    return `Lexohen postimet e ${who}. Një postim bëhet produkt kur në tekst ka çmim, p.sh. 790 Lekë ose 18 EUR. Kontrolloje listën para se ta ruash.`;
   }
-  if (status === "expired") {
-    return "Lidhja e Instagram ka skaduar. Lidhe përsëri, pastaj shkruaj llogarinë publike që do të skanosh.";
-  }
+  if (status === "expired") return "Lidhja e Instagram ka skaduar. Lidhe përsëri që të lexohen postimet.";
   if (status === "revoked") return "Lidhja e Instagram është hequr. Lidhe përsëri llogarinë.";
-  return "Lidh një llogari profesionale të Instagram. Pastaj këtu shkruan llogarinë publike që do të skanosh.";
+  return "Lidh Instagram-in e biznesit. Pastaj këtu lexohen postimet dhe nxirren produktet që kanë çmim në tekst.";
 }
 
 function fileLabel(name: string): string {
