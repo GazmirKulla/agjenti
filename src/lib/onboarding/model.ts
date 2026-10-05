@@ -269,6 +269,10 @@ export function parseAnswers(
   const offeringAllow = new Set(
     allowedOfferings(businessType || "other").map(([value]) => value),
   );
+  if (
+    (offeringInput as string[]).some((value) => !offeringAllow.has(value))
+  )
+    throw new Error("Zgjidh vetëm ofertat që vlejnë për llojin e biznesit.");
   const offeringTypes = [
     ...new Set(
       (offeringInput as string[]).filter((value) => offeringAllow.has(value)),
@@ -286,6 +290,8 @@ export function parseAnswers(
       ([value]) => value,
     ),
   );
+  if ((caseInput as string[]).some((value) => !caseAllow.has(value)))
+    throw new Error("Zgjidh vetëm qëllimet që vlejnë për ofertën tënde.");
   const useCases = [
     ...new Set((caseInput as string[]).filter((value) => caseAllow.has(value))),
   ];
@@ -298,6 +304,11 @@ export function parseAnswers(
     ? raw.agentCapabilities
     : legacyCapabilities(raw.aiMode);
   if (capabilityInput.some((value) => typeof value !== "string"))
+    throw new Error("Zgjidh aftësi të vlefshme për Agjentin.");
+  const knownCapabilities = new Set(
+    capabilityChoices.map(([value]) => value),
+  );
+  if ((capabilityInput as string[]).some((value) => !knownCapabilities.has(value)))
     throw new Error("Zgjidh aftësi të vlefshme për Agjentin.");
   const capabilityAllow = new Set(
     allowedCapabilities(businessType || "other", offeringTypes, useCases).map(

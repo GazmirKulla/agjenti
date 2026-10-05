@@ -56,13 +56,22 @@ describe("self-service onboarding boundary", () => {
     expect(
       await saveOnboarding({ ...answers, p_user_id: "victim" }, 7, true),
     ).toEqual({ destination: "/b/biznes-123?welcome=1" });
-    expect(mocks.rpc).toHaveBeenCalledWith(
-      "complete_business_onboarding",
-      expect.objectContaining({
-        p_user_id: "verified-user",
-        p_answers: answers,
-      }),
+    const completion = mocks.rpc.mock.calls.find(
+      ([name]) => name === "complete_business_onboarding",
     );
+    expect(completion?.[1]).toMatchObject({
+      p_user_id: "verified-user",
+      p_answers: expect.objectContaining({
+        name: answers.name,
+        businessType: answers.businessType,
+        useCases: answers.useCases,
+        selectedUseCases: answers.useCases,
+        offeringTypes: ["variants"],
+        productType: "variants",
+        agentCapabilities: ["understand_needs", "recommend_products"],
+        businessProfile: expect.any(Object),
+      }),
+    });
   });
   it("saves drafts independently of completing the workspace", async () => {
     expect(await saveOnboarding({ ...answers, teamSize: "" }, 6)).toEqual({
@@ -76,7 +85,13 @@ describe("self-service onboarding boundary", () => {
   it("rejects invalid steps and incomplete final submissions", async () => {
     expect((await saveOnboarding(answers, 9)).error).toBeTruthy();
     expect(
-      (await saveOnboarding({ ...answers, teamSize: "" }, 7, true)).error,
+      (
+        await saveOnboarding(
+          { ...answers, teamSize: "", useCases: [] },
+          7,
+          true,
+        )
+      ).error,
     ).toBeTruthy();
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
