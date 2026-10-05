@@ -18,10 +18,12 @@ export async function InboxWorkspace({
 	businessId,
 	slug,
 	conversationId,
+	view,
 }: {
 	businessId: string;
 	slug: string;
 	conversationId?: string;
+	view?: "customer";
 }) {
 	const db = createServiceSupabase();
 	const { data: rows, error } = await db
@@ -121,7 +123,7 @@ export async function InboxWorkspace({
 	return (
 		<>
 			{heading}
-			<div className="inbox-workspace">
+			<div className={`inbox-workspace ${conversationId ? "has-selection" : "inbox-list-home"} ${view === "customer" ? "is-mobile-customer" : ""}`}>
 				<InboxList
 					slug={slug}
 					selected={selected}
@@ -154,6 +156,11 @@ export async function InboxWorkspace({
 					logs={logResult.data ?? []}
 				/>
 				<aside className="inbox-customer">
+					<div className="inbox-customer-mobile-header">
+						<Link href={`/b/${slug}/inbox/${selected}`} aria-label="Kthehu te biseda">‹</Link>
+						<strong>Pjesëmarrësi i bisedës</strong>
+						<span aria-hidden="true">⋮</span>
+					</div>
 					<section className="panel section-pad">
 						<h2 className="text-base mb-5">
 							{linkedCustomer ? "Informacioni i klientit" : "Pjesëmarrësi i bisedës"}

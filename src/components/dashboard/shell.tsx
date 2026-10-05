@@ -1,9 +1,12 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { signOut } from "@/lib/auth/actions";
-import { ThemeSwitch } from "@/components/theme/theme-switch";
+import { useEffect, useRef, useState } from "react";
+import {
+  isDashboardRoute,
+  mobileBusinessNav,
+  mobileAdminNav,
+} from "./navigation";
 import { Icon } from "./icon";
 const businessNav = [
   ["", "Dashboard", "dashboard"],
@@ -44,14 +47,116 @@ export function DashboardShell({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const sidebar = useRef<HTMLElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const media = matchMedia("(max-width: 760px)");
+    const sync = () => {
+      setMobile(media.matches);
+      if (!media.matches) setOpen(false);
+    };
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    let restingHeight = viewport?.height ?? window.innerHeight;
+    const sync = () => {
+      const editing = document.activeElement?.matches(
+        "input, textarea, select, [contenteditable='true']",
+      );
+      if (!editing) restingHeight = viewport?.height ?? window.innerHeight;
+      setKeyboardOpen(
+        Boolean(
+          editing &&
+          viewport &&
+          Math.max(restingHeight, window.innerHeight) - viewport.height > 120,
+        ),
+      );
+    };
+    viewport?.addEventListener("resize", sync);
+    document.addEventListener("focusin", sync);
+    document.addEventListener("focusout", sync);
+    return () => {
+      viewport?.removeEventListener("resize", sync);
+      document.removeEventListener("focusin", sync);
+      document.removeEventListener("focusout", sync);
+    };
+  }, []);
+  useEffect(() => {
+    if (searchOpen && mobile) searchInput.current?.focus();
+  }, [searchOpen, mobile]);
+  useEffect(() => {
+    if (!open || !mobile) return;
+    const trigger = menuButton.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () =>
+      Array.from(
+        sidebar.current?.querySelectorAll<HTMLElement>(
+          "a[href],button,summary,input",
+        ) ?? [],
+      ).filter(
+        (el) => el.getClientRects().length > 0 && !el.hasAttribute("disabled"),
+      );
+    focusable()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+      }
+      if (event.key === "Tab") {
+        const list = focusable();
+        const first = list[0];
+        const last = list.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKey);
+      trigger?.focus();
+    };
+  }, [open, mobile]);
   const base = admin ? "/admin" : `/b/${slug}`;
   const items = admin ? adminNav : businessNav;
+  const primaryItems = admin ? mobileAdminNav : mobileBusinessNav;
   return (
-    <div className="dashboard-shell">
-      <aside className={`dashboard-sidebar ${open ? "is-open" : ""}`}>
+    <div
+      className={`dashboard-shell ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""}`}
+    >
+      <aside
+        ref={sidebar}
+        id="dashboard-navigation"
+        className={`dashboard-sidebar ${open ? "is-open" : ""}`}
+        role={mobile && open ? "dialog" : undefined}
+        aria-modal={mobile && open ? true : undefined}
+        aria-label={mobile && open ? "Menuja kryesore" : undefined}
+      >
+        <button
+          type="button"
+          className="mobile-drawer-close btn btn-ghost"
+          onClick={() => setOpen(false)}
+          aria-label="Mbyll menunë"
+        >
+          ×
+        </button>
         <Link
           href={platformAdmin || admin ? "/admin" : base}
           className="dashboard-brand"
+          onClick={() => setOpen(false)}
         >
           <span className="brand-symbol">A</span> Agjenti.app
         </Link>
@@ -80,7 +185,11 @@ export function DashboardShell({
                 {b.name}
               </Link>
             ))}
-            {admin && <Link href="/admin/businesses">+ Menaxho bizneset</Link>}
+            {admin && (
+              <Link href="/admin/businesses" onClick={() => setOpen(false)}>
+                + Menaxho bizneset
+              </Link>
+            )}
           </div>
         </details>
         <nav
@@ -88,14 +197,14 @@ export function DashboardShell({
         >
           {items.map(([path, label, icon]) => {
             const href = `${base}${path ? `/${path}` : ""}`;
-            const active = path ? pathname.startsWith(href) : pathname === base;
+            const active = isDashboardRoute(pathname, base, path);
             return (
               <Link
                 key={path}
                 href={href}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setOpen(false)}
-                className={`dashboard-nav ${active ? "active" : ""}`}
+                className={`dashboard-nav ${active ? "active" : ""} ${primaryItems.some(([p]) => p === path) ? "mobile-primary-item" : ""}`}
               >
                 <Icon name={icon} />
                 {label}
@@ -116,6 +225,7 @@ export function DashboardShell({
           <Link
             href={admin ? "/admin/businesses" : base}
             className="btn btn-primary"
+            onClick={() => setOpen(false)}
           >
             {admin ? "Menaxho bizneset" : "Hap Dashboard-in"}
             <Icon name="arrow" size={16} />
@@ -127,23 +237,52 @@ export function DashboardShell({
           type="button"
           className="sidebar-backdrop"
           aria-label="Mbyll menunë"
+          tabIndex={-1}
           onClick={() => setOpen(false)}
         />
       )}
       <div className="dashboard-main">
-        <header className="dashboard-topbar">
+        <header
+          className={`dashboard-topbar ${searchOpen ? "search-is-open" : ""}`}
+        >
           <button
             type="button"
+            ref={menuButton}
+            aria-controls="dashboard-navigation"
             className="mobile-menu btn btn-ghost"
             aria-label="Hap ose mbyll menunë"
             aria-expanded={open}
             onClick={() => setOpen(!open)}
           >
-            ☰
+            <Icon name="dashboard" />
           </button>
-          <div className="dashboard-search">
+          <Link className="mobile-workspace-title" href={base}>
+            <strong>{name}</strong>
+            <small>{admin ? "Administrimi" : "Agjenti.app"}</small>
+          </Link>
+          <button
+            className="mobile-search-toggle btn btn-ghost"
+            type="button"
+            aria-label={searchOpen ? "Mbyll kërkimin" : "Hap kërkimin"}
+            aria-expanded={searchOpen}
+            aria-controls="dashboard-page-search"
+            onClick={() => {
+              setSearchOpen(!searchOpen);
+              setSearch("");
+            }}
+          >
+            <Icon name="search" />
+          </button>
+          <div className="dashboard-search" id="dashboard-page-search">
             <Icon name="search" size={18} />
             <input
+              ref={searchInput}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setSearchOpen(false);
+                  setSearch("");
+                }
+              }}
               aria-label="Kërko faqe"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -160,7 +299,11 @@ export function DashboardShell({
                   .map(([path, label]) => (
                     <Link
                       key={path}
-                      onClick={() => setSearch("")}
+                      onClick={() => {
+                        setSearch("");
+                        setSearchOpen(false);
+                        setOpen(false);
+                      }}
                       href={`${base}/${path}`}
                     >
                       {label}
@@ -176,33 +319,47 @@ export function DashboardShell({
             )}
           </div>
           <div className="topbar-actions">
-            <ThemeSwitch />
-            <details className="profile-menu">
-            <summary className="topbar-profile">
+            <Link
+              href="/account"
+              className="topbar-profile account-profile-link"
+              aria-label="Hap profilin dhe cilësimet e llogarisë"
+              title="Profili dhe cilësimet"
+            >
               <span className="profile-avatar">
-                {name.slice(0, 2).toUpperCase()}
+                {(email || name).slice(0, 2).toUpperCase()}
               </span>
               <span>
-                <strong>{name}</strong>
-                <small>
-                  {admin ? "Platform Admin" : email || "Hapësira e biznesit"}
-                </small>
+                <strong>{email || name}</strong>
+                <small>Profili dhe cilësimet</small>
               </span>
-              <span>⌄</span>
-            </summary>
-            <div className="profile-options">
-              <p>{email}</p>
-              <form action={signOut}>
-                <button type="submit" className="btn btn-ghost">
-                  Dil nga llogaria
-                </button>
-              </form>
-            </div>
-          </details>
+            </Link>
           </div>
         </header>
         <main className="dashboard-content">{children}</main>
       </div>
+      <nav
+        className="mobile-bottom-nav"
+        aria-label={admin ? "Navigimi kryesor i adminit" : "Navigimi kryesor"}
+      >
+        {primaryItems.map(([path, label, icon]) => (
+          <Link
+            key={path}
+            href={`${base}${path ? `/${path}` : ""}`}
+            prefetch={false}
+            aria-current={
+              isDashboardRoute(pathname, base, path) ? "page" : undefined
+            }
+            onClick={() => {
+              setOpen(false);
+              setSearchOpen(false);
+              setSearch("");
+            }}
+          >
+            <Icon name={icon} size={22} />
+            <span>{label}</span>
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }

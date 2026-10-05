@@ -45,9 +45,11 @@ export function SetupJourney({
   const [chosen, setChosen] = useState<string | null>(null);
   const active = steps.find((s) => s.key === chosen) ?? next;
   const count = steps.filter((s) => s.done).length;
-  useEffect(() => { setChosen(null); }, [status.signature, count]);
+  useEffect(() => {
+    setChosen(null);
+  }, [status.signature, count]);
   const home = `/b/${slug}`;
-  const onHome = pathname === home || pathname === "/login/setup-preview";
+  const onHome = pathname === home;
   if (!status.available)
     return (
       <div className="setup-notice" role="status">

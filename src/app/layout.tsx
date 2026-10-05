@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import Script from "next/script";
 import { themeBootScript } from "@/lib/theme/theme";
@@ -17,6 +17,12 @@ const figtree = localFont({
   variable: "--font-figtree",
   weight: "300 900",
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "Agjenti.app",
