@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeQuestions,
   emptyAnswers,
   initialInstructions,
   parseAnswers,
   recommendations,
+  resumeWizardStep,
+  wizardStepToStored,
   type Answers,
 } from "./model";
 export const completeAnswers: Answers = {
@@ -64,6 +67,30 @@ describe("onboarding answers", () => {
         true,
       ),
     ).toEqual({ ...completeAnswers, useCases: ["sales"] });
+  });
+  it("skips disabled questionnaire steps on completion", () => {
+    expect(
+      parseAnswers(
+        { ...emptyAnswers, name: "Zana", businessType: "fashion" },
+        true,
+        ["businessType"],
+      ),
+    ).toEqual({ ...emptyAnswers, name: "Zana", businessType: "fashion" });
+    expect(() =>
+      parseAnswers(
+        { ...emptyAnswers, name: "Zana", businessType: "fashion" },
+        true,
+        ["businessType", "productType"],
+      ),
+    ).toThrow(/Produktet/);
+  });
+  it("maps resume progress across disabled steps", () => {
+    const active = activeQuestions(["businessType", "aiMode", "teamSize"]);
+    expect(resumeWizardStep(0, active)).toBe(0);
+    expect(resumeWizardStep(1, active)).toBe(1);
+    expect(resumeWizardStep(4, active)).toBe(2);
+    expect(resumeWizardStep(5, active)).toBe(2);
+    expect(wizardStepToStored(2, active)).toBe(5);
   });
   it("personalizes instructions without inventing business facts", () => {
     const result = initialInstructions(completeAnswers);

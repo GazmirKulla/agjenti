@@ -69,7 +69,7 @@ export default async function OnboardingPage() {
     );
   let initial = emptyAnswers;
   try {
-    if (data) initial = parseAnswers(data.answers);
+    if (data) initial = parseAnswers(data.answers, false, settings.onboarding_steps);
   } catch {
     /* A malformed old draft can be safely restarted. */
   }
@@ -78,6 +78,7 @@ export default async function OnboardingPage() {
       initial={initial}
       initialStep={data?.step ?? 0}
       email={user.email || ""}
+      enabledSteps={settings.onboarding_steps}
     />
   );
 }

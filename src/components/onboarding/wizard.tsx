@@ -1,29 +1,43 @@
 "use client";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "@/components/dashboard/icon";
 import { signOut } from "@/lib/auth/actions";
 import { saveOnboarding } from "@/lib/onboarding/actions";
-import { questions, type Answers } from "@/lib/onboarding/model";
+import {
+  activeQuestions,
+  allQuestionKeys,
+  resumeWizardStep,
+  wizardStepToStored,
+  type AnswerKey,
+  type Answers,
+} from "@/lib/onboarding/model";
 export function OnboardingWizard({
   initial,
   initialStep,
   email,
+  enabledSteps = allQuestionKeys,
   onSave = saveOnboarding,
 }: {
   initial: Answers;
   initialStep: number;
   email: string;
+  enabledSteps?: AnswerKey[];
   onSave?: typeof saveOnboarding;
 }) {
+  const active = useMemo(
+    () => activeQuestions(enabledSteps),
+    [enabledSteps],
+  );
+  const total = active.length;
   const [answers, setAnswers] = useState(initial);
-  const [step, setStep] = useState(Math.max(0, Math.min(7, initialStep)));
+  const [step, setStep] = useState(() => resumeWizardStep(initialStep, active));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
-  const question = step ? questions[step - 1] : null;
+  const question = step ? active[step - 1] : null;
   const valid =
     step === 0
       ? answers.name.trim().length >= 2
@@ -55,7 +69,7 @@ export function OnboardingWizard({
     setSaved(false);
   }
   function skipStep() {
-    if (step < 1 || step >= 7 || busy) return;
+    if (step < 1 || step >= total || busy) return;
     void persist(step + 1);
   }
   async function persist(target: number, complete = false, advance = true) {
@@ -63,7 +77,11 @@ export function OnboardingWizard({
     setBusy(true);
     setError("");
     try {
-      const result = await onSave(answers, target, complete);
+      const result = await onSave(
+        answers,
+        wizardStepToStored(complete ? total : target, active),
+        complete,
+      );
       if (result.error) {
         setError(result.error);
         return;
@@ -112,7 +130,7 @@ export function OnboardingWizard({
             </div>
           ) : (
             <ol aria-label="Pyetjet e personalizimit">
-              {questions.map((q, i) => (
+              {active.map((q, i) => (
                 <li
                   key={q.key}
                   aria-current={step === i + 1 ? "step" : undefined}
@@ -136,16 +154,22 @@ export function OnboardingWizard({
         <section className="onboarding-body">
           <div className="onboarding-progress">
             <progress
-              max={7}
+              max={Math.max(total, 1)}
               value={step}
               aria-label="Progresi i personalizimit"
             />
-            <span>{step === 0 ? "Rreth 2 minuta" : `${step} / 7`}</span>
+            <span>
+              {step === 0
+                ? "Rreth 2 minuta"
+                : `${step} / ${Math.max(total, 1)}`}
+            </span>
           </div>
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (valid) void persist(Math.min(step + 1, 7), step === 7);
+              if (!valid) return;
+              if (step >= total) void persist(step, true);
+              else void persist(step + 1);
             }}
           >
             <fieldset disabled={busy}>
@@ -241,11 +265,17 @@ export function OnboardingWizard({
                   </div>
                 </>
               )}
-              {step === 7 && (
+              {step > 0 && step === total && (
                 <p className="onboarding-final-note">
                   Hapësira do të krijohet në emër të{" "}
                   <strong>{answers.name}</strong>. Pas kësaj mund të lidhësh
                   Instagram-in dhe të rishikosh rekomandimet.
+                </p>
+              )}
+              {step === 0 && total === 0 && (
+                <p className="onboarding-final-note">
+                  Hapësira do të krijohet në emër të{" "}
+                  <strong>{answers.name || "biznesit tënd"}</strong>.
                 </p>
               )}
               {error && (
@@ -266,7 +296,7 @@ export function OnboardingWizard({
                   <Link href="/privacy">Privatësia</Link>
                 )}
                 <div className="onboarding-actions-end">
-                  {step > 0 && step < 7 && (
+                  {step > 0 && step < total && (
                     <button
                       className="onboarding-skip"
                       type="button"
@@ -282,9 +312,9 @@ export function OnboardingWizard({
                   >
                     {busy
                       ? "Duke ruajtur…"
-                      : step === 0
+                      : step === 0 && total > 0
                         ? "Fillo personalizimin →"
-                        : step === 7
+                        : step >= total
                           ? "Krijo hapësirën →"
                           : "Vazhdo →"}
                   </button>

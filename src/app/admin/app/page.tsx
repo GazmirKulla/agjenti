@@ -4,10 +4,12 @@ import { getAppSettings } from "@/lib/platform/settings";
 import { saveAppSettings } from "@/lib/platform/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { PageHeading } from "@/components/dashboard/ui";
+import { questions } from "@/lib/onboarding/model";
 export default async function AppSettingsPage() {
   const user = await getSessionUser();
   if (!user || !(await isPlatformAdmin(user.id))) redirect("/auth/continue");
   const settings = await getAppSettings();
+  const enabled = new Set(settings.onboarding_steps);
   return (
     <>
       <PageHeading
@@ -32,6 +34,31 @@ export default async function AppSettingsPage() {
               i biznesit dhe krijohet hapësira me agjentin dhe përgjigjet
               automatike të çaktivizuara. Bizneset ekzistuese nuk ndryshojnë.
             </p>
+          </div>
+          <div>
+            <p className="form-label">Hapat e pyetësorit</p>
+            <p className="muted-copy mb-3">
+              Zgjidh cilat pyetje shfaqen gjatë regjistrimit. Emri i biznesit
+              mbetet gjithmonë i detyrueshëm. Hiq check-un për ta fshehur një
+              hap.
+            </p>
+            <div className="grid gap-3">
+              {questions.map((q) => (
+                <label key={q.key} className="toggle-label">
+                  <span>
+                    {q.title}
+                    <small>{q.label}</small>
+                  </span>
+                  <input
+                    className="switch-input"
+                    type="checkbox"
+                    name="onboarding_steps"
+                    value={q.key}
+                    defaultChecked={enabled.has(q.key)}
+                  />
+                </label>
+              ))}
+            </div>
           </div>
           <div>
             <label className="toggle-label">

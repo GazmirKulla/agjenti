@@ -28,7 +28,11 @@ export async function saveOnboarding(
     const settings = await getAppSettings();
     let answers;
     try {
-      answers = parseAnswers(input, complete && settings.onboarding_enabled);
+      answers = parseAnswers(
+        input,
+        complete && settings.onboarding_enabled,
+        settings.onboarding_steps,
+      );
     } catch (e) {
       return {
         error: e instanceof Error ? e.message : "Kontrollo përgjigjet.",

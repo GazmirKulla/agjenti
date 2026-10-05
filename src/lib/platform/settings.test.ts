@@ -21,6 +21,7 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 import { saveAppSettings } from "./actions";
 import { defaultAppSettings, getAppSettings } from "./settings";
+import { allQuestionKeys } from "@/lib/onboarding/model";
 beforeEach(() => {
   vi.clearAllMocks();
   m.user.mockResolvedValue({ id: "admin-id" });
@@ -35,10 +36,13 @@ it("rejects anonymous and non-admin writes", async () => {
   expect((await saveAppSettings(new FormData())).error).toBeTruthy();
   expect(m.upsert).not.toHaveBeenCalled();
 });
-it("persists disabled switches, announcement, and verified actor", async () => {
+it("persists disabled switches, selected steps, announcement, and verified actor", async () => {
   const f = new FormData();
   f.set("announcement", " Njoftim ");
   f.set("checklist_enabled", "on");
+  f.append("onboarding_steps", "businessType");
+  f.append("onboarding_steps", "productType");
+  f.append("onboarding_steps", "forged");
   f.set("updated_by", "forged");
   expect((await saveAppSettings(f)).success).toBeTruthy();
   expect(m.upsert).toHaveBeenCalledWith(
@@ -46,6 +50,7 @@ it("persists disabled switches, announcement, and verified actor", async () => {
       id: true,
       onboarding_enabled: false,
       checklist_enabled: true,
+      onboarding_steps: ["businessType", "productType"],
       announcement: "Njoftim",
       updated_by: "admin-id",
     }),
@@ -65,11 +70,24 @@ it("loads persisted values and defaults only for a missing migration", async () 
     onboarding_enabled: false,
     checklist_enabled: false,
     announcement: "Test",
+    onboarding_steps: ["businessType", "aiMode"],
   };
   m.read.mockResolvedValue({ data, error: null });
   expect(await getAppSettings()).toEqual(data);
   m.read.mockResolvedValue({ data: null, error: { code: "42P01" } });
   expect(await getAppSettings()).toEqual(defaultAppSettings);
+  m.read.mockResolvedValue({
+    data: {
+      onboarding_enabled: true,
+      checklist_enabled: true,
+      announcement: "",
+    },
+    error: null,
+  });
+  expect(await getAppSettings()).toEqual({
+    ...defaultAppSettings,
+    onboarding_steps: [...allQuestionKeys],
+  });
   m.read.mockResolvedValue({ data: null, error: { code: "OTHER" } });
   await expect(getAppSettings()).rejects.toThrow();
 });

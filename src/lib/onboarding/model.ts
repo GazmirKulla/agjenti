@@ -96,6 +96,8 @@ export const questions = [
   },
 ] as const;
 export type AnswerKey = (typeof questions)[number]["key"];
+export type OnboardingQuestion = (typeof questions)[number];
+export const allQuestionKeys = questions.map((q) => q.key) as AnswerKey[];
 export type Answers = {
   name: string;
   businessType: string;
@@ -116,8 +118,57 @@ export const emptyAnswers: Answers = {
   messageVolume: "",
   teamSize: "",
 };
+export function normalizeOnboardingSteps(input: unknown): AnswerKey[] {
+  if (!Array.isArray(input)) return [...allQuestionKeys];
+  const allowed = new Set<string>(allQuestionKeys);
+  const seen = new Set<AnswerKey>();
+  const result: AnswerKey[] = [];
+  for (const value of input) {
+    if (typeof value !== "string" || !allowed.has(value)) continue;
+    const key = value as AnswerKey;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(key);
+  }
+  return result;
+}
+export function activeQuestions(enabled: readonly AnswerKey[]): OnboardingQuestion[] {
+  const set = new Set(enabled);
+  return questions.filter((q) => set.has(q.key));
+}
+/** Map a stored full-questionnaire step onto the admin-enabled subset. */
+export function resumeWizardStep(
+  storedStep: number,
+  active: readonly OnboardingQuestion[],
+): number {
+  if (!Number.isInteger(storedStep) || storedStep <= 0 || !active.length) return 0;
+  const key = questions[storedStep - 1]?.key;
+  if (key) {
+    const idx = active.findIndex((q) => q.key === key);
+    if (idx >= 0) return idx + 1;
+    for (let i = storedStep - 1; i < questions.length; i++) {
+      const next = active.findIndex((q) => q.key === questions[i].key);
+      if (next >= 0) return next + 1;
+    }
+    return active.length;
+  }
+  return Math.min(storedStep, active.length);
+}
+export function wizardStepToStored(
+  wizardStep: number,
+  active: readonly OnboardingQuestion[],
+): number {
+  if (wizardStep <= 0 || !active.length) return 0;
+  const question = active[wizardStep - 1];
+  if (!question) return questions.length;
+  return questions.findIndex((q) => q.key === question.key) + 1;
+}
 // Allow-list every field. Never persist arbitrary client-supplied JSON or permission flags.
-export function parseAnswers(input: unknown, complete = false): Answers {
+export function parseAnswers(
+  input: unknown,
+  complete = false,
+  enabledSteps: readonly AnswerKey[] = allQuestionKeys,
+): Answers {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("Përgjigjet nuk janë të vlefshme.");
   const raw = input as Record<string, unknown>;
@@ -127,26 +178,34 @@ export function parseAnswers(input: unknown, complete = false): Answers {
   result.name = raw.name.trim();
   if (complete && result.name.length < 2)
     throw new Error("Vendos emrin e biznesit (të paktën 2 karaktere).");
+  const required = new Set(normalizeOnboardingSteps(enabledSteps));
   for (const q of questions) {
     const allowed: string[] = q.options.map((o) => o[0]);
+    const mustHave = complete && required.has(q.key);
     if (q.key === "useCases") {
-      if (
+      if (raw.useCases === undefined || raw.useCases === null) {
+        result.useCases = [];
+      } else if (
         !Array.isArray(raw.useCases) ||
         raw.useCases.some((v) => typeof v !== "string" || !allowed.includes(v))
-      )
+      ) {
         throw new Error("Zgjidh qëllime të vlefshme.");
-      result.useCases = [...new Set(raw.useCases as string[])];
-      if (complete && !result.useCases.length)
+      } else {
+        result.useCases = [...new Set(raw.useCases as string[])];
+      }
+      if (mustHave && !result.useCases.length)
         throw new Error("Zgjidh të paktën një qëllim.");
     } else {
       const value = raw[q.key];
-      if (
-        typeof value !== "string" ||
-        (value !== "" && !allowed.includes(value)) ||
-        (complete && !value)
-      )
+      if (value === undefined || value === null || value === "") {
+        result[q.key] = "";
+      } else if (typeof value !== "string" || !allowed.includes(value)) {
         throw new Error(`Plotëso fushën: ${q.label}.`);
-      result[q.key] = value;
+      } else {
+        result[q.key] = value;
+      }
+      if (mustHave && !result[q.key])
+        throw new Error(`Plotëso fushën: ${q.label}.`);
     }
   }
   return result;
@@ -171,15 +230,26 @@ export function initialInstructions(a: Answers) {
     workflow:
       "Ndiq hapat e workflow-t të produktit dhe kërko konfirmimet përkatëse. Mos thuaj se porosia u krye pa konfirmim nga sistemi.",
   };
-  return [
-    `Je asistenti i biznesit ${a.name}. Fusha: ${answerLabel("businessType", a.businessType)}.`,
+  const field = a.businessType
+    ? answerLabel("businessType", a.businessType)
+    : "e përgjithshme";
+  const parts = [
+    `Je asistenti i biznesit ${a.name}. Fusha: ${field}.`,
     "Përgjigju në shqip ose në gjuhën e klientit, me ton miqësor dhe profesional. Mos shpik çmime, stok ose politika. Përdor katalogun dhe njohuritë e biznesit. Nëse informacioni mungon, kërko ndihmën e stafit.",
-    modes[a.aiMode],
-    `Oferta: ${answerLabel("productType", a.productType)}. Qëllimet: ${a.useCases.map((v) => answerLabel("useCases", v)).join(", ")}.`,
-    a.productType === "personalized"
+  ];
+  if (a.aiMode && modes[a.aiMode]) parts.push(modes[a.aiMode]);
+  const goals = a.useCases.map((v) => answerLabel("useCases", v)).join(", ");
+  const offer = a.productType
+    ? `Oferta: ${answerLabel("productType", a.productType)}. `
+    : "";
+  if (offer || goals)
+    parts.push(`${offer}Qëllimet: ${goals || "të përgjithshme"}.`);
+  parts.push(
+    a.productType === "personalized" || a.businessType === "personalized"
       ? "Për personalizime ndiq kërkesat e workflow-t për foto, tekst dhe miratim; mos premto gjenerim ose prodhim që nuk është konfirmuar."
       : "Kërko sqarime për zgjedhjet e produktit ose shërbimit kur nevojiten.",
-  ].join("\n\n");
+  );
+  return parts.join("\n\n");
 }
 export function recommendations(a: Answers) {
   return [
