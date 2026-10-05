@@ -325,6 +325,11 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                       <div key={field}>
                         <label>
                           {labels[field]}
+                          {draft.missingInformation.includes(
+                            `${entity.id}:${field}`,
+                          )
+                            ? " · Kërkohet sqarim"
+                            : ""}
                           <textarea
                             rows={field === "steps" ? 5 : 2}
                             value={current}

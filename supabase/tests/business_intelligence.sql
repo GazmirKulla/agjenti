@@ -3,9 +3,10 @@ insert into auth.users(id,email) values('00000000-0000-4000-8000-000000000081','
 do $$
 declare u uuid:='00000000-0000-4000-8000-000000000081'; b uuid; sid uuid; rev integer; draft jsonb; entities jsonb; base jsonb;
 begin
- perform complete_business_onboarding(u,'{"name":"Test","useCases":[]}','Instructions');
+ perform complete_business_onboarding(u,'{"name":"Test","useCases":[],"details":{"businessDescription":"Studio fotografike"}}','Instructions');
  select business_id into b from business_users where user_id=u;
  if not exists(select 1 from business_intelligence where business_id=b) then raise exception 'Onboarding bridge failed'; end if;
+ if not exists(select 1 from business_intelligence bi, jsonb_array_elements(bi.data->'entities') e, jsonb_array_elements(e->'facts') f where bi.business_id=b and f->>'field'='description' and f->>'value'='Studio fotografike') then raise exception 'Onboarding details lost';end if;
  sid:=claim_intelligence_source(b,u,'manual');
  begin perform claim_intelligence_source(b,u,'audio');raise exception 'Busy not enforced' using errcode='XX001';exception when raise_exception then if sqlerrm<>'busy' then raise;end if;end;
  begin perform claim_intelligence_source(b,'00000000-0000-4000-8000-000000000082','manual');raise exception 'Unauthorized allowed' using errcode='XX001';exception when raise_exception then if sqlerrm<>'unauthorized' then raise;end if;end;

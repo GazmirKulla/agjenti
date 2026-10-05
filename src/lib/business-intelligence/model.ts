@@ -171,7 +171,9 @@ export function withMissing(draft: Draft): Draft {
             : e.target === "agent"
               ? ["rules"]
               : ["name"];
-    return required.filter((f) => !value(e, f)).map((f) => `${e.id}:${f}`);
+    return required
+      .filter((f) => !value(e, f).trim())
+      .map((f) => `${e.id}:${f}`);
   });
   return {
     ...draft,
@@ -216,7 +218,11 @@ export function parseEntities(
       const evidence = typeof f.evidence === "string" ? f.evidence : null;
       const supported =
         source === "manual" || !!(evidence && text.includes(evidence));
-      let v = supported ? (f.value as string | null) : null;
+      let v = supported
+        ? typeof f.value === "string"
+          ? f.value.trim() || null
+          : null
+        : null;
       if (
         f.field === "businessType" &&
         v &&

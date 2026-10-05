@@ -123,7 +123,7 @@ begin
  for entry in select * from jsonb_each(new.answers || coalesce(new.answers->'details','{}'::jsonb)) loop
   field:=case entry.key when 'name' then 'name' when 'businessType' then 'businessType' when 'businessCategory' then 'category' when 'businessDescription' then 'description' else null end;
   if field is not null and entry.value<>'null'::jsonb then
-   facts:=facts||jsonb_build_array(jsonb_build_object('field',field,'value',entry.value,'source',source_kind,'sourceRef','onboarding','confidence',1,'evidence',null,'createdAt',now(),'updatedAt',now(),'confirmedByUser',true));
+   facts:=facts||jsonb_build_array(jsonb_build_object('field',field,'value',entry.value,'source',case when new.answers->'audioReview'->'corrections' ? entry.key then 'manual' else source_kind end,'sourceRef','onboarding','confidence',coalesce(new.answers->'audioReview'->'confidence'->entry.key,'1'::jsonb),'evidence',null,'createdAt',now(),'updatedAt',now(),'confirmedByUser',true));
   end if;
  end loop;
  entity:=jsonb_build_object('id',gen_random_uuid(),'target','profile','facts',facts);
