@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type ScanFrame = {
   id: string;
@@ -25,17 +26,32 @@ export function InstagramScanner({
   const finished = useRef(onFinished);
   finished.current = onFinished;
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const count = frames?.length ?? 0;
+  const stepMs = scanStepMs(count, reduced);
+
   useEffect(() => {
     setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previous;
+    };
   }, []);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && count > 0) finished.current();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [count]);
 
   useEffect(() => {
     setIndex(0);
     setBroken({});
   }, [frames]);
-
-  const count = frames?.length ?? 0;
-  const stepMs = scanStepMs(count, reduced);
 
   useEffect(() => {
     if (loading || !count) return;
@@ -60,10 +76,21 @@ export function InstagramScanner({
   const image = shown && !broken[shown.id] ? shown.imageUrl : null;
   const sweeping = !reduced && (loading || index < count);
 
-  return (
-    <div className="ig-scanner" aria-busy={loading || index < count}>
+  const host = document.querySelector(".dashboard-shell") ?? document.body;
+
+  return createPortal(
+    <div className="ig-scan-overlay">
+    <div
+      ref={dialogRef}
+      className="ig-scanner"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ig-scan-title"
+      aria-busy={loading || index < count}
+      tabIndex={-1}
+    >
       <div className="ig-scanner-head">
-        <span>Skanim</span>
+        <span id="ig-scan-title">Skanim</span>
         <span>{loading || !count ? "Duke marrë postimet" : `${position} / ${count}`}</span>
       </div>
       <div className="ig-scan-stage">
@@ -132,6 +159,8 @@ export function InstagramScanner({
         </button>
       ) : null}
     </div>
+    </div>,
+    host,
   );
 }
 
