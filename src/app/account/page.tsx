@@ -39,14 +39,19 @@ export default async function AccountPage() {
           <span>Menaxho të dhënat dhe preferencat e llogarisë tënde.</span>
         </div>
 
-        <section className="account-card" aria-labelledby="account-details-title">
+        <section
+          className="account-card"
+          aria-labelledby="account-details-title"
+        >
           <div className="account-user-summary">
             <span className="account-avatar">
               {displayName.slice(0, 2).toUpperCase()}
             </span>
             <div>
               <h2>{displayName}</h2>
-              <p>{access.admin ? "Administrator i platformës" : "Anëtar biznesi"}</p>
+              <p>
+                {access.admin ? "Administrator i platformës" : "Anëtar biznesi"}
+              </p>
             </div>
           </div>
           <h2 id="account-details-title">Të dhënat e llogarisë</h2>
@@ -66,13 +71,20 @@ export default async function AccountPage() {
             {!access.admin && access.businesses.length > 0 && (
               <div>
                 <dt>Bizneset</dt>
-                <dd>{access.businesses.map((business) => business.name).join(", ")}</dd>
+                <dd>
+                  {access.businesses
+                    .map((business) => business.name)
+                    .join(", ")}
+                </dd>
               </div>
             )}
           </dl>
         </section>
 
-        <section className="account-card" aria-labelledby="account-appearance-title">
+        <section
+          className="account-card"
+          aria-labelledby="account-appearance-title"
+        >
           <div>
             <h2 id="account-appearance-title">Pamja</h2>
             <p>Zgjidh mënyrën si shfaqet Agjenti.app në pajisjen tënde.</p>

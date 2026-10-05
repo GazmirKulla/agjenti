@@ -33,6 +33,7 @@ export function DashboardShell({
   slug,
   admin = false,
   email,
+  userName,
   platformAdmin = false,
   businesses = [],
 }: {
@@ -41,6 +42,7 @@ export function DashboardShell({
   slug?: string;
   admin?: boolean;
   email?: string;
+  userName?: string;
   platformAdmin?: boolean;
   businesses?: { id: string; name: string; slug: string }[];
 }) {
@@ -131,11 +133,12 @@ export function DashboardShell({
     };
   }, [open, mobile]);
   const base = admin ? "/admin" : `/b/${slug}`;
+  const inboxDetailView = !admin && pathname.startsWith(`${base}/inbox/`);
   const items = admin ? adminNav : businessNav;
   const primaryItems = admin ? mobileAdminNav : mobileBusinessNav;
   return (
     <div
-      className={`dashboard-shell ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""}`}
+      className={`dashboard-shell ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
     >
       <aside
         ref={sidebar}
@@ -326,10 +329,10 @@ export function DashboardShell({
               title="Profili dhe cilësimet"
             >
               <span className="profile-avatar">
-                {(email || name).slice(0, 2).toUpperCase()}
+                {(userName || email || name).slice(0, 2).toUpperCase()}
               </span>
               <span>
-                <strong>{email || name}</strong>
+                <strong>{userName || email || name}</strong>
                 <small>Profili dhe cilësimet</small>
               </span>
             </Link>

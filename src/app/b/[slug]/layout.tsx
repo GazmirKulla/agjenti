@@ -28,6 +28,13 @@ export default async function BusinessLayout({
       platformAdmin={access.admin}
       businesses={access.businesses}
       email={user.email}
+      userName={
+        (typeof user.user_metadata?.full_name === "string" &&
+          user.user_metadata.full_name) ||
+        (typeof user.user_metadata?.name === "string" &&
+          user.user_metadata.name) ||
+        undefined
+      }
     >
       {settings.announcement && (
         <div

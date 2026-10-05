@@ -50,6 +50,9 @@ export function SetupJourney({
   }, [status.signature, count]);
   const home = `/b/${slug}`;
   const onHome = pathname === home;
+  // Bisedat janë rrjedhë pune e përditshme; checklist-i i konfigurimit
+  // nuk duhet të zërë hapësirë në ekranin e një bisede.
+  if (pathname?.startsWith(`${home}/inbox/`)) return null;
   if (!status.available)
     return (
       <div className="setup-notice" role="status">

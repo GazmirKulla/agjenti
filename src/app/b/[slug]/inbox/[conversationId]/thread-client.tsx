@@ -5,6 +5,7 @@ import Image from "next/image";
 import type { NormalizedAttachment } from "@/lib/instagram/types";
 import { StatusBadge } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
+import Link from "next/link";
 type Message = {
   id: string;
   direction: string;
@@ -88,13 +89,26 @@ export function ThreadClient(props: {
   return (
     <section className="panel chat-panel">
       <div className="chat-header">
-        <span className="profile-avatar">
-          {props.customerName.slice(0, 2).toUpperCase()}
-        </span>
-        <div>
-          <h2>{props.customerName}</h2>
-          <StatusBadge status={props.status} />
-        </div>
+        <Link
+          href={`/b/${props.slug}/inbox`}
+          className="chat-mobile-back"
+          aria-label="Kthehu te bisedat"
+        >
+          ‹
+        </Link>
+        <Link
+          href={`/b/${props.slug}/inbox/${props.conversationId}/customer`}
+          className="chat-contact-link"
+          aria-label="Hap detajet e klientit"
+        >
+          <span className="profile-avatar">
+            {props.customerName.slice(0, 2).toUpperCase()}
+          </span>
+          <div>
+            <h2>{props.customerName}</h2>
+            <StatusBadge status={props.status} />
+          </div>
+        </Link>
         <button
           type="button"
           className="btn btn-ghost"

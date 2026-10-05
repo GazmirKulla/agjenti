@@ -17,6 +17,13 @@ export default async function AdminLayout({
       platformAdmin
       businesses={access.businesses}
       email={user.email}
+      userName={
+        (typeof user.user_metadata?.full_name === "string" &&
+          user.user_metadata.full_name) ||
+        (typeof user.user_metadata?.name === "string" &&
+          user.user_metadata.name) ||
+        undefined
+      }
     >
       {children}
     </DashboardShell>
