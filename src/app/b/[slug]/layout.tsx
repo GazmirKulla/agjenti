@@ -1,3 +1,4 @@
+import { BusinessIntelligencePanel } from "@/components/business-intelligence/panel";
 import { SetupJourney } from "@/components/setup/journey";
 import { getSetupStatus } from "@/lib/setup/status";
 import { redirect } from "next/navigation";
@@ -76,6 +77,7 @@ export default async function BusinessLayout({
         expanded={settings.checklist_enabled}
         profile={profile}
       />
+      <BusinessIntelligencePanel slug={slug} />
       {children}
     </DashboardShell>
   );

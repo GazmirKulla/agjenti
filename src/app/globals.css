@@ -363,28 +363,6 @@ html[data-resolved="dark"] .brand-logo-dark {
 .dashboard-nav:hover {
   background: #f6f3ff;
 }
-.sidebar-promo {
-  margin-top: auto;
-  padding: 20px 14px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: linear-gradient(130deg, white, #f6f2ff);
-}
-.sidebar-promo h3 {
-  font-size: 18px;
-  margin: 15px 0 8px;
-}
-.sidebar-promo p {
-  font-size: 13px;
-  color: var(--ink-muted);
-  line-height: 1.65;
-  margin-bottom: 18px;
-}
-.sidebar-promo .btn {
-  width: 100%;
-  font-size: 12px;
-  padding-inline: 8px;
-}
 .dashboard-main {
   margin-left: 230px;
 }
@@ -551,9 +529,6 @@ html[data-resolved="dark"] .brand-logo-dark {
   }
   .dashboard-content h1 {
     font-size: 25px;
-  }
-  .sidebar-promo {
-    margin-top: 25px;
   }
 }
 .page-heading {
@@ -2288,7 +2263,6 @@ html[data-resolved="dark"] .dashboard-nav:hover,
 html[data-resolved="dark"] .dashboard-content .list-row:hover {
   background: #241e36;
 }
-html[data-resolved="dark"] .sidebar-promo,
 html[data-resolved="dark"] .import-link {
   background: #1d1830;
   border-color: #3d3260;
@@ -2560,10 +2534,6 @@ html[data-resolved="dark"]
   }
   .dashboard-sidebar .workspace-picker {
     margin-top: 24px;
-  }
-  .dashboard-sidebar .sidebar-promo {
-    margin-top: auto;
-    padding-top: 20px;
   }
 }
 

@@ -5,7 +5,6 @@ import {
   linkExternalProduct,
   updateProduct,
 } from "@/lib/products/actions";
-import { previewProductFromUrl, scanInstagramProducts } from "@/lib/products/import-actions";
 import { applyTypeSuggestion } from "@/lib/product-types/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { ProductFields } from "@/components/dashboard/product-fields";
@@ -103,8 +102,12 @@ export default async function ProductsPage({
   const workflows = workflowResult.data ?? [];
   const remote = remoteResult.products;
   const catalogError = remoteResult.error;
-  const instagramStatus = igResult.error ? null : (igResult.data?.status ?? null);
-  const instagramUsername = igResult.error ? null : (igResult.data?.username ?? null);
+  const instagramStatus = igResult.error
+    ? null
+    : (igResult.data?.status ?? null);
+  const instagramUsername = igResult.error
+    ? null
+    : (igResult.data?.username ?? null);
 
   return (
     <>
@@ -137,8 +140,6 @@ export default async function ProductsPage({
         instagramStatus={instagramStatus}
         instagramUsername={instagramUsername}
         createAction={createProduct.bind(null, slug)}
-        previewAction={previewProductFromUrl.bind(null, slug)}
-        scanAction={scanInstagramProducts.bind(null, slug)}
         importAction={importProductBatch.bind(null, slug)}
       />
       <RecordBrowser

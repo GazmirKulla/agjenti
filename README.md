@@ -169,3 +169,61 @@ Në `/onboarding`, përdoruesit e rinj mund të zgjedhin “Na trego shkurt për
 AI prodhon një ndryshim të pjesshëm të profilit, vetëm me identifikuesit nga rules layer-i ekzistues. Çdo fakt kërkon një citim nga transkripti i ri; fushat e papërmendura mbeten null. Confidence është vlerësim i modelit, jo probabilitet i kalibruar. Audioja shtesë bashkon listat dhe plotëson tekstin pa zëvendësuar korrigjimet manuale. Të dhënat kalojnë përsëri në rregullat kushtore; rekomandimet gjenerohen në kod. Fushat me confidence nën 0.8 kërkojnë konfirmim individual, konfliktet kërkojnë korrigjim dhe krijimi i biznesit kërkon rishikimin përfundimtar. Një draft i ndryshuar në një tab tjetër nuk mbishkruhet nga një analizë e vonuar.
 
 Kontrollo në desktop dhe mobile: audio → dëgjo → analizo → korrigjo/sqaro → konfirmo; provo edhe refuzimin e mikrofonit, një regjistrim plotësues, rifreskimin e faqes dhe kalimin në manual. Testet me Vitest mbulojnë auth, upload-et, kufijtë, bashkimin, të dhënat e panjohura, provat nga transkripti dhe konfirmimin. `supabase/tests/audio_onboarding.sql` teston izolimin dhe ruajtjen atomike në një databazë testimi; nuk duhet ekzekutuar në prodhim.
+
+### Business Intelligence: collect → review → apply
+
+Apply `supabase/migrations/20261006100000_business_intelligence.sql` after the
+existing audio-onboarding migration. `OPENAI_API_KEY` enables source analysis;
+manual structured entry works without an AI key. No external scan or audio is
+applied automatically.
+
+“Plotëso me AI” is shared by business settings, products, agents, knowledge and
+workflows. Services are available in the same section selector and are applied
+as `knowledge_entries` with `intent_key=service`, matching the existing agent
+knowledge pipeline. Product website/Instagram entry points and agent-instruction
+generation now open this same dialog. CSV and direct manual product forms remain
+available.
+
+- `src/lib/business-intelligence/model.ts`: shared entities/facts, provenance,
+  explicit conflicts, missing fields and apply validation. Unknown facts are null;
+  unsupported fields and unsupported onboarding business types are rejected.
+- `ingestion.ts`: reuses the catalog's bounded public URL reader and the existing
+  authenticated Instagram media client. Websites read the initial page and up to
+  seven relevant same-origin links; this is a bounded scan, not a full-site crawl.
+  Instagram analyzes up to the existing media limit using captions and available
+  URLs, not private DMs or undocumented profile scraping.
+- `normalization.ts`: evidence-backed structured extraction with the existing AI
+  model. Source content is untrusted input. No absent prices, policies or sensitive
+  facts are invented. Exact source evidence is checked before retaining AI facts.
+- `transcription.ts`: shared with onboarding; existing recorder and upload limits
+  are reused. Audio bytes are transient. Transcripts and extractions are retained.
+- `/api/business-intelligence`: business membership/admin authorization, bounded
+  input, 30 source attempts/business/day, concurrent-attempt lock, revision checks.
+- Database: `business_intelligence` stores the common draft;
+  `business_intelligence_sources` stores source/transcript/extraction history;
+  `business_intelligence_revisions` preserves edits and confirmations. RLS isolates
+  businesses. A bridge imports confirmed onboarding profiles and audio history
+  when a workspace is created, including pre-existing completed onboardings.
+
+Choose a source, add information, expand draft items, edit fields, select items,
+resolve conflicting values, then confirm and apply. Additional recordings/scans
+fill unknowns and propose conflicts instead of overwriting existing facts. User
+confirmation is retained separately from source confidence. “Rilexo të dhënat
+aktive” refreshes the baseline if another page changed the catalog or agent.
+Applications are atomic and retry-safe by revision; no partial product batch is
+committed after failure. No Meta sends occur.
+
+New products are inactive until their existing product form configures type,
+workflow and activation. Variants, personalization and customer requirements
+remain structured facts in `products.intelligence_details` and readable product
+context, without inventing a separate SKU/variant engine. Workflows use existing
+supported step kinds and are not automatically linked to products. Services and
+policies become existing agent knowledge. New agent records stay inactive; an
+existing agent's activation state is preserved. Business profile facts also live
+in `businesses.intelligence_profile` for downstream consumers.
+
+Validation: Vitest covers merge/conflicts, extraction boundaries, tenant auth,
+review gating and bounded crawl; `supabase/tests/business_intelligence.sql` runs
+in an isolated migrated database and checks draft isolation, atomic application,
+RLS, stale-write protection and onboarding bridging. Browser smoke uses mocked
+API responses, without paid AI requests or production writes.

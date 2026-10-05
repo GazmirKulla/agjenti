@@ -1,11 +1,10 @@
 import { ActionForm } from "@/components/dashboard/action-form";
-import { AiSuggestButton } from "@/components/dashboard/ai-suggest-button";
+import { IntelligenceTrigger } from "@/components/business-intelligence/trigger";
 import Link from "next/link";
 import { PageHeading } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { generateAgentInstructions } from "@/lib/agents/ai-actions";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
@@ -101,12 +100,12 @@ export default async function AgentsPage({
       </label>
       <div className="grid gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="form-label mb-0">Udhëzimet për Agjentin (Prompt)</span>
-          <AiSuggestButton
-            action={generateAgentInstructions.bind(null, slug)}
-            targetName="instructions"
-            label="Plotëso me AI nga produktet"
-          />
+          <span className="form-label mb-0">
+            Udhëzimet për Agjentin (Prompt)
+          </span>
+          <IntelligenceTrigger source="ai_inferred">
+            ✨ Gjenero Agent Instructions
+          </IntelligenceTrigger>
         </div>
         <textarea
           name="instructions"
@@ -148,7 +147,9 @@ export default async function AgentsPage({
       />
       <div className="panel section-pad mb-5 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="font-semibold">Provo përgjigjet para dërgimit automatik</h2>
+          <h2 className="font-semibold">
+            Provo përgjigjet para dërgimit automatik
+          </h2>
           <p className="muted-copy">
             Bisedë e përkohshme, pa Instagram dhe pa porosi reale.
           </p>

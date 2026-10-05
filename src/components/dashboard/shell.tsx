@@ -216,25 +216,6 @@ export function DashboardShell({
             );
           })}
         </nav>
-        <div className="sidebar-promo">
-          <span className="icon-tile">
-            <Icon name="spark" size={25} />
-          </span>
-          <h3>{admin ? "Platform Admin" : "Hapësira e biznesit"}</h3>
-          <p>
-            {admin
-              ? "Menaxho bizneset dhe ndiq aktivitetin e platformës."
-              : "Ndiq konfigurimin dhe aktivitetin e biznesit nga Dashboard."}
-          </p>
-          <Link
-            href={admin ? "/admin/businesses" : base}
-            className="btn btn-primary"
-            onClick={() => setOpen(false)}
-          >
-            {admin ? "Menaxho bizneset" : "Hap Dashboard-in"}
-            <Icon name="arrow" size={16} />
-          </Link>
-        </div>
       </aside>
       {open && (
         <button

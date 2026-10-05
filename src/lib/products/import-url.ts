@@ -362,3 +362,8 @@ function parseJson(body: string): unknown {
     return null;
   }
 }
+
+/** Shared bounded public-page reader for business and catalog ingestion. */
+export async function fetchPublicPage(url: string, deps: ImportDeps = {}) {
+  return fetchChecked(url, deps.fetch ?? fetch, deps.resolveHost ?? defaultResolveHost, 1_200_000);
+}

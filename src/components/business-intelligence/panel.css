@@ -1,0 +1,158 @@
+.bi-entry {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+.bi-dialog {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--ink);
+  width: min(820px, 96vw);
+  max-height: 90dvh;
+  padding: 0;
+  margin: auto;
+}
+.bi-dialog::backdrop {
+  background: #09081899;
+}
+.bi-dialog header {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1.2rem;
+  border-bottom: 1px solid var(--line);
+}
+.bi-dialog h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.bi-content {
+  padding: 1.2rem;
+}
+.bi-dialog p {
+  margin: 0.7rem 0;
+}
+.bi-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.bi-dialog label {
+  display: block;
+  margin: 0.7rem 0;
+}
+.bi-dialog input:not([type="checkbox"]),
+.bi-dialog textarea,
+.bi-dialog select {
+  width: 100%;
+  background: var(--surface);
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.65rem;
+  font-size: 16px;
+}
+.bi-dialog textarea {
+  resize: vertical;
+}
+.bi-entity {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+.bi-entity summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.bi-dialog .bi-check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.bi-dialog small {
+  opacity: 0.75;
+}
+.bi-dialog blockquote {
+  padding: 0.5rem;
+  border-inline-start: 2px solid var(--line);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.bi-conflict {
+  padding: 0.8rem;
+  border: 1px solid #c69230;
+  border-radius: 8px;
+  margin: 0.7rem 0;
+}
+.bi-error {
+  color: #df4858;
+}
+.bi-review-head,
+.bi-dialog footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+.bi-dialog .onboarding-audio {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.bi-dialog .onboarding-mic svg {
+  width: 40px;
+  height: 40px;
+}
+.bi-dialog .onboarding-audio audio {
+  max-width: 100%;
+}
+.bi-dialog .onboarding-audio-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.bi-dialog .onboarding-next,
+.bi-dialog .onboarding-back {
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+}
+.bi-dialog .onboarding-disclaimer {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+@media (max-width: 600px) {
+  .bi-dialog {
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .bi-sources {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .bi-sources .btn {
+    white-space: normal;
+  }
+  .bi-content {
+    padding: 1rem;
+  }
+}
+.bi-content {
+  min-width: 0;
+  border: 0;
+}
+.bi-dialog input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--accent);
+}

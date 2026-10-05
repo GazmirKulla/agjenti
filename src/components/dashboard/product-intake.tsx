@@ -1,21 +1,39 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useState, type ChangeEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { Icon } from "@/components/dashboard/icon";
-import { ImportProductLink } from "@/components/dashboard/import-product-link";
+import { IntelligenceTrigger } from "@/components/business-intelligence/trigger";
 import { ProductFields } from "@/components/dashboard/product-fields";
-import { InstagramScanner, type ScanFrame } from "@/components/dashboard/instagram-scanner";
-import { ProductReview, type ReviewDraft } from "@/components/dashboard/product-review";
+
+import {
+  ProductReview,
+  type ReviewDraft,
+} from "@/components/dashboard/product-review";
 import { parseProductCsv, type CsvProduct } from "@/lib/products/csv";
 
 const METHODS = [
-  { id: "manual", title: "Dorazi", hint: "Shkruaj emrin dhe çmimin", icon: "spark" },
-  { id: "url", title: "Nga linku", hint: "Skano faqen e produktit", icon: "search" },
+  {
+    id: "manual",
+    title: "Dorazi",
+    hint: "Shkruaj emrin dhe çmimin",
+    icon: "spark",
+  },
+  {
+    id: "url",
+    title: "Nga linku",
+    hint: "Skano faqen e produktit",
+    icon: "search",
+  },
   { id: "csv", title: "Skedar CSV", hint: "Ngarko një listë", icon: "orders" },
-  { id: "instagram", title: "Instagram", hint: "Nxirr nga postimet", icon: "instagram" },
+  {
+    id: "instagram",
+    title: "Instagram",
+    hint: "Nxirr nga postimet",
+    icon: "instagram",
+  },
 ] as const;
 
 type MethodId = (typeof METHODS)[number]["id"];
@@ -26,16 +44,6 @@ type ImportAction = (payload: {
   productTypeId?: string | null;
   workflowId?: string | null;
 }) => Promise<{ error?: string; success?: string }>;
-type ScanProduct = {
-  externalId: string;
-  name: string;
-  description: string | null;
-  price: number;
-  currency: string;
-  imageUrl: string | null;
-  permalink: string | null;
-};
-
 export function ProductIntake({
   slug,
   types,
@@ -43,8 +51,6 @@ export function ProductIntake({
   instagramStatus,
   instagramUsername,
   createAction,
-  previewAction,
-  scanAction,
   importAction,
 }: {
   slug: string;
@@ -52,39 +58,13 @@ export function ProductIntake({
   workflows: Option[];
   instagramStatus: string | null;
   instagramUsername: string | null;
-  createAction: (data: FormData) => Promise<{ error?: string; success?: string } | void>;
-  previewAction: (data: FormData) => Promise<{
-    error?: string;
-    success?: string;
-    product?: {
-      name: string;
-      description: string | null;
-      price: number | null;
-      currency: string | null;
-      imageUrl: string | null;
-      sku: string | null;
-    };
-  }>;
-  scanAction: () => Promise<{
-    error?: string;
-    success?: string;
-    products?: ScanProduct[];
-    frames?: ScanFrame[];
-  }>;
+  createAction: (
+    data: FormData,
+  ) => Promise<{ error?: string; success?: string } | void>;
   importAction: ImportAction;
 }) {
   const [method, setMethod] = useState<MethodId>("manual");
   const csv = useBatchSave(importAction);
-  const instagram = useBatchSave(importAction);
-  const [scanning, setScanning] = useState(false);
-  const [scanner, setScanner] = useState<{ loading: boolean; frames: ScanFrame[] | null } | null>(null);
-  const scanResultRef = useRef<{
-    error?: string;
-    success?: string;
-    products?: ScanProduct[];
-  } | null>(null);
-  const instagramRef = useRef(instagram);
-  instagramRef.current = instagram;
   const connected = instagramStatus === "connected";
 
   function onTabsKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -95,46 +75,6 @@ export function ProductIntake({
     const next = METHODS[(index + delta + METHODS.length) % METHODS.length];
     setMethod(next.id);
     document.getElementById(`product-tab-${next.id}`)?.focus();
-  }
-
-  function finishInstagramScan() {
-    const result = scanResultRef.current;
-    if (!result) return;
-    scanResultRef.current = null;
-    setScanner(null);
-    setScanning(false);
-    const batch = instagramRef.current;
-    if (result.error || !result.products?.length) {
-      batch.setRows([]);
-      batch.setNotice({ error: result.error || "Nuk gjeta produkte në postime." });
-      return;
-    }
-    batch.setRows(result.products.map(draftFromInstagram));
-    batch.setNotice({ success: result.success || "Kontrolloje listën, pastaj ruaji." });
-  }
-
-  async function scanInstagram() {
-    setScanning(true);
-    setScanner({ loading: true, frames: null });
-    instagram.setNotice(null);
-    instagram.setRows([]);
-    scanResultRef.current = null;
-    try {
-      const result = await scanAction();
-      if (!result.frames?.length) {
-        setScanner(null);
-        setScanning(false);
-        instagram.setNotice({ error: result.error || "Nuk gjeta produkte në postime." });
-        return;
-      }
-      scanResultRef.current = result;
-      setScanner({ loading: false, frames: result.frames });
-    } catch {
-      scanResultRef.current = null;
-      setScanner(null);
-      setScanning(false);
-      instagram.setNotice({ error: "Skanimi dështoi. Provo përsëri." });
-    }
   }
 
   function onCsvFile(event: ChangeEvent<HTMLInputElement>) {
@@ -171,9 +111,16 @@ export function ProductIntake({
     <section className="panel section-pad product-intake">
       <div className="product-intake-head">
         <h2>Shto produkte</h2>
-        <p className="muted-copy">Zgjidh mënyrën. Katalogu përditësohet vetëm kur ruan.</p>
+        <p className="muted-copy">
+          Zgjidh mënyrën. Katalogu përditësohet vetëm kur ruan.
+        </p>
       </div>
-      <div role="tablist" aria-label="Mënyra e shtimit" className="product-methods" onKeyDown={onTabsKeyDown}>
+      <div
+        role="tablist"
+        aria-label="Mënyra e shtimit"
+        className="product-methods"
+        onKeyDown={onTabsKeyDown}
+      >
         {METHODS.map((item) => (
           <button
             key={item.id}
@@ -183,7 +130,9 @@ export function ProductIntake({
             aria-selected={method === item.id}
             aria-controls={`product-panel-${item.id}`}
             tabIndex={method === item.id ? 0 : -1}
-            className={method === item.id ? "product-method is-active" : "product-method"}
+            className={
+              method === item.id ? "product-method is-active" : "product-method"
+            }
             onClick={() => setMethod(item.id)}
           >
             <span className="product-method-icon">
@@ -202,7 +151,10 @@ export function ProductIntake({
         hidden={method !== "manual"}
         className="product-method-panel"
       >
-        <p className="muted-copy">Plotëso fushat dhe ruaje. Përshkrimin mund ta gjenerosh me AI nga emri.</p>
+        <p className="muted-copy">
+          Plotëso fushat dhe ruaje. Përshkrimin mund ta gjenerosh me AI nga
+          emri.
+        </p>
         <ActionForm action={createAction} className="grid gap-5">
           <ProductFields slug={slug} types={types} workflows={workflows} />
           <button className="btn btn-primary" type="submit">
@@ -219,15 +171,12 @@ export function ProductIntake({
         className="product-method-panel"
       >
         <p className="muted-copy">
-          Ngjit linkun e faqes së produktit, nga çdo dyqan. Kontrollo emrin, çmimin dhe përshkrimin, pastaj ruaje.
+          Ngjit linkun e faqes së produktit, nga çdo dyqan. Kontrollo emrin,
+          çmimin dhe përshkrimin, pastaj ruaje.
         </p>
-        <ActionForm action={createAction} className="grid gap-5">
-          <ImportProductLink action={previewAction} quiet />
-          <ProductFields slug={slug} types={types} workflows={workflows} />
-          <button className="btn btn-primary" type="submit">
-            Ruaj produktin
-          </button>
-        </ActionForm>
+        <IntelligenceTrigger source="website">
+          Skano me AI dhe rishiko
+        </IntelligenceTrigger>
       </div>
 
       <div
@@ -238,8 +187,8 @@ export function ProductIntake({
         className="product-method-panel"
       >
         <p className="muted-copy">
-          Kolonat: emri, cmimi, monedha, pershkrimi, sku, foto. Ndarësi mund të jetë presje ose pikëpresje, si në Excel.
-          Zgjidh rreshtat dhe ruaji.
+          Kolonat: emri, cmimi, monedha, pershkrimi, sku, foto. Ndarësi mund të
+          jetë presje ose pikëpresje, si në Excel. Zgjidh rreshtat dhe ruaji.
         </p>
         <div className="import-link-row">
           <label className="btn btn-ghost">
@@ -251,7 +200,11 @@ export function ProductIntake({
               onChange={onCsvFile}
             />
           </label>
-          <button type="button" className="btn btn-ghost" onClick={downloadSample}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={downloadSample}
+          >
             Shkarko një shembull
           </button>
         </div>
@@ -275,35 +228,18 @@ export function ProductIntake({
         hidden={method !== "instagram"}
         className="product-method-panel"
       >
-        <p className="muted-copy">{instagramIntro(instagramStatus, instagramUsername)}</p>
+        <p className="muted-copy">
+          {instagramIntro(instagramStatus, instagramUsername)}
+        </p>
         {connected ? (
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={scanning || instagram.saving}
-            onClick={scanInstagram}
-          >
-            {scanning ? "Duke skanuar…" : "Skano postimet"}
-          </button>
+          <IntelligenceTrigger source="instagram">
+            Analizo Instagram-in dhe rishiko
+          </IntelligenceTrigger>
         ) : (
           <Link href={`/b/${slug}/instagram`} className="btn btn-primary">
             Hap Instagram
           </Link>
         )}
-        {scanner ? (
-          <InstagramScanner loading={scanner.loading} frames={scanner.frames} onFinished={finishInstagramScan} />
-        ) : null}
-        {scanner ? null : <Notice notice={instagram.notice} />}
-        {!scanner && instagram.rows.length > 0 ? (
-          <ProductReview
-            rows={instagram.rows}
-            onChange={instagram.setRows}
-            types={types}
-            workflows={workflows}
-            pending={instagram.saving}
-            onSave={instagram.save}
-          />
-        ) : null}
       </div>
     </section>
   );
@@ -381,30 +317,19 @@ function draftsFromCsv(rows: CsvProduct[]): ReviewDraft[] {
   }));
 }
 
-function draftFromInstagram(product: ScanProduct): ReviewDraft {
-  return {
-    key: product.externalId,
-    selected: true,
-    name: product.name,
-    price: Number.isInteger(product.price) ? String(product.price) : product.price.toFixed(2),
-    currency: product.currency || "ALL",
-    description: product.description ?? "",
-    sku: "",
-    imageUrl: product.imageUrl ?? "",
-    sourceLabel: "Postim",
-    externalId: product.externalId,
-    permalink: product.permalink,
-  };
-}
-
-function instagramIntro(status: string | null, username: string | null): string {
+function instagramIntro(
+  status: string | null,
+  username: string | null,
+): string {
   if (status === "connected") {
     const handle = username?.replace(/^@/, "").trim();
     const who = handle ? `@${handle}` : "llogarisë së lidhur";
-    return `Lexohen postimet e ${who}. Një postim bëhet produkt kur në tekst ka çmim, p.sh. 790 Lekë ose 18 EUR. Kontrolloje listën para se ta ruash.`;
+    return `Lexohen postimet e ${who}. Produktet, shërbimet dhe njohuritë përgatiten si drafte me burimin përkatës. Kontrolloje listën para se ta ruash.`;
   }
-  if (status === "expired") return "Lidhja e Instagram ka skaduar. Lidhe përsëri që të lexohen postimet.";
-  if (status === "revoked") return "Lidhja e Instagram është hequr. Lidhe përsëri llogarinë.";
+  if (status === "expired")
+    return "Lidhja e Instagram ka skaduar. Lidhe përsëri që të lexohen postimet.";
+  if (status === "revoked")
+    return "Lidhja e Instagram është hequr. Lidhe përsëri llogarinë.";
   return "Lidh Instagram-in e biznesit. Pastaj këtu lexohen postimet dhe nxirren produktet që kanë çmim në tekst.";
 }
 
@@ -417,7 +342,9 @@ function fileLabel(name: string): string {
 function downloadSample() {
   const content =
     "\uFEFFemri,cmimi,monedha,pershkrimi,sku,foto\nFilizat Hapi 2,790,ALL,Paketë me 140 faqe,FIL-2,\n";
-  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const url = URL.createObjectURL(
+    new Blob([content], { type: "text/csv;charset=utf-8" }),
+  );
   const link = document.createElement("a");
   link.href = url;
   link.download = "produkte-shembull.csv";
