@@ -109,26 +109,42 @@
 .auth-card form {
   margin-top: 0;
 }
-.auth-google {
+.auth-oauth {
   margin-top: 28px;
+  display: grid;
+  gap: 10px;
+}
+.auth-google,
+.auth-apple {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  border: 1px solid #e1ddea;
   border-radius: 10px;
-  background: #fff;
   padding: 14px 16px;
   font-size: 15px;
   font-weight: 600;
+}
+.auth-google {
+  border: 1px solid #e1ddea;
+  background: #fff;
   color: #17132f;
 }
 .auth-google:hover {
   background: #fcfbff;
   border-color: #cfc6e4;
 }
-.auth-google:disabled {
+.auth-apple {
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+}
+.auth-apple:hover {
+  background: #000;
+}
+.auth-google:disabled,
+.auth-apple:disabled {
   opacity: 0.65;
 }
 .auth-divider {
@@ -228,12 +244,6 @@
   background: #eafaf2;
   color: #237450;
 }
-.auth-card .auth-footnote {
-  font-size: 12px;
-  text-align: center;
-  border-top: 1px solid #eeeaf3;
-  padding-top: 24px;
-}
 .auth-page button {
   cursor: pointer;
 }
@@ -275,6 +285,14 @@ html[data-resolved="dark"] .auth-card input {
 html[data-resolved="dark"] .auth-google:hover {
   background: #241e36;
   border-color: #514868;
+}
+html[data-resolved="dark"] .auth-apple {
+  border-color: #f4f0ff;
+  background: #f4f0ff;
+  color: #111;
+}
+html[data-resolved="dark"] .auth-apple:hover {
+  background: #fff;
 }
 html[data-resolved="dark"] .auth-divider::before,
 html[data-resolved="dark"] .auth-divider::after {

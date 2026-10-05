@@ -30,6 +30,15 @@ Google / Gmail login (Supabase → Authentication → Providers → Google):
 4. Vendos Client ID + Client Secret te Supabase Google provider dhe aktivizoje.
 5. `NEXT_PUBLIC_APP_URL` në Vercel duhet të jetë saktësisht domain-i publik (p.sh. `https://www.agjenti.app`) — i njëjti origin ku përdoruesi hap login-in, që cookie e sesionit të përputhet.
 6. Redirect URLs në Supabase Auth duhet të përfshijnë `https://www.agjenti.app/auth/callback**` (dhe variantin pa www nëse e përdorni).
+
+Apple login (Supabase → Authentication → Providers → Apple):
+1. Në [Apple Developer](https://developer.apple.com/account) → Identifiers krijo një **App ID** me “Sign in with Apple”.
+2. Krijo një **Services ID** (p.sh. `app.agjenti.web`) dhe aktivizo Sign in with Apple.
+3. Configure → Domains: `<PROJECT_REF>.supabase.co` · Return URL: `https://<PROJECT_REF>.supabase.co/auth/v1/callback`
+4. Keys → krijo një key me “Sign in with Apple”, shkarko `.p8` (vetëm një herë) dhe ruaj Key ID + Team ID.
+5. Në Supabase Apple provider: Client IDs = Services ID (i pari në listë), pastaj Secret Key (JWT nga `.p8` / generatori i Supabase). Aktivizo.
+6. Secret Key skadon çdo **6 muaj** — rinovoje përpara skadimit ose login-i Apple ndalon së funksionuari.
+7. Testo `/auth/apple` (butoni “Vazhdo me Apple” te `/login`).
 - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` (Instagram App ID/Secret nga Meta → Instagram, jo Facebook App ID)
 - `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`
 - `INSTAGRAM_OAUTH_REDIRECT_URI` = `https://agjenti.app/api/instagram/oauth/callback`

@@ -20,7 +20,7 @@ function LoginForm() {
     const err = params.get("error");
     if (!err) return "";
     if (err === "oauth_callback") {
-      return "Hyrja me Google dështoi ose u anulua. Provo përsëri.";
+      return "Hyrja me Google/Apple dështoi ose u anulua. Provo përsëri.";
     }
     return "Lidhja e konfirmimit ka skaduar ose nuk është e vlefshme. Provo të hysh ose kërko një lidhje të re.";
   });
@@ -29,13 +29,13 @@ function LoginForm() {
     setError("");
     setMessage("");
   }
-  function signInWithGoogle() {
+  function signInWithOAuth(provider: "google" | "apple") {
     if (busy) return;
     setBusy(true);
     setError("");
     setMessage("");
-    // Server route sets the PKCE verifier cookie on the redirect to Google.
-    window.location.assign("/auth/google");
+    // Server route sets the PKCE verifier cookie on the redirect.
+    window.location.assign(`/auth/${provider}`);
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -149,39 +149,60 @@ function LoginForm() {
           </p>
           {mode !== "reset" && (
             <>
-              <button
-                type="button"
-                className="auth-google"
-                disabled={busy}
-                onClick={signInWithGoogle}
-              >
-                <svg
-                  aria-hidden="true"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 18 18"
+              <div className="auth-oauth">
+                <button
+                  type="button"
+                  className="auth-google"
+                  disabled={busy}
+                  onClick={() => signInWithOAuth("google")}
                 >
-                  <path
-                    fill="#4285F4"
-                    d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961l3.007 2.332C4.672 5.163 6.656 3.58 9 3.58z"
-                  />
-                </svg>
-                {mode === "signup"
-                  ? "Regjistrohu me Google"
-                  : "Vazhdo me Google"}
-              </button>
+                  <svg
+                    aria-hidden="true"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 18 18"
+                  >
+                    <path
+                      fill="#4285F4"
+                      d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961l3.007 2.332C4.672 5.163 6.656 3.58 9 3.58z"
+                    />
+                  </svg>
+                  {mode === "signup"
+                    ? "Regjistrohu me Google"
+                    : "Vazhdo me Google"}
+                </button>
+                <button
+                  type="button"
+                  className="auth-apple"
+                  disabled={busy}
+                  onClick={() => signInWithOAuth("apple")}
+                >
+                  <svg
+                    aria-hidden="true"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 18 18"
+                    fill="currentColor"
+                  >
+                    <path d="M14.73 9.48c-.02-2.07 1.69-3.07 1.77-3.12-0.97-1.41-2.47-1.61-3-1.63-1.28-.13-2.5.75-3.15.75-.65 0-1.66-.73-2.73-.71-1.4.02-2.7.82-3.42 2.07-1.46 2.53-.37 6.28 1.05 8.34.69 1.01 1.52 2.14 2.61 2.1 1.05-.04 1.44-.67 2.71-.67 1.26 0 1.62.67 2.73.65 1.13-.02 1.84-1.03 2.53-2.05.8-1.16 1.12-2.29 1.14-2.35-.02-.01-2.19-.84-2.21-3.33zm-2.1-6.2c.58-.7.97-1.67.86-2.64-.83.03-1.84.55-2.44 1.25-.53.61-.99 1.6-.87 2.54.92.07 1.86-.47 2.45-1.15z" />
+                  </svg>
+                  {mode === "signup"
+                    ? "Regjistrohu me Apple"
+                    : "Vazhdo me Apple"}
+                </button>
+              </div>
               <div className="auth-divider" role="separator">
                 <span>ose me email</span>
               </div>
@@ -270,13 +291,6 @@ function LoginForm() {
               ? "Nuk ke llogari? Regjistrohu"
               : "Ke llogari? Hyr"}
           </button>
-          <p className="auth-footnote">
-            <Link href="/privacy">Politika e privatësisë</Link>
-            <br />
-            Pas regjistrimit mund të krijosh hapësirën e biznesit tënd. Nëse je
-            pjesë e një ekipi ekzistues, administratori mund të të lidhë me
-            biznesin.
-          </p>
         </div>
       </section>
     </main>
