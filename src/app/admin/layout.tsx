@@ -1,6 +1,8 @@
-import { redirect } from "next/navigation";
-import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { DashboardShell } from "@/components/dashboard/shell";
+import { buildAdminNavigation } from "@/lib/dashboard/navigation/builder";
+import { getSessionUser, listMemberships } from "@/lib/tenant/access";
+import { redirect } from "next/navigation";
+
 export default async function AdminLayout({
   children,
 }: {
@@ -24,6 +26,8 @@ export default async function AdminLayout({
           user.user_metadata.name) ||
         undefined
       }
+      navigationItems={buildAdminNavigation("desktop")}
+      mobileNavigationItems={buildAdminNavigation("mobile")}
     >
       {children}
     </DashboardShell>

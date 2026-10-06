@@ -7,6 +7,8 @@ import { DashboardShell } from "@/components/dashboard/shell";
 import { getAppSettings } from "@/lib/platform/settings";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import type { BusinessProfileAnswers } from "@/lib/onboarding/rules";
+import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
+import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 export default async function BusinessLayout({
   children,
   params,
@@ -20,7 +22,7 @@ export default async function BusinessLayout({
   const access = await listMemberships(user.id);
   const business = access.businesses.find((b) => b.slug === slug);
   if (!business) redirect("/auth/continue");
-  const [settings, setup, onboarding] = await Promise.all([
+  const [settings, setup, onboarding, dashboardProfile] = await Promise.all([
     getAppSettings(),
     getSetupStatus(business.id),
     createServiceSupabase()
@@ -28,6 +30,7 @@ export default async function BusinessLayout({
       .select("answers")
       .eq("business_id", business.id)
       .maybeSingle(),
+    loadDashboardProfile(business.id),
   ]);
   const storedAnswers = onboarding.data?.answers;
   const storedProfile =
@@ -48,6 +51,11 @@ export default async function BusinessLayout({
       return null;
     return storedProfile as BusinessProfileAnswers;
   })();
+  const navigationItems = buildNavigationItems(dashboardProfile, "desktop");
+  const mobileNavigationItems = buildNavigationItems(
+    dashboardProfile,
+    "mobile",
+  );
   return (
     <DashboardShell
       name={business.name}
@@ -62,6 +70,8 @@ export default async function BusinessLayout({
           user.user_metadata.name) ||
         undefined
       }
+      navigationItems={navigationItems}
+      mobileNavigationItems={mobileNavigationItems}
     >
       {settings.announcement && (
         <div

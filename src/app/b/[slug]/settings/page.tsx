@@ -4,6 +4,7 @@ import { ActionForm } from "@/components/dashboard/action-form";
 import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { IntegrationApiKeyField } from "@/components/dashboard/integration-api-key";
 import { IntegrationProbe } from "@/components/dashboard/integration-probe";
+import { ModulesSettingsPanel } from "@/components/dashboard/modules-settings";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
@@ -11,6 +12,7 @@ import { redirect } from "next/navigation";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 
 function parseOptionalUrl(value: string): string | null | { error: string } {
   const trimmed = value.trim();
@@ -168,6 +170,7 @@ export default async function SettingsPage({
   const autoReplyBlocked = access.business.auto_reply
     ? null
     : setupGateMessage(await loadSetupStatus(access.business.id));
+  const dashboardProfile = await loadDashboardProfile(access.business.id);
 
   return (
     <>
@@ -237,6 +240,12 @@ export default async function SettingsPage({
               </p>
             )}
           </ActionForm>
+
+          <ModulesSettingsPanel
+            slug={slug}
+            businessId={access.business.id}
+            profile={dashboardProfile}
+          />
 
           <ActionForm
             action={saveExternalCatalog}

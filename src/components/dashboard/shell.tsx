@@ -2,34 +2,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import {
-  isDashboardRoute,
-  mobileBusinessNav,
-  mobileAdminNav,
-} from "./navigation";
+import { isDashboardRoute } from "./navigation";
+import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
-const businessNav = [
-  ["", "Dashboard", "dashboard"],
-  ["inbox", "Inbox", "inbox"],
-  ["products", "Produkte", "products"],
-  ["services", "Shërbime", "knowledge"],
-  ["catalogs", "Katalogë", "knowledge"],
-  ["orders", "Porosi", "orders"],
-  ["customers", "Klientë", "customers"],
-  ["agents", "Agjenti AI", "agents"],
-  ["knowledge", "Njohuria", "knowledge"],
-  ["workflows", "Workflow", "workflows"],
-  ["instagram", "Instagram", "instagram"],
-  ["settings", "Cilësimet", "settings"],
-];
-const adminNav = [
-  ["", "Dashboard", "dashboard"],
-  ["businesses", "Bizneset", "businesses"],
-  ["product-types", "Llojet", "products"],
-  ["conversations", "Biseda & Integrime", "inbox"],
-  ["app", "App", "settings"],
-];
+
 export function DashboardShell({
   children,
   name,
@@ -39,6 +16,8 @@ export function DashboardShell({
   userName,
   platformAdmin = false,
   businesses = [],
+  navigationItems,
+  mobileNavigationItems,
 }: {
   children: React.ReactNode;
   name: string;
@@ -48,6 +27,8 @@ export function DashboardShell({
   userName?: string;
   platformAdmin?: boolean;
   businesses?: { id: string; name: string; slug: string }[];
+  navigationItems: NavItem[];
+  mobileNavigationItems: NavItem[];
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -137,8 +118,9 @@ export function DashboardShell({
   }, [open, mobile]);
   const base = admin ? "/admin" : `/b/${slug}`;
   const inboxDetailView = !admin && pathname.startsWith(`${base}/inbox/`);
-  const items = admin ? adminNav : businessNav;
-  const primaryItems = admin ? mobileAdminNav : mobileBusinessNav;
+  const items = navigationItems;
+  const primaryItems = mobileNavigationItems;
+  const mobilePaths = new Set(primaryItems.map((item) => item.path));
   return (
     <div
       className={`dashboard-shell ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
@@ -203,19 +185,19 @@ export function DashboardShell({
         <nav
           aria-label={admin ? "Menuja e administratorit" : "Menuja e biznesit"}
         >
-          {items.map(([path, label, icon]) => {
-            const href = `${base}${path ? `/${path}` : ""}`;
-            const active = isDashboardRoute(pathname, base, path);
+          {items.map((item) => {
+            const href = `${base}${item.path ? `/${item.path}` : ""}`;
+            const active = isDashboardRoute(pathname, base, item.path);
             return (
               <Link
-                key={path}
+                key={item.id}
                 href={href}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setOpen(false)}
-                className={`dashboard-nav ${active ? "active" : ""} ${primaryItems.some(([p]) => p === path) ? "mobile-primary-item" : ""}`}
+                className={`dashboard-nav ${active ? "active" : ""} ${mobilePaths.has(item.path) ? "mobile-primary-item" : ""}`}
               >
-                <Icon name={icon} />
-                {label}
+                <Icon name={item.icon} />
+                {item.label}
               </Link>
             );
           })}
@@ -280,27 +262,27 @@ export function DashboardShell({
             {search && (
               <div className="search-results">
                 {items
-                  .filter(([, label]) =>
-                    label
+                  .filter((item) =>
+                    item.label
                       .toLocaleLowerCase()
                       .includes(search.toLocaleLowerCase()),
                   )
-                  .map(([path, label]) => (
+                  .map((item) => (
                     <Link
-                      key={path}
+                      key={item.id}
                       onClick={() => {
                         setSearch("");
                         setSearchOpen(false);
                         setOpen(false);
                       }}
-                      href={`${base}/${path}`}
+                      href={`${base}${item.path ? `/${item.path}` : ""}`}
                     >
-                      {label}
+                      {item.label}
                       <Icon name="arrow" size={15} />
                     </Link>
                   ))}
-                {!items.some(([, label]) =>
-                  label
+                {!items.some((item) =>
+                  item.label
                     .toLocaleLowerCase()
                     .includes(search.toLocaleLowerCase()),
                 ) && <p>Nuk u gjet asnjë faqe.</p>}
@@ -330,13 +312,13 @@ export function DashboardShell({
         className="mobile-bottom-nav"
         aria-label={admin ? "Navigimi kryesor i adminit" : "Navigimi kryesor"}
       >
-        {primaryItems.map(([path, label, icon]) => (
+        {primaryItems.map((item) => (
           <Link
-            key={path}
-            href={`${base}${path ? `/${path}` : ""}`}
+            key={item.id}
+            href={`${base}${item.path ? `/${item.path}` : ""}`}
             prefetch={false}
             aria-current={
-              isDashboardRoute(pathname, base, path) ? "page" : undefined
+              isDashboardRoute(pathname, base, item.path) ? "page" : undefined
             }
             onClick={() => {
               setOpen(false);
@@ -344,8 +326,8 @@ export function DashboardShell({
               setSearch("");
             }}
           >
-            <Icon name={icon} size={22} />
-            <span>{label}</span>
+            <Icon name={item.icon} size={22} />
+            <span>{item.label}</span>
           </Link>
         ))}
       </nav>

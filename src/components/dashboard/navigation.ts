@@ -4,15 +4,5 @@ export function isDashboardRoute(pathname: string, base: string, path: string) {
     ? pathname === href || pathname.startsWith(`${href}/`)
     : pathname === href;
 }
-export const mobileBusinessNav = [
-  ["", "Kreu", "dashboard"],
-  ["inbox", "Inbox", "inbox"],
-  ["products", "Produkte", "products"],
-  ["orders", "Porosi", "orders"],
-];
-export const mobileAdminNav = [
-  ["", "Kreu", "dashboard"],
-  ["businesses", "Bizneset", "businesses"],
-  ["conversations", "Bisedat", "inbox"],
-  ["app", "App", "settings"],
-];
+
+export type { NavItem } from "@/lib/dashboard/navigation/builder";

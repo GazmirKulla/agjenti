@@ -9,6 +9,7 @@ import {
 import { redirect } from "next/navigation";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { requireEnabledModule } from "@/lib/dashboard/modules/permissions";
 
 export default async function OrdersPage({
   params,
@@ -16,6 +17,7 @@ export default async function OrdersPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  await requireEnabledModule(slug, "orders");
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);

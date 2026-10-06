@@ -10,11 +10,16 @@ import {
   StatusBadge,
 } from "./ui";
 import { TrendChart } from "./trend-chart";
+import type { DashboardProfile } from "@/lib/dashboard/modules/types";
+import { legacyDashboardProfile } from "@/lib/dashboard/profile/legacy";
+import { resolveWidgets } from "@/lib/dashboard/widgets/resolver";
 
 export async function Overview({
   business,
+  dashboardProfile = legacyDashboardProfile,
 }: {
   business?: { id: string; name: string; slug: string; auto_reply: boolean };
+  dashboardProfile?: DashboardProfile;
 }) {
   const db = createServiceSupabase();
   const base = business ? `/b/${business.slug}` : "/admin";
@@ -41,16 +46,11 @@ export async function Overview({
     throw new Error("Nuk u ngarkuan të dhënat e panelit.");
   const recent = recentResult.data;
   const businesses = businessesResult.data;
-  const {
-    conversations,
-    orders,
-    customers,
-    connections,
-    agents,
-    paused,
-    totalBusinesses,
-    trend,
-  } = stats;
+  const { agents, paused, trend } = stats;
+  const widgets = resolveWidgets(dashboardProfile, stats, {
+    business: Boolean(business),
+  });
+  const primaryActions = dashboardProfile.primaryActions;
   return (
     <div className="overview-page">
       <PageHeading
@@ -62,42 +62,37 @@ export async function Overview({
             : "Bizneset, bisedat dhe porositë në një vend."
         }
       >
-        <span className="date-label">
-          <Icon name="calendar" size={17} />
-          Gjendja aktuale
-        </span>
+        {business && primaryActions[0] && (
+          <Link
+            className="btn btn-primary"
+            href={`${base}/${primaryActions[0].href}`}
+          >
+            <Icon name={primaryActions[0].icon} size={17} />
+            {primaryActions[0].label}
+          </Link>
+        )}
+        {!business && (
+          <span className="date-label">
+            <Icon name="calendar" size={17} />
+            Gjendja aktuale
+          </span>
+        )}
       </PageHeading>
       <div className="stats-grid">
-        <StatCard
-          label={business ? "Biseda" : "Biznese"}
-          value={business ? conversations : totalBusinesses}
-          hint="Gjithsej në platformë"
-          icon={business ? "inbox" : "businesses"}
-        />
-        <StatCard
-          label="Porosi të krijuara"
-          value={orders}
-          hint="Të gjitha statuset"
-          icon="orders"
-        />
-        <StatCard
-          label={business ? "Klientë" : "Biseda"}
-          value={business ? customers : conversations}
-          hint={business ? "Klientë të regjistruar" : "Në të gjitha bizneset"}
-          icon="customers"
-          tone="blue"
-        />
-        <StatCard
-          label="Instagram i lidhur"
-          value={connections}
-          hint="Llogari me status të lidhur"
-          icon="instagram"
-          tone="pink"
-        />
+        {widgets.map((widget) => (
+          <StatCard
+            key={widget.id}
+            label={widget.label}
+            value={widget.value}
+            hint={widget.hint}
+            icon={widget.icon}
+            tone={widget.tone}
+          />
+        ))}
       </div>
       <div className="overview-primary">
         <section className="panel section-pad">
-          <SectionTitle title="Biseda dhe porosi" />
+          <SectionTitle title="Biseda dhe aktiviteti" />
           <p className="muted-copy">
             Të krijuara gjatë 7 ditëve të fundit · sipas UTC
           </p>
@@ -191,15 +186,10 @@ export async function Overview({
           />
           {business ? (
             <div className="quick-actions">
-              {[
-                ["products", "Shto produkte", "products"],
-                ["orders", "Shiko porositë", "orders"],
-                ["knowledge", "Përditëso njohuritë", "knowledge"],
-                ["instagram", "Menaxho Instagram", "instagram"],
-              ].map(([path, label, icon]) => (
-                <Link key={path} href={`${base}/${path}`}>
-                  <Icon name={icon} size={25} />
-                  <span>{label}</span>
+              {primaryActions.map((action) => (
+                <Link key={action.id} href={`${base}/${action.href}`}>
+                  <Icon name={action.icon} size={25} />
+                  <span>{action.label}</span>
                   <Icon name="arrow" size={16} />
                 </Link>
               ))}

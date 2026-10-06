@@ -4,6 +4,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { homeForAccess } from "@/lib/auth/destination";
 import { getAppSettings } from "@/lib/platform/settings";
 import { emptyAnswers, parseAnswers, initialInstructions } from "./model";
+import { persistGeneratedProfile } from "@/lib/dashboard/profile/service";
 export type OnboardingResult = {
   error?: string;
   destination?: string;
@@ -76,6 +77,21 @@ export async function saveOnboarding(
       }
       if (typeof data !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(data))
         return { error: "Nuk u kthye një hapësirë e vlefshme. Provo përsëri." };
+      try {
+        const { data: business } = await db
+          .from("businesses")
+          .select("id")
+          .eq("slug", data)
+          .maybeSingle();
+        if (business?.id) {
+          await persistGeneratedProfile(
+            business.id,
+            answers as unknown as Record<string, unknown>,
+          );
+        }
+      } catch (error) {
+        console.error("[dashboard profile]", error);
+      }
       return { destination: `/b/${data}?welcome=1` };
     }
     return { saved: true };
