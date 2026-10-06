@@ -1,5 +1,11 @@
 "use client";
-import { startTransition, useActionState, type ReactNode } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 
 export type ActionResult = { error?: string; success?: string };
 
@@ -8,12 +14,16 @@ export function ActionForm({
   children,
   className,
   successMessage = "U ruajt me sukses.",
+  onSuccess,
 }: {
   action: (data: FormData) => Promise<ActionResult | void>;
   children: ReactNode;
   className?: string;
   successMessage?: string;
+  onSuccess?: () => void;
 }) {
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
   const [result, submit, pending] = useActionState(
     async (
       _previous: ActionResult | null,
@@ -33,6 +43,9 @@ export function ActionForm({
     },
     null,
   );
+  useEffect(() => {
+    if (result?.success) onSuccessRef.current?.();
+  }, [result?.success]);
   return (
     <form
       action={submit}

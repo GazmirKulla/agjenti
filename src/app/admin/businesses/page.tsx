@@ -1,7 +1,12 @@
 import { ActionForm } from "@/components/dashboard/action-form";
+import { BusinessNameField } from "@/components/dashboard/business-name-field";
 import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
+import {
+  allocateUniqueBusinessSlug,
+  slugifyBusinessName,
+} from "@/lib/businesses/slug";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -36,16 +41,14 @@ export default async function AdminBusinessesPage() {
     if (!session || !(await isPlatformAdmin(session.id)))
       return { error: "Kërkohet qasja e administratorit." };
     const name = String(formData.get("name") ?? "").trim();
-    const slug = String(formData.get("slug") ?? "")
-      .trim()
-      .toLowerCase();
     const auto_reply = formData.get("auto_reply") === "on";
-    if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))
+    const base = slugifyBusinessName(name);
+    if (!name || !base)
       return {
-        error:
-          "Vendos emrin dhe një slug me shkronja të vogla, numra ose viza.",
+        error: "Vendos një emër biznesi me të paktën një shkronjë ose numër.",
       };
     const db = createServiceSupabase();
+    const slug = await allocateUniqueBusinessSlug(db, base);
     const { error } = await db
       .from("businesses")
       .insert({ name, slug, catalog_source: "internal", auto_reply });
@@ -53,7 +56,7 @@ export default async function AdminBusinessesPage() {
       return {
         error:
           error.code === "23505"
-            ? "Ky slug përdoret nga një biznes tjetër."
+            ? "Ky slug sapo u zë. Provo përsëri."
             : "Biznesi nuk u krijua. Provo përsëri.",
       };
     revalidatePath("/admin/businesses");
@@ -106,21 +109,10 @@ export default async function AdminBusinessesPage() {
         placeholder="Kërko biznes ose slug…"
         columns={["Biznesi", "Katalogu", "Përgjigje automatike"]}
         createLabel="Shto biznes"
+        createAsModal
         createForm={
           <ActionForm action={createBusiness} className="grid gap-4">
-            <label className="form-label">
-              Emri i biznesit
-              <input name="name" className="field" required />
-            </label>
-            <label className="form-label">
-              Adresa e biznesit (slug)
-              <input
-                name="slug"
-                pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-                className="field"
-                required
-              />
-            </label>
+            <BusinessNameField />
             <label className="toggle-label">
               <span>Përgjigje automatike</span>
               <input

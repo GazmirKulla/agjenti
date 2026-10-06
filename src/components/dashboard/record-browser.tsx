@@ -1,9 +1,17 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
-import type { ReactNode } from "react";
+import {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { Icon } from "./icon";
 import { EmptyState } from "./ui";
+
 export type BrowserRecord = {
   id: string;
   title: string;
@@ -12,6 +20,7 @@ export type BrowserRecord = {
   detail: ReactNode;
   cells?: ReactNode[];
 };
+
 export function RecordBrowser({
   records,
   serverPage,
@@ -22,6 +31,7 @@ export function RecordBrowser({
   listTitle = "Të gjitha",
   createForm,
   createLabel = "Shto të re",
+  createAsModal = false,
 }: {
   serverPage?: {
     page: number;
@@ -38,11 +48,14 @@ export function RecordBrowser({
   listTitle?: string;
   createForm?: ReactNode;
   createLabel?: string;
+  /** Kur true, forma e krijimit hapet në modal, jo në panelin e detajeve. */
+  createAsModal?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(records[0]?.id ?? "");
   const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(0);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const matches = serverPage
     ? records
     : records.filter((r) =>
@@ -61,6 +74,25 @@ export function RecordBrowser({
     return `${serverPage!.path}?${new URLSearchParams({ page: String(page), q: serverPage!.search })}`;
   }
   const active = rows.find((r) => r.id === selected) ?? rows[0];
+
+  useEffect(() => {
+    if (!createAsModal) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (creating) {
+      if (!dialog.open) dialog.showModal();
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  }, [creating, createAsModal]);
+
+  const formWithClose =
+    createAsModal && isValidElement(createForm)
+      ? cloneElement(createForm as ReactElement<{ onSuccess?: () => void }>, {
+          onSuccess: () => setCreating(false),
+        })
+      : createForm;
+
   return (
     <div className={`record-browser ${columns ? "table-browser" : ""}`}>
       <section className="panel record-list">
@@ -74,7 +106,7 @@ export function RecordBrowser({
               className="btn btn-primary"
               onClick={() => setCreating(!creating)}
             >
-              {creating ? "Mbyll" : `+ ${createLabel}`}
+              {creating && !createAsModal ? "Mbyll" : `+ ${createLabel}`}
             </button>
           )}
         </div>
@@ -127,7 +159,9 @@ export function RecordBrowser({
                     <tr
                       key={r.id}
                       className={
-                        active?.id === r.id && !creating ? "selected" : ""
+                        active?.id === r.id && !(creating && !createAsModal)
+                          ? "selected"
+                          : ""
                       }
                     >
                       <td>
@@ -136,7 +170,7 @@ export function RecordBrowser({
                           className="row-select"
                           onClick={() => {
                             setSelected(r.id);
-                            setCreating(false);
+                            if (!createAsModal) setCreating(false);
                           }}
                         >
                           <strong>{r.title}</strong>
@@ -157,12 +191,14 @@ export function RecordBrowser({
                 <button
                   type="button"
                   key={r.id}
-                  className={`record-item ${active?.id === r.id && !creating ? "selected" : ""}`}
+                  className={`record-item ${active?.id === r.id && !(creating && !createAsModal) ? "selected" : ""}`}
                   onClick={() => {
                     setSelected(r.id);
-                    setCreating(false);
+                    if (!createAsModal) setCreating(false);
                   }}
-                  aria-pressed={active?.id === r.id && !creating}
+                  aria-pressed={
+                    active?.id === r.id && !(creating && !createAsModal)
+                  }
                 >
                   <span className="record-monogram">
                     {r.title.slice(0, 2).toUpperCase()}
@@ -251,16 +287,18 @@ export function RecordBrowser({
       </section>
       <section
         className="panel record-detail"
-        key={creating ? "create" : (active?.id ?? "empty")}
+        key={
+          creating && !createAsModal ? "create" : (active?.id ?? "empty")
+        }
       >
-        {creating ? (
+        {creating && !createAsModal ? (
           <>
             <h2 className="detail-title">{createLabel}</h2>
             {createForm}
           </>
         ) : active ? (
           active.detail
-        ) : createForm ? (
+        ) : createForm && !createAsModal ? (
           <>
             <h2 className="detail-title">{createLabel}</h2>
             {createForm}
@@ -272,6 +310,31 @@ export function RecordBrowser({
           />
         )}
       </section>
+      {createAsModal && createForm ? (
+        <dialog
+          ref={dialogRef}
+          className="record-create-dialog"
+          onClose={() => setCreating(false)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setCreating(false);
+          }}
+        >
+          <div className="record-create-dialog-body">
+            <header className="record-create-dialog-head">
+              <h2>{createLabel}</h2>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                aria-label="Mbyll"
+                onClick={() => setCreating(false)}
+              >
+                ✕
+              </button>
+            </header>
+            {creating ? formWithClose : null}
+          </div>
+        </dialog>
+      ) : null}
     </div>
   );
 }
