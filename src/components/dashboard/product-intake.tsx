@@ -52,7 +52,11 @@ export function ProductIntake({
   instagramUsername,
   createAction,
   importAction,
+  initialMethod = "manual",
+  hideTabs = false,
 }: {
+  initialMethod?: MethodId;
+  hideTabs?: boolean;
   slug: string;
   types: Option[];
   workflows: Option[];
@@ -63,7 +67,7 @@ export function ProductIntake({
   ) => Promise<{ error?: string; success?: string } | void>;
   importAction: ImportAction;
 }) {
-  const [method, setMethod] = useState<MethodId>("manual");
+  const [method, setMethod] = useState<MethodId>(initialMethod);
   const csv = useBatchSave(importAction);
   const connected = instagramStatus === "connected";
 
@@ -116,6 +120,7 @@ export function ProductIntake({
         </p>
       </div>
       <div
+        hidden={hideTabs}
         role="tablist"
         aria-label="Mënyra e shtimit"
         className="product-methods"

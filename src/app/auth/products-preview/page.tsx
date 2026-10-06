@@ -1,0 +1,6 @@
+import {ProductCatalog} from '@/components/products/catalog';
+import {ProductEditor} from '@/components/products/editor';
+import {ProductHeading} from '@/components/products/shared';
+import type {ProductRow} from '@/lib/products/catalog';
+import '@/components/products/products.css';
+export default async function Preview({searchParams}:{searchParams:Promise<{mode?:string}>}){const {mode}=await searchParams;const types=[{id:'type',name:'Produkte të personalizuara'}];const workflows=[{id:'workflow',name:'Foto dhe adresë'}];const products:ProductRow[]=Array.from({length:12},(_,i)=>({id:String(i+1),name:['Bluza me Foto','Puzzle i personalizuar','Jastëk me Foto'][i%3],sku:`PZ-${i+1}`,description:'Produkt i personalizuar me foton tuaj.',image_url:null,source:i%2?'linked':'manual',external_id:null,price_amount:2200,currency:'ALL',product_type_id:i%3===0?null:'type',workflow_id:i%3===0?null:'workflow',is_active:i%2===0,created_at:'2026-10-06'}));return <div className="dashboard-shell" style={{display:'block',padding:24,maxWidth:1250,margin:'auto'}}><ProductHeading slug="demo" title="Produktet e Zana Store" description="Zgjidh, krijo dhe menaxho produktet."/>{mode==='editor'?<ProductEditor slug="demo" types={types} workflows={workflows}/>:<ProductCatalog slug="demo" products={products} types={types} workflows={workflows} mapping={mode==='mapping'}/>}</div>}

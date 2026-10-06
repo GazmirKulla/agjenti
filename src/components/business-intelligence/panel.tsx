@@ -133,10 +133,18 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
     return () =>
       window.removeEventListener("business-intelligence:open", listener);
   });
-  if (!initialTarget || pathname.split("/").length > 4) return null;
+  if (
+    !initialTarget ||
+    (section !== "products" && pathname.split("/").length > 4)
+  )
+    return null;
   return (
     <div className="bi-entry">
-      <button className="btn btn-ghost" onClick={() => void open()}>
+      <button
+        hidden={section === "products"}
+        className="btn btn-ghost"
+        onClick={() => void open()}
+      >
         ✨ Plotëso me AI
       </button>
       <dialog

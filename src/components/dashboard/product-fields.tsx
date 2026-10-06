@@ -30,7 +30,7 @@ export function ProductFields({
 }) {
   return (
     <>
-      <fieldset className="grid gap-3">
+      <fieldset id="product-identity" className="grid gap-3">
         <legend className="font-semibold">Identiteti</legend>
         <label className="form-label">
           Emri i produktit
@@ -69,6 +69,10 @@ export function ProductFields({
             defaultValue={product?.description ?? ""}
           />
         </div>
+      </fieldset>
+
+      <fieldset id="product-media" className="grid gap-3">
+        <legend className="font-semibold">Media</legend>{" "}
         <label className="form-label">
           URL e fotos
           <input
@@ -79,9 +83,11 @@ export function ProductFields({
             defaultValue={product?.image_url ?? ""}
           />
         </label>
+        <p className="muted-copy">
+          Vendos linkun e fotos që dëshiron të shfaqësh në katalog.
+        </p>
       </fieldset>
-
-      <fieldset className="grid gap-3">
+      <fieldset id="product-pricing" className="grid gap-3">
         <legend className="font-semibold">Çmimi</legend>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="form-label">
@@ -93,7 +99,7 @@ export function ProductFields({
               step="0.01"
               className="field"
               defaultValue={product?.price_amount ?? ""}
-              required={Boolean(product)}
+              required={false}
             />
           </label>
           <label className="form-label">
@@ -109,7 +115,7 @@ export function ProductFields({
         </div>
       </fieldset>
 
-      <fieldset className="grid gap-3">
+      <fieldset id="product-process" className="grid gap-3">
         <legend className="font-semibold">Procesi i porosisë</legend>
         <label className="form-label">
           Lloji i produktit
@@ -119,7 +125,9 @@ export function ProductFields({
             defaultValue={product?.product_type_id ?? ""}
             required={requireType}
           >
-            <option value="">{requireType ? "Zgjidh llojin" : "Pa lloj"}</option>
+            <option value="">
+              {requireType ? "Zgjidh llojin" : "Pa lloj"}
+            </option>
             {types.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.name}
@@ -129,7 +137,11 @@ export function ProductFields({
         </label>
         <label className="form-label">
           Workflow i biznesit
-          <select name="workflow_id" className="field" defaultValue={product?.workflow_id ?? ""}>
+          <select
+            name="workflow_id"
+            className="field"
+            defaultValue={product?.workflow_id ?? ""}
+          >
             <option value="">Pa workflow</option>
             {workflows.map((workflow) => (
               <option key={workflow.id} value={workflow.id}>
@@ -149,7 +161,7 @@ export function ProductFields({
           className="switch-input"
           type="checkbox"
           name="is_active"
-          defaultChecked={product?.is_active ?? true}
+          defaultChecked={product?.is_active ?? false}
         />
       </label>
     </>

@@ -54,7 +54,10 @@ function rowFromParsed(
   };
 }
 
-export async function createProduct(slug: string, form: FormData) {
+export async function createProduct(
+  slug: string,
+  form: FormData,
+): Promise<{ error?: string; success?: string }> {
   const user = await getSessionUser();
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);
@@ -62,6 +65,15 @@ export async function createProduct(slug: string, form: FormData) {
 
   const parsed = parseProductForm(form);
   if ("error" in parsed) return parsed;
+  if (form.get("save_mode") === "draft") parsed.isActive = false;
+  if (
+    parsed.isActive &&
+    (parsed.price == null || !parsed.productTypeId || !parsed.workflowId)
+  )
+    return {
+      error:
+        "Për aktivizim duhen çmimi, lloji dhe workflow. Mund ta ruash si draft.",
+    };
   const check = await assertTypeAndWorkflow(
     access.business.id,
     parsed.productTypeId,
@@ -84,7 +96,10 @@ export async function createProduct(slug: string, form: FormData) {
   return { success: "Produkti u krijua." };
 }
 
-export async function updateProduct(slug: string, form: FormData) {
+export async function updateProduct(
+  slug: string,
+  form: FormData,
+): Promise<{ error?: string; success?: string }> {
   const user = await getSessionUser();
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);
@@ -93,10 +108,17 @@ export async function updateProduct(slug: string, form: FormData) {
   const id = String(form.get("product_id") ?? "");
   if (!id) return { error: "Produkti nuk është i vlefshëm." };
 
-  const parsed = parseProductForm(form, { requirePrice: true });
+  const parsed = parseProductForm(form);
   if ("error" in parsed) return parsed;
-  if (!parsed.productTypeId)
-    return { error: "Zgjidh llojin e produktit." };
+  if (form.get("save_mode") === "draft") parsed.isActive = false;
+  if (
+    parsed.isActive &&
+    (parsed.price == null || !parsed.productTypeId || !parsed.workflowId)
+  )
+    return {
+      error:
+        "Për aktivizim duhen çmimi, lloji dhe workflow. Mund ta ruash si draft.",
+    };
 
   const check = await assertTypeAndWorkflow(
     access.business.id,
@@ -181,7 +203,10 @@ export async function linkExternalProduct(slug: string, form: FormData) {
     external_id: externalId,
   };
   if (existing) {
-    const { error } = await db.from("products").update(row).eq("id", existing.id);
+    const { error } = await db
+      .from("products")
+      .update(row)
+      .eq("id", existing.id);
     if (error) return { error: "Produkti i lidhur nuk u përditësua." };
   } else {
     const { error } = await db.from("products").insert(row);
@@ -207,15 +232,22 @@ export async function importProductBatch(
   const parsed = parseProductBatch(payload?.items);
   if ("error" in parsed) return parsed;
   const productTypeId = optionalUuid(payload?.productTypeId);
-  if (typeof productTypeId !== "string" && productTypeId !== null) return productTypeId;
+  if (typeof productTypeId !== "string" && productTypeId !== null)
+    return productTypeId;
   const workflowId = optionalUuid(payload?.workflowId);
   if (typeof workflowId !== "string" && workflowId !== null) return workflowId;
 
-  const check = await assertTypeAndWorkflow(access.business.id, productTypeId, workflowId);
+  const check = await assertTypeAndWorkflow(
+    access.business.id,
+    productTypeId,
+    workflowId,
+  );
   if ("error" in check) return check;
 
   const db = createServiceSupabase();
-  const externalIds = parsed.items.flatMap((item) => (item.externalId ? [item.externalId] : []));
+  const externalIds = parsed.items.flatMap((item) =>
+    item.externalId ? [item.externalId] : [],
+  );
   const existing = new Map<string, string>();
   if (externalIds.length) {
     const { data, error } = await db
@@ -223,8 +255,12 @@ export async function importProductBatch(
       .select("id, external_id")
       .eq("business_id", access.business.id)
       .in("external_id", externalIds);
-    if (error) return { error: "Produktet ekzistuese nuk u verifikuan. Provo përsëri." };
-    for (const row of (data ?? []) as { id: string; external_id: string | null }[]) {
+    if (error)
+      return { error: "Produktet ekzistuese nuk u verifikuan. Provo përsëri." };
+    for (const row of (data ?? []) as {
+      id: string;
+      external_id: string | null;
+    }[]) {
       if (row.external_id && row.id) existing.set(row.external_id, row.id);
     }
   }
@@ -247,26 +283,119 @@ export async function importProductBatch(
       ...(workflowId ? { workflow_id: workflowId } : {}),
       ...(item.sku ? { sku: item.sku } : {}),
     };
-    const currentId = item.externalId ? existing.get(item.externalId) : undefined;
+    const currentId = item.externalId
+      ? existing.get(item.externalId)
+      : undefined;
     const result = currentId
-      ? await db.from("products").update(fields).eq("id", currentId).eq("business_id", access.business.id)
+      ? await db
+          .from("products")
+          .update(fields)
+          .eq("id", currentId)
+          .eq("business_id", access.business.id)
       : await db.from("products").insert({
           ...fields,
           business_id: access.business.id,
-          is_active: true,
+          is_active: false,
           source: "manual",
           ...(item.externalId ? { external_id: item.externalId } : {}),
         });
     if (result.error) {
       skipped += 1;
       if (!reason) {
-        reason = result.error.code === "23505" ? "Një SKU është i zënë." : "Një produkt nuk u ruajt.";
+        reason =
+          result.error.code === "23505"
+            ? "Një SKU është i zënë."
+            : "Një produkt nuk u ruajt.";
       }
     } else if (currentId) updated += 1;
     else created += 1;
   }
 
-  if (!created && !updated) return { error: reason || "Asnjë produkt nuk u ruajt." };
+  if (!created && !updated)
+    return { error: reason || "Asnjë produkt nuk u ruajt." };
   revalidatePath(`/b/${slug}`, "layout");
   return { success: batchSummary(created, updated, skipped) };
+}
+
+export async function bulkConfigureProducts(
+  slug: string,
+  payload: {
+    ids: string[];
+    productTypeId: string | null;
+    workflowId: string | null;
+    mode: "map" | "activate" | "draft";
+  },
+): Promise<{ error?: string; success?: string }> {
+  const user = await getSessionUser();
+  if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
+  const access = await requireBusinessAccess(user.id, slug);
+  if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+  const ids = Array.isArray(payload?.ids) ? [...new Set(payload.ids)] : [];
+  if (
+    !ids.length ||
+    ids.length > 100 ||
+    ids.some((id) => typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) ||
+    !["map", "activate", "draft"].includes(payload.mode)
+  )
+    return { error: "Zgjidh 1–100 produkte të vlefshme." };
+  const check = await assertTypeAndWorkflow(
+    access.business.id,
+    payload.productTypeId,
+    payload.workflowId,
+  );
+  if ("error" in check) return check;
+  const db = createServiceSupabase();
+  const { data: rows, error } = await db
+    .from("products")
+    .select("id,product_type_id,workflow_id,price_amount")
+    .eq("business_id", access.business.id)
+    .in("id", ids);
+  if (error || rows?.length !== ids.length)
+    return {
+      error: "Disa produkte nuk u gjetën në këtë biznes. Rifresko listën.",
+    };
+  if (
+    payload.mode === "activate" &&
+    rows.some(
+      (p) =>
+        !(payload.productTypeId || p.product_type_id) ||
+        !(payload.workflowId || p.workflow_id) ||
+        p.price_amount == null,
+    )
+  )
+    return {
+      error:
+        "Çdo produkt duhet të ketë çmim, lloj dhe workflow përpara aktivizimit.",
+    };
+  if (payload.mode === "map" && !payload.productTypeId && !payload.workflowId)
+    return { error: "Zgjidh llojin ose workflow-n." };
+  const changes = {
+    updated_at: new Date().toISOString(),
+    ...(payload.mode !== "draft" && payload.productTypeId
+      ? { product_type_id: payload.productTypeId }
+      : {}),
+    ...(payload.mode !== "draft" && payload.workflowId
+      ? { workflow_id: payload.workflowId }
+      : {}),
+    ...(payload.mode === "activate"
+      ? { is_active: true }
+      : payload.mode === "draft"
+        ? { is_active: false }
+        : {}),
+  };
+  let mutation = db
+    .from("products")
+    .update(changes)
+    .eq("business_id", access.business.id)
+    .in("id", ids);
+  if (payload.mode === "activate") {
+    mutation = mutation.not("price_amount", "is", null);
+    if (!payload.productTypeId)
+      mutation = mutation.not("product_type_id", "is", null);
+    if (!payload.workflowId) mutation = mutation.not("workflow_id", "is", null);
+  }
+  const saved = await mutation.select("id");
+  if (saved.error) return { error: "Ndryshimet nuk u ruajtën." };
+  revalidatePath(`/b/${slug}`, "layout");
+  return { success: `U përditësuan ${saved.data?.length ?? 0} produkte.` };
 }
