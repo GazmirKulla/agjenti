@@ -362,3 +362,4 @@ export async function loadBusinessCatalogUrl(
   const url = integration?.catalog_url?.trim() || null;
   return url && parseAbsoluteUrl(url) ? url : null;
 }
+

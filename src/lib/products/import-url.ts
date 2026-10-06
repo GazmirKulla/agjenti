@@ -12,8 +12,7 @@ import {
 } from "./page-extract";
 
 export type ImportResult =
-  | { product: ProductDraft; note: string }
-  | { error: string };
+  { product: ProductDraft; note: string } | { error: string };
 
 export type ImportDeps = {
   fetch?: typeof fetch;
@@ -34,7 +33,12 @@ export async function importProductFromUrl(
   const resolveHost = deps.resolveHost ?? defaultResolveHost;
   const now = deps.now ?? new Date();
   try {
-    const page = await fetchChecked(raw.trim(), fetchImpl, resolveHost, 1_200_000);
+    const page = await fetchChecked(
+      raw.trim(),
+      fetchImpl,
+      resolveHost,
+      1_200_000,
+    );
     if ("error" in page) return page;
 
     const parsedJson = looksLikeJson(page) ? parseJson(page.body) : null;
@@ -45,13 +49,19 @@ export async function importProductFromUrl(
 
     const shell = isAppShell(page.body);
     const htmlDraft = extractProductFromHtml(page.body, page.url);
-    if (!shell && htmlDraft?.name && htmlDraft.price != null) return ready(htmlDraft);
+    if (!shell && htmlDraft?.name && htmlDraft.price != null)
+      return ready(htmlDraft);
 
     const catalogDraft =
       shell || /supabase\.co/i.test(page.body)
         ? await draftFromPublicCatalog(page, fetchImpl, resolveHost, now)
         : null;
-    const shopifyDraft = await draftFromShopifyUrl(page.url, fetchImpl, resolveHost, now);
+    const shopifyDraft = await draftFromShopifyUrl(
+      page.url,
+      fetchImpl,
+      resolveHost,
+      now,
+    );
     const merged = mergeDraft([catalogDraft, shopifyDraft, htmlDraft]);
     if (merged?.name) return ready(merged);
     return {
@@ -118,11 +128,17 @@ async function draftFromPublicCatalog(
   if (!catalog) return null;
 
   const endpoint = `${catalog.origin}/rest/v1/${catalog.table}?${catalog.slugColumn}=eq.${encodeURIComponent(slug)}&select=*`;
-  const fetched = await fetchChecked(endpoint, fetchImpl, resolveHost, 400_000, {
-    accept: "application/json",
-    apikey: catalog.apiKey,
-    authorization: `Bearer ${catalog.apiKey}`,
-  });
+  const fetched = await fetchChecked(
+    endpoint,
+    fetchImpl,
+    resolveHost,
+    400_000,
+    {
+      accept: "application/json",
+      apikey: catalog.apiKey,
+      authorization: `Bearer ${catalog.apiKey}`,
+    },
+  );
   if ("error" in fetched) return null;
   const parsed = parseJson(fetched.body);
   const row = Array.isArray(parsed) ? parsed[0] : parsed;
@@ -138,9 +154,15 @@ async function draftFromShopifyUrl(
 ): Promise<ProductDraft | null> {
   const endpoint = shopifyProductJs(pageUrl);
   if (!endpoint || endpoint === pageUrl) return null;
-  const fetched = await fetchChecked(endpoint, fetchImpl, resolveHost, 400_000, {
-    accept: "application/json",
-  });
+  const fetched = await fetchChecked(
+    endpoint,
+    fetchImpl,
+    resolveHost,
+    400_000,
+    {
+      accept: "application/json",
+    },
+  );
   if ("error" in fetched) return null;
   return draftFromJson(parseJson(fetched.body), now);
 }
@@ -161,7 +183,9 @@ function shopifyProductJs(pageUrl: string): string | null {
 
 function inlineScripts(html: string): string[] {
   const out: string[] = [];
-  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  for (const match of html.matchAll(
+    /<script\b([^>]*)>([\s\S]*?)<\/script>/gi,
+  )) {
     if (/\bsrc\s*=/i.test(match[1])) continue;
     const type = match[1].match(/\btype=["']([^"']+)["']/i)?.[1] ?? "";
     if (type && !/javascript|ecmascript|module/i.test(type)) continue;
@@ -174,7 +198,9 @@ function inlineScripts(html: string): string[] {
 function scriptSrcs(html: string, pageUrl: string): string[] {
   const origin = new URL(pageUrl).origin;
   const out: string[] = [];
-  for (const match of html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)) {
+  for (const match of html.matchAll(
+    /<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi,
+  )) {
     try {
       const url = new URL(match[1], pageUrl);
       if (url.origin !== origin) continue;
@@ -195,7 +221,12 @@ async function readScript(
 ): Promise<string | null> {
   const url = new URL(src, pageUrl);
   if (url.origin !== new URL(pageUrl).origin) return null;
-  const fetched = await fetchChecked(url.toString(), fetchImpl, resolveHost, 400_000);
+  const fetched = await fetchChecked(
+    url.toString(),
+    fetchImpl,
+    resolveHost,
+    400_000,
+  );
   if ("error" in fetched) return null;
   if (/html|image|audio|video|pdf/i.test(fetched.contentType)) return null;
   return fetched.body;
@@ -217,7 +248,8 @@ async function fetchChecked(
       cache: "no-store",
       signal: AbortSignal.timeout(8_000),
       headers: {
-        accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+        accept:
+          "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
         "accept-language": "sq,en;q=0.8",
         "user-agent": USER_AGENT,
         ...headers,
@@ -225,7 +257,10 @@ async function fetchChecked(
     });
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      if (!location) return { error: "Faqja nuk u hap. Kontrollo linkun dhe provo përsëri." };
+      if (!location)
+        return {
+          error: "Faqja nuk u hap. Kontrollo linkun dhe provo përsëri.",
+        };
       current = new URL(location, checked.url).toString();
       continue;
     }
@@ -234,7 +269,11 @@ async function fetchChecked(
       return { error: "Faqja nuk u hap. Kontrollo linkun dhe provo përsëri." };
     }
     const contentType = response.headers.get("content-type") ?? "";
-    if (/image\/|audio\/|video\/|application\/pdf|application\/zip|octet-stream/i.test(contentType)) {
+    if (
+      /image\/|audio\/|video\/|application\/pdf|application\/zip|octet-stream/i.test(
+        contentType,
+      )
+    ) {
       return { error: "Ky link nuk është faqe produkti." };
     }
     const body = await readLimited(response, maxBytes);
@@ -262,12 +301,16 @@ async function assertPublic(
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     return { error: "Vendos një link të plotë që fillon me http ose https." };
   }
-  if (url.username || url.password) return { error: "Ky link nuk mund të lexohet." };
+  if (url.username || url.password)
+    return { error: "Ky link nuk mund të lexohet." };
   const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (blockedHostname(host)) return { error: "Ky link nuk mund të lexohet." };
-  const addresses = isIP(host) ? [host] : await resolveOrNull(host, resolveHost);
+  const addresses = isIP(host)
+    ? [host]
+    : await resolveOrNull(host, resolveHost);
   if (!addresses?.length) return { error: "Nuk e gjeta këtë faqe." };
-  if (addresses.some(isBlockedIp)) return { error: "Ky link nuk mund të lexohet." };
+  if (addresses.some(isBlockedIp))
+    return { error: "Ky link nuk mund të lexohet." };
   return { url: url.toString() };
 }
 
@@ -325,7 +368,8 @@ async function readLimited(
   }
   if (!response.body) {
     const text = await response.text();
-    if (text.length > maxBytes) return { error: "Faqja është shumë e madhe për t'u skanuar." };
+    if (text.length > maxBytes)
+      return { error: "Faqja është shumë e madhe për t'u skanuar." };
     return text;
   }
   const reader = response.body.getReader();
@@ -365,5 +409,61 @@ function parseJson(body: string): unknown {
 
 /** Shared bounded public-page reader for business and catalog ingestion. */
 export async function fetchPublicPage(url: string, deps: ImportDeps = {}) {
-  return fetchChecked(url, deps.fetch ?? fetch, deps.resolveHost ?? defaultResolveHost, 1_200_000);
+  return fetchChecked(
+    url,
+    deps.fetch ?? fetch,
+    deps.resolveHost ?? defaultResolveHost,
+    1_200_000,
+  );
+}
+
+/** Bounded binary reader using the same public-host checks as website ingestion. */
+export async function fetchPublicDocument(raw: string, deps: ImportDeps = {}) {
+  let current = raw;
+  for (let hop = 0; hop < 4; hop++) {
+    const checked = await assertPublic(
+      current,
+      deps.resolveHost ?? defaultResolveHost,
+    );
+    if ("error" in checked) throw new Error(checked.error);
+    const response = await (deps.fetch ?? fetch)(checked.url, {
+      redirect: "manual",
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("Linku nuk u hap.");
+      await response.body?.cancel();
+      current = new URL(location, checked.url).href;
+      continue;
+    }
+    if (!response.ok) throw new Error("Dokumenti nuk u hap.");
+    const max = 10 * 1024 * 1024;
+    if (Number(response.headers.get("content-length")) > max) {
+      await response.body?.cancel();
+      throw new Error("Maksimumi 10 MB.");
+    }
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("Dokument bosh.");
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > max) {
+        await reader.cancel();
+        throw new Error("Maksimumi 10 MB.");
+      }
+      chunks.push(value);
+    }
+    const bytes = Buffer.concat(chunks);
+    const pdf = bytes.subarray(0, 5).toString() === "%PDF-";
+    const type = response.headers.get("content-type") ?? "";
+    if (!pdf && !/text\/|application\/xhtml/.test(type))
+      throw new Error("Mbështeten PDF dhe dokumente teksti / website.");
+    return { bytes, pdf, url: checked.url };
+  }
+  throw new Error("Shumë përcjellje të linkut.");
 }

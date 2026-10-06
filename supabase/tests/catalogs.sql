@@ -1,0 +1,47 @@
+begin;
+insert into auth.users(id,email) values('00000000-0000-4000-8000-000000000071','catalog-owner@example.test'),('00000000-0000-4000-8000-000000000072','catalog-other@example.test');
+do $$
+declare b uuid;other_b uuid;c uuid;r catalogs;ok boolean;before_signature text;after_signature text;
+begin
+ perform complete_business_onboarding('00000000-0000-4000-8000-000000000071','{"name":"Catalog owner","useCases":[]}','Support');
+ perform complete_business_onboarding('00000000-0000-4000-8000-000000000072','{"name":"Other business","useCases":[]}','Support');
+ select business_id into b from business_users where user_id='00000000-0000-4000-8000-000000000071';
+ select business_id into other_b from business_users where user_id='00000000-0000-4000-8000-000000000072';
+ before_signature:=business_setup_status(b)->>'signature';
+ if before_signature<>product_business_setup_status(b)->>'signature' then raise exception 'SMB signature changed';end if;
+ insert into catalogs(business_id,title,source_type,source_url) values(b,'Pumps','url','https://example.test/pumps.pdf') returning id into c;
+ if exists(select 1 from claim_catalog_index(c,other_b)) then raise exception 'Cross tenant claim';end if;
+ select * into r from claim_catalog_index(c,b);
+ if r.index_status<>'indexing' then raise exception 'Claim failed';end if;
+ if exists(select 1 from claim_catalog_index(c,b)) then raise exception 'Concurrent index allowed';end if;
+ select finish_catalog_index(c,b,r.revision-1,'{}','old','old','[]') into ok;
+ if ok then raise exception 'Stale index replaced current';end if;
+ select finish_catalog_index(c,b,r.revision,'{"languages":["EN"],"markets":["Germany"]}','Summary','Page 3 indexed','[{"heading":"Pumps","text":"Industrial pumps 400 L/min","page":3,"keywords":["pumps"],"embedding":null}]') into ok;
+ if not ok or not exists(select 1 from catalogs where id=c and index_status='review' and active=false) then raise exception 'Review required';end if;
+ if exists(select 1 from search_catalog_sections(b,'{}','pumps')) then raise exception 'Draft searchable';end if;
+ update catalogs set active=true,index_status='ready',confirmed_at=now() where id=c;
+ if not exists(select 1 from search_catalog_sections(b,'{}','pumps') where page=3) then raise exception 'Ready catalog not retrieved';end if;
+ if exists(select 1 from search_catalog_sections(other_b,'{}','pumps')) then raise exception 'Cross tenant retrieval';end if;
+ if (business_setup_status(b)->>'catalogCount')::int<>1 then raise exception 'Setup not catalog aware';end if;
+ after_signature:=business_setup_status(b)->>'signature';
+ if after_signature=before_signature then raise exception 'Catalog omitted from setup signature';end if;
+ if exists(select 1 from products where business_id=b) then raise exception 'Catalog created SKU';end if;
+ if has_function_privilege('authenticated','search_catalog_sections(uuid,double precision[],text)','execute') then raise exception 'Retrieval RPC exposed';end if;
+
+ insert into instagram_connections(business_id,ig_user_id,access_token_ciphertext) values(b,'catalog-test','unused');
+ update ai_agents set is_active=true,instructions='Use verified documents' where business_id=b;
+ insert into business_setup(business_id,tested_signature,tested_at) values(b,business_setup_status(b)->>'signature',now()) on conflict(business_id) do update set tested_signature=excluded.tested_signature;
+ perform launch_business(b,true);
+ if not exists(select 1 from businesses where id=b and auto_reply) then raise exception 'Catalog-only launch failed';end if;
+ update catalogs set metadata='{"languages":["DE"],"markets":["Germany"]}' where id=c;
+ select * into r from claim_catalog_index(c,b);
+ perform finish_catalog_index(c,b,r.revision,'{"languages":["EN"]}','Updated','Page 1','[{"heading":"Pumps","text":"New pump section","page":1,"keywords":[],"embedding":null}]');
+ if not exists(select 1 from catalogs where id=c and metadata->'languages'='["DE"]' and index_metadata->'languages'='["EN"]' and active=false) then raise exception 'Reindex overwrote confirmed metadata';end if;
+ update catalogs set active=false where id=c;
+ if exists(select 1 from search_catalog_sections(b,'{}','pumps')) then raise exception 'Disabled document searchable';end if;
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000072',true);
+do $$ begin if exists(select 1 from catalogs) or exists(select 1 from catalog_sections) then raise exception 'RLS cross tenant';end if;end $$;
+reset role;
+rollback;

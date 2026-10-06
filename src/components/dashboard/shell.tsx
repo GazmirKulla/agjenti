@@ -13,6 +13,8 @@ const businessNav = [
   ["", "Dashboard", "dashboard"],
   ["inbox", "Inbox", "inbox"],
   ["products", "Produkte", "products"],
+  ["services", "Shërbime", "knowledge"],
+  ["catalogs", "Katalogë", "knowledge"],
   ["orders", "Porosi", "orders"],
   ["customers", "Klientë", "customers"],
   ["agents", "Agjenti AI", "agents"],

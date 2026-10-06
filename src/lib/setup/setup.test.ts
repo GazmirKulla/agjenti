@@ -98,12 +98,8 @@ it("requires Instagram even when every other step and the test are complete", as
 });
 it("names the first incomplete setup step in the gate message", () => {
   expect(setupGateMessage(ready)).toBeNull();
-  expect(setupGateMessage({ ...ready, connected: false })).toMatch(
-    /Instagram/,
-  );
-  expect(setupGateMessage({ ...ready, usableProducts: 0 })).toMatch(
-    /produkt/,
-  );
+  expect(setupGateMessage({ ...ready, connected: false })).toMatch(/Instagram/);
+  expect(setupGateMessage({ ...ready, usableProducts: 0 })).toMatch(/produkt/);
   expect(setupGateMessage({ ...ready, tested: false })).toMatch(/provën/i);
 });
 it("reports concurrent launch failure instead of success", async () => {
@@ -124,5 +120,21 @@ it("records only matching configuration signatures, without overwriting launch m
       tested_at: expect.any(String),
     },
     { onConflict: "business_id" },
+  );
+});
+it("allows catalog/service-only workspaces without artificial products or order workflows", () => {
+  for (const extra of [{ catalogCount: 1 }, { serviceCount: 1 }]) {
+    const s = { ...ready, productCount: 0, usableProducts: 0, ...extra };
+    expect(setupSteps(s).map((step) => step.key)).toEqual([
+      "instagram",
+      "products",
+      "agents",
+      "test",
+    ]);
+    expect(isReady(s)).toBe(true);
+    expect(isReady({ ...s, tested: false })).toBe(false);
+  }
+  expect(isReady({ ...ready, catalogCount: 1, unconfiguredProducts: 1 })).toBe(
+    false,
   );
 });

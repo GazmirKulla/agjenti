@@ -230,6 +230,79 @@ it("never certifies a session with only fallback replies or incomplete customer 
     workflowId: "wf",
     debug: { source: "fallback", agentConfigured: true },
   });
-  expect(await simulateAgentTurn(input)).toHaveProperty("setupTestPassed", false);
+  expect(await simulateAgentTurn(input)).toHaveProperty(
+    "setupTestPassed",
+    false,
+  );
+  expect(mocks.record).not.toHaveBeenCalled();
+});
+it("certifies a catalog-only business after a grounded AI document reply", async () => {
+  mocks.setup.mockResolvedValue({
+    available: true,
+    signature: "config-a",
+    productCount: 0,
+    catalogCount: 1,
+  });
+  mocks.process.mockResolvedValue({
+    reply: "Katalogu: https://agjenti.app/api/catalogs/share/opaque",
+    nextState: emptyState(),
+    previousResponseId: null,
+    workflowId: null,
+    debug: {
+      source: "ai",
+      agentConfigured: true,
+      retrievedCatalogIds: ["doc"],
+    },
+  });
+  expect(await simulateAgentTurn(input)).toHaveProperty(
+    "setupTestPassed",
+    true,
+  );
+  expect(mocks.record).toHaveBeenCalledWith("business-a", "config-a");
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+it("does not certify catalog clarification or document-only test for a product business", async () => {
+  mocks.setup.mockResolvedValue({
+    available: true,
+    signature: "config-a",
+    productCount: 0,
+    catalogCount: 1,
+  });
+  mocks.process.mockResolvedValue({
+    reply: "Në cilin shtet?",
+    nextState: emptyState(),
+    previousResponseId: null,
+    workflowId: null,
+    debug: {
+      source: "fallback",
+      agentConfigured: true,
+      retrievedCatalogIds: [],
+    },
+  });
+  expect(await simulateAgentTurn(input)).toHaveProperty(
+    "setupTestPassed",
+    false,
+  );
+  mocks.setup.mockResolvedValue({
+    available: true,
+    signature: "config-a",
+    productCount: 1,
+    catalogCount: 1,
+  });
+  mocks.process.mockResolvedValue({
+    reply: "Katalogu",
+    nextState: emptyState(),
+    previousResponseId: null,
+    workflowId: null,
+    debug: {
+      source: "ai",
+      agentConfigured: true,
+      retrievedCatalogIds: ["doc"],
+    },
+  });
+  expect(await simulateAgentTurn(input)).toHaveProperty(
+    "setupTestPassed",
+    false,
+  );
   expect(mocks.record).not.toHaveBeenCalled();
 });

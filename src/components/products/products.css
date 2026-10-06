@@ -580,3 +580,21 @@
     display: none;
   }
 }
+/* Route surfaces inherit dashboard tokens in both themes. */
+.dashboard-shell .products-workspace .panel,
+.dashboard-shell .product-external,
+.dashboard-shell .product-import-picker {
+  background: var(--surface);
+  color: var(--ink);
+}
+.dashboard-shell .product-method-list > a,
+.dashboard-shell .product-method-cards > a {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.dashboard-shell .product-method-list > a:hover,
+.dashboard-shell .product-method-cards > a:hover,
+.dashboard-shell .product-method-cards > a.is-selected {
+  background: var(--accent-soft);
+  color: var(--ink);
+}

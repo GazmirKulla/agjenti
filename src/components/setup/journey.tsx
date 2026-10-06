@@ -44,7 +44,7 @@ export function SetupJourney({
     };
   }, [router]);
   const steps = setupSteps(status);
-  const next = steps.find((s) => !s.done) ?? steps[4];
+  const next = steps.find((s) => !s.done) ?? steps[steps.length - 1];
   const [chosen, setChosen] = useState<string | null>(null);
   const active = steps.find((s) => s.key === chosen) ?? next;
   const count = steps.filter((s) => s.done).length;
@@ -83,7 +83,7 @@ export function SetupJourney({
                 ? "Konfigurimi ndryshoi — rekomandohet një provë e re"
                 : isReady(status)
                   ? "Gati për të filluar"
-                  : `Konfigurimi · ${count}/5 hapa`}
+                  : `Konfigurimi · ${count}/${steps.length} hapa`}
           </strong>
           <p>
             {status.connected
@@ -110,7 +110,9 @@ export function SetupJourney({
     <section className="setup-journey" aria-labelledby="setup-title">
       <header>
         <div>
-          <p className="setup-eyebrow">HAPAT E PARË · {count}/5</p>
+          <p className="setup-eyebrow">
+            HAPAT E PARË · {count}/{steps.length}
+          </p>
           <h1 id="setup-title">
             {isReady(status)
               ? "Konfigurimi u përfundua"
@@ -128,8 +130,8 @@ export function SetupJourney({
       </header>
       <progress
         value={count}
-        max={5}
-        aria-label={`${count} nga 5 hapa të përfunduar`}
+        max={steps.length}
+        aria-label={`${count} nga ${steps.length} hapa të përfunduar`}
       />
       {isReady(status) ? (
         <ActionForm
@@ -156,7 +158,7 @@ export function SetupJourney({
       ) : (
         <div className="setup-grid">
           <details className="setup-step-list" open={!mobile}>
-            <summary>Shiko 5 hapat</summary>
+            <summary>Shiko {steps.length} hapat</summary>
             <ol>
               {steps.map((step, i) => (
                 <li key={step.key}>
@@ -187,7 +189,7 @@ export function SetupJourney({
           </details>
           <article className="setup-current">
             <span className="setup-eyebrow">
-              HAPI {steps.indexOf(active) + 1} NGA 5
+              HAPI {steps.indexOf(active) + 1} NGA {steps.length}
             </span>
             <h2>{active.title}</h2>
             <p>{active.description}</p>

@@ -9,7 +9,7 @@ import {
 } from "@/lib/products/actions";
 import { applyTypeSuggestion } from "@/lib/product-types/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
-import { money } from "@/components/dashboard/ui";
+import { productMoney as money } from "@/lib/products/catalog";
 import { ProductTips } from "./shared";
 import type { ProductRow, Option } from "@/lib/products/catalog";
 export function ProductEditor({

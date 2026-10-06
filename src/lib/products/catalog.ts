@@ -54,3 +54,9 @@ export function catalogFilter(
           : (b.created_at ?? "").localeCompare(a.created_at ?? ""),
     );
 }
+// Deterministic across Node and browsers whose ICU currency data differs.
+export function productMoney(amount: number | null, currency: string) {
+  if (amount == null || !Number.isFinite(amount)) return "Pa çmim";
+  const [whole, decimal] = amount.toFixed(2).split(".");
+  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${decimal === "00" ? "" : "." + decimal} ${currency === "ALL" ? "Lekë" : currency}`;
+}

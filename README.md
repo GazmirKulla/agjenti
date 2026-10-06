@@ -227,3 +227,24 @@ review gating and bounded crawl; `supabase/tests/business_intelligence.sql` runs
 in an isolated migrated database and checks draft isolation, atomic application,
 RLS, stale-write protection and onboarding bridging. Browser smoke uses mocked
 API responses, without paid AI requests or production writes.
+
+### Katalogë B2B dhe dokumente
+
+Apliko `supabase/migrations/20261006120000_catalogs.sql` përpara përdorimit.
+Migrimi shton `catalogs`, `catalog_sections`, indeksimin me revision/claim dhe bucket-in privat `business-catalogs`.
+Nuk krijon produkte dhe nuk ndryshon fingerprint-in e konfigurimit të bizneseve që përdorin vetëm produkte.
+Nevojiten `OPENAI_API_KEY`, një `AGENT_MODEL` me mbështetje për PDF + structured output dhe `NEXT_PUBLIC_APP_URL` me origjinën kanonike të aplikacionit. Embeddings përdorin `text-embedding-3-small`, 256 dimensione.
+
+1. Hap **Katalogë → Shto katalog**. Ngarko PDF/TXT/Markdown (deri 10 MB), shto link dokumenti ose skano një website.
+2. Te detajet kliko **Plotëso me AI · Indekso dokumentin**. Indeksi ruhet si draft për rishikim: përmbledhje, metadata dhe fragmente me faqe kur burimi është PDF.
+3. Kontrollo fragmentet kundrejt dokumentit origjinal, gjuhët, tregjet dhe industritë. Konfiguro **Kur duhet ta përdorë Agjenti?** dhe pyetjet sqaruese. Konfirmo dhe aktivizo.
+4. Provo te **Agjenti AI → Provo Agjentin**, pa Meta Live/webhook: “Më dërgo katalogun e pompave industriale”. Përgjigju pyetjes për tregun/gjuhën nëse kërkohet. Debug përmban `retrievedCatalogIds`.
+5. Verifiko që një pyetje për SKU/çmim përdor produktet dhe që një dokument joaktiv nuk dërgohet. Test Chat nuk dërgon mesazhe reale.
+
+Skanohet maksimumi 8 faqe website, deri 100,000 karaktere për dokument teksti (65,000 për skanim website), dhe deri 40 seksione për dokument. Ky është indeks selektiv, jo premtim për lexim shterues të katalogëve të mëdhenj. UI tregon mbulimin dhe kufizimet; për materiale të mëdha ndaj dokumentet sipas kategorive. Teksti verifikohet me citime ekzakte; PDF-të kërkojnë rishikim njerëzor të referencave. Nuk mbështeten ende DOCX/XLSX, OCR i dedikuar, import SKU nga PDF apo background jobs. Analiza kryhet brenda request-it (180s), me retry pas 5 minutash për procese të ndërprera, maksimumi 10 analiza/orë/biznes dhe 500 dokumente/biznes.
+
+Retrieval përdor cosine similarity të fragmenteve, përputhje teksti/metadata, rregulla të konfirmuara dhe freski. Gjuha/tregu/industria e kërkuar duhet të përputhen me metadata të konfirmuara; vlerat e panjohura nuk konsiderohen automatikisht të përshtatshme. Pyetjet sqaruese ruhen në `conversation_states.collected.fields.catalog_context` (në sesionin e enkriptuar për Test Chat). Një pyetje dokumenti nuk avancon workflow-n e porosisë. Njohuritë renditen sipas pyetjes; shërbimet ripërdorin `knowledge_entries` me `intent_key='service'`, pa tabelë paralele. Për bizneset vetëm me katalogë/shërbime, konfigurimi nuk kërkon produkt ose workflow artificial; testi duhet të marrë një përgjigje AI mbi dokument/shërbim të verifikuar. Bizneset me produkte ruajnë provën e plotë të porosisë.
+
+Dokumentet e ngarkuara janë private deri në aktivizim. Agjenti ndan një link me token të rastësishëm; çaktivizimi e revokon atë. Linku gjeneron URL shkarkimi 60-sekondëshe (një URL e nënshkruar më parë mbetet e vlefshme deri në skadim). Materiali i shkarkuar nga klienti nuk mund të revokohet. URL-të e jashtme hapin burimin origjinal, i cili mund të ndryshojë; riindekso pas ndryshimeve. Riindeksimi çaktivizon dokumentin derisa të konfirmohet sërish. Metadata ekzistuese ruhet; metadata e nxjerrë nga analiza e re shfaqet veçmas për krahasim dhe korrigjim manual.
+
+Verifikimi lokal: `npx vitest run src/lib/catalogs src/lib/conversations src/lib/setup src/lib/agents`; kontrollet SQL/RLS janë në `supabase/tests/catalogs.sql` (transaksion me rollback, për databazë test). Testet e provider-it përdorin mock; bëj një provë reale me dokument të biznesit pasi të aplikosh migrimin dhe konfigurimin.

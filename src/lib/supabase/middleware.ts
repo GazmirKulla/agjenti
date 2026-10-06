@@ -8,6 +8,7 @@ export async function updateSession(request: NextRequest) {
   if (
     path === "/" ||
     path === "/api/webhooks/meta" ||
+    path.startsWith("/api/catalogs/share/") ||
     path === "/api/cron/refresh-instagram-tokens" ||
     path === "/api/instagram/oauth/callback" ||
     path === "/api/meta/data-deletion" ||

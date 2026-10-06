@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ from: vi.fn(), generate: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  from: vi.fn(),
+  generate: vi.fn(),
+  retrieve: vi.fn(),
+}));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({ from: mocks.from }),
 }));
 vi.mock("@/lib/agents/generate", () => ({
   generateAgentReply: mocks.generate,
   agentModel: () => "configured-model",
+}));
+vi.mock("@/lib/catalogs/retrieval", () => ({
+  retrieveBusinessSources: mocks.retrieve,
 }));
 import { processAgentTurn } from "./process-agent-turn";
 import { emptyState } from "@/lib/workflows/engine";
@@ -14,6 +21,7 @@ let queries: { table: string; filters: unknown[][] }[] = [];
 let failedTable = "";
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.retrieve.mockResolvedValue(null);
   queries = [];
   failedTable = "";
   Object.assign(fixtures, {
@@ -87,7 +95,12 @@ describe("shared business turn processor", () => {
         previousResponseId: null,
       }),
     );
-    for (const table of ["products", "ai_agents", "knowledge_entries", "workflows"])
+    for (const table of [
+      "products",
+      "ai_agents",
+      "knowledge_entries",
+      "workflows",
+    ])
       expect(queries.find((q) => q.table === table)?.filters).toContainEqual([
         "business_id",
         "business-a",
@@ -217,8 +230,51 @@ describe("shared business turn processor", () => {
       step_key: "collect_size",
     });
     expect(r.productName).toBe("Bluzë");
-    expect(r.workflowProgress.some((s) => s.key === "collect_size" && s.status === "current")).toBe(
-      true,
-    );
+    expect(
+      r.workflowProgress.some(
+        (s) => s.key === "collect_size" && s.status === "current",
+      ),
+    ).toBe(true);
   });
+});
+
+it("keeps an order untouched when answering a document inquiry", async () => {
+  const state = {
+    ...emptyState(),
+    product_id: "product-a",
+    step_key: "awaiting_photo",
+    fields: { collect_size: "M" },
+  };
+  mocks.retrieve.mockResolvedValue({
+    context: { query: "katalog", requirements: {}, turns: 0 },
+    clarification: null,
+    documents: [
+      {
+        id: "cat-a",
+        title: "Katalog",
+        url: "https://agjenti.app/api/catalogs/share/token",
+      },
+    ],
+    evidence: "Pumps: 400 L/min, page 3",
+  });
+  const result = await processAgentTurn({
+    businessId: "business-a",
+    message: "Më dërgo katalogun",
+    hasPhoto: false,
+    state,
+  });
+  expect(result.nextState.step_key).toBe("awaiting_photo");
+  expect(result.nextState.fields.collect_size).toBe("M");
+  expect(result.workflowId).toBe("workflow-a");
+  expect(result.reply).toContain(
+    "https://agjenti.app/api/catalogs/share/token",
+  );
+  expect(result.debug.retrievedCatalogIds).toEqual(["cat-a"]);
+  expect(mocks.generate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      documentContext: expect.stringContaining("400 L/min"),
+      previousResponseId: null,
+    }),
+  );
+  expect(state.fields).toEqual({ collect_size: "M" });
 });

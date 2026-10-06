@@ -1,3 +1,6 @@
+import { retrieveBusinessSources } from "@/lib/catalogs/retrieval";
+import { rankKnowledge } from "@/lib/catalogs/source-ranking";
+import { routeIntent } from "@/lib/catalogs/ranking";
 import { agentModel, generateAgentReply } from "@/lib/agents/generate";
 import { shortenDescription } from "@/lib/products/parse";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -28,8 +31,20 @@ export type AgentTurnResult = {
     productCount: number;
     workflowSteps: string[];
     elapsedMs: number;
+    retrievedCatalogIds?: string[];
+    retrievedService?: boolean;
   };
 };
+
+function matchesSku(sku: string | null | undefined, message: string) {
+  if (!sku?.trim()) return false;
+  const key = foldText(sku).trim(),
+    query = foldText(message).trim();
+  if (query === key) return true;
+  if (key.length < 2) return query === `sku ${key}`;
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`).test(query);
+}
 
 function pickProduct<T extends { id: string; name: string }>(
   products: T[],
@@ -49,7 +64,9 @@ function pickProduct<T extends { id: string; name: string }>(
       if (name.includes(normalized) && normalized.length >= 3)
         return { p, score: normalized.length };
       // Token overlap: "dua bluze te zeze" vs "Bluzë"
-      const tokens = normalized.split(/[^a-z0-9]+/).filter((t) => t.length >= 3);
+      const tokens = normalized
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length >= 3);
       const hit = tokens.some((t) => name.includes(t) || t.includes(name));
       return { p, score: hit ? name.length : 0 };
     })
@@ -78,7 +95,7 @@ export async function processAgentTurn(params: {
     db
       .from("products")
       .select(
-        "id,name,description,product_type_id,workflow_id,price_amount,currency",
+        "id,name,sku,description,product_type_id,workflow_id,price_amount,currency",
       )
       .eq("business_id", params.businessId)
       .eq("is_active", true),
@@ -90,24 +107,144 @@ export async function processAgentTurn(params: {
       .maybeSingle(),
     db
       .from("knowledge_entries")
-      .select("title,body")
+      .select("title,body,intent_key")
       .eq("business_id", params.businessId)
       .eq("is_active", true)
       .order("sort_order")
-      .limit(12),
+      .limit(1000),
   ]);
   if (productResult.error || agentResult.error || knowledgeResult.error)
     throw new Error("Nuk u ngarkua konfigurimi i agjentit.");
   const products = productResult.data ?? [];
   const agent = agentResult.data;
-  const knowledge = knowledgeResult.data ?? [];
+  const rankedKnowledge = rankKnowledge(
+    knowledgeResult.data ?? [],
+    params.message,
+  );
+  const knowledge = rankedKnowledge.slice(0, 12).map((k) => k.entry);
   let state = structuredClone(params.state ?? emptyState());
   const text = params.message.trim();
+  if (state.product_id && !products.some((p) => p.id === state.product_id))
+    state = emptyState();
+  const exactProduct = products.some(
+    (p) => foldText(p.name) === foldText(text) || matchesSku(p.sku, text),
+  );
+  const wantsDocument = routeIntent(text) === "catalog";
+  const sources =
+    (exactProduct || (state.product_id && !state.fields.catalog_context)) &&
+    !wantsDocument
+      ? null
+      : await retrieveBusinessSources(
+          params.businessId,
+          text,
+          state.fields.catalog_context,
+        );
+  const service =
+    !state.product_id &&
+    !exactProduct &&
+    rankedKnowledge.find(
+      (k) => k.entry.intent_key === "service" && k.score >= 0.7,
+    );
+  if (!sources && service) {
+    const generated = await generateAgentReply({
+      instructions: agent?.instructions || "Answer in the customer's language.",
+      state,
+      knowledge: "",
+      customerMessage: text,
+      previousResponseId: null,
+      catalogSummary: "",
+      documentContext: `Verified business service: ${service.entry.title}\n${service.entry.body}`,
+      documentFallback: `${service.entry.title}: ${service.entry.body}`,
+    });
+    return {
+      reply: generated.reply,
+      nextState: state,
+      previousResponseId: null,
+      workflowId: null,
+      productName: null,
+      workflowProgress: [],
+      debug: {
+        model: agentModel(),
+        source: generated.source,
+        fallbackReason: generated.fallbackReason,
+        agentConfigured: Boolean(agent?.instructions),
+        knowledgeCount: knowledge.length,
+        productCount: products.length,
+        workflowSteps: [],
+        retrievedService: true,
+        elapsedMs: Date.now() - started,
+      },
+    };
+  }
+  if (sources) {
+    state.fields.catalog_context = sources.context;
+    const currentProduct = products.find((p) => p.id === state.product_id);
+    let currentWorkflow: string | null = null;
+    if (currentProduct?.workflow_id) {
+      const owned = await db
+        .from("workflows")
+        .select("id")
+        .eq("business_id", params.businessId)
+        .eq("id", currentProduct.workflow_id)
+        .maybeSingle();
+      if (owned.error) throw new Error("Nuk u ngarkua workflow.");
+      currentWorkflow = owned.data?.id ?? null;
+    }
+    // Document questions do not answer or advance an order workflow.
+    const links = sources.documents
+      .map((d) => `${d.title}: ${d.url}`)
+      .join("\n");
+    const generated = sources.clarification
+      ? {
+          reply: sources.clarification,
+          responseId: null,
+          source: "fallback" as const,
+          fallbackReason: "catalog_clarification",
+        }
+      : await generateAgentReply({
+          instructions:
+            agent?.instructions || "Answer in the customer's language.",
+          state,
+          customerMessage: `${sources.context.query}\nSqarime: ${JSON.stringify(sources.context.requirements)}\nMesazhi i fundit: ${text}`,
+          previousResponseId: null,
+          knowledge: knowledge.map((k) => `${k.title}: ${k.body}`).join("\n"),
+          catalogSummary: "",
+          documentContext: `${sources.evidence}\nVerified document links:\n${links}`,
+          documentFallback: `Këtu është materiali më i përshtatshëm që gjeta. Për çmime, disponueshmëri ose specifikime që nuk gjenden në dokument, kontaktoni ekipin.\n${links}`,
+        });
+    // Always include the selected, server-validated document link, even if the model omits it.
+    const missingLinks = sources.documents
+      .filter((d) => !generated.reply.includes(d.url))
+      .map((d) => `${d.title}: ${d.url}`)
+      .join("\n");
+    return {
+      reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""),
+      nextState: state,
+      previousResponseId: null,
+      workflowId: currentWorkflow,
+      productName: currentProduct?.name ?? null,
+      workflowProgress: [],
+      debug: {
+        model: agentModel(),
+        source: generated.source,
+        fallbackReason: generated.fallbackReason,
+        agentConfigured: Boolean(agent?.instructions),
+        knowledgeCount: knowledge.length,
+        productCount: products.length,
+        workflowSteps: [],
+        elapsedMs: Date.now() - started,
+        retrievedCatalogIds: sources.documents.map((d) => d.id),
+      },
+    };
+  }
+  delete state.fields.catalog_context;
   let selected = products.find((p) => p.id === state.product_id) ?? null;
   if (state.product_id && !selected) state = emptyState();
   let justSelected = false;
   if (!selected && text) {
-    const match = pickProduct(products, text);
+    const skuMatches = products.filter((p) => matchesSku(p.sku, text));
+    const match =
+      skuMatches.length === 1 ? skuMatches[0] : pickProduct(products, text);
     if (match) {
       selected = match;
       justSelected = true;
@@ -119,7 +256,11 @@ export async function processAgentTurn(params: {
   state.product_type_id = selected?.product_type_id ?? null;
   let workflowId: string | null = null;
   let steps: WorkflowStepDef[] = [
-    { key: "collect_customer", kind: "customer", label: "Të dhënat e klientit" },
+    {
+      key: "collect_customer",
+      kind: "customer",
+      label: "Të dhënat e klientit",
+    },
   ];
   if (selected?.workflow_id) {
     const workflow = await db

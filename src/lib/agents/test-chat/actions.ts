@@ -32,9 +32,9 @@ function customerComplete(customer: {
 }) {
   return Boolean(
     customer.name?.trim() &&
-      customer.phone?.trim() &&
-      customer.city?.trim() &&
-      customer.address?.trim(),
+    customer.phone?.trim() &&
+    customer.city?.trim() &&
+    customer.address?.trim(),
   );
 }
 
@@ -103,14 +103,13 @@ export async function simulateAgentTurn(
 
     const configAligned = Boolean(
       setup?.available &&
-        setupSignature &&
-        setup.signature === setupSignature &&
-        turn.debug.agentConfigured,
+      setupSignature &&
+      setup.signature === setupSignature &&
+      turn.debug.agentConfigured,
     );
     // One AI reply in the session is enough; the last turn may be fallback.
     const sawAi =
-      configAligned &&
-      (session.sawAi === true || turn.debug.source === "ai");
+      configAligned && (session.sawAi === true || turn.debug.source === "ai");
 
     session.setupSignature = configAligned ? setupSignature : null;
     session.sawAi = sawAi;
@@ -119,10 +118,14 @@ export async function simulateAgentTurn(
     if (
       configAligned &&
       sawAi &&
-      turn.workflowId &&
-      turn.nextState.product_id &&
-      turn.nextState.step_key === "order_ready" &&
-      customerComplete(turn.nextState.customer)
+      ((turn.workflowId &&
+        turn.nextState.product_id &&
+        turn.nextState.step_key === "order_ready" &&
+        customerComplete(turn.nextState.customer)) ||
+        (setup?.productCount === 0 &&
+          turn.debug.source === "ai" &&
+          ((turn.debug.retrievedCatalogIds?.length ?? 0) > 0 ||
+            turn.debug.retrievedService === true)))
     ) {
       setupTestPassed = await recordSetupTest(
         access.business.id,

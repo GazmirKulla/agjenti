@@ -11,7 +11,7 @@ import {
   type Option,
 } from "@/lib/products/catalog";
 import { bulkConfigureProducts } from "@/lib/products/actions";
-import { money } from "@/components/dashboard/ui";
+import { productMoney as money } from "@/lib/products/catalog";
 import { ProductMethods, ProductTips } from "./shared";
 export function ProductCatalog({
   slug,
