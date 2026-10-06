@@ -1,12 +1,13 @@
 .agent-test {
-  border: 1px solid #dfe5e7;
+  border: 1px solid var(--line);
   border-radius: 16px;
-  background: #fff;
+  background: var(--surface);
+  color: var(--ink);
   overflow: hidden;
 }
 .agent-test-header {
   padding: 22px 24px;
-  border-bottom: 1px solid #e5e9eb;
+  border-bottom: 1px solid var(--line);
   display: flex;
   gap: 24px;
   justify-content: space-between;
@@ -16,7 +17,7 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1.5px;
-  color: #377668;
+  color: var(--accent);
   display: flex;
   align-items: center;
   gap: 7px;
@@ -25,22 +26,22 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #4e9885;
+  background: var(--accent);
 }
 .agent-test-header h2 {
   font-size: 20px;
   font-weight: 650;
   margin: 7px 0;
+  color: var(--ink);
 }
 .agent-test-header p {
   font-size: 13px;
   line-height: 1.7;
-  color: #6a737b;
+  color: var(--ink-muted);
   max-width: 680px;
 }
 .agent-test-header > button {
   white-space: nowrap;
-  color: #394950;
 }
 .agent-test-layout {
   display: grid;
@@ -50,7 +51,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #e5e9eb;
+  border-right: 1px solid var(--line);
 }
 .agent-test-log {
   height: 440px;
@@ -61,20 +62,20 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  background: #fafbfc;
+  background: var(--paper-2);
 }
 .agent-test-empty {
   margin: auto;
   text-align: center;
   max-width: 330px;
-  color: #7b868c;
+  color: var(--ink-muted);
 }
 .agent-test-empty > svg {
   margin: 0 auto 18px;
-  color: #567e76;
+  color: var(--accent);
 }
 .agent-test-empty h3 {
-  color: #35454e;
+  color: var(--ink);
   font-size: 17px;
   font-weight: 600;
 }
@@ -92,16 +93,16 @@
   border-radius: 12px;
   padding: 13px 16px;
   align-self: flex-start;
-  background: white;
-  border: 1px solid #e1e7e9;
-  color: #34414a;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 .agent-test-bubble.customer {
   align-self: flex-end;
-  background: #33494e;
-  border-color: #33494e;
-  color: white;
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--ink);
 }
 .agent-test-bubble small {
   font-size: 10px;
@@ -115,23 +116,34 @@
 }
 .agent-test-thinking {
   font-size: 12px;
-  color: #6c827b;
+  color: var(--ink-muted);
 }
 .agent-test-composer {
   padding: 18px 22px;
-  border-top: 1px solid #e5e9eb;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
 }
 .agent-test-composer textarea {
   resize: vertical;
   width: 100%;
   min-height: 78px;
   max-height: 220px;
-  border: 1px solid #dce3e5;
+  border: 1px solid var(--line);
   border-radius: 9px;
   padding: 12px;
   font: inherit;
   font-size: 14px;
-  outline-color: #5d958b;
+  color: var(--ink);
+  background: var(--paper-2);
+  outline: none;
+}
+.agent-test-composer textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+html[data-resolved="dark"] .dashboard-shell .agent-test-composer textarea {
+  background: var(--paper-2);
+  color: var(--ink);
 }
 .agent-test-composer > div {
   display: flex;
@@ -146,26 +158,34 @@
   flex-wrap: wrap;
   gap: 7px;
   font-size: 12px;
-  color: #59686f;
+  color: var(--ink-muted);
 }
 .agent-test-photo input {
-  accent-color: #366b5e;
+  accent-color: var(--accent);
 }
 .agent-test-photo small {
-  color: #849096;
+  color: var(--ink-muted);
   font-size: 10px;
+  opacity: 0.85;
 }
 .agent-test-send {
   display: flex;
   align-items: center;
   gap: 12px;
   color: #fff;
-  background: #2d5e53;
+  background: var(--accent);
+  border: 0;
   border-radius: 9px;
   padding: 11px 17px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+html[data-resolved="dark"] .agent-test-send {
+  color: #161222;
+}
+.agent-test-send:hover:not(:disabled) {
+  background: var(--accent-2);
 }
 .agent-test-send:disabled {
   opacity: 0.5;
@@ -174,12 +194,12 @@
 .agent-test-disclaimer {
   font-size: 11px;
   line-height: 1.7;
-  color: #839095;
+  color: var(--ink-muted);
   margin-top: 13px;
 }
 .agent-test-error {
-  color: #ab354b;
-  background: #fff0f2;
+  color: var(--danger, #ab354b);
+  background: var(--danger-soft, #fff0f2);
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -189,11 +209,12 @@
 .agent-test-debug {
   padding: 24px;
   min-width: 0;
+  background: var(--surface);
 }
 .agent-test-debug h3 {
   font-size: 14px;
   font-weight: 650;
-  color: #34474e;
+  color: var(--ink);
   margin-bottom: 16px;
 }
 .agent-test-steps {
@@ -209,21 +230,21 @@
   gap: 10px;
   align-items: start;
   padding: 10px 12px;
-  border: 1px solid #e7ecee;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fbfcfc;
+  background: var(--paper-2);
 }
 .agent-test-step strong {
   display: block;
   font-size: 13px;
-  color: #31454e;
+  color: var(--ink);
 }
 .agent-test-step small {
   display: block;
   margin-top: 3px;
   font-size: 11px;
   line-height: 1.5;
-  color: #7a878e;
+  color: var(--ink-muted);
   overflow-wrap: anywhere;
 }
 .agent-test-step-mark {
@@ -237,44 +258,47 @@
   margin-top: 1px;
 }
 .agent-test-step.is-done {
-  border-color: #cfe3dc;
-  background: #f4faf7;
+  border-color: color-mix(in srgb, var(--success) 35%, var(--line));
+  background: var(--success-soft);
 }
 .agent-test-step.is-done .agent-test-step-mark {
-  background: #377668;
+  background: var(--success);
   color: #fff;
 }
 .agent-test-step.is-current {
-  border-color: #9fcabf;
-  background: #eef7f3;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
 }
 .agent-test-step.is-current .agent-test-step-mark {
-  background: #4e9885;
+  background: var(--accent);
   color: #fff;
 }
+html[data-resolved="dark"] .agent-test-step.is-current .agent-test-step-mark {
+  color: #161222;
+}
 .agent-test-step.is-pending .agent-test-step-mark {
-  background: #e8ecee;
-  color: #8a959b;
+  background: var(--line);
+  color: var(--ink-muted);
 }
 .agent-test-debug dl > div {
   display: flex;
   justify-content: space-between;
   gap: 18px;
-  border-bottom: 1px solid #eff2f3;
+  border-bottom: 1px solid var(--line);
   padding: 9px 0;
   font-size: 11px;
 }
 .agent-test-debug dt {
-  color: #829097;
+  color: var(--ink-muted);
 }
 .agent-test-debug dd {
   text-align: right;
-  color: #485b63;
+  color: var(--ink);
   overflow-wrap: anywhere;
   max-width: 60%;
 }
 .agent-test-debug details {
-  border: 1px solid #e3e8eb;
+  border: 1px solid var(--line);
   border-radius: 9px;
   margin-top: 16px;
   overflow: hidden;
@@ -282,11 +306,11 @@
 .agent-test-debug summary {
   cursor: pointer;
   font-size: 12px;
-  color: #556a74;
+  color: var(--ink-muted);
   padding: 12px;
 }
 .agent-test-debug pre {
-  background: #f7f9fa;
+  background: var(--paper-2);
   max-height: 260px;
   overflow: auto;
   white-space: pre-wrap;
@@ -294,16 +318,16 @@
   font-size: 11px;
   padding: 12px;
   line-height: 1.7;
-  border-top: 1px solid #e3e8eb;
-  color: #51616d;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
 }
 .agent-test-notice {
-  background: #fff9ed;
-  border: 1px solid #f2e4c7;
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
   border-radius: 9px;
   padding: 12px;
   font-size: 12px;
-  color: #8a6c30;
+  color: var(--ink);
   line-height: 1.7;
   margin-top: 15px;
 }
@@ -311,22 +335,24 @@
   display: block;
   text-decoration: underline;
   margin-top: 5px;
+  color: var(--accent);
 }
 .agent-test button:focus-visible,
 .agent-test input:focus-visible,
+.agent-test textarea:focus-visible,
 .agent-test summary:focus-visible {
-  outline: 3px solid #9fcabf;
+  outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 3px;
 }
 @media (max-width: 1000px) {
   .agent-test-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .agent-test-conversation {
     border-right: 0;
   }
   .agent-test-debug {
-    border-top: 1px solid #e5e9eb;
+    border-top: 1px solid var(--line);
   }
   .agent-test-log {
     height: 400px;
@@ -358,17 +384,21 @@
 }
 .agent-test-setup-guide {
   grid-column: 1 / -1;
-  border: 1px solid #e3e7e5;
-  background: #f5faf7;
+  border: 1px solid var(--line);
+  background: var(--accent-soft);
   border-radius: 12px;
   padding: 16px;
   font-size: 14px;
   line-height: 1.6;
+  color: var(--ink);
+  margin: 16px 16px 0;
 }
 .agent-test-setup-guide p {
   margin-top: 8px;
+  color: var(--ink-muted);
 }
 .agent-test-setup-guide a {
   text-decoration: underline;
   font-weight: 600;
+  color: var(--accent);
 }
