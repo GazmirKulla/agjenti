@@ -86,7 +86,42 @@ describe("shared business intelligence", () => {
         "",
         "",
       ),
-    ).toThrow();
+    ).toThrow(/nuk u gjetën të dhëna/i);
+    const mixed = parseEntities(
+      [
+        {
+          target: "service",
+          facts: [
+            {
+              field: "category",
+              value: "SaaS",
+              confidence: 1,
+              evidence: "SaaS",
+            },
+            {
+              field: "name",
+              value: "Agjenti",
+              confidence: 0.9,
+              evidence: "Agjenti",
+            },
+            {
+              field: "description",
+              value: "Asistent",
+              confidence: 0.8,
+              evidence: "Asistent",
+            },
+          ],
+        },
+      ],
+      "website",
+      "https://www.agjenti.app",
+      "Agjenti Asistent SaaS",
+    );
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0].facts.map((f) => f.field).sort()).toEqual([
+      "description",
+      "name",
+    ]);
   });
   it("detects missing prices and rejects invalid workflow / monetary fields", () => {
     const e = entity("manual", "-5");

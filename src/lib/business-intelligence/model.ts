@@ -192,7 +192,7 @@ export function parseEntities(
   if (!Array.isArray(raw) || raw.length > 60)
     throw new Error("invalid_extraction");
   const now = new Date().toISOString();
-  return raw.map((item) => {
+  const entities = raw.flatMap((item) => {
     if (
       !item ||
       !targets.includes(item.target) ||
@@ -201,20 +201,22 @@ export function parseEntities(
     )
       throw new Error("invalid_extraction");
     const target = item.target as Target;
+    const allowed = fields[target] as readonly string[];
     const seen = new Set<string>();
-    const facts: Fact[] = item.facts.map((f: Record<string, unknown>) => {
+    const facts: Fact[] = [];
+    for (const f of item.facts as Record<string, unknown>[]) {
       if (
         typeof f.field !== "string" ||
-        !(fields[target] as readonly string[]).includes(f.field) ||
+        !allowed.includes(f.field) ||
         seen.has(f.field)
       )
-        throw new Error("invalid_field");
+        continue;
       seen.add(f.field);
       if (
         f.value !== null &&
         (typeof f.value !== "string" || f.value.length > 8000)
       )
-        throw new Error("invalid_value");
+        continue;
       const evidence = typeof f.evidence === "string" ? f.evidence : null;
       const supported =
         source === "manual" || !!(evidence && text.includes(evidence));
@@ -235,7 +237,7 @@ export function parseEntities(
         (!/^https?:\/\//.test(v) || !text.includes(v))
       )
         v = null;
-      return {
+      facts.push({
         field: f.field,
         value: v,
         source,
@@ -254,10 +256,16 @@ export function parseEntities(
         createdAt: now,
         updatedAt: now,
         confirmedByUser: false,
-      };
-    });
-    return { id: crypto.randomUUID(), target, facts };
+      });
+    }
+    if (!facts.length) return [];
+    return [{ id: crypto.randomUUID(), target, facts }];
   });
+  if (!entities.length)
+    throw new Error(
+      "Nuk u gjetën të dhëna të mbështetura për këtë seksion. Provo një faqe tjetër, ndrysho seksionin, ose plotëso manualisht.",
+    );
+  return entities;
 }
 export function validateForApply(entities: Entity[]) {
   if (!entities.length || entities.length > 60)

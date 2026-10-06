@@ -329,6 +329,12 @@ export async function POST(request: Request) {
         "Të dhënat aktive kanë ndryshuar. Kliko «Rilexo të dhënat aktive» dhe rishiko konfliktet.",
       daily_limit: "Ke arritur kufirin prej 30 analizash për sot.",
       busy: "Një analizë tjetër po kryhet. Provo pas pak.",
+      invalid_field:
+        "Analiza ktheu fusha që nuk mbështeten për këtë seksion. Provo përsëri ose plotëso manualisht.",
+      invalid_value:
+        "Disa vlera të analizuara ishin të pavlefshme. Provo përsëri ose plotëso manualisht.",
+      invalid_extraction:
+        "Analiza nuk ktheu një strukturë të vlefshme. Provo përsëri ose ndrysho burimin.",
     };
     return json(
       {
