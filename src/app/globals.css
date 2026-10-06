@@ -2584,13 +2584,38 @@ html[data-resolved="dark"]
     background: var(--surface);
     overscroll-behavior: contain;
   }
-  .dashboard-sidebar .mobile-drawer-close {
-    display: block;
-    align-self: flex-end;
-    width: 44px;
-    height: 44px;
-    font-size: 26px;
+  .dashboard-sidebar .mobile-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 8px;
+  }
+  .dashboard-sidebar .mobile-drawer-header .dashboard-brand {
+    padding: 0;
+    min-width: 0;
+  }
+  .dashboard-sidebar .mobile-drawer-close {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-muted);
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 300;
+  }
+  .dashboard-sidebar .mobile-drawer-close:hover,
+  .dashboard-sidebar .mobile-drawer-close:focus-visible {
+    color: var(--ink);
+    background: var(--accent-soft);
+    outline: none;
   }
   .dashboard-sidebar .mobile-primary-item {
     display: none;

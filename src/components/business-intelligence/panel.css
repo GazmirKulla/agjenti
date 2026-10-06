@@ -18,14 +18,50 @@
 }
 .bi-dialog header {
   display: flex;
+  align-items: flex-start;
   gap: 1rem;
   justify-content: space-between;
   padding: 1.2rem;
   border-bottom: 1px solid var(--line);
 }
+.bi-dialog header > div {
+  min-width: 0;
+  flex: 1;
+}
 .bi-dialog h2 {
   font-size: 1.3rem;
   font-weight: 700;
+}
+.bi-dialog header > div > p {
+  margin: 0.35rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.bi-close {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 300;
+}
+.bi-close:hover:not(:disabled),
+.bi-close:focus-visible {
+  color: var(--ink);
+  background: var(--accent-soft);
+  outline: none;
+}
+.bi-close:disabled {
+  opacity: 0.5;
 }
 .bi-content {
   padding: 1.2rem;

@@ -149,21 +149,23 @@ export function DashboardShell({
         aria-modal={mobile && open ? true : undefined}
         aria-label={mobile && open ? "Menuja kryesore" : undefined}
       >
-        <button
-          type="button"
-          className="mobile-drawer-close btn btn-ghost"
-          onClick={() => setOpen(false)}
-          aria-label="Mbyll menunë"
-        >
-          ×
-        </button>
-        <Link
-          href={platformAdmin || admin ? "/admin" : base}
-          className="dashboard-brand"
-          onClick={() => setOpen(false)}
-        >
-          <BrandLogo size={36} priority />
-        </Link>
+        <div className="mobile-drawer-header">
+          <Link
+            href={platformAdmin || admin ? "/admin" : base}
+            className="dashboard-brand"
+            onClick={() => setOpen(false)}
+          >
+            <BrandLogo size={36} priority />
+          </Link>
+          <button
+            type="button"
+            className="mobile-drawer-close"
+            onClick={() => setOpen(false)}
+            aria-label="Mbyll menunë"
+          >
+            ×
+          </button>
+        </div>
         <details className="workspace-picker">
           <summary className="workspace-switch">
             <span className="workspace-avatar">

@@ -167,7 +167,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                 </p>
               </div>
               <button
-                className="btn btn-ghost"
+                className="bi-close"
                 disabled={busy}
                 onClick={() => dialog.current?.close()}
                 aria-label="Mbyll"
