@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { Icon } from "@/components/dashboard/icon";
 import { IntelligenceTrigger } from "@/components/business-intelligence/trigger";
 import { ProductFields } from "@/components/dashboard/product-fields";
-
+import {
+  InstagramScanner,
+  type ScanFrame,
+} from "@/components/dashboard/instagram-scanner";
 import {
   ProductReview,
   type ReviewDraft,
@@ -44,6 +47,16 @@ type ImportAction = (payload: {
   productTypeId?: string | null;
   workflowId?: string | null;
 }) => Promise<{ error?: string; success?: string }>;
+type ScanProduct = {
+  externalId: string;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  imageUrl: string | null;
+  permalink: string | null;
+};
+
 export function ProductIntake({
   slug,
   types,
@@ -52,6 +65,7 @@ export function ProductIntake({
   instagramUsername,
   createAction,
   importAction,
+  scanAction,
   initialMethod = "manual",
   hideTabs = false,
 }: {
@@ -66,9 +80,28 @@ export function ProductIntake({
     data: FormData,
   ) => Promise<{ error?: string; success?: string } | void>;
   importAction: ImportAction;
+  scanAction?: () => Promise<{
+    error?: string;
+    success?: string;
+    products?: ScanProduct[];
+    frames?: ScanFrame[];
+  }>;
 }) {
   const [method, setMethod] = useState<MethodId>(initialMethod);
   const csv = useBatchSave(importAction);
+  const instagram = useBatchSave(importAction);
+  const [scanning, setScanning] = useState(false);
+  const [scanner, setScanner] = useState<{
+    loading: boolean;
+    frames: ScanFrame[] | null;
+  } | null>(null);
+  const scanResultRef = useRef<{
+    error?: string;
+    success?: string;
+    products?: ScanProduct[];
+  } | null>(null);
+  const instagramRef = useRef(instagram);
+  instagramRef.current = instagram;
   const connected = instagramStatus === "connected";
 
   function onTabsKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -79,6 +112,53 @@ export function ProductIntake({
     const next = METHODS[(index + delta + METHODS.length) % METHODS.length];
     setMethod(next.id);
     document.getElementById(`product-tab-${next.id}`)?.focus();
+  }
+
+  function finishInstagramScan() {
+    const result = scanResultRef.current;
+    if (!result) return;
+    scanResultRef.current = null;
+    setScanner(null);
+    setScanning(false);
+    const batch = instagramRef.current;
+    if (result.error || !result.products?.length) {
+      batch.setRows([]);
+      batch.setNotice({
+        error: result.error || "Nuk gjeta produkte në postime.",
+      });
+      return;
+    }
+    batch.setRows(result.products.map(draftFromInstagram));
+    batch.setNotice({
+      success: result.success || "Kontrolloje listën, pastaj ruaji.",
+    });
+  }
+
+  async function scanInstagram() {
+    if (!scanAction) return;
+    setScanning(true);
+    setScanner({ loading: true, frames: null });
+    instagram.setNotice(null);
+    instagram.setRows([]);
+    scanResultRef.current = null;
+    try {
+      const result = await scanAction();
+      if (!result.frames?.length) {
+        setScanner(null);
+        setScanning(false);
+        instagram.setNotice({
+          error: result.error || "Nuk gjeta produkte në postime.",
+        });
+        return;
+      }
+      scanResultRef.current = result;
+      setScanner({ loading: false, frames: result.frames });
+    } catch {
+      scanResultRef.current = null;
+      setScanner(null);
+      setScanning(false);
+      instagram.setNotice({ error: "Skanimi dështoi. Provo përsëri." });
+    }
   }
 
   function onCsvFile(event: ChangeEvent<HTMLInputElement>) {
@@ -236,7 +316,21 @@ export function ProductIntake({
         <p className="muted-copy">
           {instagramIntro(instagramStatus, instagramUsername)}
         </p>
-        {connected ? (
+        {connected && scanAction ? (
+          <div className="import-link-row">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={scanning || instagram.saving}
+              onClick={scanInstagram}
+            >
+              {scanning ? "Duke skanuar…" : "Skano postimet"}
+            </button>
+            <IntelligenceTrigger source="instagram">
+              Analizo me AI
+            </IntelligenceTrigger>
+          </div>
+        ) : connected ? (
           <IntelligenceTrigger source="instagram">
             Analizo Instagram-in dhe rishiko
           </IntelligenceTrigger>
@@ -245,6 +339,24 @@ export function ProductIntake({
             Hap Instagram
           </Link>
         )}
+        {scanner ? (
+          <InstagramScanner
+            loading={scanner.loading}
+            frames={scanner.frames}
+            onFinished={finishInstagramScan}
+          />
+        ) : null}
+        {scanner ? null : <Notice notice={instagram.notice} />}
+        {!scanner && instagram.rows.length > 0 ? (
+          <ProductReview
+            rows={instagram.rows}
+            onChange={instagram.setRows}
+            types={types}
+            workflows={workflows}
+            pending={instagram.saving}
+            onSave={instagram.save}
+          />
+        ) : null}
       </div>
     </section>
   );
@@ -322,6 +434,24 @@ function draftsFromCsv(rows: CsvProduct[]): ReviewDraft[] {
   }));
 }
 
+function draftFromInstagram(product: ScanProduct): ReviewDraft {
+  return {
+    key: product.externalId,
+    selected: true,
+    name: product.name,
+    price: Number.isInteger(product.price)
+      ? String(product.price)
+      : product.price.toFixed(2),
+    currency: product.currency || "ALL",
+    description: product.description ?? "",
+    sku: "",
+    imageUrl: product.imageUrl ?? "",
+    sourceLabel: "Postim",
+    externalId: product.externalId,
+    permalink: product.permalink,
+  };
+}
+
 function instagramIntro(
   status: string | null,
   username: string | null,
@@ -329,7 +459,7 @@ function instagramIntro(
   if (status === "connected") {
     const handle = username?.replace(/^@/, "").trim();
     const who = handle ? `@${handle}` : "llogarisë së lidhur";
-    return `Lexohen postimet e ${who}. Produktet, shërbimet dhe njohuritë përgatiten si drafte me burimin përkatës. Kontrolloje listën para se ta ruash.`;
+    return `Lexohen postimet e ${who}. Një postim bëhet produkt kur në tekst ka çmim, p.sh. 790 Lekë ose 18 EUR. Kontrolloje listën para se ta ruash.`;
   }
   if (status === "expired")
     return "Lidhja e Instagram ka skaduar. Lidhe përsëri që të lexohen postimet.";
