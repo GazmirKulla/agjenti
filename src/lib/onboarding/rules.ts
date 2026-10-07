@@ -81,6 +81,38 @@ const productCapabilities = [
 ] as const;
 const serviceCapabilities = ["qualify_leads", "handle_bookings"] as const;
 
+/** Qëllim → aftësi të sugjeruara që shfaqen te hapi aiMode. */
+export const useCaseCapabilities: Record<string, readonly string[]> = {
+  messages: ["reply_messages", "handoff"],
+  support: ["answer_questions", "ask_missing", "handoff"],
+  leads: ["ask_missing", "qualify_leads", "save_customer_details", "handoff"],
+  booking: ["ask_missing", "handle_bookings", "handoff"],
+  sales: ["understand_needs", "recommend_products", "compare_products"],
+  products: [
+    "answer_product_details",
+    "recommend_products",
+    "compare_products",
+  ],
+  orders: [
+    "collect_order_details",
+    "follow_workflow",
+    "create_order",
+    "handoff",
+  ],
+  customers: ["recognize_customers", "save_customer_details"],
+  recommendations: [
+    "understand_needs",
+    "recommend_products",
+    "compare_products",
+  ],
+  collection: [
+    "ask_missing",
+    "collect_order_details",
+    "follow_workflow",
+    "create_order",
+  ],
+};
+
 export const businessProfiles = {
   ecommerce: {
     label: "Dyqan online",
@@ -328,36 +360,6 @@ export function allowedCapabilities(
   const rules = rulesFor(businessType);
   const allowed = new Set<string>(rules.allowedCapabilities);
   const hasProducts = offerings.some((item) => item !== "services");
-  const useCaseCapabilities: Record<string, readonly string[]> = {
-    messages: ["reply_messages", "handoff"],
-    support: ["answer_questions", "ask_missing", "handoff"],
-    leads: ["ask_missing", "qualify_leads", "save_customer_details", "handoff"],
-    booking: ["ask_missing", "handle_bookings", "handoff"],
-    sales: ["understand_needs", "recommend_products", "compare_products"],
-    products: [
-      "answer_product_details",
-      "recommend_products",
-      "compare_products",
-    ],
-    orders: [
-      "collect_order_details",
-      "follow_workflow",
-      "create_order",
-      "handoff",
-    ],
-    customers: ["recognize_customers", "save_customer_details"],
-    recommendations: [
-      "understand_needs",
-      "recommend_products",
-      "compare_products",
-    ],
-    collection: [
-      "ask_missing",
-      "collect_order_details",
-      "follow_workflow",
-      "create_order",
-    ],
-  };
   const relevant = new Set(
     selectedUseCases.flatMap((item) => useCaseCapabilities[item] ?? []),
   );

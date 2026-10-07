@@ -33,6 +33,17 @@ it("keeps four principal tabs for admin mobile nav", () => {
   ]);
 });
 
+it("includes onboarding map in admin desktop nav", () => {
+  expect(buildAdminNavigation("desktop").map((item) => item.path)).toEqual([
+    "",
+    "businesses",
+    "product-types",
+    "conversations",
+    "onboarding",
+    "app",
+  ]);
+});
+
 it("adapts mobile tabs for a service booking business", () => {
   const profile = generateDashboardProfile({
     businessType: "services",

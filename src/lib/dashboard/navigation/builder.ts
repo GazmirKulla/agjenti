@@ -41,6 +41,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
     { id: "customers", path: "businesses", label: "Bizneset", icon: "businesses" },
     { id: "products", path: "product-types", label: "Llojet", icon: "products" },
     { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
+    { id: "agents", path: "onboarding", label: "Onboarding", icon: "spark" },
     { id: "settings", path: "app", label: "App", icon: "settings" },
   ];
 }
