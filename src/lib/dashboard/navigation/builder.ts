@@ -32,7 +32,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
     return [
       { id: "dashboard", path: "", label: "Kreu", icon: "dashboard" },
       { id: "customers", path: "businesses", label: "Bizneset", icon: "businesses" },
-      { id: "inbox", path: "conversations", label: "Bisedat", icon: "inbox" },
+      { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
       { id: "settings", path: "app", label: "App", icon: "settings" },
     ];
   }
@@ -40,7 +40,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
     { id: "dashboard", path: "", label: "Dashboard", icon: "dashboard" },
     { id: "customers", path: "businesses", label: "Bizneset", icon: "businesses" },
     { id: "products", path: "product-types", label: "Llojet", icon: "products" },
-    { id: "inbox", path: "conversations", label: "Biseda & Integrime", icon: "inbox" },
+    { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
     { id: "settings", path: "app", label: "App", icon: "settings" },
   ];
 }
