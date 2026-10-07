@@ -66,7 +66,7 @@ describe("self-service onboarding boundary", () => {
     mocks.rpc.mockResolvedValue({ data: "biznes-123", error: null });
     expect(
       await saveOnboarding({ ...answers, p_user_id: "victim" }, 7, true),
-    ).toEqual({ destination: "/b/biznes-123?welcome=1" });
+    ).toEqual({ destination: "/b/biznes-123/setup" });
     const completion = mocks.rpc.mock.calls.find(
       ([name]) => name === "complete_business_onboarding",
     );

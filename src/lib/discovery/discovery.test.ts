@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyDraft, mergeDraft, parseEntities, value } from "@/lib/business-intelligence/model";
 import { basicInstructions } from "@/lib/onboarding/model";
 import { mergedReview, signalsFor, withSetupRecommendations } from "./proposal";
-import { discoveryConflictGroups, editDiscoveryDraft } from "./review";
+import { discoveryConflictGroups, editDiscoveryDraft, editReviewPreferences, reviewDashboardProfile, reviewEntityEnabled } from "./review";
 import { selectDiscoveryImages } from "./images";
 
 const product = (price: string) => parseEntities([{ target: "product", facts: [
@@ -10,6 +10,29 @@ const product = (price: string) => parseEntities([{ target: "product", facts: [
 ] }], "manual", "test", "")[0];
 
 describe("discovery evidence and review", () => {
+  it("persists exclusion of entire sections across new source results and draft edits", () => {
+    const first = product("10");
+    let draft = editReviewPreferences({ ...emptyDraft(), entities: [first] }, { excludedTargets: ["product"], excludedEntityIds: [] });
+    const second = product("20"); second.facts.find((f) => f.field === "name")!.value = "Këmisha";
+    draft = mergedReview(draft, { ...emptyDraft(), entities: [second] });
+    draft = editDiscoveryDraft(draft, [{ id: first.id, values: { price: "12" } }], []);
+    expect(draft.reviewPreferences?.excludedTargets).toEqual(["product"]);
+    expect(draft.entities.every((e) => !reviewEntityEnabled(e, draft))).toBe(true);
+  });
+  it("preserves per-item exclusions and removes dependent modules when products are omitted", () => {
+    const first = product("10"), second = product("20");
+    const draft = editReviewPreferences({ ...emptyDraft(), entities: [first, second] }, { excludedTargets: [], excludedEntityIds: [first.id], enabledModules: ["orders", "knowledge"] });
+    expect(draft.reviewPreferences?.enabledModules).not.toContain("orders");
+    expect(reviewEntityEnabled(second, draft)).toBe(false);
+    draft.reviewPreferences!.enabledModules!.push("products");
+    expect(reviewEntityEnabled(first, draft)).toBe(false);
+    expect(reviewEntityEnabled(second, draft)).toBe(true);
+    expect(reviewDashboardProfile(draft, signalsFor("ecommerce", ["standard"]), null).enabledModules).not.toContain("orders");
+  });
+  it("rejects forged sections, unknown entities and unknown modules", () => {
+    const draft = { ...emptyDraft(), entities: [product("10")] };
+    for (const bad of [{ excludedTargets: ["profile"], excludedEntityIds: [] }, { excludedTargets: ["forged"], excludedEntityIds: [] }, { excludedTargets: [], excludedEntityIds: ["unknown"] }, { excludedTargets: [], excludedEntityIds: [], enabledModules: ["forged"] }]) expect(() => editReviewPreferences(draft, bad)).toThrow("invalid_request");
+  });
   it("groups competing versions by field and counts only unresolved selected elements", () => {
     const first = product("10");
     const second = product("20");

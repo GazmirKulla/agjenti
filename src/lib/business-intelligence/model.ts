@@ -1,4 +1,5 @@
 import { businessProfiles } from "@/lib/onboarding/rules";
+import type { ModuleId } from "@/lib/dashboard/modules/types";
 export const targets = [
   "profile",
   "product",
@@ -99,6 +100,7 @@ export type Conflict = {
   incoming: Fact;
 };
 export type Draft = {
+  reviewPreferences?: { excludedTargets: Target[]; excludedEntityIds: string[]; enabledModules?: ModuleId[] };
   entities: Entity[];
   conflicts: Conflict[];
   missingInformation: string[];

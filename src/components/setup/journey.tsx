@@ -60,11 +60,9 @@ export function SetupJourney({
     "service-request": "kërkesa për shërbim",
     "business-defined": "proces sipas biznesit",
   };
-  const onHome = pathname === home;
-  // Bisedat janë rrjedhë pune e përditshme; checklist-i i konfigurimit
-  // nuk duhet të zërë hapësirë në ekranin e një bisede.
-  if (pathname?.startsWith(`${home}/inbox/`)) return null;
-  if (pathname === `${home}/setup`) return null;
+  const onHome = pathname === `${home}/setup`;
+  // Përgatitja dhe aktivizimi shfaqen vetëm në onboarding.
+  if (!onHome) return null;
   if (!status.available)
     return (
       <div className="setup-notice" role="status">

@@ -38,6 +38,15 @@ describe("resumable discovery worker", () => {
     expect(m.rpc).toHaveBeenCalledWith("finish_business_discovery", expect.objectContaining({ p_revision: 7, p_signals: signals }));
     expect(m.rpc).toHaveBeenLastCalledWith("checkpoint_business_discovery", expect.objectContaining({ p_stage: "finish" }));
   });
+  it("retains omitted sections and manual module choices when a later analysis finishes", async () => {
+    const preferences = { excludedTargets: ["product"], excludedEntityIds: [], enabledModules: ["knowledge"] };
+    m.read.mockResolvedValue({ data: { draft: { ...emptyDraft(), reviewPreferences: preferences }, revision: 7, signals_source: "manual", signals: { businessType: "ecommerce", offeringTypes: ["standard"] }, baseline: { business: { name: "Studio" }, agents: [] } }, error: null });
+    const entities = parseEntities([{ target: "product", facts: [{ field: "name", value: "Bluza" }, { field: "price", value: "10" }, { field: "currency", value: "EUR" }] }], "manual", "test", "");
+    await processDiscoveryStep({ ...job, stage: "finish", checkpoint: { entities } });
+    const args = m.rpc.mock.calls.find(([name]) => name === "finish_business_discovery")![1];
+    expect(args.p_draft.reviewPreferences).toEqual(preferences);
+    expect(args.p_draft.entities.some((e: { target: string }) => e.target === "product")).toBe(true);
+  });
   it("fences a disconnected/relinked Instagram account before fetching or publishing", async () => {
     await expect(processDiscoveryStep({ ...job, source: "instagram", input: { connectionId: "old", generation: "oldgen" } })).rejects.toThrow("connection_changed");
     expect(m.instagram).not.toHaveBeenCalled();

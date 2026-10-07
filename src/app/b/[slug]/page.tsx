@@ -2,8 +2,6 @@ import { Suspense } from "react";
 import { DashboardLoading } from "@/components/dashboard/loading";
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { getSetupStatus } from "@/lib/setup/status";
-import Link from "next/link";
 import { Overview } from "@/components/dashboard/overview";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 
@@ -17,23 +15,7 @@ export default async function BusinessDashboard({
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
-  const [setup, dashboardProfile] = await Promise.all([
-    getSetupStatus(access.business.id),
-    loadDashboardProfile(access.business.id),
-  ]);
-  if (setup.available && !setup.launched)
-    return (
-      <section className="panel section-pad">
-        <h2 className="text-lg">Lëre aktivitetin të vijë natyrshëm</h2>
-        <p className="muted-copy mt-2">
-          Bisedat shfaqen kur klientët të shkruajnë. Klientët dhe porositë
-          krijohen nga aktiviteti real; nuk janë hapa konfigurimi.
-        </p>
-        <Link href={`/b/${slug}/inbox`} className="soft-link mt-4">
-          Shiko Inbox-in →
-        </Link>
-      </section>
-    );
+  const dashboardProfile = await loadDashboardProfile(access.business.id);
   return (
     <>
       <Suspense fallback={<DashboardLoading />}>

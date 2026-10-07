@@ -96,7 +96,7 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
       } catch (error) {
         console.error("[dashboard profile]", error);
       }
-      return { destination: basic && settings.onboarding_enabled ? `/b/${data}/setup` : `/b/${data}?welcome=1` };
+      return { destination: settings.onboarding_enabled ? `/b/${data}/setup` : `/b/${data}?welcome=1` };
     }
     return { saved: true };
   } catch {

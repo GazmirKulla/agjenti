@@ -241,11 +241,13 @@ export default async function SettingsPage({
             )}
           </ActionForm>
 
-          <ModulesSettingsPanel
-            slug={slug}
-            businessId={access.business.id}
-            profile={dashboardProfile}
-          />
+          <div id="modules">
+            <ModulesSettingsPanel
+              slug={slug}
+              businessId={access.business.id}
+              profile={dashboardProfile}
+            />
+          </div>
 
           <ActionForm
             action={saveExternalCatalog}

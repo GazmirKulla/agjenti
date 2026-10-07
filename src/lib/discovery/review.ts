@@ -1,4 +1,41 @@
-import { emptyDraft, equivalent, fields, value, withMissing, type Draft, type Fact } from "@/lib/business-intelligence/model";
+import { emptyDraft, equivalent, fields, targets, value, withMissing, type Draft, type Entity, type Fact, type Target } from "@/lib/business-intelligence/model";
+import { isModuleId, normalizeEnabledModules } from "@/lib/dashboard/modules/dependencies";
+import { generateDashboardProfile, rebuildProfileFromModules } from "@/lib/dashboard/profile/generate";
+import type { DashboardProfile, DashboardSignals, ModuleId } from "@/lib/dashboard/modules/types";
+
+export const reviewSections: { target: Target; label: string; description: string }[] = [
+  { target: "profile", label: "Profili i biznesit", description: "Emri dhe informacioni bazë i biznesit." },
+  { target: "product", label: "Produktet", description: "Produktet dhe çmimet e gjetura në burimet e tua." },
+  { target: "service", label: "Shërbimet", description: "Shërbimet që ofron biznesi." },
+  { target: "knowledge", label: "Njohuritë dhe FAQ", description: "Informacioni që Agjenti mund të përdorë në përgjigje." },
+  { target: "agent", label: "Udhëzimet e Agjentit", description: "Propozime për mënyrën si përgjigjet Agjenti." },
+  { target: "workflow", label: "Proceset", description: "Hapat e propozuar për bisedat dhe porositë." },
+];
+export const sectionModules: Partial<Record<Target, ModuleId>> = { product: "products", service: "services", knowledge: "knowledge", workflow: "workflows" };
+
+export function editReviewPreferences(draft: Draft, input: unknown): Draft {
+  if (input === undefined) return draft;
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("invalid_request");
+  const raw = input as Record<string, unknown>;
+  if (!Array.isArray(raw.excludedTargets) || raw.excludedTargets.some((v) => typeof v !== "string" || !(targets as readonly string[]).includes(v) || v === "profile") || !Array.isArray(raw.excludedEntityIds) || raw.excludedEntityIds.length > 60 || raw.excludedEntityIds.some((id) => typeof id !== "string" || !draft.entities.some((e) => e.id === id))) throw new Error("invalid_request");
+  if (raw.enabledModules !== undefined && (!Array.isArray(raw.enabledModules) || raw.enabledModules.length > 16 || raw.enabledModules.some((id) => typeof id !== "string" || !isModuleId(id)))) throw new Error("invalid_request");
+  const excludedTargets = [...new Set(raw.excludedTargets as Target[])];
+  const disabledModules = excludedTargets.map((target) => sectionModules[target]);
+  return { ...draft, reviewPreferences: { excludedTargets, excludedEntityIds: [...new Set(raw.excludedEntityIds as string[])], ...(raw.enabledModules === undefined ? {} : { enabledModules: normalizeEnabledModules((raw.enabledModules as ModuleId[]).filter((id) => !disabledModules.includes(id))) }) } };
+}
+
+export function reviewEntityEnabled(entity: Entity, draft: Draft) {
+  const preferences = draft.reviewPreferences;
+  const moduleId = sectionModules[entity.target];
+  return !preferences?.excludedTargets.includes(entity.target) && !preferences?.excludedEntityIds.includes(entity.id) && (!moduleId || !preferences?.enabledModules || preferences.enabledModules.includes(moduleId));
+}
+
+export function reviewDashboardProfile(draft: Draft, signals: DashboardSignals, prior: DashboardProfile | null): DashboardProfile {
+  const base = prior ? { ...prior, signals } : generateDashboardProfile(signals);
+  if (!draft.reviewPreferences) return base;
+  const disabled = draft.reviewPreferences.excludedTargets.map((target) => sectionModules[target]);
+  return rebuildProfileFromModules((draft.reviewPreferences.enabledModules ?? base.enabledModules).filter((id) => !disabled.includes(id)), signals);
+}
 
 export type DiscoveryConflictGroup = { key: string; entityId: string; field: string; current: Fact; alternatives: Fact[] };
 

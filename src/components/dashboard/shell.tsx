@@ -6,6 +6,7 @@ import { isDashboardRoute } from "./navigation";
 import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
+import { SetupWorkspace } from "@/components/setup/workspace";
 
 export function DashboardShell({
   children,
@@ -121,6 +122,7 @@ export function DashboardShell({
   const items = navigationItems;
   const primaryItems = mobileNavigationItems;
   const mobilePaths = new Set(primaryItems.map((item) => item.path));
+  if (!admin && slug && pathname === `${base}/setup`) return <SetupWorkspace name={name} slug={slug}>{children}</SetupWorkspace>;
   return (
     <div
       className={`dashboard-shell ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
@@ -201,6 +203,7 @@ export function DashboardShell({
               </Link>
             );
           })}
+          {!admin && <Link href={`${base}/setup`} className="dashboard-nav" onClick={() => setOpen(false)}><Icon name="spark" /> Onboarding</Link>}
         </nav>
       </aside>
       {open && (

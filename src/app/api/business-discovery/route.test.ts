@@ -31,6 +31,24 @@ beforeEach(() => {
   });
 });
 describe("discovery API boundary", () => {
+  it("persists omitted sections and module choices, keeping them after GET and applying only allowed entities", async () => {
+    const productId = state.draft.entities[0].id;
+    const profile = parseEntities([{ target: "profile", facts: [{ field: "name", value: "Studio" }] }], "manual", "test", "")[0];
+    state.draft.entities.push(profile);
+    const preferences = { excludedTargets: ["product"], excludedEntityIds: [productId], enabledModules: ["knowledge", "orders"] };
+    expect((await POST(request({ action: "save", revision: 2, intelligenceRevision: 0, reviewPreferences: preferences }))).status).toBe(200);
+    state.draft = m.rpc.mock.calls[0][1].p_draft; state.revision++;
+    const loaded = await (await GET(readRequest())).json();
+    expect(loaded.draft.reviewPreferences.excludedTargets).toEqual(["product"]);
+    expect(loaded.dashboardProfile.enabledModules).not.toContain("products");
+    expect(loaded.dashboardProfile.enabledModules).not.toContain("orders");
+    expect((await POST(request({ action: "confirm", revision: 3, intelligenceRevision: 0, confirmed: true, selected: [productId, profile.id] }))).status).toBe(400);
+    expect((await POST(request({ action: "confirm", revision: 3, intelligenceRevision: 0, confirmed: true, selected: [profile.id] }))).status).toBe(200);
+    const args = m.rpc.mock.calls.at(-1)![1];
+    expect(args.p_entities.map((e: { id: string }) => e.id)).toEqual([profile.id]);
+    expect(args.p_profile.enabledModules).not.toContain("products");
+    expect(args.p_profile.source).toBe("manual");
+  });
   it("returns field issues for the existing Lek draft before calling the confirmation RPC", async () => {
     const e = state.draft.entities[0];
     e.facts.find((fact) => fact.field === "currency")!.value = "Lek";

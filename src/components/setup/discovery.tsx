@@ -2,14 +2,16 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { entityValidationIssues, fields, labels, normalizeCurrency, value, type Draft, type Entity, type EntityValidationIssue } from "@/lib/business-intelligence/model";
+import { entityValidationIssues, fields, labels, normalizeCurrency, value, type Draft, type Entity, type EntityValidationIssue, type Target } from "@/lib/business-intelligence/model";
 import { businessProfiles, allowedOfferings } from "@/lib/onboarding/rules";
-import { canApplyEntity, discoveryConflictGroups, editDiscoveryDraft } from "@/lib/discovery/review";
-import type { DashboardSignals } from "@/lib/dashboard/modules/types";
+import { canApplyEntity, discoveryConflictGroups, editDiscoveryDraft, reviewEntityEnabled, reviewSections, sectionModules } from "@/lib/discovery/review";
+import type { DashboardProfile, DashboardSignals, ModuleId } from "@/lib/dashboard/modules/types";
+import { canEnableModule, normalizeEnabledModules } from "@/lib/dashboard/modules/dependencies";
+import { moduleRegistry, toggleableModules } from "@/lib/dashboard/modules/registry";
 import "./discovery.css";
 
 type Job = { id: string; source: "instagram" | "website"; status: string; stage: string; progress: number; error: string | null; note: string; warnings: string[]; postCount: number; imageCount: number; website: string | null; canResume: boolean };
-type State = { available: boolean; error?: string; connection: { username: string | null } | null; draft: Draft; signals: DashboardSignals | null; revision: number; intelligenceRevision: number; confirmedAt: string | null; jobs: Job[] };
+type State = { available: boolean; error?: string; connection: { username: string | null } | null; draft: Draft; dashboardProfile: DashboardProfile; signals: DashboardSignals | null; revision: number; intelligenceRevision: number; confirmedAt: string | null; jobs: Job[] };
 const stageLabels: Record<string, string> = { capture: "Duke lexuar përmbajtjen", text: "Duke analizuar tekstet", images: "Duke analizuar fotot", finish: "Duke përgatitur konfigurimin", done: "Analiza u përfundua" };
 
 export function DiscoverySetup({ slug, businessId }: { slug: string; businessId: string }) {
@@ -19,6 +21,9 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [startingSource, setStartingSource] = useState("");
+  const [excludedTargets, setExcludedTargets] = useState<Target[]>([]);
+  const [enabledModules, setEnabledModules] = useState<ModuleId[]>([]);
   const [website, setWebsite] = useState("");
   const [businessType, setBusinessType] = useState("other");
   const [offers, setOffers] = useState<string[]>([]);
@@ -48,7 +53,12 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
     if (data.available && !dirty.current) {
       setBusinessType(data.signals?.businessType ?? "other");
       setOffers(data.signals?.offeringTypes ?? []);
-      if (!selectionTouched.current) setSelected(data.draft.entities.filter((e) => canApplyEntity(data.draft, e.id)).map((e) => e.id));
+      setExcludedTargets(data.draft.reviewPreferences?.excludedTargets ?? []);
+      setEnabledModules(data.draft.reviewPreferences?.enabledModules ?? data.dashboardProfile.enabledModules);
+      if (!selectionTouched.current) {
+        const review = { ...data.draft, reviewPreferences: { excludedTargets: data.draft.reviewPreferences?.excludedTargets ?? [], excludedEntityIds: data.draft.reviewPreferences?.excludedEntityIds ?? [], enabledModules: data.draft.reviewPreferences?.enabledModules ?? data.dashboardProfile.enabledModules } };
+        setSelected(data.draft.entities.filter((e) => reviewEntityEnabled(e, review) && canApplyEntity(data.draft, e.id)).map((e) => e.id));
+      }
     }
     return data;
   }, [endpoint]);
@@ -77,8 +87,9 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
       return;
     }
     setBusy(true);
+    if (action === "start") setStartingSource(String(extra.source ?? ""));
     try {
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, revision: state?.revision, intelligenceRevision: state?.intelligenceRevision, businessType, offeringTypes: offers, edits: Object.entries(edits).map(([id, values]) => ({ id, values })), selected, resolved, confirmed, ...extra }) });
+      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, revision: state?.revision, intelligenceRevision: state?.intelligenceRevision, businessType, offeringTypes: offers, edits: Object.entries(edits).map(([id, values]) => ({ id, values })), selected, resolved, confirmed, reviewPreferences: { excludedTargets, excludedEntityIds: state?.draft.entities.filter((e) => !selected.includes(e.id)).map((e) => e.id) ?? [], enabledModules }, ...extra }) });
       const result = await response.json();
       if (!response.ok) {
         if (result.code === "unresolved_conflicts") {
@@ -98,11 +109,11 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
         throw new Error(result.error || "Veprimi nuk u përfundua.");
       }
       dirty.current = false; setEdits({}); setResolved([]); setConfirmed(false); setServerIssues([]); setHighlighted("");
-      setNotice(result.success || (action === "save" ? "Ndryshimet u ruajtën." : action === "start" ? "Analiza u nis. Mund të vazhdosh në panel ndërsa përgatitet." : "Përmbledhja u rifreskua."));
+      setNotice(result.success || (action === "save" ? "Ndryshimet u ruajtën." : action === "start" ? "Analiza u nis. Progresin mund ta ndjekësh këtu." : "Përmbledhja u rifreskua."));
       await load();
       if (action === "confirm") router.refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Veprimi dështoi."); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setStartingSource(""); }
   }
   function edit(id: string, field: string, text: string) {
     dirty.current = true;
@@ -146,8 +157,28 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
       input?.focus({ preventScroll: true });
     });
   }
+  function chooseSection(target: Target, use: boolean) {
+    if (!state || target === "profile") return;
+    dirty.current = true; selectionTouched.current = true; setConfirmed(false); setError("");
+    setExcludedTargets((current) => use ? current.filter((id) => id !== target) : [...new Set([...current, target])]);
+    setSelected((current) => [...current.filter((id) => state.draft.entities.find((e) => e.id === id)?.target !== target), ...(use ? state.draft.entities.filter((e) => e.target === target && canApplyEntity(state.draft, e.id)).map((e) => e.id) : [])]);
+    const moduleId = sectionModules[target];
+    if (moduleId) setEnabledModules((current) => normalizeEnabledModules(use ? [...current, moduleId] : current.filter((id) => id !== moduleId)));
+  }
+  function chooseModule(moduleId: ModuleId, use: boolean) {
+    dirty.current = true; selectionTouched.current = true; setConfirmed(false); setError("");
+    const next = normalizeEnabledModules(use ? [...enabledModules, moduleId] : enabledModules.filter((id) => id !== moduleId));
+    setEnabledModules(next);
+    const matchingTargets = Object.entries(sectionModules).filter(([, id]) => id === moduleId).map(([target]) => target as Target);
+    setExcludedTargets((current) => use ? current.filter((target) => !matchingTargets.includes(target)) : [...new Set([...current, ...matchingTargets])]);
+    const disabledTargets = Object.entries(sectionModules).filter(([, id]) => !next.includes(id!)).map(([target]) => target as Target);
+    setSelected((current) => current.filter((id) => !disabledTargets.includes(state!.draft.entities.find((e) => e.id === id)!.target)));
+  }
   const active = state?.jobs.some((job) => ["queued", "running"].includes(job.status)) ?? false;
+  const analyzing = active || Boolean(startingSource);
+  const step = state?.confirmedAt ? 4 : analyzing ? 2 : state?.draft.entities.length ? 3 : 1;
   const conflictGroups = state ? discoveryConflictGroups(state.draft, undefined, resolved) : [];
+  const sectionEnabled = (target: Target) => !excludedTargets.includes(target) && (!sectionModules[target] || enabledModules.includes(sectionModules[target]!));
   const pending = conflictGroups.filter((group) => selected.includes(group.entityId));
   const reviewedEntities = state?.available ? editDiscoveryDraft(state.draft, Object.entries(edits).filter(([id]) => state.draft.entities.some((entity) => entity.id === id)).map(([id, values]) => ({ id, values })), []).entities.map((entity) => entity.target === "profile" ? { ...entity, facts: entity.facts.map((fact) => fact.field === "businessType" ? { ...fact, value: businessType } : fact) } : entity) : [];
   const localIssues = entityValidationIssues(reviewedEntities.filter((entity) => selected.includes(entity.id)));
@@ -162,13 +193,17 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   return (
     <section className="discovery" aria-labelledby="discovery-title">
       <header className="discovery-header">
-        <p className="setup-eyebrow">KONFIGURIMI I BIZNESIT</p>
-        <h1 id="discovery-title">Lidh burimet. Ne përgatisim hapësirën.</h1>
+        <p className="setup-eyebrow">ONBOARDING · KONFIGURIMI I BIZNESIT</p>
+        <h1 id="discovery-title">Përgatit biznesin, hap pas hapi</h1>
         <p>Lexojmë postimet, fotot dhe website-in për të përgatitur ofertat, njohuritë dhe Agjentin. Ti kontrollon rezultatin.</p>
       </header>
-      {!state && <p role="status">Duke ngarkuar konfigurimin…</p>}
+      <ol className="discovery-stepper" aria-label="Hapat e onboarding-ut">
+        {["Lidh burimet", "Analiza", "Rishiko dhe zgjidh", "Provo Agjentin"].map((label, index) => <li key={label} aria-current={step === index + 1 ? "step" : undefined} className={step > index + 1 ? "is-done" : ""}><span>{step > index + 1 ? "✓" : index + 1}</span>{label}</li>)}
+      </ol>
+      {!state && <p role="status" className="discovery-loading"><span className="discovery-spinner" aria-hidden="true" /> Duke ngarkuar konfigurimin…</p>}
+      {analyzing && <section id="discovery-analysis" className="discovery-analysis-banner" role="status" aria-live="polite" aria-busy="true"><span className="discovery-spinner" aria-hidden="true" /><div><h2>Po analizojmë biznesin tënd</h2><p>{startingSource ? `Po nisim analizën e ${startingSource === "instagram" ? "Instagram-it" : "website-it"}.` : "Po lexojmë përmbajtjen dhe po përgatisim propozimet."} Rezultatet do të shfaqen këtu automatikisht.</p><small>Mund të largohesh nga faqja dhe të kthehesh te Onboarding. Analiza vazhdon dhe progresi ruhet.</small></div></section>}
       {state && !state.available && <p role="status">{state.error}</p>}
-      <div className="discovery-sources">
+      <div className="discovery-sources" aria-label="Hapi 1: Lidh burimet">
         <article className="panel section-pad">
           <span className="discovery-number">1</span><h2>Lidh Instagram-in</h2>
           <p>{state?.connection ? `Llogaria @${state.connection.username || "Instagram"} është e lidhur.` : "Lidh llogarinë e biznesit. Analiza nis automatikisht pas autorizimit."}</p>
@@ -189,7 +224,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
       </div>
       {state?.available && state.jobs.length > 0 && <div className="discovery-progress" aria-live="polite">
         {[latest("instagram"), latest("website")].filter((job): job is Job => Boolean(job)).map((job) => <article className="panel section-pad" key={job.id}>
-          <strong>{job.source === "instagram" ? "Instagram · postime dhe foto" : "Website"}</strong>
+          <div className="discovery-job-heading">{["queued", "running"].includes(job.status) && <span className="discovery-spinner" aria-hidden="true" />}<strong>{job.source === "instagram" ? "Instagram · postime dhe foto" : "Website"}</strong><span>{job.status === "completed" ? "✓ Përfundoi" : job.status === "failed" ? "Kërkon vëmendje" : `${job.progress}%`}</span></div>
           <p>{job.status === "failed" ? "Analiza kërkon një provë tjetër" : stageLabels[job.stage] ?? "Në pritje"}</p>
           <progress max={100} value={job.progress} aria-label={`Progresi i analizës së ${job.source}`} />
           <p className="muted-copy">{job.note}</p>
@@ -200,14 +235,15 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
         </article>)}
         {active && <p>Analiza ruhet dhe vazhdon edhe nëse largohesh nga kjo faqe.</p>}
       </div>}
-      {state?.available && state.jobs.length > 0 && state.draft.entities.length > 0 && <section className="panel section-pad discovery-review" aria-labelledby="discovery-review-title">
-        <h2 id="discovery-review-title">{state.confirmedAt ? "Konfigurimi u përgatit" : "Ja çfarë kuptuam për biznesin tënd"}</h2>
+      {state?.available && !analyzing && state.jobs.length > 0 && state.draft.entities.length > 0 && <section className="panel section-pad discovery-review" aria-labelledby="discovery-review-title">
+        <h2 id="discovery-review-title">{state.confirmedAt ? "Konfigurimi u përgatit" : "Rishiko dhe zgjidh çfarë do të përdorësh"}</h2>
         {state.confirmedAt ? <>
-          <p>Ofertat e përzgjedhura dhe udhëzimet u ruajtën. Produktet me çmim dhe template të vlefshëm u konfiguruan; të tjerat mund t’i përfundosh nga paneli.</p>
+          <p>U ruajtën elementet e përzgjedhura dhe zgjedhjet e seksioneve. Propozimet që përjashtove mbeten jashtë këtij konfigurimi. Provo Agjentin përpara përdorimit real.</p>
           <Link className="btn btn-primary" href={`${home}/agents/test`}>Provo Agjentin →</Link>
           <Link className="btn btn-ghost" href={home}>Shko në panel</Link>
+          <Link className="soft-link" href={`${home}/settings#modules`}>Ndrysho seksionet që përdor në panel →</Link>
         </> : <>
-          <p>Konfigurimi është një propozim. Hiq elementet që nuk dëshiron dhe korrigjo çfarë nevojitet. Çmimet e lexuara nga postimet mund të jenë oferta të vjetra.</p>
+          <p>Analiza krijon propozime. Mund të çaktivizosh një seksion të tërë ose të përzgjedhësh vetëm disa elemente. Seksionet e çaktivizuara nuk shtohen nga analiza. Çmimet e gjetura duhen kontrolluar.</p>
           <fieldset disabled={busy || active}>
             {pending.length > 0 && <section className="discovery-conflict-summary" aria-labelledby="discovery-conflict-title">
               <h3 id="discovery-conflict-title">{pending.length === 1 ? "1 fushë kërkon një zgjedhje" : `${pending.length} fusha kërkojnë një zgjedhje`}</h3>
@@ -237,9 +273,11 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
                 <input type="checkbox" checked={offers.includes(id)} onChange={() => { dirty.current = true; setOffers((current) => current.includes(id) ? current.filter((v) => v !== id) : ["services", "mixed"].includes(id) ? [id] : [...current.filter((v) => !["services", "mixed"].includes(v)), id]); setConfirmed(false); }} /> {label}
               </label>)}</div></div>
             </div>
-            <div className="discovery-entities">{state.draft.entities.map((entity) => <details key={entity.id} className={`discovery-entity${pending.some((group) => group.entityId === entity.id) ? " has-conflicts" : ""}${validationIssues.some((issue) => issue.entityId === entity.id) ? " has-errors" : ""}${highlighted === entity.id ? " is-highlighted" : ""}`} open={expanded[entity.id] ?? false} ref={(element) => { if (element) entityCards.current.set(entity.id, element); else entityCards.current.delete(entity.id); }} onToggle={(event) => { const open = event.currentTarget.open; setExpanded((current) => current[entity.id] === open ? current : { ...current, [entity.id]: open }); }}>
+            <div className="discovery-entities">{reviewSections.filter((section) => state.draft.entities.some((entity) => entity.target === section.target)).map((section) => <section className={`discovery-review-group${!sectionEnabled(section.target) ? " is-excluded" : ""}`} key={section.target} aria-label={section.label}>
+              <header className="discovery-group-header"><div><h3>{section.label}</h3><p>{section.description}</p><small>{state.draft.entities.filter((e) => e.target === section.target).length} elemente · {sectionEnabled(section.target) ? "Mund t’i përzgjedhësh më poshtë" : "Nuk do të përdoret nga kjo analizë"}</small></div>{section.target === "profile" ? <span className="discovery-required">Informacioni bazë</span> : <label className="discovery-section-switch"><input type="checkbox" checked={sectionEnabled(section.target)} onChange={(event) => chooseSection(section.target, event.target.checked)} /> Përdor këtë seksion</label>}</header>
+              {sectionEnabled(section.target) && state.draft.entities.filter((entity) => entity.target === section.target).map((entity) => <details key={entity.id} className={`discovery-entity${pending.some((group) => group.entityId === entity.id) ? " has-conflicts" : ""}${validationIssues.some((issue) => issue.entityId === entity.id) ? " has-errors" : ""}${highlighted === entity.id ? " is-highlighted" : ""}`} open={expanded[entity.id] ?? false} ref={(element) => { if (element) entityCards.current.set(entity.id, element); else entityCards.current.delete(entity.id); }} onToggle={(event) => { const open = event.currentTarget.open; setExpanded((current) => current[entity.id] === open ? current : { ...current, [entity.id]: open }); }}>
               <summary><span><strong>{entity.target === "agent" ? "Udhëzimet e Agjentit" : (edits[entity.id]?.name ?? (value(entity, "name") || value(entity, "title") || labels[entity.target]))}</strong><small>{labels[entity.target]}{!canApplyEntity(state.draft, entity.id) ? " · ka të dhëna për të plotësuar" : ""}</small>{validationIssues.some((issue) => issue.entityId === entity.id) && <small className="discovery-field-error">Kërkon korrigjim</small>}{conflictGroups.some((group) => group.entityId === entity.id) && <small className="discovery-conflict-badge">{conflictGroups.filter((group) => group.entityId === entity.id).length} {conflictGroups.filter((group) => group.entityId === entity.id).length === 1 ? "fushë" : "fusha"} me mospërputhje</small>}</span><span>{selected.includes(entity.id) ? "Përzgjedhur" : "Për më vonë"}</span></summary>
-              <label className="discovery-select"><input type="checkbox" checked={selected.includes(entity.id)} onChange={() => { selectionTouched.current = true; setSelected((current) => current.includes(entity.id) ? current.filter((id) => id !== entity.id) : [...current, entity.id]); setConfirmed(false); setError(""); }} /> Përfshije në konfigurim</label>
+              {entity.target !== "profile" && <label className="discovery-select"><input type="checkbox" checked={selected.includes(entity.id)} onChange={() => { selectionTouched.current = true; setSelected((current) => current.includes(entity.id) ? current.filter((id) => id !== entity.id) : [...current, entity.id]); dirty.current = true; setConfirmed(false); setError(""); }} /> Përfshije në konfigurim</label>}
               {conflictGroups.filter((group) => group.entityId === entity.id).map((group) => <div className="discovery-conflict" key={group.key}>
                 <strong>Zgjidh: {labels[group.field] ?? group.field}</strong>
                 <p>Vlera aktuale: {group.current.value}</p>
@@ -263,7 +301,12 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
                   {fact?.evidence && <small className="discovery-evidence">{fact.evidenceKind === "recommendation" ? "Rekomandim" : fact.evidenceKind === "visual" ? "Vëzhgim nga foto" : fact.evidenceKind === "ocr" ? "Tekst nga foto" : "Nga burimi"}: {fact.evidence}{fact.confidence < 0.8 ? " · kontrolloje me kujdes" : ""}</small>}
                 </label>;
               })}
-            </details>)}</div>
+            </details>)}
+            </section>)}</div>
+            <section className="discovery-module-choice" aria-labelledby="discovery-modules-title"><h3 id="discovery-modules-title">Cilat seksione dëshiron në panel?</h3><p>Propozimet nuk aktivizojnë çdo seksion. Zgjidh çfarë të duhet; mund t’i ndryshosh më vonë te Cilësimet. Kur heq një seksion, hiqen edhe seksionet që varen prej tij.</p><div className="discovery-module-grid">{toggleableModules.map((id) => {
+              const allowed = canEnableModule(id, new Set(enabledModules));
+              return <label key={id}><input type="checkbox" checked={enabledModules.includes(id)} disabled={!enabledModules.includes(id) && !allowed.ok} onChange={(event) => chooseModule(id, event.target.checked)} /><span><strong>{moduleRegistry[id].label}</strong><small>{!allowed.ok ? allowed.reason : moduleRegistry[id].description}</small></span></label>;
+            })}</div></section>
             {dirty.current && <p className="muted-copy">Ruaj korrigjimet për të parë konfigurimin e përditësuar përpara konfirmimit.</p>}
             {pending.length > 0 && <p className="discovery-conflict-badge" role="status">{pending.length === 1 ? "Zgjidh fushën e shënuar më sipër" : `Zgjidh ${pending.length} fushat e shënuara më sipër`} përpara konfirmimit.</p>}
             {validationIssues.length > 0 && <div className="discovery-validation-jump" role="status"><span>{validationIssues.length} {validationIssues.length === 1 ? "fushë kërkon korrigjim" : "fusha kërkojnë korrigjim"}.</span><button type="button" className="btn btn-ghost" onClick={() => revealEntity(validationIssues[0].entityId, validationIssues[0].field)}>Shko te fusha problematike ↑</button></div>}

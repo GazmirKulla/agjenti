@@ -4,11 +4,10 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { enqueueDiscovery, runDiscoveryQueue } from "@/lib/discovery/queue";
 import { answersFor, mergedReview, signalsFor, withSetupRecommendations } from "@/lib/discovery/proposal";
-import { discoveryConflictGroups, editDiscoveryDraft, jobProgress } from "@/lib/discovery/review";
+import { discoveryConflictGroups, editDiscoveryDraft, editReviewPreferences, jobProgress, reviewDashboardProfile, reviewEntityEnabled } from "@/lib/discovery/review";
 import { emptyDraft, EntityValidationError, labels, validateForApply, value, type Draft } from "@/lib/business-intelligence/model";
 import type { DashboardSignals } from "@/lib/dashboard/modules/types";
 import { seedDraft } from "@/lib/business-intelligence/state";
-import { generateDashboardProfile } from "@/lib/dashboard/profile/generate";
 import { parseDashboardProfile } from "@/lib/dashboard/profile/service";
 import { businessProfiles, allowedOfferings } from "@/lib/onboarding/rules";
 
@@ -54,7 +53,11 @@ export async function GET(request: Request) {
     ]);
     if (state.error || jobs.error) return json({ available: false, error: "Konfigurimi automatik kërkon përditësimin e databazës. Mund të vazhdosh nga paneli." });
     if (connection.error || intelligence.error) throw new Error("discovery_unavailable");
-    return json({ available: true, connection: connection.data, draft: reviewDraft(state.data, intelligence.data), signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null,
+    const draft = reviewDraft(state.data, intelligence.data);
+    const signals = signalsFor(state.data?.signals?.businessType, state.data?.signals?.offeringTypes);
+    const prior = state.data?.baseline?.business?.dashboard_profile;
+    const dashboardProfile = reviewDashboardProfile(draft, signals, prior?.source === "manual" ? parseDashboardProfile(prior) : null);
+    return json({ available: true, connection: connection.data, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null,
       jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
     });
   } catch (error) { return failure(error); }
@@ -86,6 +89,7 @@ export async function POST(request: Request) {
       if (snap.error) throw new Error("discovery_unavailable");
       draft = mergedReview(seedDraft(snap.data), draft);
     } else draft = editDiscoveryDraft(draft, body.edits ?? [], body.resolved ?? []);
+    draft = editReviewPreferences(draft, body.reviewPreferences);
     const type = body.businessType ?? state.data.signals?.businessType ?? "other";
     const offers = body.offeringTypes ?? state.data.signals?.offeringTypes ?? [];
     if (typeof type !== "string" || !Object.hasOwn(businessProfiles, type) || !Array.isArray(offers) || offers.some((v) => typeof v !== "string" || !allowedOfferings(type).some(([id]) => id === v))) throw new Error("invalid_request");
@@ -102,6 +106,7 @@ export async function POST(request: Request) {
       return json({ saved: true });
     }
     if (body.action !== "confirm" || body.confirmed !== true || !Array.isArray(body.selected) || body.selected.some((id) => typeof id !== "string" || !draft.entities.some((e) => e.id === id))) throw new Error("invalid_request");
+    if (body.selected.some((id) => !reviewEntityEnabled(draft.entities.find((e) => e.id === id)!, draft))) throw new Error("invalid_request");
     const ids = new Set(body.selected as string[]);
     const conflicts = discoveryConflictGroups(draft, [...ids]);
     if (conflicts.length) {
@@ -117,7 +122,7 @@ export async function POST(request: Request) {
     const answers = { ...answersFor(profile ? value(profile, "name") || business.name : business.name, signals, draft), onboardingMode: "sources" };
     const priorProfile = state.data.baseline?.business?.dashboard_profile;
     const manualProfile = priorProfile?.source === "manual" ? parseDashboardProfile(priorProfile) : null;
-    const generated = manualProfile ? { ...manualProfile, signals } : generateDashboardProfile(signals);
+    const generated = reviewDashboardProfile(draft, signals, manualProfile);
     const applied = await db.rpc("confirm_business_discovery", { p_business: business.id, p_user: user.id, p_revision: state.data.revision, p_intelligence_revision: intelligence.data?.revision ?? 0, p_draft: draft, p_entities: entities, p_profile: generated, p_answers: answers });
     if (applied.error) {
       console.error("[discovery] confirmation failed", { code: applied.error.code ?? "unknown" });

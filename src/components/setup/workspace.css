@@ -1,0 +1,13 @@
+.dashboard-shell.setup-workspace { display: block; min-height: 100svh; }
+.setup-workspace-header { display: flex; align-items: center; gap: 16px; padding: 20px max(24px, calc((100vw - 1100px) / 2)); border-bottom: 1px solid var(--line); background: var(--paper-2); }
+.setup-workspace-header > div { flex: 1; min-width: 0; }
+.setup-workspace-header > div > strong, .setup-workspace-header > div > span { display: block; }
+.setup-workspace-header > div > span { color: var(--ink-muted); font-size: 13px; margin-top: 4px; }
+.dashboard-shell.setup-workspace .panel { background: var(--surface); }
+.dashboard-shell.setup-workspace .field { background: var(--paper-2); color: var(--ink); }
+.setup-workspace-content { max-width: 1150px; margin: 0 auto; padding: 36px 24px 60px; }
+@media (max-width: 600px) {
+  .setup-workspace-header { flex-wrap: wrap; padding: 16px; }
+  .setup-workspace-header .btn { width: 100%; }
+  .setup-workspace-content { padding: 24px 16px 40px; }
+}
