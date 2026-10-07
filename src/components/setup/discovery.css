@@ -34,7 +34,21 @@
 .discovery-conflict-summary p { line-height: 1.6; }
 .discovery-conflict-summary ul { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 0; margin: 16px 0; list-style: none; }
 .discovery-conflict-summary li button { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-align: left; }
-.discovery-entity.has-conflicts { border-color: var(--line-strong); }
+.discovery-entity.has-conflicts, .discovery-entity.has-errors { border: 2px solid var(--danger); background: var(--danger-soft); }
+.discovery-entity.is-highlighted { outline: 3px solid var(--accent); outline-offset: 4px; }
+.discovery-invalid-field { padding: 12px; border-radius: 8px; border: 1px solid var(--danger); background: var(--danger-soft); scroll-margin-block: 100px; }
+.discovery .discovery-invalid-field .field { border: 2px solid var(--danger); }
+.discovery-field-error { color: var(--danger); font-size: 13px; font-weight: 600; line-height: 1.6; }
+.discovery-entity summary .discovery-field-error { color: var(--danger); }
+.discovery-validation-summary { background: var(--danger-soft); border: 2px solid var(--danger); border-radius: 12px; padding: 20px; margin-bottom: 24px; overflow-wrap: anywhere; }
+.discovery-validation-summary h3 { font-size: 18px; margin-bottom: 10px; }
+.discovery-validation-summary p { line-height: 1.6; }
+.discovery-validation-summary ul { padding-left: 20px; margin-top: 12px; }
+.discovery-validation-summary li { margin-top: 12px; }
+.discovery-validation-summary button { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-align: left; }
+.discovery-validation-jump { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px; margin-top: 24px; border: 1px solid var(--danger); border-radius: 8px; background: var(--danger-soft); }
+.discovery-currency-fix { justify-self: start; }
+.discovery-recovery { outline: 2px solid var(--danger); outline-offset: 3px; }
 .discovery-entity summary > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .discovery-entity summary .discovery-conflict-badge, .discovery-conflict-badge { color: var(--danger); font-weight: 600; }
 .discovery-confirm { display: flex; align-items: flex-start; gap: 12px; margin: 28px 0 18px; line-height: 1.6; }

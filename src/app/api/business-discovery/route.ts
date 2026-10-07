@@ -5,7 +5,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { enqueueDiscovery, runDiscoveryQueue } from "@/lib/discovery/queue";
 import { answersFor, mergedReview, signalsFor, withSetupRecommendations } from "@/lib/discovery/proposal";
 import { discoveryConflictGroups, editDiscoveryDraft, jobProgress } from "@/lib/discovery/review";
-import { emptyDraft, labels, validateForApply, value, type Draft } from "@/lib/business-intelligence/model";
+import { emptyDraft, EntityValidationError, labels, validateForApply, value, type Draft } from "@/lib/business-intelligence/model";
 import type { DashboardSignals } from "@/lib/dashboard/modules/types";
 import { seedDraft } from "@/lib/business-intelligence/state";
 import { generateDashboardProfile } from "@/lib/dashboard/profile/generate";
@@ -119,7 +119,10 @@ export async function POST(request: Request) {
     const manualProfile = priorProfile?.source === "manual" ? parseDashboardProfile(priorProfile) : null;
     const generated = manualProfile ? { ...manualProfile, signals } : generateDashboardProfile(signals);
     const applied = await db.rpc("confirm_business_discovery", { p_business: business.id, p_user: user.id, p_revision: state.data.revision, p_intelligence_revision: intelligence.data?.revision ?? 0, p_draft: draft, p_entities: entities, p_profile: generated, p_answers: answers });
-    if (applied.error) throw new Error(applied.error.message);
+    if (applied.error) {
+      console.error("[discovery] confirmation failed", { code: applied.error.code ?? "unknown" });
+      throw new Error(applied.error.message);
+    }
     revalidatePath(`/b/${business.slug}`, "layout");
     return json({ confirmed: true, success: "Konfigurimi u ruajt. Provo Agjentin përpara aktivizimit të përgjigjeve automatike." });
   } catch (error) { return failure(error); }
@@ -136,6 +139,9 @@ function reviewDraft(state: { draft: Draft; intelligence_revision: number; basel
 }
 
 function failure(error: unknown) {
+  if (error instanceof EntityValidationError) {
+    return json({ code: "validation_failed", error: "Korrigjo fushat e shënuara përpara konfirmimit.", issues: error.issues }, 400);
+  }
   const message = error instanceof Error ? error.message : "";
   const errors: Record<string, string> = {
     unauthorized: "Nuk ke qasje në këtë biznes.", stale_draft: "Konfigurimi ndryshoi. Rifresko përmbledhjen dhe provo përsëri.",
@@ -144,5 +150,6 @@ function failure(error: unknown) {
     unresolved_conflicts: "Zgjidh mospërputhjet e elementeve të përzgjedhura.", invalid_request: "Kontrollo të dhënat e kërkesës.",
     discovery_unavailable: "Konfigurimi nuk u ngarkua. Kontrollo lidhjen dhe migrimin e databazës.",
   };
-  return json({ error: errors[message] ?? "Veprimi nuk u përfundua. Kontrollo fushat e kërkuara dhe provo përsëri." }, message === "unauthorized" ? 403 : 400);
+  // Unknown failures may originate in storage, not in a user's fields.
+  return json({ code: Object.hasOwn(errors, message) ? message : "save_failed", error: errors[message] ?? "Konfigurimi nuk u ruajt. Provo përsëri; nëse vazhdon, kontakto mbështetjen." }, message === "unauthorized" ? 403 : 400);
 }

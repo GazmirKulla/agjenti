@@ -5,6 +5,8 @@ import {
   mergeDraft,
   validateForApply,
   value,
+  entityValidationIssues,
+  EntityValidationError,
 } from "./model";
 const entity = (source: "audio" | "website" | "manual", price: string) =>
   parseEntities(
@@ -28,6 +30,34 @@ const entity = (source: "audio" | "website" | "manual", price: string) =>
     `Puzzle ${price} EUR`,
   )[0];
 describe("shared business intelligence", () => {
+  it("reports the exact invalid fields of an existing draft, including Lek currency", () => {
+    const e = entity("manual", "-5");
+    e.facts.find((f) => f.field === "currency")!.value = "Lek";
+    expect(entityValidationIssues([e])).toEqual([
+      { entityId: e.id, field: "price", message: expect.any(String) },
+      { entityId: e.id, field: "currency", message: expect.stringContaining("ALL për Lek") },
+    ]);
+    expect(() => validateForApply([e])).toThrow(EntityValidationError);
+    e.facts.find((f) => f.field === "price")!.value = "790";
+    e.facts.find((f) => f.field === "currency")!.value = "ALL";
+    expect(entityValidationIssues([e])).toEqual([]);
+  });
+  it("normalizes explicit currency names from source evidence without inventing unknown currencies", () => {
+    for (const [input, expected] of [["Lek", "ALL"], ["lekë", "ALL"], ["eur", "EUR"], ["Euro", "EUR"], ["usd", "USD"], ["$", "$"]]) {
+      const e = parseEntities([{ target: "product", facts: [{ field: "currency", value: input, evidence: input }] }], "instagram", "test", input)[0];
+      expect(value(e, "currency")).toBe(expected);
+      expect(e.facts[0].evidence).toBe(input);
+    }
+    const unsupported = parseEntities([{ target: "product", facts: [{ field: "currency", value: "Lek", evidence: "missing" }] }], "instagram", "test", "790")[0];
+    expect(value(unsupported, "currency")).toBe("");
+  });
+  it("returns all missing fields and rejects numeric syntax PostgreSQL cannot store", () => {
+    const e = entity("manual", "5");
+    e.facts = e.facts.filter((f) => !["price", "currency"].includes(f.field));
+    expect(entityValidationIssues([e]).map((issue) => issue.field)).toEqual(["price", "currency"]);
+    expect(entityValidationIssues([entity("manual", "0x10")])[0].field).toBe("price");
+    expect(entityValidationIssues([entity("manual", "0")])).toEqual([]);
+  });
   it("preserves existing and user-confirmed facts, creates conflicts without source priority", () => {
     const a = entity("website", "5");
     a.facts.forEach((f) => (f.confirmedByUser = true));

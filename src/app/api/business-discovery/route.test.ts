@@ -31,6 +31,36 @@ beforeEach(() => {
   });
 });
 describe("discovery API boundary", () => {
+  it("returns field issues for the existing Lek draft before calling the confirmation RPC", async () => {
+    const e = state.draft.entities[0];
+    e.facts.find((fact) => fact.field === "currency")!.value = "Lek";
+    e.facts.find((fact) => fact.field === "price")!.value = "-2";
+    const response = await POST(request({ action: "confirm", revision: 2, intelligenceRevision: 0, selected: [e.id], confirmed: true }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "validation_failed", issues: [{ entityId: e.id, field: "price" }, { entityId: e.id, field: "currency" }] });
+    expect(m.rpc).not.toHaveBeenCalled();
+  });
+  it("reports missing fields only for selected entities and allows saving a partial correction", async () => {
+    const e = product(""); state.draft.entities.push(e);
+    const payload = { action: "confirm", revision: 2, intelligenceRevision: 0, selected: [e.id], confirmed: true };
+    const response = await POST(request(payload));
+    expect(await response.json()).toMatchObject({ code: "validation_failed", issues: [{ entityId: e.id, field: "price" }] });
+    expect(m.rpc).not.toHaveBeenCalled();
+    expect((await POST(request({ ...payload, action: "save", edits: [{ id: e.id, values: { currency: "ALL" } }] }))).status).toBe(200);
+    expect(m.rpc.mock.calls[0][0]).toBe("save_business_discovery");
+  });
+  it("distinguishes changed platform data from storage failures without exposing database details", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const payload = { action: "confirm", revision: 2, intelligenceRevision: 0, selected: [state.draft.entities[0].id], confirmed: true };
+    m.rpc.mockResolvedValue({ error: { code: "P0001", message: "platform_changed" } });
+    expect(await (await POST(request(payload))).json()).toMatchObject({ code: "platform_changed", error: expect.stringContaining("Rifresko nga paneli") });
+    m.rpc.mockResolvedValue({ error: { code: "23505", message: "PRIVATE DATABASE DETAIL" } });
+    const response = await (await POST(request(payload))).json();
+    expect(response.code).toBe("save_failed");
+    expect(JSON.stringify(response)).not.toContain("PRIVATE DATABASE DETAIL");
+    expect(JSON.stringify(log.mock.calls)).not.toContain("PRIVATE DATABASE DETAIL");
+    log.mockRestore();
+  });
   it("rejects unauthenticated, cross-tenant and cross-origin requests before queuing", async () => {
     m.user.mockResolvedValue(null);
     expect((await POST(request({ action: "start", source: "instagram" }))).status).toBe(403);

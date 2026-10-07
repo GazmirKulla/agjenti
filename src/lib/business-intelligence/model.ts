@@ -237,6 +237,7 @@ export function parseEntities(
           ? f.value.trim() || null
           : null
         : null;
+      if (f.field === "currency" && v) v = normalizeCurrency(v);
       if (
         f.field === "businessType" &&
         v &&
@@ -281,43 +282,74 @@ export function parseEntities(
     );
   return entities;
 }
-export function validateForApply(entities: Entity[]) {
-  if (!entities.length || entities.length > 60)
-    throw new Error("Zgjidh të paktën një element.");
+export type EntityValidationIssue = { entityId: string; field: string; message: string };
+
+// Preserve unknown values for review; only unambiguous names/codes are mapped.
+export function normalizeCurrency(text: string) {
+  const trimmed = text.trim();
+  if (/^(lek|lekë|leke|all)$/i.test(trimmed)) return "ALL";
+  if (/^(euro|euros|eur)$/i.test(trimmed)) return "EUR";
+  return /^[a-z]{3}$/i.test(trimmed) ? trimmed.toUpperCase() : trimmed;
+}
+
+export class EntityValidationError extends Error {
+  constructor(public issues: EntityValidationIssue[]) {
+    super(issues[0]?.message ?? "Kontrollo fushat e kërkuara.");
+    this.name = "EntityValidationError";
+  }
+}
+
+export function entityValidationIssues(entities: Entity[]): EntityValidationIssue[] {
+  const issues: EntityValidationIssue[] = [];
   for (const e of entities) {
     if (!targets.includes(e.target)) throw new Error("Lloj i pavlefshëm.");
+    const add = (field: string, message: string) => {
+      if (!issues.some((issue) => issue.entityId === e.id && issue.field === field)) issues.push({ entityId: e.id, field, message });
+    };
     for (const f of e.facts)
       if (
         !(fields[e.target] as readonly string[]).includes(f.field) ||
         (f.value !== null &&
           (typeof f.value !== "string" || f.value.length > 8000))
       )
-        throw new Error("Fushë e pavlefshme.");
-    if (
-      withMissing({ ...emptyDraft(), entities: [e] }).missingInformation.length
-    )
-      throw new Error("Plotëso fushat e kërkuara përpara ruajtjes.");
+        add(f.field, "Fushë e pavlefshme (deri në 8000 karaktere).");
+    for (const key of withMissing({ ...emptyDraft(), entities: [e] }).missingInformation) {
+      const field = key.slice(e.id.length + 1);
+      add(field, `Plotëso fushën ${labels[field] ?? field}.`);
+    }
     if (
       ["product", "service"].includes(e.target) &&
       value(e, "price") &&
-      (!Number.isFinite(Number(value(e, "price"))) ||
+      (!/^\d+(?:\.\d+)?$/.test(value(e, "price").trim()) ||
+        !Number.isFinite(Number(value(e, "price"))) ||
         Number(value(e, "price")) < 0)
     )
-      throw new Error("Çmimi duhet të jetë numër pozitiv.");
+      add("price", "Vendos një çmim numerik, 0 ose më të madh (p.sh. 790 ose 7.90).");
     if (value(e, "currency") && !/^[A-Z]{3}$/.test(value(e, "currency")))
-      throw new Error(
-        "Monedha duhet të jetë ALL, EUR ose kod tjetër me 3 shkronja.",
-      );
+      add("currency", "Përdor ALL për Lek, EUR për Euro, ose një kod monedhe me 3 shkronja të mëdha.");
     if (value(e, "imageUrl") && !/^https?:\/\//.test(value(e, "imageUrl")))
-      throw new Error("Fotoja duhet të jetë një link http ose https.");
+      add("imageUrl", "Fotoja duhet të jetë një link http ose https.");
+    if (e.target === "profile" && value(e, "name").trim().length > 100)
+      add("name", "Emri i biznesit duhet të ketë deri në 100 karaktere.");
     if (
       e.target === "profile" &&
       value(e, "businessType") &&
       !Object.hasOwn(businessProfiles, value(e, "businessType"))
     )
-      throw new Error("Lloji i biznesit nuk mbështetet.");
-    if (e.target === "workflow") parseSteps(value(e, "steps"));
+      add("businessType", "Lloji i biznesit nuk mbështetet.");
+    if (e.target === "workflow" && value(e, "steps").trim()) {
+      try { parseSteps(value(e, "steps")); }
+      catch (error) { add("steps", error instanceof Error ? error.message : "Kontrollo hapat e workflow-t."); }
+    }
   }
+  return issues;
+}
+
+export function validateForApply(entities: Entity[]) {
+  if (!entities.length || entities.length > 60)
+    throw new Error("Zgjidh të paktën një element.");
+  const issues = entityValidationIssues(entities);
+  if (issues.length) throw new EntityValidationError(issues);
 }
 export function parseSteps(text: string) {
   const lines = text

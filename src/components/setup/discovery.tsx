@@ -2,9 +2,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fields, labels, value, type Draft, type Entity } from "@/lib/business-intelligence/model";
+import { entityValidationIssues, fields, labels, normalizeCurrency, value, type Draft, type Entity, type EntityValidationIssue } from "@/lib/business-intelligence/model";
 import { businessProfiles, allowedOfferings } from "@/lib/onboarding/rules";
-import { canApplyEntity, discoveryConflictGroups } from "@/lib/discovery/review";
+import { canApplyEntity, discoveryConflictGroups, editDiscoveryDraft } from "@/lib/discovery/review";
 import type { DashboardSignals } from "@/lib/dashboard/modules/types";
 import "./discovery.css";
 
@@ -27,7 +27,12 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   const [resolved, setResolved] = useState<string[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [serverIssues, setServerIssues] = useState<EntityValidationIssue[]>([]);
+  const [highlighted, setHighlighted] = useState("");
+  const [recovery, setRecovery] = useState(false);
   const entityCards = useRef(new Map<string, HTMLDetailsElement>());
+  const fieldInputs = useRef(new Map<string, HTMLTextAreaElement | HTMLSelectElement>());
+  const refreshButton = useRef<HTMLButtonElement>(null);
   const dirty = useRef(false);
   const selectionTouched = useRef(false);
   const resumePending = useRef(false);
@@ -65,7 +70,13 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   }, [endpoint, load]);
 
   async function run(action: string, extra: Record<string, unknown> = {}) {
-    setBusy(true); setError(""); setNotice("");
+    setError(""); setNotice(""); setRecovery(false);
+    if (action === "confirm" && validationIssues.length) {
+      setError("Korrigjo fushat e shënuara përpara konfirmimit.");
+      revealEntity(validationIssues[0].entityId, validationIssues[0].field);
+      return;
+    }
+    setBusy(true);
     try {
       const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, revision: state?.revision, intelligenceRevision: state?.intelligenceRevision, businessType, offeringTypes: offers, edits: Object.entries(edits).map(([id, values]) => ({ id, values })), selected, resolved, confirmed, ...extra }) });
       const result = await response.json();
@@ -73,11 +84,20 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
         if (result.code === "unresolved_conflicts") {
           await load();
           const id = result.conflicts?.[0]?.entityId;
-          if (typeof id === "string") revealEntity(id);
+          if (typeof id === "string") revealEntity(id, result.conflicts[0].field);
+        }
+        if (result.code === "validation_failed" && Array.isArray(result.issues)) {
+          const issues = result.issues.filter((issue: EntityValidationIssue) => typeof issue.entityId === "string" && typeof issue.field === "string" && typeof issue.message === "string");
+          setServerIssues(issues);
+          if (issues[0]) revealEntity(issues[0].entityId, issues[0].field);
+        }
+        if (result.code === "platform_changed") {
+          setRecovery(true);
+          requestAnimationFrame(() => { refreshButton.current?.scrollIntoView({ behavior: "smooth", block: "center" }); refreshButton.current?.focus({ preventScroll: true }); });
         }
         throw new Error(result.error || "Veprimi nuk u përfundua.");
       }
-      dirty.current = false; setEdits({}); setResolved([]); setConfirmed(false);
+      dirty.current = false; setEdits({}); setResolved([]); setConfirmed(false); setServerIssues([]); setHighlighted("");
       setNotice(result.success || (action === "save" ? "Ndryshimet u ruajtën." : action === "start" ? "Analiza u nis. Mund të vazhdosh në panel ndërsa përgatitet." : "Përmbledhja u rifreskua."));
       await load();
       if (action === "confirm") router.refresh();
@@ -89,6 +109,8 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
     setEdits((current) => ({ ...current, [id]: { ...current[id], [field]: text } }));
     setResolved((current) => [...new Set([...current, `${id}:${field}`])]);
     setConfirmed(false);
+    setServerIssues((current) => current.filter((issue) => issue.entityId !== id || issue.field !== field));
+    setError("");
   }
   function keepCurrent(keys: string[]) {
     dirty.current = true;
@@ -111,16 +133,26 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
     setOffers((current) => current.filter((id) => allowed.has(id)));
     const profile = state?.draft.entities.find((e) => e.target === "profile");
     if (profile) setResolved((current) => [...new Set([...current, `${profile.id}:businessType`])]);
+    if (profile) setServerIssues((current) => current.filter((issue) => issue.entityId !== profile.id || issue.field !== "businessType"));
+    setError("");
     setConfirmed(false);
   }
-  function revealEntity(id: string) {
+  function revealEntity(id: string, field?: string) {
+    setHighlighted(id);
     setExpanded((current) => ({ ...current, [id]: true }));
-    requestAnimationFrame(() => entityCards.current.get(id)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    requestAnimationFrame(() => {
+      const input = field ? fieldInputs.current.get(`${id}:${field}`) : undefined;
+      (input ?? entityCards.current.get(id))?.scrollIntoView({ behavior: "smooth", block: "center" });
+      input?.focus({ preventScroll: true });
+    });
   }
   const active = state?.jobs.some((job) => ["queued", "running"].includes(job.status)) ?? false;
   const conflictGroups = state ? discoveryConflictGroups(state.draft, undefined, resolved) : [];
   const pending = conflictGroups.filter((group) => selected.includes(group.entityId));
-  const pendingEntityIds = [...new Set(pending.map((group) => group.entityId))].join(",");
+  const reviewedEntities = state?.available ? editDiscoveryDraft(state.draft, Object.entries(edits).filter(([id]) => state.draft.entities.some((entity) => entity.id === id)).map(([id, values]) => ({ id, values })), []).entities.map((entity) => entity.target === "profile" ? { ...entity, facts: entity.facts.map((fact) => fact.field === "businessType" ? { ...fact, value: businessType } : fact) } : entity) : [];
+  const localIssues = entityValidationIssues(reviewedEntities.filter((entity) => selected.includes(entity.id)));
+  const validationIssues = [...localIssues, ...serverIssues.filter((issue) => selected.includes(issue.entityId) && !localIssues.some((local) => local.entityId === issue.entityId && local.field === issue.field))];
+  const pendingEntityIds = [...new Set([...pending, ...validationIssues].map((group) => group.entityId))].join(",");
   useEffect(() => {
     if (pendingEntityIds) setExpanded((current) => ({ ...current, ...Object.fromEntries(pendingEntityIds.split(",").map((id) => [id, true])) }));
   }, [pendingEntityIds]);
@@ -182,13 +214,22 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
               <p>Burimet dhanë versione të ndryshme. Zgjidh vlerën që dëshiron, korrigjo fushën, ose lëre elementin për më vonë.</p>
               <ul>{pending.map((group) => {
                 const entity = state.draft.entities.find((e) => e.id === group.entityId)!;
-                return <li key={group.key}><button type="button" onClick={() => revealEntity(entity.id)}>{value(entity, "name") || value(entity, "title") || labels[entity.target]} · {labels[group.field] ?? group.field}</button></li>;
+                return <li key={group.key}><button type="button" onClick={() => revealEntity(entity.id, group.field)}>{value(entity, "name") || value(entity, "title") || labels[entity.target]} · {labels[group.field] ?? group.field}</button></li>;
               })}</ul>
               <button type="button" className="btn btn-ghost" onClick={() => keepCurrent(pending.map((group) => group.key))}>Mbaj vlerat aktuale të këtyre fushave</button>
             </section>}
+            {validationIssues.length > 0 && <section className="discovery-validation-summary" aria-labelledby="discovery-validation-title">
+              <h3 id="discovery-validation-title">{validationIssues.length === 1 ? "1 fushë pengon konfirmimin" : `${validationIssues.length} fusha pengojnë konfirmimin`}</h3>
+              <p>Kartat dhe fushat përkatëse janë shënuar me të kuqe. Korrigjoji dhe ruaj ndryshimet, ose lëri elementet për më vonë.</p>
+              <ul>{validationIssues.map((issue) => {
+                const entity = reviewedEntities.find((e) => e.id === issue.entityId);
+                if (!entity) return null;
+                return <li key={`${issue.entityId}:${issue.field}`}><button type="button" onClick={() => revealEntity(issue.entityId, issue.field)}>{value(entity, "name") || value(entity, "title") || labels[entity.target]} · {labels[issue.field] ?? issue.field}</button><p>{issue.message}</p></li>;
+              })}</ul>
+            </section>}
             <div className="discovery-classification">
               <label className="form-label">Lloji i biznesit
-                <select className="field" value={businessType} onChange={(e) => changeBusinessType(e.target.value)}>
+                <select className="field" value={businessType} ref={(element) => { const profile = state.draft.entities.find((e) => e.target === "profile"); if (profile && element) fieldInputs.current.set(`${profile.id}:businessType`, element); }} onChange={(e) => changeBusinessType(e.target.value)}>
                   {Object.entries(businessProfiles).map(([id, profile]) => <option value={id} key={id}>{profile.label}</option>)}
                 </select>
               </label>
@@ -196,9 +237,9 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
                 <input type="checkbox" checked={offers.includes(id)} onChange={() => { dirty.current = true; setOffers((current) => current.includes(id) ? current.filter((v) => v !== id) : ["services", "mixed"].includes(id) ? [id] : [...current.filter((v) => !["services", "mixed"].includes(v)), id]); setConfirmed(false); }} /> {label}
               </label>)}</div></div>
             </div>
-            <div className="discovery-entities">{state.draft.entities.map((entity) => <details key={entity.id} className={`discovery-entity${pending.some((group) => group.entityId === entity.id) ? " has-conflicts" : ""}`} open={expanded[entity.id] ?? false} ref={(element) => { if (element) entityCards.current.set(entity.id, element); else entityCards.current.delete(entity.id); }} onToggle={(event) => { const open = event.currentTarget.open; setExpanded((current) => current[entity.id] === open ? current : { ...current, [entity.id]: open }); }}>
-              <summary><span><strong>{entity.target === "agent" ? "Udhëzimet e Agjentit" : (edits[entity.id]?.name ?? (value(entity, "name") || value(entity, "title") || labels[entity.target]))}</strong><small>{labels[entity.target]}{!canApplyEntity(state.draft, entity.id) ? " · ka të dhëna për të plotësuar" : ""}</small>{conflictGroups.some((group) => group.entityId === entity.id) && <small className="discovery-conflict-badge">{conflictGroups.filter((group) => group.entityId === entity.id).length} {conflictGroups.filter((group) => group.entityId === entity.id).length === 1 ? "fushë" : "fusha"} me mospërputhje</small>}</span><span>{selected.includes(entity.id) ? "Përzgjedhur" : "Për më vonë"}</span></summary>
-              <label className="discovery-select"><input type="checkbox" checked={selected.includes(entity.id)} onChange={() => { selectionTouched.current = true; setSelected((current) => current.includes(entity.id) ? current.filter((id) => id !== entity.id) : [...current, entity.id]); setConfirmed(false); }} /> Përfshije në konfigurim</label>
+            <div className="discovery-entities">{state.draft.entities.map((entity) => <details key={entity.id} className={`discovery-entity${pending.some((group) => group.entityId === entity.id) ? " has-conflicts" : ""}${validationIssues.some((issue) => issue.entityId === entity.id) ? " has-errors" : ""}${highlighted === entity.id ? " is-highlighted" : ""}`} open={expanded[entity.id] ?? false} ref={(element) => { if (element) entityCards.current.set(entity.id, element); else entityCards.current.delete(entity.id); }} onToggle={(event) => { const open = event.currentTarget.open; setExpanded((current) => current[entity.id] === open ? current : { ...current, [entity.id]: open }); }}>
+              <summary><span><strong>{entity.target === "agent" ? "Udhëzimet e Agjentit" : (edits[entity.id]?.name ?? (value(entity, "name") || value(entity, "title") || labels[entity.target]))}</strong><small>{labels[entity.target]}{!canApplyEntity(state.draft, entity.id) ? " · ka të dhëna për të plotësuar" : ""}</small>{validationIssues.some((issue) => issue.entityId === entity.id) && <small className="discovery-field-error">Kërkon korrigjim</small>}{conflictGroups.some((group) => group.entityId === entity.id) && <small className="discovery-conflict-badge">{conflictGroups.filter((group) => group.entityId === entity.id).length} {conflictGroups.filter((group) => group.entityId === entity.id).length === 1 ? "fushë" : "fusha"} me mospërputhje</small>}</span><span>{selected.includes(entity.id) ? "Përzgjedhur" : "Për më vonë"}</span></summary>
+              <label className="discovery-select"><input type="checkbox" checked={selected.includes(entity.id)} onChange={() => { selectionTouched.current = true; setSelected((current) => current.includes(entity.id) ? current.filter((id) => id !== entity.id) : [...current, entity.id]); setConfirmed(false); setError(""); }} /> Përfshije në konfigurim</label>
               {conflictGroups.filter((group) => group.entityId === entity.id).map((group) => <div className="discovery-conflict" key={group.key}>
                 <strong>Zgjidh: {labels[group.field] ?? group.field}</strong>
                 <p>Vlera aktuale: {group.current.value}</p>
@@ -210,25 +251,33 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
               </div>)}
               {reviewFields(entity).map((field) => {
                 const fact = entity.facts.find((f) => f.field === field);
-                return <label className="form-label" key={field}>{labels[field] ?? field}
-                  {field === "businessType" ? <p>{businessProfiles[businessType as keyof typeof businessProfiles]?.label}</p> : <textarea className="field" rows={field === "rules" ? 5 : 2} maxLength={8000} value={edits[entity.id]?.[field] ?? value(entity, field)} onChange={(e) => edit(entity.id, field, e.target.value)} />}
+                const issue = validationIssues.find((issue) => issue.entityId === entity.id && issue.field === field);
+                const conflicting = pending.some((group) => group.entityId === entity.id && group.field === field);
+                const text = edits[entity.id]?.[field] ?? value(entity, field);
+                const currency = field === "currency" ? normalizeCurrency(text) : "";
+                const errorId = `discovery-error-${entity.id}-${field}`;
+                return <label className={`form-label${issue || conflicting ? " discovery-invalid-field" : ""}`} key={field}>{labels[field] ?? field}
+                  {field === "businessType" ? <p>{businessProfiles[businessType as keyof typeof businessProfiles]?.label}</p> : <textarea ref={(element) => { const key = `${entity.id}:${field}`; if (element) fieldInputs.current.set(key, element); else fieldInputs.current.delete(key); }} aria-invalid={Boolean(issue || conflicting)} aria-describedby={issue ? errorId : undefined} className="field" rows={field === "rules" ? 5 : 2} maxLength={8000} value={text} onChange={(e) => edit(entity.id, field, e.target.value)} />}
+                  {issue && <span id={errorId} className="discovery-field-error">{issue.message}</span>}
+                  {issue && currency && currency !== text && /^[A-Z]{3}$/.test(currency) && <button type="button" className="btn btn-ghost discovery-currency-fix" onClick={() => edit(entity.id, field, currency)}>Përdor {currency}{currency === "ALL" ? " (Lek)" : currency === "EUR" ? " (Euro)" : ""}</button>}
                   {fact?.evidence && <small className="discovery-evidence">{fact.evidenceKind === "recommendation" ? "Rekomandim" : fact.evidenceKind === "visual" ? "Vëzhgim nga foto" : fact.evidenceKind === "ocr" ? "Tekst nga foto" : "Nga burimi"}: {fact.evidence}{fact.confidence < 0.8 ? " · kontrolloje me kujdes" : ""}</small>}
                 </label>;
               })}
             </details>)}</div>
             {dirty.current && <p className="muted-copy">Ruaj korrigjimet për të parë konfigurimin e përditësuar përpara konfirmimit.</p>}
             {pending.length > 0 && <p className="discovery-conflict-badge" role="status">{pending.length === 1 ? "Zgjidh fushën e shënuar më sipër" : `Zgjidh ${pending.length} fushat e shënuara më sipër`} përpara konfirmimit.</p>}
+            {validationIssues.length > 0 && <div className="discovery-validation-jump" role="status"><span>{validationIssues.length} {validationIssues.length === 1 ? "fushë kërkon korrigjim" : "fusha kërkojnë korrigjim"}.</span><button type="button" className="btn btn-ghost" onClick={() => revealEntity(validationIssues[0].entityId, validationIssues[0].field)}>Shko te fusha problematike ↑</button></div>}
             <label className="discovery-confirm"><input type="checkbox" disabled={dirty.current || pending.length > 0} checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> I kontrollova elementet e përzgjedhura, përfshirë çmimet dhe propozimet nga fotot.</label>
             <div className="discovery-actions">
               <button className="btn btn-primary" disabled={dirty.current || pending.length > 0 || !confirmed || !selected.length} onClick={() => void run("confirm")}>{busy ? "Duke ruajtur…" : "Konfirmo konfigurimin →"}</button>
               <button className="btn btn-ghost" onClick={() => void run("save")}>Ruaj korrigjimet</button>
-              <button className="btn btn-ghost" onClick={() => void run("refresh")}>Rifresko nga paneli</button>
+              <button ref={refreshButton} className={`btn btn-ghost${recovery ? " discovery-recovery" : ""}`} onClick={() => void run("refresh")}>Rifresko nga paneli</button>
             </div>
           </fieldset>
           {active && <p role="status">Mund ta konfirmosh konfigurimin pasi të përfundojnë analizat.</p>}
         </>}
       </section>}
-      {error && <p className="discovery-error" role="alert">{error}</p>}
+      {error && <div className="discovery-error" role="alert"><p>{error}</p>{validationIssues.length > 0 && <button type="button" className="soft-link" onClick={() => revealEntity(validationIssues[0].entityId, validationIssues[0].field)}>Shko te fusha problematike ↑</button>}{recovery && <button type="button" className="btn btn-ghost" disabled={busy || active} onClick={() => void run("refresh")}>Rifresko nga paneli</button>}</div>}
       {notice && <p className="discovery-notice" role="status">{notice}</p>}
       <p className="discovery-footer"><Link href={home}>Vazhdo në panel; plotësoje më vonë →</Link></p>
     </section>
