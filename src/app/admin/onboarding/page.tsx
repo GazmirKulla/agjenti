@@ -14,8 +14,8 @@ export default async function AdminOnboardingPage() {
     <>
       <PageHeading
         eyebrow="PLATFORMA"
-        title="Onboarding"
-        description="Harta e lidhjeve midis hapave të wizard-it dhe pyetjeve që kushtëzojnë njëra-tjetrën."
+        title="Onboarding Flow"
+        description="Kupto se si përgjigjet e onboarding formojnë profilin e biznesit dhe konfigurimin e Agjentit."
       >
         <Link className="btn btn-ghost" href="/admin/app">
           Cilësimet e App
@@ -23,8 +23,8 @@ export default async function AdminOnboardingPage() {
       </PageHeading>
       {!settings.onboarding_enabled && (
         <p className="muted-copy mb-4">
-          Konfigurimi automatik është i fikur. Hapat më poshtë vlejnë për
-          alternativën manuale/audio kur ajo aktivizohet te App.
+          Konfigurimi automatik është i fikur. Harta më poshtë tregon hapat e
+          alternativës manuale/audio kur ajo aktivizohet te App.
         </p>
       )}
       <OnboardingLinks enabledSteps={settings.onboarding_steps} />

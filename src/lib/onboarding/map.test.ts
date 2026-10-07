@@ -7,7 +7,8 @@ import {
 } from "./map";
 
 it("lists wizard steps in dependency order", () => {
-  expect(wizardSteps().map((step) => step.key)).toEqual([
+  const steps = wizardSteps();
+  expect(steps.map((step) => step.key)).toEqual([
     "businessType",
     "productType",
     "useCases",
@@ -15,6 +16,11 @@ it("lists wizard steps in dependency order", () => {
     "productCount",
     "messageVolume",
     "teamSize",
+  ]);
+  expect(steps.find((step) => step.key === "aiMode")?.influencedBy).toEqual([
+    "businessType",
+    "productType",
+    "useCases",
   ]);
 });
 
