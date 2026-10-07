@@ -9,6 +9,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import type { BusinessProfileAnswers } from "@/lib/onboarding/rules";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import Link from "next/link";
 export default async function BusinessLayout({
   children,
   params,
@@ -22,7 +23,7 @@ export default async function BusinessLayout({
   const access = await listMemberships(user.id);
   const business = access.businesses.find((b) => b.slug === slug);
   if (!business) redirect("/auth/continue");
-  const [settings, setup, onboarding, dashboardProfile] = await Promise.all([
+  const [settings, setup, onboarding, dashboardProfile, discovery] = await Promise.all([
     getAppSettings(),
     getSetupStatus(business.id),
     createServiceSupabase()
@@ -31,8 +32,10 @@ export default async function BusinessLayout({
       .eq("business_id", business.id)
       .maybeSingle(),
     loadDashboardProfile(business.id),
+    createServiceSupabase().from("business_discovery").select("confirmed_at").eq("business_id", business.id).maybeSingle(),
   ]);
   const storedAnswers = onboarding.data?.answers;
+  const preparing = settings.onboarding_enabled && !discovery.data?.confirmed_at && (Boolean(discovery.data) || storedAnswers?.onboardingMode === "sources");
   const storedProfile =
     storedAnswers &&
     typeof storedAnswers === "object" &&
@@ -81,12 +84,12 @@ export default async function BusinessLayout({
           {settings.announcement}
         </div>
       )}
-      <SetupJourney
+      {preparing ? <div className="panel section-pad mb-6"><strong>Përgatit konfigurimin nga Instagram-i dhe website-i</strong><p className="muted-copy">Lidh burimet dhe kontrollo përmbledhjen e përgatitur për biznesin tënd.</p><Link className="soft-link" href={`/b/${slug}/setup`}>Hap konfigurimin automatik →</Link></div> : <SetupJourney
         status={setup}
         slug={slug}
         expanded={settings.checklist_enabled}
         profile={profile}
-      />
+      />}
       <BusinessIntelligencePanel slug={slug} />
       {children}
     </DashboardShell>

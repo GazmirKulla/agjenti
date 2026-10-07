@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { createBasicWorkspace } from "@/lib/onboarding/actions";
-export function BasicWorkspaceForm() {
+export function BasicWorkspaceForm({ initialName = "" }: { initialName?: string }) {
   const router = useRouter();
   return (
     <ActionForm
@@ -25,6 +25,9 @@ export function BasicWorkspaceForm() {
           minLength={2}
           maxLength={100}
           required
+          defaultValue={initialName}
+          autoComplete="organization"
+          placeholder="Si quhet biznesi yt?"
         />
       </label>
       <button className="btn btn-primary" type="submit">

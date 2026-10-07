@@ -85,6 +85,8 @@ export type Fact = {
   sourceRef: string;
   confidence: number;
   evidence: string | null;
+  evidenceKind?: "text" | "visual" | "ocr" | "recommendation";
+  imageRef?: string;
   createdAt: string;
   updatedAt: string;
   confirmedByUser: boolean;
@@ -188,6 +190,7 @@ export function parseEntities(
   source: Source,
   sourceRef: string,
   text: string,
+  images: readonly { id: string; url: string; postUrl?: string | null }[] = [],
 ): Entity[] {
   if (!Array.isArray(raw) || raw.length > 60)
     throw new Error("invalid_extraction");
@@ -218,8 +221,17 @@ export function parseEntities(
       )
         continue;
       const evidence = typeof f.evidence === "string" ? f.evidence : null;
+      const image = images.find((image) => image.id === f.imageRef);
+      const visual = Boolean(image && evidence &&
+        ["visual", "ocr"].includes(String(f.evidenceKind)));
+      // Only observable attributes may be inferred from pixels. Commercial
+      // terms require explicit text (caption or OCR), never visual guesses.
+      const visualAllowed = ["name", "description", "category", "variants", "imageUrl"]
+        .includes(f.field);
       const supported =
-        source === "manual" || !!(evidence && text.includes(evidence));
+        source === "manual" ||
+        (visual && (f.evidenceKind === "ocr" || visualAllowed)) ||
+        (f.evidenceKind !== "visual" && f.evidenceKind !== "ocr" && !!(evidence && text.includes(evidence)));
       let v = supported
         ? typeof f.value === "string"
           ? f.value.trim() || null
@@ -235,13 +247,14 @@ export function parseEntities(
         f.field === "imageUrl" &&
         v &&
         (!/^https?:\/\//.test(v) || !text.includes(v))
+        && !images.some((image) => image.url === v)
       )
         v = null;
       facts.push({
         field: f.field,
         value: v,
         source,
-        sourceRef,
+        sourceRef: visual ? image!.postUrl ?? sourceRef : sourceRef,
         confidence:
           v === null
             ? 0
@@ -249,10 +262,11 @@ export function parseEntities(
                 0,
                 Math.min(
                   1,
-                  typeof f.confidence === "number" ? f.confidence : 0,
+                  typeof f.confidence === "number" ? Math.min(f.confidence, visual ? 0.79 : 1) : 0,
                 ),
               ),
         evidence,
+        ...(visual ? { evidenceKind: f.evidenceKind as "visual" | "ocr", imageRef: image!.id } : {}),
         createdAt: now,
         updatedAt: now,
         confirmedByUser: false,

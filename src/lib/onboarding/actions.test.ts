@@ -32,6 +32,17 @@ beforeEach(() => {
   mocks.rpc.mockResolvedValue({ data: null, error: null });
 });
 describe("self-service onboarding boundary", () => {
+  it("creates the source-based workspace with only a name and a verified owner", async () => {
+    mocks.rpc.mockResolvedValue({ data: "biznes-basic", error: null });
+    const { createBasicWorkspace } = await import("./actions");
+    const form = new FormData();
+    form.set("name", "Studio");
+    form.set("user_id", "victim");
+    expect(await createBasicWorkspace(form)).toEqual({ destination: "/b/biznes-basic/setup" });
+    expect(mocks.rpc).toHaveBeenCalledWith("complete_business_onboarding", expect.objectContaining({
+      p_user_id: "verified-user", p_answers: expect.objectContaining({ name: "Studio", businessType: "", useCases: [], onboardingMode: "sources" }),
+    }));
+  });
   it("rejects unauthenticated requests without a database write", async () => {
     mocks.user.mockResolvedValue(null);
     expect((await saveOnboarding(answers, 7, true)).error).toBeTruthy();

@@ -435,6 +435,10 @@ export function answerLabel(key: AnswerKey, value: string) {
   return options.find((option) => option[0] === value)?.[1] || value;
 }
 
+export function basicInstructions(name: string) {
+  return `Je asistenti i biznesit ${name}. Përgjigju në gjuhën e klientit me ton miqësor dhe profesional. Përdor vetëm katalogun dhe njohuritë e biznesit. Mos shpik çmime, stok ose politika. Kur mungon informacioni, kërko ndihmën e stafit.`;
+}
+
 export function initialInstructions(a: Answers) {
   const business =
     answerLabel("businessType", a.businessType) || "e përgjithshme";

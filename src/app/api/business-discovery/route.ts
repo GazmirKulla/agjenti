@@ -1,0 +1,136 @@
+import { after } from "next/server";
+import { revalidatePath } from "next/cache";
+import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { createServiceSupabase } from "@/lib/supabase/service";
+import { enqueueDiscovery, runDiscoveryQueue } from "@/lib/discovery/queue";
+import { answersFor, mergedReview, signalsFor, withSetupRecommendations } from "@/lib/discovery/proposal";
+import { editDiscoveryDraft, jobProgress } from "@/lib/discovery/review";
+import { emptyDraft, validateForApply, value, type Draft } from "@/lib/business-intelligence/model";
+import { seedDraft } from "@/lib/business-intelligence/state";
+import { generateDashboardProfile } from "@/lib/dashboard/profile/generate";
+import { parseDashboardProfile } from "@/lib/dashboard/profile/service";
+import { businessProfiles, allowedOfferings } from "@/lib/onboarding/rules";
+
+export const runtime = "nodejs";
+export const maxDuration = 180;
+const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+async function authorize(request: Request) {
+  const slug = new URL(request.url).searchParams.get("slug") ?? "";
+  const user = await getSessionUser();
+  const access = user ? await requireBusinessAccess(user.id, slug) : null;
+  if (!user || !access) throw new Error("unauthorized");
+  return { user, business: access.business };
+}
+function wake(businessId: string) {
+  after(async () => { await runDiscoveryQueue(businessId).catch(() => console.error("[discovery] worker unavailable")); });
+}
+async function readBody(request: Request) {
+  const reader = request.body?.getReader();
+  if (!reader) throw new Error("invalid_request");
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.length;
+    if (bytes > 512000) { await reader.cancel(); throw new Error("invalid_request"); }
+    chunks.push(value);
+  }
+  const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("invalid_request");
+  return body as Record<string, unknown>;
+}
+
+export async function GET(request: Request) {
+  try {
+    const { business } = await authorize(request);
+    const db = createServiceSupabase();
+    const [state, jobs, connection, intelligence] = await Promise.all([
+      db.from("business_discovery").select("draft,signals,revision,intelligence_revision,confirmed_at").eq("business_id", business.id).maybeSingle(),
+      db.from("business_discovery_jobs").select("id,source,status,stage,checkpoint,error,input,created_at,next_attempt_at,leased_until").eq("business_id", business.id).order("created_at", { ascending: false }).limit(24),
+      db.from("instagram_connections").select("id,username,status").eq("business_id", business.id).eq("status", "connected").maybeSingle(),
+      db.from("business_intelligence").select("data,revision").eq("business_id", business.id).maybeSingle(),
+    ]);
+    if (state.error || jobs.error) return json({ available: false, error: "Konfigurimi automatik kërkon përditësimin e databazës. Mund të vazhdosh nga paneli." });
+    if (connection.error || intelligence.error) throw new Error("discovery_unavailable");
+    return json({ available: true, connection: connection.data, draft: reviewDraft(state.data, intelligence.data), signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null,
+      jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
+    });
+  } catch (error) { return failure(error); }
+}
+
+export async function POST(request: Request) {
+  try {
+    if (request.headers.get("origin") !== new URL(request.url).origin) throw new Error("unauthorized");
+    const { user, business } = await authorize(request);
+    const body = await readBody(request);
+    if (body.action === "resume") { wake(business.id); return json({ success: "Analiza vazhdon në background." }); }
+    if (body.action === "start") {
+      if (!["instagram", "website"].includes(String(body.source))) throw new Error("invalid_request");
+      const id = await enqueueDiscovery(business.id, user.id, body.source as "instagram" | "website", typeof body.website === "string" ? body.website : undefined, body.force === true);
+      wake(business.id);
+      return json({ id });
+    }
+    const db = createServiceSupabase();
+    const [state, intelligence] = await Promise.all([
+      db.from("business_discovery").select("*").eq("business_id", business.id).single(),
+      db.from("business_intelligence").select("data,revision").eq("business_id", business.id).maybeSingle(),
+    ]);
+    if (state.error || !state.data || intelligence.error) throw new Error("discovery_unavailable");
+    if (state.data.confirmed_at && body.action === "confirm") return json({ confirmed: true });
+    if (body.revision !== state.data.revision || body.intelligenceRevision !== (intelligence.data?.revision ?? 0)) throw new Error("stale_draft");
+    let draft = reviewDraft(state.data, intelligence.data);
+    if (body.action === "refresh") {
+      const snap = await db.rpc("intelligence_snapshot", { p_business: business.id });
+      if (snap.error) throw new Error("discovery_unavailable");
+      draft = mergedReview(seedDraft(snap.data), draft);
+    } else draft = editDiscoveryDraft(draft, body.edits ?? [], body.resolved ?? []);
+    const type = body.businessType ?? state.data.signals?.businessType ?? "other";
+    const offers = body.offeringTypes ?? state.data.signals?.offeringTypes ?? [];
+    if (typeof type !== "string" || !Object.hasOwn(businessProfiles, type) || !Array.isArray(offers) || offers.some((v) => typeof v !== "string" || !allowedOfferings(type).some(([id]) => id === v))) throw new Error("invalid_request");
+    const signals = signalsFor(type, offers);
+    draft = withSetupRecommendations(draft, signals, state.data.baseline);
+    const profile = draft.entities.find((e) => e.target === "profile");
+    if (profile) {
+      const prior = profile.facts.find((f) => f.field === "businessType");
+      if (prior) { prior.value = type; prior.confirmedByUser = true; }
+    }
+    if (body.action === "save" || body.action === "refresh") {
+      const saved = await db.rpc("save_business_discovery", { p_business: business.id, p_revision: state.data.revision, p_draft: draft, p_signals: signals, p_refresh: body.action === "refresh", p_intelligence_revision: intelligence.data?.revision ?? 0 });
+      if (saved.error || !saved.data) throw new Error("stale_draft");
+      return json({ saved: true });
+    }
+    if (body.action !== "confirm" || body.confirmed !== true || !Array.isArray(body.selected) || body.selected.some((id) => typeof id !== "string" || !draft.entities.some((e) => e.id === id))) throw new Error("invalid_request");
+    const ids = new Set(body.selected as string[]);
+    if (draft.conflicts.some((c) => ids.has(c.entityId))) throw new Error("unresolved_conflicts");
+    const entities = draft.entities.filter((e) => ids.has(e.id));
+    validateForApply(entities);
+    for (const entity of entities) for (const fact of entity.facts) fact.confirmedByUser = true;
+    const answers = { ...answersFor(profile ? value(profile, "name") || business.name : business.name, signals, draft), onboardingMode: "sources" };
+    const priorProfile = state.data.baseline?.business?.dashboard_profile;
+    const manualProfile = priorProfile?.source === "manual" ? parseDashboardProfile(priorProfile) : null;
+    const generated = manualProfile ? { ...manualProfile, signals } : generateDashboardProfile(signals);
+    const applied = await db.rpc("confirm_business_discovery", { p_business: business.id, p_user: user.id, p_revision: state.data.revision, p_intelligence_revision: intelligence.data?.revision ?? 0, p_draft: draft, p_entities: entities, p_profile: generated, p_answers: answers });
+    if (applied.error) throw new Error(applied.error.message);
+    revalidatePath(`/b/${business.slug}`, "layout");
+    return json({ confirmed: true, success: "Konfigurimi u ruajt. Provo Agjentin përpara aktivizimit të përgjigjeve automatike." });
+  } catch (error) { return failure(error); }
+}
+
+function reviewDraft(state: { draft: Draft; intelligence_revision: number } | null, intelligence: { data: Draft; revision: number } | null): Draft {
+  // Reconcile only new revisions. Replaying an old intelligence snapshot after
+  // a user correction would resurrect conflicts the user already resolved.
+  return mergedReview(state?.draft ?? emptyDraft(), !state || (intelligence?.revision ?? 0) > state.intelligence_revision ? intelligence?.data : undefined);
+}
+
+function failure(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  const errors: Record<string, string> = {
+    unauthorized: "Nuk ke qasje në këtë biznes.", stale_draft: "Konfigurimi ndryshoi. Rifresko përmbledhjen dhe provo përsëri.",
+    platform_changed: "Ke ndryshuar të dhënat në panel. Rifresko nga paneli përpara konfirmimit.",
+    busy: "Analiza po vazhdon. Prit përfundimin përpara konfirmimit.", daily_limit: "Ke arritur kufirin e analizave për sot.",
+    unresolved_conflicts: "Zgjidh mospërputhjet e elementeve të përzgjedhura.", invalid_request: "Kontrollo të dhënat e kërkesës.",
+    discovery_unavailable: "Konfigurimi nuk u ngarkua. Kontrollo lidhjen dhe migrimin e databazës.",
+  };
+  return json({ error: errors[message] ?? "Veprimi nuk u përfundua. Kontrollo fushat e kërkuara dhe provo përsëri." }, message === "unauthorized" ? 403 : 400);
+}

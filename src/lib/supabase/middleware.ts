@@ -10,6 +10,7 @@ export async function updateSession(request: NextRequest) {
     path === "/api/webhooks/meta" ||
     path.startsWith("/api/catalogs/share/") ||
     path === "/api/cron/refresh-instagram-tokens" ||
+    path === "/api/cron/business-discovery" ||
     path === "/api/instagram/oauth/callback" ||
     path === "/api/meta/data-deletion" ||
     path === "/api/meta/deauthorize" ||

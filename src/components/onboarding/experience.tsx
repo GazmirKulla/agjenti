@@ -357,7 +357,7 @@ export function OnboardingExperience({
                       </button>
                     )}
                   </div>
-                  {activeQuestions(allQuestionKeys, answers).map((question) => {
+                  {activeQuestions(enabledSteps, answers).map((question) => {
                     const field =
                       question.key === "productType"
                         ? "offeringTypes"

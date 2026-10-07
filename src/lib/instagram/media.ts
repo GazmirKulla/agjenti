@@ -7,6 +7,7 @@ export type InstagramPost = {
 	imageUrl: string | null;
 	permalink: string | null;
 	mediaType: string;
+	images?: { id: string; url: string }[];
 };
 
 export type InstagramProductCandidate = {
@@ -27,7 +28,7 @@ export type InstagramScanFrame = {
 };
 
 const FIELD_SETS = [
-	"id,caption,media_type,media_url,thumbnail_url,permalink,timestamp",
+	"id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,children{id,media_type,media_url,thumbnail_url}",
 	"id,caption,media_type,media_url,permalink",
 ];
 const PAGE_LIMIT = 25;
@@ -52,6 +53,8 @@ export function postsFromMediaPage(payload: unknown): { posts: InstagramPost[]; 
 			imageUrl: pickImage(row, mediaType),
 			permalink: typeof row.permalink === "string" ? row.permalink.slice(0, 500) : null,
 			mediaType,
+			...(mediaType === "CAROUSEL_ALBUM" && row.children && typeof row.children === "object"
+				? { images: carouselImages(row.children) } : {}),
 		});
 	}
 	return { posts, next };
@@ -119,8 +122,20 @@ export async function fetchInstagramMedia(
 		next = result.next;
 	}
 
-	const truncated = posts.length > MAX_POSTS || (posts.length >= MAX_POSTS && Boolean(next));
+	const truncated = posts.length > MAX_POSTS || Boolean(next);
 	return { posts: posts.slice(0, MAX_POSTS), truncated };
+}
+
+function carouselImages(raw: unknown): { id: string; url: string }[] {
+	const rows = (raw as { data?: unknown }).data;
+	if (!Array.isArray(rows)) return [];
+	return rows.slice(0, 10).flatMap((item) => {
+		if (!item || typeof item !== "object") return [];
+		const row = item as Record<string, unknown>;
+		const url = safeImage(pickImage(row, String(row.media_type ?? "")));
+		return typeof row.id === "string" && /^[0-9]{5,40}$/.test(row.id) && url
+			? [{ id: row.id, url }] : [];
+	});
 }
 
 function mediaUrl(fields: string, token: string): string {

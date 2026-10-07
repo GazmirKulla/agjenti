@@ -3,7 +3,7 @@ import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { homeForAccess } from "@/lib/auth/destination";
 import { getAppSettings } from "@/lib/platform/settings";
-import { emptyAnswers, parseAnswers, initialInstructions } from "./model";
+import { emptyAnswers, parseAnswers, initialInstructions, basicInstructions } from "./model";
 import { persistGeneratedProfile } from "@/lib/dashboard/profile/service";
 export type OnboardingResult = {
   error?: string;
@@ -15,6 +15,10 @@ export async function saveOnboarding(
   step: number,
   complete = false,
 ): Promise<OnboardingResult> {
+  return persistOnboarding(input, step, complete);
+}
+
+async function persistOnboarding(input: unknown, step: number, complete: boolean, basic = false): Promise<OnboardingResult> {
   try {
     const user = await getSessionUser();
     if (!user)
@@ -31,7 +35,7 @@ export async function saveOnboarding(
     try {
       parsedAnswers = parseAnswers(
         input,
-        complete && settings.onboarding_enabled,
+        complete && settings.onboarding_enabled && !basic,
         settings.onboarding_steps,
       );
     } catch (e) {
@@ -39,9 +43,9 @@ export async function saveOnboarding(
         error: e instanceof Error ? e.message : "Kontrollo përgjigjet.",
       };
     }
-    const answers = settings.onboarding_enabled
+    const answers = settings.onboarding_enabled && !basic
       ? parsedAnswers
-      : { ...emptyAnswers, name: parsedAnswers.name };
+      : { ...emptyAnswers, name: parsedAnswers.name, ...(basic ? { onboardingMode: "sources" } : {}) };
     if (complete && answers.name.length < 2)
       return { error: "Vendos emrin e biznesit (të paktën 2 karaktere)." };
     const access = await listMemberships(user.id);
@@ -64,9 +68,9 @@ export async function saveOnboarding(
       const { data, error } = await db.rpc("complete_business_onboarding", {
         p_user_id: user.id,
         p_answers: answers,
-        p_instructions: settings.onboarding_enabled
+        p_instructions: settings.onboarding_enabled && !basic
           ? initialInstructions(answers)
-          : `Je asistenti i biznesit ${answers.name}. Përgjigju në gjuhën e klientit me ton miqësor dhe profesional. Përdor vetëm katalogun dhe njohuritë e biznesit. Mos shpik çmime, stok ose politika. Kur mungon informacioni, kërko ndihmën e stafit.`,
+          : basicInstructions(answers.name),
       });
       if (error) {
         console.error("[onboarding complete]", error.code);
@@ -86,13 +90,13 @@ export async function saveOnboarding(
         if (business?.id) {
           await persistGeneratedProfile(
             business.id,
-            answers as unknown as Record<string, unknown>,
+            (basic ? { ...answers, businessType: "other", useCases: ["messages", "support"], agentCapabilities: ["reply_messages", "answer_questions", "handoff"] } : answers) as unknown as Record<string, unknown>,
           );
         }
       } catch (error) {
         console.error("[dashboard profile]", error);
       }
-      return { destination: `/b/${data}?welcome=1` };
+      return { destination: basic && settings.onboarding_enabled ? `/b/${data}/setup` : `/b/${data}?welcome=1` };
     }
     return { saved: true };
   } catch {
@@ -103,9 +107,10 @@ export async function saveOnboarding(
 }
 
 export async function createBasicWorkspace(form: FormData) {
-  return saveOnboarding(
+  return persistOnboarding(
     { ...emptyAnswers, name: String(form.get("name") ?? "") },
     7,
+    true,
     true,
   );
 }

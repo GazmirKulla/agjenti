@@ -9,6 +9,14 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe("postsFromMediaPage", () => {
+  it("extracts carousel photos and video thumbnails without treating video URLs as images", () => {
+    const { posts } = postsFromMediaPage({ data: [{ id: "123456", media_type: "CAROUSEL_ALBUM", children: { data: [
+      { id: "234567", media_type: "IMAGE", media_url: "https://cdn.example/photo.jpg" },
+      { id: "345678", media_type: "VIDEO", media_url: "https://cdn.example/video.mp4", thumbnail_url: "https://cdn.example/thumb.jpg" },
+      { id: "456789", media_type: "IMAGE", media_url: "javascript:alert(1)" },
+    ] } }] });
+    expect(posts[0].images).toEqual([{ id: "234567", url: "https://cdn.example/photo.jpg" }, { id: "345678", url: "https://cdn.example/thumb.jpg" }]);
+  });
 	it("keeps a video thumbnail and drops a next link outside Instagram", () => {
 		const page = postsFromMediaPage({
 			data: [
@@ -95,6 +103,15 @@ describe("scanFramesFromPosts", () => {
 });
 
 describe("fetchInstagramMedia", () => {
+  it("reports partial coverage when pagination stops at its page budget", async () => {
+    let calls = 0;
+    const result = await fetchInstagramMedia("token", async () => {
+      calls++;
+      return jsonResponse({ data: [{ id: String(100000 + calls), media_type: "IMAGE" }], paging: { next: "https://graph.instagram.com/v24.0/me/media?after=next" } });
+    });
+    expect(calls).toBe(4);
+    expect(result).toMatchObject({ truncated: true });
+  });
 	it("does not follow a next page outside graph.instagram.com", async () => {
 		const calls: string[] = [];
 		const fetchImpl: typeof fetch = async (input) => {

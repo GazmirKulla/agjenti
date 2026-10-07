@@ -21,7 +21,7 @@ export default async function AppSettingsPage() {
         <ActionForm action={saveAppSettings} className="grid gap-6">
           <div>
             <label className="toggle-label">
-              <span>Shfaq pyetësorin e onboarding-ut</span>
+              <span>Aktivizo konfigurimin automatik të biznesit</span>
               <input
                 className="switch-input"
                 type="checkbox"
@@ -30,15 +30,15 @@ export default async function AppSettingsPage() {
               />
             </label>
             <p className="muted-copy mt-2">
-              Për përdoruesit pa biznes. Kur është i fikur, kërkohet vetëm emri
-              i biznesit dhe krijohet hapësira me agjentin dhe përgjigjet
-              automatike të çaktivizuara. Bizneset ekzistuese nuk ndryshojnë.
+              Pas emrit, përdoruesi lidh Instagram-in dhe mund të shtojë website-in.
+              Analiza përgatit një konfigurim për rishikim. Kur është i fikur,
+              përdoruesi vazhdon konfigurimin nga paneli dhe lidhja e Instagram-it nuk nis analizë automatike.
             </p>
           </div>
           <div>
-            <p className="form-label">Hapat e pyetësorit</p>
+            <p className="form-label">Hapat e alternativës manuale</p>
             <p className="muted-copy mb-3">
-              Zgjidh cilat pyetje shfaqen gjatë regjistrimit. Emri i biznesit
+              Zgjidh cilat pyetje shfaqen kur përdoruesi zgjedh plotësimin manual ose me audio. Emri i biznesit
               mbetet gjithmonë i detyrueshëm. Hiq check-un për ta fshehur një
               hap.
             </p>

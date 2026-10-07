@@ -11,7 +11,7 @@ import { BasicWorkspaceForm } from "@/components/onboarding/basic-workspace";
 import { signOut } from "@/lib/auth/actions";
 import "./onboarding.css";
 export const metadata = { title: "Konfiguro biznesin | Agjenti.app" };
-export default async function OnboardingPage() {
+export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ manual?: string }> }) {
   const user = await getSessionUser();
   if (!user) redirect("/login?mode=signup");
   const access = await listMemberships(user.id);
@@ -48,7 +48,8 @@ export default async function OnboardingPage() {
       </main>
     );
   const settings = await getAppSettings();
-  if (!settings.onboarding_enabled)
+  const query = await searchParams;
+  if (!settings.onboarding_enabled || query.manual !== "1")
     return (
       <main className="onboarding-page">
         <section className="onboarding-unavailable">
@@ -57,10 +58,10 @@ export default async function OnboardingPage() {
           </Link>
           <h1>Krijo hapësirën e biznesit</h1>
           <p>
-            Vendos emrin e biznesit. Produktet, njohuritë dhe agjentin mund t’i
-            konfigurosh nga paneli.
+            {settings.onboarding_enabled ? "Vendos emrin, pastaj lidh Instagram-in dhe website-in nëse ke. Do të përgatisim konfigurimin nga përmbajtja e biznesit tënd." : "Vendos emrin për të krijuar hapësirën. Konfigurimin mund ta plotësosh nga paneli."}
           </p>
-          <BasicWorkspaceForm />
+          <BasicWorkspaceForm initialName={typeof data?.answers?.name === "string" ? data.answers.name : ""} />
+          {settings.onboarding_enabled && <Link className="soft-link" href="/onboarding?manual=1">Preferoj ta përshkruaj biznesin manualisht ose me audio</Link>}
           <form action={signOut}>
             <button className="btn btn-ghost">Dil nga llogaria</button>
           </form>
