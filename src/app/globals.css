@@ -3019,6 +3019,7 @@ html[data-resolved="dark"] .account-details div {
 .ob-map {
   display: grid;
   gap: 18px;
+  color: var(--ink);
 }
 .ob-legend {
   display: flex;
@@ -3038,6 +3039,7 @@ html[data-resolved="dark"] .account-details div {
   height: 9px;
   border-radius: 50%;
   background: #cf8a12;
+  flex-shrink: 0;
 }
 .ob-dot.is-on {
   background: #009b62;
@@ -3053,13 +3055,13 @@ html[data-resolved="dark"] .account-details div {
   height: 14px;
   border-radius: 4px;
   border: 2px solid var(--accent);
-  background: #f4efff;
+  background: var(--accent-soft);
 }
 .ob-stepper {
   display: flex;
   gap: 0;
   overflow-x: auto;
-  padding-bottom: 6px;
+  padding: 8px 2px 10px;
 }
 .ob-stepper-item {
   display: flex;
@@ -3076,7 +3078,9 @@ html[data-resolved="dark"] .account-details div {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fff;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
   cursor: pointer;
   transition:
     border-color 0.15s ease,
@@ -3084,15 +3088,15 @@ html[data-resolved="dark"] .account-details div {
     background 0.15s ease;
 }
 .ob-step-card:hover {
-  border-color: #c9b6ff;
+  border-color: var(--accent);
 }
 .ob-step-card.is-selected {
   border-color: var(--accent);
-  background: #f7f3ff;
-  box-shadow: 0 0 0 3px #7035ff14;
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .ob-step-card.is-disabled {
-  opacity: 0.78;
+  opacity: 0.72;
 }
 .ob-step-card-top {
   display: flex;
@@ -3108,6 +3112,7 @@ html[data-resolved="dark"] .account-details div {
 .ob-step-card strong {
   font-size: 13px;
   line-height: 1.35;
+  color: var(--ink);
 }
 .ob-step-card small {
   font-size: 11px;
@@ -3124,7 +3129,7 @@ html[data-resolved="dark"] .account-details div {
 .ob-connector-line {
   width: 100%;
   height: 2px;
-  background: #e4e7f2;
+  background: var(--line);
 }
 .ob-connector.has-link .ob-connector-line {
   background: #7d9bff;
@@ -3159,6 +3164,7 @@ html[data-resolved="dark"] .account-details div {
 .ob-explore h2 {
   font-size: 17px;
   margin-bottom: 4px;
+  color: var(--ink);
 }
 .ob-tabs {
   display: flex;
@@ -3168,9 +3174,11 @@ html[data-resolved="dark"] .account-details div {
 }
 .ob-tab {
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
+  color: var(--ink);
   border-radius: 999px;
   padding: 8px 14px;
+  font: inherit;
   font-size: 13px;
   cursor: pointer;
 }
@@ -3190,7 +3198,8 @@ html[data-resolved="dark"] .account-details div {
   border-radius: 14px;
   padding: 14px;
   min-height: 180px;
-  background: #fafbff;
+  background: var(--paper-2);
+  color: var(--ink);
 }
 .ob-flow-col-head {
   display: flex;
@@ -3209,6 +3218,7 @@ html[data-resolved="dark"] .account-details div {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.3;
+  color: var(--ink);
 }
 .ob-flow-col ul {
   list-style: none;
@@ -3221,8 +3231,9 @@ html[data-resolved="dark"] .account-details div {
   font-size: 12px;
   padding: 7px 9px;
   border-radius: 8px;
-  background: #fff;
-  border: 1px solid #eef0f7;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
 }
 .ob-flow-arrow {
   align-self: center;
@@ -3245,6 +3256,7 @@ html[data-resolved="dark"] .account-details div {
 }
 .ob-detail-title h2 {
   margin-top: 4px;
+  color: var(--ink);
 }
 .ob-detail-block {
   border-top: 1px solid var(--line);
@@ -3255,6 +3267,7 @@ html[data-resolved="dark"] .account-details div {
 .ob-detail-help h3 {
   font-size: 13px;
   margin-bottom: 10px;
+  color: var(--ink);
 }
 .ob-ref-list {
   list-style: none;
@@ -3270,7 +3283,9 @@ html[data-resolved="dark"] .account-details div {
   font-size: 13px;
   padding: 8px 10px;
   border-radius: 10px;
-  background: #f7f8fc;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
 }
 .ob-ref-index {
   font-size: 11px;
@@ -3287,26 +3302,28 @@ html[data-resolved="dark"] .account-details div {
   align-items: center;
   padding: 5px 9px;
   border-radius: 8px;
-  background: #f1f3fa;
-  color: #4a5168;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
   font-size: 11px;
   line-height: 1.3;
 }
 .ob-chip-accent {
-  background: #f0eaff;
-  color: #7132ff;
-  border: 1px solid #e0d4ff;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 .ob-chip-soft {
-  background: #eef5ff;
+  background: color-mix(in srgb, #7d9bff 12%, var(--surface));
   color: #3d6fd8;
+  border-color: color-mix(in srgb, #7d9bff 30%, var(--line));
 }
 .ob-detail-help {
   margin-top: 16px;
   padding: 14px;
   border-radius: 12px;
-  background: #f7f3ff;
-  border: 1px solid #e8ddff;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
 }
 .ob-detail-help p {
   font-size: 13px;
@@ -3327,6 +3344,88 @@ html[data-resolved="dark"] .account-details div {
 .ob-matrix-table .ob-chip-row {
   max-width: 320px;
 }
+
+html[data-resolved="dark"] .dashboard-shell .ob-step-card,
+html[data-resolved="dark"] .dashboard-shell .ob-tab,
+html[data-resolved="dark"] .dashboard-shell .ob-flow-col,
+html[data-resolved="dark"] .dashboard-shell .ob-flow-col li,
+html[data-resolved="dark"] .dashboard-shell .ob-ref-list li {
+  background: #2a2440;
+  border-color: #433a63;
+  color: #f4f0ff;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-step-card strong,
+html[data-resolved="dark"] .dashboard-shell .ob-flow-col-head p,
+html[data-resolved="dark"] .dashboard-shell .ob-section-head h2,
+html[data-resolved="dark"] .dashboard-shell .ob-detail h2,
+html[data-resolved="dark"] .dashboard-shell .ob-matrix h2,
+html[data-resolved="dark"] .dashboard-shell .ob-explore h2,
+html[data-resolved="dark"] .dashboard-shell .ob-detail-block h3,
+html[data-resolved="dark"] .dashboard-shell .ob-detail-help h3 {
+  color: #f4f0ff;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-step-card small,
+html[data-resolved="dark"] .dashboard-shell .ob-legend,
+html[data-resolved="dark"] .dashboard-shell .ob-detail-kicker,
+html[data-resolved="dark"] .dashboard-shell .ob-detail-help p {
+  color: #b3aacb;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-step-card.is-selected {
+  background: #32285a;
+  border-color: #c4a6ff;
+  box-shadow: 0 0 0 3px rgb(196 166 255 / 18%);
+}
+html[data-resolved="dark"] .dashboard-shell .ob-tab.is-active {
+  background: linear-gradient(115deg, #8b5cff, #6d3af0);
+  color: #fff;
+  border-color: transparent;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-flow-col {
+  background: #1d1830;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-chip {
+  background: #2c2444;
+  color: #e8e0ff;
+  border-color: #4a3f72;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-chip-accent {
+  background: #32285a;
+  color: #d7c4ff;
+  border-color: #5b4b86;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-chip-soft {
+  background: #1f2a44;
+  color: #9db8ff;
+  border-color: #3a4f7a;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-detail-help {
+  background: #2c2444;
+  border-color: #5b4b86;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-connector-line {
+  background: #433a63;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-connector.has-link .ob-connector-line,
+html[data-resolved="dark"] .dashboard-shell .ob-connector-back {
+  border-color: #7d9bff;
+  background: transparent;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-connector.has-link .ob-connector-line {
+  background: #7d9bff;
+}
+html[data-resolved="dark"] .dashboard-shell .ob-legend-selected {
+  background: #32285a;
+  border-color: #c4a6ff;
+}
+html[data-resolved="dark"] .dashboard-shell .status-badge.status-connected {
+  background: #143528;
+  color: #4dcf9e;
+}
+html[data-resolved="dark"] .dashboard-shell .status-badge.status-paused {
+  background: #3a2a12;
+  color: #e0b15a;
+}
+
 @media (max-width: 1100px) {
   .ob-main {
     grid-template-columns: 1fr;
