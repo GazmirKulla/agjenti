@@ -2,7 +2,7 @@ import { moduleRegistry } from "../modules/registry";
 import type { DashboardProfile, ModuleId } from "../modules/types";
 
 export type NavItem = {
-  id: ModuleId;
+  id: ModuleId | "chat-lab";
   path: string;
   label: string;
   icon: string;
@@ -41,6 +41,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
     { id: "customers", path: "businesses", label: "Bizneset", icon: "businesses" },
     { id: "products", path: "product-types", label: "Llojet", icon: "products" },
     { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
+    { id: "chat-lab", path: "chat-lab", label: "Chat Lab", icon: "spark" },
     { id: "agents", path: "onboarding", label: "Onboarding", icon: "spark" },
     { id: "settings", path: "app", label: "App", icon: "settings" },
   ];

@@ -28,6 +28,7 @@ export type WorkflowStepKind =
   | "confirm";
 
 export type WorkflowStepDef = {
+  required?: boolean;
   key: string;
   kind: WorkflowStepKind;
   label?: string;

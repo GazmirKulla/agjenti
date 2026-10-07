@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import type { TraceObserver } from "@/lib/conversations/trace";
 import {
   promptForStep,
   type ConversationStatePayload,
@@ -12,6 +13,7 @@ export function agentModel(): string {
 }
 
 export async function generateAgentReply(params: {
+  onTrace?: TraceObserver;
   instructions: string;
   state: ConversationStatePayload;
   knowledge: string;
@@ -30,6 +32,7 @@ export async function generateAgentReply(params: {
   const fallback =
     params.documentFallback || promptForStep(params.state.step_key);
   if (!process.env.OPENAI_API_KEY?.trim()) {
+    params.onTrace?.({ stage: "ai", label: "AI skipped: missing API key", status: "skipped" });
     return {
       reply: fallback,
       responseId: null,
@@ -61,8 +64,7 @@ export async function generateAgentReply(params: {
         "Write the entire customer-facing reply. Do not invent prices. Ask only for the current incomplete step.",
       ].join("\n");
 
-  try {
-    const response = await client.responses.create({
+  const request = {
       model: agentModel(),
       instructions:
         params.instructions +
@@ -71,7 +73,13 @@ export async function generateAgentReply(params: {
           : ""),
       input,
       previous_response_id: params.previousResponseId || undefined,
-    });
+    };
+  params.onTrace?.({ stage: "ai", label: "AI request sent", data: { request } });
+  try {
+    const response = await client.responses.create(request);
+    params.onTrace?.({ stage: "ai", label: "AI response received", data: {
+      response, parsed: { text: response.output_text?.trim() || null }, usage: response.usage ?? null,
+    } });
     const text = response.output_text?.trim() || fallback;
     return {
       reply: text,
@@ -80,6 +88,7 @@ export async function generateAgentReply(params: {
       fallbackReason: response.output_text?.trim() ? null : "empty_reply",
     };
   } catch (err) {
+    params.onTrace?.({ stage: "ai", label: "AI provider failed; workflow fallback used", status: "error" });
     console.error(
       "[agent] OpenAI failed:",
       err instanceof Error ? err.message : err,

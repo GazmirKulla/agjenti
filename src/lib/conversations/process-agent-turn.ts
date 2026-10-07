@@ -1,3 +1,4 @@
+import type { TraceObserver } from "./trace";
 import { retrieveBusinessSources } from "@/lib/catalogs/retrieval";
 import { rankKnowledge } from "@/lib/catalogs/source-ranking";
 import { routeIntent } from "@/lib/catalogs/ranking";
@@ -83,6 +84,9 @@ function pickProduct<T extends { id: string; name: string }>(
  * Caller is responsible for authorization and, for real turns, persistence/send.
  */
 export async function processAgentTurn(params: {
+  onTrace?: TraceObserver;
+  mode?: "production" | "test";
+  source?: "instagram" | "admin_chat_lab";
   businessId: string;
   message: string;
   hasPhoto: boolean;
@@ -91,6 +95,8 @@ export async function processAgentTurn(params: {
 }): Promise<AgentTurnResult> {
   const db = createServiceSupabase();
   const started = Date.now();
+  const trace = params.onTrace;
+  trace?.({ stage: "overview", label: "Message received", data: { input: params.message, mode: params.mode ?? "production", source: params.source ?? "instagram" } });
   const [productResult, agentResult, knowledgeResult] = await Promise.all([
     db
       .from("products")
@@ -113,8 +119,19 @@ export async function processAgentTurn(params: {
       .order("sort_order")
       .limit(1000),
   ]);
-  if (productResult.error || agentResult.error || knowledgeResult.error)
+  if (productResult.error || agentResult.error || knowledgeResult.error) {
+    trace?.({ stage: "context", label: "Business context failed to load", status: "error", data: {
+      products: productResult.error ? "failed" : "loaded",
+      instructions: agentResult.error ? "failed" : "loaded",
+      knowledge: knowledgeResult.error ? "failed" : "loaded",
+    } });
     throw new Error("Nuk u ngarkua konfigurimi i agjentit.");
+  }
+  trace?.({ stage: "tools", label: "loadBusinessContext", status: "success", data: {
+    input: { businessId: params.businessId, activeOnly: true },
+    output: { products: productResult.data?.length ?? 0, knowledge: knowledgeResult.data?.length ?? 0, agent: Boolean(agentResult.data) },
+    durationMs: Date.now() - started, readOnly: true,
+  } });
   const products = productResult.data ?? [];
   const agent = agentResult.data;
   const rankedKnowledge = rankKnowledge(
@@ -122,6 +139,12 @@ export async function processAgentTurn(params: {
     params.message,
   );
   const knowledge = rankedKnowledge.slice(0, 12).map((k) => k.entry);
+  trace?.({ stage: "context", label: "Business context loaded", data: {
+    businessId: params.businessId, instructions: agent?.instructions ?? null,
+    products, knowledge, previousState: params.state ?? emptyState(),
+    previousResponseId: params.previousResponseId ?? null,
+    history: "Production carries previous messages through previous_response_id; no local transcript or summary is loaded.",
+  } });
   let state = structuredClone(params.state ?? emptyState());
   const text = params.message.trim();
   if (state.product_id && !products.some((p) => p.id === state.product_id))
@@ -129,7 +152,9 @@ export async function processAgentTurn(params: {
   const exactProduct = products.some(
     (p) => foldText(p.name) === foldText(text) || matchesSku(p.sku, text),
   );
-  const wantsDocument = routeIntent(text) === "catalog";
+  const intent = routeIntent(text);
+  trace?.({ stage: "overview", label: "Intent routed", data: { intent, method: "Deterministic product / catalog / general router" } });
+  const wantsDocument = intent === "catalog";
   const sources =
     (exactProduct || (state.product_id && !state.fields.catalog_context)) &&
     !wantsDocument
@@ -138,6 +163,7 @@ export async function processAgentTurn(params: {
           params.businessId,
           text,
           state.fields.catalog_context,
+          ...(trace ? [trace] : []),
         );
   const service =
     !state.product_id &&
@@ -145,8 +171,11 @@ export async function processAgentTurn(params: {
     rankedKnowledge.find(
       (k) => k.entry.intent_key === "service" && k.score >= 0.7,
     );
+  trace?.({ stage: "context", label: "Context retrieval completed", data: { sources, service: service ? service.entry : null } });
   if (!sources && service) {
+    trace?.({ stage: "workflow", label: "Service information; workflow not advanced", data: { state, workflowId: null, steps: [] } });
     const generated = await generateAgentReply({
+      ...(trace ? { onTrace: trace } : {}),
       instructions: agent?.instructions || "Answer in the customer's language.",
       state,
       knowledge: "",
@@ -180,15 +209,22 @@ export async function processAgentTurn(params: {
     state.fields.catalog_context = sources.context;
     const currentProduct = products.find((p) => p.id === state.product_id);
     let currentWorkflow: string | null = null;
+    let currentWorkflowName: string | null = null;
     if (currentProduct?.workflow_id) {
       const owned = await db
         .from("workflows")
-        .select("id")
+        .select("id,name")
         .eq("business_id", params.businessId)
         .eq("id", currentProduct.workflow_id)
         .maybeSingle();
       if (owned.error) throw new Error("Nuk u ngarkua workflow.");
       currentWorkflow = owned.data?.id ?? null;
+      currentWorkflowName = owned.data?.name ?? null;
+    }
+    if (trace) {
+      // Read definitions for inspection only; the informational turn still never advances state.
+      const definition = currentWorkflow ? await db.from("workflow_steps").select("key,kind,required").eq("workflow_id", currentWorkflow).order("position") : null;
+      trace({ stage: "workflow", label: "Document information; workflow not advanced", data: { state, workflowId: currentWorkflow, workflowName: currentWorkflowName, previousStep: params.state?.step_key, steps: definition?.data ?? [], definitionError: definition?.error ? "Workflow definition unavailable" : null } });
     }
     // Document questions do not answer or advance an order workflow.
     const links = sources.documents
@@ -202,6 +238,7 @@ export async function processAgentTurn(params: {
           fallbackReason: "catalog_clarification",
         }
       : await generateAgentReply({
+      ...(trace ? { onTrace: trace } : {}),
           instructions:
             agent?.instructions || "Answer in the customer's language.",
           state,
@@ -255,6 +292,7 @@ export async function processAgentTurn(params: {
   // Type and workflow come from this tenant's product, never from client state.
   state.product_type_id = selected?.product_type_id ?? null;
   let workflowId: string | null = null;
+  let workflowName: string | null = selected ? "Default customer collection" : null;
   let steps: WorkflowStepDef[] = [
     {
       key: "collect_customer",
@@ -265,16 +303,17 @@ export async function processAgentTurn(params: {
   if (selected?.workflow_id) {
     const workflow = await db
       .from("workflows")
-      .select("id")
+      .select("id,name")
       .eq("id", selected.workflow_id)
       .eq("business_id", params.businessId)
       .maybeSingle();
     if (workflow.error) throw new Error("Nuk u ngarkua workflow.");
     if (workflow.data) {
       workflowId = workflow.data.id;
+      workflowName = workflow.data.name;
       const result = await db
         .from("workflow_steps")
-        .select("key,kind,position,config")
+        .select("key,kind,position,config,required")
         .eq("workflow_id", workflowId)
         .order("position");
       if (result.error) throw new Error("Nuk u ngarkuan hapat e workflow-t.");
@@ -283,6 +322,7 @@ export async function processAgentTurn(params: {
           const config = (s.config ?? {}) as { label?: string };
           return {
             key: s.key,
+            required: s.required !== false,
             kind: s.kind as WorkflowStepKind,
             label:
               typeof config.label === "string" && config.label.trim()
@@ -309,7 +349,12 @@ export async function processAgentTurn(params: {
     productName,
   });
 
+  trace?.({ stage: "workflow", label: "Workflow resolved", data: {
+    workflowId, workflowName, previousStep: params.state?.step_key ?? "choose_product",
+    state, steps, progress: workflowProgress, selectedProduct: selected,
+  } });
   const generated = await generateAgentReply({
+      ...(trace ? { onTrace: trace } : {}),
     instructions:
       agent?.instructions ||
       "You are a customer support agent. Write in the customer's language. Do not invent prices.",

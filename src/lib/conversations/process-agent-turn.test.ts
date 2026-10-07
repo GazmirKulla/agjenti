@@ -278,3 +278,13 @@ it("keeps an order untouched when answering a document inquiry", async () => {
   );
   expect(state.fields).toEqual({ collect_size: "M" });
 });
+
+it("captures real context and workflow without changing the production result", async () => {
+  const onTrace = vi.fn();
+  const input = { businessId: "business-a", message: "Bluzë", hasPhoto: false };
+  const production = await processAgentTurn(input);
+  const test = await processAgentTurn({ ...input, mode: "test", source: "admin_chat_lab", onTrace });
+  expect({ ...test, debug: { ...test.debug, elapsedMs: 0 } }).toEqual({ ...production, debug: { ...production.debug, elapsedMs: 0 } });
+  expect(onTrace.mock.calls.map(([event]) => event.label)).toEqual(["Message received", "loadBusinessContext", "Business context loaded", "Intent routed", "Context retrieval completed", "Workflow resolved"]);
+  expect(onTrace.mock.calls.at(-1)?.[0].data).toMatchObject({ workflowId: "workflow-a", state: { step_key: "collect_size" }, steps: [{ key: "collect_size", required: true }, { key: "awaiting_photo", required: true }, { key: "collect_customer", required: true }] });
+});

@@ -264,3 +264,54 @@ Retrieval përdor cosine similarity të fragmenteve, përputhje teksti/metadata,
 Dokumentet e ngarkuara janë private deri në aktivizim. Agjenti ndan një link me token të rastësishëm; çaktivizimi e revokon atë. Linku gjeneron URL shkarkimi 60-sekondëshe (një URL e nënshkruar më parë mbetet e vlefshme deri në skadim). Materiali i shkarkuar nga klienti nuk mund të revokohet. URL-të e jashtme hapin burimin origjinal, i cili mund të ndryshojë; riindekso pas ndryshimeve. Riindeksimi çaktivizon dokumentin derisa të konfirmohet sërish. Metadata ekzistuese ruhet; metadata e nxjerrë nga analiza e re shfaqet veçmas për krahasim dhe korrigjim manual.
 
 Verifikimi lokal: `npx vitest run src/lib/catalogs src/lib/conversations src/lib/setup src/lib/agents`; kontrollet SQL/RLS janë në `supabase/tests/catalogs.sql` (transaksion me rollback, për databazë test). Testet e provider-it përdorin mock; bëj një provë reale me dokument të biznesit pasi të aplikosh migrimin dhe konfigurimin.
+
+### Admin Chat Lab / Conversation Debugger
+
+Open `/admin/chat-lab` from the admin sidebar. Search for a business, send test
+customer messages, and select a turn or execution stage to inspect Overview,
+Context, Workflow, AI / API, Tools / Actions, or chronological Logs. Conversation
+Data always shows the latest state, even when an older turn is selected. Below
+1100px the inspector opens as a modal drawer. Reset and business changes require
+confirmation; Replay restores the encrypted checkpoint before the last turn.
+
+The adapter in `src/lib/chat-lab/actions.ts` authorizes platform admins on **every
+request** and invokes the same `processAgentTurn` used by Instagram production
+conversations, with `mode: "test"` and `source: "admin_chat_lab"`. It does not invoke
+`handleInboundMessage`, onboarding completion, inbox persistence, or external
+action handlers. The shared core and catalog retrieval are read-only apart from
+AI provider calls. Future mutating tools must remain outside that boundary or
+explicitly support mocked test execution before being connected to Chat Lab.
+
+Requires the existing `TOKEN_ENCRYPTION_KEY`; `OPENAI_API_KEY` and `AGENT_MODEL`
+behave exactly as in production, including workflow fallback when unavailable.
+No migration is needed. Test state uses authenticated encryption, is bound to
+admin and business, expires after one hour of inactivity, and permits 40 turns.
+The transcript and debug snapshots remain in page memory and disappear on
+reload/navigation. Replay may make a new paid provider call and produce a
+different answer; it preserves the test conversation ID and turn count.
+
+Traces capture actual requests/responses (including catalog embeddings and
+requirements extraction), provider usage when returned, read-only calls, and
+measured timestamps. Credentials are redacted before returning debug data.
+Normal production calls do not collect these opt-in traces. The reusable
+inspector consumes snapshots without performing actions; Live mode is not
+implemented.
+
+Current engine limitations are shown explicitly: intent is the existing
+product/catalog/general router, services are active `knowledge_entries` with
+`intent_key='service'`, and only Instagram channels are currently integrated.
+Previous AI messages are linked through `previous_response_id`; no separate
+conversation summary/customer-profile load is invented. The engine has no AI
+action-tool definitions or autonomous order/booking/payment tools, so the lab
+does not manufacture successful tool calls. Workflow required flags are shown
+from configuration while production still advances sequentially through steps.
+
+Verification: `npx vitest run` covers admin authorization, cross-tenant/user and
+expired/tampered session rejection, replay checkpoints, redaction, failure
+traces, and parity with the production core. Authenticated local browser smoke testing covered live AI replies, replay
+identity/count, multi-turn customer collection, latest-state modal versus older
+selected turns, business-change confirmation/cancellation, and the mobile
+inspector at 390px. The tested Zana products use the engine's default customer
+collection (no linked workflow), and no active agent instructions were found;
+these are exposed as actual configuration diagnostics. Catalog retrieval has
+unit coverage; use a confirmed catalog for a provider/database integration test.

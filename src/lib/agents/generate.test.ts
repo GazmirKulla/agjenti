@@ -64,3 +64,12 @@ describe("reply source diagnostics", () => {
     });
   });
 });
+
+it("observes the exact provider request and response only when explicitly opted in", async () => {
+  const onTrace = vi.fn();
+  const response = { id: "resp_trace", output_text: "  Reply  ", usage: { input_tokens: 12, output_tokens: 4 } };
+  mocks.create.mockResolvedValue(response);
+  await generateAgentReply({ ...params, onTrace });
+  expect(onTrace.mock.calls[0][0].data.request).toEqual(mocks.create.mock.calls[0][0]);
+  expect(onTrace.mock.calls[1][0].data).toEqual({ response, parsed: { text: "Reply" }, usage: response.usage });
+});

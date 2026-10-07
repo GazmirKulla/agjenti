@@ -1,3 +1,4 @@
+import type { TraceObserver } from "@/lib/conversations/trace";
 import OpenAI from "openai";
 import { agentModel } from "@/lib/agents/generate";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -16,8 +17,10 @@ export async function retrieveBusinessSources(
   businessId: string,
   message: string,
   rawContext: unknown,
+  onTrace?: TraceObserver,
 ) {
   const db = createServiceSupabase();
+  const catalogStarted = Date.now();
   const result = await db
     .from("catalogs")
     .select("*")
@@ -26,6 +29,11 @@ export async function retrieveBusinessSources(
     .eq("index_status", "ready")
     .not("confirmed_at", "is", null)
     .limit(500);
+  onTrace?.({ stage: "tools", label: "loadCatalogs", status: result.error ? "error" : "success", data: {
+    input: { businessId, active: true, confirmed: true, indexStatus: "ready", limit: 500 },
+    output: { count: result.data?.length ?? 0 }, durationMs: Date.now() - catalogStarted,
+    error: result.error ? "Catalog context could not be loaded; product fallback retained" : null, readOnly: true,
+  } });
   // Rollout compatibility: businesses using only products retain their existing path.
   if (result.error || !result.data?.length) return null;
   const catalogs = result.data as Catalog[];
@@ -90,13 +98,16 @@ export async function retrieveBusinessSources(
       maxRetries: 0,
     });
     try {
-      const embedding = await client.embeddings.create({
+      const embeddingRequest = {
         model: EMBEDDING_MODEL,
         dimensions: EMBEDDING_DIMENSIONS,
         input: query,
-      });
+      };
+      onTrace?.({ stage: "ai", label: "Embedding request sent", data: { request: embeddingRequest } });
+      const embedding = await client.embeddings.create(embeddingRequest);
+      onTrace?.({ stage: "ai", label: "Embedding response received", data: { response: embedding, usage: embedding.usage } });
       vector = embedding.data[0]?.embedding ?? [];
-      const parsed = await client.responses.create({
+      const extractionRequest = {
         model: agentModel(),
         store: false,
         max_output_tokens: 800,
@@ -128,9 +139,13 @@ export async function retrieveBusinessSources(
             },
           },
         },
-      });
+      } as const;
+      onTrace?.({ stage: "ai", label: "Requirements request sent", data: { request: extractionRequest } });
+      const parsed = await client.responses.create(extractionRequest);
+      onTrace?.({ stage: "ai", label: "Requirements response received", data: { response: parsed, usage: parsed.usage } });
       if (parsed.status === "completed") {
         const r = JSON.parse(parsed.output_text);
+        onTrace?.({ stage: "ai", label: "Requirements parsed", data: { parsed: r } });
         understood = true;
         for (const k of Object.keys(questions) as (keyof Requirements)[]) {
           if (
@@ -147,14 +162,20 @@ export async function retrieveBusinessSources(
         }
       }
     } catch {
+      onTrace?.({ stage: "ai", label: "Retrieval AI failed; text ranking used", status: "error" });
       /* Text ranking and deterministic clarification remain available. */
     }
   }
+  const searchStarted = Date.now();
   const found = await db.rpc("search_catalog_sections", {
     p_business: businessId,
     p_query: vector,
     p_text: query,
   });
+  onTrace?.({ stage: "tools", label: "search_catalog_sections", status: found.error ? "error" : "success", data: {
+    input: { businessId, query, vectorDimensions: vector.length }, output: found.data,
+    durationMs: Date.now() - searchStarted, error: found.error ? "Catalog search failed" : null, readOnly: true,
+  } });
   if (found.error)
     return intent === "catalog" || old?.pending
       ? {
