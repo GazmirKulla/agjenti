@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyDraft, mergeDraft, parseEntities, value } from "@/lib/business-intelligence/model";
 import { basicInstructions } from "@/lib/onboarding/model";
 import { mergedReview, signalsFor, withSetupRecommendations } from "./proposal";
-import { editDiscoveryDraft } from "./review";
+import { discoveryConflictGroups, editDiscoveryDraft } from "./review";
 import { selectDiscoveryImages } from "./images";
 
 const product = (price: string) => parseEntities([{ target: "product", facts: [
@@ -10,6 +10,46 @@ const product = (price: string) => parseEntities([{ target: "product", facts: [
 ] }], "manual", "test", "")[0];
 
 describe("discovery evidence and review", () => {
+  it("groups competing versions by field and counts only unresolved selected elements", () => {
+    const first = product("10");
+    const second = product("20");
+    const third = product("30");
+    const draft = mergeDraft(mergeDraft(mergeDraft(emptyDraft(), [first]), [second]), [third]);
+    expect(discoveryConflictGroups(draft, [first.id])).toMatchObject([{ field: "price", alternatives: [{ value: "20" }, { value: "30" }] }]);
+    expect(discoveryConflictGroups(draft, [])).toEqual([]);
+    expect(discoveryConflictGroups(draft, [first.id], [`${first.id}:price`])).toEqual([]);
+    const corrected = editDiscoveryDraft(draft, [{ id: first.id, values: { price: "25" } }], []);
+    expect(corrected.conflicts).toEqual([]);
+    expect(value(corrected.entities[0], "price")).toBe("25");
+  });
+  it("marks an explicit keep-current decision as confirmed without requiring a text edit", () => {
+    const first = product("10");
+    first.facts.forEach((f) => { f.confirmedByUser = false; });
+    const draft = mergeDraft(mergeDraft(emptyDraft(), [first]), [product("20")]);
+    const reviewed = editDiscoveryDraft(draft, [], [`${first.id}:price`]);
+    expect(reviewed.conflicts).toEqual([]);
+    expect(reviewed.entities[0].facts.find((f) => f.field === "price")).toMatchObject({ value: "10", confirmedByUser: true });
+  });
+  it("replaces an untouched seeded starter with the generated proposal instead of demanding conflict resolution", () => {
+    const baseline = { business: { name: "Studio" }, agents: [{ id: "starter", is_active: false, instructions: basicInstructions("Studio") }] };
+    const [agent] = parseEntities([{ target: "agent", facts: [{ field: "rules", value: basicInstructions("Studio") }] }], "manual", "platform", "");
+    agent.id = "starter"; agent.facts[0].confirmedByUser = true;
+    const proposed = withSetupRecommendations(emptyDraft(), signalsFor("ecommerce", ["standard"]), baseline).entities.find((e) => e.target === "agent")!;
+    const draft = mergeDraft({ ...emptyDraft(), entities: [agent] }, [proposed]);
+    expect(draft.conflicts).toHaveLength(1);
+    const reviewed = withSetupRecommendations(draft, signalsFor("ecommerce", ["standard"]), baseline);
+    expect(reviewed.conflicts).toEqual([]);
+    expect(value(reviewed.entities.find((e) => e.target === "agent")!, "rules")).not.toBe(basicInstructions("Studio"));
+    agent.facts[0].value = "Custom user instruction";
+    expect(value(withSetupRecommendations({ ...emptyDraft(), entities: [agent] }, signalsFor("ecommerce", ["standard"]), baseline).entities.find((e) => e.target === "agent")!, "rules")).toBe("Custom user instruction");
+  });
+  it("ignores obsolete conflicts whose incoming value is now the current value", () => {
+    const first = product("10");
+    const draft = mergeDraft(mergeDraft(emptyDraft(), [first]), [product("20")]);
+    draft.entities[0].facts.find((f) => f.field === "price")!.value = "20";
+    expect(discoveryConflictGroups(draft)).toEqual([]);
+    expect(mergedReview(draft).conflicts).toEqual([]);
+  });
   it("keeps image observations and OCR with provenance, rejecting invented commercial terms or image references", () => {
     const images = [{ id: "photo1", url: "https://cdn.test/1.jpg", postUrl: "https://instagram.com/p/1" }];
     const [entity] = parseEntities([{ target: "product", facts: [

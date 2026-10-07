@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { agentModel } from "@/lib/agents/generate";
 import { emptyAnswers, initialInstructions, basicInstructions, parseAnswers } from "@/lib/onboarding/model";
 import { allowedOfferings, businessProfiles, offeringChoices, buildBusinessProfile } from "@/lib/onboarding/rules";
-import { emptyDraft, mergeDraft, value, withMissing, type Draft, type Entity, type Fact } from "@/lib/business-intelligence/model";
+import { emptyDraft, equivalent, mergeDraft, value, withMissing, type Draft, type Entity, type Fact } from "@/lib/business-intelligence/model";
 import type { DashboardSignals } from "@/lib/dashboard/modules/types";
 
 export async function classifyBusiness(draft: Draft): Promise<DashboardSignals> {
@@ -71,8 +71,11 @@ export function withSetupRecommendations(draft: Draft, signals: DashboardSignals
     if (!agent) next.entities.push({ id: starter?.id ?? crypto.randomUUID(), target: "agent", facts: [recommendation("rules", instructions)] });
     else {
       const rules = agent.facts.find((f) => f.field === "rules");
-      if (!rules?.confirmedByUser && (!rules || rules.evidenceKind === "recommendation"))
+      const untouchedStarter = agent.id === starter?.id && rules?.value === starter?.instructions && rules?.sourceRef === "platform";
+      if (untouchedStarter || (!rules?.confirmedByUser && (!rules || rules.evidenceKind === "recommendation"))) {
         agent.facts = agent.facts.filter((f) => f.field !== "rules").concat(recommendation("rules", instructions));
+        if (untouchedStarter) next.conflicts = next.conflicts.filter((c) => !(c.entityId === agent.id && c.field === "rules" && c.incoming.evidenceKind === "recommendation"));
+      }
     }
   }
   return withMissing(next);
@@ -92,5 +95,9 @@ export function mergedReview(discovery: Draft, intelligence?: Draft): Draft {
       ...entity.facts.filter((f) => ["name", "title"].includes(f.field) && f.field !== conflict.field), conflict.incoming,
     ] }]);
   }
+  merged.conflicts = merged.conflicts.filter((c) => {
+    const entity = merged.entities.find((e) => e.id === c.entityId);
+    return entity && !equivalent(value(entity, c.field), c.incoming.value);
+  });
   return merged;
 }

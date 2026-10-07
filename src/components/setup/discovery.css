@@ -27,6 +27,16 @@
 .discovery-select { display: flex; gap: 10px; margin: 20px 0; align-items: center; }
 .discovery-evidence { color: var(--ink-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .discovery-conflict { background: var(--accent-soft); border-radius: 8px; padding: 16px; margin-top: 16px; overflow-wrap: anywhere; }
+.discovery-conflict p { margin: 10px 0; line-height: 1.6; white-space: pre-wrap; }
+.discovery-conflict-option { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line-strong); }
+.discovery-conflict-summary { background: var(--accent-soft); border: 1px solid var(--line-strong); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+.discovery-conflict-summary h3 { font-size: 18px; margin: 0 0 10px; }
+.discovery-conflict-summary p { line-height: 1.6; }
+.discovery-conflict-summary ul { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 0; margin: 16px 0; list-style: none; }
+.discovery-conflict-summary li button { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-align: left; }
+.discovery-entity.has-conflicts { border-color: var(--line-strong); }
+.discovery-entity summary > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.discovery-entity summary .discovery-conflict-badge, .discovery-conflict-badge { color: var(--danger); font-weight: 600; }
 .discovery-confirm { display: flex; align-items: flex-start; gap: 12px; margin: 28px 0 18px; line-height: 1.6; }
 .discovery-confirm input { margin-top: 6px; }
 .discovery-actions { display: flex; flex-wrap: wrap; gap: 12px; }

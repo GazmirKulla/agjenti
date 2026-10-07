@@ -8,6 +8,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { GET, POST } from "./route";
 import { emptyDraft, mergeDraft, parseEntities, value, type Draft } from "@/lib/business-intelligence/model";
 import { generateDashboardProfile } from "@/lib/dashboard/profile/generate";
+import { basicInstructions } from "@/lib/onboarding/model";
+import { signalsFor, withSetupRecommendations } from "@/lib/discovery/proposal";
 
 let state: { draft: Draft; revision: number; intelligence_revision: number; baseline: object; signals: object; confirmed_at: string | null };
 let intelligence: { data: Draft; revision: number };
@@ -64,7 +66,32 @@ describe("discovery API boundary", () => {
     expect((await POST(request(payload))).status).toBe(400);
     expect((await POST(request({ ...payload, confirmed: true, selected: ["unknown"] }))).status).toBe(400);
     state.draft = mergeDraft(state.draft, [product("30")]);
-    expect((await POST(request({ ...payload, confirmed: true }))).status).toBe(400);
+    const response = await POST(request({ ...payload, confirmed: true }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "unresolved_conflicts", conflicts: [{ entityId: id, field: "price", name: "Bluza", label: "Çmimi" }] });
+    expect(m.rpc).not.toHaveBeenCalled();
+  });
+  it("saves keep-current decisions and confirms after reloading without bringing conflicts back", async () => {
+    const id = state.draft.entities[0].id;
+    state.draft = mergeDraft(state.draft, [product("30")]);
+    expect((await POST(request({ action: "save", revision: 2, intelligenceRevision: 0, resolved: [`${id}:price`] }))).status).toBe(200);
+    const saved = m.rpc.mock.calls[0][1];
+    state.draft = saved.p_draft; state.revision++;
+    const loaded = await (await GET(readRequest())).json();
+    expect(loaded.draft.conflicts).toEqual([]);
+    expect((await POST(request({ action: "confirm", revision: 3, intelligenceRevision: 0, confirmed: true, selected: [id] }))).status).toBe(200);
+    expect(m.rpc.mock.calls.at(-1)?.[0]).toBe("confirm_business_discovery");
+  });
+  it("shows the prepared starter proposal on GET without writing to the database", async () => {
+    const baseline = { business: { name: "Studio" }, agents: [{ id: "starter", is_active: false, instructions: basicInstructions("Studio") }] };
+    const seeded = parseEntities([{ target: "profile", facts: [{ field: "name", value: "Studio" }] }, { target: "agent", facts: [{ field: "rules", value: basicInstructions("Studio") }] }], "manual", "platform", "");
+    seeded[1].id = "starter"; seeded[1].facts[0].confirmedByUser = true;
+    state.baseline = baseline; state.signals = signalsFor("ecommerce", ["standard"]);
+    const proposed = withSetupRecommendations(emptyDraft(), signalsFor("ecommerce", ["standard"]), baseline).entities.find((e) => e.target === "agent")!;
+    state.draft = mergeDraft({ ...emptyDraft(), entities: seeded }, [proposed]);
+    const loaded = await (await GET(readRequest())).json();
+    expect(loaded.draft.conflicts).toEqual([]);
+    expect(value(loaded.draft.entities.find((e: { target: string }) => e.target === "agent"), "rules")).not.toBe(basicInstructions("Studio"));
     expect(m.rpc).not.toHaveBeenCalled();
   });
   it("confirms only selected complete entities and preserves manually configured dashboard modules", async () => {

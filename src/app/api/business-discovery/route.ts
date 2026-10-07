@@ -4,8 +4,9 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { enqueueDiscovery, runDiscoveryQueue } from "@/lib/discovery/queue";
 import { answersFor, mergedReview, signalsFor, withSetupRecommendations } from "@/lib/discovery/proposal";
-import { editDiscoveryDraft, jobProgress } from "@/lib/discovery/review";
-import { emptyDraft, validateForApply, value, type Draft } from "@/lib/business-intelligence/model";
+import { discoveryConflictGroups, editDiscoveryDraft, jobProgress } from "@/lib/discovery/review";
+import { emptyDraft, labels, validateForApply, value, type Draft } from "@/lib/business-intelligence/model";
+import type { DashboardSignals } from "@/lib/dashboard/modules/types";
 import { seedDraft } from "@/lib/business-intelligence/state";
 import { generateDashboardProfile } from "@/lib/dashboard/profile/generate";
 import { parseDashboardProfile } from "@/lib/dashboard/profile/service";
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
     const { business } = await authorize(request);
     const db = createServiceSupabase();
     const [state, jobs, connection, intelligence] = await Promise.all([
-      db.from("business_discovery").select("draft,signals,revision,intelligence_revision,confirmed_at").eq("business_id", business.id).maybeSingle(),
+      db.from("business_discovery").select("draft,signals,baseline,revision,intelligence_revision,confirmed_at").eq("business_id", business.id).maybeSingle(),
       db.from("business_discovery_jobs").select("id,source,status,stage,checkpoint,error,input,created_at,next_attempt_at,leased_until").eq("business_id", business.id).order("created_at", { ascending: false }).limit(24),
       db.from("instagram_connections").select("id,username,status").eq("business_id", business.id).eq("status", "connected").maybeSingle(),
       db.from("business_intelligence").select("data,revision").eq("business_id", business.id).maybeSingle(),
@@ -102,7 +103,14 @@ export async function POST(request: Request) {
     }
     if (body.action !== "confirm" || body.confirmed !== true || !Array.isArray(body.selected) || body.selected.some((id) => typeof id !== "string" || !draft.entities.some((e) => e.id === id))) throw new Error("invalid_request");
     const ids = new Set(body.selected as string[]);
-    if (draft.conflicts.some((c) => ids.has(c.entityId))) throw new Error("unresolved_conflicts");
+    const conflicts = discoveryConflictGroups(draft, [...ids]);
+    if (conflicts.length) {
+      const details = conflicts.map((c) => {
+        const entity = draft.entities.find((e) => e.id === c.entityId)!;
+        return { entityId: entity.id, field: c.field, name: value(entity, "name") || value(entity, "title") || labels[entity.target], label: labels[c.field] ?? c.field };
+      });
+      return json({ code: "unresolved_conflicts", error: "Kontrollo fushat me mospërputhje përpara konfirmimit.", conflicts: details }, 400);
+    }
     const entities = draft.entities.filter((e) => ids.has(e.id));
     validateForApply(entities);
     for (const entity of entities) for (const fact of entity.facts) fact.confirmedByUser = true;
@@ -117,10 +125,14 @@ export async function POST(request: Request) {
   } catch (error) { return failure(error); }
 }
 
-function reviewDraft(state: { draft: Draft; intelligence_revision: number } | null, intelligence: { data: Draft; revision: number } | null): Draft {
+function reviewDraft(state: { draft: Draft; intelligence_revision: number; baseline?: Record<string, unknown>; signals?: DashboardSignals } | null, intelligence: { data: Draft; revision: number } | null): Draft {
   // Reconcile only new revisions. Replaying an old intelligence snapshot after
   // a user correction would resurrect conflicts the user already resolved.
-  return mergedReview(state?.draft ?? emptyDraft(), !state || (intelligence?.revision ?? 0) > state.intelligence_revision ? intelligence?.data : undefined);
+  const draft = mergedReview(state?.draft ?? emptyDraft(), !state || (intelligence?.revision ?? 0) > state.intelligence_revision ? intelligence?.data : undefined);
+  // Show the same proposed starter instructions that saving/confirming will
+  // produce. Existing reviewed agents remain authoritative.
+  return state?.baseline && state.signals && draft.entities.some((e) => e.target === "agent") && draft.entities.some((e) => e.target === "profile")
+    ? withSetupRecommendations(draft, state.signals, state.baseline) : draft;
 }
 
 function failure(error: unknown) {
