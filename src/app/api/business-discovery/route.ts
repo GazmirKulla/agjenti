@@ -12,7 +12,7 @@ import { seedDraft } from "@/lib/business-intelligence/state";
 import { parseDashboardProfile } from "@/lib/dashboard/profile/service";
 import { businessProfiles, allowedOfferings } from "@/lib/onboarding/rules";
 import { discoveryPreviews } from "@/lib/discovery/previews";
-import { cleanBusinessProfile } from "@/lib/instagram/business-profile";
+import { capturedInstagramProfile } from "@/lib/instagram/captured-profile";
 import { parseBusinessProcess } from "@/lib/discovery/business-process";
 
 export const runtime = "nodejs";
@@ -62,12 +62,9 @@ export async function GET(request: Request) {
     const signals = signalsFor(state.data?.signals?.businessType, state.data?.signals?.offeringTypes);
     const prior = state.data?.baseline?.business?.dashboard_profile;
     const dashboardProfile = reviewDashboardProfile(draft, signals, prior?.source === "manual" ? parseDashboardProfile(prior) : null);
-    const current = connection.data;
-    const captured = (jobs.data ?? []).find(job => job.source === "instagram" && job.input?.connectionId === current?.id && job.input?.generation === current?.discovery_generation && job.checkpoint?.profile)?.checkpoint?.profile;
-    const saved = state.data?.source_profile;
-    const profile = current ? captured ?? (saved?.connectionId === current.id && saved?.generation === current.discovery_generation ? saved : null) : null;
+    const profile = capturedInstagramProfile(connection.data, jobs.data ?? [], state.data?.source_profile);
     const process = parseBusinessProcess(state.data?.operating_workflow, state.data?.operating_workflow?.source === "manual");
-    return json({ available: true, connection: connection.data, sourceProfile: profile ? cleanBusinessProfile(profile) : null, businessProcess: process ? { name: process.name, stepCount: process.steps.length, enabled: process.enabled } : null, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null, knowledgeCount: knowledge.count ?? 0, pendingKnowledgeCount: scanKnowledge(draft).length,
+    return json({ available: true, connection: connection.data, sourceProfile: profile, businessProcess: process ? { name: process.name, stepCount: process.steps.length, enabled: process.enabled } : null, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null, knowledgeCount: knowledge.count ?? 0, pendingKnowledgeCount: scanKnowledge(draft).length,
       jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length, job.checkpoint?.nextText, job.checkpoint?.text?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, nextImage: job.checkpoint?.nextImage ?? 0, previews: discoveryPreviews(job.source, job.checkpoint), pageCount: job.checkpoint?.pageCount ?? 0, knowledgeCount: job.checkpoint?.knowledgeCount ?? 0, inactiveKnowledgeCount: job.checkpoint?.inactiveKnowledgeCount ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
     });
   } catch (error) { return failure(error); }

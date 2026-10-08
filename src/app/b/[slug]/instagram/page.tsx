@@ -9,6 +9,8 @@ import { redirect } from "next/navigation";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { capturedInstagramProfile } from "@/lib/instagram/captured-profile";
+import { InstagramAccountProfile } from "@/components/instagram/account-profile";
 
 export default async function InstagramPage({
   params,
@@ -27,12 +29,26 @@ export default async function InstagramPage({
   const { data: conn, error: loadError } = await supabase
     .from("instagram_connections")
     .select(
-      "username,ig_user_id,status,expires_at,last_error,refreshed_at,access_token_ciphertext",
+      "id,discovery_generation,username,ig_user_id,status,expires_at,last_error,refreshed_at,access_token_ciphertext",
     )
     .eq("business_id", access.business.id)
     .neq("status", "disconnected")
     .maybeSingle();
   if (loadError) throw new Error("Nuk u ngarkua lidhja Instagram.");
+
+  const [discovery, captures] = conn ? await Promise.all([
+    supabase.from("business_discovery").select("source_profile")
+      .eq("business_id", access.business.id).maybeSingle(),
+    supabase.from("business_discovery_jobs").select("source,input,profile:checkpoint->profile")
+      .eq("business_id", access.business.id).eq("source", "instagram")
+      .eq("input->>connectionId", conn.id).eq("input->>generation", conn.discovery_generation)
+      .order("created_at", { ascending: false }).limit(24),
+  ]) : [null, null];
+  // Metadata is optional: connection management must still work before the
+  // discovery tables are installed or when no analysis has been captured yet.
+  const profile = capturedInstagramProfile(conn,
+    (captures?.data ?? []).map(job => ({ ...job, checkpoint: { profile: job.profile } })),
+    discovery?.data?.source_profile);
 
   let accessToken: string | null = null;
   if (access.admin && conn?.access_token_ciphertext) {
@@ -70,19 +86,7 @@ export default async function InstagramPage({
             <h2>Llogaria Instagram</h2>
             <StatusBadge status={conn?.status || "disconnected"} />
           </div>
-          <div className="flex items-center gap-4 my-6">
-            <span className="profile-avatar">
-              {access.business.name.slice(0, 2).toUpperCase()}
-            </span>
-            <div>
-              <h3 className="text-xl">
-                {conn
-                  ? `@${conn.username || conn.ig_user_id}`
-                  : "Asnjë llogari e lidhur"}
-              </h3>
-              <p className="muted-copy">{access.business.name}</p>
-            </div>
-          </div>
+          <InstagramAccountProfile profile={profile} username={conn ? conn.username || conn.ig_user_id : null} businessName={access.business.name} />
           {conn && (
             <div className="detail-block">
               <dl className="detail-fields">

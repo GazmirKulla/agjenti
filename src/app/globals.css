@@ -1198,6 +1198,46 @@ html[data-resolved="dark"] .brand-logo-dark {
   gap: 22px;
   align-items: start;
 }
+.instagram-account-profile {
+  margin-block: 28px;
+}
+.instagram-account-avatar {
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  font-size: 19px;
+}
+.instagram-account-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.instagram-profile-handle {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.instagram-profile-bio {
+  margin-top: 22px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.instagram-profile-website {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-top: 14px;
+  max-width: 100%;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.instagram-profile-handle:hover,
+.instagram-profile-website:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 .settings-side {
   display: grid;
   gap: 22px;
