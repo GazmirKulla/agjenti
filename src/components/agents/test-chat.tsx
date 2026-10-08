@@ -6,7 +6,7 @@ import {
   type TestChatResult,
 } from "@/lib/agents/test-chat/actions";
 import { Icon } from "@/components/dashboard/icon";
-import { TrainingSession, type TrainingFeedback } from "./training-session";
+import { TrainingSession, type TrainingFeedback, type TrainingRequest } from "./training-session";
 import "./test-chat.css";
 type Turn = Exclude<TestChatResult, { error: string }>;
 type Bubble = { role: "customer" | "agent"; text: string; feedback?: TrainingFeedback };
@@ -27,6 +27,7 @@ export function AgentTestChat({
   businessName: string;
   onTurn?: typeof simulateAgentTurn;
 }) {
+  const [trainingRequest, setTrainingRequest] = useState<TrainingRequest | null>(null);
   const [trainingBusy, setTrainingBusy] = useState(false);
   const [trainingFeedback, setTrainingFeedback] = useState<TrainingFeedback | null>(null);
   const [messages, setMessages] = useState<Bubble[]>([]);
@@ -131,6 +132,7 @@ export function AgentTestChat({
           ↻ Rifillo
         </button>
       </header>
+      <TrainingSession target={{ slug }} feedback={trainingFeedback} request={trainingRequest} memoryHref={`/b/${slug}/agents/memory`} busy={pending !== null} onBusyChange={setTrainingBusy} onChanged={reset} />
       <div className="agent-test-layout">
         <div className="agent-test-conversation">
           <div
@@ -160,7 +162,7 @@ export function AgentTestChat({
                   {m.role === "customer" ? "Ti · si klient" : "Agjenti"}
                 </small>
                 <p>{m.text}</p>
-                {m.feedback && <button className="btn btn-ghost" type="button" disabled={trainingBusy || pending !== null} onClick={() => { setTrainingFeedback(m.feedback!); document.getElementById("agent-training")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Trajno këtë përgjigje →</button>}
+                {m.feedback && <button className="btn btn-ghost" type="button" disabled={trainingBusy || pending !== null} onClick={() => { setTrainingFeedback(m.feedback!); setTrainingRequest(previous => ({ key: (previous?.key ?? 0) + 1, feedback: m.feedback! })); }}>Trajno këtë përgjigje →</button>}
               </div>
             ))}
             {pending && (
@@ -336,7 +338,6 @@ export function AgentTestChat({
           </p>
         </aside>
       </div>
-      <div id="agent-training"><TrainingSession target={{ slug }} feedback={trainingFeedback} busy={pending !== null} onBusyChange={setTrainingBusy} onChanged={reset} /></div>
     </section>
   );
 }

@@ -323,7 +323,9 @@ unit coverage; use a confirmed catalog for a provider/database integration test.
 
 ### Sesionet e trajnimit: Chat Lab dhe Provo Agjentin
 
-Apliko `supabase/migrations/20261008090000_agent_training.sql` pas migrimeve ekzistuese. Seksioni **Trajno Agjentin** përdoret si te `/admin/chat-lab` ashtu edhe te `/b/[slug]/agents/test`. Çdo përgjigje prove ka lidhjen **Trajno këtë përgjigje**; përdoruesi mund ta vlerësojë si shembull të mirë ose ta korrigjojë, pastaj të konfirmojë **Ruaj për këtë biznes**. Vlerësimi ose biseda e zakonshme nuk ruan automatikisht mësime.
+Apliko `supabase/migrations/20261008090000_agent_training.sql` pas migrimeve ekzistuese. Seksioni **Trajno Agjentin** përdoret si te `/admin/chat-lab` ashtu edhe te `/b/[slug]/agents/test`. Çdo përgjigje prove ka lidhjen **Trajno këtë përgjigje**; përdoruesi mund ta vlerësojë si shembull të mirë ose ta korrigjojë, pastaj të konfirmojë **Ruaj mësimin** në dritaren e dedikuar të korrigjimit. Dritarja shfaq gjendjen e ruajtjes dhe suksesin vetëm pasi serveri konfirmon ndryshimin. Vlerësimi ose biseda e zakonshme nuk ruan automatikisht mësime.
+
+Mësimet e ruajtura menaxhohen në faqen **Memoria e Agjentit** (`/b/[slug]/agents/memory`), e arritshme nga të dyja provat dhe konfigurimi i Agjentit AI. Lista ka kërkim, filtra dhe faqe me 15 mësime; nuk ngarkohet apo shfaqet poshtë bisedës së provës.
 
 Memoria ruan preferenca stili, shembuj pyetje/përgjigje dhe udhëzime për një workflow ose hap ekzistues. Preferencat vlejnë për biznesin; shembujt mund të kufizohen te workflow/hapi i zgjedhur. Motori i përbashkët i përgjigjeve lexon memorien në çdo kërkesë, edhe në bisedat reale të Instagram-it. Ruajtja, ndryshimi, aktivizimi/çaktivizimi dhe heqja janë veprime eksplicite; sesioni i provës rifillohet pas një ndryshimi për ta ritestuar konfigurimin. Çmimet dhe të dhënat e klientit nga shembujt nuk konsiderohen fakte për bisedat e reja. Trajnimi përshtat formulimin dhe shpjegimin e hapave; ndryshimet strukturore të procesit bëhen nga konfigurimi ekzistues i workflow-ve.
 

@@ -144,7 +144,9 @@ export default async function AgentsPage({
       <PageHeading
         title={`Agjenti AI i ${access.business.name}`}
         description="Konfiguro mënyrën si Agjenti AI komunikon me klientët."
-      />
+      >
+        <Link href={`/b/${slug}/agents/memory`} className="soft-link">Memoria e Agjentit →</Link>
+      </PageHeading>
       <div className="panel section-pad mb-5 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-semibold">
