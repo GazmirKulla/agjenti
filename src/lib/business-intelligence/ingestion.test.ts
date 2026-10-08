@@ -5,6 +5,14 @@ vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: vi.fn() }));
 import { extractWebsite } from "./ingestion";
 beforeEach(() => vi.clearAllMocks());
 describe("bounded business website ingestion", () => {
+  it("does not turn website titles into product hints during onboarding", async () => {
+    m.fetch.mockResolvedValue({ url: "https://shop.test/", contentType: "text/html", body: '<h1>A new week</h1><p>Learn through play</p>' });
+    const context = await extractWebsite("https://shop.test/", "onboarding");
+    const catalog = await extractWebsite("https://shop.test/");
+    expect(context.text).toContain("A new week");
+    expect(context.text).not.toContain('"name":"A new week"');
+    expect(catalog.text).toContain('"name":"A new week"');
+  });
   it("discovers same-origin business/product pages and keeps content beyond products", async () => {
     m.fetch.mockImplementation(async (url: string) => ({
       url,

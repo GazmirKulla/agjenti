@@ -6,7 +6,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { graphVersion } from "@/lib/instagram/oauth";
 import { selectDiscoveryImages } from "@/lib/discovery/images";
 
-export async function extractWebsite(url: string) {
+export async function extractWebsite(url: string, purpose: "catalog" | "onboarding" = "catalog") {
   const first = await fetchPublicPage(url);
   if ("error" in first) throw new Error(first.error);
   const base = new URL(first.url);
@@ -42,7 +42,7 @@ export async function extractWebsite(url: string) {
   }
   const captured = pages
     .map((page, index) => {
-      const product = extractProductFromHtml(page.body, page.url);
+      const product = purpose === "catalog" ? extractProductFromHtml(page.body, page.url) : null;
       const plain = page.body
         .replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
         .replace(/<[^>]+>/g, " ")

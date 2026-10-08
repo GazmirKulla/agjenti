@@ -261,6 +261,16 @@ it("certifies a catalog-only business after a grounded AI document reply", async
   expect(mocks.record).toHaveBeenCalledWith("business-a", "config-a");
   expect(mocks.send).not.toHaveBeenCalled();
 });
+it("certifies a knowledge-only business after an AI reply using active knowledge, without an order", async () => {
+  mocks.setup.mockResolvedValue({ available: true, signature: "config-a", productCount: 0, knowledgeCount: 2 });
+  mocks.process.mockResolvedValue({ reply: "We deliver in two days.", nextState: emptyState(), previousResponseId: null, workflowId: null, debug: { source: "ai", agentConfigured: true, knowledgeCount: 2 } });
+  expect(await simulateAgentTurn(input)).toHaveProperty("setupTestPassed", true);
+  expect(mocks.record).toHaveBeenCalledWith("business-a", "config-a");
+  mocks.record.mockClear();
+  mocks.process.mockResolvedValue({ reply: "No business context.", nextState: emptyState(), previousResponseId: null, workflowId: null, debug: { source: "ai", agentConfigured: true, knowledgeCount: 0 } });
+  expect(await simulateAgentTurn(input)).toHaveProperty("setupTestPassed", false);
+  expect(mocks.record).not.toHaveBeenCalled();
+});
 it("does not certify catalog clarification or document-only test for a product business", async () => {
   mocks.setup.mockResolvedValue({
     available: true,

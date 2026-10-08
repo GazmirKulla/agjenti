@@ -127,7 +127,8 @@ export async function simulateAgentTurn(
         (setup?.productCount === 0 &&
           turn.debug.source === "ai" &&
           ((turn.debug.retrievedCatalogIds?.length ?? 0) > 0 ||
-            turn.debug.retrievedService === true)))
+            turn.debug.retrievedService === true ||
+            ((setup.knowledgeCount ?? 0) > 0 && turn.debug.knowledgeCount > 0))))
     ) {
       setupTestPassed = await recordSetupTest(
         access.business.id,

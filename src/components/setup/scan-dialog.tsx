@@ -14,7 +14,7 @@ export type ScanJob = {
 const stages = ["capture", "text", "images", "finish"];
 const stageCopy: Record<string, string> = {
   capture: "Po marrim përmbajtjen nga burimi…",
-  text: "Po lexojmë tekstet dhe po njohim ofertat…",
+  text: "Po kuptojmë aktivitetin dhe pyetjet e klientëve…",
   images: "Po analizojmë fotot dhe detajet e dukshme…",
   finish: "Po përgatisim konfigurimin e biznesit…",
 };
@@ -77,7 +77,7 @@ export function DiscoveryScanDialog({ open, jobs, startingSource, error, onClose
       <div className="scan-heading">
         <span className="scan-live"><i />{finished ? "ANALIZA U PËRFUNDUA" : failure ? "KËRKON VËMENDJE" : "PO ANALIZOJMË"}</span>
         <h2 id="scan-title">{finished ? <>Biznesi yt, <em>pak më i njohur.</em></> : failure ? <>Le ta vazhdojmë <em>edhe një herë.</em></> : <>Po njohim <em>biznesin tënd.</em></>}</h2>
-        <p id="scan-description">{finished ? "Rezultatet janë gati. Kontrollo ofertat dhe konfigurimin përpara se t’i përdorësh." : failure ? "Progresi i ruajtur është këtu. Kontrollo burimin dhe provo përsëri." : source === "website" ? "Nga faqet e website-it, te ofertat dhe njohuritë e biznesit." : "Nga postimet e tua, te ofertat dhe njohuritë e biznesit."}</p>
+        <p id="scan-description">{finished ? "Profili dhe njohuritë u përgatitën automatikisht. Mund të vazhdosh në panel." : failure ? "Progresi i ruajtur është këtu. Kontrollo burimin dhe provo përsëri." : source === "website" ? "Po lexojmë faqet për të kuptuar biznesin dhe për të përgatitur njohuritë." : "Postimet na ndihmojnë të kuptojmë biznesin dhe informacionin për klientët."}</p>
       </div>
       {jobs.length > 1 && <nav className="scan-sources" aria-label="Burimet në analizë">{jobs.map(item => <button key={item.id} type="button" aria-pressed={item.id === job?.id} onClick={() => setSelectedId(item.id)}>{item.source === "instagram" ? "Instagram" : "Website"}<span>{item.status === "completed" ? "✓" : `${item.progress}%`}</span></button>)}</nav>}
       {finished ? <div className="scan-success"><div className="scan-success-orbit" /><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" /><path d="m20 32 8 8 16-17" /></svg><span>GATI PËR HAPIN TJETËR</span></div> : <>
@@ -106,7 +106,7 @@ export function DiscoveryScanDialog({ open, jobs, startingSource, error, onClose
       {(failure || job?.error) && <p className="scan-error" role="alert">{failure || job?.error}</p>}
       <footer className="scan-footer">
         <p>{finished ? `${jobs.reduce((sum, item) => sum + (item.source === "instagram" ? item.postCount : item.pageCount ?? 0), 0)} ${jobs.every(item => item.source === "website") ? "faqe të lexuara" : jobs.every(item => item.source === "instagram") ? "postime të lexuara" : "postime dhe faqe të lexuara"}` : failure ? "Progresi i ruajtur nuk humbet. Mund të provosh përsëri." : "Analiza vazhdon edhe nëse e minimizon këtë dritare."}</p>
-        <button type="button" className={`scan-footer-action${finished ? " is-primary" : ""}`} onClick={finished ? onReview : onClose}>{finished ? "Shiko rezultatin" : running ? "Vazhdo në background" : "Kthehu te onboarding"}<span aria-hidden="true">↗</span></button>
+        <button type="button" className={`scan-footer-action${finished ? " is-primary" : ""}`} onClick={finished ? onReview : onClose}>{finished ? "Vazhdo" : running ? "Vazhdo në background" : "Kthehu te onboarding"}<span aria-hidden="true">↗</span></button>
       </footer>
     </div>
   </dialog>;
@@ -115,7 +115,7 @@ export function DiscoveryScanDialog({ open, jobs, startingSource, error, onClose
 function Preview({ item, source, position, scanning }: { item: ScanPreview; source: string; position: number; scanning: boolean }) {
   const [failed, setFailed] = useState(false);
   return <article className={`scan-frame${position === 0 ? " is-focused" : ""}${!item.imageUrl || failed ? " is-document" : ""}`} style={{ "--position": position, "--distance": Math.abs(position) } as CSSProperties} aria-hidden={position !== 0}>
-    {item.imageUrl && !failed ? <Image src={item.imageUrl} width={256} height={320} unoptimized alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : <div className="scan-document"><ScanGlyph /><span>{source === "website" ? "FAQ / OFERTA / INFORMACION" : "PËRMBAJTJA E POSTIMIT"}</span><h3>{item.title}</h3><p>{item.excerpt || "Po përgatitim përmbajtjen për analizë."}</p><div className="scan-document-lines"><i /><i /><i /></div></div>}
+    {item.imageUrl && !failed ? <Image src={item.imageUrl} width={256} height={320} unoptimized alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : <div className="scan-document"><ScanGlyph /><span>{source === "website" ? "FAQ / INFORMACION" : "PËRMBAJTJA E POSTIMIT"}</span><h3>{item.title}</h3><p>{item.excerpt || "Po përgatitim përmbajtjen për analizë."}</p><div className="scan-document-lines"><i /><i /><i /></div></div>}
     <div className="scan-frame-top"><span>{source === "website" ? "↗" : "◎"}</span><span>{source === "website" ? "website" : "instagram"}</span><i /></div>
     <div className="scan-frame-bottom"><span>{position === 0 && scanning ? "NË ANALIZË" : "NGA BURIMI"}</span><strong>{item.title}</strong></div>
     {position === 0 && scanning && <div className="scan-sweep" aria-hidden="true" />}

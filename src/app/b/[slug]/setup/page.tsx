@@ -15,6 +15,6 @@ export default async function SetupPage({ params }: { params: Promise<{ slug: st
     createServiceSupabase().from("business_discovery").select("confirmed_at").eq("business_id", access.business.id).maybeSingle(),
     createServiceSupabase().from("business_onboarding").select("answers").eq("business_id", access.business.id).maybeSingle(),
   ]);
-  const reviewingSources = !discovery.data?.confirmed_at && (Boolean(discovery.data) || onboarding.data?.answers?.onboardingMode === "sources");
-  return <><DiscoverySetup slug={slug} businessId={access.business.id} />{!reviewingSources && <SetupJourney status={status} slug={slug} />}</>;
+  const sources = Boolean(discovery.data) || onboarding.data?.answers?.onboardingMode === "sources";
+  return <><DiscoverySetup slug={slug} businessId={access.business.id} />{sources ? <details className="context-launch-options"><summary>Përgjigjet automatike · Opsionale</summary><SetupJourney status={status} slug={slug} /></details> : <SetupJourney status={status} slug={slug} />}</>;
 }

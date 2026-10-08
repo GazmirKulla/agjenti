@@ -4,6 +4,7 @@ export type SetupStatus = {
   productCount: number;
   catalogCount?: number;
   serviceCount?: number;
+  knowledgeCount?: number;
   usableProducts: number;
   unconfiguredProducts: number;
   agentReady: boolean;
@@ -14,7 +15,7 @@ export type SetupStatus = {
 export function setupSteps(s: SetupStatus) {
   const documentBusiness =
     s.productCount === 0 &&
-    ((s.catalogCount ?? 0) > 0 || (s.serviceCount ?? 0) > 0);
+    ((s.catalogCount ?? 0) > 0 || (s.serviceCount ?? 0) > 0 || (s.knowledgeCount ?? 0) > 0);
   return [
     {
       key: "instagram",
@@ -31,13 +32,13 @@ export function setupSteps(s: SetupStatus) {
         ? "Përgatit informacionin e biznesit"
         : "Shto produktet",
       description: documentBusiness
-        ? "Rishiko katalogët e aktivizuar ose shërbimet që Agjenti përdor në përgjigje."
+        ? "Njohuritë, katalogët ose shërbimet i japin Agjentit informacion për përgjigjet. Mund t’i përmirësosh gjatë përdorimit."
         : "Shto produktet e para. Nëse përdor broshura ose dokumente B2B, shtoji te Katalogët; shërbimet shtohen te Shërbimet.",
       action: documentBusiness ? "Rishiko informacionin" : "Shto produkte",
       path: documentBusiness
         ? s.catalogCount
           ? "catalogs"
-          : "services"
+          : s.serviceCount ? "services" : "knowledge"
         : "products",
       done: s.usableProducts > 0 || documentBusiness,
     },
@@ -65,7 +66,7 @@ export function setupSteps(s: SetupStatus) {
       key: "test",
       title: "Provo konfigurimin",
       description: documentBusiness
-        ? "Te Provo Agjentin, bëj një pyetje reale për katalogun ose shërbimin. Përfundo sqarimet dhe kontrollo përgjigjen e Agjentit."
+        ? "Te Provo Agjentin, bëj një pyetje për biznesin dhe kontrollo përgjigjen nga njohuritë, katalogu ose shërbimi."
         : "Te Provo Agjentin, shkruaj emrin e saktë të produktit dhe ndiq të gjithë hapat deri te porosia gati. Përdor të dhëna prove; nuk krijohet porosi reale.",
       action: "Provo Agjentin",
       path: "agents/test",
@@ -88,7 +89,7 @@ export function setupGateMessage(s: SetupStatus): string | null {
     instagram:
       "Lidh Instagram-in nga Dashboard → Instagram përpara aktivizimit të përgjigjeve automatike.",
     products:
-      "Shto një produkt, një katalog të indeksuar e konfirmuar ose një shërbim përpara aktivizimit.",
+      "Përgatit njohuritë e biznesit, një produkt, një katalog ose një shërbim përpara aktivizimit.",
     agents: "Aktivizo një agjent me udhëzime te Agjentët përpara aktivizimit.",
     workflows:
       "Lidh llojin dhe workflow-in për çdo produkt te Produktet / Workflow përpara aktivizimit.",

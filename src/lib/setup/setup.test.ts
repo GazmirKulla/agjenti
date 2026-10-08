@@ -123,7 +123,7 @@ it("records only matching configuration signatures, without overwriting launch m
   );
 });
 it("allows catalog/service-only workspaces without artificial products or order workflows", () => {
-  for (const extra of [{ catalogCount: 1 }, { serviceCount: 1 }]) {
+  for (const extra of [{ catalogCount: 1 }, { serviceCount: 1 }, { knowledgeCount: 1 }]) {
     const s = { ...ready, productCount: 0, usableProducts: 0, ...extra };
     expect(setupSteps(s).map((step) => step.key)).toEqual([
       "instagram",

@@ -47,19 +47,20 @@ export async function GET(request: Request) {
   try {
     const { business } = await authorize(request);
     const db = createServiceSupabase();
-    const [state, jobs, connection, intelligence] = await Promise.all([
+    const [state, jobs, connection, intelligence, knowledge] = await Promise.all([
       db.from("business_discovery").select("draft,signals,baseline,revision,intelligence_revision,confirmed_at").eq("business_id", business.id).maybeSingle(),
       db.from("business_discovery_jobs").select("id,source,status,stage,checkpoint,error,input,created_at,next_attempt_at,leased_until").eq("business_id", business.id).order("created_at", { ascending: false }).limit(24),
       db.from("instagram_connections").select("id,username,status").eq("business_id", business.id).eq("status", "connected").maybeSingle(),
       db.from("business_intelligence").select("data,revision").eq("business_id", business.id).maybeSingle(),
+      db.from("knowledge_entries").select("id", { count: "exact", head: true }).eq("business_id", business.id).eq("is_active", true),
     ]);
     if (state.error || jobs.error) return json({ available: false, error: "Konfigurimi automatik kërkon përditësimin e databazës. Mund të vazhdosh nga paneli." });
-    if (connection.error || intelligence.error) throw new Error("discovery_unavailable");
+    if (connection.error || intelligence.error || knowledge.error) throw new Error("discovery_unavailable");
     const draft = reviewDraft(state.data, intelligence.data);
     const signals = signalsFor(state.data?.signals?.businessType, state.data?.signals?.offeringTypes);
     const prior = state.data?.baseline?.business?.dashboard_profile;
     const dashboardProfile = reviewDashboardProfile(draft, signals, prior?.source === "manual" ? parseDashboardProfile(prior) : null);
-    return json({ available: true, connection: connection.data, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null,
+    return json({ available: true, connection: connection.data, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null, knowledgeCount: knowledge.count ?? 0, pendingKnowledgeCount: scanKnowledge(draft).length,
       jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, nextImage: job.checkpoint?.nextImage ?? 0, previews: discoveryPreviews(job.source, job.checkpoint), pageCount: job.checkpoint?.pageCount ?? 0, knowledgeCount: job.checkpoint?.knowledgeCount ?? 0, inactiveKnowledgeCount: job.checkpoint?.inactiveKnowledgeCount ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
     });
   } catch (error) { return failure(error); }

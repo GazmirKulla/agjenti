@@ -2,7 +2,8 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { extractInstagram, extractWebsite } from "@/lib/business-intelligence/ingestion";
 import { normalizeSource } from "@/lib/business-intelligence/normalization";
 import { emptyDraft, mergeDraft, type Entity, type Draft } from "@/lib/business-intelligence/model";
-import { classifyBusiness, meaningfulEntities, mergedReview, withSetupRecommendations } from "./proposal";
+import { classifyBusiness, meaningfulEntities, mergedReview } from "./proposal";
+import { automaticSetup, businessContext, contextDraft, manualContextSignals, profileKnowledge } from "./context";
 import { scanKnowledge, withoutScanKnowledge } from "@/lib/business-intelligence/scan-routing";
 import { IMAGE_BATCH_SIZE, type DiscoveryImage } from "./images";
 import type { ScanPreview } from "./previews";
@@ -16,6 +17,7 @@ type Checkpoint = {
 };
 type Job = {
   id: string; business_id: string; source: "instagram" | "website";
+  user_id?: string | null;
   input: { url?: string; connectionId?: string; generation?: string };
   stage: string; checkpoint: Checkpoint; lease_token: string;
   attempts: number;
@@ -57,7 +59,7 @@ export async function processDiscoveryStep(job: Job) {
   const data = job.checkpoint;
   await validConnection(job);
   if (job.stage === "capture") {
-    const captured = job.source === "instagram" ? await extractInstagram(job.business_id) : await extractWebsite(job.input.url!);
+    const captured = job.source === "instagram" ? await extractInstagram(job.business_id) : await extractWebsite(job.input.url!, "onboarding");
     // Do not persist the decrypted token, fetch Request, or provider errors.
     const ig = job.source === "instagram" ? captured as Awaited<ReturnType<typeof extractInstagram>> : null;
     const web = job.source === "website" ? captured as Awaited<ReturnType<typeof extractWebsite>> : null;
@@ -67,7 +69,7 @@ export async function processDiscoveryStep(job: Job) {
   }
   if (job.stage === "text") {
     let entities: Entity[] = [];
-    try { entities = meaningfulEntities(await normalizeSource(data.text!, job.source, data.reference!, "profile")); }
+    try { entities = businessContext(meaningfulEntities(await normalizeSource(data.text!, job.source, data.reference!, "profile", [], "onboarding"))); }
     catch (error) {
       // Empty captions are common. Images can still provide the first useful facts.
       if (!(error instanceof Error && error.message.startsWith("Nuk u gjetën"))) throw error;
@@ -81,9 +83,9 @@ export async function processDiscoveryStep(job: Job) {
     const entities = data.entities ?? [];
     let warnings = data.warnings ?? [];
     try {
-      const extracted = meaningfulEntities(await normalizeSource(text, "instagram", data.reference!, "profile", batch));
+      const extracted = businessContext(meaningfulEntities(await normalizeSource(text, "instagram", data.reference!, "profile", batch, "onboarding")));
       // Merge conflicts are retained in the source checkpoint and final draft.
-      const merged = mergeDraft(data.draft ?? { ...emptyDraft(), entities: data.entities ?? [] }, extracted);
+      const merged = mergeDraft(contextDraft(data.draft ?? { ...emptyDraft(), entities: data.entities ?? [] }), extracted);
       return checkpoint(job, { ...data, entities: merged.entities, draft: merged, nextImage: offset + batch.length }, offset + batch.length < (data.images?.length ?? 0) ? "images" : "finish");
     } catch (error) {
       if (!(error instanceof Error && error.message.startsWith("Nuk u gjetën"))) {
@@ -98,15 +100,22 @@ export async function processDiscoveryStep(job: Job) {
   if (job.stage !== "finish") throw new Error("invalid_stage");
   const { data: state, error } = await db.from("business_discovery").select("*").eq("business_id", job.business_id).single();
   if (error || !state) throw new Error("discovery_unavailable");
-  let draft = mergedReview(state.draft as Draft, data.draft ?? { ...emptyDraft(), entities: data.entities ?? [] });
-  const signals = state.signals_source === "manual" && state.signals ? state.signals : await classifyBusiness(draft);
-  draft = withSetupRecommendations(draft, signals, state.baseline);
+  let draft = mergedReview(state.draft as Draft, contextDraft(data.draft ?? { ...emptyDraft(), entities: data.entities ?? [] }));
+  const signals = (state.signals_source === "manual" && state.signals) || manualContextSignals(state.baseline) || await classifyBusiness(contextDraft(draft));
+  const setup = automaticSetup(draft, signals, state.baseline);
+  // Contact, policies and business descriptions also become source-backed
+  // Knowledge, instead of requiring a profile confirmation form.
+  draft = mergeDraft(draft, profileKnowledge(draft));
   const knowledge = scanKnowledge(draft);
   draft = withoutScanKnowledge(draft, knowledge);
   await validConnection(job);
-  const finished = await db.rpc(knowledge.length ? "finish_scanned_business_discovery" : "finish_business_discovery", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, ...(knowledge.length ? { p_knowledge: knowledge } : {}) });
+  const finished = await db.rpc("finish_context_business_discovery", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: knowledge, p_profile: setup.profile, p_answers: setup.answers, p_agent: setup.agent });
   if (finished.error) throw new Error(["PGRST202", "42883"].includes(finished.error.code) ? "scan_migration_required" : finished.error.message);
   if (!finished.data) return checkpoint(job, data, "finish");
+  if (job.source === "instagram" && data.website && job.user_id) {
+    // A public website supplied by the profile enriches context without a form.
+    await enqueueDiscovery(job.business_id, job.user_id, "website", data.website).catch(() => console.error("[discovery] optional website was not queued"));
+  }
 }
 
 export async function runDiscoveryQueue(businessId: string | null = null, budgetMs = 110000) {
@@ -121,7 +130,7 @@ export async function runDiscoveryQueue(businessId: string | null = null, budget
     if (!job) break;
     try { await processDiscoveryStep(job); }
     catch (error) {
-      const message = error instanceof Error && error.message === "scan_migration_required" ? "Ruajtja automatike e njohurive kërkon përditësimin e databazës. Kontakto administratorin." : "Analiza u ndërpre. Do të provohet përsëri; mund të vazhdosh edhe manualisht.";
+      const message = error instanceof Error && error.message === "scan_migration_required" ? "Konfigurimi automatik kërkon migrimin 20261008150000_context_onboarding.sql në databazë. Kontakto administratorin." : "Analiza u ndërpre. Do të provohet përsëri; mund të vazhdosh edhe manualisht.";
       await checkpoint(job, job.checkpoint, job.stage, message).catch(() => {});
     }
     processed++;
