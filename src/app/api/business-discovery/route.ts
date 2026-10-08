@@ -7,6 +7,7 @@ import { answersFor, mergedReview, signalsFor, withSetupRecommendations } from "
 import { discoveryConflictGroups, editDiscoveryDraft, editReviewPreferences, jobProgress, reviewDashboardProfile, reviewEntityEnabled } from "@/lib/discovery/review";
 import { emptyDraft, EntityValidationError, labels, validateForApply, value, type Draft } from "@/lib/business-intelligence/model";
 import type { DashboardSignals } from "@/lib/dashboard/modules/types";
+import { scanKnowledge, withoutScanKnowledge, knowledgeNotice } from "@/lib/business-intelligence/scan-routing";
 import { seedDraft } from "@/lib/business-intelligence/state";
 import { parseDashboardProfile } from "@/lib/dashboard/profile/service";
 import { businessProfiles, allowedOfferings } from "@/lib/onboarding/rules";
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
     const prior = state.data?.baseline?.business?.dashboard_profile;
     const dashboardProfile = reviewDashboardProfile(draft, signals, prior?.source === "manual" ? parseDashboardProfile(prior) : null);
     return json({ available: true, connection: connection.data, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null,
-      jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
+      jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, knowledgeCount: job.checkpoint?.knowledgeCount ?? 0, inactiveKnowledgeCount: job.checkpoint?.inactiveKnowledgeCount ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
     });
   } catch (error) { return failure(error); }
 }
@@ -84,6 +85,14 @@ export async function POST(request: Request) {
     if (state.data.confirmed_at && body.action === "confirm") return json({ confirmed: true });
     if (body.revision !== state.data.revision || body.intelligenceRevision !== (intelligence.data?.revision ?? 0)) throw new Error("stale_draft");
     let draft = reviewDraft(state.data, intelligence.data);
+    if (body.action === "route_knowledge") {
+      const knowledge = scanKnowledge(draft);
+      if (!knowledge.length) return json({ knowledgeCount: 0 });
+      const routed = await db.rpc("route_discovery_knowledge", { p_business: business.id, p_user: user.id, p_revision: state.data.revision, p_draft: withoutScanKnowledge(draft, knowledge), p_knowledge: knowledge });
+      if (routed.error) throw new Error(["PGRST202", "42883"].includes(routed.error.code) ? "scan_migration_required" : routed.error.message);
+      revalidatePath(`/b/${business.slug}/knowledge`);
+      return json({ knowledgeCount: routed.data.count, inactiveKnowledgeCount: routed.data.inactiveCount, success: knowledgeNotice(routed.data.count) });
+    }
     if (body.action === "refresh") {
       const snap = await db.rpc("intelligence_snapshot", { p_business: business.id });
       if (snap.error) throw new Error("discovery_unavailable");
@@ -149,6 +158,7 @@ function failure(error: unknown) {
   }
   const message = error instanceof Error ? error.message : "";
   const errors: Record<string, string> = {
+    scan_migration_required: "Ruajtja automatike e njohurive kërkon përditësimin e databazës. Kontakto administratorin.",
     unauthorized: "Nuk ke qasje në këtë biznes.", stale_draft: "Konfigurimi ndryshoi. Rifresko përmbledhjen dhe provo përsëri.",
     platform_changed: "Ke ndryshuar të dhënat në panel. Rifresko nga paneli përpara konfirmimit.",
     busy: "Analiza po vazhdon. Prit përfundimin përpara konfirmimit.", daily_limit: "Ke arritur kufirin e analizave për sot.",

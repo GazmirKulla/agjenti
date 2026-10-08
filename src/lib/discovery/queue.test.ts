@@ -47,6 +47,14 @@ describe("resumable discovery worker", () => {
     expect(args.p_draft.reviewPreferences).toEqual(preferences);
     expect(args.p_draft.entities.some((e: { target: string }) => e.target === "product")).toBe(true);
   });
+  it("finishes a source scan by routing FAQ atomically, without applying products", async () => {
+    const entities = parseEntities([{ target: "knowledge", facts: [{ field: "title", value: "Dërgesa", evidence: "Dërgesa" }, { field: "body", value: "Dy ditë", evidence: "Dy ditë" }] }], "website", "https://shop.test", "Dërgesa Dy ditë");
+    m.read.mockResolvedValue({ data: { draft: emptyDraft(), revision: 7, signals_source: "manual", signals: { businessType: "ecommerce", offeringTypes: ["standard"] }, baseline: { business: { name: "Studio" }, agents: [] } }, error: null });
+    await processDiscoveryStep({ ...job, stage: "finish", checkpoint: { entities } });
+    const args = m.rpc.mock.calls.find(([name]) => name === "finish_scanned_business_discovery")![1];
+    expect(args.p_knowledge).toEqual(entities);
+    expect(args.p_draft.entities.some((e: { target: string }) => e.target === "knowledge")).toBe(false);
+  });
   it("fences a disconnected/relinked Instagram account before fetching or publishing", async () => {
     await expect(processDiscoveryStep({ ...job, source: "instagram", input: { connectionId: "old", generation: "oldgen" } })).rejects.toThrow("connection_changed");
     expect(m.instagram).not.toHaveBeenCalled();

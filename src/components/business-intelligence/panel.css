@@ -192,3 +192,7 @@
   flex: none;
   accent-color: var(--accent);
 }
+.bi-knowledge-notice { font-size: 13px; color: var(--ink-muted); line-height: 1.7; }
+.bi-entity.has-errors { border-color: var(--danger); background: var(--danger-soft); }
+.bi-validation { color: var(--danger); padding-left: 18px; font-size: 13px; line-height: 1.8; }
+.bi-entity textarea[aria-invalid="true"] { border-color: var(--danger); }

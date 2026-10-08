@@ -94,3 +94,4 @@
   .discovery-entity { padding: 14px; }
   .discovery-actions .btn { width: 100%; }
 }
+.discovery-knowledge-notice { font-size: 13px; line-height: 1.7; color: var(--ink-muted); margin: 18px 0; }

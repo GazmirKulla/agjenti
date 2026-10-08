@@ -64,7 +64,7 @@ beforeEach(() => {
           }
         : name === "claim_intelligence_source"
           ? "source-1"
-          : 1,
+          : name === "save_scanned_intelligence" ? { revision: 1, count: 1, inactiveCount: 0 } : 1,
   }));
 });
 describe("business intelligence boundary", () => {
@@ -144,6 +144,40 @@ describe("business intelligence boundary", () => {
       "https://shop.test",
       "product",
     );
+  });
+  it("routes FAQ from a website directly to Knowledge while keeping products in review", async () => {
+    const text = "Dërgesa Dy ditë Puzzle 12 €";
+    m.website.mockResolvedValue({ text, reference: "https://shop.test", note: "1 page" });
+    const extracted = parseEntities([
+      { target: "knowledge", facts: [{ field: "title", value: "Dërgesa", evidence: "Dërgesa" }, { field: "body", value: "Dy ditë", evidence: "Dy ditë" }] },
+      { target: "product", facts: [{ field: "name", value: "Puzzle", evidence: "Puzzle" }, { field: "price", value: "12", evidence: "12 €" }] },
+    ], "website", "https://shop.test", text);
+    m.normalize.mockResolvedValue(extracted);
+    const response = await POST(request({ action: "ingest", source: "website", target: "product", revision: 0, text: "https://shop.test" }));
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.knowledgeCount).toBe(1);
+    expect(data.draft.entities.some((e: { target: string }) => e.target === "knowledge")).toBe(false);
+    const offer = data.draft.entities.find((e: { target: string }) => e.target === "product");
+    expect(offer.facts.find((f: { field: string }) => f.field === "currency").value).toBe("EUR");
+    expect(data.reviewIds).toEqual([offer.id]);
+    expect(m.rpc).toHaveBeenCalledWith("save_scanned_intelligence", expect.objectContaining({ p_business: "business", p_user: "user", p_knowledge: [extracted[0]] }));
+    expect(m.rpc.mock.calls.some(([name]) => name === "apply_intelligence")).toBe(false);
+  });
+  it("routes eligible FAQ from older drafts without an AI call", async () => {
+    const faq = parseEntities([{ target: "knowledge", facts: [{ field: "title", value: "Dërgesa", evidence: "Dërgesa" }, { field: "body", value: "Dy ditë", evidence: "Dy ditë" }] }], "instagram", "ig:1", "Dërgesa Dy ditë")[0];
+    state = { revision: 0, data: { ...emptyDraft(), entities: [faq] } };
+    const response = await POST(request({ action: "route_knowledge", revision: 0 }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).knowledgeCount).toBe(1);
+    expect(m.normalize).not.toHaveBeenCalled();
+  });
+  it("returns field-specific apply failures without attempting an invalid product write", async () => {
+    const offer = parseEntities([{ target: "product", facts: [{ field: "name", value: "Puzzle" }] }], "manual", "", "")[0];
+    state = { revision: 0, data: { ...emptyDraft(), entities: [offer] } };
+    const response = await POST(request({ action: "apply", revision: 0, confirmed: true, selected: [offer.id] }));
+    expect(await response.json()).toMatchObject({ code: "validation_failed", issues: [{ entityId: offer.id, field: "price" }, { entityId: offer.id, field: "currency" }] });
+    expect(m.rpc.mock.calls.some(([name]) => name === "apply_intelligence")).toBe(false);
   });
   it("requires explicit review and complete selected values", async () => {
     const entity = parseEntities(

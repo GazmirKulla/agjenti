@@ -3,6 +3,7 @@ import { extractInstagram, extractWebsite } from "@/lib/business-intelligence/in
 import { normalizeSource } from "@/lib/business-intelligence/normalization";
 import { emptyDraft, mergeDraft, type Entity, type Draft } from "@/lib/business-intelligence/model";
 import { classifyBusiness, meaningfulEntities, mergedReview, withSetupRecommendations } from "./proposal";
+import { scanKnowledge, withoutScanKnowledge } from "@/lib/business-intelligence/scan-routing";
 import { IMAGE_BATCH_SIZE, type DiscoveryImage } from "./images";
 
 type Checkpoint = {
@@ -97,9 +98,11 @@ export async function processDiscoveryStep(job: Job) {
   let draft = mergedReview(state.draft as Draft, data.draft ?? { ...emptyDraft(), entities: data.entities ?? [] });
   const signals = state.signals_source === "manual" && state.signals ? state.signals : await classifyBusiness(draft);
   draft = withSetupRecommendations(draft, signals, state.baseline);
+  const knowledge = scanKnowledge(draft);
+  draft = withoutScanKnowledge(draft, knowledge);
   await validConnection(job);
-  const finished = await db.rpc("finish_business_discovery", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals });
-  if (finished.error) throw new Error(finished.error.message);
+  const finished = await db.rpc(knowledge.length ? "finish_scanned_business_discovery" : "finish_business_discovery", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, ...(knowledge.length ? { p_knowledge: knowledge } : {}) });
+  if (finished.error) throw new Error(["PGRST202", "42883"].includes(finished.error.code) ? "scan_migration_required" : finished.error.message);
   if (!finished.data) return checkpoint(job, data, "finish");
 }
 
@@ -114,8 +117,9 @@ export async function runDiscoveryQueue(businessId: string | null = null, budget
     const job = (claim.data as Job[] | null)?.[0];
     if (!job) break;
     try { await processDiscoveryStep(job); }
-    catch {
-      await checkpoint(job, job.checkpoint, job.stage, "Analiza u ndërpre. Do të provohet përsëri; mund të vazhdosh edhe manualisht.").catch(() => {});
+    catch (error) {
+      const message = error instanceof Error && error.message === "scan_migration_required" ? "Ruajtja automatike e njohurive kërkon përditësimin e databazës. Kontakto administratorin." : "Analiza u ndërpre. Do të provohet përsëri; mund të vazhdosh edhe manualisht.";
+      await checkpoint(job, job.checkpoint, job.stage, message).catch(() => {});
     }
     processed++;
   }

@@ -120,8 +120,8 @@ export function value(entity: Entity, field: string) {
   return entity.facts.find((f) => f.field === field)?.value ?? "";
 }
 export function mergeDraft(current: Draft, incoming: Entity[]): Draft {
-  const result: Draft = structuredClone(current);
-  for (const item of incoming) {
+  const result = normalizeDraftCurrencies(current);
+  for (const item of normalizeDraftCurrencies({ ...emptyDraft(), entities: incoming }).entities) {
     const entity = result.entities.find(
       (e) =>
         e.target === item.target &&
@@ -282,16 +282,50 @@ export function parseEntities(
     throw new Error(
       "Nuk u gjetën të dhëna të mbështetura për këtë seksion. Provo një faqe tjetër, ndrysho seksionin, ose plotëso manualisht.",
     );
-  return entities;
+  return normalizeDraftCurrencies({ ...emptyDraft(), entities }).entities;
 }
 export type EntityValidationIssue = { entityId: string; field: string; message: string };
 
 // Preserve unknown values for review; only unambiguous names/codes are mapped.
 export function normalizeCurrency(text: string) {
   const trimmed = text.trim();
-  if (/^(lek|lekë|leke|all)$/i.test(trimmed)) return "ALL";
-  if (/^(euro|euros|eur)$/i.test(trimmed)) return "EUR";
+  if (/^(lek|lekë|leke|all)\.?$/i.test(trimmed)) return "ALL";
+  if (/^(euro|euros|eur|€)$/i.test(trimmed)) return "EUR";
+  if (trimmed === "£") return "GBP";
   return /^[a-z]{3}$/i.test(trimmed) ? trimmed.toUpperCase() : trimmed;
+}
+
+// Derive a currency only from the price evidence of the same entity. Never
+// borrow it from another product, a business location, or an ambiguous "$".
+function currencyInPrice(text: string) {
+  const codes = new Set<string>();
+  if (/€|\b(?:eur|euros?|euro)\b/i.test(text)) codes.add("EUR");
+  if (/(?:^|[^\p{L}])(?:all|lek[ëe]?)(?:$|[^\p{L}])/iu.test(text)) codes.add("ALL");
+  for (const code of text.match(/\b(?:USD|GBP|CHF|CAD|AUD|JPY|CNY|SEK|NOK|DKK)\b/gi) ?? []) codes.add(code.toUpperCase());
+  if (text.includes("£")) codes.add("GBP");
+  return codes.size === 1 ? [...codes][0] : null;
+}
+
+export function normalizeDraftCurrencies(draft: Draft): Draft {
+  const normalized = structuredClone(draft);
+  const normalize = (fact: Fact) => fact.field === "currency" && fact.value ? { ...fact, value: normalizeCurrency(fact.value) } : fact;
+  normalized.entities = normalized.entities.map(entity => {
+    const facts = entity.facts.map(normalize);
+    if (["product", "service"].includes(entity.target) && !facts.some(fact => fact.field === "currency" && fact.value)) {
+      const price = facts.find(fact => fact.field === "price" && fact.value && fact.evidence && ["website", "instagram"].includes(fact.source) && fact.evidenceKind !== "visual");
+      const currency = price?.evidence ? currencyInPrice(price.evidence) : null;
+      if (price && currency) {
+        const existing = facts.find(fact => fact.field === "currency");
+        if (!existing?.confirmedByUser && !normalized.conflicts.some(conflict => conflict.entityId === entity.id && conflict.field === "currency")) {
+          const inferred = { ...price, field: "currency", value: currency };
+          return { ...entity, facts: facts.filter(fact => fact.field !== "currency").concat(inferred) };
+        }
+      }
+    }
+    return { ...entity, facts };
+  });
+  normalized.conflicts = normalized.conflicts.map(conflict => ({ ...conflict, current: normalize(conflict.current), incoming: normalize(conflict.incoming) })).filter(conflict => !equivalent(conflict.current.value, conflict.incoming.value));
+  return withMissing(normalized);
 }
 
 export class EntityValidationError extends Error {

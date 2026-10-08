@@ -1,9 +1,13 @@
 "use client";
+import Link from "next/link";
 import { useRef, useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AudioRecorder } from "@/components/onboarding/audio-recorder";
 import {
   emptyDraft,
+  entityValidationIssues,
+  normalizeDraftCurrencies,
+  type EntityValidationIssue,
   fields,
   labels,
   value,
@@ -11,6 +15,7 @@ import {
   type Source,
   type Target,
 } from "@/lib/business-intelligence/model";
+import { scanKnowledge, reviewEntities, knowledgeNotice } from "@/lib/business-intelligence/scan-routing";
 import "./panel.css";
 const sections: Record<string, Target> = {
   products: "product",
@@ -29,6 +34,9 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
   const [opened, setOpened] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [issues, setIssues] = useState<EntityValidationIssue[]>([]);
+  const [knowledgeCount, setKnowledgeCount] = useState(0);
   const [note, setNote] = useState("");
   const [source, setSource] = useState<Source>("audio");
   const [target, setTarget] = useState<Target>(initialTarget ?? "profile");
@@ -48,12 +56,21 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
     setTarget(initialTarget ?? "profile");
     dialog.current?.showModal();
     setBusy(true);
-    setError("");
+    setError(""); setIssues([]); setKnowledgeCount(0); setNote(""); setSelected([]); setEdits({}); setResolved([]); setConfirmed(false);
     try {
       const r = await fetch(endpoint);
-      const data = await r.json();
+      let data = await r.json();
       if (!r.ok) throw new Error(data.error);
-      setDraft(data.draft);
+      setDraft(normalizeDraftCurrencies(data.draft)); setRevision(data.revision);
+      if (scanKnowledge(data.draft).length) {
+        const routed = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "route_knowledge", revision: data.revision }) });
+        const result = await routed.json();
+        if (!routed.ok) throw new Error(result.error);
+        data = result;
+        setKnowledgeCount(data.knowledgeCount ?? 0); setNote(data.note ?? "");
+        router.refresh();
+      }
+      setDraft(normalizeDraftCurrencies(data.draft));
       setRevision(data.revision);
       setEdits({});
       setResolved([]);
@@ -68,7 +85,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
   async function run(action: string, file?: File) {
     setBusy(true);
     setError("");
-    setNote("");
+    setNote(""); setIssues([]);
     try {
       const payload = {
         action,
@@ -100,13 +117,19 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
         signal: AbortSignal.timeout(170000),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error);
-      setDraft(data.draft);
+      if (!r.ok) {
+        if (Array.isArray(data.issues)) { setIssues(data.issues); setExpanded(current => ({ ...current, ...Object.fromEntries(data.issues.map((issue: EntityValidationIssue) => [issue.entityId, true])) })); }
+        throw new Error(data.error);
+      }
+      setDraft(normalizeDraftCurrencies(data.draft));
+      if (data.knowledgeCount) { setKnowledgeCount(count => count + data.knowledgeCount); router.refresh(); }
+      if (data.inactiveKnowledgeCount) setNote(`${data.note ?? ""} ${data.inactiveKnowledgeCount} përgjigje të ndryshme u ruajtën joaktive; kontrolloji te Njohuritë.`);
       setRevision(data.revision);
       setEdits({});
       setResolved([]);
       setConfirmed(false);
-      setNote(data.success ?? data.note ?? "Drafti u ruajt.");
+      if (!data.inactiveKnowledgeCount) setNote(data.success ?? data.note ?? "Drafti u ruajt.");
+      if (action === "ingest") setSelected(reviewEntities(data.draft, target).filter(entity => (data.reviewIds ?? []).includes(entity.id) && !entityValidationIssues([entity]).length && !data.draft.conflicts.some((conflict: { entityId: string }) => conflict.entityId === entity.id)).map(entity => entity.id));
       if (action === "apply") {
         setSelected([]);
         router.refresh();
@@ -122,6 +145,8 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
   function edit(id: string, field: string, text: string) {
     setEdits((e) => ({ ...e, [id]: { ...e[id], [field]: text } }));
     setConfirmed(false);
+    setResolved(current => [...new Set([...current, `${id}:${field}`])]);
+    setIssues(current => current.filter(issue => issue.entityId !== id || issue.field !== field));
   }
   useEffect(() => {
     const listener = (event: Event) => {
@@ -183,7 +208,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                   disabled={busy}
                   onChange={(e) => {
                     setTarget(e.target.value as Target);
-                    setManual({});
+                    setManual({}); setSelected([]); setConfirmed(false); setIssues([]);
                   }}
                 >
                   {Object.entries(labels)
@@ -287,17 +312,18 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                 </button>
               </div>
               <p>
-                Asgjë nuk aplikohet pa konfirmim. Zgjidh vetëm elementet që
-                dëshiron të ruash. Mund të shtosh audio ose burime të tjera.
+                Produktet dhe konfigurimet ruhen pasi t’i konfirmosh. FAQ-të dhe informacioni i përgjithshëm nga website-i ose Instagram-i dërgohen automatikisht te Njohuritë.
               </p>
-              {draft.missingInformation.length > 0 && (
+              <p className="bi-knowledge-notice">{knowledgeCount > 0 ? `${knowledgeNotice(knowledgeCount)} ` : "FAQ-të menaxhohen te Njohuritë. "}<Link className="soft-link" href={`/b/${slug}/knowledge`}>Shiko Njohuritë →</Link></p>
+              {issues.length > 0 && <ul className="bi-validation" role="alert">{issues.map(issue => <li key={`${issue.entityId}:${issue.field}`}>{draft.entities.find(entity => entity.id === issue.entityId)?.facts.find(fact => fact.field === "name" || fact.field === "title")?.value || labels[target]} · {labels[issue.field] ?? issue.field}: {issue.message}</li>)}</ul>}
+              {entityValidationIssues(reviewEntities(draft, target)).length > 0 && (
                 <p role="status">
                   Mungojnë disa të dhëna. Hap elementin për ta plotësuar
                   manualisht ose shto një audio sqaruese.
                 </p>
               )}
-              {draft.entities.map((entity) => (
-                <details className="bi-entity" key={entity.id}>
+              {reviewEntities(draft, target).map((entity) => (
+                <details className={`bi-entity${issues.some(issue => issue.entityId === entity.id) ? " has-errors" : ""}`} open={expanded[entity.id]} onToggle={event => { const open = event.currentTarget.open; setExpanded(current => current[entity.id] === open ? current : { ...current, [entity.id]: open }); }} key={entity.id}>
                   <summary>
                     {labels[entity.target]} ·{" "}
                     {value(entity, "name") ||
@@ -322,7 +348,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                     />
                     Përfshi në ruajtje
                   </label>
-                  {fields[entity.target].map((field) => {
+                  {fields[entity.target].filter(field => value(entity, field) || (entity.target === "product" ? ["name", "price", "currency"] : entity.target === "knowledge" ? ["title", "body"] : entity.target === "workflow" ? ["name", "steps"] : entity.target === "agent" ? ["rules"] : ["name"]).includes(field)).map((field) => {
                     const fact = entity.facts.find((f) => f.field === field);
                     const conflicts = draft.conflicts.filter(
                       (c) => c.entityId === entity.id && c.field === field,
@@ -339,6 +365,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                             ? " · Kërkohet sqarim"
                             : ""}
                           <textarea
+                            aria-invalid={issues.some(issue => issue.entityId === entity.id && issue.field === field)}
                             rows={field === "steps" ? 5 : 2}
                             value={current}
                             onChange={(e) =>
@@ -402,8 +429,8 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                   })}
                 </details>
               ))}
-              {!draft.entities.length && (
-                <p>Draftet nga të gjitha burimet do të shfaqen këtu.</p>
+              {!reviewEntities(draft, target).length && (
+                <p>Nuk ka propozime për këtë seksion. Informacioni i përgjithshëm nga skanimet ruhet te Njohuritë.</p>
               )}
               <label className="bi-check">
                 <input

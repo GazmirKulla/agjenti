@@ -1,4 +1,4 @@
-import { emptyDraft, equivalent, fields, targets, value, withMissing, type Draft, type Entity, type Fact, type Target } from "@/lib/business-intelligence/model";
+import { emptyDraft, equivalent, normalizeDraftCurrencies, fields, targets, value, withMissing, type Draft, type Entity, type Fact, type Target } from "@/lib/business-intelligence/model";
 import { isModuleId, normalizeEnabledModules } from "@/lib/dashboard/modules/dependencies";
 import { generateDashboardProfile, rebuildProfileFromModules } from "@/lib/dashboard/profile/generate";
 import type { DashboardProfile, DashboardSignals, ModuleId } from "@/lib/dashboard/modules/types";
@@ -81,7 +81,7 @@ export function editDiscoveryDraft(draft: Draft, edits: unknown, resolved: unkno
     }
   }
   next.conflicts = next.conflicts.filter((c) => !decisions.has(`${c.entityId}:${c.field}`));
-  return withMissing(next);
+  return normalizeDraftCurrencies(next);
 }
 
 export function canApplyEntity(draft: Draft, id: string) {

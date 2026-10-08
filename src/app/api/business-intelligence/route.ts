@@ -9,7 +9,11 @@ import {
 import { normalizeSource } from "@/lib/business-intelligence/normalization";
 import {
   emptyDraft,
+  normalizeDraftCurrencies,
+  EntityValidationError,
   fields,
+  value,
+  equivalent,
   parseEntities,
   mergeDraft,
   targets,
@@ -19,6 +23,7 @@ import {
   type Target,
   type Source,
 } from "@/lib/business-intelligence/model";
+import { scanKnowledge, withoutScanKnowledge, knowledgeNotice } from "@/lib/business-intelligence/scan-routing";
 import { seedDraft, snapshotEntities } from "@/lib/business-intelligence/state";
 import { revalidatePath } from "next/cache";
 export const runtime = "nodejs";
@@ -44,7 +49,7 @@ export async function GET(request: Request) {
       .maybeSingle();
     if (error) throw error;
     return json({
-      draft: data?.data ?? emptyDraft(),
+      draft: normalizeDraftCurrencies(data?.data ?? emptyDraft()),
       revision: data?.revision ?? 0,
     });
   } catch {
@@ -177,7 +182,19 @@ export async function POST(request: Request) {
       draft.conflicts = draft.conflicts.filter(
         (c) => !resolved.includes(`${c.entityId}:${c.field}`),
       );
-      draft = withMissing(draft);
+      draft = normalizeDraftCurrencies(withMissing(draft));
+    }
+    if (action === "route_knowledge") {
+      const knowledge = scanKnowledge(draft);
+      if (!knowledge.length) return json({ draft, revision, knowledgeCount: 0 });
+      draft = withoutScanKnowledge(draft, knowledge);
+      const saved = await db.rpc("save_scanned_intelligence", { p_business: business.id, p_user: user.id, p_revision: revision, p_data: draft, p_baseline: snap.data, p_knowledge: knowledge });
+      if (saved.error) {
+        if (["PGRST202", "42883"].includes(saved.error.code)) throw new Error("scan_migration_required");
+        throw saved.error;
+      }
+      revalidatePath(`/b/${slug}/knowledge`);
+      return json({ draft, revision: saved.data.revision, knowledgeCount: saved.data.count, inactiveKnowledgeCount: saved.data.inactiveCount, note: knowledgeNotice(saved.data.count) });
     }
     if (action === "refresh") {
       draft = mergeDraft(draft, snapshotEntities(snap.data));
@@ -287,19 +304,28 @@ export async function POST(request: Request) {
             )
           : await normalizeSource(text, source, reference, target);
       draft = mergeDraft(draft, entities);
+      const knowledge = ["website", "instagram"].includes(source) ? scanKnowledge(draft) : [];
+      draft = withoutScanKnowledge(draft, knowledge);
       const history = await db
         .from("business_intelligence_sources")
         .update({ extracted: entities, status: "completed" })
         .eq("id", sourceId);
       if (history.error) throw history.error;
-      const saved = await db.rpc("save_intelligence_draft", {
+      const saved = await db.rpc(knowledge.length ? "save_scanned_intelligence" : "save_intelligence_draft", {
         p_business: business.id,
         p_revision: revision,
         p_data: draft,
         p_baseline: snap.data,
+        ...(knowledge.length ? { p_user: user.id, p_knowledge: knowledge } : {}),
       });
-      if (saved.error) throw saved.error;
-      return json({ draft, revision: saved.data, note });
+      if (saved.error) {
+        if (["PGRST202", "42883"].includes(saved.error.code)) throw new Error("scan_migration_required");
+        throw saved.error;
+      }
+      const knowledgeCount = knowledge.length ? saved.data.count : 0;
+      if (knowledgeCount) revalidatePath(`/b/${slug}/knowledge`);
+      const reviewIds = draft.entities.filter(entity => entity.target === target && entities.some(incoming => incoming.id === entity.id || incoming.target === entity.target && equivalent(value(incoming, "name") || value(incoming, "title"), value(entity, "name") || value(entity, "title")))).map(entity => entity.id);
+      return json({ draft, reviewIds, revision: knowledge.length ? saved.data.revision : saved.data, knowledgeCount, inactiveKnowledgeCount: knowledge.length ? saved.data.inactiveCount : 0, note: [note, knowledgeCount ? knowledgeNotice(knowledgeCount) : ""].filter(Boolean).join(" ") });
     } else throw new Error("Veprim i pavlefshëm.");
     const saved = await db.rpc("save_intelligence_draft", {
       p_business: business.id,
@@ -314,8 +340,8 @@ export async function POST(request: Request) {
       await createServiceSupabase()
         .from("business_intelligence_sources")
         .update({ status: "failed" })
-        .eq("id", sourceId)
-        .eq("status", "pending");
+        .eq("id", sourceId);
+    if (error instanceof EntityValidationError) return json({ code: "validation_failed", error: "Korrigjo fushat e shënuara përpara ruajtjes.", issues: error.issues }, 400);
     const msg =
       error instanceof Error
         ? error.message
@@ -323,6 +349,7 @@ export async function POST(request: Request) {
           ? String(error.message)
           : "";
     const known: Record<string, string> = {
+      scan_migration_required: "Ruajtja automatike e njohurive kërkon përditësimin e databazës. Kontakto administratorin.",
       unauthorized: "Nuk ke qasje në këtë biznes.",
       stale_draft: "Drafti ndryshoi. Rihap panelin.",
       platform_changed:

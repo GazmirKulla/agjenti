@@ -10,7 +10,9 @@ import { canEnableModule, normalizeEnabledModules } from "@/lib/dashboard/module
 import { moduleRegistry, toggleableModules } from "@/lib/dashboard/modules/registry";
 import "./discovery.css";
 
-type Job = { id: string; source: "instagram" | "website"; status: string; stage: string; progress: number; error: string | null; note: string; warnings: string[]; postCount: number; imageCount: number; website: string | null; canResume: boolean };
+import { scanKnowledge, knowledgeNotice } from "@/lib/business-intelligence/scan-routing";
+
+type Job = { id: string; source: "instagram" | "website"; status: string; stage: string; progress: number; error: string | null; note: string; warnings: string[]; postCount: number; imageCount: number; knowledgeCount?: number; inactiveKnowledgeCount?: number; website: string | null; canResume: boolean };
 type State = { available: boolean; error?: string; connection: { username: string | null } | null; draft: Draft; dashboardProfile: DashboardProfile; signals: DashboardSignals | null; revision: number; intelligenceRevision: number; confirmedAt: string | null; jobs: Job[] };
 const stageLabels: Record<string, string> = { capture: "Duke lexuar përmbajtjen", text: "Duke analizuar tekstet", images: "Duke analizuar fotot", finish: "Duke përgatitur konfigurimin", done: "Analiza u përfundua" };
 
@@ -38,6 +40,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   const entityCards = useRef(new Map<string, HTMLDetailsElement>());
   const fieldInputs = useRef(new Map<string, HTMLTextAreaElement | HTMLSelectElement>());
   const refreshButton = useRef<HTMLButtonElement>(null);
+  const autoRouted = useRef(new Set<string>());
   const dirty = useRef(false);
   const selectionTouched = useRef(false);
   const resumePending = useRef(false);
@@ -57,7 +60,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
       setEnabledModules(data.draft.reviewPreferences?.enabledModules ?? data.dashboardProfile.enabledModules);
       if (!selectionTouched.current) {
         const review = { ...data.draft, reviewPreferences: { excludedTargets: data.draft.reviewPreferences?.excludedTargets ?? [], excludedEntityIds: data.draft.reviewPreferences?.excludedEntityIds ?? [], enabledModules: data.draft.reviewPreferences?.enabledModules ?? data.dashboardProfile.enabledModules } };
-        setSelected(data.draft.entities.filter((e) => reviewEntityEnabled(e, review) && canApplyEntity(data.draft, e.id)).map((e) => e.id));
+        setSelected(data.draft.entities.filter((e) => e.target !== "knowledge" && reviewEntityEnabled(e, review) && canApplyEntity(data.draft, e.id)).map((e) => e.id));
       }
     }
     return data;
@@ -67,6 +70,14 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
     const poll = async () => {
       try {
         const data = await load();
+        const revision = `${data.revision}:${data.intelligenceRevision}`;
+        if (!cancelled && data.available && !dirty.current && !data.jobs.some(job => ["queued", "running"].includes(job.status)) && scanKnowledge(data.draft).length && !autoRouted.current.has(revision)) {
+          autoRouted.current.add(revision);
+          const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "route_knowledge", revision: data.revision, intelligenceRevision: data.intelligenceRevision }) });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "Njohuritë nuk u ruajtën.");
+          if (!cancelled) { setNotice(result.success || "Njohuritë u ruajtën."); await load(); }
+        }
         if (!cancelled && data.available && data.jobs.some((job) => job.canResume) && !resumePending.current) {
           resumePending.current = true;
           try { await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resume" }) }); }
@@ -181,7 +192,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   const sectionEnabled = (target: Target) => !excludedTargets.includes(target) && (!sectionModules[target] || enabledModules.includes(sectionModules[target]!));
   const pending = conflictGroups.filter((group) => selected.includes(group.entityId));
   const reviewedEntities = state?.available ? editDiscoveryDraft(state.draft, Object.entries(edits).filter(([id]) => state.draft.entities.some((entity) => entity.id === id)).map(([id, values]) => ({ id, values })), []).entities.map((entity) => entity.target === "profile" ? { ...entity, facts: entity.facts.map((fact) => fact.field === "businessType" ? { ...fact, value: businessType } : fact) } : entity) : [];
-  const localIssues = entityValidationIssues(reviewedEntities.filter((entity) => selected.includes(entity.id)));
+  const localIssues = entityValidationIssues(reviewedEntities.filter((entity) => entity.target !== "knowledge" && selected.includes(entity.id)));
   const validationIssues = [...localIssues, ...serverIssues.filter((issue) => selected.includes(issue.entityId) && !localIssues.some((local) => local.entityId === issue.entityId && local.field === issue.field))];
   const pendingEntityIds = [...new Set([...pending, ...validationIssues].map((group) => group.entityId))].join(",");
   useEffect(() => {
@@ -228,6 +239,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
           <p>{job.status === "failed" ? "Analiza kërkon një provë tjetër" : stageLabels[job.stage] ?? "Në pritje"}</p>
           <progress max={100} value={job.progress} aria-label={`Progresi i analizës së ${job.source}`} />
           <p className="muted-copy">{job.note}</p>
+          {Boolean(job.knowledgeCount) && <p className="muted-copy">{knowledgeNotice(job.knowledgeCount!)}{Boolean(job.inactiveKnowledgeCount) && ` ${job.inactiveKnowledgeCount} përgjigje të ndryshme u ruajtën joaktive për kontroll.`}</p>}
           {job.imageCount > 0 && <p className="muted-copy">Deri në {job.imageCount} foto të përzgjedhura për analizën vizuale.</p>}
           {job.warnings.map((warning, index) => <p key={index} className="muted-copy">{warning}</p>)}
           {job.error && <p role="status">{job.error}</p>}
@@ -244,6 +256,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
           <Link className="soft-link" href={`${home}/settings#modules`}>Ndrysho seksionet që përdor në panel →</Link>
         </> : <>
           <p>Analiza krijon propozime. Mund të çaktivizosh një seksion të tërë ose të përzgjedhësh vetëm disa elemente. Seksionet e çaktivizuara nuk shtohen nga analiza. Çmimet e gjetura duhen kontrolluar.</p>
+          <p className="discovery-knowledge-notice">{sectionEnabled("knowledge") ? "FAQ-të dhe informacioni i përgjithshëm ruhen automatikisht te Njohuritë." : "Njohuritë janë çaktivizuar për këtë analizë; FAQ-të nuk do të shtohen."} <Link className="soft-link" href={`${home}/knowledge`}>Shiko Njohuritë →</Link></p>
           <fieldset disabled={busy || active}>
             {pending.length > 0 && <section className="discovery-conflict-summary" aria-labelledby="discovery-conflict-title">
               <h3 id="discovery-conflict-title">{pending.length === 1 ? "1 fushë kërkon një zgjedhje" : `${pending.length} fusha kërkojnë një zgjedhje`}</h3>
@@ -273,7 +286,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
                 <input type="checkbox" checked={offers.includes(id)} onChange={() => { dirty.current = true; setOffers((current) => current.includes(id) ? current.filter((v) => v !== id) : ["services", "mixed"].includes(id) ? [id] : [...current.filter((v) => !["services", "mixed"].includes(v)), id]); setConfirmed(false); }} /> {label}
               </label>)}</div></div>
             </div>
-            <div className="discovery-entities">{reviewSections.filter((section) => state.draft.entities.some((entity) => entity.target === section.target)).map((section) => <section className={`discovery-review-group${!sectionEnabled(section.target) ? " is-excluded" : ""}`} key={section.target} aria-label={section.label}>
+            <div className="discovery-entities">{reviewSections.filter((section) => section.target !== "knowledge" && state.draft.entities.some((entity) => entity.target === section.target)).map((section) => <section className={`discovery-review-group${!sectionEnabled(section.target) ? " is-excluded" : ""}`} key={section.target} aria-label={section.label}>
               <header className="discovery-group-header"><div><h3>{section.label}</h3><p>{section.description}</p><small>{state.draft.entities.filter((e) => e.target === section.target).length} elemente · {sectionEnabled(section.target) ? "Mund t’i përzgjedhësh më poshtë" : "Nuk do të përdoret nga kjo analizë"}</small></div>{section.target === "profile" ? <span className="discovery-required">Informacioni bazë</span> : <label className="discovery-section-switch"><input type="checkbox" checked={sectionEnabled(section.target)} onChange={(event) => chooseSection(section.target, event.target.checked)} /> Përdor këtë seksion</label>}</header>
               {sectionEnabled(section.target) && state.draft.entities.filter((entity) => entity.target === section.target).map((entity) => <details key={entity.id} className={`discovery-entity${pending.some((group) => group.entityId === entity.id) ? " has-conflicts" : ""}${validationIssues.some((issue) => issue.entityId === entity.id) ? " has-errors" : ""}${highlighted === entity.id ? " is-highlighted" : ""}`} open={expanded[entity.id] ?? false} ref={(element) => { if (element) entityCards.current.set(entity.id, element); else entityCards.current.delete(entity.id); }} onToggle={(event) => { const open = event.currentTarget.open; setExpanded((current) => current[entity.id] === open ? current : { ...current, [entity.id]: open }); }}>
               <summary><span><strong>{entity.target === "agent" ? "Udhëzimet e Agjentit" : (edits[entity.id]?.name ?? (value(entity, "name") || value(entity, "title") || labels[entity.target]))}</strong><small>{labels[entity.target]}{!canApplyEntity(state.draft, entity.id) ? " · ka të dhëna për të plotësuar" : ""}</small>{validationIssues.some((issue) => issue.entityId === entity.id) && <small className="discovery-field-error">Kërkon korrigjim</small>}{conflictGroups.some((group) => group.entityId === entity.id) && <small className="discovery-conflict-badge">{conflictGroups.filter((group) => group.entityId === entity.id).length} {conflictGroups.filter((group) => group.entityId === entity.id).length === 1 ? "fushë" : "fusha"} me mospërputhje</small>}</span><span>{selected.includes(entity.id) ? "Përzgjedhur" : "Për më vonë"}</span></summary>

@@ -26,7 +26,7 @@ export async function KnowledgeWorkspace({
   const db = createServiceSupabase();
   const { data: entries, error: loadError } = await db
     .from("knowledge_entries")
-    .select("id,title,body,intent_key")
+    .select("id,title,body,intent_key,is_active,updated_at")
     .eq("business_id", access.business.id)
     .order("sort_order");
   const visibleEntries = services
@@ -110,6 +110,25 @@ export async function KnowledgeWorkspace({
     revalidatePath(`/b/${slug}`, "layout");
   }
 
+  async function saveEntry(formData: FormData) {
+    "use server";
+    const session = await getSessionUser();
+    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
+    const acc = await requireBusinessAccess(session.id, slug);
+    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
+    const title = String(formData.get("title") ?? "").trim();
+    const body = String(formData.get("body") ?? "").trim();
+    if (!title || !body || title.length > 8000 || body.length > 8000) return { error: "Plotëso titullin dhe përmbajtjen (deri në 8000 karaktere)." };
+    const result = await createServiceSupabase().from("knowledge_entries")
+      .update({ title, body, is_active: formData.get("is_active") === "on", updated_at: new Date().toISOString() })
+      .eq("business_id", acc.business.id).eq("id", String(formData.get("id") ?? ""))
+      .eq("updated_at", String(formData.get("updated_at") ?? "")).select("id").maybeSingle();
+    if (result.error) return { error: "Njohuria nuk u ruajt. Provo përsëri." };
+    if (!result.data) return { error: "Njohuria ndryshoi ose u hoq. Rifresko faqen përpara ruajtjes." };
+    revalidatePath(`/b/${slug}`, "layout");
+    return { success: "Njohuria u ruajt." };
+  }
+
   return (
     <>
       <PageHeading
@@ -158,7 +177,7 @@ export async function KnowledgeWorkspace({
           subtitle: e.body,
           badge: (
             <span className="status-badge">
-              {services ? "Shërbim" : "Njohuri"}
+              {services ? "Shërbim" : "Njohuri"} · {e.is_active ? "Aktive" : "Joaktive"}
             </span>
           ),
           detail: (
@@ -169,12 +188,15 @@ export async function KnowledgeWorkspace({
                   <p>{e.intent_key || "Informacion i biznesit"}</p>
                 </div>
               </div>
-              <div className="detail-block">
-                <h3>Përmbajtja</h3>
-                <p className="whitespace-pre-wrap text-sm leading-7 text-ink-muted">
-                  {e.body}
-                </p>
-              </div>
+              {!e.is_active && <p className="muted-copy">Kjo njohuri nuk përdoret nga Agjenti. Kontrolloje përpara aktivizimit.</p>}
+              <ActionForm action={saveEntry} className="grid gap-4 detail-block">
+                <input type="hidden" name="id" value={e.id} />
+                <input type="hidden" name="updated_at" value={e.updated_at} />
+                <label className="form-label">Titulli<input name="title" className="field" defaultValue={e.title} required maxLength={8000} /></label>
+                <label className="form-label">Përmbajtja<textarea name="body" className="field" rows={10} defaultValue={e.body} required maxLength={8000} /></label>
+                <label className="form-label flex items-center gap-2"><input name="is_active" type="checkbox" defaultChecked={e.is_active} /> Përdore në përgjigjet e Agjentit</label>
+                <button className="btn btn-primary" type="submit">Ruaj ndryshimet</button>
+              </ActionForm>
             </>
           ),
         }))}

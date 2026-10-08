@@ -49,13 +49,13 @@ describe("discovery API boundary", () => {
     expect(args.p_profile.enabledModules).not.toContain("products");
     expect(args.p_profile.source).toBe("manual");
   });
-  it("returns field issues for the existing Lek draft before calling the confirmation RPC", async () => {
+  it("normalizes an existing Lek draft and reports the remaining price issue before confirmation", async () => {
     const e = state.draft.entities[0];
     e.facts.find((fact) => fact.field === "currency")!.value = "Lek";
     e.facts.find((fact) => fact.field === "price")!.value = "-2";
     const response = await POST(request({ action: "confirm", revision: 2, intelligenceRevision: 0, selected: [e.id], confirmed: true }));
     expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ code: "validation_failed", issues: [{ entityId: e.id, field: "price" }, { entityId: e.id, field: "currency" }] });
+    expect(await response.json()).toMatchObject({ code: "validation_failed", issues: [{ entityId: e.id, field: "price" }] });
     expect(m.rpc).not.toHaveBeenCalled();
   });
   it("reports missing fields only for selected entities and allows saving a partial correction", async () => {
@@ -78,6 +78,16 @@ describe("discovery API boundary", () => {
     expect(JSON.stringify(response)).not.toContain("PRIVATE DATABASE DETAIL");
     expect(JSON.stringify(log.mock.calls)).not.toContain("PRIVATE DATABASE DETAIL");
     log.mockRestore();
+  });
+  it("routes existing supported FAQ with authorized identity and removes it from onboarding review", async () => {
+    const faq = parseEntities([{ target: "knowledge", facts: [{ field: "title", value: "Dërgesa", evidence: "Dërgesa" }, { field: "body", value: "Dy ditë", evidence: "Dy ditë" }] }], "website", "https://shop.test", "Dërgesa Dy ditë")[0];
+    state.draft.entities.push(faq);
+    m.rpc.mockResolvedValue({ data: { count: 1, inactiveCount: 0 }, error: null });
+    expect((await POST(request({ action: "route_knowledge", revision: 2, intelligenceRevision: 0, businessId: "victim", userId: "victim" }))).status).toBe(200);
+    const args = m.rpc.mock.calls[0][1];
+    expect(m.rpc.mock.calls[0][0]).toBe("route_discovery_knowledge");
+    expect(args).toMatchObject({ p_business: "server-business", p_user: "verified-user", p_knowledge: [faq] });
+    expect(args.p_draft.entities.some((e: { target: string }) => e.target === "knowledge")).toBe(false);
   });
   it("rejects unauthenticated, cross-tenant and cross-origin requests before queuing", async () => {
     m.user.mockResolvedValue(null);
