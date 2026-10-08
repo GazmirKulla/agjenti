@@ -40,8 +40,8 @@ export async function extractWebsite(url: string) {
         pages.push(result.value);
       else skipped++;
   }
-  const text = pages
-    .map((page) => {
+  const captured = pages
+    .map((page, index) => {
       const product = extractProductFromHtml(page.body, page.url);
       const plain = page.body
         .replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
@@ -51,13 +51,15 @@ export async function extractWebsite(url: string) {
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 11000);
-      return `URL: ${page.url}\n${plain}\n${product ? JSON.stringify(product) : ""}`;
-    })
-    .join("\n\n")
-    .slice(0, 65000);
+      const title = page.body.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      return { text: `URL: ${page.url}\n${plain}\n${product ? JSON.stringify(product) : ""}`, preview: { id: `page-${index}`, title: (title || product?.name || `${new URL(page.url).hostname}${new URL(page.url).pathname}`).slice(0, 120), excerpt: plain.slice(0, 180), imageUrl: null } };
+    });
+  const text = captured.map(page => page.text).join("\n\n").slice(0, 65000);
   return {
     text,
     reference: base.href,
+    previews: captured.map(page => page.preview),
+    pageCount: pages.length,
     note: `U lexuan ${pages.length} faqe publike (maksimumi 8 për skanim). ${skipped ? `${skipped} faqe nuk u lexuan.` : ""} Për katalogë më të mëdhenj, skano edhe faqet e kategorive.`,
   };
 }

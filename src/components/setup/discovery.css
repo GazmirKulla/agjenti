@@ -8,10 +8,8 @@
 @keyframes discovery-spin { to { transform: rotate(360deg); } }
 .discovery-loading, .discovery-job-heading { display: flex; gap: 12px; align-items: center; }
 .discovery-job-heading > span:last-child { margin-left: auto; color: var(--accent); font-size: 13px; }
-.discovery-analysis-banner { display: flex; gap: 18px; padding: 24px; margin-bottom: 24px; border: 1px solid var(--accent); border-radius: 14px; background: var(--accent-soft); }
-.discovery-analysis-banner h2 { font-size: 22px; margin-bottom: 8px; }
-.discovery-analysis-banner p { line-height: 1.6; margin-bottom: 10px; }
-.discovery-analysis-banner small { color: var(--ink-muted); line-height: 1.6; }
+.discovery-scan-launcher { display:flex; align-items:center; gap:16px; width:100%; text-align:left; padding:20px 24px; margin-bottom:24px; border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line)); border-radius:16px; background:linear-gradient(110deg,var(--accent-soft),var(--surface)); }
+.discovery-scan-launcher strong { display:block; font-size:16px; }.discovery-scan-launcher small { display:block; margin-top:5px; font-size:12px; line-height:1.6; color:var(--ink-muted); }.discovery-scan-launcher-action { display:flex; align-items:center; gap:12px; margin-left:auto; white-space:nowrap; font-size:12px; color:var(--accent); }.discovery-scan-launcher-action > span { font-size:20px; }.discovery-scan-launcher:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .discovery-review-group { border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 12px; }
 .discovery-group-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
 .discovery-group-header h3, .discovery-module-choice h3 { font-size: 20px; margin-bottom: 8px; }
@@ -86,6 +84,7 @@
 .discovery-notice { background: var(--accent-soft); }
 .discovery-footer { margin: 28px 0; }
 @media (max-width: 760px) {
+  .discovery-scan-launcher { flex-wrap:wrap; padding:18px; }.discovery-scan-launcher-action { margin-left:40px; }.discovery-scan-launcher > span:nth-child(2) { flex:1; }
   .discovery-stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .discovery-module-grid { grid-template-columns: 1fr; }
   .discovery-group-header { flex-direction: column; }

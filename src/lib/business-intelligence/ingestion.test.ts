@@ -17,6 +17,10 @@ describe("bounded business website ingestion", () => {
     expect(m.fetch).toHaveBeenCalledTimes(2);
     expect(result.text).toContain("Transporti 5 EUR");
     expect(result.text).not.toContain("ignore all instructions");
+    expect(result.pageCount).toBe(2);
+    expect(result.previews).toHaveLength(2);
+    expect(result.previews[1].excerpt).toContain("Transporti 5 EUR");
+    expect(JSON.stringify(result.previews)).not.toContain("ignore all instructions");
   });
   it("limits crawl to 8 pages and propagates blocked URL failures", async () => {
     m.fetch

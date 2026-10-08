@@ -9,10 +9,11 @@ import type { DashboardProfile, DashboardSignals, ModuleId } from "@/lib/dashboa
 import { canEnableModule, normalizeEnabledModules } from "@/lib/dashboard/modules/dependencies";
 import { moduleRegistry, toggleableModules } from "@/lib/dashboard/modules/registry";
 import "./discovery.css";
+import { DiscoveryScanDialog, type ScanJob } from "./scan-dialog";
 
 import { scanKnowledge, knowledgeNotice } from "@/lib/business-intelligence/scan-routing";
 
-type Job = { id: string; source: "instagram" | "website"; status: string; stage: string; progress: number; error: string | null; note: string; warnings: string[]; postCount: number; imageCount: number; knowledgeCount?: number; inactiveKnowledgeCount?: number; website: string | null; canResume: boolean };
+type Job = ScanJob & { note: string; warnings: string[]; knowledgeCount?: number; inactiveKnowledgeCount?: number; website: string | null; canResume: boolean };
 type State = { available: boolean; error?: string; connection: { username: string | null } | null; draft: Draft; dashboardProfile: DashboardProfile; signals: DashboardSignals | null; revision: number; intelligenceRevision: number; confirmedAt: string | null; jobs: Job[] };
 const stageLabels: Record<string, string> = { capture: "Duke lexuar përmbajtjen", text: "Duke analizuar tekstet", images: "Duke analizuar fotot", finish: "Duke përgatitur konfigurimin", done: "Analiza u përfundua" };
 
@@ -24,6 +25,9 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [startingSource, setStartingSource] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
+  const scanningIds = useRef<string[]>([]);
+  const wasAnalyzing = useRef(false);
   const [excludedTargets, setExcludedTargets] = useState<Target[]>([]);
   const [enabledModules, setEnabledModules] = useState<ModuleId[]>([]);
   const [website, setWebsite] = useState("");
@@ -98,7 +102,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
       return;
     }
     setBusy(true);
-    if (action === "start") setStartingSource(String(extra.source ?? ""));
+    if (action === "start") { setStartingSource(String(extra.source ?? "")); setScanOpen(true); if (!active) scanningIds.current = []; }
     try {
       const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, revision: state?.revision, intelligenceRevision: state?.intelligenceRevision, businessType, offeringTypes: offers, edits: Object.entries(edits).map(([id, values]) => ({ id, values })), selected, resolved, confirmed, reviewPreferences: { excludedTargets, excludedEntityIds: state?.draft.entities.filter((e) => !selected.includes(e.id)).map((e) => e.id) ?? [], enabledModules }, ...extra }) });
       const result = await response.json();
@@ -187,6 +191,13 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   }
   const active = state?.jobs.some((job) => ["queued", "running"].includes(job.status)) ?? false;
   const analyzing = active || Boolean(startingSource);
+  const activeJobIds = state?.jobs.filter(job => ["queued", "running"].includes(job.status)).map(job => job.id).join(",") ?? "";
+  useEffect(() => {
+    if (analyzing && !wasAnalyzing.current) { scanningIds.current = []; setScanOpen(true); }
+    if (activeJobIds) scanningIds.current = [...new Set([...scanningIds.current, ...activeJobIds.split(",")])];
+    wasAnalyzing.current = analyzing;
+  }, [analyzing, activeJobIds]);
+  const scanJobs = state?.jobs.filter(job => active ? ["queued", "running"].includes(job.status) || scanningIds.current.includes(job.id) : !startingSource && scanningIds.current.includes(job.id)) ?? [];
   const step = state?.confirmedAt ? 4 : analyzing ? 2 : state?.draft.entities.length ? 3 : 1;
   const conflictGroups = state ? discoveryConflictGroups(state.draft, undefined, resolved) : [];
   const sectionEnabled = (target: Target) => !excludedTargets.includes(target) && (!sectionModules[target] || enabledModules.includes(sectionModules[target]!));
@@ -212,7 +223,8 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
         {["Lidh burimet", "Analiza", "Rishiko dhe zgjidh", "Provo Agjentin"].map((label, index) => <li key={label} aria-current={step === index + 1 ? "step" : undefined} className={step > index + 1 ? "is-done" : ""}><span>{step > index + 1 ? "✓" : index + 1}</span>{label}</li>)}
       </ol>
       {!state && <p role="status" className="discovery-loading"><span className="discovery-spinner" aria-hidden="true" /> Duke ngarkuar konfigurimin…</p>}
-      {analyzing && <section id="discovery-analysis" className="discovery-analysis-banner" role="status" aria-live="polite" aria-busy="true"><span className="discovery-spinner" aria-hidden="true" /><div><h2>Po analizojmë biznesin tënd</h2><p>{startingSource ? `Po nisim analizën e ${startingSource === "instagram" ? "Instagram-it" : "website-it"}.` : "Po lexojmë përmbajtjen dhe po përgatisim propozimet."} Rezultatet do të shfaqen këtu automatikisht.</p><small>Progresi ruhet edhe nëse largohesh nga faqja. Kur të kthehesh te Onboarding, analiza vazhdon nga aty ku mbeti.</small></div></section>}
+      <DiscoveryScanDialog open={scanOpen} jobs={scanJobs} startingSource={startingSource} error={error} onClose={() => setScanOpen(false)} onReview={() => { setScanOpen(false); requestAnimationFrame(() => document.getElementById("discovery-review-title")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} />
+      {analyzing && <button id="discovery-analysis" type="button" className="discovery-scan-launcher" onClick={() => setScanOpen(true)}><span className="discovery-spinner" aria-hidden="true" /><span><strong>Po njohim biznesin tënd</strong><small>Analiza vazhdon në background. Ndiq postimet dhe progresin.</small></span><span className="discovery-scan-launcher-action">Shiko analizën <span aria-hidden="true">↗</span></span></button>}
       {state && !state.available && <p role="status">{state.error}</p>}
       <div className="discovery-sources" aria-label="Hapi 1: Lidh burimet">
         <article className="panel section-pad">

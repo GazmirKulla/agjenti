@@ -163,10 +163,18 @@ describe("discovery API boundary", () => {
     expect(args.p_entities[0].facts.every((f: { confirmedByUser: boolean }) => f.confirmedByUser)).toBe(true);
     expect(args).toMatchObject({ p_business: "server-business", p_user: "verified-user", p_profile: { enabledModules: manual.enabledModules, source: "manual" } });
   });
-  it("returns sanitized progress without captured texts, image URLs or connection secrets", async () => {
+  it("returns sanitized progress without raw captured texts, invalid media or connection secrets", async () => {
     jobs = [{ id: "job", source: "website", status: "queued", stage: "images", input: { url: "https://shop.test" }, checkpoint: { text: "PRIVATE CAPTURE", images: [{ url: "PRIVATE MEDIA" }], nextImage: 0 }, next_attempt_at: new Date(0).toISOString(), error: null }];
     const text = await (await GET(readRequest())).text();
     expect(text).not.toContain("PRIVATE CAPTURE"); expect(text).not.toContain("PRIVATE MEDIA");
     expect(JSON.parse(text).jobs[0]).toMatchObject({ progress: 30, canResume: true, imageCount: 1 });
+  });
+  it("returns actual bounded media previews only after tenant authorization", async () => {
+    jobs = [{ id: "job", source: "instagram", status: "running", stage: "images", checkpoint: { text: "PRIVATE CAPTURE", images: [{ id: "one", url: "https://scontent.cdninstagram.com/photo.jpg", caption: "Oferta jonë" }], postCount: 10, nextImage: 0 }, input: { access_token: "SECRET" }, leased_until: new Date(Date.now() + 60000).toISOString(), error: null }];
+    const body = await (await GET(readRequest())).json();
+    expect(body.jobs[0]).toMatchObject({ imageCount: 1, postCount: 10, previews: [{ imageUrl: "https://scontent.cdninstagram.com/photo.jpg", excerpt: "Oferta jonë" }] });
+    expect(JSON.stringify(body.jobs)).not.toMatch(/PRIVATE CAPTURE|SECRET/);
+    m.access.mockResolvedValue(null);
+    expect((await GET(readRequest())).status).toBe(403);
   });
 });

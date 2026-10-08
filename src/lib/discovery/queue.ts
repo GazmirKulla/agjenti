@@ -5,10 +5,12 @@ import { emptyDraft, mergeDraft, type Entity, type Draft } from "@/lib/business-
 import { classifyBusiness, meaningfulEntities, mergedReview, withSetupRecommendations } from "./proposal";
 import { scanKnowledge, withoutScanKnowledge } from "@/lib/business-intelligence/scan-routing";
 import { IMAGE_BATCH_SIZE, type DiscoveryImage } from "./images";
+import type { ScanPreview } from "./previews";
 
 type Checkpoint = {
   text?: string; reference?: string; note?: string; website?: string | null;
   postCount?: number; images?: DiscoveryImage[]; entities?: Entity[];
+  previews?: ScanPreview[]; pageCount?: number;
   nextImage?: number; warnings?: string[];
   draft?: Draft;
 };
@@ -58,7 +60,8 @@ export async function processDiscoveryStep(job: Job) {
     const captured = job.source === "instagram" ? await extractInstagram(job.business_id) : await extractWebsite(job.input.url!);
     // Do not persist the decrypted token, fetch Request, or provider errors.
     const ig = job.source === "instagram" ? captured as Awaited<ReturnType<typeof extractInstagram>> : null;
-    const next: Checkpoint = { text: captured.text, reference: captured.reference, note: captured.note, entities: [], images: ig?.images ?? [], postCount: ig?.postCount, website: ig?.website ?? null };
+    const web = job.source === "website" ? captured as Awaited<ReturnType<typeof extractWebsite>> : null;
+    const next: Checkpoint = { text: captured.text, reference: captured.reference, note: captured.note, entities: [], images: ig?.images ?? [], postCount: ig?.postCount, website: ig?.website ?? null, previews: web?.previews ?? [], pageCount: web?.pageCount ?? 0 };
     await validConnection(job);
     return checkpoint(job, next, "text");
   }

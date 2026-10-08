@@ -11,6 +11,7 @@ import { scanKnowledge, withoutScanKnowledge, knowledgeNotice } from "@/lib/busi
 import { seedDraft } from "@/lib/business-intelligence/state";
 import { parseDashboardProfile } from "@/lib/dashboard/profile/service";
 import { businessProfiles, allowedOfferings } from "@/lib/onboarding/rules";
+import { discoveryPreviews } from "@/lib/discovery/previews";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
     const prior = state.data?.baseline?.business?.dashboard_profile;
     const dashboardProfile = reviewDashboardProfile(draft, signals, prior?.source === "manual" ? parseDashboardProfile(prior) : null);
     return json({ available: true, connection: connection.data, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null,
-      jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, knowledgeCount: job.checkpoint?.knowledgeCount ?? 0, inactiveKnowledgeCount: job.checkpoint?.inactiveKnowledgeCount ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
+      jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, nextImage: job.checkpoint?.nextImage ?? 0, previews: discoveryPreviews(job.source, job.checkpoint), pageCount: job.checkpoint?.pageCount ?? 0, knowledgeCount: job.checkpoint?.knowledgeCount ?? 0, inactiveKnowledgeCount: job.checkpoint?.inactiveKnowledgeCount ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
     });
   } catch (error) { return failure(error); }
 }
