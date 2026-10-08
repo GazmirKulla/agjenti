@@ -19,16 +19,19 @@ export function manualContextSignals(baseline: Record<string, unknown>) {
   return raw?.source === "manual" ? parseDashboardProfile(raw)?.signals ?? null : null;
 }
 
-export function automaticSetup(draft: Draft, signals: DashboardSignals, baseline: Record<string, unknown>) {
+export function automaticSetup(draft: Draft, signals: DashboardSignals, baseline: Record<string, unknown>, generatedAgent?: { id: string; instructions: string } | null) {
   const business = baseline.business as { name: string; dashboard_profile?: unknown };
   const raw = business.dashboard_profile as { source?: string } | undefined;
   const prior = raw?.source === "manual" ? parseDashboardProfile(raw) : null;
   const answers = { ...answersFor(business.name, signals, contextDraft(draft)), onboardingMode: "sources" as const };
   const agents = (baseline.agents ?? []) as { id: string; is_active: boolean; instructions: string }[];
   const starter = agents.find(agent => !agent.is_active && agent.instructions === basicInstructions(business.name));
-  const agent = agents.some(agent => agent.is_active) || (agents.length > 0 && !starter) ? null : {
-    id: starter?.id ?? crypto.randomUUID(),
-    expectedInstructions: starter?.instructions ?? null,
+  const generated = agents.find(agent => agent.is_active && agent.id === generatedAgent?.id && agent.instructions === generatedAgent?.instructions);
+  const eligible = agents.some(agent => agent.is_active) ? generated && agents.filter(agent => agent.is_active).length === 1 : starter || !agents.length;
+  const excluded = draft.reviewPreferences?.excludedTargets.includes("agent") || (draft.reviewPreferences?.enabledModules && !draft.reviewPreferences.enabledModules.includes("agents"));
+  const agent = !eligible || excluded ? null : {
+    id: generated?.id ?? starter?.id ?? crypto.randomUUID(),
+    expectedInstructions: generated?.instructions ?? starter?.instructions ?? null,
     // Descriptions are source material, not user-confirmed commands. They are
     // available through Knowledge; generated instructions contain platform rules.
     instructions: initialInstructions({ ...answers, details: answers.details ? { ...answers.details, businessDescription: null } : undefined }),
@@ -43,11 +46,15 @@ export function automaticSetup(draft: Draft, signals: DashboardSignals, baseline
 export function profileKnowledge(draft: Draft): Entity[] {
   const profile = draft.entities.find(entity => entity.target === "profile");
   if (!profile) return [];
-  const names: Record<string, string> = { description: "Rreth biznesit", contact: "Kontakti i biznesit", shipping: "Transporti", returns: "Kthimet", policies: "Politikat e biznesit" };
+  const names: Record<string, string> = { description: "Rreth biznesit", offerings: "Çfarë ofron biznesi", audience: "Për kë janë ofertat", benefits: "Përfitimet", usage: "Si përdoren", ordering: "Si bëhet kërkesa ose porosia", delivery: "Si merret produkti ose shërbimi", payment: "Mënyra e pagesës", hours: "Orari", contact: "Kontakti i biznesit", shipping: "Transporti", returns: "Kthimet", policies: "Politikat e biznesit" };
+  const bodies = new Set(draft.entities.filter(entity => entity.target === "knowledge").flatMap(entity => entity.facts.filter(fact => fact.field === "body").map(fact => fact.value)));
   return Object.entries(names).flatMap(([field, title]) => {
     const fact = profile.facts.find(fact => fact.field === field);
     // Contradictions and image-only descriptions are not silently published.
     if (!fact?.value || !fact.evidence || !["website", "instagram"].includes(fact.source) || fact.evidenceKind === "visual" || draft.conflicts.some(conflict => conflict.entityId === profile.id && conflict.field === field)) return [];
+    // Avoid publishing the same answer once as a profile fact and again as a topic.
+    if (bodies.has(fact.value)) return [];
+    bodies.add(fact.value);
     return [{ id: crypto.randomUUID(), target: "knowledge" as const, facts: [
       { ...fact, field: "title", value: title }, { ...fact, field: "body" },
     ] }];

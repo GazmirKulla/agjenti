@@ -7,6 +7,21 @@ import { generateDashboardProfile } from "@/lib/dashboard/profile/generate";
 
 const profile = (text = "Transporti zgjat dy ditë") => parseEntities([{ target: "profile", facts: [{ field: "shipping", value: text, evidence: text }] }], "instagram", "ig:1", text)[0];
 describe("information-first onboarding", () => {
+  it("publishes audience, offering, benefits and usage independently without duplicating an extracted topic", () => {
+    const facts = { offerings: "Fletë pune edukative", audience: "Fëmijë 3–6 vjeç", benefits: "Mësim pa ekran", usage: "Printo PDF-në" };
+    const entities = parseEntities([{ target: "profile", facts: Object.entries(facts).map(([field, value]) => ({ field, value, evidence: value })) }, { target: "knowledge", facts: [{ field: "title", value: "Mësimi", evidence: facts.benefits }, { field: "body", value: facts.benefits, evidence: facts.benefits }] }], "instagram", "ig:studio", Object.values(facts).join("\n"));
+    const result = profileKnowledge({ ...emptyDraft(), entities });
+    expect(result).toHaveLength(3);
+    expect(result.map(entity => entity.facts[1].value)).toEqual([facts.offerings, facts.audience, facts.usage]);
+  });
+  it("enriches only a tracked generated agent and leaves manual edits or additional active agents intact", () => {
+    const generated = { id: "generated", instructions: "Previously generated" };
+    const baseline = { business: { name: "Studio" }, agents: [{ ...generated, is_active: true }] };
+    expect(automaticSetup(emptyDraft(), signalsFor("services", ["services"]), baseline, generated).agent).toMatchObject({ id: generated.id, expectedInstructions: generated.instructions });
+    expect(automaticSetup(emptyDraft(), signalsFor("services", ["services"]), { ...baseline, agents: [{ ...baseline.agents[0], instructions: "Manual correction" }] }, generated).agent).toBeNull();
+    expect(automaticSetup(emptyDraft(), signalsFor("services", ["services"]), { ...baseline, agents: [...baseline.agents, { ...baseline.agents[0], id: "custom" }] }, generated).agent).toBeNull();
+    expect(automaticSetup({ ...emptyDraft(), reviewPreferences: { excludedTargets: ["agent"], excludedEntityIds: [] } }, signalsFor("services", ["services"]), baseline, generated).agent).toBeNull();
+  });
   it("ignores offers and workflow commands while retaining context and its conflicts", () => {
     const entries = parseEntities(["profile", "knowledge", "product", "service", "workflow", "agent"].map(target => ({ target, facts: [{ field: target === "knowledge" ? "title" : target === "agent" ? "rules" : "name", value: "Entry" }, ...(target === "knowledge" ? [{ field: "body", value: "First answer" }] : [])] })), "manual", "test", "");
     expect(businessContext(entries).map(entry => entry.target)).toEqual(["profile", "knowledge"]);

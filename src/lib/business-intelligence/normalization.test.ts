@@ -4,6 +4,14 @@ vi.mock("openai", () => ({ default: class { responses = { create: m.create }; } 
 import { normalizeSource } from "./normalization";
 afterEach(() => vi.unstubAllEnvs());
 describe("multimodal source normalization", () => {
+  it("retains independent knowledge topics with grounded authored titles, not only literal FAQs", async () => {
+    const passages = ["Fletë pune edukative për fëmijë", "Për moshat 3–6 vjeç", "Mësojnë pa ekran dhe zhvillojnë logjikën", "Printoji dhe përdori në shtëpi"];
+    m.create.mockResolvedValue({ status: "completed", output_text: JSON.stringify({ entities: passages.map((text, i) => ({ target: "knowledge", facts: [{ field: "title", value: ["Oferta", "Mosha", "Përfitimet", "Përdorimi"][i], evidence: text }, { field: "body", value: text, evidence: text }] })) }) });
+    const result = await normalizeSource(passages.join("\n"), "instagram", "ig:studio", "knowledge", [], "onboarding");
+    expect(result).toHaveLength(4);
+    expect(result.every(entity => entity.facts.every(fact => fact.value))).toBe(true);
+    expect(m.create.mock.calls.at(-1)![0].instructions).toContain("rather than collapsing everything into one");
+  });
   it("uses a context-only schema and rejects accidental product/service extraction during onboarding", async () => {
     m.create.mockResolvedValue({ status: "completed", output_text: JSON.stringify({ entities: [
       { target: "product", facts: [{ field: "name", value: "Monday announcement", evidence: "Monday announcement" }] },

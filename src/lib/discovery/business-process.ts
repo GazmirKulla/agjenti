@@ -3,7 +3,7 @@ import { agentModel } from "@/lib/agents/generate";
 import type { Draft } from "@/lib/business-intelligence/model";
 
 export type ProcessStep = { key: string; title: string; description: string; evidence: string; sourceRef: string };
-export type BusinessProcess = { version: 1; source: "generated" | "manual"; enabled: boolean; name: string; summary: string; steps: ProcessStep[]; unknowns: string[] };
+export type BusinessProcess = { version: 1; source: "generated" | "manual"; basis?: "onboarding"; enabled: boolean; name: string; summary: string; steps: ProcessStep[]; publishedSteps?: ProcessStep[]; unknowns: string[] };
 export type ProcessSource = { reference: string; text: string };
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const comparable = (text: string) => text.normalize("NFKC").replace(/\s+/g, " ").trim();
@@ -23,12 +23,21 @@ export function parseBusinessProcess(raw: unknown, manual = false): BusinessProc
   }
   const name = clean(input.name, 120), summary = clean(input.summary, 1000);
   if (!name || !summary || !steps.length) return null;
-  return { version: 1, source: manual || input.source === "manual" ? "manual" : "generated", enabled: input.enabled !== false, name, summary, steps, unknowns: input.unknowns.map(item => clean(item, 300)).filter(Boolean) };
+  let publishedSteps: ProcessStep[] | undefined;
+  if (input.publishedSteps !== undefined) {
+    if (!Array.isArray(input.publishedSteps) || input.publishedSteps.length > 8) return null;
+    if (input.publishedSteps.length) {
+      const published = parseBusinessProcess({ ...input, steps: input.publishedSteps, publishedSteps: undefined }, manual);
+      if (!published) return null;
+      publishedSteps = published.steps;
+    }
+  }
+  return { version: 1, source: manual || input.source === "manual" ? "manual" : "generated", ...(input.basis === "onboarding" ? { basis: "onboarding" as const } : {}), enabled: input.enabled !== false, name, summary, steps, ...(publishedSteps ? { publishedSteps } : {}), unknowns: input.unknowns.map(item => clean(item, 300)).filter(Boolean) };
 }
 export function processSources(draft: Draft, text: string, reference: string, previous: BusinessProcess | null): ProcessSource[] {
   const sources = [{ reference, text: text.slice(0, 65000) }];
   // Keep earlier, cited steps available when a second source enriches the process.
-  for (const step of previous?.steps ?? []) if (step.evidence) sources.push({ reference: step.sourceRef, text: step.evidence });
+  for (const step of [...(previous?.steps ?? []), ...(previous?.publishedSteps ?? [])]) if (step.evidence && !step.sourceRef.startsWith("onboarding:")) sources.push({ reference: step.sourceRef, text: step.evidence });
   for (const entity of draft.entities) for (const fact of entity.facts) {
     if (fact.value && fact.evidence && ["website", "instagram"].includes(fact.source) && fact.evidenceKind !== "visual" && !draft.conflicts.some(conflict => conflict.entityId === entity.id && conflict.field === fact.field)) sources.push({ reference: fact.sourceRef, text: fact.evidence });
   }
@@ -67,5 +76,5 @@ export async function prepareBusinessProcess(sources: ProcessSource[]): Promise<
 }
 export function businessProcessContext(process: BusinessProcess | null) {
   if (!process?.enabled) return "";
-  return JSON.stringify({ name: process.name, summary: process.summary, steps: process.steps.map(step => ({ title: step.title, description: step.description })), unknowns: process.unknowns });
+  return JSON.stringify({ name: process.name, summary: process.summary, steps: process.steps.map(step => ({ title: step.title, description: step.description, basis: step.sourceRef.startsWith("onboarding:") ? "Platform conversation guidance, not verified business policy" : "Business source or manual guidance" })), publishedSteps: process.publishedSteps?.map(step => ({ title: step.title, description: step.description })), unknowns: process.unknowns });
 }

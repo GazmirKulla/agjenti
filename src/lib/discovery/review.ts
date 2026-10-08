@@ -89,9 +89,9 @@ export function canApplyEntity(draft: Draft, id: string) {
   return Boolean(entity && !withMissing({ ...emptyDraft(), entities: [entity] }).missingInformation.length);
 }
 
-export function jobProgress(stage: string, nextImage = 0, imageCount = 0) {
+export function jobProgress(stage: string, nextImage = 0, imageCount = 0, nextText = 0, textLength = 0) {
   if (stage === "done") return 100;
   if (stage === "finish") return 95;
   if (stage === "images") return 30 + Math.round(60 * Math.min(1, nextImage / Math.max(1, imageCount)));
-  return stage === "text" ? 20 : 5;
+  return stage === "text" ? 20 + Math.round(10 * Math.min(1, nextText / Math.max(1, textLength))) : 5;
 }

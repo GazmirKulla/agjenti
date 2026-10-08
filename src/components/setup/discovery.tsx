@@ -99,10 +99,10 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
     <header className="discovery-header">
       <p className="setup-eyebrow">ONBOARDING · NJOHIM BIZNESIN TËND</p>
       <h1 id="discovery-title">{ready ? "Biznesi yt, gati për hapin tjetër." : "Lidh burimin. Ne kujdesemi për përgatitjen."}</h1>
-      <p>Lexojmë postimet, fotot dhe website-in për të kuptuar biznesin dhe për të përgatitur njohuritë e Agjentit. Informacioni ruhet automatikisht.</p>
+      <p>Nga postimet, fotot dhe website-i kuptojmë llojin e biznesit dhe ofertën. Rregullat e onboarding-ut lidhin njohuritë, rrjedhën e klientit dhe udhëzimet e Agjentit. Informacioni ruhet automatikisht.</p>
     </header>
     <ol className="discovery-context-steps" aria-label="Hapat e onboarding-ut">
-      {["Lidh burimin", "Njohim biznesin", "Vazhdo në panel"].map((text, index) => <li key={text} className={ready || analyzing && index === 0 ? "is-done" : ""} aria-current={(ready ? 2 : analyzing ? 1 : 0) === index ? "step" : undefined}><span>{ready || analyzing && index === 0 ? "✓" : `0${index + 1}`}</span>{text}</li>)}
+      {["Lidh burimin", "Përgatisim hapësirën", "Vazhdo në panel"].map((text, index) => <li key={text} className={ready || analyzing && index === 0 ? "is-done" : ""} aria-current={(ready ? 2 : analyzing ? 1 : 0) === index ? "step" : undefined}><span>{ready || analyzing && index === 0 ? "✓" : `0${index + 1}`}</span>{text}</li>)}
     </ol>
     {!state && <p className="discovery-loading" role="status"><span className="discovery-spinner" aria-hidden="true" /> Duke ngarkuar…</p>}
     {state && !state.available && <p className="discovery-error" role="status">{state.error}</p>}
@@ -111,10 +111,10 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
     {ready && <section id="discovery-result" className="discovery-context-result" aria-labelledby="discovery-result-title">
       <span className="discovery-context-ready">✓ PËRGATITJA U PËRFUNDUA</span>
       <h2 id="discovery-result-title">{label}</h2>
-      <p>Profili dhe njohuritë janë përgatitur. Mund të vazhdosh menjëherë në panel dhe ta përshtatësh Agjentin gjatë përdorimit.</p>
+      <p>Profili dhe njohuritë janë përgatitur nga burimet. Rrjedha dhe Agjenti nisen nga oferta, qëllimet dhe aftësitë e këtij lloji biznesi. Mund t’i pasurosh gjatë përdorimit.</p>
       <div className="discovery-context-facts"><span>Lloji i biznesit <strong>{businessType === "other" ? "Profil i përgjithshëm" : label}</strong></span><span>Njohuri aktive <strong>{state?.knowledgeCount ?? 0}</strong></span><span>Produktet <strong>I shton më vonë</strong></span></div>
       <div className="discovery-actions"><Link className="btn btn-primary" href={home}>Vazhdo në panel →</Link><Link className="btn btn-ghost" href={`${home}/agents/test`}>Provo Agjentin</Link></div>
-      <nav className="discovery-context-links" aria-label="Përshtatja e biznesit"><Link href={`${home}/knowledge`}>Shiko njohuritë ↗</Link><Link href={`${home}/settings#modules`}>Përshtat seksionet ↗</Link></nav>
+      <nav className="discovery-context-links" aria-label="Përshtatja e biznesit"><Link href={`${home}/knowledge`}>Shiko njohuritë ↗</Link><Link href={`${home}/agents`}>Udhëzimet e Agjentit ↗</Link><Link href={`${home}/settings#modules`}>Përshtat seksionet ↗</Link></nav>
       {state?.businessProcess && <Link className="discovery-context-process" href={`${home}/workflows`}>↗ {state.businessProcess.name}<span>{state.businessProcess.stepCount} hapa · {state.businessProcess.enabled ? "Përgatitur për Agjentin" : "Nuk përdoret"}</span></Link>}
     </section>}
     <div className="discovery-context-sources" aria-label="Burimet e biznesit">
@@ -132,6 +132,6 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
     {state?.jobs.some(job => job.status === "failed") && <div className="discovery-context-retries">{[latest("instagram"), latest("website")].filter((job): job is Job => Boolean(job && job.status === "failed")).map(job => <div key={job.id}><p role="status">{job.error || "Ky burim kërkon një provë tjetër."}</p><button type="button" className="btn btn-ghost" disabled={busy || active} onClick={() => void start(job.source, job.website ?? undefined)}>Provo përsëri</button></div>)}</div>}
     {state && state.jobs.length > 0 && <details className="discovery-context-details"><summary>Detajet e analizës</summary>{[latest("instagram"), latest("website")].filter((job): job is Job => Boolean(job)).map(job => <div key={job.id}><strong>{job.source === "instagram" ? "Instagram" : "Website"} · {job.status === "completed" ? "Përfundoi" : `${job.progress}%`}</strong><p>{job.note}</p>{Boolean(job.inactiveKnowledgeCount) && <p>{job.inactiveKnowledgeCount} përgjigje kundërshtuese u ruajtën joaktive te Njohuritë. Mund t’i kontrollosh më vonë.</p>}{job.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>)}</details>}
     {error && <p className="discovery-error" role="alert">{error}</p>}
-    {!ready && <p className="discovery-context-later">Produktet, çmimet dhe workflow-t i shton më vonë në panel. <Link href={home}>Vazhdo tani →</Link></p>}
+    {!ready && <p className="discovery-context-later">Produktet, çmimet dhe detajet e mbetura të workflow-t i plotëson më vonë në panel. <Link href={home}>Vazhdo tani →</Link></p>}
   </section>;
 }
