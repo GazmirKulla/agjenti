@@ -73,3 +73,13 @@ it("observes the exact provider request and response only when explicitly opted 
   expect(onTrace.mock.calls[0][0].data.request).toEqual(mocks.create.mock.calls[0][0]);
   expect(onTrace.mock.calls[1][0].data).toEqual({ response, parsed: { text: "Reply" }, usage: response.usage });
 });
+
+it("supplies approved training with factual and workflow boundaries to the real provider request", async () => {
+  mocks.create.mockResolvedValue({ id: "resp_trained", output_text: "Shkurt" });
+  await generateAgentReply({ ...params, trainingContext: { rules: [{ id: "style", kind: "style", instruction: "Pa emoji", question: "", response: "", scope: "business" }] } });
+  const request = mocks.create.mock.calls[0][0];
+  expect(request.instructions).toContain("Pa emoji");
+  expect(request.instructions).toContain("Never skip required steps");
+  expect(request.instructions).toContain("Current verified knowledge");
+  expect(request.input).toContain("Collected state (source of truth)");
+});

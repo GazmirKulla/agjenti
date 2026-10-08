@@ -8,6 +8,7 @@ import {
   type AgentTurnResult,
 } from "@/lib/conversations/process-agent-turn";
 import { readTestSession, sealTestSession } from "./session";
+import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
 export type TestChatInput = {
   slug: string;
   message: string;
@@ -22,6 +23,7 @@ export type TestChatResult =
       session: string;
       turns: number;
       autoReplyEnabled: boolean;
+      trainingReceipt?: string;
     });
 
 function customerComplete(customer: {
@@ -152,6 +154,7 @@ export async function simulateAgentTurn(
       ),
       turns: session.turns + 1,
       autoReplyEnabled: access.business.auto_reply,
+      trainingReceipt: issueTrainingReceipt(user.id, access.business.id, text || "[Foto e simuluar]", turn.reply, turn.workflowId, turn.nextState.step_key),
     };
   } catch {
     return {

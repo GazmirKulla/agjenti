@@ -6,9 +6,10 @@ import {
   type TestChatResult,
 } from "@/lib/agents/test-chat/actions";
 import { Icon } from "@/components/dashboard/icon";
+import { TrainingSession, type TrainingFeedback } from "./training-session";
 import "./test-chat.css";
 type Turn = Exclude<TestChatResult, { error: string }>;
-type Bubble = { role: "customer" | "agent"; text: string };
+type Bubble = { role: "customer" | "agent"; text: string; feedback?: TrainingFeedback };
 const reasons: Record<string, string> = {
   missing_api_key:
     "OpenAI nuk është konfiguruar. Po shfaqet përgjigjja rezervë e workflow-t.",
@@ -26,6 +27,8 @@ export function AgentTestChat({
   businessName: string;
   onTurn?: typeof simulateAgentTurn;
 }) {
+  const [trainingBusy, setTrainingBusy] = useState(false);
+  const [trainingFeedback, setTrainingFeedback] = useState<TrainingFeedback | null>(null);
   const [messages, setMessages] = useState<Bubble[]>([]);
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState(false);
@@ -43,6 +46,7 @@ export function AgentTestChat({
     epoch.current++;
     inFlight.current = false;
     setMessages([]);
+    setTrainingFeedback(null);
     setDraft("");
     setPhoto(false);
     setLast(null);
@@ -51,7 +55,7 @@ export function AgentTestChat({
   }
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    if (inFlight.current || (!draft.trim() && !photo)) return;
+    if (trainingBusy || inFlight.current || (!draft.trim() && !photo)) return;
     const run = epoch.current;
     inFlight.current = true;
     setError("");
@@ -71,10 +75,12 @@ export function AgentTestChat({
         setError(result.error);
         return;
       }
+      const feedback: TrainingFeedback | undefined = result.trainingReceipt ? { receipt: result.trainingReceipt, question: text || "[Foto e simuluar]", response: result.reply, workflowId: result.workflowId, stepKey: result.nextState.step_key ?? null } : undefined;
+      setTrainingFeedback(feedback ?? null);
       setMessages((current) => [
         ...current,
         { role: "customer", text: display },
-        { role: "agent", text: result.reply },
+        { role: "agent", text: result.reply, feedback },
       ]);
       setLast(result);
       setDraft("");
@@ -121,7 +127,7 @@ export function AgentTestChat({
             dërgon mesazhe në Instagram dhe nuk krijon biseda ose porosi reale.
           </p>
         </div>
-        <button className="btn btn-ghost" type="button" onClick={reset}>
+        <button className="btn btn-ghost" type="button" disabled={trainingBusy || pending !== null} onClick={reset}>
           ↻ Rifillo
         </button>
       </header>
@@ -154,6 +160,7 @@ export function AgentTestChat({
                   {m.role === "customer" ? "Ti · si klient" : "Agjenti"}
                 </small>
                 <p>{m.text}</p>
+                {m.feedback && <button className="btn btn-ghost" type="button" disabled={trainingBusy || pending !== null} onClick={() => { setTrainingFeedback(m.feedback!); document.getElementById("agent-training")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Trajno këtë përgjigje →</button>}
               </div>
             ))}
             {pending && (
@@ -178,7 +185,7 @@ export function AgentTestChat({
               maxLength={2000}
               rows={3}
               placeholder="Shkruaj si klient…"
-              disabled={pending !== null}
+              disabled={pending !== null || trainingBusy}
               onChange={(e) => setDraft(e.target.value)}
             />
             <div>
@@ -186,7 +193,7 @@ export function AgentTestChat({
                 <input
                   type="checkbox"
                   checked={photo}
-                  disabled={pending !== null}
+                  disabled={pending !== null || trainingBusy}
                   onChange={(e) => setPhoto(e.target.checked)}
                 />{" "}
                 Simulo foto <small>(pa ngarkuar skedar)</small>
@@ -194,7 +201,7 @@ export function AgentTestChat({
               <button
                 type="submit"
                 className="agent-test-send"
-                disabled={pending !== null || (!draft.trim() && !photo)}
+                disabled={pending !== null || trainingBusy || (!draft.trim() && !photo)}
               >
                 {pending !== null ? "Duke provuar…" : "Dërgo"}
                 <Icon name="arrow" size={16} />
@@ -329,6 +336,7 @@ export function AgentTestChat({
           </p>
         </aside>
       </div>
+      <div id="agent-training"><TrainingSession target={{ slug }} feedback={trainingFeedback} busy={pending !== null} onBusyChange={setTrainingBusy} onChanged={reset} /></div>
     </section>
   );
 }

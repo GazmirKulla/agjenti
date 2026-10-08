@@ -1,0 +1,15 @@
+.training-session { margin-top: 24px; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); }
+.training-session header, .training-memories article > div:first-child { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.training-session h2 { font-size: 21px; margin: 6px 0; }.training-session h3 { font-size: 17px; }
+.training-session p, .training-session small { color: var(--ink-muted); line-height: 1.6; }.training-session p { margin: 8px 0; }
+.training-eyebrow { color: var(--accent, #bea0ff); font-size: 11px; letter-spacing: .1em; font-weight: 700; }
+.training-count { white-space: nowrap; color: var(--accent, #bea0ff); font-size: 13px; }
+.training-feedback, .training-editor { margin: 18px 0; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); }
+.training-feedback blockquote { margin: 12px 0; padding: 10px 14px; border-left: 3px solid var(--accent, #bea0ff); white-space: pre-wrap; max-height: 180px; overflow: auto; overflow-wrap: anywhere; }
+.training-controls { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }.training-controls .btn { font-size: 13px; min-height: 36px; }
+.training-editor { display: grid; gap: 8px; }.training-editor label { font-size: 13px; font-weight: 600; }
+.training-editor textarea, .training-editor select { width: 100%; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; color: inherit; font: inherit; resize: vertical; }
+.training-editor textarea:focus, .training-editor select:focus { outline: 2px solid var(--accent, #bea0ff); outline-offset: 2px; }
+.training-editor .training-note { font-size: 12px; }.training-session .training-notice { padding: 12px; border: 1px solid #417969; border-radius: 8px; color: var(--ink); }.training-session .training-error { color: var(--danger); }
+.training-memories { margin-top: 20px; }.training-memories summary { cursor: pointer; font-weight: 600; }.training-memories article { padding: 16px 0; border-bottom: 1px solid var(--line); }.training-memories article.is-disabled { opacity: .7; }.training-memories article span { color: var(--ink-muted); font-size: 12px; }.training-memories article p { overflow-wrap: anywhere; white-space: pre-wrap; }.training-remove { padding: 12px; border: 1px solid #a65362; border-radius: 8px; }
+@media (max-width: 640px) { .training-session { padding: 16px; }.training-session header { flex-direction: column; }.training-feedback, .training-editor { padding: 12px; } }

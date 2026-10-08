@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { processAgentTurn } from "@/lib/conversations/process-agent-turn";
@@ -85,7 +86,7 @@ export async function runLabTurn(input: { businessId: string; message: string; h
       ...trace.filter((event) => event.status === "error").map((event) => event.label),
     ];
     const safe = redactDebug({ ...result, trace, fields, warnings, input: input.message.trim() }) as typeof result & { trace: TimedTraceEvent[]; fields: typeof fields; warnings: string[]; input: string };
-    return { ...safe, replaySession, session: sealTestSession(session, result.nextState, result.previousResponseId), testConversationId: session.testConversationId, turns: session.turns + 1, timestamp: new Date().toISOString() };
+    return { ...safe, trainingReceipt: issueTrainingReceipt(userId, input.businessId, safe.input || "[Foto e simuluar]", safe.reply, result.workflowId, result.nextState.step_key), replaySession, session: sealTestSession(session, result.nextState, result.previousResponseId), testConversationId: session.testConversationId, turns: session.turns + 1, timestamp: new Date().toISOString() };
   } catch {
     if (trace.length) trace.push({ stage: "logs", label: "Execution failed; state not committed", status: "error", elapsedMs: Date.now() - start });
     return { error: "Test execution failed. Check the business configuration and try again. No real actions were performed.", ...(trace.length ? { trace: redactDebug(trace) as TimedTraceEvent[] } : {}) };

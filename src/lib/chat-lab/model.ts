@@ -12,6 +12,7 @@ export type LabTurn = AgentTurnResult & {
   testConversationId: string; session: string; replaySession: string; turns: number;
   trace: TimedTraceEvent[]; timestamp: string; input: string;
   fields: LabField[]; warnings: string[];
+  trainingReceipt?: string;
 };
 export type LabFailure = { error: string; trace?: TimedTraceEvent[] };
 export type LabResult = LabFailure | LabTurn;

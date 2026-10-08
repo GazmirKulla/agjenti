@@ -286,11 +286,14 @@ explicitly support mocked test execution before being connected to Chat Lab.
 
 Requires the existing `TOKEN_ENCRYPTION_KEY`; `OPENAI_API_KEY` and `AGENT_MODEL`
 behave exactly as in production, including workflow fallback when unavailable.
-No migration is needed. Test state uses authenticated encryption, is bound to
+The test simulator itself needs no migration; the training controls below require
+the agent-training migration. Test state uses authenticated encryption, is bound to
 admin and business, expires after one hour of inactivity, and permits 40 turns.
 The transcript and debug snapshots remain in page memory and disappear on
 reload/navigation. Replay may make a new paid provider call and produce a
-different answer; it preserves the test conversation ID and turn count.
+different answer; it preserves the test conversation ID and turn count. Explicit
+training saves are separate authenticated actions that persist business configuration;
+ordinary test messages remain read-only.
 
 Traces capture actual requests/responses (including catalog embeddings and
 requirements extraction), provider usage when returned, read-only calls, and
@@ -317,3 +320,15 @@ inspector at 390px. The tested Zana products use the engine's default customer
 collection (no linked workflow), and no active agent instructions were found;
 these are exposed as actual configuration diagnostics. Catalog retrieval has
 unit coverage; use a confirmed catalog for a provider/database integration test.
+
+### Sesionet e trajnimit: Chat Lab dhe Provo Agjentin
+
+Apliko `supabase/migrations/20261008090000_agent_training.sql` pas migrimeve ekzistuese. Seksioni **Trajno Agjentin** përdoret si te `/admin/chat-lab` ashtu edhe te `/b/[slug]/agents/test`. Çdo përgjigje prove ka lidhjen **Trajno këtë përgjigje**; përdoruesi mund ta vlerësojë si shembull të mirë ose ta korrigjojë, pastaj të konfirmojë **Ruaj për këtë biznes**. Vlerësimi ose biseda e zakonshme nuk ruan automatikisht mësime.
+
+Memoria ruan preferenca stili, shembuj pyetje/përgjigje dhe udhëzime për një workflow ose hap ekzistues. Preferencat vlejnë për biznesin; shembujt mund të kufizohen te workflow/hapi i zgjedhur. Motori i përbashkët i përgjigjeve lexon memorien në çdo kërkesë, edhe në bisedat reale të Instagram-it. Ruajtja, ndryshimi, aktivizimi/çaktivizimi dhe heqja janë veprime eksplicite; sesioni i provës rifillohet pas një ndryshimi për ta ritestuar konfigurimin. Çmimet dhe të dhënat e klientit nga shembujt nuk konsiderohen fakte për bisedat e reja. Trajnimi përshtat formulimin dhe shpjegimin e hapave; ndryshimet strukturore të procesit bëhen nga konfigurimi ekzistues i workflow-ve.
+
+`agent_training_memories` izolon të dhënat sipas biznesit, deri në 200 mësime. Në çdo përgjigje përfshihen deri në 16 preferenca/udhëzime aktive dhe 4 shembuj relevantë; udhëzimet për hapin/workflow-n kanë përparësi dhe brenda të njëjtit nivel përdoren fillimisht korrigjimet më të reja. Nuk bëhet fine-tuning i modelit dhe nuk mësohet automatikisht nga mesazhet e klientëve. Shembujt dhe udhëzimet dërgohen te provideri AI si pjesë e kontekstit të përgjigjes; përdor të dhëna prove dhe ruaj vetëm përmbajtjen që dëshiron të përdoret më vonë.
+
+Çdo veprim kontrollon sesionin dhe aksesin në biznes. Target-i me ID direkt lejohet vetëm për administratorët e platformës; përdoruesit e biznesit përdorin slug-un me kontrollin ekzistues të anëtarësisë. Workflow-t dhe hapat verifikohen në server dhe në databazë. Feedback-u mban një provë të enkriptuar, të lidhur me përdoruesin, biznesin dhe pyetjen reale të provës, me afat një orë. Versionet parandalojnë mbishkrimet nga ndryshime konkurruese dhe `agent_training_events` ruan historikun e ndryshimeve. RLS lejon vetëm leximin për anëtarët e biznesit ose adminin; shkrimet kryhen nga veprimet e autorizuara të serverit. Ndryshimet në memorien aktive ndryshojnë fingerprint-in e konfigurimit, që një test i vjetër të mos certifikojë preferenca të reja.
+
+Pa migrimin, bisedat ekzistuese vazhdojnë me konfigurimin aktual dhe ruajtja e trajnimit shfaq mesazh për migrimin e munguar. Testet Vitest mbulojnë autorizimin, feedback-un, izolimin e workflow-ve, përzgjedhjen e shembujve dhe përdorimin në motorin real. `supabase/tests/agent_training.sql` verifikon RLS, versionet, historikun dhe fingerprint-in në një databazë testimi me rollback.

@@ -37,6 +37,7 @@ beforeEach(() => {
       },
     ],
     ai_agents: { instructions: "Udhëzimet vetëm të biznesit A" },
+    agent_training_memories: [],
     knowledge_entries: [{ title: "Dërgesa", body: "Brenda dy ditësh" }],
     workflows: { id: "workflow-a" },
     workflow_steps: [
@@ -72,6 +73,35 @@ beforeEach(() => {
     source: "ai",
     fallbackReason: null,
   });
+});
+
+it("uses the same saved training in production and test without skipping workflow steps", async () => {
+  fixtures.agent_training_memories = [
+    { id: "style", kind: "style", instruction: "Pa emoji", customer_message: "", desired_response: "", workflow_id: null, step_key: null, is_active: true, updated_at: "2026-10-08", revision: 1 },
+    { id: "size", kind: "workflow", instruction: "Shpjego madhësitë shkurt", customer_message: "", desired_response: "", workflow_id: "workflow-a", step_key: "collect_size", is_active: true, updated_at: "2026-10-08", revision: 1 },
+    { id: "foreign", kind: "workflow", instruction: "Other workflow", customer_message: "", desired_response: "", workflow_id: "workflow-b", step_key: "collect_size", is_active: true, updated_at: "2026-10-08", revision: 1 },
+  ];
+  for (const mode of ["production", "test"] as const) {
+    const result = await processAgentTurn({ businessId: "business-a", message: "Bluzë", hasPhoto: false, mode });
+    expect(result.nextState.step_key).toBe("collect_size");
+    expect(result.debug.trainingMemoryIds).toEqual(["size", "style"]);
+    expect(mocks.generate.mock.calls.at(-1)?.[0].trainingContext.rules.map((r: { id: string }) => r.id)).toEqual(["size", "style"]);
+  }
+  expect(queries.find(q => q.table === "agent_training_memories")?.filters).toEqual([["business_id", "business-a"], ["is_active", true]]);
+  const next = await processAgentTurn({ businessId: "business-a", message: "M", hasPhoto: false, state: { ...emptyState(), product_id: "product-a", step_key: "collect_size" } });
+  expect(next.nextState.step_key).toBe("awaiting_photo");
+  expect(next.debug.trainingMemoryIds).toEqual(["style"]);
+});
+
+it("loads business training for informational service and catalog replies too", async () => {
+  fixtures.agent_training_memories = [{ id: "style", kind: "style", instruction: "Pa emoji", customer_message: "", desired_response: "", workflow_id: null, step_key: null, is_active: true, updated_at: "2026-10-08", revision: 1 }];
+  fixtures.products = [];
+  fixtures.knowledge_entries = [{ title: "Pastrim dentar", body: "Shërbim dentar", intent_key: "service" }];
+  await processAgentTurn({ businessId: "business-a", message: "Pastrim dentar", hasPhoto: false });
+  expect(mocks.generate.mock.calls.at(-1)?.[0].trainingContext.rules[0].id).toBe("style");
+  mocks.retrieve.mockResolvedValue({ context: { query: "katalog", requirements: {} }, documents: [], evidence: "Verified excerpt" });
+  await processAgentTurn({ businessId: "business-a", message: "Katalog", hasPhoto: false });
+  expect(mocks.generate.mock.calls.at(-1)?.[0].trainingContext.rules[0].id).toBe("style");
 });
 describe("shared business turn processor", () => {
   it("uses tenant agent, active knowledge, catalog prices and product workflow", async () => {

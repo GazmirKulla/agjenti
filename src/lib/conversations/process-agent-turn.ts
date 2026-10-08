@@ -1,4 +1,6 @@
 import type { TraceObserver } from "./trace";
+import { loadActiveTrainingMemories } from "@/lib/agents/training/load";
+import { selectTrainingContext } from "@/lib/agents/training/model";
 import { retrieveBusinessSources } from "@/lib/catalogs/retrieval";
 import { rankKnowledge } from "@/lib/catalogs/source-ranking";
 import { routeIntent } from "@/lib/catalogs/ranking";
@@ -34,6 +36,7 @@ export type AgentTurnResult = {
     elapsedMs: number;
     retrievedCatalogIds?: string[];
     retrievedService?: boolean;
+    trainingMemoryIds?: string[];
   };
 };
 
@@ -97,7 +100,7 @@ export async function processAgentTurn(params: {
   const started = Date.now();
   const trace = params.onTrace;
   trace?.({ stage: "overview", label: "Message received", data: { input: params.message, mode: params.mode ?? "production", source: params.source ?? "instagram" } });
-  const [productResult, agentResult, knowledgeResult] = await Promise.all([
+  const [productResult, agentResult, knowledgeResult, trainingMemories] = await Promise.all([
     db
       .from("products")
       .select(
@@ -118,6 +121,7 @@ export async function processAgentTurn(params: {
       .eq("is_active", true)
       .order("sort_order")
       .limit(1000),
+    loadActiveTrainingMemories(params.businessId),
   ]);
   if (productResult.error || agentResult.error || knowledgeResult.error) {
     trace?.({ stage: "context", label: "Business context failed to load", status: "error", data: {
@@ -134,6 +138,11 @@ export async function processAgentTurn(params: {
   } });
   const products = productResult.data ?? [];
   const agent = agentResult.data;
+  function trainingFor(workflowId: string | null, stepKey: string | null | undefined) {
+    const context = selectTrainingContext(trainingMemories, workflowId, stepKey, params.message);
+    if (context.rules.length) trace?.({ stage: "context", label: "Business training selected", data: { workflowId, stepKey, rules: context.rules } });
+    return context;
+  }
   const rankedKnowledge = rankKnowledge(
     knowledgeResult.data ?? [],
     params.message,
@@ -174,7 +183,9 @@ export async function processAgentTurn(params: {
   trace?.({ stage: "context", label: "Context retrieval completed", data: { sources, service: service ? service.entry : null } });
   if (!sources && service) {
     trace?.({ stage: "workflow", label: "Service information; workflow not advanced", data: { state, workflowId: null, steps: [] } });
+    const trainingContext = trainingFor(null, null);
     const generated = await generateAgentReply({
+      trainingContext,
       ...(trace ? { onTrace: trace } : {}),
       instructions: agent?.instructions || "Answer in the customer's language.",
       state,
@@ -201,6 +212,7 @@ export async function processAgentTurn(params: {
         productCount: products.length,
         workflowSteps: [],
         retrievedService: true,
+        trainingMemoryIds: generated.source === "ai" ? trainingContext.rules.map(rule => rule.id) : [],
         elapsedMs: Date.now() - started,
       },
     };
@@ -230,6 +242,7 @@ export async function processAgentTurn(params: {
     const links = sources.documents
       .map((d) => `${d.title}: ${d.url}`)
       .join("\n");
+    const trainingContext = trainingFor(currentWorkflow, state.step_key);
     const generated = sources.clarification
       ? {
           reply: sources.clarification,
@@ -238,6 +251,7 @@ export async function processAgentTurn(params: {
           fallbackReason: "catalog_clarification",
         }
       : await generateAgentReply({
+          trainingContext,
       ...(trace ? { onTrace: trace } : {}),
           instructions:
             agent?.instructions || "Answer in the customer's language.",
@@ -271,6 +285,7 @@ export async function processAgentTurn(params: {
         workflowSteps: [],
         elapsedMs: Date.now() - started,
         retrievedCatalogIds: sources.documents.map((d) => d.id),
+        trainingMemoryIds: generated.source === "ai" ? trainingContext.rules.map(rule => rule.id) : [],
       },
     };
   }
@@ -353,7 +368,9 @@ export async function processAgentTurn(params: {
     workflowId, workflowName, previousStep: params.state?.step_key ?? "choose_product",
     state, steps, progress: workflowProgress, selectedProduct: selected,
   } });
+  const trainingContext = trainingFor(workflowId, state.step_key);
   const generated = await generateAgentReply({
+    trainingContext,
       ...(trace ? { onTrace: trace } : {}),
     instructions:
       agent?.instructions ||
@@ -387,6 +404,7 @@ export async function processAgentTurn(params: {
       knowledgeCount: knowledge.length,
       productCount: products.length,
       workflowSteps: steps.map((s) => s.key),
+      trainingMemoryIds: generated.source === "ai" ? trainingContext.rules.map(rule => rule.id) : [],
       elapsedMs: Date.now() - started,
     },
   };
