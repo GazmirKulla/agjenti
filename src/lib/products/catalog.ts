@@ -12,7 +12,9 @@ export type ProductRow = {
   workflow_id: string | null;
   is_active: boolean;
   created_at?: string;
+  updated_at?: string;
 };
+export const productCatalogColumns = "id,name,description,sku,image_url,source,external_id,price_amount,currency,product_type_id,workflow_id,is_active,created_at,updated_at";
 export type Option = { id: string; name: string; description?: string | null };
 export function isMapped(p: ProductRow) {
   return Boolean(p.product_type_id && p.workflow_id);

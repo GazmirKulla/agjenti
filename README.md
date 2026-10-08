@@ -88,6 +88,8 @@ Në Supabase Auth, Redirect URLs duhet të lejojnë URL-në e aplikacionit me `/
 
 Panelet përdorin skemën ekzistuese. Workflow-t lidhen me llojin e produktit. Numrat e dashboard-it janë totalet reale; grafiku paraqet krijimet për 7 ditët e fundit, me kufij ditorë UTC. Listat e klientëve, porosive dhe bisedave të adminit ngarkojnë deri në 1 000 rreshta; Inbox-i ngarkon 100 bisedat dhe 200 mesazhet më të fundit. Kërkimi dhe faqezimi veprojnë mbi listën e ngarkuar.
 
+Në tabelën e produkteve, lloji, workflow-i dhe statusi ndryshohen me dropdown dhe ruhen automatikisht. Aktivizimi kërkon çmim, lloj aktiv dhe workflow të biznesit; gabimi shfaqet te rreshti përkatës. Heqja e llojit ose workflow-it nga një produkt aktiv e kalon në draft. Ruajtja kontrollon versionin e produktit që të mos mbishkruajë ndryshime të bëra ndërkohë. Ky funksion përdor skemën ekzistuese, pa migrim të ri.
+
 Planet/faturimi, Facebook/WhatsApp, statistikat e Instagram-it, transporti/pagesat, variantet e produkteve dhe CRM me etiketa/shënime mbeten për fazën tjetër. Nuk shfaqen si funksione aktive ose statistika të simuluara.
 
 Fontet Figtree dhe Syne ruhen në `src/app/fonts` bashkë me licencat OFL, pa shkarkim gjatë build-it.

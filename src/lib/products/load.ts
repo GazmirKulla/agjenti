@@ -2,7 +2,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import type { ProductRow, Option } from "./catalog";
+import { productCatalogColumns, type ProductRow, type Option } from "./catalog";
 export const loadProducts = cache(async (slug: string) => {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -12,9 +12,7 @@ export const loadProducts = cache(async (slug: string) => {
   const [products, types, workflows] = await Promise.all([
     db
       .from("products")
-      .select(
-        "id,name,description,sku,image_url,source,external_id,price_amount,currency,product_type_id,workflow_id,is_active,created_at",
-      )
+      .select(productCatalogColumns)
       .eq("business_id", access.business.id)
       .order("created_at", { ascending: false }),
     db

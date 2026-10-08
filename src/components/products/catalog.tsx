@@ -1,16 +1,16 @@
 "use client";
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   catalogFilter,
   catalogStatus,
   isMapped,
-  statusNames,
   type ProductRow,
   type Option,
 } from "@/lib/products/catalog";
 import { bulkConfigureProducts } from "@/lib/products/actions";
+import { updateCatalogField, type CatalogField } from "@/lib/products/inline-actions";
 import { productMoney as money } from "@/lib/products/catalog";
 import { ProductMethods, ProductTips } from "./shared";
 export function ProductCatalog({
@@ -36,16 +36,25 @@ export function ProductCatalog({
   const [notice, setNotice] = useState("");
   const [typeId, setTypeId] = useState("");
   const [workflowId, setWorkflowId] = useState("");
+  const [rowUpdates, setRowUpdates] = useState<Record<string, ProductRow>>({});
+  const [savingRows, setSavingRows] = useState<Record<string, { field: CatalogField; value: string | boolean | null }>>({});
+  const [rowFeedback, setRowFeedback] = useState<Record<string, { error?: string; success?: string }>>({});
+  const inFlight = useRef(new Set<string>());
+  const hasSavingRows = Object.keys(savingRows).length > 0;
+  const catalogProducts = useMemo(() => products.map(product => {
+    const edited = rowUpdates[product.id];
+    return edited && Date.parse(edited.updated_at ?? "") > Date.parse(product.updated_at ?? "") ? edited : product;
+  }), [products, rowUpdates]);
   const router = useRouter();
   const filtered = useMemo(
-    () => catalogFilter(products, query, filter, type, sort),
-    [products, query, filter, type, sort],
+    () => catalogFilter(catalogProducts, query, filter, type, sort),
+    [catalogProducts, query, filter, type, sort],
   );
   const maxPage = Math.max(1, Math.ceil(filtered.length / 10));
   const currentPage = Math.min(page, maxPage);
   const shown = filtered.slice((currentPage - 1) * 10, currentPage * 10);
   const count = (s: string) =>
-    products.filter(
+    catalogProducts.filter(
       (p) =>
         s === "all" ||
         (s === "imports"
@@ -57,6 +66,7 @@ export function ProductCatalog({
     setPage(1);
   }
   function apply(mode: "map" | "activate" | "draft") {
+    if (hasSavingRows) return;
     setNotice("");
     start(async () => {
       try {
@@ -75,6 +85,26 @@ export function ProductCatalog({
         setNotice("Ndryshimet nuk u ruajtën. Provo përsëri.");
       }
     });
+  }
+  async function editRow(product: ProductRow, field: CatalogField, value: string | boolean | null) {
+    if (pending || inFlight.current.has(product.id) || product[field] === value) return;
+    inFlight.current.add(product.id);
+    setSavingRows(current => ({ ...current, [product.id]: { field, value } }));
+    setRowFeedback(current => ({ ...current, [product.id]: {} }));
+    try {
+      const result = await updateCatalogField(slug, { id: product.id, field, value, updatedAt: product.updated_at ?? "" });
+      setRowFeedback(current => ({ ...current, [product.id]: { error: result.error, success: result.success } }));
+      if (!result.error && result.product) {
+        setRowUpdates(current => ({ ...current, [product.id]: result.product! }));
+        setNotice(`${product.name}: ${result.success ?? "U ruajt."}`);
+        router.refresh();
+      }
+    } catch {
+      setRowFeedback(current => ({ ...current, [product.id]: { error: "Ndryshimi nuk u ruajt. Provo përsëri." } }));
+    } finally {
+      inFlight.current.delete(product.id);
+      setSavingRows(current => { const next = { ...current }; delete next[product.id]; return next; });
+    }
   }
   return (
     <div className="products-workspace">
@@ -179,7 +209,7 @@ export function ProductCatalog({
             )}
             <button
               className="btn btn-ghost"
-              disabled={pending || !selected.length}
+              disabled={pending || hasSavingRows || !selected.length}
               onClick={() => apply("draft")}
             >
               Kalo në draft
@@ -187,7 +217,7 @@ export function ProductCatalog({
             {!mapping && (
               <button
                 className="btn btn-ghost"
-                disabled={pending || !selected.length}
+                disabled={pending || hasSavingRows || !selected.length}
                 onClick={() => apply("activate")}
               >
                 Aktivizo
@@ -237,6 +267,7 @@ export function ProductCatalog({
                   <tr
                     key={p.id}
                     className={selected.includes(p.id) ? "is-selected" : ""}
+                    aria-busy={Boolean(savingRows[p.id])}
                   >
                     <td>
                       <input
@@ -277,23 +308,30 @@ export function ProductCatalog({
                       </Link>
                     </td>
                     <td>
-                      {types.find((t) => t.id === p.product_type_id)?.name ??
-                        "Pa lloj"}
+                      <select className="catalog-inline-select catalog-type-select" aria-label={`Lloji i ${p.name}`} aria-describedby={`catalog-feedback-${p.id}`} value={savingRows[p.id]?.field === "product_type_id" ? String(savingRows[p.id].value ?? "") : p.product_type_id ?? ""} disabled={pending || Boolean(savingRows[p.id])} onChange={event => void editRow(p, "product_type_id", event.target.value || null)}>
+                        <option value="">Pa lloj</option>
+                        {p.product_type_id && !types.some(type => type.id === p.product_type_id) && <option value={p.product_type_id} disabled>Lloji aktual (joaktiv)</option>}
+                        {types.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                      </select>
                     </td>
                     <td>{money(p.price_amount, p.currency)}</td>
                     <td>
-                      <span className="product-tag">
-                        {workflows.find((w) => w.id === p.workflow_id)?.name ??
-                          "Pa workflow"}
-                      </span>
+                      <select className="catalog-inline-select catalog-workflow-select" aria-label={`Workflow i ${p.name}`} aria-describedby={`catalog-feedback-${p.id}`} value={savingRows[p.id]?.field === "workflow_id" ? String(savingRows[p.id].value ?? "") : p.workflow_id ?? ""} disabled={pending || Boolean(savingRows[p.id])} onChange={event => void editRow(p, "workflow_id", event.target.value || null)}>
+                        <option value="">Pa workflow</option>
+                        {p.workflow_id && !workflows.some(workflow => workflow.id === p.workflow_id) && <option value={p.workflow_id} disabled>Workflow aktual</option>}
+                        {workflows.map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}
+                      </select>
                     </td>
                     <td>
-                      <span className={`product-status is-${catalogStatus(p)}`}>
-                        {statusNames[catalogStatus(p)]}
-                      </span>
-                      {!isMapped(p) && !p.is_active && (
-                        <small className="product-draft-note">Draft</small>
-                      )}
+                      <div className={`catalog-status-picker is-${catalogStatus(p)}`}>
+                        <select className="catalog-inline-select" aria-label={`Statusi i ${p.name}`} aria-describedby={`catalog-feedback-${p.id}`} value={(savingRows[p.id]?.field === "is_active" ? savingRows[p.id].value : p.is_active) ? "active" : "draft"} disabled={pending || Boolean(savingRows[p.id])} onChange={event => void editRow(p, "is_active", event.target.value === "active")}>
+                          <option value="draft">Draft</option><option value="active">Aktiv</option>
+                        </select>
+                      </div>
+                      {!isMapped(p) && <small className="product-draft-note">I palidhur</small>}
+                      <small id={`catalog-feedback-${p.id}`} className={`catalog-inline-feedback${rowFeedback[p.id]?.error ? " is-error" : ""}`} role={rowFeedback[p.id]?.error ? "alert" : "status"}>
+                        {savingRows[p.id] ? <><span className="catalog-saving-spinner" aria-hidden="true" /> Po ruhet…</> : rowFeedback[p.id]?.error || rowFeedback[p.id]?.success}
+                      </small>
                     </td>
                     <td>
                       <Link
@@ -400,14 +438,14 @@ export function ProductCatalog({
             </label>
             <button
               className="btn btn-primary"
-              disabled={pending || !selected.length || (!typeId && !workflowId)}
+              disabled={pending || hasSavingRows || !selected.length || (!typeId && !workflowId)}
               onClick={() => apply("map")}
             >
               Apliko për të zgjedhurat
             </button>
             <button
               className="btn btn-ghost"
-              disabled={pending || !selected.length}
+              disabled={pending || hasSavingRows || !selected.length}
               onClick={() => apply("activate")}
             >
               Lidh dhe aktivizo
