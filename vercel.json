@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/business-discovery",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 3 * * *"
     },
     {
       "path": "/api/cron/refresh-instagram-tokens",
