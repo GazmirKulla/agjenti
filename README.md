@@ -194,6 +194,16 @@ Përgjigjet automatike mbeten një hap opsional brenda onboarding-ut. Përdorues
 
 Verifikim: `yarn test`, `yarn build`. `supabase/tests/context_onboarding.sql` mbulon përgatitjen automatike, rollback-un, idempotencën, izolimin, ndryshimet gjatë analizës dhe aktivizimin me njohuri pa produkte. Testet e tjera SQL mbulojnë radhën dhe routing-un; ekzekutohen vetëm në databazë testimi dhe bëjnë rollback. API/modeli dhe prova e browser-it përdorin përgjigje të simuluara; OAuth, lejet Meta dhe daljet reale AI duhen provuar me një llogari biznesi pas konfigurimit të ambientit.
 
+### Profili dhe rrjedha e biznesit nga analiza
+
+Pas migrimit të onboarding-ut, apliko `supabase/migrations/20261008160000_business_process.sql`. Emri, username, bio, fotoja dhe URL-ja kërkohen nga llogaria Instagram e lidhur. Nëse Meta refuzon një fushë opsionale, fushat e tjera lexohen veçmas; metadata e pjesshme dhe një URL eksplicite në bio përdoren kur janë të disponueshme. Refuzimi i metadata-s nuk bllokon postimet; një bio e lexueshme mund të analizohet edhe kur postimet nuk kthehen. URL-ja e gjetur vendoset automatikisht në radhë për skanimin e website-it. Në onboarding shfaqen profili i rikuperuar dhe URL-ja e plotësuar, pa konfirmim tjetër. Metadata e një lidhjeje/gjenerate të vjetër nuk shfaqet pas rilidhjes.
+
+Skanimi i website-it i jep përparësi faqeve që shpjegojnë porosinë, marrjen e materialeve, transportin, FAQ-të dhe politikat, përpara faqeve të produkteve. Analiza përgatit edhe rrjedhën e klientit dhe e ruan te `business_discovery.operating_workflow`, të ndarë nga workflow-t që ekzekutojnë porosi produktesh. Çdo hap i gjeneruar ka citim dhe referencë të verifikuar kundrejt burimeve. Për një biznes me PDF, vetëm “Shkarko PDF” nuk vërteton pagesën online apo dërgimin e menjëhershëm; hapat e pambështetur lihen jashtë dhe detajet e paqarta mbeten për plotësim më vonë. Mungesa/dështimi i kësaj analize shtesë nuk bllokon përgatitjen e njohurive dhe kalimin në panel.
+
+Te **Workflow**, rrjedha shfaqet si listë hapash me burime të mbyllura fillimisht. Përdoruesi mund të përshtatë emrin, përshkrimin, hapat dhe detajet e paqarta, ose ta çaktivizojë plotësisht. Ruajtja kontrollon qasjen në biznes dhe revision-in; skanimet e tjera nuk mbishkruajnë përshtatjet manuale. Agjenti, Test Chat dhe Chat Lab e marrin këtë rrjedhë si kontekst për shpjegimin e hapit të duhur, jo si komanda të besuara ose autorizim për pagesa, porosi apo shkarkime. Workflow-i i një produkti mbetet autoritativ për ekzekutimin e porosisë. Ndryshimi/çaktivizimi i rrjedhës ndryshon fingerprint-in e provës së Agjentit.
+
+Metadata, njohuritë, profili dhe rrjedha përfundojnë atomikisht nën lease/revision. Nëse migrimi mungon, leximi i rrjedhës nga Agjenti bie në kontekstin ekzistues; përfundimi i skanimit kërkon migrimin e ri. `supabase/tests/business_process.sql` mbulon atomicitetin, izolimin, çaktivizimin, konfliktet e versioneve dhe ruajtjen e përshtatjeve gjatë një analize të re. Testet dhe prova vizuale përdorin përgjigje të simuluara; disponueshmëria reale e fushave Meta varet nga API-ja dhe lejet e llogarisë.
+
 ### Business Intelligence: collect → review → apply
 
 Apply `supabase/migrations/20261006100000_business_intelligence.sql` after the

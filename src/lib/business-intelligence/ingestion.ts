@@ -3,7 +3,7 @@ import { extractProductFromHtml } from "@/lib/products/page-extract";
 import { fetchInstagramMedia } from "@/lib/instagram/media";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { graphVersion } from "@/lib/instagram/oauth";
+import { fetchInstagramBusinessProfile } from "@/lib/instagram/business-profile";
 import { selectDiscoveryImages } from "@/lib/discovery/images";
 
 export async function extractWebsite(url: string, purpose: "catalog" | "onboarding" = "catalog") {
@@ -17,7 +17,7 @@ export async function extractWebsite(url: string, purpose: "catalog" | "onboardi
       const u = new URL(m[1], base);
       u.hash = "";
       return u.origin === base.origin &&
-        /product|shop|service|faq|about|shipping|return|policy|contact|produkt|transport|rreth/i.test(
+        /product|shop|service|faq|about|shipping|return|policy|contact|produkt|transport|rreth|porosi|payment|delivery|download|shkarko|how-it-works|si-funksionon|booking|rezerv|terms/i.test(
           u.pathname,
         )
         ? [u.href]
@@ -26,9 +26,13 @@ export async function extractWebsite(url: string, purpose: "catalog" | "onboardi
       return [];
     }
   });
-  const selected = [...new Set(links)]
-    .filter((u) => u !== base.href)
-    .slice(0, 7);
+  const candidates = [...new Set(links)].filter((u) => u !== base.href);
+  if (purpose === "onboarding") {
+    // Spend the bounded crawl on how the business operates before item pages.
+    const priority = (url: string) => /faq|how-it-works|si-funksionon|terms|payment|delivery|download|shkarko|porosi|booking|rezerv|shipping|return|policy|transport/i.test(new URL(url).pathname) ? 0 : /about|contact|rreth/i.test(new URL(url).pathname) ? 1 : 2;
+    candidates.sort((a, b) => priority(a) - priority(b));
+  }
+  const selected = candidates.slice(0, 7);
   const pages = [first];
   let skipped = 0;
   for (let i = 0; i < selected.length; i += 3) {
@@ -60,13 +64,13 @@ export async function extractWebsite(url: string, purpose: "catalog" | "onboardi
     reference: base.href,
     previews: captured.map(page => page.preview),
     pageCount: pages.length,
-    note: `U lexuan ${pages.length} faqe publike (maksimumi 8 për skanim). ${skipped ? `${skipped} faqe nuk u lexuan.` : ""} Për katalogë më të mëdhenj, skano edhe faqet e kategorive.`,
+    note: `U lexuan ${pages.length} faqe publike (maksimumi 8 për skanim). ${skipped ? `${skipped} faqe nuk u lexuan.` : ""} Informacioni përfshin faqet e përzgjedhura të biznesit.`,
   };
 }
 export async function extractInstagram(businessId: string) {
   const { data, error } = await createServiceSupabase()
     .from("instagram_connections")
-    .select("id,access_token_ciphertext,status,expires_at,username")
+    .select("id,ig_user_id,access_token_ciphertext,status,expires_at,username")
     .eq("business_id", businessId)
     .neq("status", "disconnected")
     .maybeSingle();
@@ -80,16 +84,13 @@ export async function extractInstagram(businessId: string) {
   const token = decryptSecret(data.access_token_ciphertext);
   const [result, profile] = await Promise.all([
     fetchInstagramMedia(token),
-    fetchInstagramProfile(token),
+    fetchInstagramBusinessProfile(token, data.ig_user_id),
   ]);
-  if ("error" in result) throw new Error(result.error);
-  const text = [JSON.stringify(profile.data), ...result.posts
+  const posts = "error" in result ? [] : result.posts;
+  if ("error" in result && !profile.data.biography && !profile.data.website) throw new Error(result.error);
+  const text = [Object.entries(profile.data).map(([field, value]) => `${field}: ${value}`).join("\n"), ...posts
     .map((p) =>
-      JSON.stringify({
-        caption: p.caption,
-        url: p.permalink,
-        image: p.imageUrl,
-      }),
+      `Post: ${p.permalink ?? ""}\nCaption: ${p.caption ?? ""}\nImage: ${p.imageUrl ?? ""}`,
     )]
     .join("\n")
     .slice(0, 65000);
@@ -98,32 +99,10 @@ export async function extractInstagram(businessId: string) {
     text,
     reference: `instagram:${data.username ?? businessId}`,
     connectionId: data.id as string,
-    images: selectDiscoveryImages(result.posts),
+    images: selectDiscoveryImages(posts),
     website: profile.data.website ?? null,
-    postCount: result.posts.length,
-    note: `U lexuan ${result.posts.length} postime${result.truncated ? " (lexim i pjesshëm)" : ""}. ${profile.note} Videot përfaqësohen vetëm nga thumbnail-i.`,
+    profile: profile.data,
+    postCount: posts.length,
+    note: `U lexuan ${posts.length} postime${!("error" in result) && result.truncated ? " (lexim i pjesshëm)" : ""}. ${"error" in result ? "Postimet nuk u kthyen; përdorim informacionin e profilit. " : ""}${profile.note} Videot përfaqësohen vetëm nga thumbnail-i.`,
   };
-}
-
-async function fetchInstagramProfile(token: string): Promise<{
-  data: { name?: string; username?: string; biography?: string; website?: string };
-  note: string;
-}> {
-  // Profile fields vary between Graph versions and login products. A rejected
-  // optional field must never prevent reading an otherwise valid connection.
-  for (const fields of ["name,username,biography,website", "name,username"]) {
-    try {
-      const url = new URL(`https://graph.instagram.com/${graphVersion()}/me`);
-      url.searchParams.set("fields", fields);
-      url.searchParams.set("access_token", token);
-      const response = await fetch(url, { signal: AbortSignal.timeout(6000), cache: "no-store" });
-      if (!response.ok) continue;
-      const raw = await response.json();
-      const data: Record<string, string> = {};
-      for (const field of ["name", "username", "biography", "website"])
-        if (typeof raw[field] === "string") data[field] = raw[field].slice(0, 2000);
-      return { data, note: data.biography ? "U lexua edhe përshkrimi i profilit." : "Bio dhe website mund të plotësohen nëse API nuk i kthen." };
-    } catch { /* Optional metadata; do not log token-bearing URLs. */ }
-  }
-  return { data: {}, note: "Metadata e profilit nuk u lexua; analiza përdor postimet." };
 }

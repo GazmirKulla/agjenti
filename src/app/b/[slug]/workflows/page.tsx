@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import { SIMPLE_STEPS } from "@/lib/workflows/engine";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { loadBusinessProcess } from "@/lib/discovery/load-process";
+import { BusinessProcessView } from "@/components/workflows/business-process";
 
 export default async function WorkflowsPage({
   params,
@@ -19,6 +21,7 @@ export default async function WorkflowsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
+  const operating = await loadBusinessProcess(access.business.id);
   const [{ data: workflows, error: loadError }, { data: types }] =
     await Promise.all([
       db
@@ -68,12 +71,13 @@ export default async function WorkflowsPage({
     <>
       <PageHeading
         title="Workflow AI"
-        description="Proceset e porosisë janë të biznesit. Llojet globale japin vetëm sugjerime nga faqja e Produkteve."
+        description="Rrjedha që Agjenti përdor për të udhëzuar klientët, dhe workflow-t e lidhur me produktet."
       >
         <Link href={`/b/${slug}/products`} className="btn btn-ghost">
           Lidh te produktet →
         </Link>
       </PageHeading>
+      <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />
       <div className="configuration-layout">
         <div className="space-y-5">
           {(workflows ?? []).map((w) => (

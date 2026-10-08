@@ -38,6 +38,7 @@ beforeEach(() => {
     ],
     ai_agents: { instructions: "Udhëzimet vetëm të biznesit A" },
     agent_training_memories: [],
+    business_discovery: null,
     knowledge_entries: [{ title: "Dërgesa", body: "Brenda dy ditësh" }],
     workflows: { id: "workflow-a" },
     workflow_steps: [
@@ -102,6 +103,19 @@ it("loads business training for informational service and catalog replies too", 
   mocks.retrieve.mockResolvedValue({ context: { query: "katalog", requirements: {} }, documents: [], evidence: "Verified excerpt" });
   await processAgentTurn({ businessId: "business-a", message: "Katalog", hasPhoto: false });
   expect(mocks.generate.mock.calls.at(-1)?.[0].trainingContext.rules[0].id).toBe("style");
+});
+it("loads the tenant customer journey for both live and test replies without changing product workflow execution", async () => {
+  const journey = { version: 1, source: "generated", enabled: true, name: "Materialet PDF", summary: "Materialet merren në website.", steps: [{ title: "Shkarko", description: "Shkarko nga website-i.", evidence: "Shkarko tani PDF", sourceRef: "instagram:studio" }], unknowns: [] };
+  fixtures.business_discovery = { operating_workflow: journey, process_revision: 1 };
+  for (const mode of ["test", "production"] as const) {
+    const turn = await processAgentTurn({ businessId: "business-a", message: "Bluzë", hasPhoto: false, mode });
+    expect(turn.nextState.step_key).toBe("collect_size");
+    expect(mocks.generate.mock.calls.at(-1)?.[0].businessProcess).toContain("Materialet PDF");
+  }
+  expect(queries.find(query => query.table === "business_discovery")?.filters).toEqual([["business_id", "business-a"]]);
+  fixtures.business_discovery = { operating_workflow: { ...journey, enabled: false } };
+  await processAgentTurn({ businessId: "business-a", message: "Bluzë", hasPhoto: false });
+  expect(mocks.generate.mock.calls.at(-1)?.[0].businessProcess).toBe("");
 });
 describe("shared business turn processor", () => {
   it("uses tenant agent, active knowledge, catalog prices and product workflow", async () => {

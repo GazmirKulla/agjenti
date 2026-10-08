@@ -21,6 +21,15 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("reply source diagnostics", () => {
+  it("uses the published journey as source context while preserving the authoritative order state", async () => {
+    mocks.create.mockResolvedValue({ id: "resp_process", output_text: "Materialet merren nga website-i." });
+    await generateAgentReply({ ...params, businessProcess: "Shkarko PDF në website" });
+    const request = mocks.create.mock.calls[0][0];
+    expect(request.input).toContain("Shkarko PDF në website");
+    expect(request.input).toContain("does not authorize actions");
+    expect(request.input).toContain("Collected state (source of truth)");
+    expect(request.instructions).not.toContain("Shkarko PDF");
+  });
   it("reports AI with the response id and carries its context", async () => {
     mocks.create.mockResolvedValue({
       output_text: "Përshëndetje",

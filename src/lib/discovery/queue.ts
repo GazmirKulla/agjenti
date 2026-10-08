@@ -7,6 +7,9 @@ import { automaticSetup, businessContext, contextDraft, manualContextSignals, pr
 import { scanKnowledge, withoutScanKnowledge } from "@/lib/business-intelligence/scan-routing";
 import { IMAGE_BATCH_SIZE, type DiscoveryImage } from "./images";
 import type { ScanPreview } from "./previews";
+import type { InstagramBusinessProfile } from "@/lib/instagram/business-profile";
+import { parseBusinessProcess, prepareBusinessProcess, processSources, type BusinessProcess } from "./business-process";
+import { rebuildProfileFromModules } from "@/lib/dashboard/profile/generate";
 
 type Checkpoint = {
   text?: string; reference?: string; note?: string; website?: string | null;
@@ -14,6 +17,7 @@ type Checkpoint = {
   previews?: ScanPreview[]; pageCount?: number;
   nextImage?: number; warnings?: string[];
   draft?: Draft;
+  profile?: InstagramBusinessProfile;
 };
 type Job = {
   id: string; business_id: string; source: "instagram" | "website";
@@ -63,7 +67,7 @@ export async function processDiscoveryStep(job: Job) {
     // Do not persist the decrypted token, fetch Request, or provider errors.
     const ig = job.source === "instagram" ? captured as Awaited<ReturnType<typeof extractInstagram>> : null;
     const web = job.source === "website" ? captured as Awaited<ReturnType<typeof extractWebsite>> : null;
-    const next: Checkpoint = { text: captured.text, reference: captured.reference, note: captured.note, entities: [], images: ig?.images ?? [], postCount: ig?.postCount, website: ig?.website ?? null, previews: web?.previews ?? [], pageCount: web?.pageCount ?? 0 };
+    const next: Checkpoint = { text: captured.text, reference: captured.reference, note: captured.note, entities: [], images: ig?.images ?? [], postCount: ig?.postCount, website: ig?.website ?? null, profile: ig?.profile, previews: web?.previews ?? [], pageCount: web?.pageCount ?? 0 };
     await validConnection(job);
     return checkpoint(job, next, "text");
   }
@@ -106,10 +110,18 @@ export async function processDiscoveryStep(job: Job) {
   // Contact, policies and business descriptions also become source-backed
   // Knowledge, instead of requiring a profile confirmation form.
   draft = mergeDraft(draft, profileKnowledge(draft));
+  const previousProcess = parseBusinessProcess(state.operating_workflow, state.operating_workflow?.source === "manual");
+  let process: BusinessProcess | null = null;
+  const excludedProcess = draft.reviewPreferences?.excludedTargets.includes("workflow") || (draft.reviewPreferences?.enabledModules && !draft.reviewPreferences.enabledModules.includes("workflows"));
+  if (!excludedProcess && (!previousProcess || previousProcess.source !== "manual")) {
+    try { process = await prepareBusinessProcess(processSources(draft, data.text ?? "", data.reference ?? `instagram:${job.business_id}`, previousProcess)); }
+    catch { data.warnings = [...(data.warnings ?? []), "Njohuritë u përgatitën; rrjedha e biznesit mund të plotësohet më vonë te Workflow."]; }
+  }
+  if (process?.enabled && setup.profile.source === "generated" && !draft.reviewPreferences) setup.profile = { ...rebuildProfileFromModules([...setup.profile.enabledModules, "workflows"], signals), source: "generated" };
   const knowledge = scanKnowledge(draft);
   draft = withoutScanKnowledge(draft, knowledge);
   await validConnection(job);
-  const finished = await db.rpc("finish_context_business_discovery", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: knowledge, p_profile: setup.profile, p_answers: setup.answers, p_agent: setup.agent });
+  const finished = await db.rpc("finish_discovery_with_process", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: knowledge, p_profile: setup.profile, p_answers: setup.answers, p_agent: setup.agent, p_process: process, p_process_revision: state.process_revision ?? 0, p_source_profile: data.profile ?? null, p_warnings: data.warnings ?? [] });
   if (finished.error) throw new Error(["PGRST202", "42883"].includes(finished.error.code) ? "scan_migration_required" : finished.error.message);
   if (!finished.data) return checkpoint(job, data, "finish");
   if (job.source === "instagram" && data.website && job.user_id) {
@@ -130,7 +142,7 @@ export async function runDiscoveryQueue(businessId: string | null = null, budget
     if (!job) break;
     try { await processDiscoveryStep(job); }
     catch (error) {
-      const message = error instanceof Error && error.message === "scan_migration_required" ? "Konfigurimi automatik kërkon migrimin 20261008150000_context_onboarding.sql në databazë. Kontakto administratorin." : "Analiza u ndërpre. Do të provohet përsëri; mund të vazhdosh edhe manualisht.";
+      const message = error instanceof Error && error.message === "scan_migration_required" ? "Konfigurimi automatik kërkon migrimin 20261008160000_business_process.sql në databazë, pas migrimeve ekzistuese. Kontakto administratorin." : "Analiza u ndërpre. Do të provohet përsëri; mund të vazhdosh edhe manualisht.";
       await checkpoint(job, job.checkpoint, job.stage, message).catch(() => {});
     }
     processed++;

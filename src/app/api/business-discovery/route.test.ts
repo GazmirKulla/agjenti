@@ -14,23 +14,33 @@ import { signalsFor, withSetupRecommendations } from "@/lib/discovery/proposal";
 let state: { draft: Draft; revision: number; intelligence_revision: number; baseline: object; signals: object; confirmed_at: string | null };
 let intelligence: { data: Draft; revision: number };
 let jobs: unknown[];
+let connection: Record<string, unknown> | null;
 const request = (body: unknown, origin = "http://localhost") => new Request("http://localhost/api/business-discovery?slug=test", { method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const readRequest = () => new Request("http://localhost/api/business-discovery?slug=test");
 const product = (price: string) => parseEntities([{ target: "product", facts: [{ field: "name", value: "Bluza" }, { field: "price", value: price }, { field: "currency", value: "EUR" }] }], "manual", "test", "")[0];
 beforeEach(() => {
   vi.clearAllMocks();
   state = { draft: { ...emptyDraft(), entities: [product("10")] }, revision: 2, intelligence_revision: 0, baseline: { business: { name: "Studio" }, agents: [] }, signals: { businessType: "fashion", offeringTypes: ["standard"] }, confirmed_at: null };
-  intelligence = { data: structuredClone(state.draft), revision: 0 }; jobs = [];
+  intelligence = { data: structuredClone(state.draft), revision: 0 }; jobs = []; connection = null;
   m.user.mockResolvedValue({ id: "verified-user" });
   m.access.mockResolvedValue({ business: { id: "server-business", name: "Studio", slug: "test" } });
   m.rpc.mockResolvedValue({ data: true, error: null });
   m.from.mockImplementation((table: string) => {
-    const result = () => ({ data: table === "business_discovery" ? state : table === "business_intelligence" ? intelligence : table === "business_discovery_jobs" ? jobs : null, error: null });
+    const result = () => ({ data: table === "business_discovery" ? state : table === "business_intelligence" ? intelligence : table === "business_discovery_jobs" ? jobs : table === "instagram_connections" ? connection : null, error: null });
     const q = { select: () => q, eq: () => q, order: () => q, limit: () => q, single: async () => result(), maybeSingle: async () => result(), then: (resolve: (v: unknown) => unknown) => Promise.resolve(result()).then(resolve) };
     return q;
   });
 });
 describe("discovery API boundary", () => {
+  it("shows only metadata captured for the current connection generation and strips provider credentials", async () => {
+    connection = { id: "connection", discovery_generation: "current", username: "studio" };
+    jobs = [{ source: "instagram", input: { connectionId: "connection", generation: "old" }, checkpoint: { profile: { name: "Old brand" } } }, { source: "instagram", input: { connectionId: "connection", generation: "current" }, checkpoint: { profile: { name: "Studio", website: "studio.test", access_token: "SECRET" } } }];
+    const response = await (await GET(readRequest())).json();
+    expect(response.sourceProfile).toEqual({ name: "Studio", website: "https://studio.test/" });
+    expect(JSON.stringify(response)).not.toContain("SECRET");
+    connection.discovery_generation = "new";
+    expect((await (await GET(readRequest())).json()).sourceProfile).toBeNull();
+  });
   it("persists omitted sections and module choices, keeping them after GET and applying only allowed entities", async () => {
     const productId = state.draft.entities[0].id;
     const profile = parseEntities([{ target: "profile", facts: [{ field: "name", value: "Studio" }] }], "manual", "test", "")[0];

@@ -1,4 +1,6 @@
 import type { TraceObserver } from "./trace";
+import { loadBusinessProcess } from "@/lib/discovery/load-process";
+import { businessProcessContext } from "@/lib/discovery/business-process";
 import { loadActiveTrainingMemories } from "@/lib/agents/training/load";
 import { selectTrainingContext } from "@/lib/agents/training/model";
 import { retrieveBusinessSources } from "@/lib/catalogs/retrieval";
@@ -100,7 +102,7 @@ export async function processAgentTurn(params: {
   const started = Date.now();
   const trace = params.onTrace;
   trace?.({ stage: "overview", label: "Message received", data: { input: params.message, mode: params.mode ?? "production", source: params.source ?? "instagram" } });
-  const [productResult, agentResult, knowledgeResult, trainingMemories] = await Promise.all([
+  const [productResult, agentResult, knowledgeResult, trainingMemories, operating] = await Promise.all([
     db
       .from("products")
       .select(
@@ -122,7 +124,10 @@ export async function processAgentTurn(params: {
       .order("sort_order")
       .limit(1000),
     loadActiveTrainingMemories(params.businessId),
+    loadBusinessProcess(params.businessId),
   ]);
+  const businessProcess = businessProcessContext(operating.process);
+  if (businessProcess) trace?.({ stage: "workflow", label: "Business customer journey loaded", data: { process: operating.process, revision: operating.revision, informational: true } });
   if (productResult.error || agentResult.error || knowledgeResult.error) {
     trace?.({ stage: "context", label: "Business context failed to load", status: "error", data: {
       products: productResult.error ? "failed" : "loaded",
@@ -185,6 +190,7 @@ export async function processAgentTurn(params: {
     trace?.({ stage: "workflow", label: "Service information; workflow not advanced", data: { state, workflowId: null, steps: [] } });
     const trainingContext = trainingFor(null, null);
     const generated = await generateAgentReply({
+    businessProcess,
       trainingContext,
       ...(trace ? { onTrace: trace } : {}),
       instructions: agent?.instructions || "Answer in the customer's language.",
@@ -251,6 +257,7 @@ export async function processAgentTurn(params: {
           fallbackReason: "catalog_clarification",
         }
       : await generateAgentReply({
+          businessProcess,
           trainingContext,
       ...(trace ? { onTrace: trace } : {}),
           instructions:
@@ -370,6 +377,7 @@ export async function processAgentTurn(params: {
   } });
   const trainingContext = trainingFor(workflowId, state.step_key);
   const generated = await generateAgentReply({
+    businessProcess,
     trainingContext,
       ...(trace ? { onTrace: trace } : {}),
     instructions:

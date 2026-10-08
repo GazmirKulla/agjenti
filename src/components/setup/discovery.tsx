@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
+import type { InstagramBusinessProfile } from "@/lib/instagram/business-profile";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { businessProfiles } from "@/lib/onboarding/rules";
@@ -7,7 +9,7 @@ import { DiscoveryScanDialog, type ScanJob } from "./scan-dialog";
 import "./discovery.css";
 
 type Job = ScanJob & { note: string; warnings: string[]; knowledgeCount?: number; inactiveKnowledgeCount?: number; contextPrepared?: boolean; website: string | null; canResume: boolean };
-type State = { available: boolean; error?: string; connection: { username: string | null } | null; signals: { businessType: string } | null; confirmedAt: string | null; knowledgeCount?: number; pendingKnowledgeCount?: number; revision: number; intelligenceRevision: number; jobs: Job[] };
+type State = { available: boolean; error?: string; connection: { username: string | null } | null; sourceProfile?: InstagramBusinessProfile | null; businessProcess?: { name: string; stepCount: number; enabled: boolean } | null; signals: { businessType: string } | null; confirmedAt: string | null; knowledgeCount?: number; pendingKnowledgeCount?: number; revision: number; intelligenceRevision: number; jobs: Job[] };
 
 export function DiscoverySetup({ slug, businessId }: { slug: string; businessId: string }) {
   const router = useRouter();
@@ -18,6 +20,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   const [startingSource, setStartingSource] = useState("");
   const [scanOpen, setScanOpen] = useState(false);
   const [website, setWebsite] = useState("");
+  const websiteEdited = useRef(false);
   const scanningIds = useRef<string[]>([]);
   const wasAnalyzing = useRef(false);
   const resumePending = useRef(false);
@@ -28,6 +31,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
     const data: State = await response.json();
     if (!response.ok) throw new Error(data.error || "Analiza nuk u ngarkua.");
     setState(data);
+    if (!websiteEdited.current && data.sourceProfile?.website) setWebsite(data.sourceProfile.website);
     if (data.confirmedAt && preparedAt.current !== data.confirmedAt) {
       const changed = preparedAt.current !== null;
       preparedAt.current = data.confirmedAt;
@@ -111,15 +115,17 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
       <div className="discovery-context-facts"><span>Lloji i biznesit <strong>{businessType === "other" ? "Profil i përgjithshëm" : label}</strong></span><span>Njohuri aktive <strong>{state?.knowledgeCount ?? 0}</strong></span><span>Produktet <strong>I shton më vonë</strong></span></div>
       <div className="discovery-actions"><Link className="btn btn-primary" href={home}>Vazhdo në panel →</Link><Link className="btn btn-ghost" href={`${home}/agents/test`}>Provo Agjentin</Link></div>
       <nav className="discovery-context-links" aria-label="Përshtatja e biznesit"><Link href={`${home}/knowledge`}>Shiko njohuritë ↗</Link><Link href={`${home}/settings#modules`}>Përshtat seksionet ↗</Link></nav>
+      {state?.businessProcess && <Link className="discovery-context-process" href={`${home}/workflows`}>↗ {state.businessProcess.name}<span>{state.businessProcess.stepCount} hapa · {state.businessProcess.enabled ? "Përgatitur për Agjentin" : "Nuk përdoret"}</span></Link>}
     </section>}
     <div className="discovery-context-sources" aria-label="Burimet e biznesit">
       <article className="discovery-context-source">
-        <span className="discovery-context-icon" aria-hidden="true">◎</span><div><h2>Instagram</h2><p>{state?.connection ? `@${state.connection.username || "Instagram"} · Llogaria është e lidhur` : "Lidh llogarinë e biznesit. Analiza nis automatikisht."}</p></div>
+        {state?.sourceProfile?.profile_picture_url ? <Image className="discovery-profile-avatar" src={state.sourceProfile.profile_picture_url} alt="" width={48} height={48} unoptimized /> : <span className="discovery-context-icon" aria-hidden="true">◎</span>}<div><h2>{state?.sourceProfile?.name || "Instagram"}</h2><p>{state?.connection ? `@${state.connection.username || state.sourceProfile?.username || "Instagram"} · Llogaria është e lidhur` : "Lidh llogarinë e biznesit. Analiza nis automatikisht."}</p>{state?.sourceProfile?.biography && <p className="discovery-profile-bio">{state.sourceProfile.biography}</p>}</div>
         {state?.connection ? <button className="btn btn-ghost" disabled={busy || active || !state.available} onClick={() => void start("instagram")}>{latest("instagram") ? "Analizo përsëri" : "Analizo postimet"}</button> : <a className="btn btn-primary" href={`/api/instagram/oauth/start?businessId=${businessId}`}>Lidh Instagram-in →</a>}
       </article>
       <article className="discovery-context-source discovery-context-website">
         <span className="discovery-context-icon" aria-hidden="true">↗</span><div><h2>Website <small>Opsional</small></h2><p>Plotësojmë njohuritë me informacionin e publikuar në website.</p>
-        <form onSubmit={event => { event.preventDefault(); void start("website", website); }}><label className="sr-only" htmlFor="discovery-website">Website i biznesit</label><input id="discovery-website" className="field" type="url" placeholder="https://biznesi.al" value={website} onChange={event => setWebsite(event.target.value)} required maxLength={2000} /><button className="btn btn-ghost" disabled={busy || active || !state?.available}>Analizo →</button></form>
+        {state?.sourceProfile?.website && <p className="discovery-profile-website">Website-i u gjet në profil. {latest("website") ? "Analiza u shtua automatikisht." : "Analizohet pas përfundimit të Instagram-it."}</p>}
+        <form onSubmit={event => { event.preventDefault(); void start("website", website); }}><label className="sr-only" htmlFor="discovery-website">Website i biznesit</label><input id="discovery-website" className="field" type="url" placeholder="https://biznesi.al" value={website} onChange={event => { websiteEdited.current = true; setWebsite(event.target.value); }} required maxLength={2000} /><button className="btn btn-ghost" disabled={busy || active || !state?.available}>Analizo →</button></form>
         {suggestion && !website && !latest("website") && <button type="button" className="soft-link" onClick={() => setWebsite(suggestion)}>Përdor website-in nga profili</button>}</div>
       </article>
     </div>

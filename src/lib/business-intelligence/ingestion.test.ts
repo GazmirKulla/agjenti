@@ -5,6 +5,12 @@ vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: vi.fn() }));
 import { extractWebsite } from "./ingestion";
 beforeEach(() => vi.clearAllMocks());
 describe("bounded business website ingestion", () => {
+  it("prioritizes the published customer process over individual products during onboarding", async () => {
+    m.fetch.mockImplementation(async (url: string) => ({ url, contentType: "text/html", body: url === "https://shop.test/" ? `${Array.from({ length: 10 }, (_, i) => `<a href="/products/${i}">P</a>`).join("")}<a href="/how-it-works">Process</a><a href="/download">Download</a>` : "Published page" }));
+    await extractWebsite("https://shop.test/", "onboarding");
+    expect(m.fetch.mock.calls.map(([url]) => url).slice(1, 3)).toEqual(["https://shop.test/how-it-works", "https://shop.test/download"]);
+    expect(m.fetch).toHaveBeenCalledTimes(8);
+  });
   it("does not turn website titles into product hints during onboarding", async () => {
     m.fetch.mockResolvedValue({ url: "https://shop.test/", contentType: "text/html", body: '<h1>A new week</h1><p>Learn through play</p>' });
     const context = await extractWebsite("https://shop.test/", "onboarding");

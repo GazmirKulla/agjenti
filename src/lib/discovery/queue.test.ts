@@ -1,17 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ rpc: vi.fn(), read: vi.fn(), normalize: vi.fn(), classify: vi.fn(), instagram: vi.fn(), website: vi.fn() }));
+const m = vi.hoisted(() => ({ rpc: vi.fn(), read: vi.fn(), normalize: vi.fn(), classify: vi.fn(), instagram: vi.fn(), website: vi.fn(), process: vi.fn() }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: m.rpc, from: () => { const chain = { select: () => chain, eq: () => chain, single: m.read, maybeSingle: m.read }; return chain; } }) }));
 vi.mock("@/lib/business-intelligence/normalization", () => ({ normalizeSource: m.normalize }));
 vi.mock("@/lib/business-intelligence/ingestion", () => ({ extractInstagram: m.instagram, extractWebsite: m.website }));
 vi.mock("./proposal", async (original) => ({ ...await original<typeof import("./proposal")>(), classifyBusiness: m.classify }));
+vi.mock("./business-process", async (original) => ({ ...await original<typeof import("./business-process")>(), prepareBusinessProcess: m.process }));
 import { processDiscoveryStep, enqueueDiscovery, runDiscoveryQueue } from "./queue";
 import { emptyDraft, parseEntities } from "@/lib/business-intelligence/model";
 import { signalsFor } from "./proposal";
 import { generateDashboardProfile } from "@/lib/dashboard/profile/generate";
 
 const job = { id: "job", business_id: "business", source: "website" as const, input: { url: "https://shop.test" }, stage: "capture", checkpoint: {}, lease_token: "lease", attempts: 1 };
-beforeEach(() => { vi.resetAllMocks(); m.rpc.mockResolvedValue({ data: true, error: null }); m.read.mockResolvedValue({ data: null, error: null }); });
+beforeEach(() => { vi.resetAllMocks(); m.rpc.mockResolvedValue({ data: true, error: null }); m.read.mockResolvedValue({ data: null, error: null }); m.process.mockResolvedValue(null); });
 describe("resumable discovery worker", () => {
+  it("adds Workflow navigation for a supported journey while honoring explicit process exclusions", async () => {
+    const journey = { version: 1, source: "generated", enabled: true, name: "Website", summary: "Shkarko PDF", steps: [{ key: "one", title: "Shkarko", description: "Shkarko PDF", evidence: "Shkarko PDF", sourceRef: "https://shop.test" }], unknowns: [] };
+    const state = { draft: emptyDraft(), revision: 1, signals_source: "manual", signals: signalsFor("other", []), baseline: { business: { name: "Studio" }, agents: [] } };
+    m.read.mockResolvedValue({ data: state, error: null }); m.process.mockResolvedValue(journey);
+    await processDiscoveryStep({ ...job, stage: "finish", checkpoint: { text: "Shkarko PDF", reference: "https://shop.test" } });
+    expect(m.rpc.mock.calls.at(-1)![1].p_profile).toMatchObject({ source: "generated", enabledModules: expect.arrayContaining(["workflows"]) });
+    m.process.mockClear();
+    m.read.mockResolvedValue({ data: { ...state, draft: { ...state.draft, reviewPreferences: { excludedTargets: ["workflow"], excludedEntityIds: [] } } }, error: null });
+    await processDiscoveryStep({ ...job, stage: "finish", checkpoint: {} });
+    expect(m.process).not.toHaveBeenCalled();
+    expect(m.rpc.mock.calls.at(-1)![1].p_process).toBeNull();
+  });
+  it("completes context when process analysis fails and never releases the lease before the fenced finish", async () => {
+    m.read.mockResolvedValue({ data: { draft: emptyDraft(), revision: 1, signals_source: "manual", signals: signalsFor("ecommerce", ["standard"]), baseline: { business: { name: "Studio" }, agents: [] } }, error: null });
+    m.process.mockRejectedValue(new Error("SECRET"));
+    await processDiscoveryStep({ ...job, stage: "finish", checkpoint: { text: "Shkarko PDF", reference: "https://shop.test" } });
+    expect(m.rpc.mock.calls.map(([name]) => name)).toEqual(["finish_discovery_with_process"]);
+    expect(m.rpc.mock.calls[0][1]).toMatchObject({ p_process: null, p_warnings: [expect.stringContaining("më vonë")] });
+    expect(JSON.stringify(m.rpc.mock.calls)).not.toContain("SECRET");
+  });
   it("honors manual settings classification and automatically queues the profile website after Instagram completes", async () => {
     const signals = signalsFor("services", ["services"]);
     m.read.mockResolvedValueOnce({ data: { id: "connection" }, error: null })
@@ -19,7 +40,7 @@ describe("resumable discovery worker", () => {
       .mockResolvedValueOnce({ data: { id: "connection" }, error: null });
     await processDiscoveryStep({ ...job, source: "instagram", user_id: "verified-user", input: { connectionId: "connection", generation: "generation" }, stage: "finish", checkpoint: { entities: [], website: "https://shop.test/#contact" } });
     expect(m.classify).not.toHaveBeenCalled();
-    expect(m.rpc).toHaveBeenCalledWith("finish_context_business_discovery", expect.objectContaining({ p_signals: signals }));
+    expect(m.rpc).toHaveBeenCalledWith("finish_discovery_with_process", expect.objectContaining({ p_signals: signals }));
     expect(m.rpc).toHaveBeenLastCalledWith("enqueue_business_discovery", { p_business: "business", p_user: "verified-user", p_source: "website", p_input: { url: "https://shop.test/" }, p_force: false });
   });
   it("scopes both caption and photo analysis to context even if a provider returns offers", async () => {
@@ -58,7 +79,7 @@ describe("resumable discovery worker", () => {
     m.rpc.mockResolvedValueOnce({ data: false, error: null }).mockResolvedValueOnce({ data: true, error: null });
     await processDiscoveryStep({ ...job, stage: "finish", checkpoint: { entities: [] } });
     expect(m.classify).not.toHaveBeenCalled();
-    expect(m.rpc).toHaveBeenCalledWith("finish_context_business_discovery", expect.objectContaining({ p_revision: 7, p_signals: signals }));
+    expect(m.rpc).toHaveBeenCalledWith("finish_discovery_with_process", expect.objectContaining({ p_revision: 7, p_signals: signals }));
     expect(m.rpc).toHaveBeenLastCalledWith("checkpoint_business_discovery", expect.objectContaining({ p_stage: "finish" }));
   });
   it("retains omitted sections and manual module choices when a later analysis finishes", async () => {
@@ -66,7 +87,7 @@ describe("resumable discovery worker", () => {
     const entities = parseEntities([{ target: "product", facts: [{ field: "name", value: "Bluza" }, { field: "price", value: "10" }, { field: "currency", value: "EUR" }] }], "manual", "test", "");
     m.read.mockResolvedValue({ data: { draft: { ...emptyDraft(), entities, reviewPreferences: preferences }, revision: 7, signals_source: "manual", signals: signalsFor("ecommerce", ["standard"]), baseline: { business: { name: "Studio" }, agents: [] } }, error: null });
     await processDiscoveryStep({ ...job, stage: "finish", checkpoint: { entities } });
-    const args = m.rpc.mock.calls.find(([name]) => name === "finish_context_business_discovery")![1];
+    const args = m.rpc.mock.calls.find(([name]) => name === "finish_discovery_with_process")![1];
     expect(args.p_draft.reviewPreferences).toEqual(preferences);
     expect(args.p_draft.entities.some((e: { target: string }) => e.target === "product")).toBe(true);
   });
@@ -74,7 +95,7 @@ describe("resumable discovery worker", () => {
     const entities = parseEntities([{ target: "knowledge", facts: [{ field: "title", value: "Dërgesa", evidence: "Dërgesa" }, { field: "body", value: "Dy ditë", evidence: "Dy ditë" }] }], "website", "https://shop.test", "Dërgesa Dy ditë");
     m.read.mockResolvedValue({ data: { draft: emptyDraft(), revision: 7, signals_source: "manual", signals: signalsFor("ecommerce", ["standard"]), baseline: { business: { name: "Studio" }, agents: [] } }, error: null });
     await processDiscoveryStep({ ...job, stage: "finish", checkpoint: { entities } });
-    const args = m.rpc.mock.calls.find(([name]) => name === "finish_context_business_discovery")![1];
+    const args = m.rpc.mock.calls.find(([name]) => name === "finish_discovery_with_process")![1];
     expect(args.p_knowledge).toEqual(entities);
     expect(args.p_draft.entities.some((e: { target: string }) => e.target === "knowledge")).toBe(false);
   });
