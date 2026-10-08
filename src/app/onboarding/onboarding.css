@@ -291,6 +291,17 @@
   width: 100%;
   font-size: 16px;
   outline-color: #8956fb;
+  background: #fff;
+  color: #1d1732;
+}
+.onboarding-workspace-form .form-feedback {
+  margin-top: 16px;
+  background: #f4f0ff;
+  color: #7141ff;
+}
+.onboarding-workspace-form .form-feedback-error {
+  background: #fff0f1;
+  color: #ba3d51;
 }
 .onboarding-note {
   background: #f8f5ff;

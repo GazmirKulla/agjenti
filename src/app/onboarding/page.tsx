@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
+import { Icon } from "@/components/dashboard/icon";
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { homeForAccess } from "@/lib/auth/destination";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -52,20 +53,51 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   if (!settings.onboarding_enabled || query.manual !== "1")
     return (
       <main className="onboarding-page">
-        <section className="onboarding-unavailable">
-          <Link href="/" className="onboarding-brand">
-            <BrandLogo size={34} />
-          </Link>
-          <h1>Krijo hapësirën e biznesit</h1>
-          <p>
-            {settings.onboarding_enabled ? "Vendos emrin, pastaj lidh Instagram-in dhe website-in nëse ke. Do të përgatisim konfigurimin nga përmbajtja e biznesit tënd." : "Vendos emrin për të krijuar hapësirën. Konfigurimin mund ta plotësosh nga paneli."}
-          </p>
-          <BasicWorkspaceForm initialName={typeof data?.answers?.name === "string" ? data.answers.name : ""} />
-          {settings.onboarding_enabled && <Link className="soft-link" href="/onboarding?manual=1">Preferoj ta përshkruaj biznesin manualisht ose me audio</Link>}
-          <form action={signOut}>
-            <button className="btn btn-ghost">Dil nga llogaria</button>
-          </form>
-        </section>
+        <div className="onboarding-shell">
+          <aside className="onboarding-sidebar">
+            <Link href="/" className="onboarding-brand">
+              <BrandLogo size={34} />
+            </Link>
+            <div className="onboarding-welcome">
+              <h2>Mirë se erdhe!<br />Le të fillojmë.</h2>
+              <p>
+                Lidh Instagram-in, organizo produktet dhe kujdesu për klientët
+                nga një vend.
+              </p>
+              <div className="onboarding-art">
+                <Icon name="instagram" size={62} />
+                <span><Icon name="spark" size={30} /></span>
+              </div>
+            </div>
+            <div className="onboarding-user">
+              <span>{user.email}</span>
+              <form action={signOut}>
+                <button type="submit">Dil nga llogaria</button>
+              </form>
+            </div>
+          </aside>
+          <section className="onboarding-body">
+            <div className="onboarding-progress">
+              <progress max={1} value={0} aria-label="Progresi i konfigurimit" />
+              <span>Le të fillojmë</span>
+            </div>
+            <div className="onboarding-question">
+              <span className="onboarding-eyebrow">NJË FILLIM I THJESHTË</span>
+              <h1>Krijo hapësirën e biznesit</h1>
+              <p>
+                {settings.onboarding_enabled ? "Vendos emrin, pastaj lidh Instagram-in dhe website-in nëse ke. Do të përgatisim konfigurimin nga përmbajtja e biznesit tënd." : "Vendos emrin për të krijuar hapësirën. Konfigurimin mund ta plotësosh nga paneli."}
+              </p>
+            </div>
+            <BasicWorkspaceForm initialName={typeof data?.answers?.name === "string" ? data.answers.name : ""} />
+            {settings.onboarding_enabled && (
+              <div className="onboarding-save">
+                <Link className="onboarding-skip" href="/onboarding?manual=1">
+                  Preferoj ta përshkruaj biznesin manualisht ose me audio
+                </Link>
+              </div>
+            )}
+          </section>
+        </div>
       </main>
     );
   let initial = emptyAnswers;
