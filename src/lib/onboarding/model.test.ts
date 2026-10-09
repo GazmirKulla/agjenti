@@ -96,11 +96,8 @@ describe("onboarding answers", () => {
       ),
     ).toMatchObject({
       ...completeAnswers,
-      agentCapabilities: [
-        "recommend_products",
-        "collect_order_details",
-        "follow_workflow",
-      ],
+      agentCapabilities: expect.arrayContaining(["recommend_products", "collect_order_details", "follow_workflow"]),
+      aiMode: expect.any(String),
       businessProfile: expect.any(Object),
     });
   });
@@ -117,7 +114,7 @@ describe("onboarding answers", () => {
       productType: "photo",
       useCases: ["sales"],
       selectedUseCases: ["sales"],
-      agentCapabilities: ["recommend_products"],
+      agentCapabilities: expect.arrayContaining(["recommend_products"]),
       businessProfile: expect.any(Object),
     });
   });
@@ -146,9 +143,9 @@ describe("onboarding answers", () => {
     });
     expect(resumeWizardStep(0, active)).toBe(0);
     expect(resumeWizardStep(1, active)).toBe(1);
-    expect(resumeWizardStep(4, active)).toBe(2);
-    expect(resumeWizardStep(5, active)).toBe(2);
-    expect(wizardStepToStored(2, active)).toBe(5);
+    expect(resumeWizardStep(4, active)).toBe(1);
+    expect(resumeWizardStep(5, active)).toBe(1);
+    expect(wizardStepToStored(1, active)).toBe(1);
   });
   it("allows any offering in a category and removes product actions for explicit service-only offers", () => {
     expect(allowedOfferings("services").map(([value]) => value)).toEqual([

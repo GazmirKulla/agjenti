@@ -26,16 +26,16 @@ export function offerMode(offerings: readonly string[]) {
 }
 
 export const useCaseChoices: readonly Choice[] = [
-  ["support", "T’u përgjigjet pyetjeve të klientëve", "inbox"],
+  ["support", "T’u përgjigjet klientëve", "inbox"],
   ["sales", "T’i ndihmojë klientët të zgjedhin", "spark"],
-  ["orders", "Të marrë kërkesa për porosi", "orders"],
-  ["booking", "Të marrë kërkesa për takime ose rezervime", "calendar"],
-  ["leads", "Të mbledhë kontakte për ndjekje nga stafi", "customers"],
+  ["orders", "Të ndihmojë klientin të përfundojë porosinë", "orders"],
+  ["booking", "Të marrë kërkesa për rezervime", "calendar"],
+  ["leads", "Të mbledhë kontaktet e klientëve", "customers"],
 ];
 export const useCaseDescriptions: Record<string, string> = {
   support: "Për ofertën, çmimet, përdorimin dhe politikat e biznesit.",
   sales: "Kupton nevojat dhe ndihmon në zgjedhjen e ofertës së duhur.",
-  orders: "Mbledh produktet, sasitë dhe të dhënat për konfirmimin e porosisë.",
+  orders: "E udhëzon klientin deri te përgatitja e porosisë për konfirmim.",
   booking: "Mbledh shërbimin, orarin e dëshiruar dhe kontaktin për konfirmim.",
   leads: "Ruan interesin dhe kontaktin e klientit për ndjekje ose ofertë.",
 };

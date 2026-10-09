@@ -80,7 +80,7 @@ describe("self-service onboarding boundary", () => {
         selectedUseCases: answers.useCases,
         offeringTypes: ["variants"],
         productType: "variants",
-        agentCapabilities: ["understand_needs", "recommend_products"],
+        agentCapabilities: expect.arrayContaining(["understand_needs", "recommend_products"]),
         businessProfile: expect.any(Object),
       }),
     });

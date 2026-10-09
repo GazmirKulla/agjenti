@@ -43,5 +43,5 @@ it("maps use-case capabilities per business profile", () => {
   expect(sales?.capabilities.map(([value]) => value)).toContain(
     "recommend_products",
   );
-  expect(questionLabel("useCases")).toBe("Qëllimet");
+  expect(questionLabel("useCases")).toBe("Çfarë do të bëjë agjenti për biznesin tënd");
 });

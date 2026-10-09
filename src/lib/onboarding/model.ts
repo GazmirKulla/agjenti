@@ -37,8 +37,8 @@ export const questions = [
   },
   {
     key: "useCases",
-    label: "Qëllimet",
-    title: "Çfarë dëshiron të bëjë agjenti?",
+    label: "Çfarë do të bëjë agjenti për biznesin tënd",
+    title: "Çfarë dëshiron të bëjë agjenti për biznesin tënd?",
     description: "Mund të zgjedhësh disa mundësi.",
     options: useCaseChoices,
   },
@@ -179,8 +179,7 @@ export function activeQuestions(
   const conditional = normalizeConditionalAnswers(answers);
   return wizardOrder
     .map((key) => questions.find((question) => question.key === key)!)
-    .filter((q) => set.has(q.key))
-    .filter((q) => q.key !== "aiMode" || conditional.useCases.length > 0)
+    .filter((q) => set.has(q.key) && q.key !== "aiMode")
     .map((question) => {
       let options: readonly Choice[] = question.options;
       if (question.key === "businessType" && answers.businessType) {
@@ -336,13 +335,7 @@ export function parseAnswers(
       ([value]) => value,
     ),
   );
-  const agentCapabilities = [
-    ...new Set(
-      (capabilityInput as string[]).filter((value) =>
-        capabilityAllow.has(value),
-      ),
-    ),
-  ];
+  const agentCapabilities = [...capabilityAllow];
 
   const scalarValues: Record<
     "productCount" | "messageVolume" | "teamSize",
@@ -407,6 +400,8 @@ export function parseAnswers(
   }
   const audioReview = parseAudioReview(raw.audioReview);
   if (audioReview) {
+    // Capabilities are derived from the visible goals, not a separate user choice.
+    delete audioReview.confidence.agentCapabilities;
     for (const key of ["offeringTypes", "useCases", "agentCapabilities"] as const) {
       if (!normalized[key].length) delete audioReview.confidence[key];
     }

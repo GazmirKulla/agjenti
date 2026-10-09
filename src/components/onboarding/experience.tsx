@@ -26,6 +26,8 @@ import {
   hasValue,
 } from "@/lib/onboarding/audio-model";
 import { businessProfiles, offerMode, canonicalUseCases, useCaseDescriptions } from "@/lib/onboarding/rules";
+import { CapabilityPicker } from "./capability-picker";
+import { capabilityGroups } from "@/lib/onboarding/capability-groups";
 import { AudioRecorder } from "./audio-recorder";
 import { OnboardingWizard } from "./wizard";
 import { OnboardingBasics } from "./basics";
@@ -446,8 +448,8 @@ export function OnboardingExperience({
                           <span>
                             <strong>{question.label}</strong>
                             <small>
-                              {selected
-                                .map((v) => question.options.find(([id]) => id === v)?.[1] ?? answerLabel(question.key, v))
+                              {(field === "agentCapabilities" ? capabilityGroups(question.options).filter(group => group.capabilities.some(id => selected.includes(id))).map(group => group.label) : selected
+                                .map((v) => question.options.find(([id]) => id === v)?.[1] ?? answerLabel(question.key, v)))
                                 .join(", ") || "Pa përcaktuar"}
                             </small>
                           </span>
@@ -462,7 +464,7 @@ export function OnboardingExperience({
                           tabIndex={-1}
                           className="onboarding-options"
                         >
-                          {question.options.map(([id, label]) => (
+                          {field === "agentCapabilities" ? <CapabilityPicker options={question.options} selected={selected} onChange={value => change(field, value)} /> : question.options.map(([id, label]) => (
                             <label
                               className={`onboarding-option ${selected.includes(id) ? "selected" : ""}`}
                               key={id}

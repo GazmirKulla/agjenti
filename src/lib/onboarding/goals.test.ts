@@ -4,6 +4,16 @@ import { allowedCapabilities, canonicalUseCases, visibleUseCases } from "./rules
 import { extractionSchema } from "./audio-model";
 
 describe("simplified onboarding goals", () => {
+  it("derives order capabilities from the single visible goal selection without hidden confirmations", () => {
+    const answers = parseAnswers({ ...emptyAnswers, name: "Dyqan", businessType: "retail", offeringTypes: ["standard"], useCases: ["orders"],
+      audioReview: { analysisIds: ["11111111-1111-4111-8111-111111111111"], reviewed: true, confidence: { agentCapabilities: 0.2 } },
+    }, true);
+    expect(answers.agentCapabilities).toEqual(["ask_missing", "handoff", "collect_order_details", "follow_workflow", "create_order"]);
+    expect(answers.audioReview?.confidence).not.toHaveProperty("agentCapabilities");
+    const active = activeQuestions(allQuestionKeys, answers);
+    expect(active.some(q => q.key === "useCases")).toBe(true);
+    expect(active.some(q => q.key === "aiMode")).toBe(false);
+  });
   it("shows five goals for mixed offers and omits reservations for product-only sellers", () => {
     expect(visibleUseCases("beauty", ["mixed"], []).map(([id]) => id))
       .toEqual(["support", "sales", "orders", "booking", "leads"]);
@@ -19,7 +29,7 @@ describe("simplified onboarding goals", () => {
     const saved = { ...emptyAnswers, name: "Dyqan", businessType: "retail", offeringTypes: ["standard"], useCases: ["messages"] };
     const questions = activeQuestions(allQuestionKeys, saved);
     expect(questions.find(q => q.key === "useCases")?.options.some(([id]) => id === "messages")).toBe(false);
-    expect(questions.find(q => q.key === "aiMode")?.options.map(([id]) => id)).toContain("answer_questions");
+    expect(questions.find(q => q.key === "aiMode")).toBeUndefined();
     expect(parseAnswers({ ...saved, agentCapabilities: ["answer_questions"] }).agentCapabilities).toContain("answer_questions");
   });
   it("keeps the extraction schema and goal capabilities aligned with the five choices", () => {

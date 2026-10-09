@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { CapabilityPicker } from "./capability-picker";
 import { useMemo, useRef, useState } from "react";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "@/components/dashboard/icon";
@@ -288,18 +289,19 @@ export function OnboardingWizard({
                     role="group"
                     aria-label={question.title}
                   >
-                    {question.options.map(([value, label, icon]) => {
+                    {question.key === "aiMode" ? <CapabilityPicker options={question.options} selected={answers.agentCapabilities} onChange={value => {
+                      setAnswers(current => correctField(current, "agentCapabilities", value));
+                      setSaved(false);
+                      setError("");
+                    }} /> : question.options.map(([value, label, icon]) => {
                       const multi =
-                        question.key === "useCases" ||
-                        question.key === "aiMode";
+                        question.key === "useCases";
                       const selectedValues =
                         question.key === "productType"
                           ? answers.offeringTypes
                           : question.key === "useCases"
                             ? canonicalUseCases(answers.useCases)
-                            : question.key === "aiMode"
-                              ? answers.agentCapabilities
-                              : [];
+                            : [];
                       const checked = question.key === "productType" ? offerMode(answers.offeringTypes) === value : multi
                         ? selectedValues.includes(value)
                         : question.key === "businessType"
