@@ -24,11 +24,11 @@ import {
   fieldValue,
   hasValue,
 } from "@/lib/onboarding/audio-model";
-import { businessProfiles } from "@/lib/onboarding/rules";
+import { businessProfiles, offerMode } from "@/lib/onboarding/rules";
 import { AudioRecorder } from "./audio-recorder";
 import { OnboardingWizard } from "./wizard";
 import { OnboardingBasics } from "./basics";
-import { audioGuide, initialOnboardingMode } from "@/lib/onboarding/audio-guide";
+import { audioGuide, initialOnboardingMode, reviewDetailFields } from "@/lib/onboarding/audio-guide";
 
 type Transcript = { id: string; transcript: string };
 export function OnboardingExperience({
@@ -306,7 +306,7 @@ export function OnboardingExperience({
                 : review ? "Ja çfarë kuptuam për biznesin tënd" : "Kontrollo profilin e biznesit"}
             </h1>
             <p>
-              {mode === "basics" ? "Vendos emrin dhe zgjidh kategorinë e biznesit."
+              {mode === "basics" ? "Vendos emrin, kategorinë dhe çfarë ofron biznesi yt."
                 : mode === "written" || mode === "audio"
                 ? "Përgjigju pyetjeve më poshtë, me zë ose me shkrim."
                 : "Kontrollo të dhënat më poshtë. Hap një fushë për ta ndryshuar, pastaj konfirmo profilin."}
@@ -438,9 +438,8 @@ export function OnboardingExperience({
                         : question.key === "aiMode"
                           ? "agentCapabilities"
                           : question.key;
-                    const value = fieldValue(answers, field);
+                    const value = field === "offeringTypes" ? offerMode(answers.offeringTypes) : fieldValue(answers, field);
                     const multi = [
-                      "offeringTypes",
                       "useCases",
                       "agentCapabilities",
                     ].includes(field);
@@ -459,7 +458,7 @@ export function OnboardingExperience({
                             <strong>{question.label}</strong>
                             <small>
                               {selected
-                                .map((v) => answerLabel(question.key, v))
+                                .map((v) => question.options.find(([id]) => id === v)?.[1] ?? answerLabel(question.key, v))
                                 .join(", ") || "Pa përcaktuar"}
                             </small>
                           </span>
@@ -484,19 +483,12 @@ export function OnboardingExperience({
                                 name={field}
                                 checked={selected.includes(id)}
                                 onChange={() => {
-                                  let chosen = selected.includes(id)
+                                  const chosen = selected.includes(id)
                                     ? selected.filter((v) => v !== id)
                                     : [...selected, id];
-                                  if (field === "offeringTypes")
-                                    chosen = ["services", "mixed"].includes(id)
-                                      ? selected.includes(id)
-                                        ? []
-                                        : [id]
-                                      : chosen.filter(
-                                          (v) =>
-                                            !["services", "mixed"].includes(v),
-                                        );
-                                  change(field, multi ? chosen : id);
+                                  if (field === "offeringTypes") {
+                                    change(field, [id]);
+                                  } else change(field, multi ? chosen : id);
                                 }}
                               />
                               <span>{label}</span>
@@ -563,7 +555,7 @@ export function OnboardingExperience({
                       <button type="button" className="onboarding-back" onClick={() => confirm("offeringsSummary")}>Konfirmo listën</button>
                     )}
                   </section>
-                  {Object.entries(detailFields).filter(([field]) => field !== "offeringsSummary").map(([field, label]) => (
+                  {reviewDetailFields(answers).map(([field, label]) => (
                     <details className="onboarding-review-field" key={field}>
                       <summary>
                         <span>

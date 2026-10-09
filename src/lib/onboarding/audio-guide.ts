@@ -1,6 +1,7 @@
 import { allQuestionKeys, type AnswerKey, type Answers } from "./model";
+import { detailFields, pendingConfirmations } from "./audio-fields";
 import { clarifications, fieldValue, hasValue } from "./audio-model";
-import { businessProfiles, type BusinessType } from "./rules";
+import { businessProfiles, offerMode, type BusinessType } from "./rules";
 
 export type AudioGuideQuestion = { id: string; title: string; hint: string };
 
@@ -97,6 +98,7 @@ export function audioGuide(
     ? answers.businessType as BusinessType
     : "other";
   const guide = categoryGuides[category];
+  const mode = offerMode(answers.offeringTypes);
   const booking = answers.useCases.includes("booking");
   const orders = answers.useCases.includes("orders");
   const leads = answers.useCases.includes("leads");
@@ -105,8 +107,24 @@ export function audioGuide(
     id: "catalogContext", title: "Si i përdor klienti katalogët e tu?",
     hint: "Shpjego si organizohen dhe si gjendet oferta e duhur. Mund t’i shtosh më vonë.",
   };
+  const offerTitle = mode === "standard" ? "Cilat produkte shet?"
+    : mode === "services" ? "Cilat shërbime ofron?"
+    : mode === "mixed" ? "Cilat produkte dhe shërbime ofron?" : "Çfarë ofron biznesi yt?";
+  const offeringHint = mode === "standard"
+    ? "Përmend produktet kryesore. Nëse kanë variante ose personalizim, shpjego si zgjidhen."
+    : mode === "services"
+      ? category === "digital" ? guide.offering
+        : "Përmend shërbimet kryesore dhe kujt i shërbejnë."
+      : guide.offering;
+  const serviceSectors = ["beauty", "healthcare", "hospitality", "fitness", "education", "professional", "digital", "technical", "realestate", "services"];
+  const processHint = mode === "standard"
+    ? category === "digital" ? "Si porosit klienti, si paguan dhe si merr akses te produkti digjital?"
+      : "Si zgjedh dhe porosit klienti? Si funksionojnë pagesa, dorëzimi dhe kthimet?"
+    : mode === "services" && !serviceSectors.includes(category)
+      ? "Si kërkohet shërbimi, si përcaktohen çmimi dhe koha, dhe kush e konfirmon?"
+      : guide.process;
   const core: AudioGuideQuestion[] = [
-    { id: "offeringsSummary", title: "Çfarë ofron biznesi yt?", hint: categoryContext ? `${categoryContext}: ${guide.offering}` : guide.offering },
+    { id: "offeringsSummary", title: offerTitle, hint: categoryContext ? `${categoryContext}: ${offeringHint}` : offeringHint },
     {
       id: "customerQuestions",
       title: "Çfarë të pyesin më shpesh klientët?",
@@ -121,8 +139,10 @@ export function audioGuide(
         : booking ? "Si funksionon një rezervim ose takim?"
         : orders ? "Si funksionon një porosi?"
         : leads ? "Si e trajton një kërkesë nga një klient i interesuar?"
+        : mode === "standard" ? "Si porosit dhe e merr produktin klienti?"
+        : mode === "services" ? "Si kërkon dhe e merr shërbimin klienti?"
         : "Si e merr klienti produktin ose shërbimin?",
-      hint: `${guide.process}${needsCatalogContext(answers) ? " Si gjendet oferta në katalogët e tu?" : ""}`,
+      hint: `${processHint}${mode === "mixed" ? " Dallo hapat për produktet nga hapat për shërbimet." : ""}${needsCatalogContext(answers) ? " Si gjendet oferta në katalogët e tu?" : ""}`,
     },
     {
       id: "handoffRules",
@@ -154,4 +174,25 @@ export function needsCatalogContext(answers: Answers) {
   const text = [answers.details?.categoryDescription, answers.details?.businessDescription,
     ...(answers.details?.offeringsSummary ?? []), answers.details?.customerProcess].join(" ");
   return /(?:disa|shumë|shume|multiple|several|[2-9])\s+(?:katalog|catalog)|katalog[\wë]*\s+(?:të ndrysh|te ndrysh|të shum|te shum)/i.test(text);
+}
+
+/** Only expose details that add information to the selected sector and offer. */
+export function reviewDetailFields(answers: Answers) {
+  const mode = offerMode(answers.offeringTypes);
+  const pending = new Set(answers.audioReview ? pendingConfirmations(answers.audioReview) : []);
+  return Object.entries(detailFields).filter(([field]) => {
+    if (field === "offeringsSummary") return false;
+    // Previously saved uncertainty must remain reachable for confirmation.
+    if (pending.has(field)) return true;
+    if (field === "businessCategory") return !answers.businessType;
+    if (field === "categoryDescription") return answers.businessType === "other";
+    if (field === "businessDescription") return hasValue(fieldValue(answers, field));
+    if (field === "catalogContext") return needsCatalogContext(answers) || hasValue(fieldValue(answers, field));
+    if (field === "sellsProducts") return clarifications(answers).some(q => q.field === "offeringTypes" && q.message.includes("nuk përputhen"));
+    if (field === "hasVariants" || field === "isPersonalized") {
+      if (!mode || mode === "services") return false;
+      return answers.businessType !== "digital" || hasValue(fieldValue(answers, field));
+    }
+    return true;
+  });
 }

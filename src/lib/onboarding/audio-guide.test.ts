@@ -1,12 +1,49 @@
 import { describe, expect, it } from "vitest";
-import { audioGuide, initialOnboardingMode } from "./audio-guide";
-import { emptyAnswers, initialInstructions, parseAnswers } from "./model";
+import { audioGuide, initialOnboardingMode, reviewDetailFields } from "./audio-guide";
+import { activeQuestions, allQuestionKeys, emptyAnswers, initialInstructions, parseAnswers } from "./model";
 import { businessProfiles } from "./rules";
-import { correctField, mergeExtraction } from "./audio-model";
+import { clarifications, correctField, mergeExtraction } from "./audio-model";
 import { audioFields, emptyDetails } from "./audio-fields";
 
 const id = "11111111-1111-4111-8111-111111111111";
 describe("guided onboarding", () => {
+  it("uses the selected offer in every sector without repeating category or product-sales questions", () => {
+    for (const businessType of Object.keys(businessProfiles)) {
+      for (const offering of ["standard", "services", "mixed"]) {
+        const answers = parseAnswers({ ...emptyAnswers, businessType, name: "Biznes", offeringTypes: [offering], useCases: ["support"], details: emptyDetails });
+        const guide = audioGuide(answers);
+        expect(guide[0].title).toBe(offering === "standard" ? "Cilat produkte shet?" : offering === "services" ? "Cilat shërbime ofron?" : "Cilat produkte dhe shërbime ofron?");
+        const fields = reviewDetailFields(answers).map(([field]) => field);
+        expect(fields).not.toContain("businessCategory");
+        expect(fields).not.toContain("sellsProducts");
+        expect(fields).not.toContain("catalogContext");
+        if (businessType !== "other") expect(fields).not.toContain("categoryDescription");
+        if (offering === "services") {
+          expect(fields).not.toContain("hasVariants");
+          expect(fields).not.toContain("isPersonalized");
+        }
+        expect(clarifications(answers)).toEqual([]);
+        expect(activeQuestions(allQuestionKeys, answers).find(q => q.key === "productType")?.options.map(([id]) => id)).toEqual(["standard", "services", "mixed"]);
+      }
+    }
+  });
+  it("keeps relevant corrections reachable and clears product details when switching to services", () => {
+    const product = parseAnswers({ ...emptyAnswers, businessType: "retail", offeringTypes: ["variants"], details: emptyDetails,
+      audioReview: { analysisIds: [id], confidence: { catalogContext: 0.4 } } });
+    expect(reviewDetailFields(product).map(([key]) => key)).toContain("catalogContext");
+    expect(product.details?.hasVariants).toBe(true);
+    const service = correctField(product, "offeringTypes", ["services"]);
+    expect(service.details?.sellsProducts).toBe(false);
+    expect(service.details?.hasVariants).toBeNull();
+    expect(clarifications(service).some(q => q.message.includes("nuk përputhen"))).toBe(false);
+  });
+  it("asks for the missing goal instead of confirming capabilities that were filtered out", () => {
+    const answers = parseAnswers({ ...emptyAnswers, name: "Dyqan", businessType: "retail", offeringTypes: ["standard"],
+      audioReview: { analysisIds: [id], confidence: { agentCapabilities: 0 } } });
+    expect(answers.audioReview?.confidence).not.toHaveProperty("agentCapabilities");
+    expect(clarifications(answers).map(q => q.field)).toEqual(["useCases"]);
+    expect(audioGuide(answers).some(q => q.id === "businessType" || q.id === "sellsProducts" || q.id === "offeringTypes")).toBe(false);
+  });
   it("starts new users at basics and resumes old manual and audio drafts", () => {
     expect(initialOnboardingMode(emptyAnswers, 0)).toBe("basics");
     expect(initialOnboardingMode(emptyAnswers, 2)).toBe("manual");

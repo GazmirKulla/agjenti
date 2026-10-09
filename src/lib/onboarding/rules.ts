@@ -13,6 +13,18 @@ export const offeringChoices: readonly Choice[] = [
   ["mixed", "Shërbime dhe produkte", "businesses"],
 ];
 
+// The offer mode is chosen once; variants and personalization are product details.
+export const offerModeChoices: readonly Choice[] = [
+  ["standard", "Produkte", "products"],
+  ["services", "Shërbime", "settings"],
+  ["mixed", "Produkte dhe shërbime", "businesses"],
+];
+export function offerMode(offerings: readonly string[]) {
+  if (offerings.includes("mixed")) return "mixed";
+  if (offerings.includes("services")) return "services";
+  return offerings.length ? "standard" : "";
+}
+
 export const useCaseChoices: readonly Choice[] = [
   ["messages", "Menaxhim mesazhesh në Instagram", "instagram"],
   ["support", "Mbështetje për klientët", "inbox"],

@@ -164,11 +164,11 @@ describe("audio onboarding evidence and merge", () => {
   it("requires confirmation of low confidence and a final review", () => {
     const next = mergeExtraction(
       base(),
-      patch({ businessCategory: "beauty" }, 0.5),
+      patch({ customerQuestions: "Hapur çdo ditë." }, 0.5),
       secondId,
     );
     expect(pendingConfirmations(next.audioReview!)).toContain(
-      "businessCategory",
+      "customerQuestions",
     );
     expect(() =>
       parseAnswers(
@@ -176,7 +176,7 @@ describe("audio onboarding evidence and merge", () => {
         true,
       ),
     ).toThrow(/Rishiko/);
-    const corrected = correctField(next, "businessCategory", "beauty");
+    const corrected = correctField(next, "customerQuestions", "Hapur çdo ditë.");
     const final = parseAnswers(
       {
         ...corrected,
@@ -185,7 +185,7 @@ describe("audio onboarding evidence and merge", () => {
       },
       true,
     );
-    expect(final.confirmedProfile?.businessCategory).toBe("beauty");
+    expect(final.confirmedProfile?.customerQuestions).toBe("Hapur çdo ditë.");
     expect(final.confirmedProfile).not.toHaveProperty("forged");
   });
   it("invalidates review after editing and keeps explicit unknown corrections", () => {

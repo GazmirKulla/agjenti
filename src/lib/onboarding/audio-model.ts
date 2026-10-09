@@ -187,6 +187,7 @@ export function mergeExtraction(
   };
   for (const key of audioFields) {
     const field = extraction[key];
+    if (key === "businessCategory" && current.businessType) continue;
     const replaceOfferings = key === "offeringsSummary" && options.replaceWrittenOfferings;
     if (
       !field ||
@@ -255,6 +256,19 @@ export function correctField(
         ...new Set([...current.audioReview.confirmedFields, key]),
       ],
     };
+  if (key === "offeringTypes" && Array.isArray(value) && value.length) {
+    next.details.sellsProducts = value.some(item => item !== "services");
+    if (value.length === 1 && value[0] === "services") {
+      next.details.hasVariants = null;
+      next.details.isPersonalized = null;
+      if (next.audioReview) next.audioReview.corrections = {
+        ...next.audioReview.corrections, hasVariants: null, isPersonalized: null,
+      };
+    }
+    if (next.audioReview) {
+      next.audioReview.corrections = { ...next.audioReview.corrections, sellsProducts: next.details.sellsProducts };
+    }
+  }
   const parsed = parseAnswers(normalizeConditionalAnswers(next));
   // Keep in-progress spaces/newlines in text editors; saveOnboarding normalizes them.
   if (key === "name" && typeof value === "string") parsed.name = value;
@@ -276,11 +290,5 @@ export function clarifications(answers: Answers, enabled = allQuestionKeys) {
     if (!q.optional && !hasValue(fieldValue(answers, field)))
       missing.push({ field, message: q.title });
   }
-  if (answers.details?.sellsProducts == null)
-    missing.push({
-      field: "sellsProducts",
-      message:
-        "A shet edhe produkte? Mund ta sqarosh tani ose ta lësh pa përcaktuar.",
-    });
   return [...missing, ...detailConflicts(answers)];
 }

@@ -15,7 +15,8 @@ import {
   type AnswerKey,
   type Answers,
 } from "@/lib/onboarding/model";
-import { normalizeConditionalAnswers } from "@/lib/onboarding/rules";
+import { correctField } from "@/lib/onboarding/audio-model";
+import { normalizeConditionalAnswers, offerMode } from "@/lib/onboarding/rules";
 export function OnboardingWizard({
   initial,
   initialStep,
@@ -61,34 +62,23 @@ export function OnboardingWizard({
   function choose(value: string) {
     if (!question) return;
     setAnswers((current) => {
+      if (question.key === "productType") return correctField(current, "offeringTypes", [value]);
       const multiKey =
-        question.key === "productType" ||
         question.key === "useCases" ||
         question.key === "aiMode";
       const currentValues =
-        question.key === "productType"
-          ? current.offeringTypes
-          : question.key === "useCases"
-            ? current.useCases
-            : question.key === "aiMode"
-              ? current.agentCapabilities
-              : [];
-      let selected = multiKey
+        question.key === "useCases"
+          ? current.useCases
+          : question.key === "aiMode"
+            ? current.agentCapabilities
+            : [];
+      const selected = multiKey
         ? currentValues.includes(value)
           ? currentValues.filter((item) => item !== value)
           : [...currentValues, value]
         : currentValues;
-      if (question.key === "productType") {
-        if (["services", "mixed"].includes(value))
-          selected = currentValues.includes(value) ? [] : [value];
-        else
-          selected = selected.filter(
-            (item) => !["services", "mixed"].includes(item),
-          );
-      }
       const next = { ...current };
-      if (question.key === "productType") next.offeringTypes = selected;
-      else if (question.key === "useCases") next.useCases = selected;
+      if (question.key === "useCases") next.useCases = selected;
       else if (question.key === "aiMode") next.agentCapabilities = selected;
       else if (question.key === "businessType") next.businessType = value;
       else if (question.key === "productCount") next.productCount = value;
@@ -286,43 +276,10 @@ export function OnboardingWizard({
                 </div>
               ) : (
                 <>
-                  {(question.key === "useCases" ||
-                    question.key === "productType") && (
+                  {question.key === "useCases" && (
                     <div className="onboarding-multi-tools">
-                      <button
-                        type="button"
-                        className="onboarding-select-all"
-                        onClick={() => {
-                          if (question.key === "useCases") toggleAllUseCases();
-                          else {
-                            const all = question.options.map(
-                              ([value]) => value,
-                            );
-                            setAnswers((current) => {
-                              const normalized = normalizeConditionalAnswers({
-                                ...current,
-                                offeringTypes:
-                                  current.offeringTypes.length === all.length
-                                    ? []
-                                    : all,
-                              });
-                              return {
-                                ...normalized,
-                                productType: normalized.offeringTypes[0] ?? "",
-                                selectedUseCases: [...normalized.useCases],
-                              };
-                            });
-                            setError("");
-                            setSaved(false);
-                          }
-                        }}
-                      >
-                        {(question.key === "useCases"
-                          ? answers.useCases.length
-                          : answers.offeringTypes.length) ===
-                        question.options.length
-                          ? "Hiq të gjitha"
-                          : "Zgjidh të gjitha"}
+                      <button type="button" className="onboarding-select-all" onClick={toggleAllUseCases}>
+                        {answers.useCases.length === question.options.length ? "Hiq të gjitha" : "Zgjidh të gjitha"}
                       </button>
                     </div>
                   )}
@@ -334,7 +291,6 @@ export function OnboardingWizard({
                     {question.options.map(([value, label, icon]) => {
                       const multi =
                         question.key === "useCases" ||
-                        question.key === "productType" ||
                         question.key === "aiMode";
                       const selectedValues =
                         question.key === "productType"
@@ -344,7 +300,7 @@ export function OnboardingWizard({
                             : question.key === "aiMode"
                               ? answers.agentCapabilities
                               : [];
-                      const checked = multi
+                      const checked = question.key === "productType" ? offerMode(answers.offeringTypes) === value : multi
                         ? selectedValues.includes(value)
                         : question.key === "businessType"
                           ? answers.businessType === value

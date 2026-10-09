@@ -1,5 +1,6 @@
 "use client";
 import { activeQuestions, type AnswerKey, type Answers } from "@/lib/onboarding/model";
+import { offerMode, offerModeChoices } from "@/lib/onboarding/rules";
 import { Icon } from "@/components/dashboard/icon";
 
 export function OnboardingBasics({ answers, enabledSteps, busy, onChange, onContinue }: {
@@ -11,7 +12,9 @@ export function OnboardingBasics({ answers, enabledSteps, busy, onChange, onCont
 }) {
   const questions = activeQuestions(enabledSteps, answers);
   const business = questions.find((q) => q.key === "businessType");
-  const valid = answers.name.trim().length >= 2 && (!business ||
+  const needsOffer = enabledSteps.includes("productType");
+  const selectedOffer = offerMode(answers.offeringTypes);
+  const valid = (!needsOffer || !!selectedOffer) && answers.name.trim().length >= 2 && (!business ||
     (!!answers.businessType && (answers.businessType !== "other" || (answers.details?.categoryDescription?.trim().length ?? 0) >= 2)));
   return (
     <form onSubmit={(event) => { event.preventDefault(); void onContinue(); }}>
@@ -44,6 +47,21 @@ export function OnboardingBasics({ answers, enabledSteps, busy, onChange, onCont
                   onChange={(event) => onChange("categoryDescription", event.target.value)} />
               </label>
             )}
+          </section>
+        )}
+        {needsOffer && (
+          <section className="onboarding-categories" aria-labelledby="basics-offer-title">
+            <h2 id="basics-offer-title">Çfarë ofron biznesi yt?</h2>
+            <div className="onboarding-options" role="radiogroup" aria-labelledby="basics-offer-title">
+              {offerModeChoices.map(([id, label, icon]) => (
+                <label key={id} className={`onboarding-option ${selectedOffer === id ? "selected" : ""}`}>
+                  <input type="radio" name="business-offer" required checked={selectedOffer === id}
+                    onChange={() => onChange("offeringTypes", [id])} />
+                  <Icon name={icon} size={24} /><span>{label}</span>
+                  <span className="onboarding-choice" aria-hidden="true">{selectedOffer === id ? "✓" : ""}</span>
+                </label>
+              ))}
+            </div>
           </section>
         )}
         <div className="onboarding-actions onboarding-basics-actions">

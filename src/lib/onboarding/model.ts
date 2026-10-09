@@ -15,6 +15,8 @@ import {
   buildBusinessProfile,
   capabilityChoices,
   offeringChoices,
+  offerModeChoices,
+  offerMode,
   normalizeConditionalAnswers,
   useCaseChoices,
   type Choice,
@@ -58,7 +60,7 @@ export const questions = [
     label: "Lloji i ofertës",
     title: "Çfarë ofron biznesi yt?",
     description:
-      "Zgjidh të gjitha format që përdor. Opsionet përshtaten sipas biznesit.",
+      "Zgjidh produktet, shërbimet ose të dyja. Detajet i plotësojmë më pas.",
     options: offeringChoices,
   },
   {
@@ -184,7 +186,7 @@ export function activeQuestions(
         if (legacy && !options.some(([id]) => id === legacy[0])) options = [...options, legacy];
       }
       if (question.key === "productType")
-        options = allowedOfferings(answers.businessType);
+        options = offerModeChoices;
       if (question.key === "useCases")
         options = allowedUseCases(
           answers.businessType,
@@ -196,19 +198,18 @@ export function activeQuestions(
           answers.offeringTypes,
           conditional.useCases,
         );
-      if (question.key === "productCount" &&
-          conditional.offeringTypes.length === 1 &&
-          conditional.offeringTypes[0] === "services")
-        options = options.map(([id, label, icon]) =>
-          [id, id === "1" ? "Një shërbim" : label, icon] as Choice,
-        );
       const title =
         question.key === "productCount" &&
         answers.offeringTypes.length === 1 &&
         answers.offeringTypes[0] === "services"
           ? "Afërsisht sa shërbime ofron?"
           : question.title;
-      return { ...question, title, options } as OnboardingQuestion;
+      const mode = offerMode(answers.offeringTypes);
+      const singular = mode === "services" ? "Një shërbim" : mode === "mixed" ? "Një produkt ose shërbim" : "Një produkt";
+      if (question.key === "productCount") options = options.map(([id, label, icon]) => [id, id === "1" ? singular : label, icon]);
+      const label = question.key === "productCount" && mode !== "mixed" && mode
+        ? mode === "services" ? "Numri i shërbimeve" : "Numri i produkteve" : question.label;
+      return { ...question, label, title: question.key === "productCount" && mode === "standard" ? "Afërsisht sa produkte ofron?" : title, options } as OnboardingQuestion;
     });
 }
 
@@ -396,9 +397,20 @@ export function parseAnswers(
   normalized.aiMode = normalized.agentCapabilities[0] ?? "";
   if (["basics", "audio", "written", "manual", "review"].includes(String(raw.guidedOnboardingMode)))
     normalized.guidedOnboardingMode = raw.guidedOnboardingMode as Answers["guidedOnboardingMode"];
-  if (raw.details) normalized.details = parseDetails(raw.details);
+  if (raw.details) {
+    normalized.details = parseDetails(raw.details);
+    if (normalized.details.sellsProducts == null && offeringTypes.length)
+      normalized.details.sellsProducts = offerMode(offeringTypes) !== "services";
+    if (normalized.details.hasVariants == null && offeringTypes.includes("variants"))
+      normalized.details.hasVariants = true;
+    if (normalized.details.isPersonalized == null && offeringTypes.some(value => ["personalized", "photo", "text"].includes(value)))
+      normalized.details.isPersonalized = true;
+  }
   const audioReview = parseAudioReview(raw.audioReview);
   if (audioReview) {
+    for (const key of ["offeringTypes", "useCases", "agentCapabilities"] as const) {
+      if (!normalized[key].length) delete audioReview.confidence[key];
+    }
     normalized.audioReview = audioReview;
     normalized.missingInformation = audioFields.filter((key) => {
       const value =
