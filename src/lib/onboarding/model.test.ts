@@ -141,7 +141,7 @@ describe("onboarding answers", () => {
     expect(resumeWizardStep(5, active)).toBe(2);
     expect(wizardStepToStored(2, active)).toBe(5);
   });
-  it("allows products in a service category but removes product actions for service-only offerings", () => {
+  it("allows any offering in a category and removes product actions for explicit service-only offers", () => {
     expect(allowedOfferings("services").map(([value]) => value)).toEqual([
       "standard",
       "variants",
@@ -151,6 +151,7 @@ describe("onboarding answers", () => {
       "services",
       "mixed",
     ]);
+    expect(allowedOfferings("electronics").map(([value]) => value)).toContain("mixed");
     const cases = allowedUseCases("services", ["services"]).map(
       ([value]) => value,
     );
@@ -216,7 +217,7 @@ describe("onboarding answers", () => {
     expect(result).toContain("Aftësitë e kërkuara");
     expect(result).toContain("rekomandon produkte nga katalogu");
   });
-  it("uses inventory size, offering, automation and volume for advice", () => {
+  it("uses inventory size, offering, automation and volume for advice independently of team size", () => {
     const small = recommendations({
       ...completeAnswers,
       productCount: "0",
@@ -234,7 +235,7 @@ describe("onboarding answers", () => {
     for (let i = 0; i < 4; i++) expect(small[i]).not.toEqual(large[i]);
     expect(small[2]).toContain("stafit");
     expect(recommendations({ ...completeAnswers, teamSize: "solo" })).toEqual(
-      recommendations({ ...completeAnswers, teamSize: "2-5" }),
+      recommendations({ ...completeAnswers, teamSize: "20+" }),
     );
   });
 });

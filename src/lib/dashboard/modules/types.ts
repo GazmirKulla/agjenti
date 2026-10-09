@@ -46,6 +46,7 @@ export type DashboardSignals = {
   agentCapabilities: string[];
   workflow?: string;
   teamSize?: string;
+  catalogContext?: string;
 };
 
 export type PrimaryAction = {

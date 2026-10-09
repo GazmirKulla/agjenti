@@ -36,6 +36,7 @@ function inferModules(signals: DashboardSignals): ModuleId[] {
     selectedUseCases: useCases,
     agentCapabilities: caps,
     workflow = "",
+    catalogContext = "",
   } = signals;
 
   const products = hasProducts(offeringTypes);
@@ -53,6 +54,7 @@ function inferModules(signals: DashboardSignals): ModuleId[] {
     includesAny(caps, ["create_order", "collect_order_details"]) ||
     /product-order|variant-order|personalized-order/i.test(workflow);
   const catalogFlow =
+    !!catalogContext.trim() ||
     (!products && leadFlow && !bookingFlow) ||
     /catalog/i.test(workflow) ||
     businessType === "other" && leadFlow && !products;

@@ -8,7 +8,7 @@ export const detailFields = {
   offeringsSummary: "Produktet ose shërbimet që ofron",
   customerQuestions: "Pyetjet e shpeshta dhe përgjigjet",
   customerProcess: "Si funksionon porosia ose rezervimi",
-  handoffRules: "Ndihma nga Agjenti dhe kalimi te stafi",
+  handoffRules: "Ndihma nga Agjenti dhe kur të të kërkojë ndihmë",
   sellsProducts: "A shet edhe produkte?",
   hasVariants: "A kanë produktet variante?",
   isPersonalized: "A ofron personalizim?",

@@ -53,6 +53,10 @@ export function signalsFromOnboardingAnswers(
       : null;
   const workflow =
     typeof recommended?.workflow === "string" ? recommended.workflow : undefined;
+  const details = answers.details && typeof answers.details === "object"
+    ? answers.details as Record<string, unknown> : null;
+  const catalogContext = typeof details?.catalogContext === "string"
+    ? details.catalogContext : typeof profile?.catalogContext === "string" ? profile.catalogContext : undefined;
 
   return {
     businessType,
@@ -60,6 +64,7 @@ export function signalsFromOnboardingAnswers(
     selectedUseCases,
     agentCapabilities,
     workflow,
+    ...(catalogContext ? { catalogContext } : {}),
   };
 }
 

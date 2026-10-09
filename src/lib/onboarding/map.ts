@@ -87,16 +87,6 @@ function choiceByValue(
 export function onboardingLinks(): OnboardingLink[] {
   return [
     {
-      from: "businessType",
-      to: "productType",
-      description: "Kategoria përshtat pyetjet; nuk kufizon ofertat.",
-    },
-    {
-      from: "businessType",
-      to: "useCases",
-      description: "Kategoria jep kontekst; qëllimet zgjidhen nga nevojat e biznesit.",
-    },
-    {
       from: "productType",
       to: "useCases",
       description:
@@ -107,11 +97,6 @@ export function onboardingLinks(): OnboardingLink[] {
       to: "aiMode",
       description:
         "Aftësitë e Agjentit shfaqen vetëm kur ka të paktën një qëllim; opsionet lidhen me qëllimet e zgjedhura.",
-    },
-    {
-      from: "businessType",
-      to: "aiMode",
-      description: "Kategoria nuk kufizon aftësitë e Agjentit.",
     },
     {
       from: "productType",
@@ -204,8 +189,8 @@ export function stepIndex(key: AnswerKey) {
 
 /** Profilet e shfaqura si tab në eksplorues (si në mockup). */
 export const exploreProfileOrder: BusinessType[] = [
-  "ecommerce",
-  "services",
-  "fashion",
+  "retail",
+  "professional",
+  "beauty",
   "other",
 ];

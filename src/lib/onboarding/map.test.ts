@@ -17,7 +17,6 @@ it("lists wizard steps in dependency order", () => {
     "messageVolume",
   ]);
   expect(steps.find((step) => step.key === "aiMode")?.influencedBy).toEqual([
-    "businessType",
     "productType",
     "useCases",
   ]);
@@ -25,7 +24,7 @@ it("lists wizard steps in dependency order", () => {
 
 it("describes conditional links between questions", () => {
   const edges = onboardingLinks().map((link) => `${link.from}->${link.to}`);
-  expect(edges).toContain("businessType->productType");
+  expect(edges).not.toContain("businessType->productType");
   expect(edges).toContain("useCases->aiMode");
   expect(edges).toContain("productType->useCases");
 });

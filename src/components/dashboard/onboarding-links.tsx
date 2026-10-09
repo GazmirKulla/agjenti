@@ -360,7 +360,7 @@ export function OnboardingLinks({
   const profiles = useMemo(() => profileLinkRows(), []);
   const enabled = useMemo(() => new Set(enabledSteps), [enabledSteps]);
   const [selectedKey, setSelectedKey] = useState<AnswerKey>("aiMode");
-  const [exploreType, setExploreType] = useState<BusinessType>("ecommerce");
+  const [exploreType, setExploreType] = useState<BusinessType>("retail");
   const [matrixFilter, setMatrixFilter] = useState<BusinessType | "all">("all");
 
   const selected = steps.find((step) => step.key === selectedKey) ?? steps[0];
