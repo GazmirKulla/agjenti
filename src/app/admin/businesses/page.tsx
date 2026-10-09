@@ -150,7 +150,7 @@ export default async function AdminBusinessesPage() {
       <RecordBrowser
         listTitle="Të gjitha bizneset"
         placeholder="Kërko biznes ose slug…"
-        columns={["Biznesi", "Katalogu", "Përgjigje automatike", "Dy agjentë"]}
+        columns={["Biznesi", "Katalogu", "Përgjigje automatike", "Dy agjentë", "Onboarding"]}
         createLabel="Shto biznes"
         createAsModal
         createForm={
@@ -180,6 +180,14 @@ export default async function AdminBusinessesPage() {
               status={b.auto_reply ? "connected" : "paused"}
             />,
             b.allow_multiple_agents ? "Po" : "Jo",
+            <Link
+              key="onboarding"
+              className="btn btn-ghost"
+              href={`/b/${b.slug}/setup`}
+              aria-label={`Onboarding për ${b.name}`}
+            >
+              Onboarding
+            </Link>,
           ],
           detail: (
             <>
