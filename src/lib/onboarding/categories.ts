@@ -8,6 +8,7 @@ export const businessCategories = [
   ["fitness", "Sport / Fitness", "fitness"],
   ["education", "Arsim / Kurse", "knowledge"],
   ["professional", "Shërbime profesionale", "briefcase"],
+  ["digital", "Teknologji / Shërbime digjitale", "display"],
   ["technical", "Riparime / Shërbime teknike", "wrench"],
   ["realestate", "Pasuri të paluajtshme", "home"],
   ["manufacturing", "Prodhim / Distribucion", "factory"],

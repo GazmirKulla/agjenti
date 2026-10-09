@@ -8,6 +8,16 @@ import { generateDashboardProfile } from "@/lib/dashboard/profile/generate";
 import { signalsFromOnboardingAnswers } from "@/lib/dashboard/profile/service";
 
 describe("inclusive onboarding", () => {
+  it("guides an online platform through plans, activation and customer support", () => {
+    const answers = parseAnswers({ ...emptyAnswers, name: "Agjenti.app", businessType: "digital",
+      offeringTypes: ["services"], useCases: ["support"] }, true);
+    const questions = audioGuide(answers);
+    expect(questions[0].hint).toContain("abonimesh");
+    expect(questions.find(q => q.id === "customerProcess")?.hint).toContain("regjistrohet klienti");
+    expect(questions.find(q => q.id === "customerQuestions")?.hint).toContain("probleme teknike");
+    expect(answers.businessProfile?.businessType).toBe("digital");
+  });
+
   it("accepts products, services and mixed offers in every public sector", () => {
     for (const [businessType] of businessCategories) {
       for (const offering of ["standard", "services", "mixed"]) {

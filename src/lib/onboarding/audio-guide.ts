@@ -57,6 +57,10 @@ const categoryGuides: Record<BusinessType, { offering: string; process: string }
     offering: "Çfarë pune ose konsulence ofron dhe për kë?",
     process: "Si merr kërkesën dhe përgatit një ofertë ose takim?",
   },
+  digital: {
+    offering: "Çfarë bën platforma ose shërbimi online, kujt i shërben dhe çfarë planesh ose abonimesh ofron?",
+    process: "Si regjistrohet klienti, zgjedh planin dhe fillon ta përdorë platformën ose shërbimin?",
+  },
   technical: {
     offering: "Çfarë ndërhyrjesh, riparimesh ose pjesësh ofron?",
     process: "Çfarë kërkon për të vlerësuar problemin dhe konfirmuar ndërhyrjen?",
@@ -106,7 +110,9 @@ export function audioGuide(
     {
       id: "customerQuestions",
       title: "Çfarë të pyesin më shpesh klientët?",
-      hint: "Jep një ose dy shembuj dhe përgjigjen që u jep zakonisht.",
+      hint: category === "digital"
+        ? "Për çfarë kërkojnë ndihmë klientët: përdorimin, planet, pagesat apo probleme teknike? Jep shembuj dhe përgjigjet që u jep."
+        : "Jep një ose dy shembuj dhe përgjigjen që u jep zakonisht.",
     },
     {
       id: "customerProcess",
