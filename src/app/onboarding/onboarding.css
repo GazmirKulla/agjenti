@@ -844,6 +844,144 @@
   background: #fff3dd;
   color: #8b5d18;
 }
+.onboarding-confidence.is-neutral {
+  background: #f3f1f6;
+  color: #786c8d;
+}
+.onboarding-review .onboarding-progress {
+  margin-bottom: 28px;
+}
+.onboarding-review-heading {
+  margin: 28px 0 14px;
+}
+.onboarding-review-heading h2 {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+.onboarding-review-heading p {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #82738e;
+}
+.onboarding-review-name {
+  padding: 18px;
+  border: 1px solid #e7e1ee;
+  border-radius: 12px;
+  background: #faf9fc;
+  margin-bottom: 12px;
+}
+.onboarding-review .onboarding-review-field {
+  padding: 0;
+  overflow: hidden;
+  margin: 10px 0;
+}
+.onboarding-review .onboarding-review-field summary {
+  padding: 16px 18px;
+  transition: background 0.15s;
+}
+.onboarding-review .onboarding-review-field summary:hover {
+  background: #faf9fc;
+}
+.onboarding-review .onboarding-review-field summary:focus-visible {
+  outline: 2px solid #7541ff;
+  outline-offset: -3px;
+}
+.onboarding-review .onboarding-review-field summary > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.onboarding-review .onboarding-review-field summary small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.onboarding-review .onboarding-review-field summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid #8c809d;
+  border-bottom: 1.5px solid #8c809d;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+.onboarding-review .onboarding-review-field[open] summary {
+  background: #faf9fc;
+  border-bottom: 1px solid #eeebf5;
+}
+.onboarding-review .onboarding-review-field[open] summary::after {
+  transform: rotate(225deg);
+}
+.onboarding-review .onboarding-review-field > .onboarding-options,
+.onboarding-review .onboarding-review-field > .onboarding-detail-input {
+  margin: 18px;
+}
+.onboarding-review .onboarding-review-field > button {
+  margin: 0 18px 18px;
+}
+.onboarding-review-footer {
+  margin-top: 28px;
+  padding: 20px;
+  background: #faf9fc;
+  border: 1px solid #e7e1ee;
+  border-radius: 14px;
+}
+.onboarding-review-footer .onboarding-review-confirm {
+  margin: 0 0 20px;
+  cursor: pointer;
+}
+.onboarding-review-footer .onboarding-review-confirm input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.onboarding-review-footer .onboarding-actions {
+  margin: 0;
+}
+.onboarding-review-alternatives {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin-top: 20px;
+  font-size: 13px;
+  color: #82738e;
+}
+@media (max-width: 580px) {
+  .onboarding-review .onboarding-review-field summary {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px;
+  }
+  .onboarding-review .onboarding-review-field summary > span:first-child {
+    flex-basis: calc(100% - 24px);
+  }
+  .onboarding-review .onboarding-review-field summary::after {
+    order: 1;
+  }
+  .onboarding-review .onboarding-confidence {
+    order: 2;
+    max-width: none;
+  }
+  .onboarding-review-footer {
+    padding: 16px;
+  }
+  .onboarding-review-footer .onboarding-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .onboarding-review-footer .onboarding-actions button {
+    width: 100%;
+  }
+  .onboarding-review-alternatives > span {
+    flex-basis: 100%;
+  }
+}
 .onboarding-detail-input {
   display: grid;
   gap: 8px;

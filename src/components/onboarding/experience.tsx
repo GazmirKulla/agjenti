@@ -258,7 +258,7 @@ export function OnboardingExperience({
             </form>
           </div>
         </aside>
-        <section className="onboarding-body onboarding-hybrid">
+        <section className={`onboarding-body onboarding-hybrid ${mode === "review" ? "onboarding-review" : ""}`}>
           <div className="onboarding-progress">
             <progress
               max={3}
@@ -285,7 +285,7 @@ export function OnboardingExperience({
               {mode === "basics" ? "Vendos emrin dhe zgjidh kategorinë e biznesit."
                 : mode === "written" || mode === "audio"
                 ? "Përgjigju pyetjeve më poshtë, me zë ose me shkrim."
-                : "Kontrollo përmbledhjen. Hap çdo fushë për ta korrigjuar; informacionet që mungojnë mund t’i plotësosh me zë ose manualisht."}
+                : "Kontrollo të dhënat më poshtë. Hap një fushë për ta ndryshuar, pastaj konfirmo profilin."}
             </p>
           </div>
           {(mode === "audio" || mode === "written") && (
@@ -380,7 +380,11 @@ export function OnboardingExperience({
                 }}
               >
                 <fieldset disabled={busy}>
-                  <div className="onboarding-intro">
+                  <div className="onboarding-review-heading">
+                    <h2>Profili i biznesit</h2>
+                    <p>Të dhënat bazë dhe konfigurimi i agjentit.</p>
+                  </div>
+                  <div className="onboarding-intro onboarding-review-name">
                     <label htmlFor="audio-name">Emri i biznesit</label>
                     <input
                       id="audio-name"
@@ -434,7 +438,7 @@ export function OnboardingExperience({
                             </small>
                           </span>
                           <span
-                            className={`onboarding-confidence ${pending.includes(field) ? "is-low" : ""}`}
+                            className={`onboarding-confidence ${pending.includes(field) ? "is-low" : !hasValue(value) || badge(field) === "Për t’u rishikuar" ? "is-neutral" : ""}`}
                           >
                             {badge(field)}
                           </span>
@@ -500,6 +504,10 @@ export function OnboardingExperience({
                       </details>
                     );
                   })}
+                  <div className="onboarding-review-heading">
+                    <h2>Oferta dhe klientët</h2>
+                    <p>Çfarë ofron dhe si do t’i ndihmojë agjenti klientët.</p>
+                  </div>
                   {Object.entries(detailFields).map(([field, label]) => (
                     <details className="onboarding-review-field" key={field}>
                       <summary>
@@ -520,13 +528,13 @@ export function OnboardingExperience({
                                       details.businessCategory as keyof typeof businessProfiles
                                     ]?.label
                                   : String(
-                                      fieldValue(answers, field) ??
+                                      fieldValue(answers, field) ||
                                         "Pa përcaktuar",
                                     )}
                           </small>
                         </span>
                         <span
-                          className={`onboarding-confidence ${pending.includes(field) ? "is-low" : ""}`}
+                          className={`onboarding-confidence ${pending.includes(field) ? "is-low" : !hasValue(fieldValue(answers, field)) || badge(field) === "Për t’u rishikuar" ? "is-neutral" : ""}`}
                         >
                           {badge(field)}
                         </span>
@@ -610,56 +618,46 @@ export function OnboardingExperience({
                       )}
                     </details>
                   ))}
-                  <div className="onboarding-profile-preview">
-                    <h2>Hapat e rekomanduar</h2>
-                    <ul>
-                      {answers.businessProfile?.recommendedConfiguration.checklist.map(
-                        (item) => (
-                          <li key={item}>{item}</li>
-                        ),
-                      )}
-                    </ul>
-                    <p>
-                      Produktet dhe shërbimet e përmendura nuk shtohen
-                      automatikisht në katalog. Mund t’i përgatitësh pas
-                      krijimit të hapësirës.
-                    </p>
+                  <div className="onboarding-review-footer">
+                    <label className="onboarding-review-confirm">
+                      <input
+                        type="checkbox"
+                        checked={review ? review.reviewed : manualReviewed}
+                        onChange={(e) =>
+                          review ? setAnswers({
+                            ...answers,
+                            audioReview: {
+                              ...review,
+                              reviewed: e.target.checked,
+                            },
+                          }) : setManualReviewed(e.target.checked)
+                        }
+                      />
+                      <span>I kontrollova të dhënat dhe dua ta krijoj hapësirën me këtë profil.</span>
+                    </label>
+                    <div className="onboarding-actions">
+                      <button type="button" className="onboarding-back" onClick={() => navigate(review ? "audio" : "written")}>Kthehu</button>
+                      <button
+                        className="onboarding-next"
+                        type="submit"
+                        disabled={busy || !(review ? review.reviewed : manualReviewed) || pending.length > 0}
+                      >
+                        {busy ? "Duke ruajtur…" : "Konfirmo dhe krijo hapësirën →"}
+                      </button>
+                    </div>
                   </div>
-                  <label className="onboarding-review-confirm">
-                    <input
-                      type="checkbox"
-                      checked={review ? review.reviewed : manualReviewed}
-                      onChange={(e) =>
-                        review ? setAnswers({
-                          ...answers,
-                          audioReview: {
-                            ...review,
-                            reviewed: e.target.checked,
-                          },
-                        }) : setManualReviewed(e.target.checked)
-                      }
-                    />
-                    I kontrollova të dhënat dhe dua ta krijoj hapësirën me këtë
-                    profil.
-                  </label>
-                  <button
-                    className="onboarding-next"
-                    type="submit"
-                    disabled={busy || !(review ? review.reviewed : manualReviewed) || pending.length > 0}
-                  >
-                    {busy ? "Duke ruajtur…" : "Konfirmo dhe krijo hapësirën →"}
-                  </button>
-                  <div className="onboarding-input-modes" role="group" aria-label="Plotëso përgjigjet">
+                  <div className="onboarding-review-alternatives" role="group" aria-label="Plotëso përgjigjet">
+                    <span>Ke diçka për të shtuar?</span>
                     <button
                       type="button"
-                      className="onboarding-back"
+                      className="onboarding-skip"
                       onClick={() => navigate("audio")}
                     >
                       Përgjigju me audio
                     </button>
                     <button
                       type="button"
-                      className="onboarding-back"
+                      className="onboarding-skip"
                       onClick={() => navigate("written")}
                     >
                       Përgjigju me shkrim
