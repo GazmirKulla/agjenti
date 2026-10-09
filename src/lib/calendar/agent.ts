@@ -63,9 +63,12 @@ export async function processBookingTurn(params: {
       .maybeSingle(),
     db
       .from("booking_services")
-      .select("id,name,duration_minutes,buffer_minutes,is_active")
+      .select(
+        "id,name,duration_minutes,buffer_minutes,is_active,booking_enabled,hours",
+      )
       .eq("business_id", params.businessId)
       .eq("is_active", true)
+      .eq("booking_enabled", true)
       .order("name"),
   ]);
   // Missing migration, disabled automation, or no bookable services: use ordinary informational replies.

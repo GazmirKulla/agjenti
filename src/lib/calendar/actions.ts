@@ -52,56 +52,6 @@ export async function saveCalendarSettings(slug: string, form: FormData) {
     return { error: err instanceof Error ? err.message : "Orari nuk u ruajt." };
   }
 }
-export async function saveBookingService(slug: string, form: FormData) {
-  try {
-    const business_id = await access(slug),
-      id = String(form.get("id") ?? "");
-    if (id && !uuid(id)) throw new Error("Shërbimi është i pavlefshëm.");
-    const name = String(form.get("name") ?? "").trim(),
-      duration_minutes = Number(form.get("duration")),
-      buffer_minutes = Number(form.get("buffer"));
-    if (
-      name.length < 2 ||
-      name.length > 120 ||
-      !Number.isInteger(duration_minutes) ||
-      duration_minutes < 5 ||
-      duration_minutes > 480 ||
-      !Number.isInteger(buffer_minutes) ||
-      buffer_minutes < 0 ||
-      buffer_minutes > 120
-    )
-      throw new Error(
-        "Vendos emrin, kohëzgjatjen (5–480 min) dhe pushimin (0–120 min).",
-      );
-    const db = createServiceSupabase(),
-      values = {
-        name,
-        duration_minutes,
-        buffer_minutes,
-        is_active: form.get("active") === "on",
-      };
-    if (id)
-      await db
-        .from("booking_services")
-        .update(values)
-        .eq("business_id", business_id)
-        .eq("id", id)
-        .select("id")
-        .single()
-        .throwOnError();
-    else
-      await db
-        .from("booking_services")
-        .insert({ business_id, ...values })
-        .throwOnError();
-    refresh(slug);
-    return { success: "Shërbimi u ruajt." };
-  } catch (err) {
-    return {
-      error: err instanceof Error ? err.message : "Shërbimi nuk u ruajt.",
-    };
-  }
-}
 export async function saveBooking(slug: string, form: FormData) {
   try {
     const businessId = await access(slug),

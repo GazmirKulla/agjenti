@@ -9,11 +9,13 @@ export async function CalendarPageContent({
   date: requestedDate,
   view,
   google,
+  service,
 }: {
   slug: string;
   date?: string;
   view: "calendar" | "bookings";
   google?: string;
+  service?: string;
 }) {
   const { access } = await requireEnabledModule(slug, view);
   const result = await createServiceSupabase()
@@ -50,6 +52,11 @@ export async function CalendarPageContent({
       days={days}
       view={view}
       googleConfigured={googleConfigured()}
+      initialService={
+        data.services.find(
+          (s) => s.id === service && s.is_active && s.booking_enabled !== false,
+        )?.id
+      }
       googleNotice={google ? notices[google] : undefined}
     />
   );

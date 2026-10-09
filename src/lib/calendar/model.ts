@@ -12,6 +12,8 @@ export type BookingService = {
   duration_minutes: number;
   buffer_minutes: number;
   is_active: boolean;
+  booking_enabled?: boolean;
+  hours?: Hours[] | null;
 };
 export type Booking = {
   id: string;
@@ -176,7 +178,12 @@ export function slotCandidates(
   settings: CalendarSettings,
   now = Date.now(),
 ) {
-  if (!validDate(date) || settings.closed_dates.includes(date)) return [];
+  if (
+    !validDate(date) ||
+    settings.closed_dates.includes(date) ||
+    service.booking_enabled === false
+  )
+    return [];
   const day = new Date(`${date}T12:00:00Z`).getUTCDay();
   const slots: { start: string; end: string; blockedUntil: string }[] = [];
   for (const h of settings.hours.filter((h) => h.day === day)) {
@@ -199,7 +206,15 @@ export function slotCandidates(
         const blockedUntil = new Date(
           Date.parse(end) + service.buffer_minutes * 60000,
         ).toISOString();
-        if (Date.parse(start) > now && fitsHours(start, blockedUntil, settings))
+        if (
+          Date.parse(start) > now &&
+          fitsHours(start, blockedUntil, settings) &&
+          (service.hours == null ||
+            fitsHours(start, blockedUntil, {
+              ...settings,
+              hours: service.hours,
+            }))
+        )
           slots.push({ start, end, blockedUntil });
       } catch {
         /* Skip DST gaps and ambiguous times. */

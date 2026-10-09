@@ -1,8 +1,10 @@
 # Kalendari dhe rezervimet
 
-Apliko `supabase/migrations/20261010090000_calendar_bookings.sql` përpara përdorimit. Aktivizo modulet Shërbime, Rezervime dhe Kalendari nga Cilësimet → Modulet. Pa migrimin, faqja shfaq një njoftim dhe nuk pretendon të ruajë takime.
+Apliko me radhë `supabase/migrations/20261010090000_calendar_bookings.sql` dhe `supabase/migrations/20261010100000_business_services.sql` përpara përdorimit. Aktivizo modulet Shërbime, Rezervime dhe Kalendari nga Cilësimet → Modulet. Pa migrimin, faqja shfaq një njoftim dhe nuk pretendon të ruajë takime.
 
-Nga Kalendari → Konfigurimi shto shërbimet që rezervohen me kohëzgjatje dhe pushim pas takimit. Përcakto zonën kohore IANA, intervalet e punës (mund të shtosh dy intervale për pushimin e drekës) dhe ditët e mbyllura në format YYYY-MM-DD. Kalendari aktual pranon një takim për biznes në të njëjtën kohë; kalendarë paralelë për operatorë ose burime të ndryshme nuk janë ende të përfshirë.
+Nga Shërbimet shto emrin, përshkrimin, kategorinë opsionale dhe çmimin (fiks, duke filluar nga, ose sipas kërkesës). Aktivizo “Lejo rezervim me orar” për shërbimet që rezervohen dhe përcakto kohëzgjatjen dhe pushimin pas takimit. Butoni Rezervo hap kalendarin me shërbimin e zgjedhur. Shërbimet pa rezervim përdoren nga Agjenti për informacion, pa kërkuar orar. Përshkrimet ekzistuese nga njohuritë migrohen në katalog; shërbimet ekzistuese të kalendarit mbajnë identifikuesit dhe rezervimet e tyre. Ndryshimet sinkronizojnë njohuritë e Agjentit brenda të njëjtit transaksion.
+
+Opsionalisht vendos orar të veçantë për një shërbim; ai kufizon orarin e biznesit dhe përdor zonën kohore të tij. Disponueshmëria kontrollohet si në propozimin e orarit ashtu edhe në databazë gjatë ruajtjes. Pa orar të veçantë, përdoret orari i biznesit. Nga Kalendari → Konfigurimi Përcakto zonën kohore IANA, intervalet e punës (mund të shtosh dy intervale për pushimin e drekës) dhe ditët e mbyllura në format YYYY-MM-DD. Kalendari aktual pranon një takim për biznes në të njëjtën kohë; kalendarë paralelë për operatorë ose burime të ndryshme nuk janë ende të përfshirë.
 
 Rezervimet në pritje dhe të konfirmuara zënë orarin. Anulimi e liron. PostgreSQL e ndalon mbivendosjen edhe për kërkesa konkurrente; koha e pushimit është pjesë e intervalit të zënë. Ndryshimet kontrollojnë revision për të mos mbishkruar një redaktim tjetër. Ora duhet të jetë në të ardhmen, brenda 90 ditëve. Orët lokale të paqarta ose që nuk ekzistojnë gjatë ndryshimit sezonal të orës refuzohen.
 
@@ -37,3 +39,5 @@ Provo Agjentin dhe Chat Lab përdorin adapterin në mënyrën `test`: konfirmimi
 ## Verifikimi
 
 Testet Vitest mbulojnë zona kohore/DST, intervale, pushime, qasje të biznesit, konfirmim eksplicit, mënyrën provë dhe dështimet e Google. `supabase/tests/calendar_bookings.sql` është test transaksional për databazë të izoluar: mbivendosje, pushim, idempotence, revision, pronësi e shërbimit, ditë të mbyllura dhe anulim. Është verifikuar edhe me PostgreSQL lokal të përkohshëm (PGlite me btree_gist), pa lidhje me databazën e prodhimit.
+
+`supabase/tests/business_services.sql` verifikon rezervimin opsional, lidhjen e takimit me shërbimin, orarin e shërbimit, sinkronizimin e njohurive dhe anulimin pas çaktivizimit. Migrimi dhe ruajtja e shërbimeve ekzistuese janë provuar në PostgreSQL lokal të izoluar; migrimet nuk janë aplikuar në prodhim.

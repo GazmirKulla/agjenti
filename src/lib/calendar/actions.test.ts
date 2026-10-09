@@ -18,7 +18,6 @@ vi.mock("@/lib/supabase/service", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import {
   saveBooking,
-  saveBookingService,
   saveCalendarSettings,
   disconnectGoogleCalendar,
 } from "./actions";
@@ -28,7 +27,7 @@ beforeEach(() => {
   mocks.access.mockResolvedValue(null);
 });
 it("rejects all mutations in another business before touching data", async () => {
-  for (const action of [saveBooking, saveBookingService, saveCalendarSettings])
+  for (const action of [saveBooking, saveCalendarSettings])
     expect(await action("foreign", new FormData())).toEqual({
       error: "Nuk ke qasje në këtë biznes.",
     });

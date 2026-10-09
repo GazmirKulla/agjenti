@@ -50,7 +50,9 @@ export async function loadCalendar(
       .maybeSingle(),
     db
       .from("booking_services")
-      .select("id,name,duration_minutes,buffer_minutes,is_active")
+      .select(
+        "id,name,duration_minutes,buffer_minutes,is_active,booking_enabled,hours",
+      )
       .eq("business_id", businessId)
       .order("name"),
     db
@@ -62,7 +64,9 @@ export async function loadCalendar(
       .order("starts_at"),
   ]);
   const missing = results.some(
-    (r) => r.error && ["42P01", "PGRST205"].includes(r.error.code),
+    (r) =>
+      r.error &&
+      ["42P01", "42703", "PGRST205", "PGRST204"].includes(r.error.code),
   );
   const empty: CalendarData = {
     available: !missing,
@@ -124,6 +128,7 @@ export async function availableSlots(
       .eq("business_id", businessId)
       .eq("id", serviceId)
       .eq("is_active", true)
+      .eq("booking_enabled", true)
       .single(),
   ]);
   if (cfg.error || service.error)
@@ -165,6 +170,8 @@ const errorMessages: Record<string, string> = {
     "Rezervimet nga biseda janë të çaktivizuara. Kontakto biznesin.",
   stale_booking: "Rezervimi ndryshoi. Rifresko faqen dhe provo përsëri.",
   sync_in_progress: "Rezervimi po sinkronizohet. Provo përsëri pas pak.",
+  outside_service_hours:
+    "Ky orar nuk është i disponueshëm për shërbimin e zgjedhur.",
   outside_hours:
     "Zgjidh një orar brenda orarit të punës dhe jashtë ditëve të mbyllura.",
   invalid_date: "Zgjidh një orë të ardhshme, brenda 90 ditëve.",

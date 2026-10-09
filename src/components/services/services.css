@@ -1,0 +1,136 @@
+.services-catalog,
+.service-editor {
+  margin-bottom: 24px;
+}
+.services-toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.services-toolbar input {
+  flex: 1;
+}
+.services-toolbar select {
+  max-width: 240px;
+}
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 18px;
+}
+.service-card {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.service-card h2,
+.service-card p {
+  margin: 0;
+}
+.service-card h2 {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.service-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.service-description {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted);
+}
+.service-card .service-buttons {
+  margin-top: auto;
+}
+.service-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.service-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.service-editor-heading h2 {
+  margin: 0;
+}
+.service-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.service-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 500;
+}
+.service-wide {
+  grid-column: 1/-1;
+}
+.service-fields .service-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.service-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+.service-day {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.service-interval {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+.service-interval input {
+  width: 140px;
+  min-width: 0;
+}
+.service-hours > p {
+  margin-bottom: 12px;
+}
+@media (max-width: 650px) {
+  .service-fields {
+    grid-template-columns: 1fr;
+  }
+  .services-toolbar {
+    flex-direction: column;
+  }
+  .services-toolbar select {
+    max-width: none;
+  }
+  .service-day {
+    grid-template-columns: 1fr auto;
+  }
+  .service-day > div {
+    grid-column: 1/-1;
+    grid-row: 2;
+  }
+  .service-interval input {
+    flex: 1;
+    width: 0;
+  }
+  .services-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActionForm } from "@/components/dashboard/action-form";
 import {
   saveCalendarSettings,
-  saveBookingService,
   saveBooking,
   retryBookingSync,
   selectGoogleCalendar,
@@ -16,7 +16,6 @@ import {
   slotCandidates,
   zonedParts,
   type Booking,
-  type BookingService,
   type Hours,
 } from "@/lib/calendar/model";
 import type { CalendarData } from "@/lib/calendar/service";
@@ -32,75 +31,27 @@ const syncLabels = {
   synced: "Sinkronizuar",
   error: "Google kërkon riprovim",
 };
-function ServiceFields({ service }: { service?: BookingService }) {
-  return (
-    <div className="calendar-form-grid">
-      {service && <input type="hidden" name="id" value={service.id} />}
-      <label>
-        Emri i shërbimit
-        <input
-          className="field"
-          name="name"
-          required
-          minLength={2}
-          maxLength={120}
-          defaultValue={service?.name}
-          placeholder="P.sh. prerje flokësh"
-        />
-      </label>
-      <label>
-        Kohëzgjatja (min)
-        <input
-          className="field"
-          type="number"
-          name="duration"
-          required
-          min={5}
-          max={480}
-          defaultValue={service?.duration_minutes ?? 30}
-        />
-      </label>
-      <label>
-        Pushim pas takimit (min)
-        <input
-          className="field"
-          type="number"
-          name="buffer"
-          required
-          min={0}
-          max={120}
-          defaultValue={service?.buffer_minutes ?? 0}
-        />
-      </label>
-      <label className="calendar-check">
-        <input
-          name="active"
-          type="checkbox"
-          defaultChecked={service?.is_active ?? true}
-        />{" "}
-        Shërbimi është aktiv
-      </label>
-      <button className="btn btn-primary" type="submit">
-        Ruaj shërbimin
-      </button>
-    </div>
-  );
-}
 function BookingFields({
   data,
   date,
   booking,
+  initialService,
 }: {
   data: CalendarData;
   date: string;
   booking?: Booking;
+  initialService?: string;
 }) {
   const initial = booking
     ? zonedParts(booking.starts_at, data.settings.timezone)
     : { date, time: "" };
   const [selectedDate, setDate] = useState(initial.date),
     [serviceId, setService] = useState(
-      booking?.service_id ?? data.services.find((s) => s.is_active)?.id ?? "",
+      booking?.service_id ??
+        initialService ??
+        data.services.find((s) => s.is_active && s.booking_enabled !== false)
+          ?.id ??
+        "",
     );
   const [requestKey, setRequestKey] = useState("");
   useEffect(() => {
@@ -143,7 +94,11 @@ function BookingFields({
           onChange={(e) => setService(e.target.value)}
         >
           {data.services
-            .filter((s) => s.is_active || s.id === booking?.service_id)
+            .filter(
+              (s) =>
+                (s.is_active && s.booking_enabled !== false) ||
+                s.id === booking?.service_id,
+            )
             .map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name} · {s.duration_minutes} min
@@ -314,6 +269,7 @@ export function CalendarWorkspace({
   view,
   googleConfigured,
   googleNotice,
+  initialService,
 }: {
   data: CalendarData;
   slug: string;
@@ -322,9 +278,10 @@ export function CalendarWorkspace({
   view: "calendar" | "bookings";
   googleConfigured: boolean;
   googleNotice?: string;
+  initialService?: string;
 }) {
   const router = useRouter();
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(Boolean(initialService));
   const changeDate = (value: string) => {
     if (value)
       router.push(`/b/${slug}/${view}?date=${encodeURIComponent(value)}`);
@@ -350,7 +307,11 @@ export function CalendarWorkspace({
         </div>
         <button
           className="btn btn-primary"
-          disabled={!data.services.some((s) => s.is_active)}
+          disabled={
+            !data.services.some(
+              (s) => s.is_active && s.booking_enabled !== false,
+            )
+          }
           onClick={() => setAdding(!adding)}
         >
           {adding ? "Mbyll formularin" : "+ Shto rezervim"}
@@ -373,10 +334,12 @@ export function CalendarWorkspace({
               {data.googleError}
             </p>
           )}
-          {!data.services.some((s) => s.is_active) && (
+          {!data.services.some(
+            (s) => s.is_active && s.booking_enabled !== false,
+          ) && (
             <p className="calendar-notice">
-              Për të filluar, shto një shërbim me kohëzgjatje te “Konfigurimi i
-              kalendarit”.
+              Për të filluar, aktivizo rezervimin me orar te{" "}
+              <Link href={`/b/${slug}/services`}>Shërbimet</Link>.
             </p>
           )}
           <div className="calendar-toolbar">
@@ -420,7 +383,11 @@ export function CalendarWorkspace({
                   refresh();
                 }}
               >
-                <BookingFields data={data} date={date} />
+                <BookingFields
+                  data={data}
+                  date={date}
+                  initialService={initialService}
+                />
               </ActionForm>
             </section>
           )}
@@ -556,29 +523,9 @@ export function CalendarWorkspace({
                 Përcakto kohëzgjatjen për çdo shërbim. Kalendari pranon një
                 takim në të njëjtën kohë.
               </p>
-              {data.services.map((s) => (
-                <details key={s.id}>
-                  <summary>
-                    {s.name} · {s.duration_minutes} min
-                    {s.is_active ? "" : " · Joaktiv"}
-                  </summary>
-                  <ActionForm
-                    action={saveBookingService.bind(null, slug)}
-                    onSuccess={refresh}
-                  >
-                    <ServiceFields service={s} />
-                  </ActionForm>
-                </details>
-              ))}
-              <details>
-                <summary>+ Shto shërbim</summary>
-                <ActionForm
-                  action={saveBookingService.bind(null, slug)}
-                  onSuccess={refresh}
-                >
-                  <ServiceFields />
-                </ActionForm>
-              </details>
+              <Link className="btn btn-ghost" href={`/b/${slug}/services`}>
+                Menaxho shërbimet
+              </Link>
             </section>
             <section>
               <h2>Orari i punës</h2>

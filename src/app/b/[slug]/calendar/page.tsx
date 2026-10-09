@@ -5,9 +5,9 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ date?: string; google?: string }>;
+  searchParams: Promise<{ date?: string; google?: string; service?: string }>;
 }) {
-  const [{ slug }, { date, google }] = await Promise.all([
+  const [{ slug }, { date, google, service }] = await Promise.all([
     params,
     searchParams,
   ]);
@@ -16,6 +16,7 @@ export default async function Page({
       slug={slug}
       date={date}
       google={google}
+      service={service}
       view="calendar"
     />
   );
