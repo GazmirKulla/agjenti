@@ -3,6 +3,8 @@ import { businessProfiles } from "./rules";
 export const detailFields = {
   businessCategory: "Kategoria e biznesit",
   businessDescription: "Përshkrimi i biznesit",
+  categoryDescription: "Çfarë biznesi ke?",
+  catalogContext: "Si përdoren katalogët",
   offeringsSummary: "Produktet ose shërbimet që ofron",
   customerQuestions: "Pyetjet e shpeshta dhe përgjigjet",
   customerProcess: "Si funksionon porosia ose rezervimi",
@@ -14,6 +16,8 @@ export const detailFields = {
 export type BusinessDetails = {
   businessCategory: string | null;
   businessDescription: string | null;
+  categoryDescription: string | null;
+  catalogContext: string | null;
   offeringsSummary: string[] | null;
   customerQuestions: string | null;
   customerProcess: string | null;
@@ -25,6 +29,8 @@ export type BusinessDetails = {
 export const emptyDetails: BusinessDetails = {
   businessCategory: null,
   businessDescription: null,
+  categoryDescription: null,
+  catalogContext: null,
   offeringsSummary: null,
   customerQuestions: null,
   customerProcess: null,
@@ -41,7 +47,6 @@ export const audioFields = [
   "agentCapabilities",
   "productCount",
   "messageVolume",
-  "teamSize",
   ...Object.keys(detailFields),
 ] as const;
 export type AudioField = string;
@@ -65,6 +70,8 @@ export function parseDetails(raw: unknown): BusinessDetails {
     businessCategory:
       category && Object.hasOwn(businessProfiles, category) ? category : null,
     businessDescription: text("businessDescription", 2000),
+    categoryDescription: text("categoryDescription", 500),
+    catalogContext: text("catalogContext", 2000),
     customerQuestions: text("customerQuestions", 2000),
     customerProcess: text("customerProcess", 2000),
     handoffRules: text("handoffRules", 2000),

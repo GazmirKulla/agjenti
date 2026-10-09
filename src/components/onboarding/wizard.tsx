@@ -442,7 +442,7 @@ export function OnboardingWizard({
                       )
                     }
                   >
-                    ← Prapa
+                    Kthehu
                   </button>
                 ) : (
                   <Link href="/privacy">Privatësia</Link>
@@ -465,10 +465,10 @@ export function OnboardingWizard({
                     {busy
                       ? "Duke ruajtur…"
                       : step === 0 && total > 0
-                        ? "Fillo personalizimin →"
+                        ? "Vazhdo"
                         : step >= total
                           ? "Krijo hapësirën →"
-                          : "Vazhdo →"}
+                          : "Vazhdo"}
                   </button>
                 </div>
               </div>

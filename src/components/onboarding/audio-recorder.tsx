@@ -9,11 +9,13 @@ export function AudioRecorder({
   onAnalyze,
   questions,
   autoAnalyze = false,
+  analyzeLabel = "Analizo biznesin →",
 }: {
   busy: boolean;
   onAnalyze: (file: File) => Promise<void>;
   questions?: AudioGuideQuestion[];
   autoAnalyze?: boolean;
+  analyzeLabel?: string;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -247,7 +249,7 @@ export function AudioRecorder({
             disabled={busy || analyzing}
             onClick={() => void runAnalysis(file)}
           >
-            {busy || analyzing ? "Duke analizuar…" : "Analizo biznesin →"}
+            {busy || analyzing ? "Duke analizuar…" : analyzeLabel}
           </button>
         )}
       </div>

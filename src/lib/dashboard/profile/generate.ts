@@ -36,7 +36,6 @@ function inferModules(signals: DashboardSignals): ModuleId[] {
     selectedUseCases: useCases,
     agentCapabilities: caps,
     workflow = "",
-    teamSize = "",
   } = signals;
 
   const products = hasProducts(offeringTypes);
@@ -97,14 +96,6 @@ function inferModules(signals: DashboardSignals): ModuleId[] {
     enabled.add("calendar");
   }
 
-  if (
-    (services || bookingFlow) &&
-    teamSize &&
-    teamSize !== "solo" &&
-    teamSize !== "1"
-  ) {
-    enabled.add("staff");
-  }
 
   if (catalogFlow) {
     enabled.add("catalogs");

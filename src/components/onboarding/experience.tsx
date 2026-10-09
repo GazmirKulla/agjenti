@@ -270,25 +270,38 @@ export function OnboardingExperience({
             </span>
           </div>
           <div className="onboarding-question">
-            <span className="onboarding-eyebrow">
-              {mode === "basics" ? "LE TË FILLOJMË" : mode === "audio" || mode === "written"
-                ? "NA TREGO PËR BIZNESIN"
-                : "PROFILI YT FILLESTAR"}
-            </span>
+            {(mode === "basics" || mode === "review") && (
+              <span className="onboarding-eyebrow">
+                {mode === "basics" ? "LE TË FILLOJMË" : "PROFILI YT FILLESTAR"}
+              </span>
+            )}
             <h1 ref={heading} tabIndex={-1}>
               {mode === "basics" ? "Fillojmë me bazat e biznesit"
                 : mode === "audio" || mode === "written"
-                ? "Na trego si funksionon biznesi yt"
+                ? "Na trego për biznesin"
                 : review ? "Ja çfarë kuptuam për biznesin tënd" : "Kontrollo profilin e biznesit"}
             </h1>
             <p>
               {mode === "basics" ? "Vendos emrin dhe zgjidh tipin e biznesit. Në hapin tjetër do të të udhëzojmë me pyetje që mund t’u përgjigjesh me audio."
-                : mode === "written" ? "Përgjigju me fjalët e tua. Mund të lësh bosh çfarë nuk vlen për biznesin tënd."
-                : mode === "audio"
-                ? "Pyetjet më poshtë të ndihmojnë të fillosh. Mund ta dëgjosh audion dhe ta regjistrosh përsëri përpara analizës."
+                : mode === "written" || mode === "audio"
+                ? "Përgjigju pyetjeve më poshtë, me zë ose me shkrim."
                 : "Kontrollo përmbledhjen. Hap çdo fushë për ta korrigjuar; informacionet që mungojnë mund t’i plotësosh me zë ose manualisht."}
             </p>
           </div>
+          {(mode === "audio" || mode === "written") && (
+            <div className="onboarding-input-modes" role="group" aria-label="Mënyra e përgjigjes">
+              <button type="button" aria-pressed={mode === "audio"} disabled={busy}
+                className={mode === "audio" ? "onboarding-next" : "onboarding-back"}
+                onClick={() => { if (mode !== "audio") navigate("audio"); }}>
+                Përgjigju me audio
+              </button>
+              <button type="button" aria-pressed={mode === "written"} disabled={busy}
+                className={mode === "written" ? "onboarding-next" : "onboarding-back"}
+                onClick={() => { if (mode !== "written") navigate("written"); }}>
+                Përgjigju me shkrim
+              </button>
+            </div>
+          )}
           {mode === "basics" ? (
             <OnboardingBasics answers={answers} enabledSteps={enabledSteps} busy={busy}
               onChange={change} onContinue={() => persistMode("audio")} />
@@ -305,41 +318,32 @@ export function OnboardingExperience({
                       onChange={(event) => change(question.id, question.id === "offeringsSummary" ? event.target.value.split("\n") : event.target.value)} />
                   </label>
                 ))}
-                <div className="onboarding-audio-buttons">
-                  <button type="button" className="onboarding-back" onClick={() => navigate("basics")}>← Të dhënat bazë</button>
-                  <button type="button" className="onboarding-back" onClick={() => void persistMode("audio")}>Përgjigju me audio</button>
-                  <button type="submit" className="onboarding-next">{busy ? "Duke ruajtur…" : "Kontrollo profilin →"}</button>
+                <div className="onboarding-actions">
+                  <button type="button" className="onboarding-back" onClick={() => navigate("basics")}>Kthehu</button>
+                  <button type="submit" className="onboarding-next">{busy ? "Duke ruajtur…" : "Vazhdo"}</button>
                 </div>
               </fieldset>
             </form>
           ) : mode === "audio" ? (
             <>
-              <AudioRecorder busy={busy} onAnalyze={analyze} questions={audioGuide(answers, enabledSteps)} autoAnalyze />
+              <AudioRecorder busy={busy} onAnalyze={analyze} questions={audioGuide(answers, enabledSteps)} autoAnalyze analyzeLabel="Vazhdo" />
               {review && (
                 <p className="onboarding-note">
                   Regjistrimi tjetër plotëson profilin ekzistues. Korrigjimet e
                   tua manuale ruhen.
                 </p>
               )}
-              <div className="onboarding-audio-buttons">
+              <div className="onboarding-actions">
                 {!review && <button className="onboarding-back" disabled={busy}
-                  onClick={() => navigate("basics")}>← Të dhënat bazë</button>}
+                  onClick={() => navigate("basics")}>Kthehu</button>}
                 {review && (
                   <button
                     className="onboarding-back"
                     onClick={() => navigate("review")}
                   >
-                    ← Kthehu te profili
+                    Kthehu
                   </button>
                 )}
-                <button
-                  className="onboarding-back"
-                  onClick={() => navigate("written")}
-                >
-                  {busy
-                    ? "Anulo analizën dhe plotëso manualisht"
-                    : "Përgjigju me shkrim"}
-                </button>
               </div>
             </>
           ) : (
@@ -656,20 +660,20 @@ export function OnboardingExperience({
                   >
                     {busy ? "Duke ruajtur…" : "Konfirmo dhe krijo hapësirën →"}
                   </button>
-                  <div className="onboarding-audio-buttons">
+                  <div className="onboarding-input-modes" role="group" aria-label="Plotëso përgjigjet">
                     <button
                       type="button"
                       className="onboarding-back"
                       onClick={() => navigate("audio")}
                     >
-                      Shto informacion me audio
+                      Përgjigju me audio
                     </button>
                     <button
                       type="button"
                       className="onboarding-back"
-                      onClick={() => navigate("manual")}
+                      onClick={() => navigate("written")}
                     >
-                      Plotëso manualisht
+                      Përgjigju me shkrim
                     </button>
                   </div>
                 </fieldset>

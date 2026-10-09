@@ -49,7 +49,7 @@ const arrays = new Set([
 ]);
 const booleans = new Set(["sellsProducts", "hasVariants", "isPersonalized"]);
 const narrativeFields = new Set([
-  "businessDescription", "customerQuestions", "customerProcess", "handoffRules",
+  "businessDescription", "customerQuestions", "customerProcess", "handoffRules", "catalogContext", "categoryDescription",
 ]);
 export const extractionSchema = {
   type: "object",
@@ -116,7 +116,7 @@ export function validateExtraction(
         : booleans.has(key)
           ? typeof v === "boolean"
           : typeof v === "string" &&
-            v.length <= (narrativeFields.has(key) ? 2000 : 100) &&
+            v.length <= (key === "categoryDescription" ? 500 : narrativeFields.has(key) ? 2000 : 100) &&
             (!enums[key] || enums[key].includes(v)));
     if (!valid) throw new Error("invalid_extraction");
     const evidence =

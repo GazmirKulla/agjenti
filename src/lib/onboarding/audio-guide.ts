@@ -6,7 +6,7 @@ export type AudioGuideQuestion = { id: string; title: string; hint: string };
 
 const categoryGuides: Record<BusinessType, { offering: string; process: string }> = {
   ecommerce: {
-    offering: "Përmend produktet kryesore dhe nëse kanë variante ose personalizim.",
+    offering: "Përmend produktet kryesore dhe shërbimet që ofron, nëse ka.",
     process: "Si zgjedh klienti produktin, si porosit dhe si funksionojnë pagesa, dërgesa e kthimet?",
   },
   personalized: {
@@ -22,12 +22,52 @@ const categoryGuides: Record<BusinessType, { offering: string; process: string }
     process: "Nëse ofron trajtime, si caktohet takimi? Nëse shet produkte, si bëhet porosia?",
   },
   electronics: {
-    offering: "Çfarë pajisjesh ose aksesorësh shet? Cilat modele dhe specifika kanë rëndësi?",
+    offering: "Çfarë pajisjesh, aksesorësh ose riparimesh ofron?",
     process: "Si kontrolloni modelin dhe përputhshmërinë? Si funksionojnë porosia, dërgesa dhe garancia?",
   },
   services: {
     offering: "Çfarë shërbimesh ofron dhe për kë? Përmend nëse shet edhe produkte.",
     process: "Çfarë informacioni kërkon paraprakisht? Si caktoni orarin ose përgatitni ofertën?",
+  },
+  retail: {
+    offering: "Çfarë shet? Përmend edhe shërbimet që ofron, nëse ka.",
+    process: "Si porosit klienti dhe si e merr produktin ose shërbimin?",
+  },
+  healthcare: {
+    offering: "Çfarë konsultash, trajtimesh ose produktesh ofron?",
+    process: "Si kërkohet një takim dhe kush e konfirmon?",
+  },
+  food: {
+    offering: "Çfarë ofron: ushqim, pije, porosi apo shërbime të tjera?",
+    process: "Si bëhet porosia ose rezervimi i tavolinës?",
+  },
+  hospitality: {
+    offering: "Çfarë akomodimi dhe shërbimesh ofron?",
+    process: "Si kërkohet dhe konfirmohet qëndrimi ose shërbimi?",
+  },
+  fitness: {
+    offering: "Çfarë seancash, abonimesh ose produktesh ofron?",
+    process: "Si regjistrohet klienti ose cakton një seancë?",
+  },
+  education: {
+    offering: "Çfarë kursesh, konsultash ose materialesh digjitale ofron?",
+    process: "Si regjistrohet klienti dhe si merr kursin ose materialin?",
+  },
+  professional: {
+    offering: "Çfarë pune ose konsulence ofron dhe për kë?",
+    process: "Si merr kërkesën dhe përgatit një ofertë ose takim?",
+  },
+  technical: {
+    offering: "Çfarë ndërhyrjesh, riparimesh ose pjesësh ofron?",
+    process: "Çfarë kërkon për të vlerësuar problemin dhe konfirmuar ndërhyrjen?",
+  },
+  realestate: {
+    offering: "Çfarë pronash dhe shërbimesh ofron?",
+    process: "Si e kupton kërkesën dhe organizon një vizitë ose konsultë?",
+  },
+  manufacturing: {
+    offering: "Çfarë prodhon ose shpërndan dhe për kë?",
+    process: "Si trajton kërkesën për ofertë ose porosi?",
   },
   other: {
     offering: "Shpjego çfarë bën biznesi, për kë dhe çfarë produktesh ose shërbimesh ofron.",
@@ -56,8 +96,13 @@ export function audioGuide(
   const booking = answers.useCases.includes("booking");
   const orders = answers.useCases.includes("orders");
   const leads = answers.useCases.includes("leads");
+  const categoryContext = answers.businessType === "other" ? answers.details?.categoryDescription : null;
+  const catalogs: AudioGuideQuestion = {
+    id: "catalogContext", title: "Si i përdor klienti katalogët e tu?",
+    hint: "Shpjego si organizohen dhe si gjendet oferta e duhur. Mund t’i shtosh më vonë.",
+  };
   const core: AudioGuideQuestion[] = [
-    { id: "offeringsSummary", title: "Çfarë ofron biznesi yt?", hint: guide.offering },
+    { id: "offeringsSummary", title: "Çfarë ofron biznesi yt?", hint: categoryContext ? `${categoryContext}: ${guide.offering}` : guide.offering },
     {
       id: "customerQuestions",
       title: "Çfarë të pyesin më shpesh klientët?",
@@ -71,7 +116,7 @@ export function audioGuide(
         : orders ? "Si funksionon një porosi?"
         : leads ? "Si e trajton një kërkesë nga një klient i interesuar?"
         : "Si e merr klienti produktin ose shërbimin?",
-      hint: guide.process,
+      hint: `${guide.process}${needsCatalogContext(answers) ? " Si gjendet oferta në katalogët e tu?" : ""}`,
     },
     {
       id: "handoffRules",
@@ -87,6 +132,7 @@ export function audioGuide(
   for (const question of core) {
     if (!hasValue(fieldValue(answers, question.id))) followups.push(question);
   }
+  if (needsCatalogContext(answers) && !hasValue(answers.details?.catalogContext)) followups.push(catalogs);
   // Low-confidence facts are confirmed in the review form, not by assuming
   // another recording will prove or override them.
   return followups.length ? followups.filter((q, index, all) =>
@@ -96,4 +142,10 @@ export function audioGuide(
     title: "Çfarë dëshiron të shtosh ose të sqarosh?",
     hint: "Përmend vetëm informacionin e ri. Korrigjimet manuale ruhen; mund t’i ndryshosh te profili.",
   }];
+}
+
+export function needsCatalogContext(answers: Answers) {
+  const text = [answers.details?.categoryDescription, answers.details?.businessDescription,
+    ...(answers.details?.offeringsSummary ?? []), answers.details?.customerProcess].join(" ");
+  return /(?:disa|shumë|shume|multiple|several|[2-9])\s+(?:katalog|catalog)|katalog[\wë]*\s+(?:të ndrysh|te ndrysh|të shum|te shum)/i.test(text);
 }

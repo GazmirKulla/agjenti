@@ -1,5 +1,15 @@
 import type { CSSProperties } from "react";
 const paths: Record<string, string> = {
+  store: "M3 10V6l2-3h14l2 3v4 M3 10c0 3 4 3 4 0 0 3 5 3 5 0 0 3 5 3 5 0 0 3 4 3 4 0 M4 13v8h16v-8 M9 21v-6h6v6",
+  scissors: "M9 8 21 2 M9 16 21 22 M9 8l12 14 M9 16l4-5 M9 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
+  medical: "M9 3h6v6h6v6h-6v6H9v-6H3V9h6z",
+  food: "M4 2v7a3 3 0 0 0 6 0V2 M7 2v20 M20 2v20 M20 2c-5 3-5 10 0 10",
+  hotel: "M3 21V3h18v18 M8 7h1 M15 7h1 M8 11h1 M15 11h1 M9 21v-6h6v6",
+  fitness: "M6 7v10 M3 9v6 M18 7v10 M21 9v6 M6 12h12",
+  briefcase: "M3 7h18v14H3z M8 7V3h8v4 M3 12l9 3 9-3 M12 12v4",
+  wrench: "m14 6 4-4a6 6 0 0 0-7 8L3 18a2 2 0 0 0 3 3l8-8a6 6 0 0 0 8-7l-4 4z",
+  home: "m2 11 10-9 10 9 M5 9v12h14V9 M9 21v-7h6v7",
+  factory: "M3 21V10l6 4v-4l6 4V3h4l2 18z M7 18h1 M12 18h1 M17 18h1",
   dashboard: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   inbox:
     "M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2v-9.5A8.5 8.5 0 0 1 10.5 4H13a8 8 0 0 1 8 7.5Z M7 10h10 M7 14h6",

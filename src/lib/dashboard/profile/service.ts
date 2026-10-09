@@ -53,8 +53,6 @@ export function signalsFromOnboardingAnswers(
       : null;
   const workflow =
     typeof recommended?.workflow === "string" ? recommended.workflow : undefined;
-  const teamSize =
-    typeof answers.teamSize === "string" ? answers.teamSize : undefined;
 
   return {
     businessType,
@@ -62,7 +60,6 @@ export function signalsFromOnboardingAnswers(
     selectedUseCases,
     agentCapabilities,
     workflow,
-    teamSize,
   };
 }
 

@@ -48,7 +48,6 @@ const wizardOrder: AnswerKey[] = [
   "aiMode",
   "productCount",
   "messageVolume",
-  "teamSize",
 ];
 
 const shortLabels: Record<AnswerKey, string> = {
@@ -63,13 +62,13 @@ const shortLabels: Record<AnswerKey, string> = {
 
 const howItWorks: Record<AnswerKey, string> = {
   businessType:
-    "Zgjedhja e llojit të biznesit hap profilin bazë dhe filtrron ofertat, qëllimet dhe aftësitë e lejuara në hapat e mëvonshëm.",
+    "Kategoria përshtat pyetjet. Të gjitha kategoritë mund të ofrojnë produkte, shërbime ose të dyja.",
   productType:
-    "Opsionet e ofertës filtrohen nga lloji i biznesit. Nëse zgjidhet vetëm shërbime, qëllimet dhe aftësitë e produkteve fshihen.",
+    "Opsionet e ofertës janë të njëjta për të gjitha kategoritë. Nëse zgjidhet vetëm shërbime, qëllimet dhe aftësitë e produkteve fshihen.",
   useCases:
-    "Qëllimet varen nga lloji i biznesit dhe oferta. Pa të paktën një qëllim, hapi i aftësive të Agjentit nuk shfaqet.",
+    "Qëllimet varen nga oferta e biznesit. Pa të paktën një qëllim, hapi i aftësive të Agjentit nuk shfaqet.",
   aiMode:
-    "Aftësitë e mundshme lidhen me qëllimet e zgjedhura dhe kufizohen nga profili i biznesit dhe lloji i ofertës.",
+    "Aftësitë e mundshme lidhen me qëllimet e zgjedhura dhe përshtaten nga lloji i ofertës.",
   productCount:
     "Hap i pavarur opsional. Nuk filtrron hapat e tjerë; përdoret për rekomandime pas krijimit të hapësirës.",
   messageVolume:
@@ -90,12 +89,12 @@ export function onboardingLinks(): OnboardingLink[] {
     {
       from: "businessType",
       to: "productType",
-      description: "Opsionet e ofertës filtrohen sipas llojit të biznesit.",
+      description: "Kategoria përshtat pyetjet; nuk kufizon ofertat.",
     },
     {
       from: "businessType",
       to: "useCases",
-      description: "Qëllimet e lejuara varen nga profili i biznesit.",
+      description: "Kategoria jep kontekst; qëllimet zgjidhen nga nevojat e biznesit.",
     },
     {
       from: "productType",
@@ -112,7 +111,7 @@ export function onboardingLinks(): OnboardingLink[] {
     {
       from: "businessType",
       to: "aiMode",
-      description: "Çdo profil biznesi kufizon aftësitë e lejuara.",
+      description: "Kategoria nuk kufizon aftësitë e Agjentit.",
     },
     {
       from: "productType",

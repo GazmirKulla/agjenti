@@ -20,21 +20,14 @@ import {
   type Choice,
 } from "./rules";
 
-const businessTypeOptions = [
-  ["ecommerce", "Dyqan online", "products"],
-  ["personalized", "Produkte të personalizuara", "spark"],
-  ["fashion", "Veshje dhe modë", "products"],
-  ["beauty", "Bukuri dhe kujdes", "spark"],
-  ["electronics", "Elektronikë", "settings"],
-  ["services", "Shërbime", "businesses"],
-  ["other", "Tjetër", "dashboard"],
-] as const;
+import { businessCategories, supportedBusinessCategories } from "./categories";
+const businessTypeOptions = businessCategories;
 
 export const questions = [
   {
     key: "businessType",
-    label: "Lloji i biznesit",
-    title: "Çfarë lloj biznesi ke?",
+    label: "Kategoria e biznesit",
+    title: "Çfarë biznesi ke?",
     description: "Do ta përshtatim hapësirën me mënyrën si punon.",
     options: businessTypeOptions,
   },
@@ -113,7 +106,7 @@ export type OnboardingQuestion = {
   options: readonly Choice[];
   optional?: boolean;
 };
-export const allQuestionKeys = questions.map((q) => q.key) as AnswerKey[];
+export const allQuestionKeys = questions.filter(q => q.key !== "teamSize").map(q => q.key) as AnswerKey[];
 const wizardOrder: AnswerKey[] = [
   "businessType",
   "productType",
@@ -121,7 +114,6 @@ const wizardOrder: AnswerKey[] = [
   "aiMode",
   "productCount",
   "messageVolume",
-  "teamSize",
 ];
 export type Answers = {
   name: string;
@@ -186,6 +178,10 @@ export function activeQuestions(
     .filter((q) => q.key !== "aiMode" || conditional.useCases.length > 0)
     .map((question) => {
       let options: readonly Choice[] = question.options;
+      if (question.key === "businessType" && answers.businessType) {
+        const legacy = supportedBusinessCategories.find(([id]) => id === answers.businessType);
+        if (legacy && !options.some(([id]) => id === legacy[0])) options = [...options, legacy];
+      }
       if (question.key === "productType")
         options = allowedOfferings(answers.businessType);
       if (question.key === "useCases")
@@ -201,7 +197,6 @@ export function activeQuestions(
         );
       const title =
         question.key === "productCount" &&
-        answers.businessType === "services" &&
         answers.offeringTypes.length === 1 &&
         answers.offeringTypes[0] === "services"
           ? "Afërsisht sa shërbime ofron?"
@@ -267,7 +262,7 @@ export function parseAnswers(
 
   const required = new Set(normalizeOnboardingSteps(enabledSteps));
   const allowedTypes = new Set<string>(
-    businessTypeOptions.map(([value]) => value),
+    supportedBusinessCategories.map(([value]) => value),
   );
   const businessType =
     typeof raw.businessType === "string" && allowedTypes.has(raw.businessType)
@@ -434,6 +429,7 @@ export function answerLabel(key: AnswerKey, value: string) {
         ? useCaseChoices
         : key === "aiMode"
           ? capabilityChoices
+          : key === "businessType" ? supportedBusinessCategories
           : (questions.find((q) => q.key === key)?.options ?? []);
   return options.find((option) => option[0] === value)?.[1] || value;
 }
@@ -467,6 +463,12 @@ export function initialInstructions(a: Answers) {
     "Përgjigju në shqip ose në gjuhën e klientit, me ton miqësor dhe profesional. Mos shpik çmime, stok ose politika. Përdor katalogun dhe njohuritë e biznesit. Nëse informacioni mungon, kërko ndihmën e stafit.",
     a.details?.businessDescription
       ? `Përshkrimi i konfirmuar i biznesit: ${a.details.businessDescription}`
+      : "",
+    a.details?.categoryDescription
+      ? `Veprimtaria e përshkruar nga biznesi: ${a.details.categoryDescription}`
+      : "",
+    a.details?.catalogContext
+      ? `Organizimi i katalogëve i konfirmuar nga biznesi: ${a.details.catalogContext}`
       : "",
     a.details?.offeringsSummary?.length
       ? `Përmbledhja e ofertës e konfirmuar nga biznesi: ${a.details.offeringsSummary.join("; ")}. Kjo është përmbledhje; çmimet dhe disponueshmëria verifikohen në katalog.`
@@ -516,8 +518,6 @@ export function recommendations(a: Answers) {
     ["501-2000", "2000+"].includes(a.messageVolume)
       ? "Për vëllimin tënd të mesazheve, përdor statuset e bisedave për të ndjekur rastet që kërkojnë staf."
       : "Kontrollo bisedat e para në Inbox për të përmirësuar përgjigjet dhe njohuritë.",
-    a.teamSize === "solo"
-      ? "Inbox-i dhe porositë janë të gjitha në hapësirën tënde."
-      : "Mund të shtosh anëtarë të ekipit më vonë nga menaxhimi i biznesit.",
+
   ];
 }

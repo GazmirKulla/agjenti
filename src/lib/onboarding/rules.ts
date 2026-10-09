@@ -1,4 +1,6 @@
 import type { BusinessDetails } from "./audio-fields";
+import { supportedBusinessCategories, type BusinessType } from "./categories";
+export type { BusinessType } from "./categories";
 export type Choice = readonly [value: string, label: string, icon: string];
 
 export const offeringChoices: readonly Choice[] = [
@@ -79,7 +81,6 @@ const productCapabilities = [
   "follow_workflow",
   "create_order",
 ] as const;
-const serviceCapabilities = ["qualify_leads", "handle_bookings"] as const;
 
 /** Qëllim → aftësi të sugjeruara që shfaqen te hapi aiMode. */
 export const useCaseCapabilities: Record<string, readonly string[]> = {
@@ -113,205 +114,44 @@ export const useCaseCapabilities: Record<string, readonly string[]> = {
   ],
 };
 
-export const businessProfiles = {
-  ecommerce: {
-    label: "Dyqan online",
-    allowedOfferingTypes: ["standard", "variants", "personalized"],
-    allowedUseCases: [
-      "messages",
-      "support",
-      "leads",
-      ...productUseCases,
-      "customers",
-    ],
-    allowedCapabilities: [
-      ...commonCapabilities,
-      ...productCapabilities,
-      "qualify_leads",
-    ],
-    recommendedDefaults: {
-      useCases: ["messages", "support", "sales", "orders"],
-      capabilities: [
-        "reply_messages",
-        "answer_questions",
-        "recommend_products",
-        "collect_order_details",
-      ],
-      workflow: "product-orders",
-    },
-  },
-  personalized: {
-    label: "Produkte të personalizuara",
-    allowedOfferingTypes: ["personalized", "photo", "text", "variants"],
-    allowedUseCases: [
-      "messages",
-      "support",
-      "leads",
-      ...productUseCases,
-      "customers",
-    ],
-    allowedCapabilities: [
-      ...commonCapabilities,
-      ...productCapabilities,
-      "qualify_leads",
-    ],
-    recommendedDefaults: {
-      useCases: ["messages", "support", "sales", "collection"],
-      capabilities: [
-        "reply_messages",
-        "ask_missing",
-        "recommend_products",
-        "collect_order_details",
-        "follow_workflow",
-      ],
-      workflow: "personalized-order",
-    },
-  },
-  fashion: {
-    label: "Veshje dhe modë",
-    allowedOfferingTypes: ["standard", "variants", "personalized"],
-    allowedUseCases: [
-      "messages",
-      "support",
-      "leads",
-      ...productUseCases,
-      "customers",
-    ],
-    allowedCapabilities: [
-      ...commonCapabilities,
-      ...productCapabilities,
-      "qualify_leads",
-    ],
-    recommendedDefaults: {
-      useCases: ["messages", "sales", "recommendations", "orders"],
-      capabilities: [
-        "reply_messages",
-        "understand_needs",
-        "recommend_products",
-        "compare_products",
-        "collect_order_details",
-      ],
-      workflow: "variant-order",
-    },
-  },
-  beauty: {
-    label: "Bukuri dhe kujdes",
-    allowedOfferingTypes: [
-      "standard",
-      "variants",
-      "personalized",
-      "services",
-      "mixed",
-    ],
-    allowedUseCases: [
-      "messages",
-      "support",
-      "leads",
-      "booking",
-      ...productUseCases,
-      "customers",
-    ],
-    allowedCapabilities: [
-      ...commonCapabilities,
-      ...productCapabilities,
-      ...serviceCapabilities,
-    ],
-    recommendedDefaults: {
-      useCases: ["messages", "support", "booking", "recommendations"],
-      capabilities: [
-        "reply_messages",
-        "answer_questions",
-        "handle_bookings",
-        "recommend_products",
-      ],
-      workflow: "service-or-product-request",
-    },
-  },
-  electronics: {
-    label: "Elektronikë",
-    allowedOfferingTypes: ["standard", "variants", "personalized"],
-    allowedUseCases: [
-      "messages",
-      "support",
-      "leads",
-      ...productUseCases,
-      "customers",
-    ],
-    allowedCapabilities: [
-      ...commonCapabilities,
-      ...productCapabilities,
-      "qualify_leads",
-    ],
-    recommendedDefaults: {
-      useCases: ["messages", "support", "products", "orders"],
-      capabilities: [
-        "reply_messages",
-        "answer_questions",
-        "compare_products",
-        "answer_product_details",
-        "collect_order_details",
-      ],
-      workflow: "product-orders",
-    },
-  },
-  services: {
-    label: "Shërbime",
-    allowedOfferingTypes: ["services", "mixed"],
-    allowedUseCases: [
-      "messages",
-      "support",
-      "leads",
-      "booking",
-      "customers",
-      ...productUseCases,
-    ],
-    allowedCapabilities: [
-      ...commonCapabilities,
-      ...serviceCapabilities,
-      ...productCapabilities,
-    ],
-    recommendedDefaults: {
-      useCases: ["messages", "support", "leads", "booking"],
-      capabilities: [
-        "reply_messages",
-        "answer_questions",
-        "qualify_leads",
-        "handle_bookings",
-        "handoff",
-      ],
-      workflow: "service-request",
-    },
-  },
-  other: {
-    label: "Tjetër",
+type BusinessRule = {
+  label: string;
+  allowedOfferingTypes: string[];
+  allowedUseCases: string[];
+  allowedCapabilities: string[];
+  recommendedDefaults: { useCases: string[]; capabilities: string[]; workflow: string };
+};
+
+// Categories guide the interview; offerings and goals determine capabilities.
+export const businessProfiles = Object.fromEntries(
+  supportedBusinessCategories.map(([id, label]) => [id, {
+    label,
     allowedOfferingTypes: offeringChoices.map(([value]) => value),
-    allowedUseCases: [
-      "messages",
-      "support",
-      "leads",
-      "booking",
-      ...productUseCases,
-      "customers",
-    ],
-    allowedCapabilities: [
-      ...commonCapabilities,
-      ...serviceCapabilities,
-      ...productCapabilities,
-    ],
+    allowedUseCases: useCaseChoices.map(([value]) => value),
+    allowedCapabilities: capabilityChoices.map(([value]) => value),
     recommendedDefaults: {
       useCases: ["messages", "support"],
-      capabilities: [
-        "reply_messages",
-        "answer_questions",
-        "ask_missing",
-        "handoff",
-      ],
+      capabilities: [...commonCapabilities],
       workflow: "business-defined",
     },
-  },
-} as const;
+  }]),
+) as Record<BusinessType, BusinessRule>;
 
-export type BusinessType = keyof typeof businessProfiles;
+export function offeringDefaults(offerings: readonly string[]) {
+  const products = offerings.some(value => value !== "services");
+  const services = offerings.some(value => value === "services" || value === "mixed");
+  const personalized = offerings.some(value => ["personalized", "photo", "text"].includes(value));
+  return {
+    useCases: ["messages", "support", ...(products ? ["sales", "orders"] : []), ...(services ? ["leads", "booking"] : [])],
+    capabilities: ["reply_messages", "answer_questions", "ask_missing", "handoff", ...(products ? ["recommend_products", "collect_order_details"] : []), ...(services ? ["qualify_leads", "handle_bookings"] : [])],
+    workflow: products && services ? "service-or-product-request"
+      : personalized ? "personalized-order"
+      : offerings.includes("variants") ? "variant-order"
+      : products ? "product-orders"
+      : services ? "service-request" : "business-defined",
+  };
+}
+
 export type BusinessProfileAnswers = Partial<BusinessDetails> & {
   missingInformation?: string[];
   businessType: string;
@@ -420,7 +260,7 @@ export function buildBusinessProfile(answers: {
   messageVolume: string;
   teamSize: string;
 }): BusinessProfileAnswers {
-  const defaults = rulesFor(answers.businessType).recommendedDefaults;
+  const defaults = offeringDefaults(answers.offeringTypes);
   const validCases = new Set(
     allowedUseCases(answers.businessType, answers.offeringTypes).map(
       ([value]) => value,
