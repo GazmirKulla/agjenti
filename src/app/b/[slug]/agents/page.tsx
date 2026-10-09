@@ -8,6 +8,21 @@ import { redirect } from "next/navigation";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
+async function loadAgentLimit(businessId: string) {
+  const db = createServiceSupabase();
+  const { data, error } = await db
+    .from("businesses")
+    .select("allow_multiple_agents")
+    .eq("id", businessId)
+    .maybeSingle();
+  if (error && ["42P01", "PGRST205", "42703"].includes(error.code)) {
+    return { allowMultiple: false, maxAgents: 1 };
+  }
+  if (error) throw new Error("Nuk u ngarkuan të dhënat.");
+  const allowMultiple = Boolean(data?.allow_multiple_agents);
+  return { allowMultiple, maxAgents: allowMultiple ? 2 : 1 };
+}
+
 export default async function AgentsPage({
   params,
 }: {
@@ -19,11 +34,15 @@ export default async function AgentsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const { data: agents, error: loadError } = await db
-    .from("ai_agents")
-    .select("id,name,instructions,is_active")
-    .eq("business_id", access.business.id);
+  const [{ data: agents, error: loadError }, limit] = await Promise.all([
+    db
+      .from("ai_agents")
+      .select("id,name,instructions,is_active")
+      .eq("business_id", access.business.id),
+    loadAgentLimit(access.business.id),
+  ]);
   if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
+  const canCreate = (agents?.length ?? 0) < limit.maxAgents;
 
   async function save(formData: FormData) {
     "use server";
@@ -46,6 +65,21 @@ export default async function AgentsPage({
         .eq("business_id", acc.business.id)
         .maybeSingle();
       if (!existing) return { error: "Agjenti nuk u gjet në këtë biznes." };
+    } else {
+      const [{ count }, agentLimit] = await Promise.all([
+        supabase
+          .from("ai_agents")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", acc.business.id),
+        loadAgentLimit(acc.business.id),
+      ]);
+      if ((count ?? 0) >= agentLimit.maxAgents) {
+        return {
+          error: agentLimit.allowMultiple
+            ? "Ky biznes mund të ketë deri në dy agjentë."
+            : "Ky biznes lejon vetëm një agjent. Kontakto administratorin për dy agjentë.",
+        };
+      }
     }
     if (isActive) {
       await supabase
@@ -62,15 +96,21 @@ export default async function AgentsPage({
         .eq("business_id", acc.business.id)
         .throwOnError();
     } else {
-      await supabase
-        .from("ai_agents")
-        .insert({
-          business_id: acc.business.id,
-          name,
-          instructions,
-          is_active: isActive,
-        })
-        .throwOnError();
+      const { error } = await supabase.from("ai_agents").insert({
+        business_id: acc.business.id,
+        name,
+        instructions,
+        is_active: isActive,
+      });
+      if (error) {
+        if (error.message?.includes("agent_limit_reached")) {
+          return {
+            error:
+              "U arrit limiti i agjentëve për këtë biznes. Kontakto administratorin nëse të duhen dy.",
+          };
+        }
+        return { error: "Agjenti nuk u krijua. Provo përsëri." };
+      }
     }
     revalidatePath(`/b/${slug}`, "layout");
   }
@@ -145,7 +185,9 @@ export default async function AgentsPage({
         title={`Agjenti AI i ${access.business.name}`}
         description="Konfiguro mënyrën si Agjenti AI komunikon me klientët."
       >
-        <Link href={`/b/${slug}/agents/memory`} className="soft-link">Memoria e Agjentit →</Link>
+        <Link href={`/b/${slug}/agents/memory`} className="soft-link">
+          Memoria e Agjentit →
+        </Link>
       </PageHeading>
       <div className="panel section-pad mb-5 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -165,12 +207,22 @@ export default async function AgentsPage({
           {(agents ?? []).map((a) => (
             <div key={a.id}>{agentForm(a)}</div>
           ))}
-          <details className="panel section-pad" open={!agents?.length}>
-            <summary className="cursor-pointer font-semibold">
-              + Krijo një agjent të ri
-            </summary>
-            <div className="mt-5">{agentForm()}</div>
-          </details>
+          {canCreate ? (
+            <details className="panel section-pad" open={!agents?.length}>
+              <summary className="cursor-pointer font-semibold">
+                + Krijo një agjent të ri
+              </summary>
+              <div className="mt-5">{agentForm()}</div>
+            </details>
+          ) : (
+            <div className="panel section-pad">
+              <p className="muted-copy">
+                {limit.allowMultiple
+                  ? "Ky biznes ka arritur limitin e dy agjentëve."
+                  : "Ky biznes lejon vetëm një agjent. Për një konfigurim të dytë, kërko aktivizimin te administratori i platformës."}
+              </p>
+            </div>
+          )}
         </div>
         <aside className="space-y-5">
           <div className="panel section-pad">

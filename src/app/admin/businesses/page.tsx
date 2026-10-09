@@ -21,14 +21,33 @@ export default async function AdminBusinessesPage() {
     await Promise.all([
       service
         .from("businesses")
-        .select("id,name,slug,auto_reply")
+        .select("id,name,slug,auto_reply,allow_multiple_agents")
         .order("name"),
       service
         .from("integrations")
         .select("business_id,catalog_url")
         .eq("kind", "http"),
     ]);
-  if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
+  const businessesFallback =
+    loadError && ["42P01", "PGRST205", "42703"].includes(loadError.code)
+      ? await service
+          .from("businesses")
+          .select("id,name,slug,auto_reply")
+          .order("name")
+      : null;
+  if (loadError && !businessesFallback?.data)
+    throw new Error("Nuk u ngarkuan të dhënat.");
+  if (businessesFallback?.error) throw new Error("Nuk u ngarkuan të dhënat.");
+  const businessRows = (
+    businessesFallback?.data ??
+    businesses ??
+    []
+  ).map((b) => ({
+    ...b,
+    allow_multiple_agents: Boolean(
+      "allow_multiple_agents" in b && b.allow_multiple_agents,
+    ),
+  }));
   const linkedIds = new Set(
     (integrations ?? [])
       .filter((i) => Boolean(i.catalog_url?.trim()))
@@ -97,6 +116,30 @@ export default async function AdminBusinessesPage() {
     revalidatePath("/admin/businesses");
   }
 
+  async function saveBusinessSettings(formData: FormData) {
+    "use server";
+    const session = await getSessionUser();
+    if (!session || !(await isPlatformAdmin(session.id)))
+      return { error: "Kërkohet qasja e administratorit." };
+    const businessId = String(formData.get("business_id") ?? "");
+    if (!businessId) return { error: "Biznesi nuk u gjet." };
+    const { error } = await createServiceSupabase()
+      .from("businesses")
+      .update({
+        allow_multiple_agents: formData.get("allow_multiple_agents") === "on",
+      })
+      .eq("id", businessId);
+    if (error)
+      return {
+        error: ["42P01", "PGRST205", "42703"].includes(error.code)
+          ? "Duhet aplikuar migrimi allow_multiple_agents në databazë."
+          : "Cilësimet nuk u ruajtën. Provo përsëri.",
+      };
+    revalidatePath("/admin/businesses");
+    revalidatePath("/b", "layout");
+    return { success: "Cilësimet e klientit u ruajtën." };
+  }
+
   return (
     <>
       <PageHeading
@@ -107,7 +150,7 @@ export default async function AdminBusinessesPage() {
       <RecordBrowser
         listTitle="Të gjitha bizneset"
         placeholder="Kërko biznes ose slug…"
-        columns={["Biznesi", "Katalogu", "Përgjigje automatike"]}
+        columns={["Biznesi", "Katalogu", "Përgjigje automatike", "Dy agjentë"]}
         createLabel="Shto biznes"
         createAsModal
         createForm={
@@ -126,7 +169,7 @@ export default async function AdminBusinessesPage() {
             </button>
           </ActionForm>
         }
-        records={(businesses ?? []).map((b) => ({
+        records={businessRows.map((b) => ({
           id: b.id,
           title: b.name,
           subtitle: `/${b.slug}`,
@@ -136,6 +179,7 @@ export default async function AdminBusinessesPage() {
               key="ai"
               status={b.auto_reply ? "connected" : "paused"}
             />,
+            b.allow_multiple_agents ? "Po" : "Jo",
           ],
           detail: (
             <>
@@ -163,10 +207,45 @@ export default async function AdminBusinessesPage() {
                     <dt>Përgjigje automatike</dt>
                     <dd>{b.auto_reply ? "Aktive" : "Joaktive"}</dd>
                   </div>
+                  <div>
+                    <dt>Dy agjentë</dt>
+                    <dd>{b.allow_multiple_agents ? "Të lejuar" : "Jo"}</dd>
+                  </div>
                 </dl>
                 <Link className="soft-link" href={`/b/${b.slug}`}>
                   Hap panelin e biznesit →
                 </Link>
+              </div>
+              <div className="detail-block">
+                <h3>Cilësimet e klientit</h3>
+                <p className="muted-copy">
+                  Kontrollo sa konfigurime agjenti mund të mbajë ky biznes. Si
+                  parazgjedhje lejohet vetëm një; me këtë opsion deri në dy.
+                </p>
+                <ActionForm
+                  action={saveBusinessSettings}
+                  className="grid gap-3 mt-4"
+                >
+                  <input type="hidden" name="business_id" value={b.id} />
+                  <label className="toggle-label">
+                    <span>
+                      Lejo dy agjentë
+                      <small>
+                        Vetëm një mbetet aktiv për klientët; i dyti është
+                        konfigurim alternativ.
+                      </small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      name="allow_multiple_agents"
+                      className="switch-input"
+                      defaultChecked={b.allow_multiple_agents}
+                    />
+                  </label>
+                  <button className="btn btn-ghost" type="submit">
+                    Ruaj cilësimet
+                  </button>
+                </ActionForm>
               </div>
               <div className="detail-block">
                 <h3>Shto anëtar në ekip</h3>
