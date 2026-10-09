@@ -125,6 +125,7 @@ const wizardOrder: AnswerKey[] = [
 ];
 export type Answers = {
   name: string;
+  guidedOnboardingMode?: "basics" | "audio" | "written" | "manual" | "review";
   missingInformation?: string[];
   details?: BusinessDetails;
   audioReview?: AudioReview;
@@ -391,6 +392,8 @@ export function parseAnswers(
   normalized.selectedUseCases = [...normalized.useCases];
   normalized.productType = normalized.offeringTypes[0] ?? "";
   normalized.aiMode = normalized.agentCapabilities[0] ?? "";
+  if (["basics", "audio", "written", "manual", "review"].includes(String(raw.guidedOnboardingMode)))
+    normalized.guidedOnboardingMode = raw.guidedOnboardingMode as Answers["guidedOnboardingMode"];
   if (raw.details) normalized.details = parseDetails(raw.details);
   const audioReview = parseAudioReview(raw.audioReview);
   if (audioReview) {
@@ -464,6 +467,18 @@ export function initialInstructions(a: Answers) {
     "Përgjigju në shqip ose në gjuhën e klientit, me ton miqësor dhe profesional. Mos shpik çmime, stok ose politika. Përdor katalogun dhe njohuritë e biznesit. Nëse informacioni mungon, kërko ndihmën e stafit.",
     a.details?.businessDescription
       ? `Përshkrimi i konfirmuar i biznesit: ${a.details.businessDescription}`
+      : "",
+    a.details?.offeringsSummary?.length
+      ? `Përmbledhja e ofertës e konfirmuar nga biznesi: ${a.details.offeringsSummary.join("; ")}. Kjo është përmbledhje; çmimet dhe disponueshmëria verifikohen në katalog.`
+      : "",
+    a.details?.customerQuestions
+      ? `Pyetjet e klientëve dhe përgjigjet e konfirmuara: ${a.details.customerQuestions}`
+      : "",
+    a.details?.customerProcess
+      ? `Procesi i përshkruar nga biznesi: ${a.details.customerProcess}. Ky përshkrim nuk konfirmon kryerjen e veprimeve; zbato vetëm veprimet që mbështeten nga mjetet dhe workflow-t e konfiguruara.`
+      : "",
+    a.details?.handoffRules
+      ? `Preferencat e konfirmuara për ndihmën dhe kalimin te stafi: ${a.details.handoffRules}`
       : "",
     offer ? `Oferta e biznesit: ${offer}.` : "",
     goals ? `Qëllimet e Agjentit: ${goals}.` : "",

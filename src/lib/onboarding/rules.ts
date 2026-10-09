@@ -347,7 +347,7 @@ export function allowedUseCases(
   return useCaseChoices.filter(
     ([value]) =>
       allowed.has(value) &&
-      (hasProducts ||
+      (offerings.length === 0 || hasProducts ||
         !productUseCases.includes(value as (typeof productUseCases)[number])),
   );
 }

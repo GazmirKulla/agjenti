@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyAnswers, parseAnswers } from "./model";
+import { emptyAnswers, initialInstructions, parseAnswers } from "./model";
 import {
   audioFields,
   emptyDetails,
@@ -44,6 +44,28 @@ const base = () =>
     id,
   );
 describe("audio onboarding evidence and merge", () => {
+  it("preserves guided answers through extraction, supplemental audio, manual correction and completion", () => {
+    const process = "Klienti zgjedh një orar. " + "Konfirmimin e bën stafi. ".repeat(5);
+    const extraction = validateExtraction(patch({
+      customerProcess: process,
+      customerQuestions: "Kur jeni hapur? Nga e hëna në të premte.",
+      handoffRules: "Ankesat i kalohen stafit.",
+    }), "sallon bukurie");
+    const first = mergeExtraction(base(), extraction, secondId);
+    expect(first.details?.customerProcess).toBe(process.trim());
+    const next = mergeExtraction(first, patch({ customerProcess: "Klienti mund ta ndryshojë orarin." }, 0.4), id);
+    expect(next.details?.customerProcess).toContain(process.trim());
+    expect(next.details?.customerProcess).toContain("ndryshojë");
+    expect(pendingConfirmations(next.audioReview!)).toContain("customerProcess");
+    const corrected = correctField(next, "customerProcess", "Stafi konfirmon çdo takim. ");
+    expect(corrected.details?.customerProcess).toBe("Stafi konfirmon çdo takim. ");
+    const merged = mergeExtraction(corrected, patch({ customerProcess: "Konfirmim automatik." }), secondId);
+    expect(merged.details?.customerProcess).toBe("Stafi konfirmon çdo takim.");
+    const completed = parseAnswers({ ...merged, audioReview: { ...merged.audioReview, reviewed: true } }, true);
+    expect(completed.confirmedProfile?.details?.customerQuestions).toContain("Nga e hëna");
+    expect(initialInstructions(completed)).toContain("Ankesat i kalohen stafit.");
+    expect(validateExtraction(patch({ handoffRules: "E shpikur" }), "tekst tjetër").handoffRules.value).toBeNull();
+  });
   it("accepts only supported enum values and evidenced fields", () => {
     const validated = validateExtraction(
       patch({ businessType: "services", hasVariants: false }),

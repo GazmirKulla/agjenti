@@ -4,6 +4,9 @@ export const detailFields = {
   businessCategory: "Kategoria e biznesit",
   businessDescription: "Përshkrimi i biznesit",
   offeringsSummary: "Produktet ose shërbimet që ofron",
+  customerQuestions: "Pyetjet e shpeshta dhe përgjigjet",
+  customerProcess: "Si funksionon porosia ose rezervimi",
+  handoffRules: "Ndihma nga Agjenti dhe kalimi te stafi",
   sellsProducts: "A shet edhe produkte?",
   hasVariants: "A kanë produktet variante?",
   isPersonalized: "A ofron personalizim?",
@@ -12,6 +15,9 @@ export type BusinessDetails = {
   businessCategory: string | null;
   businessDescription: string | null;
   offeringsSummary: string[] | null;
+  customerQuestions: string | null;
+  customerProcess: string | null;
+  handoffRules: string | null;
   sellsProducts: boolean | null;
   hasVariants: boolean | null;
   isPersonalized: boolean | null;
@@ -20,6 +26,9 @@ export const emptyDetails: BusinessDetails = {
   businessCategory: null,
   businessDescription: null,
   offeringsSummary: null,
+  customerQuestions: null,
+  customerProcess: null,
+  handoffRules: null,
   sellsProducts: null,
   hasVariants: null,
   isPersonalized: null,
@@ -56,6 +65,9 @@ export function parseDetails(raw: unknown): BusinessDetails {
     businessCategory:
       category && Object.hasOwn(businessProfiles, category) ? category : null,
     businessDescription: text("businessDescription", 2000),
+    customerQuestions: text("customerQuestions", 2000),
+    customerProcess: text("customerProcess", 2000),
+    handoffRules: text("handoffRules", 2000),
     offeringsSummary: Array.isArray(data.offeringsSummary)
       ? [
           ...new Set(

@@ -1,13 +1,16 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { MAX_AUDIO_BYTES } from "@/lib/onboarding/audio-upload";
+import type { AudioGuideQuestion } from "@/lib/onboarding/audio-guide";
 
 export function AudioRecorder({
   busy,
   onAnalyze,
+  questions,
 }: {
   busy: boolean;
   onAnalyze: (file: File) => Promise<void>;
+  questions?: AudioGuideQuestion[];
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -129,6 +132,18 @@ export function AudioRecorder({
   }
   return (
     <div className="onboarding-audio-box">
+      {questions && <section className="onboarding-audio-guide" aria-labelledby="audio-guide-title">
+        <h2 id="audio-guide-title">Ja çfarë mund të na tregosh</h2>
+        <p>Përgjigju në një audio të vetme, deri në 2 minuta. Kapërce çfarë nuk vlen për biznesin tënd.</p>
+        <ol>
+          {questions.map((question) => (
+            <li key={question.id}>
+              <strong>{question.title}</strong>
+              <span>{question.hint}</span>
+            </li>
+          ))}
+        </ol>
+      </section>}
       <div
         className={`onboarding-mic ${recording ? "is-recording" : ""}`}
         aria-hidden="true"
@@ -156,10 +171,7 @@ export function AudioRecorder({
         {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} /
         2:00
       </p>
-      <p>
-        Mund të përmendësh çfarë ofron, si të kontaktojnë klientët dhe çfarë
-        dëshiron të bëjë Agjenti.
-      </p>
+      {!questions && <p>Mund të përmendësh çfarë ofron, si të kontaktojnë klientët dhe çfarë dëshiron të bëjë Agjenti.</p>}
       {url && <audio controls src={url} aria-label="Dëgjo regjistrimin tënd" />}
       <div className="onboarding-audio-buttons">
         {recording ? (

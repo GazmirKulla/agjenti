@@ -579,6 +579,70 @@
   width: 100%;
   max-width: 450px;
 }
+.onboarding-basics .onboarding-intro {
+  margin: 4px 0 8px;
+}
+.onboarding-basics .onboarding-detail-input {
+  margin: 12px 0 24px;
+}
+.onboarding-basics h2,
+.onboarding-audio-guide h2 {
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.onboarding-basics-hint {
+  color: #786c8d;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-top: 6px;
+}
+.onboarding-basics .onboarding-options {
+  margin: 16px 0 12px;
+}
+.onboarding-basics-actions {
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.onboarding-back:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.onboarding-audio-guide {
+  width: 100%;
+  text-align: left;
+  border-bottom: 1px solid #e7e1ee;
+  padding-bottom: 20px;
+}
+.onboarding-audio-guide > p {
+  margin-top: 6px;
+  font-size: 13px;
+}
+.onboarding-audio-guide ol {
+  list-style: decimal;
+  padding-left: 24px;
+  margin: 20px 0 0;
+  display: grid;
+  gap: 16px;
+}
+.onboarding-audio-guide li {
+  padding-left: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.onboarding-audio-guide li::marker {
+  color: #7541ff;
+  font-weight: 650;
+}
+.onboarding-audio-guide li strong {
+  font-weight: 600;
+}
+.onboarding-audio-guide li span {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: #786c8d;
+}
 .onboarding-audio-time {
   font-variant-numeric: tabular-nums;
 }

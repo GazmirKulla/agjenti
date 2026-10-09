@@ -48,6 +48,9 @@ const arrays = new Set([
   "offeringsSummary",
 ]);
 const booleans = new Set(["sellsProducts", "hasVariants", "isPersonalized"]);
+const narrativeFields = new Set([
+  "businessDescription", "customerQuestions", "customerProcess", "handoffRules",
+]);
 export const extractionSchema = {
   type: "object",
   additionalProperties: false,
@@ -113,7 +116,7 @@ export function validateExtraction(
         : booleans.has(key)
           ? typeof v === "boolean"
           : typeof v === "string" &&
-            v.length <= (key === "businessDescription" ? 2000 : 100) &&
+            v.length <= (narrativeFields.has(key) ? 2000 : 100) &&
             (!enums[key] || enums[key].includes(v)));
     if (!valid) throw new Error("invalid_extraction");
     const evidence =
@@ -176,6 +179,7 @@ export function mergeExtraction(
     }
   const next = {
     ...current,
+    guidedOnboardingMode: "review" as const,
     details: { ...emptyDetails, ...current.details },
     audioReview: review,
   };
@@ -190,7 +194,7 @@ export function mergeExtraction(
     const old = fieldValue(next, key);
     const value = Array.isArray(field.value)
       ? [...new Set([...(Array.isArray(old) ? old : []), ...field.value])]
-      : key === "businessDescription" &&
+      : narrativeFields.has(key) &&
           typeof old === "string" &&
           old !== field.value
         ? `${old}\n${field.value}`.slice(0, 2000)
@@ -198,9 +202,9 @@ export function mergeExtraction(
     if (key in detailFields)
       (next.details as Record<string, unknown>)[key] = value;
     else (next as unknown as Record<string, unknown>)[key] = value;
-    // A lower-confidence addition to an array must not hide previously uncertain items.
+    // Appending information must not hide uncertainty in earlier content.
     review.confidence[key] =
-      Array.isArray(value) &&
+      (Array.isArray(value) || narrativeFields.has(key)) &&
       hasValue(old) &&
       !review.confirmedFields.includes(key)
         ? Math.min(review.confidence[key] ?? 1, field.confidence)
@@ -248,7 +252,7 @@ export function correctField(
   const parsed = parseAnswers(normalizeConditionalAnswers(next));
   // Keep in-progress spaces/newlines in text editors; saveOnboarding normalizes them.
   if (key === "name" && typeof value === "string") parsed.name = value;
-  if (["businessDescription", "offeringsSummary"].includes(key))
+  if (narrativeFields.has(key) || key === "offeringsSummary")
     (parsed.details as Record<string, unknown>)[key] = value;
   return parsed;
 }
@@ -270,7 +274,7 @@ export function clarifications(answers: Answers, enabled = allQuestionKeys) {
     missing.push({
       field: "sellsProducts",
       message:
-        "Nuk kuptuam nëse shet edhe produkte. Mund ta sqarosh tani ose ta lësh pa përcaktuar.",
+        "A shet edhe produkte? Mund ta sqarosh tani ose ta lësh pa përcaktuar.",
     });
   return [...missing, ...detailConflicts(answers)];
 }

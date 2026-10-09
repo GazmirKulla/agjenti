@@ -27,6 +27,8 @@ import {
 import { businessProfiles } from "@/lib/onboarding/rules";
 import { AudioRecorder } from "./audio-recorder";
 import { OnboardingWizard } from "./wizard";
+import { OnboardingBasics } from "./basics";
+import { audioGuide, initialOnboardingMode } from "@/lib/onboarding/audio-guide";
 
 type Transcript = { id: string; transcript: string };
 export function OnboardingExperience({
@@ -43,9 +45,10 @@ export function OnboardingExperience({
   history?: Transcript[];
 }) {
   const [answers, setAnswers] = useState(initial);
-  const [mode, setMode] = useState<"audio" | "manual" | "review">(
-    initial.audioReview ? "review" : initialStep > 0 ? "manual" : "audio",
-  );
+  const [mode, setMode] = useState(() => initialOnboardingMode(initial, initialStep));
+  const [manualReviewed, setManualReviewed] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus(); }, [mode]);
   const [manualStep, setManualStep] = useState(initialStep);
   const [transcripts, setTranscripts] = useState(history);
   const [busy, setBusy] = useState(false);
@@ -64,14 +67,32 @@ export function OnboardingExperience({
     setAnswers((current) => correctField(current, field, value));
     setSaved(false);
     setError("");
+    setManualReviewed(false);
   };
   function navigate(next: typeof mode, current = answers) {
     generation.current++;
     controller.current?.abort();
     setBusy(false);
     setError("");
-    setAnswers(current);
+    setAnswers({ ...current, guidedOnboardingMode: next });
     setMode(next);
+  }
+  async function persistMode(nextMode: typeof mode) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const next = parseAnswers({ ...answers, guidedOnboardingMode: nextMode });
+      const result = await saveOnboarding(next, 0, false);
+      if (result.error) { setError(result.error); return; }
+      if (result.destination) { window.location.assign(result.destination); return; }
+      navigate(nextMode, next);
+      setSaved(true);
+    } catch {
+      setError("Nuk u ruajtën përgjigjet. Provo përsëri; të dhënat mbeten në këtë faqe.");
+    } finally {
+      setBusy(false);
+    }
   }
   async function analyze(file: File) {
     const version = ++generation.current;
@@ -150,14 +171,16 @@ export function OnboardingExperience({
         initialStep={manualStep}
         email={email}
         enabledSteps={enabledSteps}
-        onAudio={(current) => navigate("audio", editedManual(current))}
+        onAudio={(current) => navigate(
+          current.name.trim().length < 2 || (enabledSteps.includes("businessType") && !current.businessType)
+            ? "basics" : "audio", editedManual(current))}
         onSave={async (input, step, complete) => {
-          const next = editedManual(input);
+          const next = { ...editedManual(input), guidedOnboardingMode: "manual" as const };
           setAnswers(next);
           setManualStep(step);
           if (complete && next.audioReview) {
-            const result = await saveOnboarding(next, step, false);
-            if (!result.error && !result.destination) setMode("review");
+            const result = await saveOnboarding({ ...next, guidedOnboardingMode: "review" }, step, false);
+            if (!result.error && !result.destination) navigate("review", next);
             return result;
           }
           return saveOnboarding(next, step, complete);
@@ -238,34 +261,60 @@ export function OnboardingExperience({
         <section className="onboarding-body onboarding-hybrid">
           <div className="onboarding-progress">
             <progress
-              max={2}
-              value={mode === "review" ? 1 : 0}
-              aria-label="Progresi i konfigurimit me audio"
+              max={3}
+              value={mode === "basics" ? 1 : mode === "review" ? 3 : 2}
+              aria-label="Progresi i konfigurimit"
             />
             <span>
-              {mode === "review" ? "Rishiko dhe konfirmo" : "Le të fillojmë"}
+              {mode === "basics" ? "1 / 3 · Bazat" : mode === "review" ? "3 / 3 · Kontrolli" : "2 / 3 · Biznesi yt"}
             </span>
           </div>
           <div className="onboarding-question">
             <span className="onboarding-eyebrow">
-              {mode === "audio"
+              {mode === "basics" ? "LE TË FILLOJMË" : mode === "audio" || mode === "written"
                 ? "NA TREGO PËR BIZNESIN"
                 : "PROFILI YT FILLESTAR"}
             </span>
-            <h1>
-              {mode === "audio"
-                ? "Na trego shkurt për biznesin tënd"
-                : "Ja çfarë kuptuam për biznesin tënd"}
+            <h1 ref={heading} tabIndex={-1}>
+              {mode === "basics" ? "Fillojmë me bazat e biznesit"
+                : mode === "audio" || mode === "written"
+                ? "Na trego si funksionon biznesi yt"
+                : review ? "Ja çfarë kuptuam për biznesin tënd" : "Kontrollo profilin e biznesit"}
             </h1>
             <p>
-              {mode === "audio"
-                ? "Regjistro një audio të shkurtër. Mund ta dëgjosh dhe ta regjistrosh përsëri përpara analizës."
+              {mode === "basics" ? "Këto të dhëna na ndihmojnë të zgjedhim pyetjet për ty. Pastaj mund të përgjigjesh me zë ose me shkrim."
+                : mode === "written" ? "Përgjigju me fjalët e tua. Mund të lësh bosh çfarë nuk vlen për biznesin tënd."
+                : mode === "audio"
+                ? "Pyetjet më poshtë të ndihmojnë të fillosh. Mund ta dëgjosh audion dhe ta regjistrosh përsëri përpara analizës."
                 : "Kontrollo përmbledhjen. Hap çdo fushë për ta korrigjuar; informacionet që mungojnë mund t’i plotësosh me zë ose manualisht."}
             </p>
           </div>
-          {mode === "audio" ? (
+          {mode === "basics" ? (
+            <OnboardingBasics answers={answers} enabledSteps={enabledSteps} busy={busy}
+              onChange={change} onContinue={persistMode} />
+          ) : mode === "written" ? (
+            <form onSubmit={(event) => { event.preventDefault(); void persistMode("review"); }}>
+              <fieldset disabled={busy}>
+                {audioGuide({ ...answers, audioReview: undefined }, enabledSteps).map((question) => (
+                  <label key={question.id} className="onboarding-detail-input" htmlFor={`written-${question.id}`}>
+                    <strong>{question.title}</strong>
+                    <span className="onboarding-basics-hint" id={`hint-${question.id}`}>{question.hint}</span>
+                    <textarea id={`written-${question.id}`} rows={3} maxLength={2000}
+                      aria-describedby={`hint-${question.id}`}
+                      value={question.id === "offeringsSummary" ? (details.offeringsSummary ?? []).join("\n") : String(fieldValue(answers, question.id) ?? "")}
+                      onChange={(event) => change(question.id, question.id === "offeringsSummary" ? event.target.value.split("\n") : event.target.value)} />
+                  </label>
+                ))}
+                <div className="onboarding-audio-buttons">
+                  <button type="button" className="onboarding-back" onClick={() => navigate("basics")}>← Të dhënat bazë</button>
+                  <button type="button" className="onboarding-back" onClick={() => void persistMode("audio")}>Përgjigju me audio</button>
+                  <button type="submit" className="onboarding-next">{busy ? "Duke ruajtur…" : "Kontrollo profilin →"}</button>
+                </div>
+              </fieldset>
+            </form>
+          ) : mode === "audio" ? (
             <>
-              <AudioRecorder busy={busy} onAnalyze={analyze} />
+              <AudioRecorder busy={busy} onAnalyze={analyze} questions={audioGuide(answers, enabledSteps)} />
               {review && (
                 <p className="onboarding-note">
                   Regjistrimi tjetër plotëson profilin ekzistues. Korrigjimet e
@@ -273,6 +322,8 @@ export function OnboardingExperience({
                 </p>
               )}
               <div className="onboarding-audio-buttons">
+                {!review && <button className="onboarding-back" disabled={busy}
+                  onClick={() => navigate("basics")}>← Të dhënat bazë</button>}
                 {review && (
                   <button
                     className="onboarding-back"
@@ -283,11 +334,11 @@ export function OnboardingExperience({
                 )}
                 <button
                   className="onboarding-back"
-                  onClick={() => navigate("manual")}
+                  onClick={() => navigate("written")}
                 >
                   {busy
                     ? "Anulo analizën dhe plotëso manualisht"
-                    : "Ose vazhdo manualisht"}
+                    : "Përgjigju me shkrim"}
                 </button>
               </div>
             </>
@@ -325,7 +376,7 @@ export function OnboardingExperience({
                     className="onboarding-back"
                     onClick={() => navigate("audio")}
                   >
-                    Regjistro audio tjetër
+                    {review ? "Regjistro audio tjetër" : "Përgjigju me audio"}
                   </button>
                 </section>
               )}
@@ -542,7 +593,7 @@ export function OnboardingExperience({
                             value={
                               field === "offeringsSummary"
                                 ? (details.offeringsSummary?.join("\n") ?? "")
-                                : (details.businessDescription ?? "")
+                                : String(fieldValue(answers, field) ?? "")
                             }
                             onChange={(e) =>
                               change(
@@ -584,16 +635,15 @@ export function OnboardingExperience({
                   <label className="onboarding-review-confirm">
                     <input
                       type="checkbox"
-                      checked={review?.reviewed ?? false}
+                      checked={review ? review.reviewed : manualReviewed}
                       onChange={(e) =>
-                        review &&
-                        setAnswers({
+                        review ? setAnswers({
                           ...answers,
                           audioReview: {
                             ...review,
                             reviewed: e.target.checked,
                           },
-                        })
+                        }) : setManualReviewed(e.target.checked)
                       }
                     />
                     I kontrollova të dhënat dhe dua ta krijoj hapësirën me këtë
@@ -602,7 +652,7 @@ export function OnboardingExperience({
                   <button
                     className="onboarding-next"
                     type="submit"
-                    disabled={busy || !review?.reviewed || pending.length > 0}
+                    disabled={busy || !(review ? review.reviewed : manualReviewed) || pending.length > 0}
                   >
                     {busy ? "Duke ruajtur…" : "Konfirmo dhe krijo hapësirën →"}
                   </button>
