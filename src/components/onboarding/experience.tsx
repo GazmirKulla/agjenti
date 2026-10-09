@@ -282,7 +282,7 @@ export function OnboardingExperience({
                 : review ? "Ja çfarë kuptuam për biznesin tënd" : "Kontrollo profilin e biznesit"}
             </h1>
             <p>
-              {mode === "basics" ? "Këto të dhëna na ndihmojnë të zgjedhim pyetjet për ty. Pastaj mund të përgjigjesh me zë ose me shkrim."
+              {mode === "basics" ? "Vendos emrin dhe zgjidh tipin e biznesit. Në hapin tjetër do të të udhëzojmë me pyetje që mund t’u përgjigjesh me audio."
                 : mode === "written" ? "Përgjigju me fjalët e tua. Mund të lësh bosh çfarë nuk vlen për biznesin tënd."
                 : mode === "audio"
                 ? "Pyetjet më poshtë të ndihmojnë të fillosh. Mund ta dëgjosh audion dhe ta regjistrosh përsëri përpara analizës."
@@ -291,7 +291,7 @@ export function OnboardingExperience({
           </div>
           {mode === "basics" ? (
             <OnboardingBasics answers={answers} enabledSteps={enabledSteps} busy={busy}
-              onChange={change} onContinue={persistMode} />
+              onChange={change} onContinue={() => persistMode("audio")} />
           ) : mode === "written" ? (
             <form onSubmit={(event) => { event.preventDefault(); void persistMode("review"); }}>
               <fieldset disabled={busy}>
@@ -314,7 +314,7 @@ export function OnboardingExperience({
             </form>
           ) : mode === "audio" ? (
             <>
-              <AudioRecorder busy={busy} onAnalyze={analyze} questions={audioGuide(answers, enabledSteps)} />
+              <AudioRecorder busy={busy} onAnalyze={analyze} questions={audioGuide(answers, enabledSteps)} autoAnalyze />
               {review && (
                 <p className="onboarding-note">
                   Regjistrimi tjetër plotëson profilin ekzistues. Korrigjimet e

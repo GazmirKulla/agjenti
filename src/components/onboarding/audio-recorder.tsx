@@ -1,16 +1,19 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_AUDIO_BYTES } from "@/lib/onboarding/audio-upload";
 import type { AudioGuideQuestion } from "@/lib/onboarding/audio-guide";
+import { scheduleAudioAnalysis } from "@/lib/onboarding/auto-analysis";
 
 export function AudioRecorder({
   busy,
   onAnalyze,
   questions,
+  autoAnalyze = false,
 }: {
   busy: boolean;
   onAnalyze: (file: File) => Promise<void>;
   questions?: AudioGuideQuestion[];
+  autoAnalyze?: boolean;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -18,6 +21,14 @@ export function AudioRecorder({
   const [requesting, setRequesting] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState("");
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [listening, setListening] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const automatic = useRef<ReturnType<typeof scheduleAudioAnalysis> | null>(null);
+  const attemptedFile = useRef<File | null>(null);
+  const analysisInFlight = useRef(false);
+  const analyzeCallback = useRef(onAnalyze);
+  useEffect(() => { analyzeCallback.current = onAnalyze; }, [onAnalyze]);
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -26,6 +37,7 @@ export function AudioRecorder({
     mounted.current = true;
     return () => {
       mounted.current = false;
+      automatic.current?.cancel();
       if (timer.current) clearInterval(timer.current);
       if (recorder.current?.state === "recording") recorder.current.stop();
       stream.current?.getTracks().forEach((track) => track.stop());
@@ -40,6 +52,35 @@ export function AudioRecorder({
     setUrl(next);
     return () => URL.revokeObjectURL(next);
   }, [file]);
+  const runAnalysis = useCallback(async (audio: File) => {
+    if (!mounted.current || analysisInFlight.current) return;
+    automatic.current?.cancel();
+    attemptedFile.current = audio;
+    analysisInFlight.current = true;
+    setCountdown(null);
+    setAnalyzing(true);
+    setError("");
+    try {
+      await analyzeCallback.current(audio);
+    } catch {
+      if (mounted.current) setError("Analiza nuk përfundoi. Provo përsëri ose plotëso me shkrim.");
+    } finally {
+      analysisInFlight.current = false;
+      if (mounted.current) setAnalyzing(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (!autoAnalyze || !file || recording || requesting || busy || analyzing || listening || attemptedFile.current === file) {
+      setCountdown(null);
+      return;
+    }
+    const scheduled = scheduleAudioAnalysis(() => { void runAnalysis(file); }, setCountdown);
+    automatic.current = scheduled;
+    return () => {
+      scheduled.cancel();
+      if (automatic.current === scheduled) automatic.current = null;
+    };
+  }, [autoAnalyze, file, recording, requesting, busy, analyzing, listening, runAnalysis]);
   function stop() {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
@@ -48,6 +89,10 @@ export function AudioRecorder({
     setRecording(false);
   }
   async function start() {
+    if (busy || analysisInFlight.current || requesting || recording) return;
+    automatic.current?.cancel();
+    setCountdown(null);
+    setListening(false);
     setError("");
     setRequesting(true);
     setFile(null);
@@ -163,7 +208,7 @@ export function AudioRecorder({
       <p role="status">
         {recording
           ? "Duke regjistruar…"
-          : busy
+          : busy || analyzing
             ? "Po e kthejmë audion në tekst dhe po përgatisim profilin…"
             : "Fol natyrshëm. Agjenti do ta përgatisë hapësirën për ty."}
       </p>
@@ -172,7 +217,10 @@ export function AudioRecorder({
         2:00
       </p>
       {!questions && <p>Mund të përmendësh çfarë ofron, si të kontaktojnë klientët dhe çfarë dëshiron të bëjë Agjenti.</p>}
-      {url && <audio controls src={url} aria-label="Dëgjo regjistrimin tënd" />}
+      {url && <audio controls src={url} aria-label="Dëgjo regjistrimin tënd"
+        onPlay={() => { automatic.current?.cancel(); setCountdown(null); setListening(true); }}
+        onPause={() => setListening(false)} onEnded={() => setListening(false)} />}
+      {countdown !== null && <p role="status">Analiza nis automatikisht pas {countdown} sekondash.</p>}
       <div className="onboarding-audio-buttons">
         {recording ? (
           <button type="button" className="onboarding-next" onClick={stop}>
@@ -182,7 +230,7 @@ export function AudioRecorder({
           <button
             type="button"
             className={file ? "onboarding-back" : "onboarding-next"}
-            disabled={busy || requesting}
+            disabled={busy || analyzing || requesting}
             onClick={() => void start()}
           >
             {requesting
@@ -196,10 +244,10 @@ export function AudioRecorder({
           <button
             type="button"
             className="onboarding-next"
-            disabled={busy}
-            onClick={() => void onAnalyze(file)}
+            disabled={busy || analyzing}
+            onClick={() => void runAnalysis(file)}
           >
-            {busy ? "Duke analizuar…" : "Analizo biznesin →"}
+            {busy || analyzing ? "Duke analizuar…" : "Analizo biznesin →"}
           </button>
         )}
       </div>
@@ -208,11 +256,6 @@ export function AudioRecorder({
           {error}
         </p>
       )}
-      <p className="onboarding-disclaimer">
-        Kur shtyp “Analizo”, audioja dërgohet për transkriptim dhe analizë me
-        AI. Ruajmë tekstin dhe rezultatet; audion nuk e ruajmë në hapësirën
-        tënde.
-      </p>
     </div>
   );
 }

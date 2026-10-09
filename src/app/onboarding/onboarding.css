@@ -585,7 +585,6 @@
 .onboarding-basics .onboarding-detail-input {
   margin: 12px 0 24px;
 }
-.onboarding-basics h2,
 .onboarding-audio-guide h2 {
   font-size: 16px;
   font-weight: 650;
@@ -597,10 +596,8 @@
   line-height: 1.6;
   margin-top: 6px;
 }
-.onboarding-basics .onboarding-options {
-  margin: 16px 0 12px;
-}
 .onboarding-basics-actions {
+  justify-content: flex-end;
   flex-wrap: wrap;
   margin-top: 16px;
 }
