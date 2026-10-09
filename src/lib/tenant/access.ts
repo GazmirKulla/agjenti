@@ -76,7 +76,19 @@ export const requireBusinessAccess = cache(async function requireBusinessAccess(
   slug: string,
 ) {
   const { admin, businesses } = await listMemberships(userId);
-  const business = businesses.find((item) => item.slug === slug);
+  let business = businesses.find((item) => item.slug === slug);
+  // Legacy addresses remain usable after replacing UUID slugs. Only resolve
+  // aliases inside businesses this user can already access.
+  if (!business && businesses.length) {
+    const db = createServiceSupabase();
+    const { data: alias } = await db
+      .from("business_slug_aliases")
+      .select("business_id")
+      .eq("slug", slug)
+      .in("business_id", businesses.map((item) => item.id))
+      .maybeSingle();
+    business = businesses.find((item) => item.id === alias?.business_id);
+  }
   if (!business) return null;
   return { admin, business };
 });

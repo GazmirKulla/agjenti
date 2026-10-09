@@ -1,6 +1,10 @@
 import { BusinessIntelligencePanel } from "@/components/business-intelligence/panel";
 import { redirect } from "next/navigation";
-import { getSessionUser, listMemberships } from "@/lib/tenant/access";
+import {
+  getSessionUser,
+  listMemberships,
+  requireBusinessAccess,
+} from "@/lib/tenant/access";
 import { DashboardShell } from "@/components/dashboard/shell";
 import { getAppSettings } from "@/lib/platform/settings";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
@@ -16,7 +20,7 @@ export default async function BusinessLayout({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await listMemberships(user.id);
-  const business = access.businesses.find((b) => b.slug === slug);
+  const business = (await requireBusinessAccess(user.id, slug))?.business;
   if (!business) redirect("/auth/continue");
   const [settings, dashboardProfile] = await Promise.all([
     getAppSettings(),
@@ -30,7 +34,7 @@ export default async function BusinessLayout({
   return (
     <DashboardShell
       name={business.name}
-      slug={slug}
+      slug={business.slug}
       platformAdmin={access.admin}
       businesses={access.businesses}
       email={user.email}
@@ -52,7 +56,7 @@ export default async function BusinessLayout({
           {settings.announcement}
         </div>
       )}
-      <BusinessIntelligencePanel slug={slug} />
+      <BusinessIntelligencePanel slug={business.slug} />
       {children}
     </DashboardShell>
   );

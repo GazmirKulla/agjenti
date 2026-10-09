@@ -30,7 +30,7 @@ describe("allocateUniqueBusinessSlug", () => {
 
   it("shton numër kur slug ekziston", async () => {
     const or = vi.fn(async () => ({
-      data: [{ slug: "dyqani" }, { slug: "dyqani-2" }],
+      data: [{ slug: "dyqani" }, { slug: "dyqani-1" }, { slug: "dyqani-2" }],
     }));
     const db = {
       from: () => ({ select: () => ({ or }) }),
@@ -38,5 +38,10 @@ describe("allocateUniqueBusinessSlug", () => {
     await expect(allocateUniqueBusinessSlug(db, "dyqani")).resolves.toBe(
       "dyqani-3",
     );
+  });
+
+  it("starts at -1 and uses the first available number", async () => {
+    const db = { from: () => ({ select: () => ({ or: async () => ({ data: [{ slug: "dyqani" }, { slug: "dyqani-2" }] }) }) }) };
+    await expect(allocateUniqueBusinessSlug(db, "dyqani")).resolves.toBe("dyqani-1");
   });
 });

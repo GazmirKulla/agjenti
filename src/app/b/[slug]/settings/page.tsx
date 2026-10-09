@@ -32,11 +32,12 @@ export default async function SettingsPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { slug } = await params;
+  const { slug: requestedSlug } = await params;
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const access = await requireBusinessAccess(user.id, slug);
+  const access = await requireBusinessAccess(user.id, requestedSlug);
   if (!access) redirect("/auth/continue");
+  const slug = access.business.slug;
 
   async function saveBusiness(formData: FormData) {
     "use server";

@@ -362,6 +362,12 @@ Memoria ruan preferenca stili, shembuj pyetje/përgjigje dhe udhëzime për një
 
 Pa migrimin, bisedat ekzistuese vazhdojnë me konfigurimin aktual dhe ruajtja e trajnimit shfaq mesazh për migrimin e munguar. Testet Vitest mbulojnë autorizimin, feedback-un, izolimin e workflow-ve, përzgjedhjen e shembujve dhe përdorimin në motorin real. `supabase/tests/agent_training.sql` verifikon RLS, versionet, historikun dhe fingerprint-in në një databazë testimi me rollback.
 
+### Adresa të lexueshme për bizneset
+
+Apliko `supabase/migrations/20261009210000_readable_business_slugs.sql` pas migrimeve ekzistuese. Adresa krijohet nga emri: `filiz-store`, `filiz-store-1`, `filiz-store-2`. Numërimi përdor vlerën e parë të lirë dhe krijimet njëkohësisht kontrollohen në databazë, si në onboarding ashtu edhe në panelin e administratorit.
+
+Migrimi përditëson edhe adresat ekzistuese të formës `biznes-<UUID>`. ID-të dhe të dhënat mbeten të njëjta; linket e vjetra ruhen si alias dhe kontrollojnë të njëjtën anëtarësi. Cilësimet dhe konfirmimi i fshirjes shfaqin adresën e re. Adresat ekzistuese të personalizuara ruhen. Migrimi mund të riaplikohet; nuk aplikohet automatikisht në production.
+
 ### FAQ dhe monedhat nga skanimet
 
 Apliko `supabase/migrations/20261008120000_scan_knowledge_routing.sql` pas migrimeve ekzistuese. Skanimi i website-it/Instagram-it, në onboarding dhe te **Plotëso me AI**, i ruan automatikisht FAQ-të dhe informacionin e përgjithshëm me prova nga burimi në `knowledge_entries`. Produktet/shërbimet mbeten për konfirmim në seksionin përkatës; FAQ-të nuk ngarkojnë listën e produkteve. Draftet e vjetra me njohuri të mbështetura drejtohen te moduli kur hapet paneli, pa një analizë të re. Përjashtimet e shprehura nga përdoruesi respektohen.

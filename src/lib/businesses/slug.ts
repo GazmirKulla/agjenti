@@ -17,7 +17,7 @@ export function slugifyBusinessName(name: string): string | null {
 }
 
 /**
- * Zgjedh slug të lirë: baza, pastaj baza-2, baza-3, …
+ * Zgjedh slug të lirë: baza, pastaj baza-1, baza-2, …
  * `db.from("businesses")` duhet të kthejë query me select/or.
  */
 export async function allocateUniqueBusinessSlug(
@@ -30,7 +30,7 @@ export async function allocateUniqueBusinessSlug(
     .or(`slug.eq.${base},slug.like.${base}-%`);
   const taken = new Set((data ?? []).map((row) => row.slug));
   if (!taken.has(base)) return base;
-  let n = 2;
+  let n = 1;
   while (taken.has(`${base}-${n}`)) n += 1;
   return `${base}-${n}`;
 }
