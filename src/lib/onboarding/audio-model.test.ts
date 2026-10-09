@@ -44,6 +44,16 @@ const base = () =>
     id,
   );
 describe("audio onboarding evidence and merge", () => {
+  it("derives a product offer only from validated sales evidence and preserves mixed offers", () => {
+    expect(validateExtraction(patch({ sellsProducts: true }), "tekst tjetër").offeringTypes.value).toBeNull();
+    expect(validateExtraction(patch({ sellsProducts: false }), "sallon bukurie").offeringTypes.value).toBeNull();
+    expect(validateExtraction(patch({ sellsProducts: true, offeringTypes: ["mixed"] }), "sallon bukurie").offeringTypes.value).toEqual(["mixed"]);
+    const uncertain = validateExtraction(patch({ sellsProducts: true }, 0.4), "sallon bukurie");
+    const next = mergeExtraction(emptyAnswers, uncertain, id);
+    expect(pendingConfirmations(next.audioReview!)).toContain("offeringTypes");
+    const manual = correctField(emptyAnswers, "offeringTypes", ["services"]);
+    expect(mergeExtraction(manual, uncertain, id).offeringTypes).toEqual(["services"]);
+  });
   it("replaces written offering prose with individually extracted products and services", () => {
     const current = correctField(base(), "offeringsSummary", ["Shes shampo dhe ofroj prerje flokësh."]);
     const next = mergeExtraction(current, patch({ offeringsSummary: ["Shampo", "Prerje flokësh"] }), secondId, { replaceWrittenOfferings: true });

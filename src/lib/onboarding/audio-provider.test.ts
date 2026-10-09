@@ -10,6 +10,8 @@ vi.mock("openai", () => ({
 import { analyzeAudio, analyzeText } from "./audio-provider";
 import { audioFields } from "./audio-fields";
 import { emptyAnswers } from "./model";
+import { mergeExtraction } from "./audio-model";
+import { offerMode } from "./rules";
 const extraction = () =>
   Object.fromEntries(
     audioFields.map((key) => [
@@ -33,6 +35,22 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("audio provider contract", () => {
+  it("selects Products for an evidenced sale even when the provider omits the offer enum", async () => {
+    const text = "shes produkt barriera te rikarikushme";
+    const fields = extraction();
+    fields.businessType = { value: null, confidence: 0, evidence: null };
+    const output = { ...fields,
+      sellsProducts: { value: true, confidence: 0.95, evidence: text },
+      offeringsSummary: { value: ["Barriera të rikarikueshme"], confidence: 0.95, evidence: text },
+    };
+    mocks.respond.mockResolvedValue({ id: "resp", status: "completed", output_text: JSON.stringify(output) });
+    const current = { ...emptyAnswers, name: "Dyqan", businessType: "retail" };
+    const result = await analyzeText(text, current);
+    const saved = mergeExtraction(current, result.extraction, "11111111-1111-4111-8111-111111111111", { replaceWrittenOfferings: true });
+    expect(offerMode(saved.offeringTypes)).toBe("standard");
+    expect(saved.details?.offeringsSummary).toEqual(["Barriera të rikarikueshme"]);
+    expect(saved.audioReview?.confidence.offeringTypes).toBe(0.95);
+  });
   it("analyzes written answers directly without invoking transcription", async () => {
     const text = "Ne ofrojmë vetëm shërbime.";
     const result = await analyzeText(text, emptyAnswers);

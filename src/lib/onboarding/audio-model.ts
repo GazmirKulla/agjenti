@@ -133,6 +133,11 @@ export function validateExtraction(
           }
         : { value: null, confidence: 0, evidence: null };
   }
+  // An evidenced product-sale fact also establishes the broad product offer.
+  // Keep more specific/mixed classifications and carry uncertainty through.
+  if (!hasValue(result.offeringTypes?.value) && result.sellsProducts?.value === true) {
+    result.offeringTypes = { ...result.sellsProducts, value: ["standard"] };
+  }
   return result;
 }
 export function fieldValue(
