@@ -25,7 +25,7 @@ import {
   fieldValue,
   hasValue,
 } from "@/lib/onboarding/audio-model";
-import { businessProfiles, offerMode } from "@/lib/onboarding/rules";
+import { businessProfiles, offerMode, canonicalUseCases, useCaseDescriptions } from "@/lib/onboarding/rules";
 import { AudioRecorder } from "./audio-recorder";
 import { OnboardingWizard } from "./wizard";
 import { OnboardingBasics } from "./basics";
@@ -427,7 +427,7 @@ export function OnboardingExperience({
                         : question.key === "aiMode"
                           ? "agentCapabilities"
                           : question.key;
-                    const value = field === "offeringTypes" ? offerMode(answers.offeringTypes) : fieldValue(answers, field);
+                    const value = field === "offeringTypes" ? offerMode(answers.offeringTypes) : field === "useCases" ? canonicalUseCases(answers.useCases) : fieldValue(answers, field);
                     const multi = [
                       "useCases",
                       "agentCapabilities",
@@ -480,7 +480,7 @@ export function OnboardingExperience({
                                   } else change(field, multi ? chosen : id);
                                 }}
                               />
-                              <span>{label}</span>
+                              <span>{label}{field === "useCases" && <small className="onboarding-goal-description">{useCaseDescriptions[id]}</small>}</span>
                               <span
                                 className="onboarding-choice"
                                 aria-hidden="true"

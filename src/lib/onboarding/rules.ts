@@ -26,17 +26,41 @@ export function offerMode(offerings: readonly string[]) {
 }
 
 export const useCaseChoices: readonly Choice[] = [
+  ["support", "T’u përgjigjet pyetjeve të klientëve", "inbox"],
+  ["sales", "T’i ndihmojë klientët të zgjedhin", "spark"],
+  ["orders", "Të marrë kërkesa për porosi", "orders"],
+  ["booking", "Të marrë kërkesa për takime ose rezervime", "calendar"],
+  ["leads", "Të mbledhë kontakte për ndjekje nga stafi", "customers"],
+];
+export const useCaseDescriptions: Record<string, string> = {
+  support: "Për ofertën, çmimet, përdorimin dhe politikat e biznesit.",
+  sales: "Kupton nevojat dhe ndihmon në zgjedhjen e ofertës së duhur.",
+  orders: "Mbledh produktet, sasitë dhe të dhënat për konfirmimin e porosisë.",
+  booking: "Mbledh shërbimin, orarin e dëshiruar dhe kontaktin për konfirmim.",
+  leads: "Ruan interesin dhe kontaktin e klientit për ndjekje ose ofertë.",
+};
+// Keep historical IDs valid in saved profiles, without exposing duplicate goals.
+export const supportedUseCaseChoices: readonly Choice[] = [
+  ...useCaseChoices,
   ["messages", "Menaxhim mesazhesh në Instagram", "instagram"],
-  ["support", "Mbështetje për klientët", "inbox"],
-  ["leads", "Mbledhje të dhënave për klientë të rinj", "customers"],
-  ["booking", "Menaxhim kërkesash dhe rezervimesh", "orders"],
-  ["sales", "Asistent shitjesh", "spark"],
   ["products", "Menaxhim produktesh", "products"],
-  ["orders", "Menaxhim porosish", "orders"],
   ["customers", "Menaxhim klientësh", "customers"],
   ["recommendations", "Rekomandime produktesh", "agents"],
   ["collection", "Mbledhje të dhënash për porosi", "workflows"],
 ];
+export function canonicalUseCases(values: readonly string[]) {
+  const aliases: Record<string, string> = {
+    messages: "support", products: "sales", customers: "leads",
+    recommendations: "sales", collection: "orders",
+  };
+  return [...new Set(values.map(value => aliases[value] ?? value))];
+}
+export function visibleUseCases(businessType: string, offerings: readonly string[], selected: readonly string[]) {
+  const allowed = new Set(allowedUseCases(businessType, offerings).map(([id]) => id));
+  const mode = offerMode(offerings);
+  return useCaseChoices.filter(([id]) => allowed.has(id) &&
+    (id !== "booking" || mode === "services" || mode === "mixed" || selected.includes("booking")));
+}
 
 export const capabilityChoices: readonly Choice[] = [
   ["reply_messages", "Përgjigjet mesazheve në Instagram", "instagram"],
@@ -69,7 +93,6 @@ export const capabilityChoices: readonly Choice[] = [
 ];
 
 const productUseCases = [
-  "sales",
   "products",
   "orders",
   "recommendations",
@@ -85,7 +108,6 @@ const commonCapabilities = [
   "save_customer_details",
 ] as const;
 const productCapabilities = [
-  "understand_needs",
   "recommend_products",
   "compare_products",
   "answer_product_details",
@@ -97,16 +119,17 @@ const productCapabilities = [
 /** Qëllim → aftësi të sugjeruara që shfaqen te hapi aiMode. */
 export const useCaseCapabilities: Record<string, readonly string[]> = {
   messages: ["reply_messages", "handoff"],
-  support: ["answer_questions", "ask_missing", "handoff"],
+  support: ["reply_messages", "answer_questions", "answer_product_details", "ask_missing", "handoff"],
   leads: ["ask_missing", "qualify_leads", "save_customer_details", "handoff"],
   booking: ["ask_missing", "handle_bookings", "handoff"],
-  sales: ["understand_needs", "recommend_products", "compare_products"],
+  sales: ["understand_needs", "recommend_products", "compare_products", "answer_product_details", "ask_missing", "handoff"],
   products: [
     "answer_product_details",
     "recommend_products",
     "compare_products",
   ],
   orders: [
+    "ask_missing",
     "collect_order_details",
     "follow_workflow",
     "create_order",
@@ -139,10 +162,10 @@ export const businessProfiles = Object.fromEntries(
   supportedBusinessCategories.map(([id, label]) => [id, {
     label,
     allowedOfferingTypes: offeringChoices.map(([value]) => value),
-    allowedUseCases: useCaseChoices.map(([value]) => value),
+    allowedUseCases: supportedUseCaseChoices.map(([value]) => value),
     allowedCapabilities: capabilityChoices.map(([value]) => value),
     recommendedDefaults: {
-      useCases: ["messages", "support"],
+      useCases: ["support"],
       capabilities: [...commonCapabilities],
       workflow: "business-defined",
     },
@@ -154,7 +177,7 @@ export function offeringDefaults(offerings: readonly string[]) {
   const services = offerings.some(value => value === "services" || value === "mixed");
   const personalized = offerings.some(value => ["personalized", "photo", "text"].includes(value));
   return {
-    useCases: ["messages", "support", ...(products ? ["sales", "orders"] : []), ...(services ? ["leads", "booking"] : [])],
+    useCases: ["support", ...(products ? ["sales", "orders"] : []), ...(services ? ["leads", "booking"] : [])],
     capabilities: ["reply_messages", "answer_questions", "ask_missing", "handoff", ...(products ? ["recommend_products", "collect_order_details"] : []), ...(services ? ["qualify_leads", "handle_bookings"] : [])],
     workflow: products && services ? "service-or-product-request"
       : personalized ? "personalized-order"
@@ -196,7 +219,7 @@ export function allowedUseCases(
   const rules = rulesFor(businessType);
   const hasProducts = offerings.some((item) => item !== "services");
   const allowed = new Set<string>(rules.allowedUseCases);
-  return useCaseChoices.filter(
+  return supportedUseCaseChoices.filter(
     ([value]) =>
       allowed.has(value) &&
       (offerings.length === 0 || hasProducts ||
@@ -213,7 +236,8 @@ export function allowedCapabilities(
   const allowed = new Set<string>(rules.allowedCapabilities);
   const hasProducts = offerings.some((item) => item !== "services");
   const relevant = new Set(
-    selectedUseCases.flatMap((item) => useCaseCapabilities[item] ?? []),
+    [...selectedUseCases, ...canonicalUseCases(selectedUseCases)]
+      .flatMap((item) => useCaseCapabilities[item] ?? []),
   );
   return capabilityChoices.filter(
     ([value]) =>

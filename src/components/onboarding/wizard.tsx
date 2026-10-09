@@ -16,7 +16,7 @@ import {
   type Answers,
 } from "@/lib/onboarding/model";
 import { correctField } from "@/lib/onboarding/audio-model";
-import { normalizeConditionalAnswers, offerMode } from "@/lib/onboarding/rules";
+import { normalizeConditionalAnswers, offerMode, canonicalUseCases, useCaseDescriptions } from "@/lib/onboarding/rules";
 export function OnboardingWizard({
   initial,
   initialStep,
@@ -68,7 +68,7 @@ export function OnboardingWizard({
         question.key === "aiMode";
       const currentValues =
         question.key === "useCases"
-          ? current.useCases
+          ? canonicalUseCases(current.useCases)
           : question.key === "aiMode"
             ? current.agentCapabilities
             : [];
@@ -101,7 +101,7 @@ export function OnboardingWizard({
     setAnswers((current) => {
       const normalized = normalizeConditionalAnswers({
         ...current,
-        useCases: current.useCases.length === all.length ? [] : [...all],
+        useCases: canonicalUseCases(current.useCases).length === all.length ? [] : [...all],
       });
       return { ...normalized, selectedUseCases: [...normalized.useCases] };
     });
@@ -279,7 +279,7 @@ export function OnboardingWizard({
                   {question.key === "useCases" && (
                     <div className="onboarding-multi-tools">
                       <button type="button" className="onboarding-select-all" onClick={toggleAllUseCases}>
-                        {answers.useCases.length === question.options.length ? "Hiq të gjitha" : "Zgjidh të gjitha"}
+                        {canonicalUseCases(answers.useCases).length === question.options.length ? "Hiq të gjitha" : "Zgjidh të gjitha"}
                       </button>
                     </div>
                   )}
@@ -296,7 +296,7 @@ export function OnboardingWizard({
                         question.key === "productType"
                           ? answers.offeringTypes
                           : question.key === "useCases"
-                            ? answers.useCases
+                            ? canonicalUseCases(answers.useCases)
                             : question.key === "aiMode"
                               ? answers.agentCapabilities
                               : [];
@@ -324,7 +324,7 @@ export function OnboardingWizard({
                             onChange={() => choose(value)}
                           />
                           <Icon name={icon} size={25} />
-                          <span>{label}</span>
+                          <span>{label}{question.key === "useCases" && <small className="onboarding-goal-description">{useCaseDescriptions[value]}</small>}</span>
                           <span
                             className="onboarding-choice"
                             aria-hidden="true"

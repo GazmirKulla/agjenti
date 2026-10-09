@@ -19,6 +19,8 @@ import {
   offerMode,
   normalizeConditionalAnswers,
   useCaseChoices,
+  supportedUseCaseChoices,
+  visibleUseCases,
   type Choice,
 } from "./rules";
 
@@ -36,7 +38,7 @@ export const questions = [
   {
     key: "useCases",
     label: "Qëllimet",
-    title: "Për çfarë do ta përdorësh Agjentin?",
+    title: "Çfarë dëshiron të bëjë agjenti?",
     description: "Mund të zgjedhësh disa mundësi.",
     options: useCaseChoices,
   },
@@ -188,10 +190,7 @@ export function activeQuestions(
       if (question.key === "productType")
         options = offerModeChoices;
       if (question.key === "useCases")
-        options = allowedUseCases(
-          answers.businessType,
-          conditional.offeringTypes,
-        );
+        options = visibleUseCases(answers.businessType, conditional.offeringTypes, conditional.useCases);
       if (question.key === "aiMode")
         options = allowedCapabilities(
           answers.businessType,
@@ -445,7 +444,7 @@ export function answerLabel(key: AnswerKey, value: string) {
     key === "productType"
       ? offeringChoices
       : key === "useCases"
-        ? useCaseChoices
+        ? supportedUseCaseChoices
         : key === "aiMode"
           ? capabilityChoices
           : key === "businessType" ? supportedBusinessCategories
