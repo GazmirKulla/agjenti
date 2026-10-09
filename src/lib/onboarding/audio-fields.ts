@@ -51,6 +51,7 @@ export const audioFields = [
 ] as const;
 export type AudioField = string;
 export type AudioReview = {
+  inputMode?: "audio" | "written";
   analysisIds: string[];
   confidence: Record<string, number>;
   confirmedFields: string[];
@@ -126,6 +127,9 @@ export function parseAudioReview(raw: unknown): AudioReview | undefined {
   }
   return {
     analysisIds: ids,
+    ...(data.inputMode === "audio" || data.inputMode === "written"
+      ? { inputMode: data.inputMode }
+      : {}),
     confidence,
     corrections,
     confirmedFields: Array.isArray(data.confirmedFields)

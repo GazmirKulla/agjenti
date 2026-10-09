@@ -78,7 +78,9 @@ export async function handleOnboardingAnalysis(request: Request, source: "audio"
           await storeTranscript(input.text);
           return analyzeText(input.text, current);
         })();
-    const answers = mergeExtraction(current, result.extraction, attemptId!);
+    const answers = mergeExtraction(current, result.extraction, attemptId!, {
+      replaceWrittenOfferings: source === "text",
+    });
     const saved = await db.rpc("finish_onboarding_audio", {
       p_user_id: user.id,
       p_id: attemptId,

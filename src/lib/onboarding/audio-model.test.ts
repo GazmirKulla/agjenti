@@ -44,6 +44,25 @@ const base = () =>
     id,
   );
 describe("audio onboarding evidence and merge", () => {
+  it("replaces written offering prose with individually extracted products and services", () => {
+    const current = correctField(base(), "offeringsSummary", ["Shes shampo dhe ofroj prerje flokësh."]);
+    const next = mergeExtraction(current, patch({ offeringsSummary: ["Shampo", "Prerje flokësh"] }), secondId, { replaceWrittenOfferings: true });
+    expect(next.details?.offeringsSummary).toEqual(["Shampo", "Prerje flokësh"]);
+    expect(next.audioReview?.corrections).not.toHaveProperty("offeringsSummary");
+    expect(next.audioReview?.confidence.offeringsSummary).toBe(0.95);
+    expect(parseAnswers(next).audioReview?.inputMode).toBe("written");
+    expect(mergeExtraction(current, patch({}), secondId, { replaceWrittenOfferings: true }).details?.offeringsSummary)
+      .toEqual(["Shes shampo dhe ofroj prerje flokësh."]);
+  });
+  it("lists one or multiple offerings from audio and deduplicates supplemental mentions", () => {
+    const first = mergeExtraction(base(), patch({ offeringsSummary: ["Prerje flokësh"] }), id);
+    expect(first.details?.offeringsSummary).toEqual(["Prerje flokësh"]);
+    expect(parseAnswers(first).audioReview?.inputMode).toBe("audio");
+    const next = mergeExtraction(first, patch({ offeringsSummary: ["Prerje flokësh", "Shampo"] }), secondId);
+    expect(next.details?.offeringsSummary).toEqual(["Prerje flokësh", "Shampo"]);
+    const corrected = correctField(next, "offeringsSummary", ["Vetëm shampo"]);
+    expect(mergeExtraction(corrected, patch({ offeringsSummary: ["Prerje"] }), id).details?.offeringsSummary).toEqual(["Vetëm shampo"]);
+  });
   it("preserves guided answers through extraction, supplemental audio, manual correction and completion", () => {
     const process = "Klienti zgjedh një orar. " + "Konfirmimin e bën stafi. ".repeat(5);
     const extraction = validateExtraction(patch({

@@ -54,6 +54,7 @@ export function OnboardingExperience({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [step2Back, setStep2Back] = useState<"basics" | "review">("basics");
   const controller = useRef<AbortController | null>(null);
   const generation = useRef(0);
   useEffect(
@@ -74,6 +75,12 @@ export function OnboardingExperience({
     controller.current?.abort();
     setBusy(false);
     setError("");
+    if (
+      (next === "audio" || next === "written") &&
+      (mode === "basics" || mode === "review")
+    ) {
+      setStep2Back(mode === "review" ? "review" : "basics");
+    }
     setAnswers({ ...current, guidedOnboardingMode: next });
     setMode(next);
   }
@@ -204,6 +211,7 @@ export function OnboardingExperience({
       />
     );
   const review = answers.audioReview;
+  const reviewInputMode = review?.inputMode === "audio" ? "audio" : "written";
   const pending = review ? pendingConfirmations(review) : [];
   const missing = clarifications(answers, enabledSteps);
   const details = answers.details ?? emptyDetails;
@@ -335,7 +343,7 @@ export function OnboardingExperience({
                   </label>
                 ))}
                 <div className="onboarding-actions">
-                  <button type="button" className="onboarding-back" onClick={() => navigate("basics")}>Kthehu</button>
+                  <button type="button" className="onboarding-back" onClick={() => navigate(step2Back)}>Kthehu</button>
                   <button type="submit" className="onboarding-next">{busy ? "Duke analizuar përgjigjet…" : "Vazhdo"}</button>
                 </div>
               </fieldset>
@@ -343,7 +351,7 @@ export function OnboardingExperience({
           ) : mode === "audio" ? (
             <>
               <AudioRecorder busy={busy} onAnalyze={analyze} questions={audioGuide(answers, enabledSteps)} analyzeLabel="Vazhdo"
-                onBack={() => navigate(review ? "review" : "basics")} />
+                onBack={() => navigate(step2Back)} />
               {review && (
                 <p className="onboarding-note">
                   Regjistrimi tjetër plotëson profilin ekzistues. Korrigjimet e
@@ -383,9 +391,11 @@ export function OnboardingExperience({
                   ))}
                   <button
                     className="onboarding-back"
-                    onClick={() => navigate("audio")}
+                    onClick={() => navigate(reviewInputMode)}
                   >
-                    {review ? "Regjistro audio tjetër" : "Përgjigju me audio"}
+                    {review?.inputMode === "audio" ? "Regjistro audio tjetër"
+                      : review?.inputMode === "written" ? "Plotëso përgjigjet me shkrim"
+                      : "Plotëso përgjigjet"}
                   </button>
                 </section>
               )}
@@ -524,7 +534,36 @@ export function OnboardingExperience({
                     <h2>Oferta dhe klientët</h2>
                     <p>Çfarë ofron dhe si do t’i ndihmojë agjenti klientët.</p>
                   </div>
-                  {Object.entries(detailFields).map(([field, label]) => (
+                  <section className="onboarding-offerings" aria-labelledby="onboarding-offerings-title">
+                    <div className="onboarding-offerings-heading">
+                      <h3 id="onboarding-offerings-title">Produktet dhe shërbimet e përmendura</h3>
+                      {pending.includes("offeringsSummary") && (
+                        <span className="onboarding-confidence is-low">Kërkon konfirmim</span>
+                      )}
+                    </div>
+                    {details.offeringsSummary?.some((item) => item.trim()) ? (
+                      <ul>
+                        {details.offeringsSummary.filter((item) => item.trim()).map((item, index) => (
+                          <li key={`${index}-${item}`}><span aria-hidden="true">{index + 1}</span>{item}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="onboarding-offerings-empty">Nuk janë përmendur produkte ose shërbime. Mund t’i shtosh më poshtë.</p>
+                    )}
+                    <details className="onboarding-review-field">
+                      <summary><strong>Ndrysho listën</strong></summary>
+                      <label className="onboarding-detail-input" htmlFor="audio-offeringsSummary">
+                        Shkruaj një produkt ose shërbim për çdo rresht.
+                        <textarea id="audio-offeringsSummary" rows={4} maxLength={2000}
+                          value={details.offeringsSummary?.join("\n") ?? ""}
+                          onChange={(event) => change("offeringsSummary", event.target.value.split("\n"))} />
+                      </label>
+                    </details>
+                    {pending.includes("offeringsSummary") && (
+                      <button type="button" className="onboarding-back" onClick={() => confirm("offeringsSummary")}>Konfirmo listën</button>
+                    )}
+                  </section>
+                  {Object.entries(detailFields).filter(([field]) => field !== "offeringsSummary").map(([field, label]) => (
                     <details className="onboarding-review-field" key={field}>
                       <summary>
                         <span>
@@ -652,7 +691,7 @@ export function OnboardingExperience({
                       <span>I kontrollova të dhënat dhe dua ta krijoj hapësirën me këtë profil.</span>
                     </label>
                     <div className="onboarding-actions">
-                      <button type="button" className="onboarding-back" onClick={() => navigate(review ? "audio" : "written")}>Kthehu</button>
+                      <button type="button" className="onboarding-back" onClick={() => navigate(reviewInputMode)}>Kthehu</button>
                       <button
                         className="onboarding-next"
                         type="submit"

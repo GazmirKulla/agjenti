@@ -97,6 +97,22 @@ function textRequest(text = "Shes vetëm një produkt fizik.", origin = "http://
 }
 
 describe("written onboarding analysis", () => {
+  it("saves a separated offerings list instead of the original written paragraph", async () => {
+    const analysis = await mocks.analyzeText();
+    mocks.analyzeText.mockResolvedValue({
+      ...analysis,
+      extraction: { ...analysis.extraction, offeringsSummary: { value: ["Shampo", "Prerje flokësh"], confidence: 0.95, evidence: "shampo dhe prerje" } },
+    });
+    const response = await textPOST(new Request("http://localhost:3003/api/onboarding/text", {
+      method: "POST",
+      headers: { origin: "http://localhost:3003", "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "Ofroj shampo dhe prerje flokësh.", answers: { ...emptyAnswers, details: { offeringsSummary: ["Ofroj shampo dhe prerje flokësh."] } } }),
+    }));
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.answers.details.offeringsSummary).toEqual(["Shampo", "Prerje flokësh"]);
+    expect(mocks.rpc).toHaveBeenCalledWith("finish_onboarding_audio", expect.objectContaining({ p_answers: result.answers }));
+  });
   it("extracts categorical fields from text and saves the prefilled review", async () => {
     const response = await textPOST(textRequest());
     expect(response.status).toBe(200);
@@ -107,6 +123,7 @@ describe("written onboarding analysis", () => {
       productCount: "1",
       offeringTypes: ["standard"],
       guidedOnboardingMode: "review",
+      audioReview: { inputMode: "written" },
       details: { sellsProducts: true },
     });
     expect(mocks.analyzeText).toHaveBeenCalledWith("Shes vetëm një produkt fizik.", expect.objectContaining({ name: "Dyqani" }));

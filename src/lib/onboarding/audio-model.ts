@@ -162,9 +162,11 @@ export function mergeExtraction(
   current: Answers,
   extraction: Extraction,
   analysisId: string,
+  options: { replaceWrittenOfferings?: boolean } = {},
 ): Answers {
   const previous = current.audioReview;
   const review: AudioReview = {
+    inputMode: options.replaceWrittenOfferings ? "written" : "audio",
     analysisIds: [...(previous?.analysisIds ?? []), analysisId].slice(-12),
     confidence: { ...previous?.confidence },
     confirmedFields: [...(previous?.confirmedFields ?? [])],
@@ -185,13 +187,17 @@ export function mergeExtraction(
   };
   for (const key of audioFields) {
     const field = extraction[key];
+    const replaceOfferings = key === "offeringsSummary" && options.replaceWrittenOfferings;
     if (
       !field ||
       !hasValue(field.value) ||
-      Object.hasOwn(review.corrections, key)
+      (Object.hasOwn(review.corrections, key) && !replaceOfferings)
     )
       continue;
-    const old = fieldValue(next, key);
+    // Written offering answers are source prose; replace them with the extracted
+    // items instead of keeping the whole paragraph as a manually corrected item.
+    if (replaceOfferings) delete review.corrections[key];
+    const old = replaceOfferings ? null : fieldValue(next, key);
     const value = Array.isArray(field.value)
       ? [...new Set([...(Array.isArray(old) ? old : []), ...field.value])]
       : narrativeFields.has(key) &&
