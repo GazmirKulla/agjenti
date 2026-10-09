@@ -34,6 +34,15 @@ export const completeAnswers: Answers = {
   businessProfile: null,
 };
 describe("onboarding answers", () => {
+  it("accepts a single product and preserves the existing quantity range", () => {
+    expect(parseAnswers({ ...completeAnswers, productCount: "1" }, true).productCount).toBe("1");
+    expect(parseAnswers({ ...completeAnswers, productCount: "1-10" }, true).productCount).toBe("1-10");
+    const serviceQuestion = activeQuestions(["productCount"], {
+      ...completeAnswers,
+      offeringTypes: ["services"],
+    })[0];
+    expect(serviceQuestion.options.find(([id]) => id === "1")?.[1]).toBe("Një shërbim");
+  });
   it("allows incomplete drafts but rejects incomplete completion", () => {
     expect(parseAnswers(emptyAnswers)).toMatchObject({
       ...emptyAnswers,

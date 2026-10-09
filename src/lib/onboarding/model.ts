@@ -46,6 +46,7 @@ export const questions = [
     optional: true,
     options: [
       ["0", "Sapo po filloj", "products"],
+      ["1", "Një produkt", "products"],
       ["1-10", "1–10", "products"],
       ["11-50", "11–50", "products"],
       ["51-200", "51–200", "products"],
@@ -194,6 +195,12 @@ export function activeQuestions(
           answers.businessType,
           answers.offeringTypes,
           conditional.useCases,
+        );
+      if (question.key === "productCount" &&
+          conditional.offeringTypes.length === 1 &&
+          conditional.offeringTypes[0] === "services")
+        options = options.map(([id, label, icon]) =>
+          [id, id === "1" ? "Një shërbim" : label, icon] as Choice,
         );
       const title =
         question.key === "productCount" &&
