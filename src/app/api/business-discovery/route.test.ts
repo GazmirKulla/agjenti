@@ -32,6 +32,19 @@ beforeEach(() => {
   });
 });
 describe("discovery API boundary", () => {
+  it("does not schedule knowledge routing before a discovery draft exists", async () => {
+    const faq = parseEntities([{ target: "knowledge", facts: [{ field: "title", value: "Dërgesa", evidence: "Dërgesa" }, { field: "body", value: "Dy ditë", evidence: "Dy ditë" }] }], "website", "https://shop.test", "Dërgesa Dy ditë")[0];
+    intelligence = { data: { ...emptyDraft(), entities: [faq] }, revision: 6 };
+    const existingState = state;
+    // A business may have prior intelligence without having started discovery.
+    state = null!;
+    const response = await GET(readRequest());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ available: true, revision: 0, intelligenceRevision: 6, pendingKnowledgeCount: 0, draft: { entities: [faq] } });
+    expect(m.rpc).not.toHaveBeenCalled();
+    state = existingState;
+    expect(await (await GET(readRequest())).json()).toMatchObject({ pendingKnowledgeCount: 1 });
+  });
   it("shows only metadata captured for the current connection generation and strips provider credentials", async () => {
     connection = { id: "connection", discovery_generation: "current", username: "studio" };
     jobs = [{ source: "instagram", input: { connectionId: "connection", generation: "old" }, checkpoint: { profile: { name: "Old brand" } } }, { source: "instagram", input: { connectionId: "connection", generation: "current" }, checkpoint: { profile: { name: "Studio", website: "studio.test", access_token: "SECRET" } } }];
