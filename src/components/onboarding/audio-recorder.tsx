@@ -9,12 +9,14 @@ export function AudioRecorder({
   questions,
   onBack,
   analyzeLabel = "Analizo biznesin →",
+  purpose = "onboarding",
 }: {
   busy: boolean;
   onAnalyze: (file: File) => Promise<void>;
   questions?: AudioGuideQuestion[];
   onBack?: () => void;
   analyzeLabel?: string;
+  purpose?: "onboarding" | "request";
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -190,17 +192,17 @@ export function AudioRecorder({
             {recording
               ? "Duke regjistruar…"
               : busy || analyzing
-                ? "Po e kthejmë audion në tekst dhe po përgatisim profilin…"
+                ? purpose === "request" ? "Po e kthejmë audion në tekst…" : "Po e kthejmë audion në tekst dhe po përgatisim profilin…"
                 : file ? "Dëgjoje ose regjistro përsëri para se të vazhdosh."
                 : questions ? "Fol me fjalët e tua, deri në 2 minuta."
-                : "Fol natyrshëm. Agjenti do ta përgatisë hapësirën për ty."}
+                : purpose === "request" ? "Thuaj çfarë dëshiron të ndryshosh, deri në 2 minuta." : "Fol natyrshëm. Agjenti do ta përgatisë hapësirën për ty."}
           </p>
           <p className="onboarding-audio-time">
             {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} /
             2:00
           </p>
         </div>
-        {!questions && <p>Mund të përmendësh çfarë ofron, si të kontaktojnë klientët dhe çfarë dëshiron të bëjë Agjenti.</p>}
+        {!questions && purpose === "onboarding" && <p>Mund të përmendësh çfarë ofron, si të kontaktojnë klientët dhe çfarë dëshiron të bëjë Agjenti.</p>}
         {url && <audio controls src={url} aria-label="Dëgjo regjistrimin tënd" />}
         <div className="onboarding-audio-buttons">
           {recording ? (

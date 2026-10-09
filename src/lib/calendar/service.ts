@@ -114,8 +114,21 @@ export async function availableSlots(
   businessId: string,
   serviceId: string,
   date: string,
+  excludeBookingId?: string,
 ) {
   const db = createServiceSupabase();
+  let excludeGoogleEvent: string | undefined;
+  if (excludeBookingId) {
+    const existing = await db
+      .from("bookings")
+      .select("google_event_id")
+      .eq("business_id", businessId)
+      .eq("id", excludeBookingId)
+      .single();
+    if (existing.error || !existing.data)
+      throw new Error("Rezervimi nuk u gjet.");
+    excludeGoogleEvent = existing.data.google_event_id ?? undefined;
+  }
   const [cfg, service] = await Promise.all([
     db
       .from("business_calendar_settings")
@@ -143,15 +156,17 @@ export async function availableSlots(
     "00:00",
     settings.timezone,
   );
+  let bookingQuery = db
+    .from("bookings")
+    .select("starts_at,blocked_until")
+    .eq("business_id", businessId)
+    .in("status", ["pending", "confirmed"])
+    .lt("starts_at", end)
+    .gt("blocked_until", start);
+  if (excludeBookingId) bookingQuery = bookingQuery.neq("id", excludeBookingId);
   const [bookings, busy] = await Promise.all([
-    db
-      .from("bookings")
-      .select("starts_at,blocked_until")
-      .eq("business_id", businessId)
-      .in("status", ["pending", "confirmed"])
-      .lt("starts_at", end)
-      .gt("blocked_until", start),
-    googleBusy(businessId, start, end),
+    bookingQuery,
+    googleBusy(businessId, start, end, excludeGoogleEvent),
   ]);
   if (bookings.error) throw new Error("Orari nuk u verifikua.");
   return slotCandidates(date, service.data, settings).filter(

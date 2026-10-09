@@ -6,6 +6,7 @@ import { isDashboardRoute } from "./navigation";
 import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
+import { BusinessAssistant } from "@/components/business-assistant/panel";
 
 export function DashboardShell({
   children,
@@ -32,6 +33,7 @@ export function DashboardShell({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -300,6 +302,7 @@ export function DashboardShell({
             )}
           </div>
           <div className="topbar-actions">
+            {!admin && slug && <button type="button" className="assistant-desktop-trigger" onClick={() => setAssistantOpen(true)}><Icon name="spark" size={18}/> Asistenti</button>}
             <Link
               href={`${base}/account`}
               className="topbar-profile account-profile-link"
@@ -320,7 +323,7 @@ export function DashboardShell({
         <main className="dashboard-content">{children}</main>
       </div>
       <nav
-        className="mobile-bottom-nav"
+        className={`mobile-bottom-nav${!admin && slug ? " mobile-bottom-nav-with-assistant" : ""}`}
         aria-label={admin ? "Navigimi kryesor i adminit" : "Navigimi kryesor"}
       >
         {primaryItems.map((item) => (
@@ -341,7 +344,9 @@ export function DashboardShell({
             <span>{item.label}</span>
           </Link>
         ))}
+        {!admin && slug && <button type="button" className="assistant-mobile-trigger" onClick={() => { setOpen(false); setSearchOpen(false); setAssistantOpen(true); }} aria-label="Hap asistentin e biznesit" aria-haspopup="dialog"><span><Icon name="spark" size={24}/></span><small>Asistenti</small></button>}
       </nav>
+      {!admin && slug && <BusinessAssistant key={slug} modules={navigationItems.map(item => item.id)} slug={slug} open={assistantOpen} onClose={() => setAssistantOpen(false)} />}
     </div>
   );
 }
