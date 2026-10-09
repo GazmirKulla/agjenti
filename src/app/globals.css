@@ -2957,6 +2957,13 @@ html[data-resolved="dark"] .chat-message small {
   max-width: 900px;
   margin: 0 auto;
 }
+.dashboard-content .account-panel {
+  margin: 0;
+  color: var(--ink);
+}
+.dashboard-content .account-panel .account-page-title {
+  margin-top: 0;
+}
 .account-page-header,
 .account-user-summary,
 .account-signout {
@@ -3097,7 +3104,8 @@ html[data-resolved="dark"] .account-details div {
   }
 }
 @media (max-width: 900px) {
-  .account-page .theme-switch button span {
+  .account-page .theme-switch button span,
+  .account-panel .theme-switch button span {
     position: static;
     width: auto;
     height: auto;

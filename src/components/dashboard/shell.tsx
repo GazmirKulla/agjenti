@@ -301,8 +301,9 @@ export function DashboardShell({
           </div>
           <div className="topbar-actions">
             <Link
-              href="/account"
+              href={`${base}/account`}
               className="topbar-profile account-profile-link"
+              aria-current={isDashboardRoute(pathname, base, "account") ? "page" : undefined}
               aria-label="Hap profilin dhe cilësimet e llogarisë"
               title="Profili dhe cilësimet"
             >
