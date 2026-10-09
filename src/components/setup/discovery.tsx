@@ -97,11 +97,11 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
   }
   return <section className="discovery discovery-context" aria-labelledby="discovery-title">
     <header className="discovery-header">
-      <p className="setup-eyebrow">ONBOARDING · NJOHIM BIZNESIN TËND</p>
+      <p className="setup-eyebrow">BURIME · NJOHIM BIZNESIN TËND</p>
       <h1 id="discovery-title">{ready ? "Biznesi yt, gati për hapin tjetër." : "Lidh burimin. Ne kujdesemi për përgatitjen."}</h1>
-      <p>Nga postimet, fotot dhe website-i kuptojmë llojin e biznesit dhe ofertën. Rregullat e onboarding-ut lidhin njohuritë, rrjedhën e klientit dhe udhëzimet e Agjentit. Informacioni ruhet automatikisht.</p>
+      <p>Nga postimet, fotot dhe website-i kuptojmë llojin e biznesit dhe ofertën. Njohuritë, rrjedha e klientit dhe udhëzimet e Agjentit përditësohen nga burimet. Informacioni ruhet automatikisht.</p>
     </header>
-    <ol className="discovery-context-steps" aria-label="Hapat e onboarding-ut">
+    <ol className="discovery-context-steps" aria-label="Hapat e analizës së burimeve">
       {["Lidh burimin", "Përgatisim hapësirën", "Vazhdo në panel"].map((text, index) => <li key={text} className={ready || analyzing && index === 0 ? "is-done" : ""} aria-current={(ready ? 2 : analyzing ? 1 : 0) === index ? "step" : undefined}><span>{ready || analyzing && index === 0 ? "✓" : `0${index + 1}`}</span>{text}</li>)}
     </ol>
     {!state && <p className="discovery-loading" role="status"><span className="discovery-spinner" aria-hidden="true" /> Duke ngarkuar…</p>}

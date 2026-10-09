@@ -69,7 +69,7 @@ export async function GET(request: Request) {
 			}
 		} catch { console.error("[discovery] analysis could not be queued"); }
 		return NextResponse.redirect(
-			new URL(`/b/${business?.slug ?? "zana"}/${discovery ? "setup" : "instagram"}?${connectedQuery}`, url.origin),
+			new URL(`/b/${business?.slug ?? "zana"}/${discovery ? "sources" : "instagram"}?${connectedQuery}`, url.origin),
 		);
 	} catch (error) {
 		console.error("[instagram oauth]", error);

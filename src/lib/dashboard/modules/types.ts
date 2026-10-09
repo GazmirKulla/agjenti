@@ -13,6 +13,7 @@ export const MODULE_IDS = [
   "agents",
   "knowledge",
   "workflows",
+  "sources",
   "instagram",
   "settings",
 ] as const;

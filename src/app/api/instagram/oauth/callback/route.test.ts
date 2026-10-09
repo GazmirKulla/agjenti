@@ -17,9 +17,9 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 describe("Instagram discovery handoff", () => {
-  it("queues analysis only after the connection is stored, then redirects to setup", async () => {
+  it("queues analysis only after the connection is stored, then redirects to sources", async () => {
     const response = await GET(request());
-    expect(response.headers.get("location")).toBe("http://localhost/b/studio/setup?connected=1");
+    expect(response.headers.get("location")).toBe("http://localhost/b/studio/sources?connected=1");
     expect(m.enqueue).toHaveBeenCalledWith("business", "verified-user", "instagram");
     expect(m.after).toHaveBeenCalled();
   });

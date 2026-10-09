@@ -1,7 +1,7 @@
 import { emptyDraft, equivalent, normalizeDraftCurrencies, fields, targets, value, withMissing, type Draft, type Entity, type Fact, type Target } from "@/lib/business-intelligence/model";
 import { isModuleId, normalizeEnabledModules } from "@/lib/dashboard/modules/dependencies";
 import { generateDashboardProfile, rebuildProfileFromModules } from "@/lib/dashboard/profile/generate";
-import type { DashboardProfile, DashboardSignals, ModuleId } from "@/lib/dashboard/modules/types";
+import { MODULE_IDS, type DashboardProfile, type DashboardSignals, type ModuleId } from "@/lib/dashboard/modules/types";
 
 export const reviewSections: { target: Target; label: string; description: string }[] = [
   { target: "profile", label: "Profili i biznesit", description: "Emri dhe informacioni bazë i biznesit." },
@@ -18,7 +18,7 @@ export function editReviewPreferences(draft: Draft, input: unknown): Draft {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("invalid_request");
   const raw = input as Record<string, unknown>;
   if (!Array.isArray(raw.excludedTargets) || raw.excludedTargets.some((v) => typeof v !== "string" || !(targets as readonly string[]).includes(v) || v === "profile") || !Array.isArray(raw.excludedEntityIds) || raw.excludedEntityIds.length > 60 || raw.excludedEntityIds.some((id) => typeof id !== "string" || !draft.entities.some((e) => e.id === id))) throw new Error("invalid_request");
-  if (raw.enabledModules !== undefined && (!Array.isArray(raw.enabledModules) || raw.enabledModules.length > 16 || raw.enabledModules.some((id) => typeof id !== "string" || !isModuleId(id)))) throw new Error("invalid_request");
+  if (raw.enabledModules !== undefined && (!Array.isArray(raw.enabledModules) || raw.enabledModules.length > MODULE_IDS.length || raw.enabledModules.some((id) => typeof id !== "string" || !isModuleId(id)))) throw new Error("invalid_request");
   const excludedTargets = [...new Set(raw.excludedTargets as Target[])];
   const disabledModules = excludedTargets.map((target) => sectionModules[target]);
   return { ...draft, reviewPreferences: { excludedTargets, excludedEntityIds: [...new Set(raw.excludedEntityIds as string[])], ...(raw.enabledModules === undefined ? {} : { enabledModules: normalizeEnabledModules((raw.enabledModules as ModuleId[]).filter((id) => !disabledModules.includes(id))) }) } };

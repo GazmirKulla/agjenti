@@ -110,6 +110,14 @@ export const moduleRegistry: Record<ModuleId, ModuleDefinition> = {
     icon: "workflows",
     description: "Hapat e bisedës dhe porosive",
   },
+  sources: {
+    id: "sources",
+    path: "sources",
+    label: "Burime",
+    icon: "spark",
+    core: true,
+    description: "Instagram, website dhe analiza e biznesit",
+  },
   instagram: {
     id: "instagram",
     path: "instagram",
@@ -144,6 +152,7 @@ export const navigationOrder: ModuleId[] = [
   "agents",
   "knowledge",
   "workflows",
+  "sources",
   "instagram",
   "settings",
 ];
@@ -163,6 +172,7 @@ export const moduleDependencies: Record<ModuleId, ModuleDependencyRule> = {
   agents: { independent: true },
   knowledge: { independent: true },
   workflows: { independent: true },
+  sources: { independent: true },
   instagram: { independent: true },
   settings: { independent: true },
 };

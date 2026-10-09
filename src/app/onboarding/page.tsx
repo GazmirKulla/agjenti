@@ -12,7 +12,7 @@ import { BasicWorkspaceForm } from "@/components/onboarding/basic-workspace";
 import { signOut } from "@/lib/auth/actions";
 import "./onboarding.css";
 export const metadata = { title: "Konfiguro biznesin | Agjenti.app" };
-export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ manual?: string }> }) {
+export default async function OnboardingPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login?mode=signup");
   const access = await listMemberships(user.id);
@@ -49,8 +49,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
       </main>
     );
   const settings = await getAppSettings();
-  const query = await searchParams;
-  if (!settings.onboarding_enabled || query.manual !== "1")
+  if (!settings.onboarding_enabled)
     return (
       <main className="onboarding-page">
         <div className="onboarding-shell">
@@ -85,17 +84,10 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
               <span className="onboarding-eyebrow">NJË FILLIM I THJESHTË</span>
               <h1>Krijo hapësirën e biznesit</h1>
               <p>
-                {settings.onboarding_enabled ? "Vendos emrin, pastaj lidh Instagram-in dhe website-in nëse ke. Do të përgatisim konfigurimin nga përmbajtja e biznesit tënd." : "Vendos emrin për të krijuar hapësirën. Konfigurimin mund ta plotësosh nga paneli."}
+                Vendos emrin për të krijuar hapësirën. Konfigurimin mund ta plotësosh nga paneli.
               </p>
             </div>
             <BasicWorkspaceForm initialName={typeof data?.answers?.name === "string" ? data.answers.name : ""} />
-            {settings.onboarding_enabled && (
-              <div className="onboarding-save">
-                <Link className="onboarding-skip" href="/onboarding?manual=1">
-                  Preferoj ta përshkruaj biznesin manualisht ose me audio
-                </Link>
-              </div>
-            )}
           </section>
         </div>
       </main>

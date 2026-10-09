@@ -45,7 +45,7 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
     }
     const answers = settings.onboarding_enabled && !basic
       ? parsedAnswers
-      : { ...emptyAnswers, name: parsedAnswers.name, ...(basic ? { onboardingMode: "sources" } : {}) };
+      : { ...emptyAnswers, name: parsedAnswers.name };
     if (complete && answers.name.length < 2)
       return { error: "Vendos emrin e biznesit (të paktën 2 karaktere)." };
     const access = await listMemberships(user.id);
@@ -96,7 +96,7 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
       } catch (error) {
         console.error("[dashboard profile]", error);
       }
-      return { destination: settings.onboarding_enabled ? `/b/${data}/setup` : `/b/${data}?welcome=1` };
+      return { destination: settings.onboarding_enabled && !basic ? `/b/${data}` : `/b/${data}?welcome=1` };
     }
     return { saved: true };
   } catch {

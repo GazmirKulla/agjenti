@@ -62,6 +62,7 @@ function inferModules(signals: DashboardSignals): ModuleId[] {
     "dashboard",
     "inbox",
     "agents",
+    "sources",
     "instagram",
     "settings",
     "customers",

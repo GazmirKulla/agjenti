@@ -18,6 +18,7 @@ describe("generateDashboardProfile", () => {
     expect(profile.enabledModules).toContain("bookings");
     expect(profile.enabledModules).toContain("calendar");
     expect(profile.enabledModules).toContain("staff");
+    expect(profile.enabledModules).toContain("sources");
     expect(profile.enabledModules).not.toContain("products");
     expect(profile.enabledModules).not.toContain("orders");
     expect(profile.primaryActions[0]?.id).toBe("new_booking");
@@ -127,6 +128,8 @@ describe("parseDashboardProfile", () => {
       enabledModules: ["dashboard", "inbox", "services", "bookings", "agents", "instagram", "settings"],
     });
     expect(parsed?.enabledModules).toContain("bookings");
+    expect(parsed?.enabledModules).toContain("sources");
     expect(parsed?.navigationItems).toContain("services");
+    expect(parsed?.navigationItems).toContain("sources");
   });
 });
