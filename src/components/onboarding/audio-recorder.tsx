@@ -2,19 +2,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_AUDIO_BYTES } from "@/lib/onboarding/audio-upload";
 import type { AudioGuideQuestion } from "@/lib/onboarding/audio-guide";
-import { scheduleAudioAnalysis } from "@/lib/onboarding/auto-analysis";
 
 export function AudioRecorder({
   busy,
   onAnalyze,
   questions,
-  autoAnalyze = false,
+  onBack,
   analyzeLabel = "Analizo biznesin →",
 }: {
   busy: boolean;
   onAnalyze: (file: File) => Promise<void>;
   questions?: AudioGuideQuestion[];
-  autoAnalyze?: boolean;
+  onBack?: () => void;
   analyzeLabel?: string;
 }) {
   const [file, setFile] = useState<File | null>(null);
@@ -23,11 +22,7 @@ export function AudioRecorder({
   const [requesting, setRequesting] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState("");
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [listening, setListening] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const automatic = useRef<ReturnType<typeof scheduleAudioAnalysis> | null>(null);
-  const attemptedFile = useRef<File | null>(null);
   const analysisInFlight = useRef(false);
   const analyzeCallback = useRef(onAnalyze);
   useEffect(() => { analyzeCallback.current = onAnalyze; }, [onAnalyze]);
@@ -39,7 +34,6 @@ export function AudioRecorder({
     mounted.current = true;
     return () => {
       mounted.current = false;
-      automatic.current?.cancel();
       if (timer.current) clearInterval(timer.current);
       if (recorder.current?.state === "recording") recorder.current.stop();
       stream.current?.getTracks().forEach((track) => track.stop());
@@ -56,10 +50,7 @@ export function AudioRecorder({
   }, [file]);
   const runAnalysis = useCallback(async (audio: File) => {
     if (!mounted.current || analysisInFlight.current) return;
-    automatic.current?.cancel();
-    attemptedFile.current = audio;
     analysisInFlight.current = true;
-    setCountdown(null);
     setAnalyzing(true);
     setError("");
     try {
@@ -71,18 +62,6 @@ export function AudioRecorder({
       if (mounted.current) setAnalyzing(false);
     }
   }, []);
-  useEffect(() => {
-    if (!autoAnalyze || !file || recording || requesting || busy || analyzing || listening || attemptedFile.current === file) {
-      setCountdown(null);
-      return;
-    }
-    const scheduled = scheduleAudioAnalysis(() => { void runAnalysis(file); }, setCountdown);
-    automatic.current = scheduled;
-    return () => {
-      scheduled.cancel();
-      if (automatic.current === scheduled) automatic.current = null;
-    };
-  }, [autoAnalyze, file, recording, requesting, busy, analyzing, listening, runAnalysis]);
   function stop() {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
@@ -92,9 +71,6 @@ export function AudioRecorder({
   }
   async function start() {
     if (busy || analysisInFlight.current || requesting || recording) return;
-    automatic.current?.cancel();
-    setCountdown(null);
-    setListening(false);
     setError("");
     setRequesting(true);
     setFile(null);
@@ -178,10 +154,10 @@ export function AudioRecorder({
     }
   }
   return (
-    <div className="onboarding-audio-box">
+    <div className="onboarding-audio-layout">
       {questions && <section className="onboarding-audio-guide" aria-labelledby="audio-guide-title">
-        <h2 id="audio-guide-title">Ja çfarë mund të na tregosh</h2>
-        <p>Përgjigju në një audio të vetme, deri në 2 minuta. Kapërce çfarë nuk vlen për biznesin tënd.</p>
+        <h2 id="audio-guide-title">Pyetjet për biznesin tënd</h2>
+        <p>Përgjigju në një audio. Kapërce çfarë nuk vlen për biznesin tënd.</p>
         <ol>
           {questions.map((question) => (
             <li key={question.id}>
@@ -191,68 +167,79 @@ export function AudioRecorder({
           ))}
         </ol>
       </section>}
-      <div
-        className={`onboarding-mic ${recording ? "is-recording" : ""}`}
-        aria-hidden="true"
-      >
-        <svg
-          width="36"
-          height="36"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
+      <div className={`onboarding-audio-box ${questions ? "is-guided" : ""}`}>
+        <div
+          className={`onboarding-mic ${recording ? "is-recording" : ""}`}
+          aria-hidden="true"
         >
-          <rect x="9" y="2" width="6" height="12" rx="3" />
-          <path d="M5 10v2a7 7 0 0014 0v-2M12 19v3M8 22h8" />
-        </svg>
-      </div>
-      <p role="status">
-        {recording
-          ? "Duke regjistruar…"
-          : busy || analyzing
-            ? "Po e kthejmë audion në tekst dhe po përgatisim profilin…"
-            : "Fol natyrshëm. Agjenti do ta përgatisë hapësirën për ty."}
-      </p>
-      <p className="onboarding-audio-time">
-        {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} /
-        2:00
-      </p>
-      {!questions && <p>Mund të përmendësh çfarë ofron, si të kontaktojnë klientët dhe çfarë dëshiron të bëjë Agjenti.</p>}
-      {url && <audio controls src={url} aria-label="Dëgjo regjistrimin tënd"
-        onPlay={() => { automatic.current?.cancel(); setCountdown(null); setListening(true); }}
-        onPause={() => setListening(false)} onEnded={() => setListening(false)} />}
-      {countdown !== null && <p role="status">Analiza nis automatikisht pas {countdown} sekondash.</p>}
-      <div className="onboarding-audio-buttons">
-        {recording ? (
-          <button type="button" className="onboarding-next" onClick={stop}>
-            ■ Përfundo regjistrimin
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={file ? "onboarding-back" : "onboarding-next"}
-            disabled={busy || analyzing || requesting}
-            onClick={() => void start()}
+          <svg
+            width="36"
+            height="36"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
           >
-            {requesting
-              ? "Duke hapur mikrofonin…"
-              : file
-                ? "Regjistro përsëri"
-                : "Fillo regjistrimin"}
-          </button>
-        )}
-        {file && !recording && (
-          <button
-            type="button"
-            className="onboarding-next"
-            disabled={busy || analyzing}
-            onClick={() => void runAnalysis(file)}
-          >
-            {busy || analyzing ? "Duke analizuar…" : analyzeLabel}
-          </button>
-        )}
+            <rect x="9" y="2" width="6" height="12" rx="3" />
+            <path d="M5 10v2a7 7 0 0014 0v-2M12 19v3M8 22h8" />
+          </svg>
+        </div>
+        <div className="onboarding-recording-status">
+          {questions && <h2>{file ? "Audioja është gati" : "Regjistro përgjigjet"}</h2>}
+          <p role="status">
+            {recording
+              ? "Duke regjistruar…"
+              : busy || analyzing
+                ? "Po e kthejmë audion në tekst dhe po përgatisim profilin…"
+                : file ? "Dëgjoje ose regjistro përsëri para se të vazhdosh."
+                : questions ? "Fol me fjalët e tua, deri në 2 minuta."
+                : "Fol natyrshëm. Agjenti do ta përgatisë hapësirën për ty."}
+          </p>
+          <p className="onboarding-audio-time">
+            {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} /
+            2:00
+          </p>
+        </div>
+        {!questions && <p>Mund të përmendësh çfarë ofron, si të kontaktojnë klientët dhe çfarë dëshiron të bëjë Agjenti.</p>}
+        {url && <audio controls src={url} aria-label="Dëgjo regjistrimin tënd" />}
+        <div className="onboarding-audio-buttons">
+          {recording ? (
+            <button type="button" className="onboarding-next" onClick={stop}>
+              ■ Përfundo regjistrimin
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={file ? "onboarding-back" : "onboarding-next"}
+              disabled={busy || analyzing || requesting}
+              onClick={() => void start()}
+            >
+              {requesting
+                ? "Duke hapur mikrofonin…"
+                : file
+                  ? "Regjistro përsëri"
+                  : "Fillo regjistrimin"}
+            </button>
+          )}
+          {!onBack && file && !recording && (
+            <button
+              type="button"
+              className="onboarding-next"
+              disabled={busy || analyzing}
+              onClick={() => void runAnalysis(file)}
+            >
+              {busy || analyzing ? "Duke analizuar…" : analyzeLabel}
+            </button>
+          )}
+        </div>
       </div>
+      {onBack && <div className="onboarding-actions onboarding-audio-navigation">
+        <button type="button" className="onboarding-back" disabled={busy || analyzing || requesting || recording} onClick={onBack}>Kthehu</button>
+        <button type="button" className="onboarding-next" disabled={!file || recording || requesting || busy || analyzing}
+          onClick={() => { if (file) void runAnalysis(file); }}>
+          {busy || analyzing ? "Duke analizuar…" : analyzeLabel}
+        </button>
+      </div>}
       {error && (
         <p className="onboarding-error" role="alert">
           {error}

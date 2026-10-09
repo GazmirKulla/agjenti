@@ -636,30 +636,51 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+.onboarding-audio-layout {
+  display: grid;
+  gap: 20px;
+}
 .onboarding-audio-guide {
-  width: 100%;
   text-align: left;
-  border-bottom: 1px solid #e7e1ee;
-  padding-bottom: 20px;
 }
 .onboarding-audio-guide > p {
-  margin-top: 6px;
+  margin-top: 4px;
+  color: #786c8d;
   font-size: 13px;
+  line-height: 1.6;
 }
 .onboarding-audio-guide ol {
-  list-style: decimal;
-  padding-left: 24px;
-  margin: 20px 0 0;
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
   display: grid;
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  counter-reset: guide-question;
 }
 .onboarding-audio-guide li {
-  padding-left: 6px;
+  position: relative;
+  padding: 16px 16px 16px 48px;
+  border: 1px solid #e7e1ee;
+  border-radius: 12px;
+  background: #fff;
   font-size: 14px;
   line-height: 1.5;
+  counter-increment: guide-question;
 }
-.onboarding-audio-guide li::marker {
+.onboarding-audio-guide li::before {
+  content: counter(guide-question);
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #eee7ff;
   color: #7541ff;
+  font-size: 12px;
   font-weight: 650;
 }
 .onboarding-audio-guide li strong {
@@ -667,9 +688,64 @@
 }
 .onboarding-audio-guide li span {
   display: block;
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 13px;
   color: #786c8d;
+}
+.onboarding-audio-box.is-guided {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  justify-items: stretch;
+  align-items: center;
+  text-align: left;
+  padding: 24px;
+  gap: 20px;
+}
+.is-guided .onboarding-mic {
+  width: 56px;
+  height: 56px;
+  margin: 8px;
+  box-shadow: 0 0 0 8px #eee7ff;
+}
+.onboarding-recording-status h2 {
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+.is-guided .onboarding-audio-time {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.is-guided .onboarding-audio-buttons {
+  margin-top: 0;
+  grid-column: 3;
+  grid-row: 1;
+}
+.is-guided audio {
+  grid-column: 1 / -1;
+  max-width: none;
+}
+.onboarding-audio-navigation {
+  padding-top: 0;
+}
+@media (max-width: 900px) {
+  .onboarding-audio-guide ol {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .onboarding-audio-box.is-guided {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 18px;
+    gap: 16px;
+  }
+  .is-guided .onboarding-audio-buttons {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .is-guided .onboarding-audio-buttons button {
+    width: 100%;
+  }
 }
 .onboarding-audio-time {
   font-variant-numeric: tabular-nums;
@@ -684,14 +760,34 @@
 .onboarding-input-modes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 4px 0 12px;
+  gap: 4px;
+  max-width: 420px;
+  padding: 4px;
+  border: 1px solid #e7e1ee;
+  border-radius: 12px;
+  background: #f6f3fb;
+  margin: 0 0 8px;
 }
 .onboarding-input-modes button {
   min-width: 0;
-  padding: 12px 10px;
+  padding: 11px 10px;
   font-size: 13px;
   line-height: 1.4;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #786c8d;
+  box-shadow: none;
+}
+.onboarding-input-modes button[aria-pressed="true"] {
+  border-color: #e7e1ee;
+  background: #fff;
+  color: #6533ee;
+  box-shadow: 0 2px 5px #24153708;
+}
+.onboarding-input-modes button:hover:not(:disabled) {
+  background: #fff;
+  color: #6533ee;
 }
 .onboarding-clarifications {
   border: 1px solid #e3d5fc;

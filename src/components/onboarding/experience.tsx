@@ -282,7 +282,7 @@ export function OnboardingExperience({
                 : review ? "Ja çfarë kuptuam për biznesin tënd" : "Kontrollo profilin e biznesit"}
             </h1>
             <p>
-              {mode === "basics" ? "Vendos emrin dhe zgjidh tipin e biznesit. Në hapin tjetër do të të udhëzojmë me pyetje që mund t’u përgjigjesh me audio."
+              {mode === "basics" ? "Vendos emrin dhe zgjidh kategorinë e biznesit."
                 : mode === "written" || mode === "audio"
                 ? "Përgjigju pyetjeve më poshtë, me zë ose me shkrim."
                 : "Kontrollo përmbledhjen. Hap çdo fushë për ta korrigjuar; informacionet që mungojnë mund t’i plotësosh me zë ose manualisht."}
@@ -326,25 +326,14 @@ export function OnboardingExperience({
             </form>
           ) : mode === "audio" ? (
             <>
-              <AudioRecorder busy={busy} onAnalyze={analyze} questions={audioGuide(answers, enabledSteps)} autoAnalyze analyzeLabel="Vazhdo" />
+              <AudioRecorder busy={busy} onAnalyze={analyze} questions={audioGuide(answers, enabledSteps)} analyzeLabel="Vazhdo"
+                onBack={() => navigate(review ? "review" : "basics")} />
               {review && (
                 <p className="onboarding-note">
                   Regjistrimi tjetër plotëson profilin ekzistues. Korrigjimet e
                   tua manuale ruhen.
                 </p>
               )}
-              <div className="onboarding-actions">
-                {!review && <button className="onboarding-back" disabled={busy}
-                  onClick={() => navigate("basics")}>Kthehu</button>}
-                {review && (
-                  <button
-                    className="onboarding-back"
-                    onClick={() => navigate("review")}
-                  >
-                    Kthehu
-                  </button>
-                )}
-              </div>
             </>
           ) : (
             <>
