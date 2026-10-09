@@ -577,14 +577,12 @@ export function OnboardingExperience({
                           {badge(field)}
                         </span>
                       </summary>
-                      <label
-                        className="onboarding-detail-input"
-                        htmlFor={`audio-${field}`}
-                      >
-                        {label}
+                      <div className="onboarding-detail-input">
+                        <span id={`audio-label-${field}`}>{label}</span>
                         {field === "businessCategory" ? (
                           <select
                             id={`audio-${field}`}
+                            aria-labelledby={`audio-label-${field}`}
                             value={details.businessCategory ?? ""}
                             onChange={(e) =>
                               change(field, e.target.value || null)
@@ -604,29 +602,26 @@ export function OnboardingExperience({
                             "hasVariants",
                             "isPersonalized",
                           ].includes(field) ? (
-                          <select
-                            id={`audio-${field}`}
-                            value={
-                              fieldValue(answers, field) == null
-                                ? ""
-                                : String(fieldValue(answers, field))
-                            }
-                            onChange={(e) =>
-                              change(
-                                field,
-                                e.target.value === ""
-                                  ? null
-                                  : e.target.value === "true",
-                              )
-                            }
-                          >
-                            <option value="">Nuk është përcaktuar</option>
-                            <option value="true">Po</option>
-                            <option value="false">Jo</option>
-                          </select>
+                          <div>
+                            <div id={`audio-${field}`} tabIndex={-1} className="onboarding-boolean-options"
+                              role="radiogroup" aria-labelledby={`audio-label-${field}`}>
+                              {[true, false].map((value) => (
+                                <label key={String(value)} className="onboarding-boolean-choice">
+                                  <input type="radio" name={`boolean-${field}`} value={String(value)}
+                                    checked={fieldValue(answers, field) === value}
+                                    onChange={() => change(field, value)} />
+                                  <span>{value ? "Po" : "Jo"}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {fieldValue(answers, field) != null && (
+                              <button type="button" className="onboarding-skip onboarding-boolean-clear" onClick={() => change(field, null)}>Hiq zgjedhjen</button>
+                            )}
+                          </div>
                         ) : (
                           <textarea
                             id={`audio-${field}`}
+                            aria-labelledby={`audio-label-${field}`}
                             rows={3}
                             maxLength={2000}
                             value={
@@ -644,7 +639,7 @@ export function OnboardingExperience({
                             }
                           />
                         )}
-                      </label>
+                      </div>
                       {pending.includes(field) && (
                         <button
                           type="button"
