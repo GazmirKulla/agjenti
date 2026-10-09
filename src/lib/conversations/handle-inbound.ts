@@ -1,3 +1,4 @@
+import { processBookingTurn } from "@/lib/calendar/agent";
 import { processAgentTurn } from "./process-agent-turn";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { sendInstagramText } from "@/lib/instagram/send";
@@ -281,7 +282,11 @@ export async function handleInboundMessage(
     .eq("conversation_id", conversationId)
     .maybeSingle();
   const started = Date.now();
-  const turn = await processAgentTurn({
+  const bookingTurn = await processBookingTurn({
+    businessId, message: message.text ?? "", conversationKey: conversationId,
+    state: (stateRow?.collected as ConversationStatePayload | null) ?? emptyState(),
+  });
+  const turn = bookingTurn ?? await processAgentTurn({
     businessId,
     message: message.text ?? "",
     hasPhoto: message.attachments.some((a) => a.kind === "image"),

@@ -1,4 +1,5 @@
 "use server";
+import { processBookingTurn } from "@/lib/calendar/agent";
 import { loadSetupStatus } from "@/lib/setup/status";
 import { recordSetupTest } from "@/lib/setup/record-test";
 import { revalidatePath } from "next/cache";
@@ -95,7 +96,8 @@ export async function simulateAgentTurn(
       setupSignature = null;
     }
 
-    const turn = await processAgentTurn({
+    const bookingTurn = await processBookingTurn({businessId: access.business.id, message: text, state: session.state, mode: "test"});
+    const turn = bookingTurn ?? await processAgentTurn({
       businessId: access.business.id,
       message: text,
       hasPhoto: input.hasMedia === true,

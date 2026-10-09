@@ -1,17 +1,22 @@
-import { ModulePlaceholderPage } from "@/components/dashboard/module-placeholder";
-
+import { CalendarPageContent } from "@/components/calendar/page";
+export const metadata = { title: "Kalendari | Agjenti.app" };
 export default async function Page({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ date?: string; google?: string }>;
 }) {
-  const { slug } = await params;
+  const [{ slug }, { date, google }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   return (
-    <ModulePlaceholderPage
+    <CalendarPageContent
       slug={slug}
-      moduleId="calendar"
-      title="Kalendari"
-      description="Orari, slotet e lira dhe ngarkesa e stafit."
+      date={date}
+      google={google}
+      view="calendar"
     />
   );
 }

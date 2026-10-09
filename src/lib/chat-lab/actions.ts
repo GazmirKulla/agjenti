@@ -1,4 +1,5 @@
 "use server";
+import { processBookingTurn } from "@/lib/calendar/agent";
 
 import { randomUUID } from "node:crypto";
 import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
@@ -70,13 +71,14 @@ export async function runLabTurn(input: { businessId: string; message: string; h
     // Deliberately call the read-only production core, never the inbound delivery
     // handler or onboarding test action. No persistence, order, booking or webhook
     // capability is supplied to this adapter. New side effects belong outside core.
-    const result = await processAgentTurn({
+    const bookingTurn = await processBookingTurn({businessId: input.businessId, message: input.message.trim(), state: session.state, mode: "test", onTrace: (event) => trace.push({ ...structuredClone(event), elapsedMs: Date.now() - start })});
+    const result = bookingTurn ?? await processAgentTurn({
       businessId: input.businessId, message: input.message.trim(), hasPhoto: input.hasPhoto === true,
       state: session.state, previousResponseId: session.previousResponseId,
       mode: "test", source: "admin_chat_lab",
       onTrace: (event) => trace.push({ ...structuredClone(event), elapsedMs: Date.now() - start }),
     });
-    trace.push({ stage: "tools", label: "External actions disabled", status: "skipped", elapsedMs: Date.now() - start, data: { policy: "No customer sends, database mutations, orders, bookings, payments or business webhooks. The current production core defines no action tools." } });
+    trace.push({ stage: "tools", label: "External actions disabled", status: "skipped", elapsedMs: Date.now() - start, data: { policy: "No customer sends, database mutations, orders, bookings, payments or business webhooks. Appointment requests are simulated in test mode; the shared reply core remains read-only." } });
     trace.push({ stage: "overview", label: "Response finalized", elapsedMs: Date.now() - start, data: { response: result.reply, source: result.debug.source } });
     const workflow = trace.find((event) => event.stage === "workflow");
     const fields = workflowFields(result.nextState, (workflow?.data?.steps ?? []) as WorkflowStepDef[]);

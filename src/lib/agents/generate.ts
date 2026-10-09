@@ -65,6 +65,7 @@ export async function generateAgentReply(params: {
         `Catalog:\n${params.catalogSummary || "(none)"}`,
         "The workflow state above is authoritative. Do not invent completed steps or customer data that is missing.",
         "Write the entire customer-facing reply. Do not invent prices. Ask only for the current incomplete step.",
+        "This informational reply has no booking action or verified appointment availability. Never claim an appointment was reserved, confirmed, changed or cancelled. Refer booking requests to the business when no verified booking result is supplied.",
       ].join("\n");
 
   const request = {
