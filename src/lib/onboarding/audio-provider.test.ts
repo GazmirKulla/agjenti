@@ -7,7 +7,7 @@ vi.mock("openai", () => ({
   },
   toFile: vi.fn(async () => new File(["test"], "business.webm")),
 }));
-import { analyzeAudio } from "./audio-provider";
+import { analyzeAudio, analyzeText } from "./audio-provider";
 import { audioFields } from "./audio-fields";
 import { emptyAnswers } from "./model";
 const extraction = () =>
@@ -33,6 +33,15 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("audio provider contract", () => {
+  it("analyzes written answers directly without invoking transcription", async () => {
+    const text = "Ne ofrojmë vetëm shërbime.";
+    const result = await analyzeText(text, emptyAnswers);
+    expect(mocks.transcribe).not.toHaveBeenCalled();
+    expect(result.transcript).toBe(text);
+    expect(result.extraction.businessType.value).toBe("services");
+    const input = JSON.parse(mocks.respond.mock.calls[0][0].input);
+    expect(input.newBusinessDescription).toBe(text);
+  });
   it("persists transcription before structured extraction and derives schema from supported choices", async () => {
     const persisted = vi.fn(async () => {
       expect(mocks.respond).not.toHaveBeenCalled();

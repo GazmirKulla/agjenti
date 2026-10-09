@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   settings: vi.fn(),
   rpc: vi.fn(),
   analyze: vi.fn(),
+  analyzeText: vi.fn(),
   from: vi.fn(),
 }));
 vi.mock("@/lib/tenant/access", () => ({
@@ -17,8 +18,10 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 vi.mock("@/lib/onboarding/audio-provider", () => ({
   analyzeAudio: mocks.analyze,
+  analyzeText: mocks.analyzeText,
 }));
 import { POST } from "./route";
+import { POST as textPOST } from "../text/route";
 import { emptyAnswers } from "@/lib/onboarding/model";
 import { audioFields } from "@/lib/onboarding/audio-fields";
 import { MAX_AUDIO_BYTES } from "@/lib/onboarding/audio-upload";
@@ -71,6 +74,69 @@ beforeEach(() => {
     transcript: "Kam një biznes shërbimesh.",
     extraction,
     responseId: "resp-test",
+  });
+  mocks.analyzeText.mockResolvedValue({
+    transcript: "Shes vetëm një produkt fizik.",
+    extraction: {
+      ...extraction,
+      businessType: { value: "retail", confidence: 0.95, evidence: "produkt fizik" },
+      offeringTypes: { value: ["standard"], confidence: 0.95, evidence: "produkt fizik" },
+      productCount: { value: "1", confidence: 0.95, evidence: "një produkt" },
+      sellsProducts: { value: true, confidence: 0.95, evidence: "Shes" },
+    },
+    responseId: "resp-text",
+  });
+});
+
+function textRequest(text = "Shes vetëm një produkt fizik.", origin = "http://localhost:3003") {
+  return new Request("http://localhost:3003/api/onboarding/text", {
+    method: "POST",
+    headers: { origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ text, answers: { ...emptyAnswers, name: "Dyqani", businessType: "retail" } }),
+  });
+}
+
+describe("written onboarding analysis", () => {
+  it("extracts categorical fields from text and saves the prefilled review", async () => {
+    const response = await textPOST(textRequest());
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.answers).toMatchObject({
+      name: "Dyqani",
+      businessType: "retail",
+      productCount: "1",
+      offeringTypes: ["standard"],
+      guidedOnboardingMode: "review",
+      details: { sellsProducts: true },
+    });
+    expect(mocks.analyzeText).toHaveBeenCalledWith("Shes vetëm një produkt fizik.", expect.objectContaining({ name: "Dyqani" }));
+    expect(mocks.analyze).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledWith("finish_onboarding_audio", expect.objectContaining({ p_answers: result.answers, p_response_id: "resp-text" }));
+  });
+  it("rejects empty and oversized text before analysis or writes", async () => {
+    for (const text of ["   ", "a".repeat(12001), "a".repeat(128001)]) {
+      expect((await textPOST(textRequest(text))).status).toBe(400);
+    }
+    expect(mocks.analyzeText).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("applies authentication, same-origin protection and shared rate limits to text", async () => {
+    expect((await textPOST(textRequest(undefined, "https://other.test"))).status).toBe(403);
+    mocks.user.mockResolvedValue(null);
+    expect((await textPOST(textRequest())).status).toBe(401);
+    mocks.user.mockResolvedValue({ id: "owner" });
+    mocks.rpc.mockResolvedValue({ error: { message: "audio_daily_limit" } });
+    expect((await textPOST(textRequest())).status).toBe(429);
+    expect(mocks.analyzeText).not.toHaveBeenCalled();
+  });
+  it("returns a recoverable text error when extraction fails", async () => {
+    mocks.analyzeText.mockRejectedValue(new Error("private provider detail"));
+    const response = await textPOST(textRequest());
+    expect(response.status).toBe(502);
+    const result = await response.json();
+    expect(result.error).toContain("Tekstet mbeten këtu");
+    expect(result.error).not.toContain("private provider detail");
+    expect(mocks.rpc).not.toHaveBeenCalledWith("finish_onboarding_audio", expect.anything());
   });
 });
 afterEach(() => vi.unstubAllEnvs());

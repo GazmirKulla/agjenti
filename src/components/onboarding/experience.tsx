@@ -94,7 +94,8 @@ export function OnboardingExperience({
       setBusy(false);
     }
   }
-  async function analyze(file: File) {
+  async function analyze(file?: File) {
+    if (busy) return;
     const version = ++generation.current;
     controller.current?.abort();
     controller.current = new AbortController();
@@ -103,12 +104,27 @@ export function OnboardingExperience({
     setError("");
     setSaved(false);
     try {
-      const form = new FormData();
-      form.set("audio", file);
-      form.set("answers", JSON.stringify(answers));
-      const response = await fetch("/api/onboarding/audio", {
+      let body: FormData | string;
+      if (file) {
+        const form = new FormData();
+        form.set("audio", file);
+        form.set("answers", JSON.stringify(answers));
+        body = form;
+      } else {
+        const text = audioGuide({ ...answers, audioReview: undefined }, enabledSteps)
+          .map((question) => {
+            const value = fieldValue(answers, question.id);
+            const answer = Array.isArray(value) ? value.join("\n") : String(value ?? "");
+            return answer.trim() ? `${question.title}\n${answer}` : "";
+          })
+          .filter(Boolean).join("\n\n");
+        if (!text) throw new Error("Shkruaj të paktën një përgjigje për të vazhduar.");
+        body = JSON.stringify({ text, answers });
+      }
+      const response = await fetch(file ? "/api/onboarding/audio" : "/api/onboarding/text", {
         method: "POST",
-        body: form,
+        headers: file ? undefined : { "Content-Type": "application/json" },
+        body,
         signal: controller.current.signal,
       });
       const result = await response.json();
@@ -130,7 +146,7 @@ export function OnboardingExperience({
         setError(
           err instanceof Error && err.name !== "AbortError"
             ? err.message
-            : "Analiza zgjati shumë. Provo përsëri ose plotëso manualisht.",
+            : "Analiza zgjati shumë. Provo përsëri; përgjigjet mbeten në këtë faqe.",
         );
     } finally {
       clearTimeout(timer);
@@ -306,7 +322,7 @@ export function OnboardingExperience({
             <OnboardingBasics answers={answers} enabledSteps={enabledSteps} busy={busy}
               onChange={change} onContinue={() => persistMode("audio")} />
           ) : mode === "written" ? (
-            <form onSubmit={(event) => { event.preventDefault(); void persistMode("review"); }}>
+            <form onSubmit={(event) => { event.preventDefault(); void analyze(); }}>
               <fieldset disabled={busy}>
                 {audioGuide({ ...answers, audioReview: undefined }, enabledSteps).map((question) => (
                   <label key={question.id} className="onboarding-detail-input" htmlFor={`written-${question.id}`}>
@@ -320,7 +336,7 @@ export function OnboardingExperience({
                 ))}
                 <div className="onboarding-actions">
                   <button type="button" className="onboarding-back" onClick={() => navigate("basics")}>Kthehu</button>
-                  <button type="submit" className="onboarding-next">{busy ? "Duke ruajtur…" : "Vazhdo"}</button>
+                  <button type="submit" className="onboarding-next">{busy ? "Duke analizuar përgjigjet…" : "Vazhdo"}</button>
                 </div>
               </fieldset>
             </form>
@@ -685,11 +701,11 @@ export function OnboardingExperience({
           {transcripts.length > 0 && (
             <details className="onboarding-transcripts">
               <summary>
-                Çfarë dëgjuam ({transcripts.length} regjistrime)
+                Përgjigjet e analizuara ({transcripts.length})
               </summary>
               {transcripts.map((item, index) => (
                 <p key={item.id}>
-                  <strong>Regjistrimi {index + 1}</strong>
+                  <strong>Përgjigjja {index + 1}</strong>
                   <br />
                   {item.transcript}
                 </p>
