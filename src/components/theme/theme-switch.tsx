@@ -26,7 +26,7 @@ export function applyTheme(preference: ThemePreference) {
 }
 
 export function ThemeSwitch() {
-  const [preference, setPreference] = useState<ThemePreference>("system");
+  const [preference, setPreference] = useState<ThemePreference>("light");
 
   useEffect(() => {
     const stored = readThemePreference(localStorage.getItem(THEME_STORAGE_KEY));
