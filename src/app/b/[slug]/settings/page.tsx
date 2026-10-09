@@ -5,6 +5,7 @@ import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { IntegrationApiKeyField } from "@/components/dashboard/integration-api-key";
 import { IntegrationProbe } from "@/components/dashboard/integration-probe";
 import { ModulesSettingsPanel } from "@/components/dashboard/modules-settings";
+import { BusinessProfile } from "@/components/dashboard/business-profile";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
@@ -172,22 +173,29 @@ export default async function SettingsPage({
     ? null
     : setupGateMessage(await loadSetupStatus(access.business.id));
   const dashboardProfile = await loadDashboardProfile(access.business.id);
+  const { data: onboarding, error: onboardingError } = await createServiceSupabase()
+    .from("business_onboarding")
+    .select("answers")
+    .eq("business_id", access.business.id)
+    .maybeSingle();
 
   return (
     <>
       <PageHeading
         eyebrow="Cilësimet"
         title={access.business.name}
-        description="Produktet krijohen në panel, ose lidh një katalog të jashtëm — pa zgjedhur burim."
+        description="Shiko profilin e biznesit dhe menaxho cilësimet, modulet dhe lidhjet e katalogut."
       />
       <div className="settings-tabs">
         <span>
           <Icon name="businesses" size={18} />
           Informacioni i biznesit
         </span>
+        <a href="#business-profile">Profili i biznesit</a>
       </div>
       <div className="configuration-layout">
         <div className="space-y-5">
+          <BusinessProfile answers={onboarding?.answers} slug={slug} failed={!!onboardingError} />
           <ActionForm
             action={saveBusiness}
             className="panel section-pad grid gap-5"

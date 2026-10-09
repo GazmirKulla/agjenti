@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 const paths: Record<string, string> = {
+  edit: "m16 3 5 5 M4 20l4-1L21 6a2 2 0 0 0-4-4L4 15z",
+  microphone: "M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0z M5 10v2a7 7 0 0 0 14 0v-2 M12 19v3 M8 22h8",
   store: "M3 10V6l2-3h14l2 3v4 M3 10c0 3 4 3 4 0 0 3 5 3 5 0 0 3 5 3 5 0 0 3 4 3 4 0 M4 13v8h16v-8 M9 21v-6h6v6",
   scissors: "M9 8 21 2 M9 16 21 22 M9 8l12 14 M9 16l4-5 M9 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
   medical: "M9 3h6v6h6v6h-6v6H9v-6H3V9h6z",

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "@/components/dashboard/icon";
 import { BrandLogo } from "@/components/brand/logo";
 import { signOut } from "@/lib/auth/actions";
 import { saveOnboarding } from "@/lib/onboarding/actions";
@@ -216,6 +217,10 @@ export function OnboardingExperience({
   const missing = clarifications(answers, enabledSteps);
   const details = answers.details ?? emptyDetails;
   function focusField(field: string) {
+    if (field === "name") {
+      navigate("basics");
+      return;
+    }
     const target = document.getElementById(`audio-${field}`);
     const group = target?.closest("details");
     if (group) group.open = true;
@@ -367,19 +372,20 @@ export function OnboardingExperience({
                   aria-label="Sqarimet e nevojshme"
                 >
                   <h2>Disa detaje për t’u sqaruar</h2>
+                  <p className="onboarding-clarifications-intro">Plotëso detajet më poshtë në mënyrën që preferon.</p>
                   {missing.map((item) => (
-                    <div key={`${item.field}-${item.message}`}>
+                    <div className="onboarding-clarification-item" key={`${item.field}-${item.message}`}>
                       <p>{item.message}</p>
                       <button
                         className="onboarding-skip"
                         onClick={() => focusField(item.field)}
                       >
-                        Përgjigju manualisht →
+                        Plotëso fushën →
                       </button>
                     </div>
                   ))}
                   {pending.map((field) => (
-                    <div key={field}>
+                    <div className="onboarding-clarification-item" key={field}>
                       <p>Konfirmo: {labels[field] || field}.</p>
                       <button
                         className="onboarding-skip"
@@ -389,14 +395,18 @@ export function OnboardingExperience({
                       </button>
                     </div>
                   ))}
-                  <button
-                    className="onboarding-back"
-                    onClick={() => navigate(reviewInputMode)}
-                  >
-                    {review?.inputMode === "audio" ? "Regjistro audio tjetër"
-                      : review?.inputMode === "written" ? "Plotëso përgjigjet me shkrim"
-                      : "Plotëso përgjigjet"}
-                  </button>
+                  <div className="onboarding-reply-choices" role="group" aria-label="Mënyra e përgjigjes">
+                    <button type="button" disabled={busy} onClick={() => navigate("written")} className="onboarding-reply-card">
+                      <span className="onboarding-reply-icon"><Icon name="edit" size={22} /></span>
+                      <span className="onboarding-reply-copy"><strong>Tekst</strong><small>Shkruaj ose plotëso përgjigjet</small></span>
+                      <Icon name="arrow" size={18} />
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => navigate("audio")} className="onboarding-reply-card">
+                      <span className="onboarding-reply-icon"><Icon name="microphone" size={22} /></span>
+                      <span className="onboarding-reply-copy"><strong>Audio</strong><small>Na trego me fjalët e tua</small></span>
+                      <Icon name="arrow" size={18} />
+                    </button>
+                  </div>
                 </section>
               )}
               <form
@@ -409,27 +419,6 @@ export function OnboardingExperience({
                   <div className="onboarding-review-heading">
                     <h2>Profili i biznesit</h2>
                     <p>Të dhënat bazë dhe konfigurimi i agjentit.</p>
-                  </div>
-                  <div className="onboarding-intro onboarding-review-name">
-                    <label htmlFor="audio-name">Emri i biznesit</label>
-                    <input
-                      id="audio-name"
-                      value={answers.name}
-                      minLength={2}
-                      maxLength={100}
-                      required
-                      autoComplete="organization"
-                      onChange={(e) => change("name", e.target.value)}
-                    />
-                    {pending.includes("name") && (
-                      <button
-                        type="button"
-                        className="onboarding-skip"
-                        onClick={() => confirm("name")}
-                      >
-                        Konfirmo emrin
-                      </button>
-                    )}
                   </div>
                   {activeQuestions(enabledSteps, answers).map((question) => {
                     const field =
