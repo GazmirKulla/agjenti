@@ -86,3 +86,10 @@ describe("workflow engine", () => {
 		]);
 	});
 });
+
+it("never treats a refusal or an unrelated message as a product confirmation", () => {
+  const state = { ...emptyState(), product_id: "p1", step_key: "confirm_product" };
+  const steps = [{ key: "confirm_product", kind: "confirm" as const }];
+  for (const message of ["jo", "sa kushton?", "nuk e dua"]) expect(applyInboundToState(state, message, false, steps).step_key).toBe("confirm_product");
+  expect(applyInboundToState(state, "po", false, steps).step_key).toBe("order_ready");
+});

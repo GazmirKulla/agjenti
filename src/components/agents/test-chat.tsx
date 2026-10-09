@@ -1,4 +1,5 @@
 "use client";
+import { VisualGraphView } from "@/components/workflows/visual-graph";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -11,6 +12,7 @@ import "./test-chat.css";
 type Turn = Exclude<TestChatResult, { error: string }>;
 type Bubble = { role: "customer" | "agent"; text: string; feedback?: TrainingFeedback };
 const reasons: Record<string, string> = {
+  workflow_not_configured: "Produkti ka nevojë për një workflow. Kërkesa i kaloi stafit.",
   missing_api_key:
     "OpenAI nuk është konfiguruar. Po shfaqet përgjigjja rezervë e workflow-t.",
   provider_error:
@@ -101,11 +103,9 @@ export function AgentTestChat({
   return (
     <section className="agent-test">
       <div className="agent-test-setup-guide">
-        <strong>Provo një porosi nga fillimi deri në fund</strong>
+        <strong>Provo një bisedë me Agjentin</strong>
         <p>
-          Fillo me emrin e produktit. Në të djathtë sheh hapat e workflow-it:
-          çfarë u plotësua dhe çfarë mungon. Të dhënat e klientit mund t’i
-          dërgosh edhe në një mesazh (emër, tel, qytet, adresë).
+          Shkruaj si klient. Në të djathtë shfaqet rruga që ndjek Agjenti.
         </p>
         {last?.setupTestPassed && (
           <p role="status">
@@ -222,7 +222,8 @@ export function AgentTestChat({
           </form>
         </div>
         <aside className="agent-test-debug">
-          <h3>Workflow i porosisë</h3>
+          {last?.visualWorkflow && <VisualGraphView graph={last.visualWorkflow.graph} currentNodeId={last.visualWorkflow.state.nodeId} visitedNodeIds={last.visualWorkflow.state.visited} traversedNodeIds={last.visualWorkflow.traversedNodeIds} compact />}
+          <h3>{last?.visualWorkflow ? "Rrjedha e bisedës" : "Workflow i porosisë"}</h3>
           {!last ? (
             <p className="agent-test-disclaimer">
               Pas mesazhit të parë shfaqen hapat: çfarë u plotësua dhe çfarë
@@ -264,7 +265,7 @@ export function AgentTestChat({
             </div>
             <div>
               <dt>Hapi aktual</dt>
-              <dd>{last?.nextState.step_key || "choose_product"}</dd>
+              <dd>{last?.visualWorkflow ? last.visualWorkflow.graph.nodes.find(n => n.id === last.visualWorkflow?.state.nodeId)?.label : last?.nextState.step_key || "choose_product"}</dd>
             </div>
             <div>
               <dt>Mesazhe prove</dt>
@@ -276,7 +277,7 @@ export function AgentTestChat({
                 {last
                   ? last.debug.source === "ai"
                     ? "Inteligjenca artificiale"
-                    : "Përgjigje rezervë"
+                    : last.debug.fallbackReason === "workflow_prompt" ? "Workflow" : "Përgjigje rezervë"
                   : "—"}
               </dd>
             </div>
@@ -295,19 +296,19 @@ export function AgentTestChat({
               </>
             )}
           </dl>
-          {last && !last.debug.agentConfigured && (
+          {last && !last.debug.agentConfigured && last.debug.fallbackReason !== "workflow_prompt" && (
             <p className="agent-test-notice">
               Nuk ka udhëzime nga një agjent aktiv. Po përdoren udhëzimet bazë.{" "}
               <Link href={`/b/${slug}/agents`}>Konfiguro agjentin →</Link>
             </p>
           )}
-          {last?.debug.fallbackReason && (
+          {last?.debug.fallbackReason && last.debug.fallbackReason !== "workflow_prompt" && (
             <p role="status" className="agent-test-notice">
               {reasons[last.debug.fallbackReason] ||
                 "U përdor përgjigjja rezervë."}
             </p>
           )}
-          {last && !last.nextState.product_id && (
+          {last && !last.nextState.product_id && (!last.visualWorkflow || last.visualWorkflow.graph.nodes.find(n => n.id === last.visualWorkflow?.state.nodeId)?.kind === "product") && (
             <p className="agent-test-notice">
               Produkti nuk u njoh ende. Shkruaj emrin e saktë nga katalogu (p.sh.
               emri i produktit).

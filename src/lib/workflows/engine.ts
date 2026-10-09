@@ -35,6 +35,8 @@ export type WorkflowStepDef = {
 };
 
 export type ConversationStatePayload = {
+  visual?: import("./visual/types").VisualRunState;
+  completedVisual?: import("./visual/types").VisualRunState;
   product_id?: string | null;
   product_type_id?: string | null;
   step_key?: string | null;
@@ -239,7 +241,7 @@ export function applyInboundToState(
     return next;
   }
   if (step.kind === "confirm") {
-    if (trimmed && (isAffirmative(trimmed) || trimmed.length > 0)) {
+    if (trimmed && isAffirmative(trimmed)) {
       next.fields[step.key] = trimmed;
       next.step_key = nextStepKey(step.key, steps);
     }

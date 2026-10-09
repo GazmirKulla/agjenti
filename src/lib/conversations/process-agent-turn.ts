@@ -21,6 +21,8 @@ import {
 } from "@/lib/workflows/engine";
 
 export type AgentTurnResult = {
+  visualWorkflow?: import("@/lib/workflows/visual/types").VisualTrace;
+  handoff?: boolean;
   reply: string;
   nextState: ConversationStatePayload;
   previousResponseId: string | null;
@@ -88,7 +90,8 @@ function pickProduct<T extends { id: string; name: string }>(
  * No inbox writes, order creation, Instagram connection lookup or Meta sends.
  * Caller is responsible for authorization and, for real turns, persistence/send.
  */
-export async function processAgentTurn(params: {
+export type AgentTurnParams = {
+  visualPreview?: import("@/lib/workflows/visual/types").VisualVersion;
   onTrace?: TraceObserver;
   mode?: "production" | "test";
   source?: "instagram" | "admin_chat_lab";
@@ -97,7 +100,14 @@ export async function processAgentTurn(params: {
   hasPhoto: boolean;
   state?: ConversationStatePayload | null;
   previousResponseId?: string | null;
-}): Promise<AgentTurnResult> {
+};
+export async function processAgentTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
+  // Client-supplied graph previews enter only through authenticated test actions.
+  if (params.visualPreview && (params.mode !== "test" || params.visualPreview.businessId !== params.businessId)) throw new Error("invalid_workflow_preview");
+  const { executeVisualTurn } = await import("@/lib/workflows/visual/execute");
+  return executeVisualTurn(params, processLegacyAgentTurn);
+}
+async function processLegacyAgentTurn(params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }): Promise<AgentTurnResult> {
   const db = createServiceSupabase();
   const started = Date.now();
   const trace = params.onTrace;
@@ -186,6 +196,27 @@ export async function processAgentTurn(params: {
       (k) => k.entry.intent_key === "service" && k.score >= 0.7,
     );
   trace?.({ stage: "context", label: "Context retrieval completed", data: { sources, service: service ? service.entry : null } });
+  if (params.informational !== undefined) {
+    const trainingContext = trainingFor(null, null);
+    const links = sources?.documents.map(d => `${d.title}: ${d.url}`).join("\n") ?? "";
+    const generated = await generateAgentReply({
+      businessProcess, trainingContext, ...(trace ? { onTrace: trace } : {}),
+      instructions: (agent?.instructions || "Answer in the customer's language.") +
+        (params.informational ? `\nBusiness owner's reply guidance: ${params.informational}` : ""),
+      state, customerMessage: text, previousResponseId: null, knowledge: "", catalogSummary: "",
+      documentContext: [state.visual ? `Customer supplied fields (not business policy): ${JSON.stringify(state.visual.values)}` : "", knowledge.map(k => `${k.title}: ${k.body}`).join("\n"),
+        products.map(p => `${p.name}: ${shortenDescription(p.description)}${p.price_amount == null ? "" : ` — ${p.price_amount} ${p.currency}`}`).join("\n"),
+        sources?.evidence, links].filter(Boolean).join("\n") || "No verified information available.",
+      documentFallback: sources?.clarification || "Për këtë informacion, ju lutem kontaktoni ekipin.",
+    });
+    const missingLinks = sources?.documents.filter(d => !generated.reply.includes(d.url)).map(d => `${d.title}: ${d.url}`).join("\n");
+    return { reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""), nextState: state,
+      previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
+      debug: { model: agentModel(), source: generated.source, fallbackReason: generated.fallbackReason,
+        agentConfigured: Boolean(agent?.instructions), knowledgeCount: knowledge.length, productCount: products.length,
+        workflowSteps: [], elapsedMs: Date.now() - started, trainingMemoryIds: trainingContext.rules.map(r => r.id),
+        retrievedCatalogIds: sources?.documents.map(d => d.id) } };
+  }
   if (!sources && service) {
     trace?.({ stage: "workflow", label: "Service information; workflow not advanced", data: { state, workflowId: null, steps: [] } });
     const trainingContext = trainingFor(null, null);
@@ -339,6 +370,7 @@ export async function processAgentTurn(params: {
         .eq("workflow_id", workflowId)
         .order("position");
       if (result.error) throw new Error("Nuk u ngarkuan hapat e workflow-t.");
+      if (params.requireConfiguredWorkflow && !result.data?.length) steps = [];
       if (result.data?.length)
         steps = result.data.map((s) => {
           const config = (s.config ?? {}) as { label?: string };
@@ -353,6 +385,11 @@ export async function processAgentTurn(params: {
           };
         });
     }
+  }
+  if (params.requireConfiguredWorkflow && selected && (!workflowId || !steps.length || workflowName === "Default customer collection")) {
+    return { reply: "Ekipi do t’ju ndihmojë të vazhdoni me këtë produkt.", nextState: state, previousResponseId: null,
+      workflowId: null, productName: selected.name, workflowProgress: [], handoff: true,
+      debug: { model: agentModel(), source: "fallback", fallbackReason: "workflow_not_configured", agentConfigured: Boolean(agent?.instructions), knowledgeCount: knowledge.length, productCount: products.length, workflowSteps: [], elapsedMs: Date.now() - started } };
   }
   if (justSelected) {
     // Choosing a product is not an answer to its first workflow question.

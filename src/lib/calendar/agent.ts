@@ -20,6 +20,7 @@ import {
 } from "./model";
 import { availableSlots, persistBooking } from "./service";
 import { extractBookingDetails } from "./agent-parser";
+import { loadVisualVersion } from "@/lib/workflows/visual/store";
 export type BookingDraft = {
   serviceId?: string;
   date?: string;
@@ -44,6 +45,8 @@ export async function processBookingTurn(params: {
 }): Promise<AgentTurnResult | null> {
   const existingState = structuredClone(params.state ?? emptyState());
   if (existingState.product_id) return null;
+  // Published visual rules own routing; booking cannot bypass a collect/confirm or handoff.
+  if (existingState.visual && existingState.visual.status !== "completed") return null;
   const raw = existingState.fields.booking as BookingDraft | undefined;
   if (
     !raw &&
@@ -54,6 +57,8 @@ export async function processBookingTurn(params: {
     return null;
   const profile = await loadDashboardProfile(params.businessId);
   if (!profile.enabledModules.includes("bookings")) return null;
+  // Finish reservations already in progress, but let new runs follow the published graph.
+  if (!raw && await loadVisualVersion(params.businessId)) return null;
   const db = createServiceSupabase();
   const [cfg, services] = await Promise.all([
     db

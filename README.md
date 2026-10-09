@@ -375,3 +375,16 @@ Apliko `supabase/migrations/20261008120000_scan_knowledge_routing.sql` pas migri
 Përsëritja e skanimit nuk dyfishon të njëjtin titull/përgjigje. Një përgjigje që kundërshton një njohuri ekzistuese ruhet joaktive dhe mund të kontrollohet, korrigjohet ose aktivizohet te **Njohuritë**. Ruajtja e draftit dhe regjistrimi i FAQ-ve kryhen në një transaksion me kontroll të biznesit, versionit dhe lease-it. Baseline-i përditësohet vetëm për insertimet tona; ndryshimet e tjera manuale vazhdojnë të kërkojnë rishikim.
 
 `€`, `Euro`, `EUR` normalizohen në `EUR`; `Lek`, `Lekë`, `ALL` në `ALL`; `£` në `GBP`. Kur monedha mungon, ajo plotësohet vetëm nga prova tekstuale/OCR e çmimit të të njëjtit produkt. `$` pa kod dhe tekstet me disa monedha mbeten për sqarim. Normalizimi zbatohet edhe për draftet ekzistuese. Gabimet e ruajtjes tregojnë fushën përkatëse; mungesa e migrimit shfaqet si problem databaze, jo si çmim i pavlefshëm.
+
+
+### Visual workflows
+
+Apply `supabase/migrations/20261010110000_visual_workflows.sql` after the existing migrations. It is transactional and safe to rerun in Supabase SQL Editor. No production migration is run by the application. Without it, the editor can preview the prepared graph; saving explains which migration is required, and existing conversations keep their previous behavior.
+
+`/b/[slug]/workflows` now prepares an editable diagram from the onboarding journey, with start, condition, knowledge reply, data collection, confirmation, product workflow, handoff and end nodes. Move nodes by dragging (or Alt + arrow keys), and connect each output from the side inspector. Save incomplete work as a draft; publishing requires a reachable, valid graph. The active published version is separate from the draft. New conversations use it; running conversations retain their immutable version. Disabling the visual workflow affects new runs. Existing linear orders and reservations finish before entering the visual layer. While the visual workflow is active, it owns routing; the separate booking adapter cannot bypass its conditions or required steps. A dedicated booking node is not included in this version.
+
+The editor's test conversation executes the same state machine as production with a user/business-bound encrypted session. It never sends Instagram messages or changes inbox data. Chat Lab and the business agent test also show the traversed graph. Production stores the current node and collected values in `conversation_states.collected.visual`; `completedVisual` retains the last completed run. A handoff pauses the inbox conversation, and staff can explicitly resume it. The visual layer prepares replies and data; it does not create orders, charge payments or schedule follow-ups.
+
+Intent conditions currently use conservative Albanian/English word rules (shown in the inspector), while knowledge replies use the existing AI, source retrieval and saved business training. Field conditions use only accepted values, and confirmations require an explicit yes/no. Product nodes delegate only to configured product workflows; missing configuration hands off to staff.
+
+Validation: `yarn test`, `yarn build`, and `supabase/tests/visual_workflows.sql` in an isolated PostgreSQL database. The SQL suite checks draft/publish separation, optimistic revisions, immutable snapshots, tenant isolation and bounded graph validation.

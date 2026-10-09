@@ -1,4 +1,5 @@
 "use client";
+import { VisualGraphView } from "@/components/workflows/visual-graph";
 import type { ReactNode } from "react";
 import type { LabTurn, LabField, LabFailure } from "@/lib/chat-lab/model";
 import type { TraceStage } from "@/lib/conversations/trace";
@@ -35,7 +36,7 @@ export function intentOf(turn?: LabTurn) {
   return turn?.trace.find((event) => event.label === "Intent routed")?.data?.intent ?? null;
 }
 export function workflowOf(turn: LabTurn) {
-  return turn.trace.find((event) => event.stage === "workflow")?.data ?? {};
+  return turn.trace.find((event) => event.stage === "workflow" && event.label === "Visual workflow executed")?.data ?? turn.trace.find((event) => event.stage === "workflow")?.data ?? {};
 }
 export function Inspector({ turn, failure, tab, onTab }: { turn?: LabTurn; failure?: LabFailure; tab: TraceStage; onTab: (tab: TraceStage) => void }) {
   const workflow = turn ? workflowOf(turn) : {};
@@ -65,6 +66,7 @@ export function Inspector({ turn, failure, tab, onTab }: { turn?: LabTurn; failu
           <Card title="Customer and prior collected data"><Data value={turn.trace.find((e) => e.label === "Business context loaded")?.data?.previousState} /></Card>
         </>}
         {tab === "workflow" && <>
+          {turn.visualWorkflow && <><VisualGraphView graph={turn.visualWorkflow.graph} currentNodeId={turn.visualWorkflow.state.nodeId} visitedNodeIds={turn.visualWorkflow.state.visited} traversedNodeIds={turn.visualWorkflow.traversedNodeIds} compact /><Card title="Visual workflow data"><Data value={turn.visualWorkflow.state} /></Card></>}
           <Card title="Workflow state"><Data value={{ name: workflow.workflowName, id: turn.workflowId, previousStep: workflow.previousStep, currentStep: turn.nextState.step_key, status: turn.nextState.step_key === "order_ready" ? "ready" : "in progress", nextPossibleSteps: turn.workflowProgress.filter((s) => s.status === "pending").slice(0, 1).map((s) => s.key) }} /></Card>
           <Card title="Workflow progress">{turn.workflowProgress.length ? <ol className="lab-progress">{turn.workflowProgress.map((step) => <li key={step.key} className={`is-${step.status}`}><span>{step.status === "done" ? "✓" : step.status === "current" ? "●" : "○"}</span><div><strong>{step.label}</strong><small>{step.key} · {step.status}</small>{step.value && <p>{step.value}</p>}</div></li>)}</ol> : <p className="lab-muted">Informational turn; no workflow steps executed.</p>}</Card>
           <Card title="Collected workflow variables"><Data value={turn.nextState.fields} /></Card>

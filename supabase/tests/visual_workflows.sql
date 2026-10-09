@@ -1,0 +1,46 @@
+begin;
+insert into auth.users(id,email) values ('00000000-0000-4000-8000-000000003101','visual-a@example.test'),('00000000-0000-4000-8000-000000003102','visual-b@example.test');
+insert into businesses(id,name,slug) values ('00000000-0000-4000-8000-000000003101','Visual A','visual-a'),('00000000-0000-4000-8000-000000003102','Visual B','visual-b');
+insert into business_users(business_id,user_id,role) values ('00000000-0000-4000-8000-000000003101','00000000-0000-4000-8000-000000003101','owner'),('00000000-0000-4000-8000-000000003102','00000000-0000-4000-8000-000000003102','owner');
+do $$ declare
+ a uuid:='00000000-0000-4000-8000-000000003101'; b uuid:='00000000-0000-4000-8000-000000003102'; v uuid; sig text;
+ g jsonb:='{"version":1,"name":"Customer journey","nodes":[{"id":"s","kind":"start","label":"Start","position":{"x":0,"y":0},"config":{}},{"id":"end","kind":"end","label":"End","position":{"x":300,"y":0},"config":{}}],"edges":[{"id":"e1","source":"s","target":"end","port":"next"}]}';
+begin
+ if not valid_visual_graph(g,true) then raise exception 'Valid graph rejected'; end if;
+ if valid_visual_graph(jsonb_set(g,'{edges}','[]'),true) then raise exception 'Missing edge published'; end if;
+ if not valid_visual_graph(jsonb_set(g,'{edges}','[]'),false) then raise exception 'Incomplete draft rejected'; end if;
+ if valid_visual_graph(jsonb_set(g,'{edges,0,target}','"missing"'),false) then raise exception 'Dangling edge accepted'; end if;
+ if valid_visual_graph(jsonb_set(g,'{nodes,1,id}','"s"'),true) then raise exception 'Duplicate id accepted'; end if;
+ if valid_visual_graph(jsonb_set(g,'{nodes,0,kind}','"unknown"'),false) then raise exception 'Unknown kind accepted'; end if;
+ if valid_visual_graph(jsonb_set(g,'{nodes,1,kind}','"collect"'),true) then raise exception 'Unconfigured collect accepted'; end if;
+ begin perform save_visual_workflow(a,b,0,g,'publish'); raise exception 'Cross tenant publish accepted' using errcode='XX001'; exception when raise_exception then if sqlerrm<>'unauthorized' then raise; end if; end;
+ sig:=business_setup_status(a)->>'signature';
+ perform save_visual_workflow(a,a,0,g,'draft');
+ if business_setup_status(a)->>'signature' is distinct from sig then raise exception 'Draft invalidated live test'; end if;
+ begin perform save_visual_workflow(a,a,0,g,'publish'); raise exception 'Stale draft accepted' using errcode='XX001'; exception when raise_exception then if sqlerrm<>'stale_workflow' then raise; end if; end;
+ perform save_visual_workflow(a,a,1,g,'publish');
+ select published_version_id into v from visual_workflows where business_id=a;
+ if v is null or business_setup_status(a)->>'signature'=sig then raise exception 'Published fingerprint missing'; end if;
+ perform save_visual_workflow(a,a,2,jsonb_set(g,'{name}','"Draft change"'),'draft');
+ if not exists(select 1 from visual_workflow_versions where id=v and graph=g) then raise exception 'Draft mutated published snapshot'; end if;
+ perform save_visual_workflow(a,a,3,jsonb_set(g,'{name}','"New version"'),'publish');
+ if (select count(*) from visual_workflow_versions where business_id=a)<>2 then raise exception 'Version history lost'; end if;
+ if not exists(select 1 from visual_workflow_versions where id=v and graph=g) then raise exception 'Pinned version mutated'; end if;
+ perform save_visual_workflow(a,a,4,null,'disable');
+ if (select enabled from visual_workflows where business_id=a) then raise exception 'Disable failed'; end if;
+ perform save_visual_workflow(a,a,5,null,'enable');
+ perform save_visual_workflow(b,b,0,g,'draft');
+ begin update visual_workflows set published_version_id=v,enabled=true where business_id=b; raise exception 'Foreign pointer accepted' using errcode='XX001'; exception when foreign_key_violation then null; end;
+ if has_table_privilege('service_role','visual_workflow_versions','update') or has_table_privilege('service_role','visual_workflow_versions','delete') or has_table_privilege('authenticated','visual_workflows','insert') or has_function_privilege('authenticated','save_visual_workflow(uuid,uuid,integer,jsonb,text)','execute') then raise exception 'Write boundary exposed'; end if;
+end $$;
+do $$ declare g jsonb:='{"version":1,"name":"Branches","nodes":[{"id":"s","kind":"start","label":"Start","position":{"x":0,"y":0},"config":{}},{"id":"c","kind":"condition","label":"Email supplied?","position":{"x":200,"y":0},"config":{"condition":"field_present","fieldKey":"email"}},{"id":"q","kind":"collect","label":"Email","position":{"x":400,"y":0},"config":{"prompt":"Email?","fieldKey":"email","fieldType":"email"}},{"id":"e","kind":"end","label":"Done","position":{"x":600,"y":0},"config":{}}],"edges":[{"id":"1","source":"s","target":"c","port":"next"},{"id":"2","source":"c","target":"e","port":"yes"},{"id":"3","source":"c","target":"q","port":"no"},{"id":"4","source":"q","target":"c","port":"next"}]}'; begin
+ if not valid_visual_graph(g,true) then raise exception 'Wait cycle rejected'; end if;
+ if valid_visual_graph(jsonb_set(g,'{nodes,2,kind}','"knowledge"'),true) then raise exception 'Instant cycle accepted'; end if;
+ if valid_visual_graph(jsonb_set(g,'{edges,2,port}','"yes"'),true) then raise exception 'Duplicate output accepted'; end if;
+ if valid_visual_graph(jsonb_set(g,'{nodes,2,config,fieldType}','null'),false) then raise exception 'Invalid field type accepted'; end if;
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000003102',true);
+do $$ begin if exists(select 1 from visual_workflow_versions where business_id='00000000-0000-4000-8000-000000003101') then raise exception 'Foreign version exposed by RLS'; end if; end $$;
+reset role;
+rollback;

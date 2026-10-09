@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   slots: vi.fn(),
   persist: vi.fn(),
   profile: vi.fn(),
+  visual: vi.fn(),
   cfg: {
     agent_booking_enabled: true,
     timezone: "Europe/Tirane",
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   ],
 }));
 vi.mock("./agent-parser", () => ({ extractBookingDetails: mocks.extract }));
+vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: mocks.visual }));
 vi.mock("./service", () => ({
   availableSlots: mocks.slots,
   persistBooking: mocks.persist,
@@ -53,6 +55,7 @@ beforeEach(() => {
   mocks.cfg.agent_booking_enabled = true;
   mocks.cfg.confirmation_mode = "manual";
   mocks.profile.mockResolvedValue({ enabledModules: ["bookings"] });
+  mocks.visual.mockResolvedValue(null);
   mocks.extract.mockResolvedValue({
     bookingIntent: true,
     cancel: false,
@@ -88,6 +91,23 @@ const confirmState = () => ({
       expires: Date.now() + 600000,
     } satisfies BookingDraft,
   },
+});
+it.each(["running", "waiting", "handoff"] as const)("does not interrupt a %s visual workflow", async (status) => {
+  const state = { ...emptyState(), visual: { versionId: "version", nodeId: "collect", status, visited: ["collect"], values: {}, awaiting: true } };
+  expect(await processBookingTurn({ businessId: "business", message: "dua rezervim", state })).toBeNull();
+  expect(mocks.extract).not.toHaveBeenCalled();
+  expect(mocks.persist).not.toHaveBeenCalled();
+});
+it("routes new booking requests through the published visual graph", async () => {
+  mocks.visual.mockResolvedValue({ id: "published-version" });
+  expect(await processBookingTurn({ businessId: "business", message: "dua rezervim" })).toBeNull();
+  expect(mocks.extract).not.toHaveBeenCalled();
+});
+it("finishes an existing booking when a visual graph is newly published", async () => {
+  mocks.visual.mockResolvedValue({ id: "published-version" });
+  const turn = await processBookingTurn({ businessId: "business", message: "konfirmoj", state: confirmState(), mode: "test" });
+  expect(turn?.reply).toContain("Nuk u krijua rezervim real");
+  expect(mocks.persist).not.toHaveBeenCalled();
 });
 it("requires exact customer confirmation, not instructions from an AI parse", async () => {
   expect(explicitBookingConfirmation("po konfirmoj")).toBe(true);

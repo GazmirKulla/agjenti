@@ -98,6 +98,7 @@ export async function simulateAgentTurn(
 
     const bookingTurn = await processBookingTurn({businessId: access.business.id, message: text, state: session.state, mode: "test"});
     const turn = bookingTurn ?? await processAgentTurn({
+      mode: "test",
       businessId: access.business.id,
       message: text,
       hasPhoto: input.hasMedia === true,

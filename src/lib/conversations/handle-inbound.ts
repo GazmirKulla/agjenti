@@ -88,10 +88,12 @@ export async function handleInboundMessage(
     })
     .select("id")
     .maybeSingle();
+  if (webhookEventError?.code === "23505") return;
+  if (webhookEventError) throw new Error("Nuk u ruajt mesazhi hyrës.");
   console.log("[inbound] webhook_events insert", {
     ok: !webhookEventError,
     id: webhookEvent?.id ?? null,
-    error: webhookEventError?.message ?? null,
+    error: null,
     externalMessageId: message.externalMessageId,
   });
 
@@ -281,17 +283,23 @@ export async function handleInboundMessage(
     .select("collected, workflow_id")
     .eq("conversation_id", conversationId)
     .maybeSingle();
+  // A paused handoff returns above. Reaching this point with its saved state means
+  // staff explicitly resumed the conversation; start a new run without erasing data.
+  const inboundState = structuredClone((stateRow?.collected as ConversationStatePayload | null) ?? emptyState());
+  if (inboundState.visual?.status === "handoff") {
+    inboundState.completedVisual = structuredClone(inboundState.visual);
+    inboundState.visual.status = "completed";
+  }
   const started = Date.now();
   const bookingTurn = await processBookingTurn({
     businessId, message: message.text ?? "", conversationKey: conversationId,
-    state: (stateRow?.collected as ConversationStatePayload | null) ?? emptyState(),
+    state: inboundState,
   });
   const turn = bookingTurn ?? await processAgentTurn({
     businessId,
     message: message.text ?? "",
     hasPhoto: message.attachments.some((a) => a.kind === "image"),
-    state:
-      (stateRow?.collected as ConversationStatePayload | null) ?? emptyState(),
+    state: inboundState,
     previousResponseId: open?.openai_previous_response_id ?? null,
   });
   const state = turn.nextState;
@@ -309,6 +317,10 @@ export async function handleInboundMessage(
     })
     .throwOnError();
 
+  if (turn.handoff) {
+    await supabase.from("conversations").update({ status: "paused", auto_reply: false })
+      .eq("id", conversationId).eq("business_id", businessId).throwOnError();
+  }
   const send = await sendInstagramText({
     accountId: conn.ig_user_id,
     token: accessToken,

@@ -37,11 +37,15 @@ const message: NormalizedIncomingMessage = {
 };
 let paused = false;
 let auto = true;
+let webhookInsertCode: string | null = null;
+let savedState = emptyState();
 let writes: { table: string; operation: string; data: unknown }[] = [];
 beforeEach(() => {
   vi.clearAllMocks();
   paused = false;
   auto = true;
+  webhookInsertCode = null;
+  savedState = emptyState();
   writes = [];
   mocks.process.mockResolvedValue({
     reply: "Përgjigje nga pipeline",
@@ -53,7 +57,7 @@ beforeEach(() => {
   mocks.from.mockImplementation((table: string) => {
     let op = "select";
     const result = () => ({
-      error: null,
+      error: table === "webhook_events" && op === "insert" && webhookInsertCode ? { code: webhookInsertCode, message: "Insert failed" } : null,
       data:
         table === "webhook_events"
           ? op === "select"
@@ -77,7 +81,7 @@ beforeEach(() => {
                 : table === "businesses"
                   ? { auto_reply: auto }
                   : table === "conversation_states"
-                    ? { collected: emptyState(), workflow_id: null }
+                    ? { collected: savedState, workflow_id: null }
                     : { id: "row-a" },
     });
     const chain = {
@@ -275,4 +279,29 @@ describe("real inbound integration with shared processor", () => {
     expect(writes).toHaveLength(1);
     expect(mocks.process).not.toHaveBeenCalled();
   });
+});
+
+it("pauses a visual handoff before sending and preserves its collected state", async () => {
+  const nextState = { ...emptyState(), visual: { versionId: "v1", nodeId: "staff", status: "handoff" as const, awaiting: false, visited: ["start", "staff"], values: { email: "demo@example.test" } } };
+  mocks.process.mockResolvedValue({ reply: "Kaloi te stafi", nextState, previousResponseId: null, workflowId: null, handoff: true });
+  await handleInboundMessage(message);
+  expect(writes).toContainEqual({ table: "conversations", operation: "update", data: { status: "paused", auto_reply: false } });
+  expect(writes).toContainEqual(expect.objectContaining({ table: "conversation_states", data: expect.objectContaining({ collected: nextState }) }));
+  expect(mocks.send).toHaveBeenCalledOnce();
+});
+it("allows an explicitly resumed handoff to start a new run without erasing collected data", async () => {
+  savedState = { ...emptyState(), visual: { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: ["staff"], values: { email: "demo@example.test" } } };
+  await handleInboundMessage(message);
+  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: expect.objectContaining({ visual: expect.objectContaining({ status: "completed", values: { email: "demo@example.test" } }), completedVisual: savedState.visual }) }));
+});
+it("does not execute the same webhook twice when concurrent inserts collide", async () => {
+  webhookInsertCode = "23505";
+  await handleInboundMessage(message);
+  expect(mocks.process).not.toHaveBeenCalled();
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+it("does not execute a message whose event cannot be persisted", async () => {
+  webhookInsertCode = "XX000";
+  await expect(handleInboundMessage(message)).rejects.toThrow();
+  expect(mocks.process).not.toHaveBeenCalled();
 });

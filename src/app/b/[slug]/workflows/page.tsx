@@ -9,6 +9,8 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { BusinessProcessView } from "@/components/workflows/business-process";
+import { VisualWorkflowEditor } from "@/components/workflows/visual-editor";
+import { loadVisualWorkspace } from "@/lib/workflows/visual/store";
 
 export default async function WorkflowsPage({
   params,
@@ -21,7 +23,7 @@ export default async function WorkflowsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const operating = await loadBusinessProcess(access.business.id);
+  const [operating, visual] = await Promise.all([loadBusinessProcess(access.business.id), loadVisualWorkspace(access.business.id)]);
   const [{ data: workflows, error: loadError }, { data: types }] =
     await Promise.all([
       db
@@ -70,14 +72,18 @@ export default async function WorkflowsPage({
   return (
     <>
       <PageHeading
-        title="Workflow AI"
-        description="Rrjedha që Agjenti përdor për të udhëzuar klientët, dhe workflow-t e lidhur me produktet."
+        title="Workflow"
+        description="Nga mesazhi i parë, te hapi i duhur."
       >
         <Link href={`/b/${slug}/products`} className="btn btn-ghost">
           Lidh te produktet →
         </Link>
       </PageHeading>
-      <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />
+      <VisualWorkflowEditor slug={slug} initialWorkspace={visual} />
+      <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
+        <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />
+      </details>
+      <details className="vf-product-details"><summary>Workflow-t e produkteve · {workflows?.length ?? 0}</summary>
       <div className="configuration-layout">
         <div className="space-y-5">
           {(workflows ?? []).map((w) => (
@@ -175,6 +181,7 @@ export default async function WorkflowsPage({
           )}
         </aside>
       </div>
+      </details>
     </>
   );
 }
