@@ -2523,7 +2523,7 @@ html[data-resolved="dark"] .secret-reveal {
 html[data-resolved="dark"] .dashboard-shell ::placeholder {
   color: #8d84a8;
 }
-html[data-resolved="dark"] .dashboard-content .btn-primary {
+html[data-resolved="dark"] .dashboard-shell .btn-primary {
   background: var(--accent);
   color: #161222;
   box-shadow: 0 3px 8px rgb(196 166 255 / 18%);
@@ -2538,9 +2538,7 @@ html[data-resolved="dark"] .chart-day-buttons button {
   color: var(--accent);
   border-color: var(--line);
 }
-html[data-resolved="dark"]
-  .dashboard-content
-  .btn-primary:hover:not(:disabled) {
+html[data-resolved="dark"] .dashboard-shell .btn-primary:hover:not(:disabled) {
   background: var(--accent-2);
 }
 

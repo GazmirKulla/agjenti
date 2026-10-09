@@ -17,27 +17,30 @@ export default async function OnboardingPage() {
   if (!user) redirect("/login?mode=signup");
   const access = await listMemberships(user.id);
   if (access.admin || access.businesses.length) redirect(homeForAccess(access));
-  const { data, error } = await createServiceSupabase()
+  const db = createServiceSupabase();
+  const { data, error } = await db
     .from("business_onboarding")
     .select("answers,step,completed_at")
     .eq("user_id", user.id)
     .maybeSingle();
-  if (error || data?.completed_at)
+  // Completed onboarding without a membership is an orphan (business deleted
+  // or membership lost). Clear it so the user can create a new workspace.
+  let draft = data;
+  if (!error && draft?.completed_at) {
+    await db.from("business_onboarding").delete().eq("user_id", user.id);
+    draft = null;
+  }
+  if (error)
     return (
       <main className="onboarding-page">
         <section className="onboarding-unavailable">
           <Link href="/" className="onboarding-brand">
             <BrandLogo size={34} />
           </Link>
-          <h1>
-            {data?.completed_at
-              ? "Hapësira jote kërkon rishikim"
-              : "Konfigurimi nuk është i disponueshëm për momentin"}
-          </h1>
+          <h1>Konfigurimi nuk është i disponueshëm për momentin</h1>
           <p>
-            {data?.completed_at
-              ? "Llogaria e ka përfunduar konfigurimin më parë. Kontakto administratorin për të rikthyer qasjen në biznes."
-              : "Nuk mundëm të ngarkonim konfigurimin. Provo përsëri ose kontakto administratorin."}
+            Nuk mundëm të ngarkonim konfigurimin. Provo përsëri ose kontakto
+            administratorin.
           </p>
           <Link className="btn btn-primary" href="/onboarding">
             Provo përsëri
@@ -87,19 +90,19 @@ export default async function OnboardingPage() {
                 Vendos emrin për të krijuar hapësirën. Konfigurimin mund ta plotësosh nga paneli.
               </p>
             </div>
-            <BasicWorkspaceForm initialName={typeof data?.answers?.name === "string" ? data.answers.name : ""} />
+            <BasicWorkspaceForm initialName={typeof draft?.answers?.name === "string" ? draft.answers.name : ""} />
           </section>
         </div>
       </main>
     );
   let initial = emptyAnswers;
   try {
-    if (data)
-      initial = parseAnswers(data.answers, false, settings.onboarding_steps);
+    if (draft)
+      initial = parseAnswers(draft.answers, false, settings.onboarding_steps);
   } catch {
     /* A malformed old draft can be safely restarted. */
   }
-  const { data: audioHistory } = await createServiceSupabase()
+  const { data: audioHistory } = await db
     .from("onboarding_audio_attempts")
     .select("id,transcript")
     .eq("user_id", user.id)
@@ -110,7 +113,7 @@ export default async function OnboardingPage() {
     <OnboardingExperience
       history={(audioHistory ?? []).reverse()}
       initial={initial}
-      initialStep={data?.step ?? 0}
+      initialStep={draft?.step ?? 0}
       email={user.email || ""}
       enabledSteps={settings.onboarding_steps}
     />
