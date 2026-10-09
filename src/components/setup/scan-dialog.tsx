@@ -72,7 +72,7 @@ export function DiscoveryScanDialog({ open, jobs, startingSource, error, onClose
         <button className="scan-close" type="button" onClick={onClose} aria-label={running ? "Minimizo analizën" : "Mbyll analizën"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg></button>
       </header>
       <div className="scan-heading">
-        <h2 id="scan-title">{finished ? "Gati" : failure ? "Analiza u ndërpre" : "Po analizojmë"}</h2>
+        <h2 id="scan-title">{finished ? "Gati" : failure ? "Analiza u ndërpre" : "Po njohim biznesin tënd"}</h2>
         <p id="scan-description" className="sr-only">{finished ? "Profili dhe njohuritë u përgatitën. Mund të vazhdosh në panel." : failure ? "Progresi u ruajt. Provo përsëri nga onboarding." : "Analiza vazhdon edhe kur e minimizon këtë dritare."}</p>
         {!finished && !failure && jobs.length <= 1 && <span className="scan-live"><i />{source === "website" ? "Website" : "Instagram"}</span>}
       </div>
