@@ -17,7 +17,7 @@ describe("generateDashboardProfile", () => {
     expect(profile.enabledModules).toContain("services");
     expect(profile.enabledModules).toContain("bookings");
     expect(profile.enabledModules).toContain("calendar");
-    expect(profile.enabledModules).toContain("staff");
+    expect(profile.enabledModules).not.toContain("staff");
     expect(profile.enabledModules).toContain("sources");
     expect(profile.enabledModules).not.toContain("products");
     expect(profile.enabledModules).not.toContain("orders");

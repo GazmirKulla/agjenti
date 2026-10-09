@@ -15,7 +15,6 @@ it("lists wizard steps in dependency order", () => {
     "aiMode",
     "productCount",
     "messageVolume",
-    "teamSize",
   ]);
   expect(steps.find((step) => step.key === "aiMode")?.influencedBy).toEqual([
     "businessType",
