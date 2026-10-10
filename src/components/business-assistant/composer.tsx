@@ -59,7 +59,7 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
     <div className="assistant-prompt is-multiline" aria-busy={busy}>
       <button ref={menuButton} type="button" disabled={busy} aria-label="Shto foto, skedar ose link" aria-controls={`${id}-menu`} aria-expanded={menu} onClick={() => setMenu(v => !v)}><Icon name="plus" size={22} /></button>
       <label className="sr-only" htmlFor={id}>Shkruaji Agjentit</label>
-      <textarea ref={textarea} id={id} value={value} onChange={e => onChange(e.target.value)} rows={1} enterKeyHint="enter" maxLength={maxLength} placeholder={placeholder} disabled={busy}
+      <textarea ref={textarea} id={id} autoComplete="off" inputMode="text" name="assistant-message" value={value} onChange={e => onChange(e.target.value)} rows={1} enterKeyHint="enter" maxLength={maxLength} placeholder={placeholder} disabled={busy}
         onPaste={e => { if (onFiles && e.clipboardData.files.length) { e.preventDefault(); onFiles(Array.from(e.clipboardData.files)); } }}
         onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !window.matchMedia("(max-width: 760px)").matches) { e.preventDefault(); if (canSend) onSubmit(); } if (e.key === "Escape") { setMenu(false); setLink(null); } }} />
       <div className="assistant-prompt-actions"><button type="button" onClick={onVoice} disabled={busy} aria-label="Dikto me mikrofon"><Icon name="microphone" size={21} /></button>
