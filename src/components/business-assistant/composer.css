@@ -1,0 +1,78 @@
+.assistant-home-workspace {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px clamp(20px, 4vw, 56px) 26px;
+  margin-bottom: 32px;
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-radius: 30px;
+  background: radial-gradient(ellipse at 50% 28%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%), color-mix(in srgb, var(--surface) 66%, var(--paper));
+}
+.assistant-home-identity { color: var(--ink-muted); font-size: 12px; letter-spacing: .01em; }
+.assistant-home-workspace h1 { margin: 23px 0 28px; text-align: center; font-size: clamp(25px, 2.6vw, 34px); font-weight: 600; letter-spacing: -.045em; line-height: 1.2; }
+.assistant-presence { position: relative; isolation: isolate; width: 92px; height: 92px; margin-top: 26px; overflow: hidden; border-radius: 50%; background: radial-gradient(circle at 28% 20%, #f1eaff 0%, #b09af8 30%, #7353dc 63%, #44346e 100%); box-shadow: inset 1px 2px 7px #ffffff75, inset -8px -12px 20px #2b185c45, 0 12px 36px #8c65dd20; }
+.assistant-presence::after { content: ""; position: absolute; inset: 0; border: 1px solid #ffffff35; border-radius: inherit; background: radial-gradient(circle at 30% 17%, #ffffff70, transparent 30%); }
+.assistant-presence span { position: absolute; width: 140%; height: 75%; left: -20%; bottom: -12%; border-radius: 44%; filter: blur(6px); background: linear-gradient(120deg, #fbf6ff, #d5befe80 50%, #a2baff); transform: rotate(-22deg); animation: assistant-presence-drift 9s ease-in-out infinite alternate; }
+.assistant-presence span:nth-child(2) { bottom: -35%; left: 4%; background: #ede8ffa0; animation-delay: -4s; }
+.assistant-presence span:nth-child(3) { width: 75%; height: 100%; left: 56%; bottom: -38%; background: #7461d0b0; animation-delay: -7s; }
+@keyframes assistant-presence-drift { to { transform: translate(-6%, -9%) rotate(28deg); } }
+
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock) .assistant-prompt {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 9px 10px 9px 24px; margin: 0;
+  border: 1px solid color-mix(in srgb, var(--ink-muted) 23%, transparent); border-radius: 32px;
+  background: color-mix(in srgb, var(--paper) 75%, var(--surface)); box-shadow: 0 6px 24px #00000008, inset 0 1px 0 #ffffff06;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.assistant-home-workspace .assistant-prompt { max-width: 900px; }
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock) .assistant-prompt:focus-within { border-color: color-mix(in srgb, var(--accent) 62%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent); }
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock) .assistant-prompt :is(input,textarea) { display: block; flex: 1; width: 100%; min-width: 0; min-height: 24px; max-height: 144px; margin: 0; padding: 9px 0; background: transparent; color: var(--ink); border: 0; border-radius: 0; outline: none; box-shadow: none; font: inherit; font-size: 15px; line-height: 24px; resize: none; }
+.assistant-prompt :is(input,textarea)::placeholder { color: var(--ink-muted); opacity: .8; }
+.assistant-prompt .assistant-prompt-actions { display: flex; flex: none; align-items: center; gap: 7px; align-self: flex-end; }
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock) .assistant-prompt button { display: grid; place-items: center; width: 44px; height: 44px; min-height: 44px; flex: none; padding: 0; border: 0; border-radius: 50%; color: var(--ink); background: color-mix(in srgb, var(--ink-muted) 10%, transparent); cursor: pointer; transition: background .2s ease, transform .2s ease, opacity .2s ease; }
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock) .assistant-prompt .assistant-prompt-send { color: var(--paper); background: var(--accent); }
+.assistant-prompt button:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.08); }
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock) .assistant-prompt button:disabled { opacity: .35; cursor: default; }
+.assistant-prompt button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.assistant-prompt-spinner { width: 17px; height: 17px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: assistant-prompt-spin .8s linear infinite; }
+@keyframes assistant-prompt-spin { to { transform: rotate(360deg); } }
+.assistant-quick-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.assistant-home-workspace .assistant-quick-actions { justify-content: center; }
+.assistant-quick-actions button { display: inline-flex; align-items: center; gap: 10px; min-height: 38px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 22px; background: transparent; color: var(--ink-muted); font: inherit; font-size: 12px; cursor: pointer; transition: color .2s ease, background .2s ease; }
+.assistant-quick-actions button:hover { color: var(--ink); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.assistant-quick-actions span { opacity: .5; }
+.assistant-home-workspace > small { display: block; margin-top: 20px; color: var(--ink-muted); font-size: 11px; opacity: .8; }
+.assistant-context-entry { margin-bottom: 24px; }
+.assistant-context-entry .assistant-quick-actions { margin-top: 8px; }
+.assistant-context-entry .assistant-quick-actions button { border-color: transparent; padding-left: 4px; }
+.assistant-composer .assistant-composer-top { margin-bottom: 10px; }
+.assistant-composer-top > small { color: var(--ink-muted); font-size: 11px; }
+.assistant-composer .assistant-reset-icon { display: grid; place-items: center; padding: 0; width: 32px; height: 32px; border: 0; border-radius: 50%; margin-left: auto; background: transparent; color: var(--ink-muted); }
+.assistant-composer .assistant-reset-icon:hover { background: var(--paper); color: var(--ink); }
+.assistant-write-instead { display: inline-flex; gap: 8px; align-items: center; min-height: 36px; background: transparent; border: 0; color: var(--ink-muted); font: inherit; font-size: 12px; }
+.assistant-composer .assistant-prompt.is-multiline { border-radius: 26px; padding-left: 18px; }
+.assistant-workspace-panel.is-voice .assistant-body.is-empty { display: none; }
+.assistant-workspace-panel.is-voice .assistant-body.is-empty + .assistant-composer { border-top: 0; }
+.assistant-workspace-panel.is-voice .assistant-composer { flex: 1; max-height: none; display: flex; flex-direction: column; }
+.assistant-workspace-panel.is-voice .assistant-composer > .assistant-voice { margin-block: auto; }
+@media (max-width: 760px) {
+  .assistant-home-workspace { padding: 24px 18px; border-radius: 24px; }
+  .assistant-home-workspace h1 { margin: 20px 0 4px; font-size: 26px; }
+  .assistant-presence { width: 78px; height: 78px; margin-top: 24px; }
+  .assistant-home-workspace .assistant-prompt, .assistant-context-entry .assistant-prompt { display: none; }
+  .assistant-home-workspace .assistant-quick-actions { gap: 7px; margin-top: 22px; }
+  .assistant-quick-actions button { font-size: 11px; padding-inline: 12px; }
+  .assistant-context-entry { margin-bottom: 12px; }
+  .assistant-context-entry .assistant-quick-actions { flex-wrap: nowrap; overflow-x: auto; }
+  .assistant-context-entry .assistant-quick-actions button { white-space: nowrap; }
+  .assistant-mobile-dock { border-top: 0; background: linear-gradient(transparent, var(--paper) 24%); padding-top: 18px; }
+  .assistant-mobile-dock .assistant-prompt { padding: 6px 7px 6px 18px; gap: 6px; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(20px); }
+  .assistant-mobile-dock .assistant-prompt-actions { gap: 4px; }
+  .assistant-mobile-dock .assistant-prompt :is(input,textarea), .assistant-composer .assistant-prompt textarea { font-size: 16px; }
+  .assistant-mobile-dock .assistant-prompt input::placeholder { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-presence span, .assistant-prompt-spinner { animation: none; }
+  .assistant-prompt, .assistant-prompt button, .assistant-quick-actions button { transition: none !important; }
+}

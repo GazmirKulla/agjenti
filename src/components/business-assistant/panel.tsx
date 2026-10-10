@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AudioRecorder } from "@/components/onboarding/audio-recorder";
-import { TalkingRobot } from "./talking-robot";
+import { AssistantComposer } from "./composer";
 import { Icon } from "@/components/dashboard/icon";
 import type { Preview } from "@/lib/business-assistant/model";
 
@@ -241,69 +241,22 @@ export function BusinessAssistant({
           aria-label={agentName}
           style={{ bottom: viewport.bottom }}
         >
-          <form
-            onSubmit={(event) => {
-              onOpen();
-              setMode("text");
-              void analyze(event);
-            }}
-          >
-            <button
-              className="assistant-dock-robot"
-              type="button"
-              onClick={onOpen}
-              aria-label={`Hap bisedën me ${agentName}`}
-            >
-              <TalkingRobot />
-            </button>
-            <label className="sr-only" htmlFor="assistant-dock-input">
-              Shkruaji {agentName}
-            </label>
-            <input
-              id="assistant-dock-input"
-              value={text}
-              onChange={(event) => {
-                setText(event.target.value);
-                if (result?.token && !result.workflow) setResult(null);
-              }}
-              maxLength={12000}
-              placeholder="Pyet ose kërko një veprim…"
-              disabled={Boolean(busy)}
-              autoComplete="off"
-            />
-            <button
-              type="button"
-              className="assistant-dock-audio"
-              disabled={Boolean(busy)}
-              onClick={() => {
-                setMode("audio");
-                onOpen();
-              }}
-              aria-label="Përgjigju me audio"
-            >
-              <Icon name="microphone" size={20} />
-            </button>
-            <button
-              type="submit"
-              className="assistant-dock-send"
-              disabled={Boolean(busy) || text.trim().length < 3}
-              aria-label="Dërgo kërkesën"
-            >
-              ↑
-            </button>
-          </form>
+          <AssistantComposer id="assistant-dock-input" value={text} busy={Boolean(busy)} onOpen={onOpen}
+            onChange={(value) => { setText(value); if (result?.token && !result.workflow) setResult(null); }}
+            onSubmit={() => { onOpen(); setMode("text"); void analyze(); }}
+            onVoice={() => { setMode("audio"); onOpen(); }} />
           <span className="assistant-dock-hint">
             {busy
               ? "Agjenti po punon…"
               : result?.token
                 ? "Propozimi është gati · hap bisedën për konfirmim"
-                : "Agjenti yt · çdo ndryshim e konfirmon ti"}
+                : "Ndryshimet i konfirmon ti."}
           </span>
         </section>
       )}
       <dialog
         ref={dialog}
-        className={`business-assistant assistant-workspace-panel ${context.page === "home" ? "is-home" : ""} ${expanded ? "is-expanded" : ""}`}
+        className={`business-assistant assistant-workspace-panel ${context.page === "home" ? "is-home" : ""} ${expanded ? "is-expanded" : ""} ${mode === "audio" ? "is-voice" : ""}`}
         style={
           {
             "--assistant-panel-width": `${panelWidth}px`,
@@ -360,8 +313,8 @@ export function BusinessAssistant({
             />
           </label>
         )}
-        <div className="assistant-body" aria-busy={Boolean(busy)}>
-          {!history.length && !result && (
+        <div className={`assistant-body ${!history.length && !result && !error ? "is-empty" : ""}`} aria-busy={Boolean(busy)}>
+          {mode === "text" && !history.length && !result && (
             <div className="assistant-welcome">
               <h3>Çfarë dëshiron të ndryshosh?</h3>
               <p>
@@ -516,76 +469,19 @@ export function BusinessAssistant({
         </div>
         <div className="assistant-composer">
           <div className="assistant-composer-top">
-            <div
-              className="assistant-modes"
-              role="group"
-              aria-label="Mënyra e përgjigjes"
-            >
-              <button
-                type="button"
-                aria-pressed={mode === "text"}
-                disabled={Boolean(busy)}
-                onClick={() => setMode("text")}
-              >
-                <Icon name="edit" size={16} />
-                Tekst
-              </button>
-              <button
-                type="button"
-                aria-pressed={mode === "audio"}
-                disabled={Boolean(busy)}
-                onClick={() => setMode("audio")}
-              >
-                <Icon name="microphone" size={16} />
-                Audio
-              </button>
-            </div>
-            <button
-              type="button"
-              className="assistant-reset"
-              onClick={reset}
-              disabled={Boolean(busy)}
-            >
-              Kërkesë e re
+            {mode === "audio" ? <button type="button" className="assistant-write-instead" disabled={Boolean(busy)} onClick={() => setMode("text")}>
+              <Icon name="edit" size={16} /> Shkruaj
+            </button> : <small>Ndryshimet i konfirmon ti.</small>}
+            <button type="button" className="assistant-reset assistant-reset-icon" onClick={reset} disabled={Boolean(busy)} aria-label="Bisedë e re" title="Bisedë e re">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
             </button>
           </div>
           {mode === "text" ? (
-            <form onSubmit={analyze}>
-              <label className="sr-only" htmlFor="business-assistant-input">
-                Kërkesa jote
-              </label>
-              <textarea
-                id="business-assistant-input"
-                value={text}
-                onChange={(e) => {
-                  setText(e.target.value);
-                  if (result?.token && !result.workflow) setResult(null);
-                }}
-                maxLength={12000}
-                rows={3}
-                placeholder="P.sh. Ndrysho çmimin e barrierës në 45 EUR…"
-                disabled={Boolean(busy)}
-              />
-              <div className="assistant-send-row">
-                <small>Çdo ndryshim kërkon konfirmimin tënd.</small>
-                <button
-                  type="submit"
-                  className="assistant-primary"
-                  disabled={Boolean(busy) || text.trim().length < 3}
-                >
-                  Analizo <span aria-hidden="true">↑</span>
-                </button>
-              </div>
-            </form>
+            <AssistantComposer id="business-assistant-input" value={text} busy={Boolean(busy)} multiline
+              onChange={(value) => { setText(value); if (result?.token && !result.workflow) setResult(null); }}
+              onSubmit={() => void analyze()} onVoice={() => setMode("audio")} />
           ) : (
-            open && (
-              <AudioRecorder
-                purpose="request"
-                busy={Boolean(busy)}
-                onAnalyze={transcribe}
-                analyzeLabel="Ktheje në tekst"
-              />
-            )
+            open && <AudioRecorder variant="assistant" purpose="request" busy={Boolean(busy)} onAnalyze={transcribe} analyzeLabel="Ktheje në tekst" />
           )}
         </div>
       </dialog>

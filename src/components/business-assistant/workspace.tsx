@@ -11,7 +11,7 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { BusinessAssistant } from "./panel";
-import { TalkingRobot } from "./talking-robot";
+import { AssistantComposer } from "./composer";
 import {
   assistantSuggestions,
   contextFromPath,
@@ -164,48 +164,16 @@ export function AssistantEntry({ home = false }: { home?: boolean }) {
       {home && (
         <>
           <span className="assistant-home-identity">
-            <TalkingRobot />
             Agjenti “{w.name}”
           </span>
+          <div className="assistant-presence" aria-hidden="true"><span /><span /><span /></div>
           <h1>Çfarë do të bëjmë sot?</h1>
-          <p>Më trego çfarë dëshiron të përditësosh për biznesin tënd.</p>
         </>
       )}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          w.send();
-        }}
-      >
-        <label
-          className="sr-only"
-          htmlFor={home ? "assistant-home-input" : "assistant-context-input"}
-        >
-          Kërkesa për Agjentin
-        </label>
-        <input
-          id={home ? "assistant-home-input" : "assistant-context-input"}
-          value={w.text}
-          onChange={(e) => w.setText(e.target.value)}
-          maxLength={12000}
-          placeholder={
-            home
-              ? "Shkruaj çfarë dëshiron të bëjë Agjenti…"
-              : `Pyet Agjentin për ${contextLabel(w.context).toLocaleLowerCase()}…`
-          }
-        />
-        <button
-          type="button"
-          aria-label="Përgjigju me audio"
-          onClick={() => {
-            w.setMode("audio");
-            w.setOpen(true);
-          }}
-        >
-          Audio
-        </button>
-        <button type="submit">Dërgo kërkesën ↑</button>
-      </form>
+      <AssistantComposer id={home ? "assistant-home-input" : "assistant-context-input"}
+        value={w.text} onChange={w.setText} onSubmit={w.send}
+        placeholder={home ? "Pyet ose kërko një ndryshim…" : `Pyet për ${contextLabel(w.context).toLocaleLowerCase()}…`}
+        onVoice={() => { w.setMode("audio"); w.setOpen(true); }} />
       <div className="assistant-quick-actions">
         {suggestions.map((s) => (
           <button key={s.label} onClick={() => w.launch(s.text)}>
@@ -215,7 +183,7 @@ export function AssistantEntry({ home = false }: { home?: boolean }) {
         ))}
       </div>
       {home && (
-        <small>Ti kontrollon propozimin dhe konfirmon çdo ndryshim.</small>
+        <small>Ndryshimet i konfirmon ti.</small>
       )}
     </section>
   );

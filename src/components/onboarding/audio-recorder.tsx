@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_AUDIO_BYTES } from "@/lib/onboarding/audio-upload";
 import type { AudioGuideQuestion } from "@/lib/onboarding/audio-guide";
+import "@/components/business-assistant/voice-recorder.css";
 
 export function AudioRecorder({
   busy,
@@ -10,6 +11,7 @@ export function AudioRecorder({
   onBack,
   analyzeLabel = "Analizo biznesin →",
   purpose = "onboarding",
+  variant = "onboarding",
 }: {
   busy: boolean;
   onAnalyze: (file: File) => Promise<void>;
@@ -17,6 +19,7 @@ export function AudioRecorder({
   onBack?: () => void;
   analyzeLabel?: string;
   purpose?: "onboarding" | "request";
+  variant?: "onboarding" | "assistant";
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -154,6 +157,47 @@ export function AudioRecorder({
     } finally {
       if (mounted.current) setRequesting(false);
     }
+  }
+  if (variant === "assistant") {
+    const processing = busy || analyzing;
+    const unavailable = processing || requesting;
+    const micLabel = requesting ? "Duke hapur mikrofonin" : file ? "Regjistro përsëri" : "Fillo regjistrimin";
+    return (
+      <div className={`assistant-voice ${recording ? "is-recording" : ""} ${processing ? "is-processing" : ""}`}>
+        <div className="assistant-voice-orb" aria-hidden="true"><span /></div>
+        <div className="assistant-voice-status">
+          <p role="status">
+            {requesting ? "Po hapim mikrofonin…" : recording ? "Po regjistrojmë" : processing ? "Po e kthejmë në tekst…" : file ? "Regjistrimi është gati" : "Fol me Agjentin"}
+          </p>
+          <span className="assistant-voice-time">
+            {recording || file ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} / 2:00` : "Deri në 2 minuta"}
+          </span>
+        </div>
+        {url && !recording && <audio controls src={url} aria-label="Dëgjo regjistrimin tënd" />}
+        <div className="assistant-voice-controls">
+          {onBack && <button type="button" className="assistant-voice-button" aria-label="Kthehu te shkrimi" title="Kthehu te shkrimi" disabled={unavailable || recording} onClick={onBack}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+          </button>}
+          {recording ? (
+            <button type="button" className="assistant-voice-button is-stop" onClick={stop} aria-label="Përfundo regjistrimin" title="Përfundo regjistrimin">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3" /></svg>
+            </button>
+          ) : (
+            <button type="button" className={`assistant-voice-button ${file ? "" : "is-primary"}`} disabled={unavailable} onClick={() => void start()} aria-label={micLabel} title={micLabel}>
+              {requesting ? <span className="assistant-voice-spinner" aria-hidden="true" /> : file ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1.5 7M3 4v6h6" /></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" /></svg>
+              )}
+            </button>
+          )}
+          {file && !recording && <button type="button" className="assistant-voice-button is-primary" disabled={unavailable} onClick={() => void runAnalysis(file)} aria-label="Ktheje regjistrimin në tekst" title="Ktheje regjistrimin në tekst">
+            {processing ? <span className="assistant-voice-spinner" aria-hidden="true" /> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>}
+          </button>}
+        </div>
+        {error && <p className="assistant-voice-error" role="alert">{error}</p>}
+      </div>
+    );
   }
   return (
     <div className="onboarding-audio-layout">

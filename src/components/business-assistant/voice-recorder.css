@@ -1,0 +1,94 @@
+.assistant-voice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 28px 20px 16px;
+  color: var(--ink);
+}
+
+.assistant-voice-orb {
+  position: relative;
+  isolation: isolate;
+  width: 104px;
+  height: 104px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle at 28% 22%, #eee6ff 0%, #c4a6ff 26%, #8a59e7 60%, #5935ae 100%);
+  box-shadow: inset 0 0 17px #ffffff40, 0 12px 40px #8250d523;
+  transition: box-shadow .4s, transform .4s;
+}
+
+.assistant-voice-orb::before,
+.assistant-voice-orb::after,
+.assistant-voice-orb > span {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  border-radius: 42%;
+  background: radial-gradient(ellipse at 65% 68%, #f7f3ff 0%, #dfceffbd 20%, #a984ef00 54%);
+  transform: rotate(-35deg);
+  filter: blur(7px);
+}
+
+.assistant-voice-orb::after {
+  inset: -30% -50% -50% -25%;
+  background: radial-gradient(ellipse at 46% 32%, #7335d9 2%, #b898f7a6 30%, transparent 61%);
+  transform: rotate(35deg);
+  mix-blend-mode: soft-light;
+}
+
+.assistant-voice-orb > span {
+  inset: 35% -30% -46%;
+  background: #f5edff9c;
+  filter: blur(12px);
+}
+
+.assistant-voice.is-recording .assistant-voice-orb {
+  animation: assistant-voice-breathe 2.4s ease-in-out infinite;
+}
+
+.assistant-voice.is-recording .assistant-voice-orb::before,
+.assistant-voice.is-processing .assistant-voice-orb::before {
+  animation: assistant-voice-swirl 6s linear infinite;
+}
+
+.assistant-voice.is-recording .assistant-voice-orb::after,
+.assistant-voice.is-processing .assistant-voice-orb::after {
+  animation: assistant-voice-swirl 9s linear infinite reverse;
+}
+
+.assistant-voice-status { text-align: center; }
+.assistant-voice-status p { margin: 0; font-size: 15px; font-weight: 500; }
+.assistant-voice-time { display: block; margin-top: 5px; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.assistant-voice audio { width: min(100%, 300px); height: 36px; border-radius: 18px; }
+.assistant-voice-controls { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.assistant-voice-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--ink-muted) 20%, transparent);
+  border-radius: 50%;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink-muted) 9%, transparent);
+  cursor: pointer;
+  transition: background .2s, transform .2s, box-shadow .2s;
+}
+.assistant-voice-button svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; }
+.assistant-voice-button:hover:not(:disabled) { background: var(--accent-soft); transform: translateY(-1px); }
+.assistant-voice-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.assistant-voice-button.is-primary { color: var(--surface, #fff); background: var(--accent); border-color: transparent; }
+.assistant-voice-button.is-primary:hover:not(:disabled) { background: var(--accent-2); }
+.assistant-voice-button.is-stop { color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.assistant-voice-button:disabled { opacity: .5; cursor: wait; }
+.assistant-voice-error { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; text-align: center; color: var(--danger, #d94c68); }
+.assistant-voice-spinner { width: 18px; height: 18px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: assistant-voice-swirl .8s linear infinite; }
+
+@keyframes assistant-voice-swirl { to { transform: rotate(325deg); } }
+@keyframes assistant-voice-breathe { 50% { transform: scale(1.04); box-shadow: inset 0 0 17px #ffffff40, 0 12px 48px #8250d53d; } }
+@media (prefers-reduced-motion: reduce) {
+  .assistant-voice *, .assistant-voice *::before, .assistant-voice *::after { animation: none !important; transition: none !important; }
+}
