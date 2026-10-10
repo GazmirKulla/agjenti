@@ -84,7 +84,9 @@ Paraqiten hapat e shtuar/ndryshuar/hequr. Veprimet: Ruaj draftin, Provoje, Publi
 
 Webhook-u ruan mesazhet e pilotit para përgjigjes HTTP. Çelësi unik është lidhja Instagram + ID e mesazhit. Worker-i merr mesazhin më të vjetër të papërfunduar për pjesëmarrësin, me lease dhe token; `prepare_workflow_reply` ruan bashkë state-in me revision, profilin dhe përgjigjen për dërgim.
 
-Përgjigjja e ruajtur mund të dërgohet pa ekzekutuar sërish workflow-n. Një dërgim me rezultat të paqartë nuk përsëritet automatikisht: biseda ndalet për stafin. Gabimet para dërgimit riprovohen deri në tre herë. `/api/cron/workflow-inbound` kërkon `CRON_SECRET`; është regjistruar çdo minutë në konfigurimin e hostimit. Për platforma që nuk mbështesin këtë frekuencë duhet një scheduler ekuivalent i autorizuar.
+Përgjigjja e ruajtur mund të dërgohet pa ekzekutuar sërish workflow-n. Një dërgim me rezultat të paqartë nuk përsëritet automatikisht: biseda ndalet për stafin. Gabimet para dërgimit riprovohen deri në tre herë. Webhook-u nis worker-in menjëherë pas ruajtjes së mesazheve. `/api/cron/workflow-inbound` kërkon `CRON_SECRET`; në konfigurimin bazë ekzekutohet një herë në ditë (`0 5 * * *`, UTC), për pajtueshmëri me Vercel Hobby. Ky ekzekutim është rikuperim rezervë: pa mesazh të ri, puna e mbetur ose riprovimi mund të presë deri në ekzekutimin e ditës tjetër.
+
+Për pilotin real kërkohet rikuperim çdo minutë: në Vercel Pro ndrysho vetëm orarin e këtij endpoint-i në `* * * * *`, ose konfiguro një scheduler të jashtëm që thërret `GET /api/cron/workflow-inbound` çdo minutë me `Authorization: Bearer <CRON_SECRET>`. Mos ruaj sekretin në repo. Orari çdo minutë në `vercel.json` bllokon deployment-in në Vercel Hobby; nuk duhet aktivizuar aty pa planin përkatës.
 
 ## Aktivizimi i pilotit
 

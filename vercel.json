@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/workflow-inbound",
-      "schedule": "* * * * *"
+      "schedule": "0 5 * * *"
     }
   ]
 }
