@@ -237,3 +237,28 @@ describe("audio onboarding boundary", () => {
     expect((await POST(request())).status).toBe(409);
   });
 });
+
+describe('conversational onboarding boundary', () => {
+  async function send(field='name') {
+    const {POST: conversationPOST} = await import('../conversation/route');
+    return conversationPOST(new Request(`http://localhost:3003/api/onboarding/conversation?field=${field}`, {
+      method:'POST', headers:{origin:'http://localhost:3003','Content-Type':'application/json'},
+      body:JSON.stringify({text:'Barriera',answers:emptyAnswers}),
+    }));
+  }
+  it('requires the administrator to enable agent onboarding', async () => {
+    expect((await send()).status).toBe(403);
+    expect(mocks.analyzeText).not.toHaveBeenCalled();
+  });
+  it('passes the validated question as context and saves the result', async () => {
+    mocks.settings.mockResolvedValue({onboarding_enabled:true,onboarding_mode:'agent'});
+    expect((await send()).status).toBe(200);
+    expect(mocks.analyzeText).toHaveBeenCalledWith('Barriera',expect.any(Object),undefined,'Si quhet biznesi yt?');
+    expect(mocks.rpc).toHaveBeenCalledWith('finish_onboarding_audio',expect.objectContaining({p_user_id:'owner'}));
+  });
+  it('rejects unsupported question identifiers before running AI', async () => {
+    mocks.settings.mockResolvedValue({onboarding_enabled:true,onboarding_mode:'agent'});
+    expect((await send('forged')).status).toBe(400);
+    expect(mocks.analyzeText).not.toHaveBeenCalled();
+  });
+});

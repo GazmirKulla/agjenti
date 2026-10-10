@@ -4,10 +4,11 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { parseAnswers } from "@/lib/onboarding/model";
 import { mergeExtraction } from "@/lib/onboarding/audio-model";
 import { analyzeAudio, analyzeText } from "@/lib/onboarding/audio-provider";
+import { conversationQuestions } from "@/lib/onboarding/conversation";
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
-export async function handleOnboardingAnalysis(request: Request, source: "audio" | "text") {
+export async function handleOnboardingAnalysis(request: Request, source: "audio" | "text", conversation = false) {
   let attemptId: string | null = null;
   let userId: string | null = null;
   try {
@@ -23,7 +24,7 @@ export async function handleOnboardingAnalysis(request: Request, source: "audio"
     if (
       access.admin ||
       access.businesses.length ||
-      !settings.onboarding_enabled
+      !settings.onboarding_enabled || (conversation && settings.onboarding_mode !== "agent")
     )
       return json(
         { error: "Kjo mënyrë është për hapësirat e reja të biznesit." },
@@ -42,6 +43,9 @@ export async function handleOnboardingAnalysis(request: Request, source: "audio"
       : await readWrittenForm(request);
     const { raw } = input;
     const current = parseAnswers(raw, false, settings.onboarding_steps);
+    const field = conversation ? new URL(request.url).searchParams.get("field") : null;
+    const question = conversationQuestions(current, settings.onboarding_steps).find(q => q.field === field);
+    if (conversation && field && !question) return json({error:"Pyetja nuk është e vlefshme."}, 400);
     const db = createServiceSupabase();
     const claim = await db.rpc("claim_onboarding_audio", {
       p_user_id: user.id,
@@ -73,13 +77,14 @@ export async function handleOnboardingAnalysis(request: Request, source: "audio"
       if (stored.error) throw new Error("save_failed");
     };
     const result = "file" in input
-      ? await analyzeAudio(input.file, current, storeTranscript)
+      ? await analyzeAudio(input.file, current, storeTranscript, question?.title)
       : await (async () => {
           await storeTranscript(input.text);
-          return analyzeText(input.text, current);
+          return question ? analyzeText(input.text, current, undefined, question.title) : analyzeText(input.text, current);
         })();
     const answers = mergeExtraction(current, result.extraction, attemptId!, {
-      replaceWrittenOfferings: source === "text",
+      replaceWrittenOfferings: !conversation && source === "text",
+      replaceFields: conversation && field ? [field] : [],
     });
     const saved = await db.rpc("finish_onboarding_audio", {
       p_user_id: user.id,

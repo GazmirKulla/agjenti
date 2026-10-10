@@ -6,6 +6,7 @@ import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { homeForAccess } from "@/lib/auth/destination";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { emptyAnswers, parseAnswers } from "@/lib/onboarding/model";
+import { ConversationOnboarding } from "@/components/onboarding/conversation";
 import { OnboardingExperience } from "@/components/onboarding/experience";
 import { getAppSettings } from "@/lib/platform/settings";
 import { BasicWorkspaceForm } from "@/components/onboarding/basic-workspace";
@@ -102,6 +103,7 @@ export default async function OnboardingPage() {
   } catch {
     /* A malformed old draft can be safely restarted. */
   }
+  if (settings.onboarding_mode === "agent") return <ConversationOnboarding initial={initial} email={user.email || ""} enabledSteps={settings.onboarding_steps} />;
   const { data: audioHistory } = await db
     .from("onboarding_audio_attempts")
     .select("id,transcript")

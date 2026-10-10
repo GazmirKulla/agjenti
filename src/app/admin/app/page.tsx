@@ -35,15 +35,21 @@ export default async function AppSettingsPage() {
               përdoruesi vazhdon konfigurimin nga paneli dhe lidhja e Instagram-it nuk nis analizë automatike.
             </p>
           </div>
+          <fieldset className="grid gap-3">
+            <legend className="form-label">Si kryhet onboarding-u?</legend>
+            <label className="toggle-label"><span>Me Agjentin<small>Bisedë me tekst ose audio, pyetje sipas biznesit dhe konfirmim i profilit.</small></span><input type="radio" name="onboarding_mode" value="agent" defaultChecked={settings.onboarding_mode === "agent"} /></label>
+            <label className="toggle-label"><span>Me hapat e udhëzuar<small>Përvoja ekzistuese e plotësimit të profilit.</small></span><input type="radio" name="onboarding_mode" value="guided" defaultChecked={settings.onboarding_mode === "guided"} /></label>
+            <p className="muted-copy">Zbatohet kur konfigurimi automatik është aktiv. Përgjigjet e ruajtura vazhdojnë edhe kur ndryshon mënyra.</p>
+          </fieldset>
           <div>
-            <p className="form-label">Hapat e alternativës manuale</p>
+            <p className="form-label">Pyetjet e konfigurimit</p>
             <p className="muted-copy mb-3">
-              Zgjidh cilat pyetje shfaqen kur përdoruesi zgjedh plotësimin manual ose me audio. Emri i biznesit
+              Zgjidh cilat pyetje shfaqen gjatë konfigurimit me hapa ose me Agjentin. Emri i biznesit
               mbetet gjithmonë i detyrueshëm. Hiq check-un për ta fshehur një
               hap.
             </p>
             <div className="grid gap-3">
-              {questions.map((q) => (
+              {questions.filter(q => !["aiMode", "teamSize"].includes(q.key)).map((q) => (
                 <label key={q.key} className="toggle-label">
                   <span>
                     {q.title}

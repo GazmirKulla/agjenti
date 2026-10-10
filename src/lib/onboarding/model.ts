@@ -122,6 +122,7 @@ const wizardOrder: AnswerKey[] = [
 ];
 export type Answers = {
   name: string;
+  conversationSkipped?: string[];
   guidedOnboardingMode?: "basics" | "audio" | "written" | "manual" | "review";
   missingInformation?: string[];
   details?: BusinessDetails;
@@ -384,6 +385,7 @@ export function parseAnswers(
     aiMode: agentCapabilities[0] ?? "",
     ...scalarValues,
   });
+  normalized.conversationSkipped = Array.isArray(raw.conversationSkipped) ? [...new Set(raw.conversationSkipped.filter((key): key is string => typeof key === "string" && ([...allQuestionKeys, ...Object.keys(detailFields)] as string[]).includes(key)))].slice(0, 30) : [];
   normalized.selectedUseCases = [...normalized.useCases];
   normalized.productType = normalized.offeringTypes[0] ?? "";
   normalized.aiMode = normalized.agentCapabilities[0] ?? "";

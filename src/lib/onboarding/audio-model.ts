@@ -167,7 +167,7 @@ export function mergeExtraction(
   current: Answers,
   extraction: Extraction,
   analysisId: string,
-  options: { replaceWrittenOfferings?: boolean } = {},
+  options: { replaceWrittenOfferings?: boolean; replaceFields?: string[] } = {},
 ): Answers {
   const previous = current.audioReview;
   const review: AudioReview = {
@@ -193,7 +193,7 @@ export function mergeExtraction(
   for (const key of audioFields) {
     const field = extraction[key];
     if (key === "businessCategory" && current.businessType) continue;
-    const replaceOfferings = key === "offeringsSummary" && options.replaceWrittenOfferings;
+    const replaceOfferings = (key === "offeringsSummary" && options.replaceWrittenOfferings) || options.replaceFields?.includes(key);
     if (
       !field ||
       !hasValue(field.value) ||

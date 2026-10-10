@@ -7,6 +7,7 @@ import {
 } from "@/lib/onboarding/model";
 export const defaultAppSettings = {
   onboarding_enabled: true,
+  onboarding_mode: "guided" as "guided" | "agent",
   checklist_enabled: true,
   announcement: "",
   onboarding_steps: [...allQuestionKeys] as AnswerKey[],
@@ -15,6 +16,7 @@ export type AppSettings = typeof defaultAppSettings;
 function normalizeSettings(data: Record<string, unknown> | null): AppSettings {
   if (!data) return { ...defaultAppSettings };
   return {
+    onboarding_mode: data.onboarding_mode === "agent" ? "agent" : "guided",
     onboarding_enabled:
       typeof data.onboarding_enabled === "boolean"
         ? data.onboarding_enabled
@@ -36,9 +38,7 @@ export const getAppSettings = cache(
   async function getAppSettings(): Promise<AppSettings> {
     const { data, error } = await createServiceSupabase()
       .from("app_settings")
-      .select(
-        "onboarding_enabled,checklist_enabled,announcement,onboarding_steps",
-      )
+      .select("*")
       .eq("id", true)
       .maybeSingle();
     // Preserve existing behavior while the migration is being deployed.

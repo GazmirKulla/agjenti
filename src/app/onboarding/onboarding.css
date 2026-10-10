@@ -1339,3 +1339,36 @@
   .onboarding-review-confirm input[type="checkbox"] { appearance: auto; }
   .onboarding-boolean-choice input::after, .onboarding-review-confirm input::after { display: none; }
 }
+
+/* Conversational onboarding keeps choices, explanations and progress together. */
+.conversation-page { padding: 32px 20px; }
+.onboarding-chat { width: min(100%, 860px); margin: 0 auto; background: #fff; border: 1px solid #e7dff4; border-radius: 28px; box-shadow: 0 18px 70px #39215c0a; overflow: hidden; color: #211936; }
+.onboarding-chat-header { display:flex; align-items:center; gap:18px; padding:28px; border-bottom:1px solid #eee8f5; background:linear-gradient(120deg,#faf7ff,#fff); }
+.onboarding-chat-header h1 { font-size:clamp(22px,3vw,30px); line-height:1.3; margin:6px 0; overflow-wrap:anywhere; }
+.onboarding-chat-header p,.onboarding-chat-question p { color:#80728f; font-size:14px; line-height:1.6; }
+.onboarding-chat-avatar { flex-shrink:0; display:grid; place-items:center; width:64px; height:64px; border-radius:22px; background:#eee5ff; color:#7e4af5; }
+.onboarding-chat-thread { padding:24px 28px; max-height:56vh; min-height:260px; overflow:auto; overscroll-behavior:contain; display:flex; flex-direction:column; gap:18px; }
+.onboarding-chat-bubble { max-width:88%; padding:14px 18px; border-radius:18px 18px 18px 5px; background:#f5f1fb; font-size:15px; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; }
+.onboarding-chat-bubble.is-user { align-self:flex-end; background:#7c4bed; color:white; border-radius:18px 18px 5px 18px; }
+.onboarding-chat-question h2 { font-size:21px; line-height:1.4; margin-bottom:8px; }
+.onboarding-chat-options { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0; }
+.onboarding-chat-options button { padding:12px 16px; border:1px solid #ded4ec; border-radius:14px; background:white; text-align:left; font-size:14px; transition:background .15s,border-color .15s; }
+.onboarding-chat-options button:hover,.onboarding-chat-options button[aria-pressed=true] { background:#f1eaff; border-color:#8151ec; color:#6230ca; }
+.onboarding-chat button:focus-visible,.onboarding-chat textarea:focus-visible { outline:3px solid #aa82ff; outline-offset:3px; }
+.onboarding-chat button:disabled { opacity:.5; cursor:wait; }
+.onboarding-chat-skip { display:block; margin-top:16px; font-size:14px; color:#76658c; text-decoration:underline; text-underline-offset:4px; }
+.onboarding-chat-composer { padding:20px 28px; border-top:1px solid #eee8f5; }
+.onboarding-chat-modes { display:flex; gap:4px; padding:4px; width:max-content; background:#f4f0fa; border-radius:12px; margin-bottom:14px; }
+.onboarding-chat-modes button { padding:7px 18px; font-size:14px; border-radius:9px; }
+.onboarding-chat-modes button[aria-pressed=true] { background:white; color:#7342db; box-shadow:0 2px 5px #32155812; }
+.onboarding-chat-composer form { display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
+.onboarding-chat-composer textarea { width:100%; resize:vertical; min-height:90px; padding:14px; border:1px solid #ded4ec; border-radius:14px; background:#fdfbff; font-size:16px; }
+.onboarding-chat-summary { padding:20px 28px; border-top:1px solid #eee8f5; }
+.onboarding-chat-summary summary { cursor:pointer; font-weight:600; color:#715297; }
+.onboarding-chat-summary dl>div { padding:16px 0; border-bottom:1px solid #f0eaf6; }
+.onboarding-chat-summary dt { font-size:13px; color:#897997; margin-bottom:6px; }
+.onboarding-chat-summary dd { white-space:pre-wrap; overflow-wrap:anywhere; }
+.onboarding-chat-summary button { color:#7543de; font-size:13px; margin-top:8px; }
+.onboarding-chat-error { margin:10px 28px; padding:12px; border-radius:10px; background:#fff0f0; color:#a32232; }
+.onboarding-chat-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; padding:18px 28px; background:#faf8fd; color:#897997; font-size:12px; }
+@media(max-width:600px) { .conversation-page{padding:12px 8px;} .onboarding-chat{border-radius:20px;} .onboarding-chat-header{padding:20px 16px;gap:12px;} .onboarding-chat-avatar{width:48px;height:48px;} .onboarding-chat-thread{padding:20px 16px;max-height:50dvh;} .onboarding-chat-composer,.onboarding-chat-summary{padding:18px 16px;} .onboarding-chat-bubble{max-width:94%;} .onboarding-chat-options button{flex:1 1 42%;} }
