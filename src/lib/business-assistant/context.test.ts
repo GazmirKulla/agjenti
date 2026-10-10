@@ -63,6 +63,22 @@ it("advertises only available actions for the current page and catalog source", 
       "services",
     ]).map((s) => s.label),
   ).toEqual(["Shto shërbim"]);
+  expect(
+    assistantSuggestions({ page: "workflows", entryPoint: "contextual" }, [
+      "workflows",
+    ]).map((s) => s.label),
+  ).toEqual([
+    "Shiko rrjedhën",
+    "Përshtat hapat",
+    "Provoje si klient",
+    "Publiko draftin",
+  ]);
+  expect(
+    assistantSuggestions({ page: "home", entryPoint: "home" }, [
+      "workflows",
+      "services",
+    ]).map((s) => s.label),
+  ).toEqual(["Shiko rrjedhën", "Përshtat hapat", "Shto shërbim"]);
 });
 it("carries bounded catalog context and resolves a single checked product", () => {
   expect(

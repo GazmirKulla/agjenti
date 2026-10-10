@@ -252,7 +252,7 @@ export function WorkflowCard({
       )}
       <footer>
         <Link href={`/b/${slug}/workflows`}>Hap editorin →</Link>
-        {!pending && !proposed && (
+        {!pending && !proposed && tab === "draft" && (
           <button
             type="button"
             className="assistant-secondary"
@@ -261,13 +261,41 @@ export function WorkflowCard({
                 "Publiko dhe aktivizo draftin aktual të rrjedhës së biznesit.",
               )
             }
-            disabled={
-              !workspace.available || problems.length > 0 || tab !== "draft"
-            }
+            disabled={!workspace.available || problems.length > 0}
           >
             Publiko draftin…
           </button>
         )}
+        {!pending &&
+          !proposed &&
+          tab === "published" &&
+          published &&
+          workspace.available &&
+          (workspace.enabled ? (
+            <button
+              type="button"
+              className="assistant-secondary"
+              onClick={() =>
+                onRequest(
+                  "Çaktivizo rrjedhën e publikuar për bisedat e reja.",
+                )
+              }
+            >
+              Çaktivizo…
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="assistant-secondary"
+              onClick={() =>
+                onRequest(
+                  "Aktivizo versionin e publikuar të rrjedhës për bisedat e reja.",
+                )
+              }
+            >
+              Aktivizo…
+            </button>
+          ))}
       </footer>
     </section>
   );

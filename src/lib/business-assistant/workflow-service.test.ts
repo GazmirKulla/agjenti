@@ -190,3 +190,90 @@ it("restores a tenant-owned published graph only as a draft", async () => {
     values: { operation: "draft", graph: { name: "Version i vjetër" } },
   });
 });
+it("disables a published workflow and activates a disabled published version", async () => {
+  const disable = await prepareWorkflow(
+    access,
+    proposal("workflow_disable"),
+    3,
+  );
+  expect(disable.preview?.title).toBe("Çaktivizo rrjedhën");
+  expect(openTicket(disable.token!, access)).toMatchObject({
+    action: "workflow_disable",
+    values: { operation: "disable" },
+  });
+  await executeTicket(access, disable.token!);
+  expect(m.rpc).toHaveBeenCalledExactlyOnceWith(
+    "save_visual_workflow",
+    expect.objectContaining({
+      p_business: "business-a",
+      p_operation: "disable",
+      p_revision: 3,
+    }),
+  );
+
+  m.workspace.mockResolvedValue({
+    graph: starterVisualGraph(),
+    revision: 4,
+    publishedVersionId: "version-a",
+    enabled: false,
+    available: true,
+    generated: false,
+  });
+  m.rpc.mockClear();
+  const enable = await prepareWorkflow(access, proposal("workflow_enable"), 4);
+  expect(enable.preview?.title).toBe("Aktivizo versionin e publikuar");
+  expect(openTicket(enable.token!, access)).toMatchObject({
+    action: "workflow_enable",
+    values: { operation: "enable" },
+  });
+  await executeTicket(access, enable.token!);
+  expect(m.rpc).toHaveBeenCalledExactlyOnceWith(
+    "save_visual_workflow",
+    expect.objectContaining({
+      p_operation: "enable",
+      p_revision: 4,
+    }),
+  );
+});
+it("returns without a ticket when enable or disable is already the current state", async () => {
+  const alreadyEnabled = await prepareWorkflow(
+    access,
+    proposal("workflow_enable"),
+    3,
+  );
+  expect(alreadyEnabled.message).toBe("Rrjedha është tashmë në këtë gjendje.");
+  expect(alreadyEnabled.token).toBeUndefined();
+  m.workspace.mockResolvedValue({
+    graph: starterVisualGraph(),
+    revision: 3,
+    publishedVersionId: "version-a",
+    enabled: false,
+    available: true,
+    generated: false,
+  });
+  const alreadyDisabled = await prepareWorkflow(
+    access,
+    proposal("workflow_disable"),
+    3,
+  );
+  expect(alreadyDisabled.message).toBe("Rrjedha është tashmë në këtë gjendje.");
+  expect(alreadyDisabled.token).toBeUndefined();
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it("refuses enable or disable when no published version exists", async () => {
+  m.workspace.mockResolvedValue({
+    graph: starterVisualGraph(),
+    revision: 1,
+    publishedVersionId: null,
+    enabled: false,
+    available: true,
+    generated: false,
+  });
+  await expect(
+    prepareWorkflow(access, proposal("workflow_enable"), 1),
+  ).rejects.toThrow("publikuar");
+  await expect(
+    prepareWorkflow(access, proposal("workflow_disable"), 1),
+  ).rejects.toThrow("publikuar");
+  expect(m.rpc).not.toHaveBeenCalled();
+});

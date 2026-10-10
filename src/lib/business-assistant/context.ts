@@ -165,8 +165,28 @@ export function assistantSuggestions(
   external = false,
 ) {
   const all = [
-    { module: "workflows", label: "Shiko rrjedhën", text: "Më trego rrjedhën aktuale të Agjentit." },
-    { module: "workflows", label: "Përshtat hapat", text: "Dua të ndryshoj hapat e rrjedhës së biznesit." },
+    {
+      module: "workflows",
+      label: "Shiko rrjedhën",
+      text: "Më trego rrjedhën aktuale të Agjentit.",
+    },
+    {
+      module: "workflows",
+      label: "Përshtat hapat",
+      text: "Dua të ndryshoj hapat e rrjedhës së biznesit.",
+    },
+    {
+      module: "workflows",
+      label: "Provoje si klient",
+      text: "Më trego rrjedhën dhe si ta provoj si klient.",
+      pageOnly: "workflows" as const,
+    },
+    {
+      module: "workflows",
+      label: "Publiko draftin",
+      text: "Publiko dhe aktivizo draftin aktual të rrjedhës së biznesit.",
+      pageOnly: "workflows" as const,
+    },
     {
       module: "products",
       label: "Shto produkt",
@@ -202,7 +222,12 @@ export function assistantSuggestions(
       label: "Përditëso udhëzimet",
       text: "Dua të përditësoj udhëzimet e Agjentit.",
     },
-  ].filter((a) => modules.includes(a.module) && !a.blocked);
+  ].filter(
+    (a) =>
+      modules.includes(a.module) &&
+      !a.blocked &&
+      (!("pageOnly" in a && a.pageOnly) || a.pageOnly === c.page),
+  );
   return c.page === "home"
     ? all.filter((a) => a.label !== "Ndrysho produktin").slice(0, 4)
     : all.filter(
