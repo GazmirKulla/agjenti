@@ -428,3 +428,57 @@ it("reopens a known shared field, retains other facts and invalidates final appr
  const confirmed=await processAgentTurn({businessId:"business-a",state:correction.nextState,message:"Po",hasPhoto:false});
  expect(confirmed.nextState.step_key).toBe("order_ready");
 });
+
+it("treats a routed request to resume ordering as navigation, not a size answer",async()=>{
+ const state={...emptyState(),product_id:"product-a",step_key:"collect_size",fields:{color:"blue"}};
+ const turn=await processAgentTurn({businessId:"business-a",state,message:"Fola në WhatsApp dhe dua të porosis",hasPhoto:false,orderRequest:true});
+ expect(turn.nextState.step_key).toBe("collect_size");
+ expect(turn.nextState.fields).toEqual({color:"blue"});
+});
+it("allows collecting a later step first, then asks for missing required fields before completing",async()=>{
+ const guidance=await import("@/lib/workflows/guidance");
+ const spy=vi.spyOn(guidance,"chooseGuidance").mockResolvedValueOnce({action:"route",target:"collect_customer",source:"ai"});
+ try {
+  const state={...emptyState(),product_id:"product-a",step_key:"collect_size"};
+  const routed=await processAgentTurn({businessId:"business-a",state,message:"Dua të jap adresën tani",hasPhoto:false});
+  expect(routed.nextState.step_key).toBe("collect_customer");
+  const address=await processAgentTurn({businessId:"business-a",state:routed.nextState,message:"Emri: Ana; Telefon: +355691234567; Qyteti: Tiranë; Adresa: Rruga A",hasPhoto:false});
+  expect(address.nextState.customer.name).toBe("Ana");
+  expect(address.nextState.step_key).toBe("collect_size");
+  const size=await processAgentTurn({businessId:"business-a",state:address.nextState,message:"M",hasPhoto:false});
+  expect(size.nextState.step_key).toBe("awaiting_photo");
+ } finally {spy.mockRestore();}
+});
+
+it("routes every message through staff, ordering and back while preserving a live order",async()=>{
+ const {starterVisualGraph}=await import("@/lib/workflows/visual/model");
+ const graph=starterVisualGraph();
+ graph.nodes.find(n=>n.id==="support")!.config={condition:"field_equals",fieldKey:"channel",value:"whatsapp"};
+ const visualPreview={id:"v1",businessId:"business-a",graph,createdAt:"2026-10-10T00:00:00Z"};
+ const state={...emptyState(),visual:{versionId:"v1",nodeId:"handoff",status:"handoff" as const,awaiting:false,visited:["start","support","handoff"],values:{channel:"whatsapp"}}};
+ const resume=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state,message:"Ok fola në WhatsApp dhe dua të porosis produkt",hasPhoto:false});
+ expect(resume.nextState.visual?.nodeId).toBe("product");
+ expect(resume.nextState.step_key).toBe("choose_product");
+ const product=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state:resume.nextState,message:"Bluzë",hasPhoto:false});
+ expect(product.nextState.step_key).toBe("collect_size");
+ const staff=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state:product.nextState,message:"Dua të flas me stafin",hasPhoto:false});
+ expect(staff.nextState.visual?.status).toBe("handoff");
+ expect(staff.advisoryHandoff).toBe(true);
+ const back=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state:staff.nextState,message:"Fola me stafin, tani dua të porosis",hasPhoto:false});
+ expect(back.nextState.product_id).toBe("product-a");
+ expect(back.nextState.step_key).toBe("collect_size");
+ expect(back.nextState.fields.collect_size).toBeUndefined();
+ const size=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state:back.nextState,message:"M",hasPhoto:false});
+ expect(size.nextState.fields.collect_size).toBe("M");
+ expect(size.nextState.step_key).toBe("awaiting_photo");
+});
+it("switches the selected product on a new explicit order request without inheriting old product fields",async()=>{
+ fixtures.products=[{id:"product-a",name:"Bluzë",workflow_id:"workflow-a"},{id:"product-b",name:"Filxhan",workflow_id:"workflow-b"}];
+ fixtures.workflows={id:"workflow-b",name:"Filxhan"};
+ const state={...emptyState(),product_id:"product-a",step_key:"collect_size",fields:{collect_size:"M"},customer:{name:"Ana",phone:"+355691234567",city:"Tiranë",address:"Rruga A"}};
+ const turn=await processAgentTurn({businessId:"business-a",state,message:"Dua të porosis Filxhan",hasPhoto:false,orderRequest:true});
+ expect(turn.nextState.product_id).toBe("product-b");
+ expect(turn.nextState.fields.collect_size).toBeUndefined();
+ expect(turn.nextState.customer).toEqual(state.customer);
+ expect(turn.workflowId).toBe("workflow-b");
+});

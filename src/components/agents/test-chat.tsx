@@ -1,5 +1,5 @@
 "use client";
-import { VisualGraphView } from "@/components/workflows/visual-graph";
+import { MessageRoutingView } from "@/components/workflows/message-routing";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -222,7 +222,7 @@ export function AgentTestChat({
           </form>
         </div>
         <aside className="agent-test-debug">
-          {last?.visualWorkflow && <VisualGraphView graph={last.visualWorkflow.graph} currentNodeId={last.visualWorkflow.state.nodeId} visitedNodeIds={last.visualWorkflow.state.visited} traversedNodeIds={last.visualWorkflow.traversedNodeIds} compact />}
+          {last?.visualWorkflow && <MessageRoutingView trace={last.visualWorkflow} />}
           <h3>{last?.visualWorkflow ? "Rrjedha e bisedës" : "Workflow i porosisë"}</h3>
           {!last ? (
             <p className="agent-test-disclaimer">

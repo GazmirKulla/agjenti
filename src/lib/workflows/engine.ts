@@ -41,6 +41,7 @@ export type WorkflowStepDef = {
 export type ConversationStatePayload = {
   recentMessages?: import("./guidance").ConversationMessage[];
   revisitStep?: string;
+  unorderedWorkflow?: boolean;
   orderWorkflowSnapshot?: string;
   linearSnapshot?: { id: string; versionId: string; name: string; steps: WorkflowStepDef[] };
   schemaVersion?: 2;

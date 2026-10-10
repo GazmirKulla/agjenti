@@ -43,4 +43,4 @@ export type VisualWorkspace = {
   generated: boolean;
   hasUnpublishedChanges?: boolean;
 };
-export type VisualTrace = { graph: VisualGraph; state: VisualRunState; traversedNodeIds: string[] };
+export type VisualTrace = { graph: VisualGraph; state: VisualRunState; traversedNodeIds: string[]; routing?: {action:string;from:string|null;to:string;source:"rules"|"ai"} };

@@ -162,3 +162,16 @@
 
 .vf-assistant-actions { display: grid; gap: 8px; margin: 18px 0; }
 .vf-assistant-actions .vf-button { white-space: normal; text-align: left; }
+
+.vf-message-routing { border: 1px solid var(--line); border-radius: 18px; padding: 12px; background: var(--surface); color: var(--ink-muted); }
+.vf-message-routing p { margin: 6px 8px; font-size: 12px; }
+.vf-message-routing svg { display: block; width: 100%; height: auto; max-height: 430px; overflow: visible; }
+.vf-message-orbit { fill: none; stroke: var(--line); stroke-dasharray: 5 8; }
+.vf-message-link { fill: none; stroke: currentColor; stroke-width: 1.4; opacity: .45; }
+.vf-message-step { fill: var(--surface); stroke: var(--line); }
+.vf-message-hub { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.vf-message-title { fill: var(--ink); font-size: 15px; font-weight: 600; }
+.vf-message-detail { fill: var(--ink-muted); font-size: 12px; }
+.vf-message-routing .is-current { color: var(--accent); }
+.vf-message-routing .is-current .vf-message-link { opacity: 1; stroke-width: 2.5; }
+.vf-message-routing .is-current .vf-message-step { stroke: var(--accent); stroke-width: 2; }

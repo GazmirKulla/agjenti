@@ -43,3 +43,20 @@ it("retains only a bounded transcript without mutating the prior state",()=>{
  expect(recentConversation(next).every(m=>m.content.length<=1200)).toBe(true);
  expect(state.recentMessages).toHaveLength(20);
 });
+
+it("can select an unvisited task from all configured routes",async()=>{
+ const message="Dua të jap adresën tani";
+ m.create.mockResolvedValue({output_text:JSON.stringify({action:"route",target:"address",confidence:.99,evidence:message})});
+ const routes=[{id:"size",label:"Madhësia",kind:"collect"},{id:"address",label:"Adresa",kind:"collect"}];
+ expect(await chooseGuidance({...input,message,targets:[],routes})).toMatchObject({action:"route",target:"address"});
+ expect(JSON.parse(m.create.mock.calls[0][0].input).routes).toEqual(routes);
+});
+it("never selects a route absent from the current business workflow",async()=>{
+ const message="Dua të bëj pagesën";
+ m.create.mockResolvedValue({output_text:JSON.stringify({action:"route",target:"charge-card",confidence:1,evidence:message})});
+ expect(await chooseGuidance({...input,message,routes:[{id:"photo",label:"Foto",kind:"collect"}]})).toMatchObject({action:"continue"});
+});
+it("asks which order flow when several products flows are configured instead of choosing an arbitrary one",async()=>{
+ vi.stubEnv("OPENAI_API_KEY","");
+ expect(await chooseGuidance({...input,message:"Dua të porosis",allowOrder:true,routes:[{id:"a",label:"Dhurata",kind:"product"},{id:"b",label:"Veshje",kind:"product"}]})).toMatchObject({action:"clarify"});
+});

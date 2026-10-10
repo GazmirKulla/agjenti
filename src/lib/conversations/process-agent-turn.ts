@@ -100,6 +100,8 @@ export type AgentTurnParams = {
   /** Trusted conversation_states.workflow_id, supplied only by the inbound server. */
   persistedWorkflowId?: string | null;
   linearPreview?: boolean;
+  /** A routed order request is not an answer to the pending product field. */
+  orderRequest?: boolean;
   visualPreview?: import("@/lib/workflows/visual/types").VisualVersion;
   onTrace?: TraceObserver;
   mode?: "production" | "test";
@@ -354,6 +356,14 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
   let selected = products.find((p) => p.id === state.product_id) ?? null;
   if (state.product_id && !selected) state = state.context ? resetOrder(state) : emptyState();
   let justSelected = false;
+  const orderRequest = params.orderRequest || detectVisualIntent(text) === "order";
+  if (selected && orderRequest) {
+    const requested = pickProduct(products,text);
+    if (requested && requested.id !== selected.id) {
+      state = state.context ? resetOrder(state) : {...emptyState(),customer:state.customer,recentMessages:state.recentMessages};
+      selected=null;
+    }
+  }
   if (!selected && text) {
     const skuMatches = products.filter((p) => matchesSku(p.sku, text));
     const match =
@@ -431,23 +441,24 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
   }
   if (params.requireConfiguredWorkflow && selected && (!workflowId || !steps.length || workflowName === "Default customer collection")) {
     return { reply: "Ekipi do t’ju ndihmojë të vazhdoni me këtë produkt.", nextState: state, previousResponseId: null,
-      workflowId: null, productName: selected.name, workflowProgress: [], handoff: true,
+      workflowId: null, productName: selected.name, workflowProgress: [], handoff: true, advisoryHandoff: true,
       debug: { model: agentModel(), source: "fallback", fallbackReason: "workflow_not_configured", agentConfigured: Boolean(agent?.instructions), knowledgeCount: knowledge.length, productCount: products.length, workflowSteps: [], elapsedMs: Date.now() - started } };
   }
   let navigationReply: string | undefined;
   let informationalTurn = false;
-  let revisiting = false;
+  let revisiting = Boolean(orderRequest);
   if (selected && !justSelected && text) {
     const index = steps.findIndex(s=>s.key===state.step_key);
     const targets = steps.slice(0,index<0?steps.length:index).map(s=>({id:s.key,label:s.label??s.key,prompt:s.prompt,fieldKey:s.fieldKey}));
     const current = steps.find(s=>s.key===state.step_key);
-    const guidance = await chooseGuidance({message:text,state,targets,current:current?{id:current.key,label:current.label??current.key,prompt:current.prompt,fieldKey:current.fieldKey}:undefined});
+    const guidance = await chooseGuidance({message:text,state,targets,routes:steps.map(s=>({id:s.key,label:s.label??s.key,prompt:s.prompt,fieldKey:s.fieldKey,kind:s.kind})),current:current?{id:current.key,label:current.label??current.key,prompt:current.prompt,fieldKey:current.fieldKey}:undefined});
     trace?.({stage:"workflow",label:"Order conversation guidance",data:guidance});
-    if(guidance.action==="revisit" && guidance.target) {
+    if((guidance.action==="revisit" || guidance.action==="route") && guidance.target) {
       state.step_key=guidance.target;
       state.revisitStep=guidance.target;
+      state.unorderedWorkflow=true;
       invalidateConfirmation(state);
-      if(state.context && steps.find(s=>s.key===guidance.target)?.kind==="customer") state.context.execution.profileConfirmation="pending";
+      if(state.context && Object.keys(state.context.profile).length && steps.find(s=>s.key===guidance.target)?.kind==="customer") state.context.execution.profileConfirmation="pending";
       revisiting=true;
     } else if(guidance.action==="answer") informationalTurn=true;
     else if(guidance.action==="clarify") navigationReply=clarification(targets);
@@ -463,9 +474,19 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
     if (state.step_key !== state.revisitStep) delete state.revisitStep;
   }
 
-  if (state.context && selected && !revisiting && !informationalTurn && !navigationReply) {
+  if (state.context && selected && (!revisiting || justSelected) && !informationalTurn && !navigationReply) {
     const extracted=await extractMessageFacts(state,text,[...profileExtractionFields,...steps.filter(s=>!["confirm","customer","photo"].includes(s.kind)).map(s=>({key:s.fieldKey??s.key,type:s.fieldType??"text" as const,label:s.label,options:s.options}))]);
     state = advanceSharedOrder(state, text, params.hasPhoto, steps, justSelected,extracted);
+  }
+  if (state.unorderedWorkflow && ["order_ready","order_confirm"].includes(state.step_key ?? "")) {
+    const missing = steps.find(step => {
+      if (step.required === false) return false;
+      if (step.kind === "customer") return !state.customer.name || !state.customer.phone || !state.customer.city || !state.customer.address;
+      if (step.kind === "confirm") return !/^(po|ok|okay|yes|dakord|konfirmoj)[.!\s]*$/i.test(String(state.fields[step.key]??""));
+      const value = state.context?.order[step.fieldKey??step.key]?.value ?? (step.fieldKey?.startsWith("customer_") ? state.context?.profile[step.fieldKey.slice(9) as import("@/lib/workflows/context").ProfileKey]?.value : undefined) ?? state.fields[step.key];
+      return step.kind === "photo" ? value!==true && value!=="photo_received" : !value;
+    });
+    if (missing) { state.step_key=missing.key; invalidateConfirmation(state); }
   }
   if(state.context && !isQuestion(text) && state.step_key!=="order_ready") recordPrompt(state,state.step_key??"choose_product");
   const productName = selected?.name ?? null;

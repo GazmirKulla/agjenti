@@ -194,7 +194,7 @@ it("resumes a suspended product without treating the resume request as a field v
  const state={...emptyState(),product_id:"product-a",step_key:"collect_size",fields:{color:"blue"},visual:{...waiting("handoff"),status:"handoff" as const,awaiting:false,advisory:true}};
  const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Madhësia?"));
  await executeVisualTurn({...params(),state,message:"Fola me stafin, dua të porosis"},legacy);
- expect(legacy.mock.calls[0][0]).toMatchObject({message:"",state:{product_id:"product-a",step_key:"collect_size",fields:{color:"blue"}}});
+ expect(legacy.mock.calls[0][0]).toMatchObject({message:"Fola me stafin, dua të porosis",orderRequest:true,state:{product_id:"product-a",step_key:"collect_size",fields:{color:"blue"}}});
 });
 it("revisits a completed product subflow without starting an empty order",async()=>{
  const state={...emptyState(),product_id:"product-a",step_key:"order_ready",fields:{size:"M"},visual:{...waiting("end"),status:"completed" as const,awaiting:false,visited:["start","product","end"]}};
@@ -209,4 +209,28 @@ it("uses a newly published version for a new order while preserving the old vers
  const turn=await executeVisualTurn({...params(),visualPreview:undefined,state,message:"Dua të porosis"},async p=>response(p,"Cilin produkt?"));
  expect(mocks.load.mock.calls).toEqual([["business-a","old"],["business-a"]]);
  expect(turn.nextState.visual?.versionId).toBe("new");
+});
+
+it("routes WhatsApp to ordering directly even when a saved field still points to staff and no order condition exists",async()=>{
+ const graph:VisualGraph={version:1,name:"Channel",nodes:[node("start","start"),node("channel","condition",{condition:"field_equals",fieldKey:"channel",value:"whatsapp"}),node("staff","handoff",{prompt:"Numri WhatsApp"}),node("product","product"),node("end","end")],edges:[{id:"s",source:"start",target:"channel",port:"next"},{id:"y",source:"channel",target:"staff",port:"yes"},{id:"n",source:"channel",target:"product",port:"no"},{id:"p",source:"product",target:"end",port:"next"}]};
+ const state={...emptyState(),visual:{...waiting("staff"),status:"handoff" as const,awaiting:false,visited:["start","channel","staff"],values:{channel:"whatsapp",email:"ana@example.com"}}};
+ const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Cilin produkt dëshironi?"));
+ const turn=await executeVisualTurn({...params(graph),state,message:"ok fola ne whatsapp dhe dua qe te te porosis produkt"},legacy);
+ expect(turn.nextState.visual).toMatchObject({nodeId:"product",status:"waiting",values:{channel:"whatsapp",email:"ana@example.com"}});
+ expect(turn.visualWorkflow?.traversedNodeIds).toEqual(["product"]);
+ expect(turn.visualWorkflow?.routing).toMatchObject({from:"staff",to:"product",action:"order"});
+ expect(turn.reply).toBe("Cilin produkt dëshironi?");
+});
+it("evaluates the message at a product node and can move to a different configured task",async()=>{
+ const guidance=await import("../guidance");
+ const spy=vi.spyOn(guidance,"chooseGuidance").mockResolvedValueOnce({action:"route",target:"email",source:"ai"});
+ try {
+  const graph=linear(node("product","product"),node("email","collect",{fieldKey:"email",fieldType:"email",prompt:"Email?"}));
+  const state={...emptyState(),product_id:"product-a",step_key:"size",fields:{color:"blue"},visual:waiting("product")};
+  const turn=await executeVisualTurn({...params(graph),state,message:"Tani dua të ndryshoj emailin"},async p=>response(p));
+  expect(spy.mock.calls[0][0].routes?.map(r=>r.id)).toEqual(["product","email"]);
+  expect(turn.nextState.visual?.nodeId).toBe("email");
+  expect(turn.nextState.fields.color).toBe("blue");
+  expect(turn.nextState.product_id).toBe("product-a");
+ } finally {spy.mockRestore();}
 });

@@ -147,6 +147,15 @@ Ekzekutimi rishikon kërkesën e klientit duke përdorur hapin aktual, vlerat e 
 - “Kthehu pas” dhe korrigjimet mund të rihapin një hap të kaluar. Vlerat ruhen derisa klienti t'i zëvendësojë; konfirmimi final zhvlerësohet dhe kërkohet përsëri.
 - Pyetjet informative marrin përgjigje pa u regjistruar si përgjigje të hapit. Më pas biseda vazhdon nga e njëjta pikë.
 - AI zgjedh vetëm navigim të lejuar: vazhdim, pyetje informative, korrigjim në hap ekzistues, porosi, ndihmë ose sqarim. Nuk mund të shënojë vetë përfundim, të konfirmojë porosi, të krijojë aftësi të reja apo të anashkalojë validimin. Vendimet e paqarta dhe gabimet e ofruesit përdorin rregullat lokale ose kërkojnë sqarim.
-- Nyja vizuale `handoff` është orientim te stafi dhe ruhet si `advisory`; nuk çaktivizon përgjigjet automatike. Kjo vlen edhe në editor dhe në provën brenda asistentit. Pauzat manuale, dërgimet e paqarta dhe mungesa e konfigurimit të produktit ruajnë ndalimin ekzistues.
+- Nyja vizuale `handoff` është orientim te stafi dhe ruhet si `advisory`; nuk çaktivizon përgjigjet automatike. Kjo vlen edhe në editor dhe në provën brenda asistentit. Pauzat manuale dhe dërgimet e paqarta ruajnë ndalimin ekzistues. Mungesa e konfigurimit të produktit shpjegohet pa bllokuar një kërkesë të re për një produkt tjetër.
 
 Bisedat që ishin tashmë `paused` nga versioni i vjetër nuk riaktivizohen automatikisht. Stafi duhet t'i rifillojë përpara se të marrin përgjigje të reja. Versioni ekzistues ruhet gjatë korrigjimeve; një porosi e re pas përfundimit përdor versionin e fundit të publikuar.
+
+
+### Mesazhi si qendër e navigimit
+
+Çdo mesazh vlerësohet përpara cursor-it të ruajtur, përfshirë hapat e produktit dhe gjendjet handoff/completed. Vlerësimi merr të gjithë hapat bisedorë të versionit të biznesit, jo vetëm hapat e vizituar. Përputhjet e qarta trajtohen nga rregulla lokale; kërkesat e tjera vlerësohen nga AI me kontekstin e bisedës.
+
+Kërkesa për porosi shkon drejtpërdrejt te nyja product përkatëse, pa kaluar sërish nga kushte të vjetra si kanali WhatsApp. Nëse ka disa nyje produkti dhe qëllimi është i paqartë, kërkohet zgjedhje. Një kërkesë e re për produkt tjetër ruan profilin, por pastron variantet e produktit të mëparshëm. Rifillimi i porosisë nuk regjistrohet si vlerë e hapit në pritje.
+
+Hapat linearë mund të mblidhen jashtë radhës. Para se porosia të përfundojë, kontrollohen edhe hapat e kërkuar që mbetën pas; ndryshimi i rrugës nuk përbën plotësim ose konfirmim. Gjurma e provës përfshin vendimin dhe destinacionin për çdo mesazh. Pamja e provës paraqet mesazhin në qendër dhe grupet e rrjedhave rreth tij; pozicionet e ruajtura të editorit nuk ndryshojnë.
