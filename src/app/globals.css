@@ -1260,23 +1260,27 @@ html[data-resolved="dark"] .brand-logo-dark {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 0.82rem;
   text-align: left;
 }
 .data-table th {
   font-weight: 500;
-  color: #676d91;
-  font-size: 11px;
-  background: #f8f9fd;
-  padding: 13px;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: transparent;
+  padding: 0.65rem 0.7rem;
   white-space: nowrap;
+  border-bottom: 1px solid var(--line);
 }
 .data-table td {
   border-bottom: 1px solid var(--line);
-  padding: 13px;
+  padding: 0.7rem;
+  vertical-align: middle;
 }
 .data-table tr.selected td {
-  background: #f1ebff;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .row-select {
   text-align: left;
@@ -2614,9 +2618,7 @@ html[data-resolved="dark"] .workspace-options a:hover,
 html[data-resolved="dark"] .workspace-options a[aria-current],
 html[data-resolved="dark"] .record-item.selected,
 html[data-resolved="dark"] .data-table tr.selected td {
-  background: #2c2444;
-  color: #e4d8ff;
-  border-color: #5b4b86;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 html[data-resolved="dark"] .inbox-row.selected {
   background: #2c2444;
@@ -2624,8 +2626,8 @@ html[data-resolved="dark"] .inbox-row.selected {
   color: #f4f0ff;
 }
 html[data-resolved="dark"] .data-table th {
-  color: #b3aacb;
-  background: #1b1728;
+  color: var(--ink-muted);
+  background: transparent;
 }
 html[data-resolved="dark"] .form-label,
 html[data-resolved="dark"] .chat-message small {

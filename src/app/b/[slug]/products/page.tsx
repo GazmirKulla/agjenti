@@ -13,8 +13,8 @@ export default async function ProductsPage({
       <ProductHeading
         slug={slug}
         back={false}
-        title={`Produktet e ${data.business.name}`}
-        description="Zgjidh, krijo dhe menaxho produktet. Shto dorazi, nga CSV ose Instagram. Për shtim me tekst ose audio, përdor Agjentin."
+        title="Produktet"
+        description="Shto dhe menaxho produktet që përdor Agjenti."
       />
       <ProductCatalog
         slug={slug}
