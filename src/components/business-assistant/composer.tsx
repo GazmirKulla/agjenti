@@ -16,7 +16,23 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
   const [menu, setMenu] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [linkError, setLinkError] = useState("");
-  useEffect(() => { const field = textarea.current; if (field) { field.style.height = "auto"; field.style.height = `${Math.min(field.scrollHeight, 144)}px`; } }, [value]);
+  useEffect(() => {
+    const field = textarea.current;
+    if (!field) return;
+    const resize = () => {
+      if (!field.clientWidth) return;
+      field.style.height = "auto";
+      field.style.height = `${Math.min(field.scrollHeight, 192)}px`;
+    };
+    resize();
+    // Recalculate wrapping when the keyboard, panel or screen changes width.
+    let width = field.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (field.clientWidth !== width) { width = field.clientWidth; resize(); }
+    });
+    observer.observe(field);
+    return () => observer.disconnect();
+  }, [value]);
   const pastedLinks = [...new Set(value.match(/https?:\/\/[^\s<>"']+/g) ?? [])].filter(url => !items.some(item => item.name === url));
   const visibleItems = [...items, ...pastedLinks.map(url => ({ id: `url:${url}`, name: url }))];
   const canSend = !busy && (canSubmit ?? (Boolean(value.trim()) || items.length > 0));
@@ -43,9 +59,9 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
     <div className="assistant-prompt is-multiline" aria-busy={busy}>
       <button ref={menuButton} type="button" disabled={busy} aria-label="Shto foto, skedar ose link" aria-controls={`${id}-menu`} aria-expanded={menu} onClick={() => setMenu(v => !v)}><Icon name="plus" size={22} /></button>
       <label className="sr-only" htmlFor={id}>Shkruaji Agjentit</label>
-      <textarea ref={textarea} id={id} value={value} onChange={e => onChange(e.target.value)} rows={1} maxLength={maxLength} placeholder={placeholder} disabled={busy}
+      <textarea ref={textarea} id={id} value={value} onChange={e => onChange(e.target.value)} rows={1} enterKeyHint="enter" maxLength={maxLength} placeholder={placeholder} disabled={busy}
         onPaste={e => { if (onFiles && e.clipboardData.files.length) { e.preventDefault(); onFiles(Array.from(e.clipboardData.files)); } }}
-        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (canSend) onSubmit(); } if (e.key === "Escape") { setMenu(false); setLink(null); } }} />
+        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !window.matchMedia("(max-width: 760px)").matches) { e.preventDefault(); if (canSend) onSubmit(); } if (e.key === "Escape") { setMenu(false); setLink(null); } }} />
       <div className="assistant-prompt-actions"><button type="button" onClick={onVoice} disabled={busy} aria-label="Dikto me mikrofon"><Icon name="microphone" size={21} /></button>
         {onStop && busy ? <button type="button" className="assistant-prompt-send" onClick={onStop} aria-label="Ndalo pritjen"><Icon name="stop" size={20}/></button> : <button type="button" className="assistant-prompt-send" onClick={onSubmit} disabled={!canSend} aria-label={busy ? "Duke përgatitur përgjigjen" : "Dërgo mesazhin"}>{busy ? <span className="assistant-prompt-spinner"/> : <Icon name="up" size={21}/>}</button>}
       </div>

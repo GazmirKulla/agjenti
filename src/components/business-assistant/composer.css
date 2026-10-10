@@ -103,3 +103,31 @@
 .assistant-panel-open .assistant-context-entry > .unified-composer { display: none; }
 .assistant-workspace-panel .assistant-composer { max-height: calc(var(--assistant-viewport-height, 100dvh) * .55); }
 .assistant-workspace-panel .unified-menu { max-height: min(42dvh, calc(var(--assistant-viewport-height, 100dvh) * .4)); }
+
+/* Text owns the full first row; attachments and send stay below it. */
+.unified-composer .assistant-prompt textarea { box-sizing: border-box; max-height: 192px; overflow-y: auto; }
+@media (max-width: 760px) {
+  :is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt.is-multiline {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: end;
+    gap: 8px;
+    padding: 12px 10px 8px;
+    border-radius: 26px;
+    box-shadow: none;
+  }
+  :is(.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt.is-multiline textarea {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+    min-height: 40px;
+    max-height: 192px;
+    padding: 8px 6px;
+    font-size: 16px;
+    line-height: 24px;
+    overflow-wrap: anywhere;
+  }
+  .unified-composer .assistant-prompt > button { grid-column: 1; grid-row: 2; }
+  .unified-composer .assistant-prompt .assistant-prompt-actions { grid-column: 2; grid-row: 2; justify-self: end; gap: 8px; }
+  :is(.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt .assistant-prompt-send { background: var(--ink); color: var(--surface); }
+}

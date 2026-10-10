@@ -1,0 +1,30 @@
+/* One conversation and proposal, presented side by side or as mobile screens. */
+.assistant-work-trigger { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 18px; margin-top: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); color: var(--ink); text-align: left; }
+.assistant-work-trigger strong, .assistant-work-trigger small { display: block; }
+.assistant-work-trigger small { margin-top: 6px; color: var(--ink-muted); }
+.assistant-work-trigger:focus-visible, .assistant-work-heading button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.assistant-work-detail { min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 20px; background: var(--paper); }
+.assistant-work-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--ink-muted); }
+.assistant-work-heading button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); }
+.assistant-work-detail .assistant-preview { background: var(--surface); }
+@media (min-width: 761px) {
+  .business-assistant.assistant-workspace-panel.has-work-detail[open] { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(300px, .9fr); grid-template-rows: auto auto minmax(0, 1fr) auto; width: min(1100px, calc(100vw - 270px)); max-width: calc(100vw - 270px); }
+  .has-work-detail > .assistant-heading { grid-column: 1 / -1; grid-row: 1; }
+  .has-work-detail > .assistant-panel-resize { display: none; }
+  .has-work-detail > .assistant-body { grid-column: 1; grid-row: 3; padding: 24px !important; }
+  .has-work-detail > .assistant-composer { grid-column: 1; grid-row: 4; padding: 16px 24px !important; }
+  .has-work-detail > .assistant-work-detail { grid-column: 2; grid-row: 2 / 5; border-left: 1px solid var(--line); }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .business-assistant.assistant-workspace-panel.has-work-detail[open] { left: 12px; right: 12px; width: auto; max-width: none; }
+}
+@media (max-width: 760px) {
+  .has-assistant-dock .business-assistant.assistant-workspace-panel { height: var(--assistant-viewport-height); max-height: var(--assistant-viewport-height); border-radius: 0; border: 0; }
+  .assistant-work-detail { display: none; }
+  .is-work-open > .assistant-work-detail { display: block; flex: 1; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  .is-work-open > .assistant-body, .is-work-open > .assistant-composer { display: none; }
+  .assistant-work-trigger { align-items: flex-start; flex-direction: column; min-height: 72px; }
+  .assistant-work-heading { position: sticky; top: -20px; padding: 12px 0; background: var(--paper); z-index: 1; }
+  .assistant-work-detail .assistant-preview-actions { flex-direction: column; }
+  .assistant-workspace-panel .assistant-expand { display: none; }
+}

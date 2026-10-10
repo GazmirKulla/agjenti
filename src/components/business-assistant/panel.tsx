@@ -1,4 +1,5 @@
 "use client";
+import "./workspace-layout.css";
 import { LinearWorkflowCard } from "./linear-workflow-card";
 import type { LinearCard } from "@/lib/business-assistant/linear-service";
 import {
@@ -102,6 +103,10 @@ export function BusinessAssistant({
   const materialProps = { items: materials, onFiles: addFiles, onLink: addLink, onRemove: removeMaterial };
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
+  const [workOpen, setWorkOpen] = useState(false);
+  const workBack = useRef<HTMLButtonElement>(null);
+  const workTrigger = useRef<HTMLButtonElement>(null);
+  const composerRegion = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const locked = useRef(false);
   const [busy, setBusy] = useState<"plan" | "confirm" | "audio" | null>(null);
@@ -174,6 +179,13 @@ export function BusinessAssistant({
     if (open)
       end.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [history, result, open]);
+  useEffect(() => {
+    if (mobile && workOpen && result?.preview) workBack.current?.focus();
+  }, [mobile, workOpen, result?.preview]);
+  function returnToConversation() {
+    setWorkOpen(false);
+    requestAnimationFrame(() => workTrigger.current?.focus());
+  }
   async function request(body: FormData | Record<string, unknown>) {
     const response = await fetch(
       `/api/business-assistant?slug=${encodeURIComponent(slug)}`,
@@ -197,6 +209,7 @@ export function BusinessAssistant({
     event?.preventDefault();
     if (locked.current || (!text.trim() && !materials.length)) return;
     locked.current = true;
+    setWorkOpen(false);
     setBusy("plan");
     setSending(true);
     setError("");
@@ -282,6 +295,8 @@ export function BusinessAssistant({
       workflowRequest.current = null;
       setRequestContext(null);
       setResult(data);
+      setWorkOpen(false);
+      requestAnimationFrame(() => composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
       setHistory((prev) => [
         ...prev,
         { role: "assistant", content: data.message || "Ndryshimi u ruajt." },
@@ -314,6 +329,7 @@ export function BusinessAssistant({
     }
   }
   function reset() {
+    setWorkOpen(false);
     previousMaterials.current = null;
     setMaterials([]);
     setMaterialError("");
@@ -350,7 +366,7 @@ export function BusinessAssistant({
       )}
       <dialog
         ref={dialog}
-        className={`business-assistant assistant-workspace-panel ${context.page === "home" ? "is-home" : ""} ${expanded ? "is-expanded" : ""} ${mode === "audio" ? "is-voice" : ""}`}
+        className={`business-assistant assistant-workspace-panel ${context.page === "home" ? "is-home" : ""} ${expanded ? "is-expanded" : ""} ${mode === "audio" ? "is-voice" : ""} ${result?.preview ? "has-work-detail" : ""} ${workOpen && result?.preview ? "is-work-open" : ""}`}
         style={
           {
             "--assistant-panel-width": `${panelWidth}px`,
@@ -359,9 +375,12 @@ export function BusinessAssistant({
           } as React.CSSProperties
         }
         aria-labelledby="business-assistant-title"
-        onCancel={onClose}
+        onCancel={(event) => {
+          if (mobile && workOpen && result?.preview) { event.preventDefault(); returnToConversation(); }
+          else onClose();
+        }}
         onKeyDown={(event) => {
-          if (event.key === "Escape") onClose();
+          if (event.key === "Escape" && !mobile) onClose();
         }}
       >
         <header className="assistant-heading">
@@ -478,6 +497,70 @@ export function BusinessAssistant({
           {result?.workflow && <WorkflowCard key={JSON.stringify(result.workflow)} data={result.workflow} slug={slug} pending={Boolean(result.token)} onRequest={value => { setMode("text"); setText(value); }} />}
           {result?.linear && <LinearWorkflowCard data={result.linear} slug={slug} pending={Boolean(result.token)} onRequest={value=>{setMode("text");setText(value);}} />}
           {result?.preview && (
+            <button ref={workTrigger} type="button" className="assistant-work-trigger"
+              aria-controls="assistant-work-detail" aria-expanded={!mobile || workOpen}
+              onClick={() => { setWorkOpen(true); if (!mobile) workBack.current?.focus(); }}>
+              <span><strong>{result.preview.title}</strong><small>Në pritje të konfirmimit</small></span>
+              <span>Shiko ndryshimin →</span>
+            </button>
+          )}
+          {result?.saved && (
+            <div className="assistant-success" role="status">
+              <Icon name="check" size={22} />
+              <div>
+                <strong>{result.message}</strong>
+                {result.path && (
+                  <Link href={`/b/${slug}/${result.path}`} onClick={onClose}>
+                    Shiko ndryshimin →
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+          {error && (
+            <p className="assistant-error" role="alert">
+              {error}
+            </p>
+          )}
+          {busy && (
+            <p className="assistant-working" role="status">
+              {busy === "audio"
+                ? "Po kthej audion në tekst…"
+                : busy === "confirm"
+                  ? "Po ruaj ndryshimin…"
+                  : "Po analizoj kërkesën dhe të dhënat…"}
+            </p>
+          )}
+          <div ref={end} />
+        </div>
+        <div ref={composerRegion} className="assistant-composer">
+          {materialError && <p className="assistant-error" role="alert">{materialError}</p>}
+          <div className="assistant-composer-top">
+            {mode === "audio" ? <button type="button" className="assistant-write-instead" disabled={Boolean(busy)} onClick={() => setMode("text")}>
+              <Icon name="edit" size={16} /> Shkruaj
+            </button> : <small>Ndryshimet i konfirmon ti.</small>}
+            <button type="button" className="assistant-reset assistant-reset-icon" onClick={reset} disabled={Boolean(busy)} aria-label="Bisedë e re" title="Bisedë e re">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            </button>
+          </div>
+          {mode === "text" ? (
+            <AssistantComposer {...materialProps} id="business-assistant-input" value={text} busy={Boolean(busy)} multiline
+              onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
+              onSubmit={() => void analyze()} onVoice={() => setMode("audio")} />
+          ) : (
+            open && <AudioRecorder variant="assistant" purpose="request" busy={Boolean(busy)} onAnalyze={transcribe} analyzeLabel="Ktheje në tekst" />
+          )}
+        </div>
+        {result?.preview && (
+          <aside id="assistant-work-detail" className="assistant-work-detail" aria-label="Pamja e ndryshimit">
+            <header className="assistant-work-heading">
+              <button ref={workBack} type="button" onClick={() => {
+                if (mobile) returnToConversation();
+                else composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+              }}>← Biseda</button>
+              <span>Në pritje të konfirmimit</span>
+            </header>
+          {result?.preview && (
             <section
               className="assistant-preview"
               aria-label="Ndryshimet për konfirmim"
@@ -525,6 +608,8 @@ export function BusinessAssistant({
                   className="assistant-secondary"
                   disabled={Boolean(busy)}
                   onClick={() => {
+                    setWorkOpen(false);
+                    requestAnimationFrame(() => composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
                     workflowRequest.current = null;
                     setRequestContext(null);
                     setResult(null);
@@ -542,53 +627,10 @@ export function BusinessAssistant({
               </div>
             </section>
           )}
-          {result?.saved && (
-            <div className="assistant-success" role="status">
-              <Icon name="check" size={22} />
-              <div>
-                <strong>{result.message}</strong>
-                {result.path && (
-                  <Link href={`/b/${slug}/${result.path}`} onClick={onClose}>
-                    Shiko ndryshimin →
-                  </Link>
-                )}
-              </div>
-            </div>
-          )}
-          {error && (
-            <p className="assistant-error" role="alert">
-              {error}
-            </p>
-          )}
-          {busy && (
-            <p className="assistant-working" role="status">
-              {busy === "audio"
-                ? "Po kthej audion në tekst…"
-                : busy === "confirm"
-                  ? "Po ruaj ndryshimin…"
-                  : "Po analizoj kërkesën dhe të dhënat…"}
-            </p>
-          )}
-          <div ref={end} />
-        </div>
-        <div className="assistant-composer">
-          {materialError && <p className="assistant-error" role="alert">{materialError}</p>}
-          <div className="assistant-composer-top">
-            {mode === "audio" ? <button type="button" className="assistant-write-instead" disabled={Boolean(busy)} onClick={() => setMode("text")}>
-              <Icon name="edit" size={16} /> Shkruaj
-            </button> : <small>Ndryshimet i konfirmon ti.</small>}
-            <button type="button" className="assistant-reset assistant-reset-icon" onClick={reset} disabled={Boolean(busy)} aria-label="Bisedë e re" title="Bisedë e re">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-            </button>
-          </div>
-          {mode === "text" ? (
-            <AssistantComposer {...materialProps} id="business-assistant-input" value={text} busy={Boolean(busy)} multiline
-              onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
-              onSubmit={() => void analyze()} onVoice={() => setMode("audio")} />
-          ) : (
-            open && <AudioRecorder variant="assistant" purpose="request" busy={Boolean(busy)} onAnalyze={transcribe} analyzeLabel="Ktheje në tekst" />
-          )}
-        </div>
+
+            {error && <p className="assistant-error" role="alert">{error}</p>}
+          </aside>
+        )}
       </dialog>
     </>
   );
