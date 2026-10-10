@@ -392,3 +392,9 @@ it("an ambiguous entity question cannot leave an older confirmation owned by the
   mocks.entity.mockResolvedValue({});
   expect((await turn("Po", next.nextState)).conversationRouting?.action).toBe("clarify");
 });
+it.each(["test", "production"] as const)("derives inactive entity preview access only from trusted %s mode", async mode => {
+  mocks.version.mockResolvedValue(entityVersion()); mocks.entity.mockResolvedValue(entityResult("puzzle"));
+  await processConversationMessage({ businessId: "business", message: "Puzzle", mode, hasPhoto: false, state: migrateConversationProcesses(emptyState(), () => "id") });
+  expect(mocks.entity).toHaveBeenCalled();
+  expect(mocks.entity.mock.calls.every(call => call[4] === (mode === "test"))).toBe(true);
+});

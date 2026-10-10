@@ -492,3 +492,9 @@ it("asks before leaving a bound order for a different unbound legacy product", a
   expect(result.reply).toContain("Ta zëvendësojmë me Poster"); expect(result.nextState.product_id).toBe(boundProductId);
   expect(result.nextState.processes?.pendingChoice?.kind).toBe("replace"); expect(legacy).not.toHaveBeenCalled();
 });
+it.each(["test", "production"] as const)("only enables inactive binding previews in trusted %s mode", async mode => {
+  mockBoundProduct();
+  const graph = boundGraph(node("product", "product")); mocks.load.mockResolvedValue(version(graph));
+  await executeVisualTurn({ ...params(graph), mode, visualPreview: undefined, message: "Puzzle" }, async p => response(p));
+  expect(mocks.entity).toHaveBeenCalledWith("business-a", graph, "Puzzle", undefined, mode === "test");
+});

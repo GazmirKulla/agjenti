@@ -278,6 +278,9 @@
 .vf-binding-focus svg { color: var(--accent); flex-shrink: 0; }
 .vf-binding-focus strong { color: var(--ink); font-weight: 500; }
 .vf-bindings { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 20px; }
+.vf-inspector-content > .vf-bindings:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+.vf-inspector-empty.is-flow { padding-top: 24px; }
+.vf-catalog-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .vf-bindings header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; }
 .vf-bindings header h3 { font-size: 14px; font-weight: 550; margin: 0; }
 .vf-bindings header > span { font-size: 10px; color: var(--ink-muted); }

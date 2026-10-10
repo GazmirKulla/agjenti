@@ -9,8 +9,8 @@ export function isEntityInformationRequest(message: string) {
   return /\b(sa kushton|cmim\w*|price|how much|informacion\w*|information|me thuaj|dua te di)\b/.test(text)
     && !/\b(porosit\w*|rezervo\w*|book|buy|vazhdo\w*|rifillo\w*)\b|\bdua\b.*\b(porosi\w*|rezervim\w*)\b/.test(text);
 }
-/** Resolve only active tenant catalog entries. Graph IDs and model guesses cannot supply entity data. */
-export async function resolveVisualEntity(businessId: string, graph: VisualGraph, message: string, saved?: VisualRunState["binding"]): Promise<{ selected?: VisualEntitySelection; mentioned?: VisualEntity; choices?: VisualEntity[]; available?: VisualEntity[] }> {
+/** Production resolves active entries; isolated preview also permits inactive entries explicitly bound in the graph. */
+export async function resolveVisualEntity(businessId: string, graph: VisualGraph, message: string, saved?: VisualRunState["binding"], preview = false): Promise<{ selected?: VisualEntitySelection; mentioned?: VisualEntity; choices?: VisualEntity[]; available?: VisualEntity[] }> {
   if (graph.version !== 2 || !graph.flows.some(flow => flow.productIds?.length || flow.serviceIds?.length)) return {};
   const db = createServiceSupabase();
   const all = async <T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>) => {
@@ -26,6 +26,24 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
     all((from, to) => db.from("products").select("id,name,sku,product_type_id").eq("business_id", businessId).eq("is_active", true).order("id").range(from, to)),
     all((from, to) => db.from("booking_services").select("id,name,booking_enabled").eq("business_id", businessId).eq("is_active", true).order("id").range(from, to)),
   ]);
+  if (preview) {
+    const boundProducts = [...new Set(graph.flows.flatMap(flow => flow.productIds ?? []))];
+    const boundServices = [...new Set(graph.flows.flatMap(flow => flow.serviceIds ?? []))];
+    const inactive = async <T>(ids: string[], query: (ids: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>) => {
+      const rows: T[] = [];
+      for (let offset = 0; offset < ids.length; offset += 200) {
+        const result = await query(ids.slice(offset, offset + 200));
+        if (result.error) throw new Error("Nuk u ngarkuan produktet dhe shërbimet e rrjedhës.");
+        rows.push(...result.data ?? []);
+      }
+      return rows;
+    };
+    const [previewProducts, previewServices] = await Promise.all([
+      inactive(boundProducts, ids => db.from("products").select("id,name,sku,product_type_id").eq("business_id", businessId).eq("is_active", false).in("id", ids)),
+      inactive(boundServices, ids => db.from("booking_services").select("id,name,booking_enabled").eq("business_id", businessId).eq("is_active", false).in("id", ids)),
+    ]);
+    products.push(...previewProducts); services.push(...previewServices);
+  }
   const entities: (VisualEntity & { sku?: string | null })[] = [
     ...(products ?? []).map(row => ({ kind: "product" as const, id: row.id, name: row.name, sku: row.sku, productTypeId: row.product_type_id })),
     ...(services ?? []).map(row => ({ kind: "service" as const, id: row.id, name: row.name, bookingEnabled: row.booking_enabled })),

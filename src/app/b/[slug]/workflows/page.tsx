@@ -88,10 +88,10 @@ export default async function WorkflowsPage({
         title="Workflow"
         description="Çdo mesazh, rruga e duhur. Konteksti i klientit mbetet me bisedën."
       >
-        <Link href={`/b/${slug}/products`} className="btn btn-ghost">
+        <div className="vf-catalog-links"><Link href={`/b/${slug}/products`} className="btn btn-ghost">
           Produktet →
         </Link>
-        <Link href={`/b/${slug}/services`} className="btn btn-ghost">Shërbimet →</Link>
+        <Link href={`/b/${slug}/services`} className="btn btn-ghost">Shërbimet →</Link></div>
       </PageHeading>
       <VisualWorkflowEditor slug={slug} initialWorkspace={visual} bookingEnabled={bookingEnabled} readiness={readiness} bindingCatalog={bindingCatalog} initialFlowId={query.flow} bindingFocus={bindingFocus} />
       <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>

@@ -134,11 +134,11 @@ export async function processConversationMessage(params: ConversationMessagePara
   const ordinaryQuestion = isEntityInformationRequest(entityMessage) || isQuestion(entityMessage) && !/\b(dua|kerkoj|rezervo|book|want|vazhdo|rifillo)\b/.test(foldText(entityMessage));
   const continueService = processes.service?.status === "active" && !ordinaryQuestion && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
   let serviceVersion = continueService ? params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service!.versionId) : graphVersion;
-  let entityResolution = !ordinaryQuestion && serviceVersion ? await resolveVisualEntity(params.businessId, serviceVersion.graph, entityMessage, continueService ? processes.service?.visual.binding : undefined) : {};
+  let entityResolution = !ordinaryQuestion && serviceVersion ? await resolveVisualEntity(params.businessId, serviceVersion.graph, entityMessage, continueService ? processes.service?.visual.binding : undefined, params.mode === "test") : {};
   let resumingService = Boolean(continueService && entityResolution.selected?.entity.id === processes.service?.visual.binding?.entity.id);
   if (!ordinaryQuestion && !continueService && processes.service && processes.service.status !== "completed") {
     const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service.versionId);
-    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage) : {};
+    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, undefined, params.mode === "test") : {};
     if (match.selected && match.selected.entity.id === processes.service.visual.binding?.entity.id && match.selected.entity.kind === processes.service.visual.binding.entity.kind) { entityResolution = match; serviceVersion = pinned; resumingService = true; }
   }
   let resumingOrder = false;
@@ -146,7 +146,7 @@ export async function processConversationMessage(params: ConversationMessagePara
   if (!ordinaryQuestion && orderVisual?.binding && !processes.pendingChoice) {
     const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, orderVisual.versionId);
     const continuing = processes.active === "order" && explicitIntent(entityMessage) !== "support" && !bookingRequest(foldText(entityMessage));
-    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, resumeOrder(foldText(entityMessage)) || continuing ? orderVisual.binding : undefined) : {};
+    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, resumeOrder(foldText(entityMessage)) || continuing ? orderVisual.binding : undefined, params.mode === "test") : {};
     if (match.selected?.entity.kind === "product" && match.selected.entity.id === orderVisual.binding.entity.id) { entityResolution = match; serviceVersion = pinned; resumingOrder = true; resumingService = false; }
   }
   let resumingBooking = false;
@@ -154,13 +154,13 @@ export async function processConversationMessage(params: ConversationMessagePara
   if (!ordinaryQuestion && bookingVisual?.binding && !processes.pendingChoice) {
     const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, bookingVisual.versionId);
     const continuing = processes.active === "booking" && !["order", "support"].includes(explicitIntent(entityMessage)) && !resumeOrder(foldText(entityMessage));
-    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, continuing ? bookingVisual.binding : undefined) : {};
+    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, continuing ? bookingVisual.binding : undefined, params.mode === "test") : {};
     if (match.selected?.entity.kind === "service" && match.selected.entity.id === bookingVisual.binding.entity.id) { entityResolution = match; serviceVersion = pinned; resumingBooking = true; resumingService = false; resumingOrder = false; }
   }
   const freshEntityVersion = !ordinaryQuestion && !resumingService && !resumingOrder && !resumingBooking && Boolean(state.visual);
   if (freshEntityVersion && !params.visualPreview) {
     const latest = await loadVisualVersion(params.businessId);
-    entityResolution = latest ? await resolveVisualEntity(params.businessId, latest.graph, entityMessage) : {};
+    entityResolution = latest ? await resolveVisualEntity(params.businessId, latest.graph, entityMessage, undefined, params.mode === "test") : {};
     serviceVersion = latest;
   }
   const selectedEntity = entityResolution.selected;

@@ -33,7 +33,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   const simple = (reply: string): AgentTurnResult => ({ reply, nextState: base, previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
     debug: { model: agentModel(), source: "fallback", fallbackReason: "visual_entity", agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: Date.now() - started } });
   const informationalEntity = !params.orderRequest && !params.bookingRequest && (isQuestion(params.message) || isEntityInformationRequest(params.message));
-  const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding) : {};
+  const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding, params.mode === "test") : {};
   const selectedEntity = entityResolution.selected;
   if (entityResolution.choices?.length) return simple(`Cilin produkt ose shërbim dëshironi: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`);
   if (!selectedEntity && entityResolution.mentioned?.kind === "product" && previous?.binding && entityResolution.mentioned.id !== previous.binding.entity.id) {
