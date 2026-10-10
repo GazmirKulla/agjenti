@@ -46,6 +46,7 @@ export async function POST(
 		.eq("conversation_id", conversationId)
 		.maybeSingle();
 	const state = (stateRow?.collected ?? {}) as ConversationStatePayload;
+	if(state.schemaVersion===2 && (state.step_key!=="order_ready" || !state.context?.execution.orderConfirmed)) return NextResponse.json({error:"Porosia pret plotësimin dhe konfirmimin e klientit."},{status:400});
 	const customer = state.customer ?? { name: null, phone: null, city: null, address: null };
 	if (!customer.name || !customer.phone || !customer.address) {
 		return NextResponse.json({ error: "Mungojnë të dhënat e klientit." }, { status: 400 });

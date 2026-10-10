@@ -1,3 +1,5 @@
+import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
+import { getFact, setFact, resetOrder, isQuestion, recordPrompt } from "../context";
 import { agentModel } from "@/lib/agents/generate";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { emptyState } from "../engine";
@@ -21,10 +23,17 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   if (version.businessId !== params.businessId || !validateVisualGraph(version.graph).graph) throw new Error("invalid_visual_workflow");
   const started = Date.now();
   // Completion does not erase order/customer data. Only entering a new product flow resets it.
-  const base = structuredClone(params.state ?? emptyState());
+  let base = structuredClone(params.state ?? emptyState());
   const intent = detectVisualIntent(params.message);
-  let execution = advanceVisualWorkflow({ graph: version.graph, versionId: version.id, state: active,
-    message: params.message, hasPhoto: params.hasPhoto, intent });
+  if(base.context && !active && base.product_id && intent==="order") base=resetOrder(base);
+  let currentState=base;
+  const extracted=base.context ? await extractMessageFacts(base,params.message,[...profileExtractionFields,...version.graph.nodes.filter(n=>n.kind==='collect').map(n=>({key:n.config.fieldKey!,type:n.config.fieldType||"text" as const,label:n.label}))]) : 0;
+  const sharedValues = () => currentState.context ? Object.fromEntries(version.graph.nodes.filter(n=>n.config.fieldKey).flatMap(n=> {
+    const fact=getFact(currentState,n.config.fieldKey!); return fact ? [[n.config.fieldKey!,fact.value]] : [];
+  })) : undefined;
+  const advance: typeof advanceVisualWorkflow = input => advanceVisualWorkflow({ ...input, sharedValues: sharedValues() });
+  let execution = advance({ graph: version.graph, versionId: version.id, state: active,
+    message: params.message, hasPhoto: params.hasPhoto, intent, ...(extracted?{inputAvailable:false}:{}) });
   const traversed = [...execution.traversedNodeIds];
   const replies: string[] = [];
   let productCalled = false, finished = false;
@@ -36,10 +45,15 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   for (let count = 0; count < 32; count++) {
     const action = execution.action;
     turn.nextState.visual = execution.state;
+    if(turn.nextState.context) for(const node of version.graph.nodes.filter(n=>n.kind==='collect')) {
+      const value=execution.state.values[node.config.fieldKey!];
+      if(value) setFact(turn.nextState,node.config.fieldKey!,value,node.config.fieldType||"text",`visual:${node.id}`);
+    }
     if (action.kind === "knowledge") {
       turn = await legacy({ ...params, state: turn.nextState, informational: action.message ?? "" });
+      currentState=turn.nextState;
       replies.push(turn.reply);
-      execution = advanceVisualWorkflow({ graph: version.graph, versionId: version.id, state: execution.state,
+      execution = advance({ graph: version.graph, versionId: version.id, state: execution.state,
         message: "", hasPhoto: false, intent, inputAvailable: false });
       traversed.push(...execution.traversedNodeIds);
       continue;
@@ -47,22 +61,29 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
     if (action.kind === "product") {
       const continuing = active?.nodeId === action.nodeId && active.awaiting && !productCalled;
       if (!continuing) {
-        turn.nextState = { ...emptyState(), visual: execution.state, completedVisual: base.completedVisual };
+        turn.nextState = { ...(turn.nextState.context ? (base.product_id ? resetOrder(turn.nextState) : turn.nextState) : emptyState()), visual: execution.state, completedVisual: base.completedVisual };
       }
+      currentState=turn.nextState;
       // A loop back to a product starts a fresh selection on the NEXT incoming message.
       if (productCalled) { replies.push("Cilin produkt dëshironi?"); finished = true; break; }
       productCalled = true;
-      turn = await legacy({ ...params, message: execution.inputConsumed ? "" : params.message,
+      turn = await legacy({ ...params, message: execution.inputConsumed && (!extracted || continuing) ? "" : params.message,
         hasPhoto: !execution.inputConsumed && params.hasPhoto, state: turn.nextState, previousResponseId: continuing ? params.previousResponseId : null,
         requireConfiguredWorkflow: true });
+      currentState=turn.nextState;
       replies.push(turn.reply);
       if (turn.handoff) { execution.state.status = "handoff"; execution.state.awaiting = false; finished = true; break; }
       if (turn.nextState.step_key !== "order_ready") { finished = true; break; }
-      execution = advanceVisualWorkflow({ graph: version.graph, versionId: version.id, state: execution.state,
+      execution = advance({ graph: version.graph, versionId: version.id, state: execution.state,
         message: "", hasPhoto: false, intent, productComplete: true, inputAvailable: false });
       traversed.push(...execution.traversedNodeIds);
       continue;
     }
+    if (action.kind === "prompt" && base.context && isQuestion(params.message)) {
+      const answer = await legacy({ ...params, state: turn.nextState, informational: "Përgjigju pyetjes pa ndryshuar të dhënat e porosisë." });
+      replies.push(answer.reply);
+    }
+    if(action.kind==="prompt") recordPrompt(turn.nextState,action.nodeId);
     if (action.message) replies.push(action.message);
     if (action.kind === "end" && !replies.length) replies.push("Faleminderit. Të dhënat u plotësuan.");
     if (action.kind === "handoff") turn.handoff = true;

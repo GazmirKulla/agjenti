@@ -1,3 +1,5 @@
+import { hydrateProfile } from "./profile";
+import { prepareWorkflowReply, type WorkflowJob } from "./workflow-queue";
 import { processBookingTurn } from "@/lib/calendar/agent";
 import { processAgentTurn } from "./process-agent-turn";
 import { decryptSecret } from "@/lib/crypto/tokens";
@@ -32,6 +34,7 @@ async function alreadyHandled(externalId: string): Promise<boolean> {
 
 export async function handleInboundMessage(
   message: NormalizedIncomingMessage,
+  job?: WorkflowJob,
 ): Promise<void> {
   const accountId =
     typeof message.contextMetadata?.instagramAccountId === "string"
@@ -72,7 +75,7 @@ export async function handleInboundMessage(
     console.warn("[inbound] early return: missing instagramAccountId");
     return;
   }
-  if (await alreadyHandled(message.externalMessageId)) {
+  if (!job && await alreadyHandled(message.externalMessageId)) {
     console.warn("[inbound] early return: alreadyHandled", {
       externalMessageId: message.externalMessageId,
     });
@@ -80,7 +83,7 @@ export async function handleInboundMessage(
   }
 
   const supabase = createServiceSupabase();
-  const { data: webhookEvent, error: webhookEventError } = await supabase
+  const { data: webhookEvent, error: webhookEventError } = job ? { data: {id:job.id},error:null } : await supabase
     .from("webhook_events")
     .insert({
       external_event_id: message.externalMessageId,
@@ -112,6 +115,7 @@ export async function handleInboundMessage(
     error: connectionError?.message ?? null,
   });
   if (!connection) {
+    if(job) throw new Error("Queued connection unavailable");
     console.warn(
       "[inbound] early return: unknown Instagram account",
       accountId,
@@ -133,10 +137,12 @@ export async function handleInboundMessage(
   }
   const conn = connection as ConnectionRow;
   const businessId = conn.business_id;
+  if(job && (job.business_id!==businessId||job.connection_id!==conn.id||job.participant_id!==message.externalParticipantId)) throw new Error("Invalid queue identity");
   let accessToken: string;
   try {
     accessToken = decryptSecret(conn.access_token_ciphertext);
   } catch (error) {
+    if(job) throw new Error("Queued token unavailable");
     console.error("[inbound] token decrypt failed", error);
     await supabase
       .from("instagram_connections")
@@ -237,6 +243,7 @@ export async function handleInboundMessage(
     });
   }
   if (!conversationId) {
+    if(job) throw new Error("Queued conversation unavailable");
     console.warn("[inbound] early return: no conversationId");
     return;
   }
@@ -263,6 +270,7 @@ export async function handleInboundMessage(
     error: messageInsertError?.message ?? null,
   });
 
+  if(job&&messageInsertError&&messageInsertError.code!=="23505") throw new Error("Inbound persistence failed");
   const { data: business } = await supabase
     .from("businesses")
     .select("auto_reply")
@@ -278,20 +286,24 @@ export async function handleInboundMessage(
     return;
   }
 
-  const { data: stateRow } = await supabase
+  const { data: rawState, error: stateReadError } = await supabase
     .from("conversation_states")
-    .select("collected, workflow_id")
+    .select(job ? "collected, workflow_id, revision" : "collected, workflow_id")
     .eq("conversation_id", conversationId)
     .maybeSingle();
+  if(job&&stateReadError) throw new Error("Conversation state unavailable");
+  if(job&&!rawState) await supabase.from("conversation_states").upsert({conversation_id:conversationId,business_id:businessId,status:"in_progress",collected:emptyState()},{onConflict:"conversation_id",ignoreDuplicates:true}).throwOnError();
+  const stateRow=rawState as unknown as {collected:ConversationStatePayload|null;workflow_id:string|null;revision?:number}|null;
   // A paused handoff returns above. Reaching this point with its saved state means
   // staff explicitly resumed the conversation; start a new run without erasing data.
-  const inboundState = structuredClone((stateRow?.collected as ConversationStatePayload | null) ?? emptyState());
+  let inboundState = structuredClone((stateRow?.collected as ConversationStatePayload | null) ?? emptyState());
+  if(job) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState);
   if (inboundState.visual?.status === "handoff") {
     inboundState.completedVisual = structuredClone(inboundState.visual);
     inboundState.visual.status = "completed";
   }
   const started = Date.now();
-  const bookingTurn = await processBookingTurn({
+  const bookingTurn = job && inboundState.product_id && inboundState.step_key!=="order_ready" ? null : await processBookingTurn({
     businessId, message: message.text ?? "", conversationKey: conversationId,
     state: inboundState,
   });
@@ -305,6 +317,10 @@ export async function handleInboundMessage(
   });
   const state = turn.nextState;
   const generated = { reply: turn.reply, responseId: turn.previousResponseId };
+  if(job) {
+    await prepareWorkflowReply(job,conversationId,stateRow?.revision??0,turn);
+    return;
+  }
   await supabase
     .from("conversation_states")
     .upsert({

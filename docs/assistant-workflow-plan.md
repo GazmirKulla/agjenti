@@ -23,6 +23,8 @@ Faza 4 është implementuar për hapat që motori ekzekuton sot: text, choice, p
 
 Migrimet e kërkuara, sipas rendit: `20261010110000_visual_workflows.sql`, `20261010130000_assistant_orderflows.sql`, `20261010140000_visual_workflow_history.sql`. Migrimet e reja janë verifikuar në PostgreSQL lokal të izoluar (PGlite); nuk janë aplikuar në databazën e prodhimit. Pa to leximi vazhdon, ndërsa ruajtja shfaq kufizimin real. Nuk u gjet CLI/lidhje SQL e konfiguruar për aplikim në databazën e vendosur. Kontrolli i fundit vetëm për lexim konfirmoi se `visual_workflows` tashmë ekziston, ndërsa `assistant_workflow_changes` dhe `visual_workflow_events` mungojnë: mbeten për aplikim dy migrimet e reja 130000 dhe 140000.
 
+**Faza 4 dhe konteksti i përbashkët janë zbatuar në kod, me aktivizim për biznes pilot.** Duhet të aplikohen migrimet e reja dhe të vendoset `SHARED_WORKFLOW_BUSINESS_IDS` para përdorimit real. Nuk është kryer aktivizim në production nga ky ndryshim.
+
 ## Qëllimi
 
 Biznesi mund t’i kërkojë Agjentit, me tekst ose audio, të shfaqë dhe shpjegojë rrjedhën aktuale, të propozojë ndryshime, të krijojë një rrjedhë, ta provojë dhe ta publikojë pas konfirmimit. Chati dhe editori përdorin të njëjtat të dhëna dhe të njëjtin ekzekutim.
@@ -33,7 +35,7 @@ Biznesi mund t’i kërkojë Agjentit, me tekst ose audio, të shfaqë dhe shpje
 - Workflow-i vizual është një hapësirë për biznes, me draft, revision, version të publikuar dhe gjendje aktive/joaktive. Nuk është bibliotekë me disa workflow vizuale të pavarura.
 - `src/lib/workflows/visual/actions.ts` dhe `mutations.ts` mbështesin ruajtje drafti, publikim dhe aktivizim/çaktivizim. Publikimi e aktivizon rrjedhën.
 - `store.ts` dhe `execute.ts` ruajnë versionin e publikuar për bisedat vizuale në vazhdim.
-- Ekzistojnë edhe `workflows` dhe `workflow_steps` për porositë e produkteve. Hapi vizual `product` përdor motorin ekzistues të porosisë; Agjenti i menaxhon përmes veprimeve `orderflow_*` dhe ruajtjes atomike me kopje të re.
+- Ekzistojnë edhe `workflows` dhe `workflow_steps` për porositë e produkteve. Hapi vizual `product` përdor motorin ekzistues të porosisë; Agjenti i menaxhon përmes veprimeve `orderflow_*` dhe ruajtjes atomike me kopje të re. Për pilotin, veprimet `linear_*` shtojnë draft, provë dhe publikim të veçantë.
 - `simulateVisualWorkflow` përdor motorin real në modalitet prove.
 
 ## Përvoja e klientit
@@ -55,19 +57,66 @@ Paraqiten hapat e shtuar/ndryshuar/hequr. Veprimet: Ruaj draftin, Provoje, Publi
 - Hapat e mbështetur: `start`, `condition`, `knowledge`, `collect`, `confirm`, `product`, `handoff`, `end`.
 - Nuk ka pagesa, rezervime apo nyja ekzekutuese të reja brenda grafikut pa zhvillim të veçantë të motorit.
 - Kushtet e intentit janë rregulla deterministe; ndryshimi i etiketës së një kushti nuk është aftësi e re semantike.
-- Nyja `product` thërret workflow-n linear të produktit; ndryshimi i hapave `collect` në grafikun vizual **nuk** ndryshon fushat e porosisë / klientit.
+- Nyja `product` thërret workflow-n linear të produktit; për bizneset e pilotit, `collect.fieldKey` lidhet me `customer_name`, `customer_phone`, `customer_email`, `customer_city`, `customer_address` ose një fushë të porosisë. Fushat e tjera ekzistuese nuk interpretohen si profil automatikisht.
 - Kufij grafiku: 32 nyje, 64 lidhje; draftet e paplota etiketohen dhe nuk publikohen.
 - Autorizimi dhe modulet vijnë nga serveri; konteksti i faqes nuk jep autorizim.
 - Konfirmimi lidhet me revision; kërkesat e përsëritura nuk krijojnë publikime të dyfishta. Rikthimi krijon draft të ri, nuk rishkruan historikun e versioneve.
 
-## Faza 4 — e ardhshme (jo e zbatuar)
+## Faza 4 — workflow-t e produkteve
 
-1. Lexim/listim i `workflows` / `workflow_steps` lineare dhe lidhjeve me produktet.
-2. Propozime të konfirmueshme për ndryshim hapash lineare dhe caktim `products.workflow_id`.
-3. Kur një workflow ndahet nga disa produkte: trego produktet e prekura; ofro kopje për produktin e kërkuar.
-4. Para aktivizimit: ruajtje atomike, kontroll versioni, vazhdimësi e porosive në proces.
-5. Validim fushash kundrejt motorit real (`engine.ts`); mos pretendo që edit vizual = fusha porosie.
-6. Historik i plotë i ndryshimeve të drafteve (përtej listës së versioneve të publikuara).
+- `linear_load/read/draft/link/publish`: listim, propozim i konfirmueshëm, draft, provë dhe publikim. Zgjedhjet e sqarimit mund të shfaqen si butona.
+- Drafti ruhet sipas produktit. Publikimi krijon kopje kur workflow ndahet me produkte të tjera; ndryshimi i përbashkët është zgjedhje eksplicite, me listën e produkteve të prekura.
+- `save_product_workflow` kontrollon autorizimin, revision, versionet që u panë gjatë propozimit dhe produktet e prekura brenda transaksionit. Drafti nuk prek hapat aktivë apo lidhjen e produktit.
+- `linear_workflow_versions` ruan definicionet e publikuara. Trigger-at krijojnë snapshot edhe për ndryshimet nga importet dhe editorët e vjetër. Bisedat në proces ruajnë hapat e tyre; migrimi vendos snapshot për porositë ekzistuese në proces.
+- Prova e produktit përdor draftin e ruajtur dhe sesion të enkriptuar. Nuk ruan profil, porosi apo mesazhe reale.
+
+## Konteksti i përbashkët
+
+`ConversationStatePayload.schemaVersion = 2` shton `context.profile`, `context.order` dhe `context.execution`. Fushat mbajnë vlerën, tipin, burimin dhe validimin. `customer`, `fields`, `step_key` dhe `product_id` mbeten përshtatës për Inbox dhe dërgimin ekzistues të porosisë.
+
+- Të dhënat e etiketuara mblidhen në mënyrë deterministe; nxjerrja me AI lejon vetëm fushat e deklaruara, evidencë ekzakte nga mesazhi dhe vlera të vlefshme. Pa AI vazhdon mbledhja përmes pyetjes aktuale dhe etiketave.
+- Hapat e plotësuar kapërcehen; konfirmimet mbeten eksplicite. Pyetjet informative nuk plotësojnë fushën aktuale. Korrigjimet zhvlerësojnë konfirmimin përfundimtar.
+- `conversation_profiles` mban kujtesën sipas biznesit/pjesëmarrësit Instagram, me lidhjen e integrimit për fshirje. Nuk krijon klient CRM dhe nuk bashkon identitete nga emri apo telefoni.
+- Porosia e re ruan profilin, kërkon konfirmim të përmbledhur dhe pastron variante, foto e konfirmime të vjetra.
+- Pas konfirmimit final shënohet `order_ready`; endpoint-i ekzistues i stafit kërkon konfirmimin kur state është v2. Asistenti nuk krijon/dërgon porosi vetë.
+
+## Radhitja dhe rikuperimi
+
+Webhook-u ruan mesazhet e pilotit para përgjigjes HTTP. Çelësi unik është lidhja Instagram + ID e mesazhit. Worker-i merr mesazhin më të vjetër të papërfunduar për pjesëmarrësin, me lease dhe token; `prepare_workflow_reply` ruan bashkë state-in me revision, profilin dhe përgjigjen për dërgim.
+
+Përgjigjja e ruajtur mund të dërgohet pa ekzekutuar sërish workflow-n. Një dërgim me rezultat të paqartë nuk përsëritet automatikisht: biseda ndalet për stafin. Gabimet para dërgimit riprovohen deri në tre herë. `/api/cron/workflow-inbound` kërkon `CRON_SECRET`; është regjistruar çdo minutë në konfigurimin e hostimit. Për platforma që nuk mbështesin këtë frekuencë duhet një scheduler ekuivalent i autorizuar.
+
+## Aktivizimi i pilotit
+
+1. Apliko migrimet `20261010143000_shared_workflow_context.sql` dhe `20261010150000_workflow_inbound_queue.sql` pas migrimeve ekzistuese.
+2. Vendos `SHARED_WORKFLOW_BUSINESS_IDS` me UUID-në e biznesit pilot; bosh e lë sjelljen e vjetër për bizneset pa state v2. Verifiko `CRON_SECRET`, konfigurimin AI dhe worker-in e planifikuar.
+3. Provo draftin: telefon përpara porosisë, disa fusha në një mesazh, korrigjim, klient që rikthehet, publikim gjatë porosisë dhe kalim te stafi.
+4. Publiko draftet me konfirmim nga ndërfaqja. Verifiko një bisedë reale të kontrolluar dhe që vetëm stafi dërgon porosinë.
+5. Monitoro radhën dhe bisedat e ndalura para zgjerimit të listës së bizneseve.
+
+Për ndalim operacional: ndal auto-reply të biznesit, lër worker-in të përfundojë ose klasifikojë punët në radhë dhe verifiko dërgimet e paqarta. Mos hiq konfigurimin e pilotit ndërsa ka punë të papërfunduara; bisedat me state v2 vazhdojnë ta përdorin atë format. Mos fshi snapshot-et ose kujtesën për të rikthyer konfigurimin.
+
+### Monitorim pa përmbajtjen e mesazheve
+
+```sql
+select business_id, status, count(*), min(created_at) as oldest
+from workflow_inbound_queue
+where created_at > now() - interval '24 hours'
+group by business_id, status;
+
+select business_id, conversation_id, step_key, updated_at,
+       collected #> '{context,execution,promptCounts}' as prompts_per_step,
+       collected #> '{context,execution,validationFailures}' as validation_failures,
+       collected #> '{context,execution,skipped}' as reused_steps
+from conversation_states
+where collected->>'schemaVersion' = '2';
+```
+
+Numërimi i pyetjeve për hap përfshin edhe përsëritjet legjitime pas përgjigjeve të pavlefshme ose korrigjimeve. Një bisedë e vjetër në pritje nuk provon vetë ngecje; krahaso mesazhin e fundit dhe statusin e radhës. `uncertain` dhe `failed` kërkojnë shqyrtim nga stafi.
+
+### Verifikimi lokal
+
+Testet e aplikacionit mbulojnë state-in, nxjerrjen me evidencë, kujtesën, propozimet, versionet dhe rikuperimin e dërgimit. `supabase/tests/shared_workflow_context.sql` verifikon në PostgreSQL autorizimin, kopjen për produktin, versionet, revision, commit-in atomik, rendin, lease-et dhe dërgimet e paqarta. Të gjitha migrimet u provuan në një PostgreSQL lokal të përkohshëm; kjo nuk vërteton konfigurimin e hostimit apo lidhjen reale Instagram.
 
 ## Kriteret e pranimit (faza 1–3 / 5)
 

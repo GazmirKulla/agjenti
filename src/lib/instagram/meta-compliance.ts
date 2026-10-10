@@ -80,6 +80,11 @@ export async function deleteInstagramUserData(params: {
 			.eq("id", connection.id)
 			.throwOnError();
 
+		// New memory and queued payloads are personal data too. Missing tables are tolerated before migration.
+        for (const table of ["conversation_profiles", "workflow_inbound_queue"]) {
+          const { error } = await supabase.from(table).delete().eq("business_id", connection.business_id).eq("connection_id", connection.id);
+          if (error && !["42P01", "PGRST205"].includes(error.code ?? "")) throw new Error("Nuk u fshi kujtesa e klientit.");
+        }
 		const { data: conversations } = await supabase
 			.from("conversations")
 			.select("id,customer_id")

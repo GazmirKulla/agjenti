@@ -1,3 +1,4 @@
+import { isQuestion, validValue, profileKey } from "../context";
 import { foldText } from "../engine";
 import type { VisualExecution, VisualGraph, VisualIntent, VisualRunState } from "./types";
 export function detectVisualIntent(message:string):VisualIntent {
@@ -8,9 +9,16 @@ export function detectVisualIntent(message:string):VisualIntent {
   if(/\b(porosis|porosit|blej|bleme|buy|purchase|dua (?:kete|ta marr)|e dua|want (?:this|to buy))\b/.test(text)||/^(porosi|order)[.!\s]*$/.test(text))return 'order';
   return message.trim()?'question':'unknown';
 }
-export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;productComplete?:boolean;inputAvailable?:boolean}):VisualExecution {
+export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;productComplete?:boolean;inputAvailable?:boolean; sharedValues?:Record<string,string>}):VisualExecution {
   const state:VisualRunState=p.state?structuredClone(p.state):{versionId:p.versionId,nodeId:p.graph.nodes.find(n=>n.kind==='start')!.id,status:'running',visited:[],values:{},awaiting:false};
+  if(p.sharedValues) {
+    const forced=p.graph.nodes.find(n=>n.id===state.forceCollect);
+    const key=forced?.config.fieldKey;
+    if(key && p.sharedValues[key] && p.sharedValues[key]!==state.values[key]) delete state.forceCollect;
+    Object.assign(state.values,p.sharedValues);
+  }
   const traversedNodeIds:string[]=[];
+  const skipped=new Set<string>();
   let consumed=p.inputAvailable===false;
   const result=(kind:VisualExecution['action']['kind'],nodeId:string,message?:string):VisualExecution=>({state,action:{kind,nodeId,message},traversedNodeIds,inputConsumed:consumed});
   if(state.versionId!==p.versionId)throw new Error('workflow_version_mismatch');
@@ -37,6 +45,12 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       if(state.awaiting&&p.productComplete){consumed=true;advance('next');continue;}
       state.awaiting=true;state.status='waiting';return result('product',n.id);
     }
+    const boundProfile=p.sharedValues&&n.config.fieldKey?profileKey(n.config.fieldKey):null;
+    const fieldType=boundProfile==='phone'?'phone':boundProfile==='email'?'email':boundProfile?'text':n.config.fieldType||'text';
+    if(n.kind==='collect'&&state.forceCollect!==n.id&&p.sharedValues&&Object.hasOwn(state.values,n.config.fieldKey!)) {
+      const known=state.values[n.config.fieldKey!];
+      if(validValue(known,fieldType)&&!skipped.has(n.id)) { skipped.add(n.id);advance('next');continue; }
+    }
     const wasAwaiting=state.awaiting;
     state.awaiting=true;state.status='waiting';
     if(!wasAwaiting||consumed)return result('prompt',n.id,n.config.prompt);
@@ -46,12 +60,15 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       const yes=/^(po|ok|okay|yes|dakord|konfirmoj|e konfirmoj|ne rregull|sure|po ju lutem)[\s.!]*$/.test(t);
       const no=/^(jo|no|nuk e konfirmoj|ndrysho|korrigjo)[\s.!]*$/.test(t);
       if(!yes&&!no)return result('prompt',n.id,`${n.config.prompt} Përgjigju me Po ose Jo.`);
-      state.values[n.id]=yes?'po':'jo';consumed=true;advance(yes?'yes':'no');continue;
+      state.values[n.id]=yes?'po':'jo';consumed=true;advance(yes?'yes':'no');
+      if(!yes && p.sharedValues && p.graph.nodes.find(node=>node.id===state.nodeId)?.kind==='collect') state.forceCollect=state.nodeId;
+      continue;
     }
-    const type=n.config.fieldType||'text';
+    if(p.sharedValues&&isQuestion(text)) return result('prompt',n.id,n.config.prompt);
+    const type=fieldType;
     const valid=type==='photo'?p.hasPhoto:type==='email'?/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text):type==='phone'?/^\+?[\d\s().-]{7,24}$/.test(text)&&text.replace(/\D/g,'').length>=7:type==='number'?/^\d+(?:[.,]\d+)?$/.test(text):Boolean(text)&&text.length<=2000;
     if(!valid)return result('prompt',n.id,`${n.config.prompt} ${type==='email'?'Vendos një email të vlefshëm.':type==='photo'?'Dërgo një foto.':type==='number'?'Vendos një numër.':type==='phone'?'Vendos një numër telefoni të vlefshëm.':''}`.trim());
-    state.values[n.config.fieldKey!]=type==='photo'?'photo_received':text.slice(0,2000);consumed=true;advance('next');
+    state.values[n.config.fieldKey!]=type==='photo'?'photo_received':text.slice(0,2000);delete state.forceCollect;consumed=true;advance('next');
   }
   throw new Error('workflow_step_limit');
 }

@@ -28,6 +28,10 @@ export type WorkflowStepKind =
   | "confirm";
 
 export type WorkflowStepDef = {
+  fieldKey?: string;
+  prompt?: string;
+  fieldType?: "text" | "email" | "phone" | "number" | "photo";
+  options?: string[];
   required?: boolean;
   key: string;
   kind: WorkflowStepKind;
@@ -36,6 +40,9 @@ export type WorkflowStepDef = {
 
 export type ConversationStatePayload = {
   orderWorkflowSnapshot?: string;
+  linearSnapshot?: { id: string; versionId: string; name: string; steps: WorkflowStepDef[] };
+  schemaVersion?: 2;
+  context?: import("./context").SharedContext;
   visual?: import("./visual/types").VisualRunState;
   completedVisual?: import("./visual/types").VisualRunState;
   product_id?: string | null;

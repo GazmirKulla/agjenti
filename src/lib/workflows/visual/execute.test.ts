@@ -145,3 +145,12 @@ describe("visual execution integration", () => {
     expect(saved.visual.status).toBe("completed");
   });
 });
+
+it("shares a collected phone with the product engine without requesting it twice", async () => {
+  const {migrateContext,setFact}=await import("../context");
+  const graph=linear(node("phone","collect",{fieldKey:"customer_phone",fieldType:"phone",prompt:"Telefoni?"}),node("product","product"));
+  const state=migrateContext();setFact(state,"customer_phone","+355691234567","phone","message");
+  const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Vazhdo"));
+  const turn=await executeVisualTurn({...params(graph),message:"dua bluze",state},legacy);
+  expect(legacy.mock.calls[0][0].state?.customer.phone).toBe("+355691234567");expect(turn.reply).not.toContain("Telefoni?");
+});

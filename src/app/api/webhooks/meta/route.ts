@@ -1,3 +1,4 @@
+import { enqueueWorkflowMessage, runWorkflowQueue } from "@/lib/conversations/workflow-queue";
 import { after, NextResponse } from "next/server";
 import { handleInboundMessage } from "@/lib/conversations/handle-inbound";
 import {
@@ -9,6 +10,8 @@ import {
 	type InstagramWebhookPayload,
 	parseInstagramWebhookPayload,
 } from "@/lib/instagram/parse-webhook";
+
+export const maxDuration = 180;
 
 export async function GET(request: Request) {
 	const url = new URL(request.url);
@@ -52,9 +55,11 @@ export async function POST(request: Request) {
 			matchedSecret: verified.matched,
 		});
 
+		const legacy: typeof messages=[];
+		for(const message of messages) { if(!await enqueueWorkflowMessage(message)) legacy.push(message); }
 		after(async () => {
 			try {
-				await Promise.all(messages.map((message) => handleInboundMessage(message)));
+				await Promise.all([runWorkflowQueue(), ...legacy.map((message) => handleInboundMessage(message))]);
 			} catch (err) {
 				console.error("[meta webhook][POST] processing error:", err);
 			}
@@ -62,6 +67,6 @@ export async function POST(request: Request) {
 		return NextResponse.json({ received: true });
 	} catch (err) {
 		console.error("[meta webhook][POST] top-level error", err);
-		return NextResponse.json({ received: true, error: true });
+		return NextResponse.json({ received: false, error: true }, {status:503});
 	}
 }

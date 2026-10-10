@@ -1,4 +1,7 @@
 import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
+import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
+import { detectVisualIntent } from "@/lib/workflows/visual/runtime";
+import { sharedWorkflowEnabled, migrateContext, extractExplicitFacts, advanceSharedOrder, sharedPrompt, isQuestion, resetOrder, recordPrompt } from "@/lib/workflows/context";
 import type { TraceObserver } from "./trace";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
@@ -94,6 +97,7 @@ function pickProduct<T extends { id: string; name: string }>(
 export type AgentTurnParams = {
   /** Trusted conversation_states.workflow_id, supplied only by the inbound server. */
   persistedWorkflowId?: string | null;
+  linearPreview?: boolean;
   visualPreview?: import("@/lib/workflows/visual/types").VisualVersion;
   onTrace?: TraceObserver;
   mode?: "production" | "test";
@@ -105,6 +109,14 @@ export type AgentTurnParams = {
   previousResponseId?: string | null;
 };
 export async function processAgentTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
+  if (sharedWorkflowEnabled(params.businessId) || params.state?.schemaVersion === 2) {
+    params = { ...params, state: migrateContext(params.state) };
+    extractExplicitFacts(params.state!, params.message);
+  }
+  if(params.linearPreview) {
+    if(params.mode!=="test"||!params.state?.context?.execution.linear?.versionId.startsWith("linear-preview:")) throw new Error("invalid_linear_preview");
+    return processLegacyAgentTurn(params);
+  }
   // Client-supplied graph previews enter only through authenticated test actions.
   if (params.visualPreview && (params.mode !== "test" || params.visualPreview.businessId !== params.businessId)) throw new Error("invalid_workflow_preview");
   const { executeVisualTurn } = await import("@/lib/workflows/visual/execute");
@@ -174,8 +186,9 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
   } });
   let state = structuredClone(params.state ?? emptyState());
   const text = params.message.trim();
+  if(state.context && state.step_key==="order_ready" && detectVisualIntent(text)==="order" && params.informational===undefined) state=resetOrder(state);
   if (state.product_id && !products.some((p) => p.id === state.product_id))
-    state = emptyState();
+    state = state.context ? resetOrder(state) : emptyState();
   const exactProduct = products.some(
     (p) => foldText(p.name) === foldText(text) || matchesSku(p.sku, text),
   );
@@ -332,7 +345,7 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
   }
   delete state.fields.catalog_context;
   let selected = products.find((p) => p.id === state.product_id) ?? null;
-  if (state.product_id && !selected) state = emptyState();
+  if (state.product_id && !selected) state = state.context ? resetOrder(state) : emptyState();
   let justSelected = false;
   if (!selected && text) {
     const skuMatches = products.filter((p) => matchesSku(p.sku, text));
@@ -357,9 +370,13 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
     },
   ];
   const pinnedOrder = selected && !justSelected ? readOrderSnapshot(state.orderWorkflowSnapshot, params.businessId, selected.id) : null;
-  const resolvedWorkflowId = pinnedOrder?.workflowId ?? (selected && !justSelected ? params.persistedWorkflowId : null) ?? selected?.workflow_id;
-  if (pinnedOrder) {
-    workflowId = pinnedOrder.workflowId; workflowName = pinnedOrder.name; steps = pinnedOrder.steps;
+  const pinned = state.context?.execution.linear ?? (pinnedOrder ? {
+    id: pinnedOrder.workflowId, versionId: "sealed-order-snapshot", name: pinnedOrder.name, steps: pinnedOrder.steps,
+  } : state.linearSnapshot);
+  const resolvedWorkflowId = pinned?.id ?? (selected && !justSelected ? params.persistedWorkflowId : null) ?? selected?.workflow_id;
+  if (pinned && state.product_id === selected?.id) {
+    workflowId = pinned.id; workflowName = pinned.name; steps = pinned.steps;
+    if (state.context) state.context.execution.linear = pinned;
   } else if (resolvedWorkflowId) {
     const workflow = await db
       .from("workflows")
@@ -380,9 +397,10 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
       if (params.requireConfiguredWorkflow && !result.data?.length) steps = [];
       if (result.data?.length)
         steps = result.data.map((s) => {
-          const config = (s.config ?? {}) as { label?: string };
+          const config = (s.config ?? {}) as { label?: string; prompt?: string; fieldKey?: string; fieldType?: WorkflowStepDef["fieldType"]; options?: string[] };
           return {
             key: s.key,
+            fieldKey: config.fieldKey, prompt: config.prompt, fieldType: config.fieldType, options: config.options,
             required: s.required !== false,
             kind: s.kind as WorkflowStepKind,
             label:
@@ -392,6 +410,14 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
           };
         });
     }
+  }
+  if (state.context && workflowId && !pinned) {
+    const { data: definition, error } = await db.from("linear_workflow_versions").select("id,name,steps")
+      .eq("business_id", params.businessId).eq("workflow_id", workflowId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (error || !definition) throw new Error("Mungon versioni i workflow-t të produktit.");
+    steps = definition.steps as WorkflowStepDef[];
+    workflowName = definition.name;
+    state.context.execution.linear = { id: workflowId, versionId: definition.id, name: definition.name, steps };
   }
   if (selected && workflowId && !pinnedOrder) {
     state.orderWorkflowSnapshot = sealOrderSnapshot({businessId:params.businessId,productId:selected.id,workflowId,name:workflowName ?? "Porosia",steps});
@@ -407,10 +433,15 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
   } else if (!selected) {
     if (text) state.fields.product_query = text;
     state.step_key = "choose_product";
-  } else {
+  } else if (!state.context) {
     state = applyInboundToState(state, text, params.hasPhoto, steps);
   }
 
+  if (state.context && selected) {
+    const extracted=await extractMessageFacts(state,text,[...profileExtractionFields,...steps.filter(s=>!["confirm","customer","photo"].includes(s.kind)).map(s=>({key:s.fieldKey??s.key,type:s.fieldType??"text" as const,label:s.label,options:s.options}))]);
+    state = advanceSharedOrder(state, text, params.hasPhoto, steps, justSelected,extracted);
+  }
+  if(state.context && !isQuestion(text) && state.step_key!=="order_ready") recordPrompt(state,state.step_key??"choose_product");
   const productName = selected?.name ?? null;
   const workflowProgress = buildWorkflowProgress({
     steps,
@@ -423,7 +454,7 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
     state, steps, progress: workflowProgress, selectedProduct: selected,
   } });
   const trainingContext = trainingFor(workflowId, state.step_key);
-  const generated = await generateAgentReply({
+  const generated = state.context && !isQuestion(text) ? { reply: sharedPrompt(state, steps, productName ?? undefined), responseId: null, source: "fallback" as const, fallbackReason: "shared_workflow_prompt" } : await generateAgentReply({
     businessProcess,
     trainingContext,
       ...(trace ? { onTrace: trace } : {}),

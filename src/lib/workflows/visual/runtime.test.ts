@@ -183,3 +183,10 @@ describe("visual runtime", () => {
     expect(() => run(graph, "Po", { ...handoff.state, versionId: "other" })).toThrow("workflow_version_mismatch");
   });
 });
+
+it("validates canonical phone fields even if the editor field type is text",()=>{
+ const graph={version:1 as const,name:"Phone",nodes:[{id:"start",kind:"start" as const,label:"Start",position:{x:0,y:0},config:{}},{id:"phone",kind:"collect" as const,label:"Phone",position:{x:1,y:0},config:{fieldKey:"customer_phone",fieldType:"text" as const,prompt:"Telefoni?"}},{id:"end",kind:"end" as const,label:"End",position:{x:2,y:0},config:{}}],edges:[{id:"e1",source:"start",target:"phone",port:"next" as const},{id:"e2",source:"phone",target:"end",port:"next" as const}]};
+ const first=advanceVisualWorkflow({graph,versionId:"v",message:"",hasPhoto:false,intent:"unknown",sharedValues:{}});
+ const second=advanceVisualWorkflow({graph,versionId:"v",state:first.state,message:"gabim",hasPhoto:false,intent:"unknown",sharedValues:{}});
+ expect(second.state.nodeId).toBe("phone");expect(second.state.values.customer_phone).toBeUndefined();
+});

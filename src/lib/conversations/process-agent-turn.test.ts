@@ -358,3 +358,36 @@ it("resolves a pre-upgrade order from the workflow id persisted by the inbound s
   expect(queries.find(q => q.table === "workflows")?.filters).toContainEqual(["id","workflow-old"]);
   expect(queries.find(q => q.table === "workflows")?.filters).toContainEqual(["business_id","business-a"]);
 });
+
+it("pins linear product versions and reuses a phone collected before product selection", async () => {
+  const {migrateContext,extractExplicitFacts}=await import("@/lib/workflows/context");
+  fixtures.linear_workflow_versions={id:"version-a",name:"Saved order",steps:[{key:"customer",kind:"customer"}]};
+  const state=migrateContext(emptyState());extractExplicitFacts(state,"Telefon: +355691234567");
+  const first=await processAgentTurn({businessId:"business-a",message:"Bluzë",hasPhoto:false,state});
+  expect(first.nextState.context?.execution.linear?.versionId).toBe("version-a");
+  expect(first.reply).not.toContain("telefonin");
+  fixtures.linear_workflow_versions={id:"version-b",name:"New order",steps:[{key:"photo",kind:"photo"}]};
+  const second=await processAgentTurn({businessId:"business-a",message:"Emri: Ana; Qyteti: Tiranë; Adresa: Rruga A",hasPhoto:false,state:first.nextState});
+  expect(second.nextState.context?.execution.linear?.versionId).toBe("version-a");
+  expect(second.nextState.step_key).toBe("order_confirm");
+  const third=await processAgentTurn({businessId:"business-a",message:"po",hasPhoto:false,state:second.nextState});
+  expect(third.nextState.step_key).toBe("order_ready");expect(third.reply).toContain("gati për stafin");
+  expect(queries.some(q=>["orders","order_items","conversation_profiles"].includes(q.table))).toBe(false);
+});
+
+
+it("preserves a sealed legacy order when shared context is enabled after reassignment", async () => {
+  vi.stubEnv("TOKEN_ENCRYPTION_KEY", "snapshot-test-key");
+  try {
+    const first = await processAgentTurn({businessId:"business-a",message:"Bluzë",hasPhoto:false});
+    vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business-a");
+    fixtures.products = [{id:"product-a",name:"Bluzë",workflow_id:"workflow-new"}];
+    first.nextState.linearSnapshot = {id:"workflow-new",versionId:"new",name:"New",steps:[{key:"customer",kind:"customer"}]};
+    queries = [];
+    const next = await processAgentTurn({businessId:"business-a",message:"M",hasPhoto:false,state:first.nextState});
+    expect(next.workflowId).toBe("workflow-a");
+    expect(next.nextState.context?.execution.linear?.steps[0].key).toBe("collect_size");
+    expect(next.nextState.step_key).toBe("awaiting_photo");
+    expect(queries.some(q => ["workflow_steps", "linear_workflow_versions"].includes(q.table))).toBe(false);
+  } finally { vi.unstubAllEnvs(); }
+});

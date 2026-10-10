@@ -44,7 +44,7 @@ export async function generateAgentReply(params: {
       fallbackReason: "missing_api_key",
     };
   }
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 25000, maxRetries: 0 });
   const progress =
     params.workflowProgress
       ?.map(

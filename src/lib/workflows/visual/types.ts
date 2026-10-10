@@ -23,6 +23,7 @@ export type VisualRunState = {
   visited: string[];
   values: Record<string, string>;
   awaiting: boolean;
+  forceCollect?: string;
 };
 export type VisualExecution = {
   state: VisualRunState;
