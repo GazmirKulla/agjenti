@@ -139,3 +139,13 @@ it("keeps pre-pilot production booking behavior behind the single entry point", 
   await processConversationMessage({ businessId: "business", message: "Dua rezervim", hasPhoto: false, state: emptyState(), mode: "production" });
   expect(mocks.booking).toHaveBeenCalledWith(expect.not.objectContaining({ routed: true }));
 });
+
+it("treats a bare contact channel after handoff as support rather than an order", async () => {
+  const state = emptyState(); state.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: ["staff"], values: {}, advisory: true };
+  const next = await turn("WhatsApp", state);
+  expect(next.conversationRouting?.process).toBe("support");
+  expect(next.nextState.processes?.order).toBeUndefined();
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("selected a contact channel") }));
+  expect(next.advisoryHandoff).toBe(true);
+});

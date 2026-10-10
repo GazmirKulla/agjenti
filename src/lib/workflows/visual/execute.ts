@@ -178,7 +178,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
       traversed.push(...execution.traversedNodeIds);
       continue;
     }
-    if (action.kind === "prompt" && !revisiting && isQuestion(params.message)) {
+    if (action.kind === "prompt" && !revisiting && isQuestion(params.message) && !replies.length) {
       const answer = await legacy({ ...params, state: turn.nextState, informational: "Përgjigju pyetjes pa ndryshuar të dhënat e porosisë." });
       replies.push(answer.reply);
     }

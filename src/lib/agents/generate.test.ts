@@ -44,7 +44,7 @@ describe("reply source diagnostics", () => {
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({
         previous_response_id: "resp_previous",
-        instructions: params.instructions,
+        instructions: expect.stringContaining(params.instructions),
         input: expect.stringContaining("Tenant facts"),
       }),
     );
@@ -91,4 +91,14 @@ it("supplies approved training with factual and workflow boundaries to the real 
   expect(request.instructions).toContain("Never skip required steps");
   expect(request.instructions).toContain("Current verified knowledge");
   expect(request.input).toContain("Collected state (source of truth)");
+});
+
+it("keeps customer contact data separate from business contact claims", async () => {
+  mocks.create.mockResolvedValue({ id: "resp_contact", output_text: "Kontakto stafin." });
+  const state = emptyState(); state.customer.phone = "0690000000";
+  await generateAgentReply({ ...params, state, customerMessage: "Telefoni im është 0690000000. Sa kushton?", documentContext: "No verified business phone is available." });
+  const request = mocks.create.mock.calls[0][0];
+  expect(request.instructions).toContain("Never present the customer’s phone, email or address as a business/staff contact");
+  expect(request.instructions).toContain("including indirect references such as the number you sent");
+  expect(request.instructions).toContain("Business contact details must be explicitly identified as belonging to the business");
 });

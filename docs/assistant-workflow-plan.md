@@ -2,7 +2,7 @@
 
 ## Statusi i dorëzimit
 
-Integrimi në kod mbulon workflow-n vizual dhe rrjedhat lineare të porosive. Aktivizimi në databazën e vendosur mbetet hap operacional:
+Integrimi në kod mbulon një qendër mesazhesh me rrjedha për porosi, rezervime të konfiguruara, informacion dhe staf. Përkufizimi vizual është v2; gjendja e bisedës është v3. Aktivizimi në prodhim mbetet hap operacional dhe nuk konfirmohet vetëm nga deployment-i:
 
 - [x] Lexim/shpjegim i rrjedhës, kartë në chat, lidhje me editorin, kontekst faqje/hap
 - [x] Propozime të strukturuara për draft (shto/ndrysho/hiq hapa e lidhje), para/pas, konfirmim
@@ -16,14 +16,15 @@ Integrimi në kod mbulon workflow-n vizual dhe rrjedhat lineare të porosive. Ak
 - [x] Kopje e re për çdo ndryshim të rrjedhës lineare; versioni i vjetër mbetet për porositë në proces
 - [x] Snapshot i enkriptuar i hapave në gjendjen e bisedës; bisedat e vjetra lexojnë workflow_id e ruajtur nga serveri
 - [x] Historik i pandryshueshëm i drafteve/publikimeve dhe i lidhjeve me produktet; konfirmime idempotente
+- [x] Pamje qendrore e proceseve, hapje dhe editim i secilës rrjedhë me dorë ose përmes AI-së
+- [x] Rivlerësim i çdo mesazhi; një porosi dhe një rezervim i papërfunduar ruhen dhe rifillohen me kontekstin e tyre
+- [x] Profil i përbashkët, konfirmime të veçanta për çdo proces dhe orientim te stafi pa bllokuar AI-në
+- [x] Kontroll i migrimeve, biznesit pilot dhe funksionimit të worker-it para publikimit/aktivizimit të grafikut v2
+- [ ] Aplikim dhe verifikim i migrimeve, scheduler-it dhe pilotit në mjedisin e prodhimit
 
-Migrimi `supabase/migrations/20261010110000_visual_workflows.sql` ekziston në repo. Aplikimi në mjedisin e vendosur është hap operacional; pa të, chati shfaq rrjedhë të sugjeruar dhe bllokon ruajtjen/publikimin.
+Dy migrimet e këtij dorëzimi janë `20261010213000_message_workflow_definitions.sql` (grafiku v2 dhe pajtueshmëria me v1) dhe `20261010220000_workflow_message_runtime.sql` (rezervime idempotente, kontrolli i pronësisë së bisedës dhe gatishmëria e worker-it). Ato varen nga migrimet paraprake të repos, përfshirë kalendarin, workflow-t vizualë, kontekstin e përbashkët dhe radhën e mesazheve.
 
-Faza 4 është implementuar për hapat që motori ekzekuton sot: text, choice, photo, confirm, customer. Hapi customer mbetet i fundit dhe mbledh emër/telefon/qytet/adresë. Nuk shtohen lloje të reja veprimesh si pagesa apo rezervime brenda grafikut.
-
-Migrimet e kërkuara, sipas rendit: `20261010110000_visual_workflows.sql`, `20261010130000_assistant_orderflows.sql`, `20261010140000_visual_workflow_history.sql`. Migrimet e reja janë verifikuar në PostgreSQL lokal të izoluar (PGlite); nuk janë aplikuar në databazën e prodhimit. Pa to leximi vazhdon, ndërsa ruajtja shfaq kufizimin real. Nuk u gjet CLI/lidhje SQL e konfiguruar për aplikim në databazën e vendosur. Kontrolli i fundit vetëm për lexim konfirmoi se `visual_workflows` tashmë ekziston, ndërsa `assistant_workflow_changes` dhe `visual_workflow_events` mungojnë: mbeten për aplikim dy migrimet e reja 130000 dhe 140000.
-
-**Faza 4 dhe konteksti i përbashkët janë zbatuar në kod, me aktivizim për biznes pilot.** Duhet të aplikohen migrimet e reja dhe të vendoset `SHARED_WORKFLOW_BUSINESS_IDS` para përdorimit real. Nuk është kryer aktivizim në production nga ky ndryshim.
+Grafikët v1 dhe snapshot-et ekzistuese ruhen. Migrimet dhe testet SQL janë verifikuar në PostgreSQL 17 lokal të izoluar; ky verifikim nuk provon se migrimet ose konfigurimi operacional janë aplikuar në prodhim.
 
 ## Qëllimi
 
@@ -32,11 +33,11 @@ Biznesi mund t’i kërkojë Agjentit, me tekst ose audio, të shfaqë dhe shpje
 ## Gjendja e verifikuar
 
 - Actions: `workflow_load`, `workflow_read`, `workflow_draft`, `workflow_publish`, `workflow_enable`, `workflow_disable`, `workflow_restore` në `src/lib/business-assistant/`.
-- Workflow-i vizual është një hapësirë për biznes, me draft, revision, version të publikuar dhe gjendje aktive/joaktive. Nuk është bibliotekë me disa workflow vizuale të pavarura.
+- Workflow-i vizual është një hapësirë për biznes, me draft, revision, version të publikuar dhe gjendje aktive/joaktive. Grafiku v2 i grupon hapat në rrjedha me hyrjen e tyre; pamja qendrore hap rrjedhën për editim.
 - `src/lib/workflows/visual/actions.ts` dhe `mutations.ts` mbështesin ruajtje drafti, publikim dhe aktivizim/çaktivizim. Publikimi e aktivizon rrjedhën.
 - `store.ts` dhe `execute.ts` ruajnë versionin e publikuar për bisedat vizuale në vazhdim.
 - Ekzistojnë edhe `workflows` dhe `workflow_steps` për porositë e produkteve. Hapi vizual `product` përdor motorin ekzistues të porosisë; Agjenti i menaxhon përmes veprimeve `orderflow_*` dhe ruajtjes atomike me kopje të re. Për pilotin, veprimet `linear_*` shtojnë draft, provë dhe publikim të veçantë.
-- `simulateVisualWorkflow` përdor motorin real në modalitet prove.
+- `processConversationMessage` bashkon rrugët e Instagram-it, provës së agjentit dhe simulimit të draftit për pilotin. Prova nuk ruan profil real, rezervim apo porosi dhe nuk dërgon mesazhe te klientët.
 
 ## Përvoja e klientit
 
@@ -54,11 +55,11 @@ Paraqiten hapat e shtuar/ndryshuar/hequr. Veprimet: Ruaj draftin, Provoje, Publi
 
 ## Kufijtë e motorit
 
-- Hapat e mbështetur: `start`, `condition`, `knowledge`, `collect`, `confirm`, `product`, `handoff`, `end`.
-- Nuk ka pagesa, rezervime apo nyja ekzekutuese të reja brenda grafikut pa zhvillim të veçantë të motorit.
+- Hapat e mbështetur: `start`, `condition`, `knowledge`, `collect`, `confirm`, `product`, `booking`, `handoff`, `end`.
+- Nyja `booking` përdor kalendarin dhe shërbimet ekzistuese të biznesit; kërkon konfigurimin dhe aktivizimin e rezervimeve. Pagesat dhe integrimet e reja kërkojnë zhvillim të veçantë. Kanalet e këtij dorëzimi janë Instagram dhe prova e izoluar.
 - Kushtet e intentit janë rregulla deterministe; ndryshimi i etiketës së një kushti nuk është aftësi e re semantike.
 - Nyja `product` thërret workflow-n linear të produktit; për bizneset e pilotit, `collect.fieldKey` lidhet me `customer_name`, `customer_phone`, `customer_email`, `customer_city`, `customer_address` ose një fushë të porosisë. Fushat e tjera ekzistuese nuk interpretohen si profil automatikisht.
-- Kufij grafiku: 32 nyje, 64 lidhje; draftet e paplota etiketohen dhe nuk publikohen.
+- Kufij grafiku: 32 nyje, 64 lidhje dhe 16 rrjedha; draftet e paplota etiketohen dhe nuk publikohen.
 - Autorizimi dhe modulet vijnë nga serveri; konteksti i faqes nuk jep autorizim.
 - Konfirmimi lidhet me revision; kërkesat e përsëritura nuk krijojnë publikime të dyfishta. Rikthimi krijon draft të ri, nuk rishkruan historikun e versioneve.
 
@@ -72,13 +73,13 @@ Paraqiten hapat e shtuar/ndryshuar/hequr. Veprimet: Ruaj draftin, Provoje, Publi
 
 ## Konteksti i përbashkët
 
-`ConversationStatePayload.schemaVersion = 2` shton `context.profile`, `context.order` dhe `context.execution`. Fushat mbajnë vlerën, tipin, burimin dhe validimin. `customer`, `fields`, `step_key` dhe `product_id` mbeten përshtatës për Inbox dhe dërgimin ekzistues të porosisë.
+`ConversationStatePayload.schemaVersion = 3` ruan profilin e përbashkët dhe kontekstin e ekzekutimit, bashkë me një porosi dhe një rezervim të papërfunduar. Çdo proces ka gjendjen e vet (`active`, `suspended`, `completed`); pyetja në pritje i përket procesit që e bëri. Gjendjet e mëparshme përshtaten pa humbur vlerat dhe versionet e ruajtura. Fushat mbajnë vlerën, tipin, burimin dhe validimin. `customer`, `fields`, `step_key` dhe `product_id` mbeten përshtatës për Inbox dhe dërgimin ekzistues të porosisë.
 
 - Të dhënat e etiketuara mblidhen në mënyrë deterministe; nxjerrja me AI lejon vetëm fushat e deklaruara, evidencë ekzakte nga mesazhi dhe vlera të vlefshme. Pa AI vazhdon mbledhja përmes pyetjes aktuale dhe etiketave.
-- Hapat e plotësuar kapërcehen; konfirmimet mbeten eksplicite. Pyetjet informative nuk plotësojnë fushën aktuale. Korrigjimet zhvlerësojnë konfirmimin përfundimtar.
+- Hapat e plotësuar kapërcehen; konfirmimet mbeten eksplicite për procesin përkatës. Pyetjet informative nuk plotësojnë fushën aktuale; të dhënat e qarta në të njëjtin mesazh ruhen. Korrigjimet zhvlerësojnë konfirmimin që prekin.
 - `conversation_profiles` mban kujtesën sipas biznesit/pjesëmarrësit Instagram, me lidhjen e integrimit për fshirje. Nuk krijon klient CRM dhe nuk bashkon identitete nga emri apo telefoni.
 - Porosia e re ruan profilin, kërkon konfirmim të përmbledhur dhe pastron variante, foto e konfirmime të vjetra.
-- Pas konfirmimit final shënohet `order_ready`; endpoint-i ekzistues i stafit kërkon konfirmimin kur state është v2. Asistenti nuk krijon/dërgon porosi vetë.
+- Pas konfirmimit final shënohet `order_ready`; endpoint-i ekzistues i stafit kërkon konfirmimin për state v2/v3. Asistenti nuk krijon/dërgon porosi vetë. Rezervimi ndjek konfirmimin dhe rregullat ekzistuese të kalendarit, me mbrojtje nga krijimi i dyfishtë gjatë riprovimit.
 
 ## Radhitja dhe rikuperimi
 
@@ -86,21 +87,26 @@ Webhook-u ruan mesazhet e pilotit para përgjigjes HTTP. Çelësi unik është l
 
 Përgjigjja e ruajtur mund të dërgohet pa ekzekutuar sërish workflow-n. Një dërgim me rezultat të paqartë nuk përsëritet automatikisht: biseda ndalet për stafin. Gabimet para dërgimit riprovohen deri në tre herë. Webhook-u nis worker-in menjëherë pas ruajtjes së mesazheve. `/api/cron/workflow-inbound` kërkon `CRON_SECRET`; në konfigurimin bazë ekzekutohet një herë në ditë (`0 5 * * *`, UTC), për pajtueshmëri me Vercel Hobby. Ky ekzekutim është rikuperim rezervë: pa mesazh të ri, puna e mbetur ose riprovimi mund të presë deri në ekzekutimin e ditës tjetër.
 
-Për pilotin real kërkohet rikuperim çdo minutë: në Vercel Pro ndrysho vetëm orarin e këtij endpoint-i në `* * * * *`, ose konfiguro një scheduler të jashtëm që thërret `GET /api/cron/workflow-inbound` çdo minutë me `Authorization: Bearer <CRON_SECRET>`. Mos ruaj sekretin në repo. Orari çdo minutë në `vercel.json` bllokon deployment-in në Vercel Hobby; nuk duhet aktivizuar aty pa planin përkatës.
+Për pilotin kërkohet rikuperim çdo minutë në Supabase përmes `pg_cron` dhe `pg_net`. Skripti `supabase/operations/workflow-worker-schedule.sql` krijon job-in `agjenti-workflow-inbound` me orarin `* * * * *`, duke lexuar adresën dhe sekretin nga Vault. Ai thërret `GET /api/cron/workflow-inbound` me autorizimin e worker-it. Ky konfigurim funksionon pa ndryshuar orarin ditor të Vercel Hobby.
+
+Publikimi/aktivizimi v2 kërkon job-in e mësipërm aktiv dhe një përfundim të suksesshëm të worker-it brenda tre minutave të fundit. Vetëm një scheduler tjetër ose fallback-u ditor nuk e plotëson kontrollin aktual. Worker-i regjistron funksionimin edhe kur radha është bosh.
 
 ## Aktivizimi i pilotit
 
-1. Apliko migrimet `20261010143000_shared_workflow_context.sql` dhe `20261010150000_workflow_inbound_queue.sql` pas migrimeve ekzistuese.
-2. Vendos `SHARED_WORKFLOW_BUSINESS_IDS` me UUID-në e biznesit pilot; bosh e lë sjelljen e vjetër për bizneset pa state v2. Verifiko `CRON_SECRET`, konfigurimin AI dhe worker-in e planifikuar.
-3. Provo draftin: telefon përpara porosisë, disa fusha në një mesazh, korrigjim, klient që rikthehet, publikim gjatë porosisë dhe kalim te stafi.
-4. Publiko draftet me konfirmim nga ndërfaqja. Verifiko një bisedë reale të kontrolluar dhe që vetëm stafi dërgon porosinë.
-5. Monitoro radhën dhe bisedat e ndalura para zgjerimit të listës së bizneseve.
+1. Kontrollo historikun e migrimeve në Supabase dhe apliko vetëm ato që mungojnë, në rend kronologjik. Përveç varësive ekzistuese, kërkohen `20261010143000_shared_workflow_context.sql`, `20261010150000_workflow_inbound_queue.sql`, **`20261010213000_message_workflow_definitions.sql`** dhe **`20261010220000_workflow_message_runtime.sql`**. Mos riekzekuto verbërisht migrimet e vjetra.
+2. Në deployment-in e prodhimit vendos `SHARED_WORKFLOW_BUSINESS_IDS` me UUID-në e biznesit pilot dhe `CRON_SECRET`; verifiko konfigurimet ekzistuese AI/enkriptim dhe bëj redeploy që të lexohen vlerat e reja. Bizneset jashtë listës mbajnë rrugën e vjetër të përpunimit.
+3. Në Supabase Vault krijo `agjenti_app_url` me origjinën HTTPS të prodhimit (p.sh. `https://agjenti.app`, pa path) dhe `agjenti_cron_secret` me të njëjtën vlerë si `CRON_SECRET`. Mos vendos vlerat e sekreteve në repo, migrime ose log-e.
+4. Ekzekuto `supabase/operations/workflow-worker-schedule.sql`; ai aktivizon `pg_cron`/`pg_net` dhe planifikon job-in. Pas ekzekutimit të parë të suksesshëm, `select public.workflow_runtime_readiness();` duhet të japë `schemaVersion: 3`, `scheduled: true` dhe `lastSuccessAt` brenda tre minutave. Nëse jo, kontrollo job-in dhe përgjigjen HTTP të thirrjes së tij.
+5. Ruaj dhe provo draftin: porosi → rezervim → informacion → rifillim porosie, “fola në WhatsApp, dua të porosis”, disa fusha/foto në një mesazh, korrigjim dhe klient që rikthehet. Për rezervime kontrollo edhe shërbimet dhe oraret e aktivizuara. Drafti/prova lejohen para gatishmërisë; publikimi dhe aktivizimi v2 bllokohen derisa kontrolli të kalojë.
+6. Publiko nga ndërfaqja pas shqyrtimit. Verifiko një bisedë reale të kontrolluar, versionet e ruajtura dhe që porosia dërgohet vetëm nga veprimi ekzistues i stafit. Monitoro radhën dhe bisedat e ndalura përpara zgjerimit të pilotit.
 
-Për ndalim operacional: ndal auto-reply të biznesit, lër worker-in të përfundojë ose klasifikojë punët në radhë dhe verifiko dërgimet e paqarta. Mos hiq konfigurimin e pilotit ndërsa ka punë të papërfunduara; bisedat me state v2 vazhdojnë ta përdorin atë format. Mos fshi snapshot-et ose kujtesën për të rikthyer konfigurimin.
+Për ndalim operacional: ndal auto-reply të biznesit, lër worker-in të përfundojë ose klasifikojë punët në radhë dhe verifiko dërgimet e paqarta. Mos hiq konfigurimin e pilotit ndërsa ka punë të papërfunduara. Ruaj pajtueshmërinë me state v2/v3 dhe grafikët e versionuar; mos rikthe një version aplikacioni që nuk i lexon ato. Mos fshi snapshot-et ose kujtesën për të rikthyer konfigurimin.
 
 ### Monitorim pa përmbajtjen e mesazheve
 
 ```sql
+select public.workflow_runtime_readiness();
+
 select business_id, status, count(*), min(created_at) as oldest
 from workflow_inbound_queue
 where created_at > now() - interval '24 hours'
@@ -111,14 +117,14 @@ select business_id, conversation_id, step_key, updated_at,
        collected #> '{context,execution,validationFailures}' as validation_failures,
        collected #> '{context,execution,skipped}' as reused_steps
 from conversation_states
-where collected->>'schemaVersion' = '2';
+where collected->>'schemaVersion' in ('2', '3');
 ```
 
 Numërimi i pyetjeve për hap përfshin edhe përsëritjet legjitime pas përgjigjeve të pavlefshme ose korrigjimeve. Një bisedë e vjetër në pritje nuk provon vetë ngecje; krahaso mesazhin e fundit dhe statusin e radhës. `uncertain` dhe `failed` kërkojnë shqyrtim nga stafi.
 
 ### Verifikimi lokal
 
-Testet e aplikacionit mbulojnë state-in, nxjerrjen me evidencë, kujtesën, propozimet, versionet dhe rikuperimin e dërgimit. `supabase/tests/shared_workflow_context.sql` verifikon në PostgreSQL autorizimin, kopjen për produktin, versionet, revision, commit-in atomik, rendin, lease-et dhe dërgimet e paqarta. Të gjitha migrimet u provuan në një PostgreSQL lokal të përkohshëm; kjo nuk vërteton konfigurimin e hostimit apo lidhjen reale Instagram.
+Testet e aplikacionit mbulojnë state-in, nxjerrjen me evidencë, kujtesën, propozimet, versionet dhe rikuperimin e dërgimit. `supabase/tests/shared_workflow_context.sql`, `message_workflow_definitions.sql` dhe `workflow_message_runtime.sql` verifikojnë autorizimin, versionet, revision, grafikun v2, commit-in atomik, rendin, lease-et, kontrollin e pronësisë, rezervimet idempotente dhe dërgimet e paqarta. Të gjitha migrimet u provuan në PostgreSQL 17 lokal të përkohshëm; kjo nuk vërteton konfigurimin e hostimit apo lidhjen reale Instagram.
 
 ## Kriteret e pranimit (faza 1–3 / 5)
 
@@ -134,16 +140,15 @@ Testet e aplikacionit mbulojnë state-in, nxjerrjen me evidencë, kujtesën, pro
 
 ## Verifikimi i këtij dorëzimi
 
-- 192 teste kaluan për Agjentin, API-në, workflow-t, motorin e bisedës dhe përgjigjet e Agjentit; TypeScript dhe lint pa gabime në ndryshimet përkatëse.
-- Dy suitët e reja SQL kaluan në PostgreSQL lokal të izoluar (PGlite): izolim biznesi, ruajtje atomike, ruajtje e përkufizimeve të vjetra, replay idempotent, konflikte, validim dhe auditim i editorit/Agjentit.
-- Në shfletues u verifikua leximi i rrjedhave dhe propozimi i një workflow të ri me dy hapa; korrigjimi i emrit mbajti të njëjtët hapa. Propozimi u anulua, pa shkrime në të dhënat reale.
-- Simulimi real në chat u provua me “Dua të flas me stafin”; ktheu mesazhin e handoff-it dhe ndaloi hyrjen e provës pa dërguar mesazhe reale.
-- Publikimi/ruajtja në databazën e vendosur nuk u krye: kërkohen dy migrimet e reja. Implementimi nuk paraqitet si plotësisht aktiv përpara këtij hapi.
+- Kontrolli i versionit `f1d850b` përfundoi me 758 teste të aplikacionit dhe build të suksesshëm.
+- Migrimet dhe suitët SQL përkatëse kaluan në PostgreSQL 17 lokal të izoluar, përfshirë përkufizimin v2 dhe ekzekutimin e ri.
+- Testet mbulojnë rifillimin pas orientimit te stafi, ndërrimin porosi/rezervim, konfirmimet dhe kufizimet e provës. Marrja manuale e bisedës nga stafi mbetet ndalim për AI-në.
+- Aplikimi i migrimeve dhe verifikimi i scheduler-it/Instagram-it në prodhim mbeten hapa operacionalë të pakonfirmuar në këtë dokument.
 
 
 ## Rrjedha sugjeruese dhe kthimi pas
 
-Ekzekutimi rishikon kërkesën e klientit duke përdorur hapin aktual, vlerat e ruajtura dhe deri në 10 mesazhet e fundit (1,200 karaktere secili). Mesazhet ruhen brenda gjendjes së bisedës dhe sesionit të provës; nuk shtohet tabelë ose migrim i ri. Fshirja ekzistuese e bisedës fshin edhe këtë kontekst.
+Ekzekutimi rishikon kërkesën e klientit duke përdorur procesin dhe hapin aktual, vlerat e ruajtura dhe historikun e kufizuar të bisedës. Ky kontekst ruhet brenda gjendjes së bisedës dhe sesionit të provës; fshirja ekzistuese e bisedës e përfshin edhe atë.
 
 - “Fola me stafin, dua të porosis” rihap rrugën e porosisë. Përmendja e kontaktit të mëparshëm nuk interpretohet si kërkesë e re për staf.
 - “Kthehu pas” dhe korrigjimet mund të rihapin një hap të kaluar. Vlerat ruhen derisa klienti t'i zëvendësojë; konfirmimi final zhvlerësohet dhe kërkohet përsëri.
@@ -158,7 +163,7 @@ Bisedat që ishin tashmë `paused` nga versioni i vjetër nuk riaktivizohen auto
 
 Çdo mesazh vlerësohet përpara cursor-it të ruajtur, përfshirë hapat e produktit dhe gjendjet handoff/completed. Vlerësimi merr të gjithë hapat bisedorë të versionit të biznesit, jo vetëm hapat e vizituar. Përputhjet e qarta trajtohen nga rregulla lokale; kërkesat e tjera vlerësohen nga AI me kontekstin e bisedës.
 
-Kërkesa për porosi shkon drejtpërdrejt te nyja product përkatëse, pa kaluar sërish nga kushte të vjetra si kanali WhatsApp. Nëse ka disa nyje produkti dhe qëllimi është i paqartë, kërkohet zgjedhje. Një kërkesë e re për produkt tjetër ruan profilin, por pastron variantet e produktit të mëparshëm. Rifillimi i porosisë nuk regjistrohet si vlerë e hapit në pritje.
+Në grafikun v2 kërkesa hyn nga hapi hyrës i rrjedhës përkatëse, duke respektuar hapat e konfiguruar para produktit ose rezervimit. Në v1 ruhet pajtueshmëria me navigimin ekzistues. Ndërrimi i procesit pezullon punën e papërfunduar dhe rifillimi e rikthen me vlerat e saj. Ndërrimi i produktit gjatë një porosie kërkon sqarimin për zëvendësim; profili ruhet dhe të dhënat specifike nuk transferohen verbërisht. Rifillimi nuk regjistrohet si përgjigje e hapit në pritje.
 
 Hapat linearë mund të mblidhen jashtë radhës. Para se porosia të përfundojë, kontrollohen edhe hapat e kërkuar që mbetën pas; ndryshimi i rrugës nuk përbën plotësim ose konfirmim. Gjurma e provës përfshin vendimin dhe destinacionin për çdo mesazh. Pamja e provës paraqet mesazhin në qendër dhe grupet e rrjedhave rreth tij; pozicionet e ruajtura të editorit nuk ndryshojnë.
 

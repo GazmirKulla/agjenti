@@ -296,3 +296,11 @@ it("opens a published information flow during a pinned linear order", async () =
   expect(result.nextState.product_id).toBe("p");
   expect(legacy).not.toHaveBeenCalled();
 });
+
+it("answers once when an informational question reaches knowledge followed by collection", async () => {
+  const graph = linear(node("knowledge", "knowledge"), node("age", "collect", { fieldKey: "age", prompt: "Sa vjeç është fëmija?" }));
+  const legacy = vi.fn(async (p: LegacyParams) => response(p, "Çmimi mungon."));
+  const result = await executeVisualTurn({ ...params(graph), message: "Sa kushton?" }, legacy);
+  expect(legacy).toHaveBeenCalledTimes(1);
+  expect(result.reply).toBe("Çmimi mungon.\n\nSa vjeç është fëmija?");
+});
