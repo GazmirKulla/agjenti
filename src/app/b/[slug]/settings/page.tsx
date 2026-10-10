@@ -186,69 +186,77 @@ export default async function SettingsPage({
         title={access.business.name}
         description="Shiko profilin e biznesit dhe menaxho cilësimet, modulet dhe lidhjet e katalogut."
       />
-      <div className="settings-tabs">
-        <span>
-          <Icon name="businesses" size={18} />
-          Informacioni i biznesit
-        </span>
-        <a href="#business-profile">Profili i biznesit</a>
-      </div>
+      <nav className="settings-tabs" aria-label="Seksionet e cilësimeve">
+        <a href="#business-profile">
+          <Icon name="businesses" size={16} />
+          Profili
+        </a>
+        <a href="#business-data">Të dhënat</a>
+        <a href="#modules">Modulet</a>
+        <a href="#external-catalog">Katalogu</a>
+      </nav>
       <div className="configuration-layout">
         <div className="space-y-5">
-          <BusinessProfile answers={onboarding?.answers} slug={slug} failed={!!onboardingError} />
-          <ActionForm
-            action={saveBusiness}
-            className="panel section-pad grid gap-5"
-          >
-            <div className="section-title">
-              <h2>Të dhënat e biznesit</h2>
-              <button className="btn btn-primary" type="submit">
-                Ruaj
-              </button>
-            </div>
-            <div className="detail-block">
-              <dl className="detail-fields">
-                <div>
-                  <dt>Emri i biznesit</dt>
-                  <dd>{access.business.name}</dd>
-                </div>
-                <div>
-                  <dt>Adresa në platformë</dt>
-                  <dd>/{slug}</dd>
-                </div>
-                <div>
-                  <dt>Katalogu</dt>
-                  <dd>
-                    {linked
-                      ? "Lidhur me API të jashtme"
-                      : "Produkte të krijuara në panel"}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-            <label className="toggle-label">
-              <span>
-                Përgjigje automatike
-                <small>
-                  Agjenti u përgjigjet mesazheve të reja në bisedat aktive.
-                </small>
-              </span>
-              <input
-                type="checkbox"
-                name="auto_reply"
-                className="switch-input"
-                defaultChecked={access.business.auto_reply}
-              />
-            </label>
-            {autoReplyBlocked && (
-              <p className="muted-copy" role="status">
-                {autoReplyBlocked}{" "}
-                <a className="soft-link" href={`/b/${slug}`}>
-                  Hap Dashboard →
-                </a>
-              </p>
-            )}
-          </ActionForm>
+          <BusinessProfile
+            answers={onboarding?.answers}
+            slug={slug}
+            failed={!!onboardingError}
+          />
+          <div id="business-data">
+            <ActionForm
+              action={saveBusiness}
+              className="panel section-pad grid gap-5"
+            >
+              <div className="section-title">
+                <h2>Të dhënat e biznesit</h2>
+                <button className="btn btn-primary" type="submit">
+                  Ruaj
+                </button>
+              </div>
+              <div className="detail-block settings-detail-block">
+                <dl className="detail-fields">
+                  <div>
+                    <dt>Emri i biznesit</dt>
+                    <dd>{access.business.name}</dd>
+                  </div>
+                  <div>
+                    <dt>Adresa në platformë</dt>
+                    <dd>/{slug}</dd>
+                  </div>
+                  <div>
+                    <dt>Katalogu</dt>
+                    <dd>
+                      {linked
+                        ? "Lidhur me API të jashtme"
+                        : "Produkte të krijuara në panel"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+              <label className="toggle-label">
+                <span>
+                  Përgjigje automatike
+                  <small>
+                    Agjenti u përgjigjet mesazheve të reja në bisedat aktive.
+                  </small>
+                </span>
+                <input
+                  type="checkbox"
+                  name="auto_reply"
+                  className="switch-input"
+                  defaultChecked={access.business.auto_reply}
+                />
+              </label>
+              {autoReplyBlocked && (
+                <p className="muted-copy" role="status">
+                  {autoReplyBlocked}{" "}
+                  <a className="soft-link" href={`/b/${slug}`}>
+                    Hap Dashboard →
+                  </a>
+                </p>
+              )}
+            </ActionForm>
+          </div>
 
           <div id="modules">
             <ModulesSettingsPanel
@@ -258,72 +266,76 @@ export default async function SettingsPage({
             />
           </div>
 
-          <ActionForm
-            action={saveExternalCatalog}
-            className="panel section-pad grid gap-5 business-settings-form"
-          >
-            <div className="section-title">
-              <h2>Katalog i jashtëm</h2>
-              <StatusBadge status={linked ? "connected" : "draft"} />
-            </div>
-            <p className="muted-copy">
-              Plotëso URL-të dhe API key për të lidhur katalogun. Pa këtë
-              lidhje, përdoren vetëm produktet e krijuara te Produktet.
-            </p>
-            <label className="form-label">
-              URL e katalogut
-              <input
-                type="url"
-                name="catalog_url"
-                defaultValue={integration?.catalog_url ?? ""}
-                placeholder="https://…/catalog"
-                className="field"
+          <div id="external-catalog" className="grid gap-3">
+            <ActionForm
+              action={saveExternalCatalog}
+              className="panel section-pad grid gap-5 business-settings-form"
+            >
+              <div className="section-title">
+                <h2>Katalog i jashtëm</h2>
+                <StatusBadge status={linked ? "connected" : "draft"} />
+              </div>
+              <p className="muted-copy">
+                Plotëso URL-të dhe API key për të lidhur katalogun. Pa këtë
+                lidhje, përdoren vetëm produktet e krijuara te Produktet.
+              </p>
+              <label className="form-label">
+                URL e katalogut
+                <input
+                  type="url"
+                  name="catalog_url"
+                  defaultValue={integration?.catalog_url ?? ""}
+                  placeholder="https://…/catalog"
+                  className="field"
+                />
+              </label>
+              <label className="form-label">
+                URL e porosive
+                <input
+                  type="url"
+                  name="orders_url"
+                  defaultValue={integration?.orders_url ?? ""}
+                  placeholder="https://…/orders"
+                  className="field"
+                />
+              </label>
+              <IntegrationApiKeyField
+                hasStoredSecret={Boolean(integration?.secret_ciphertext)}
+                storedSecret={storedSecret}
               />
-            </label>
-            <label className="form-label">
-              URL e porosive
-              <input
-                type="url"
-                name="orders_url"
-                defaultValue={integration?.orders_url ?? ""}
-                placeholder="https://…/orders"
-                className="field"
+              <IntegrationProbe
+                businessId={access.business.id}
+                formSelector="form.business-settings-form"
               />
-            </label>
-            <IntegrationApiKeyField
-              hasStoredSecret={Boolean(integration?.secret_ciphertext)}
-              storedSecret={storedSecret}
-            />
-            <IntegrationProbe
-              businessId={access.business.id}
-              formSelector="form.business-settings-form"
-            />
-            <button className="btn btn-primary w-fit" type="submit">
-              Ruaj lidhjen
-            </button>
-          </ActionForm>
-          {linked && (
-            <ActionForm action={disconnectExternalCatalog}>
-              <button className="btn btn-ghost" type="submit">
-                Shkëput katalogun e jashtëm
+              <button className="btn btn-primary w-fit" type="submit">
+                Ruaj lidhjen
               </button>
             </ActionForm>
-          )}
+            {linked && (
+              <ActionForm action={disconnectExternalCatalog}>
+                <button className="btn btn-ghost" type="submit">
+                  Shkëput katalogun e jashtëm
+                </button>
+              </ActionForm>
+            )}
+          </div>
         </div>
         <aside className="settings-side">
-          <section className="panel section-pad">
+          <section className="panel section-pad grid gap-4">
             <span className="icon-tile">
               <Icon name="products" size={25} />
             </span>
-            <h2 className="text-lg mt-5">Si funksionon</h2>
-            <p className="muted-copy">
-              Dy mënyra: produkte të krijuara në panel, ose lidhje me katalog të
-              jashtëm. Nuk ka zgjedhës — mjafton të plotësosh këtë seksion.
-            </p>
-            <p className="muted-copy">
-              Vendos URL + API key, testo lidhjen, pastaj lidh produktet nga
-              faqja Produkte.
-            </p>
+            <div className="grid gap-2">
+              <h2 className="text-lg">Si funksionon</h2>
+              <p className="muted-copy">
+                Dy mënyra: produkte të krijuara në panel, ose lidhje me katalog
+                të jashtëm. Nuk ka zgjedhës — mjafton të plotësosh këtë seksion.
+              </p>
+              <p className="muted-copy">
+                Vendos URL + API key, testo lidhjen, pastaj lidh produktet nga
+                faqja Produkte.
+              </p>
+            </div>
           </section>
           <DeleteBusinessPanel
             businessId={access.business.id}

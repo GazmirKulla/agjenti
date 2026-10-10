@@ -50,13 +50,13 @@ export function DeleteBusinessPanel(props: {
 
   const body = (
     <>
-      <h2 className="text-base mb-2">Zona e rrezikshme</h2>
-      <p className="muted-copy mb-4">
+      <h2 className="text-base mb-3">Zona e rrezikshme</h2>
+      <p className="muted-copy mb-5">
         Fshirja e biznesit heq përgjithmonë bisedat, mesazhet, porositë,
         produktet, agjentët dhe lidhjen me Instagram. Llogaritë e përdoruesve
         mbeten.
       </p>
-      <form className="grid gap-3" onSubmit={onSubmit}>
+      <form className="grid gap-4" onSubmit={onSubmit}>
         <label className="form-label">
           Shkruaj <strong>{props.slug}</strong> për të konfirmuar
           <input

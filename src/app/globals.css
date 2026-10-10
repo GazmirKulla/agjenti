@@ -1354,11 +1354,29 @@ html[data-resolved="dark"] .brand-logo-dark {
   display: grid;
   gap: 22px;
 }
+.settings-detail-block {
+  margin-top: 0;
+}
+#business-profile,
+#business-data,
+#modules,
+#external-catalog {
+  scroll-margin-top: 20px;
+}
+@media (min-width: 1001px) {
+  .settings-side {
+    position: sticky;
+    top: 18px;
+  }
+}
 .danger-zone {
   border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
 }
 .danger-zone h2 {
   color: var(--danger);
+}
+.danger-zone .form-label strong {
+  word-break: break-all;
 }
 .toggle-label {
   display: flex;
@@ -1411,18 +1429,79 @@ html[data-resolved="dark"] .brand-logo-dark {
   background: white;
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 0 18px;
+  padding: 0 10px;
   margin-bottom: 22px;
   display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  overflow-x: auto;
 }
-.settings-tabs span {
-  color: var(--accent);
-  border-bottom: 2px solid var(--accent);
-  padding: 17px 10px;
-  display: flex;
+.settings-tabs a {
+  color: var(--ink-muted);
+  border-bottom: 2px solid transparent;
+  padding: 15px 12px;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+.settings-tabs a:hover {
+  color: var(--ink);
+  border-bottom-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.settings-tabs a:focus-visible {
+  color: var(--accent);
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+.profile-groups {
+  display: grid;
+  gap: 16px;
+}
+.profile-group {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.profile-group h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  color: var(--ink-muted);
+  letter-spacing: 0.01em;
+}
+.profile-fields {
+  display: grid;
+  gap: 14px;
+}
+.profile-fields > div {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.9fr) minmax(0, 1.4fr);
+  gap: 12px 20px;
+  align-items: start;
+  font-size: 13px;
+}
+.profile-fields dt {
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+.profile-fields dd {
+  color: var(--ink);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.profile-fields > div.profile-field-wide {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+@media (max-width: 640px) {
+  .profile-fields > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 @media (max-width: 1000px) {
   .configuration-layout {
