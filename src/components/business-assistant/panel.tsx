@@ -18,6 +18,28 @@ import { WorkflowCard } from "./workflow-card";
 import type { WorkflowCard as WorkflowCardData } from "@/lib/business-assistant/workflow";
 
 type Message = { role: "user" | "assistant"; content: string };
+function MessageCopy({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="assistant-message-copy"
+      aria-label={copied ? "U kopjua" : "Kopjo mesazhin"}
+      title={copied ? "U kopjua" : "Kopjo"}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* clipboard may be unavailable */
+        }
+      }}
+    >
+      <Icon name={copied ? "check" : "copy"} size={14} />
+    </button>
+  );
+}
 type Result = {
   message?: string;
   preview?: Preview;
@@ -356,8 +378,12 @@ export function BusinessAssistant({
                 key={i}
                 className={`assistant-message assistant-message-${message.role}`}
               >
-                <small>{message.role === "user" ? "Ti" : agentName}</small>
                 <p>{message.content}</p>
+                {message.role === "assistant" && (
+                  <div className="assistant-message-actions">
+                    <MessageCopy text={message.content} />
+                  </div>
+                )}
               </div>
             ))}
           </div>

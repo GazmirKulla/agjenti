@@ -37,6 +37,8 @@ const paths: Record<string, string> = {
   moon: "M21 14.5A8.5 8.5 0 1 1 9.5 3 6.5 6.5 0 0 0 21 14.5z",
   display: "M4 5h16v10H4zM8 19h8M12 15v4",
   calendar: "M5 5h14v16H5z M8 2v6 M16 2v6 M5 11h14",
+  copy: "M8 8V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-3 M5 8h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z",
+  check: "M4 12l5 5L20 6",
 };
 export function Icon({
   name,

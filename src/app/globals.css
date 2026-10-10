@@ -3718,12 +3718,21 @@ html[data-resolved="dark"] .dashboard-shell .status-badge.status-paused {
 .assistant-examples button:hover { border-color: var(--accent); background: var(--accent-soft); }
 .assistant-examples button svg { flex-shrink: 0; color: var(--accent); }
 .assistant-examples button span { margin-left: auto; color: var(--ink-muted); }
-.assistant-conversation { display: flex; flex-direction: column; gap: 18px; }
-.assistant-message { max-width: 94%; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
-.assistant-message p { margin: 4px 0 0; white-space: pre-wrap; }
-.assistant-message small { font-size: 11px; font-weight: 600; color: var(--ink-muted); }
-.assistant-message-user { align-self: flex-end; background: var(--accent-soft); border-radius: 16px 16px 4px 16px; padding: 12px 16px; }
+.assistant-conversation { display: flex; flex-direction: column; gap: 10px; }
+.assistant-message { max-width: 94%; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.assistant-message p { margin: 0; white-space: pre-wrap; }
+.assistant-message-user { align-self: flex-end; background: var(--accent-soft); border-radius: 14px 14px 4px 14px; padding: 8px 12px; }
 .assistant-message-assistant { padding: 0 2px; }
+.assistant-message-actions { display: flex; align-items: center; gap: 2px; margin-top: 4px; opacity: 0; transition: opacity .15s ease; }
+.assistant-message-assistant:last-child .assistant-message-actions,
+.assistant-message-assistant:hover .assistant-message-actions,
+.assistant-message-assistant:focus-within .assistant-message-actions { opacity: 1; }
+.assistant-message-copy { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ink-muted); cursor: pointer; }
+.assistant-message-copy:hover { background: var(--paper-2); color: var(--ink); }
+.assistant-message-copy:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (hover: none) {
+  .assistant-message-actions { opacity: 1; }
+}
 .assistant-preview { margin-top: 20px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
 .assistant-preview-heading { background: var(--paper); padding: 18px; }
 .assistant-preview-heading > span { font-size: 10px; font-weight: 700; letter-spacing: 1.4px; color: var(--accent); }
