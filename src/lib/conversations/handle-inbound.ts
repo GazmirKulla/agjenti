@@ -300,6 +300,7 @@ export async function handleInboundMessage(
     message: message.text ?? "",
     hasPhoto: message.attachments.some((a) => a.kind === "image"),
     state: inboundState,
+    persistedWorkflowId: stateRow?.workflow_id ?? null,
     previousResponseId: open?.openai_previous_response_id ?? null,
   });
   const state = turn.nextState;

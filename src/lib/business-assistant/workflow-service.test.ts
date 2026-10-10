@@ -75,7 +75,7 @@ it("confirms the exact draft through the existing atomic writer, without publish
   });
   await executeTicket(access, result.token!);
   expect(m.rpc).toHaveBeenCalledExactlyOnceWith(
-    "save_visual_workflow",
+    "apply_assistant_visual_workflow",
     expect.objectContaining({
       p_business: "business-a",
       p_user: "user-a",
@@ -203,7 +203,7 @@ it("disables a published workflow and activates a disabled published version", a
   });
   await executeTicket(access, disable.token!);
   expect(m.rpc).toHaveBeenCalledExactlyOnceWith(
-    "save_visual_workflow",
+    "apply_assistant_visual_workflow",
     expect.objectContaining({
       p_business: "business-a",
       p_operation: "disable",
@@ -228,7 +228,7 @@ it("disables a published workflow and activates a disabled published version", a
   });
   await executeTicket(access, enable.token!);
   expect(m.rpc).toHaveBeenCalledExactlyOnceWith(
-    "save_visual_workflow",
+    "apply_assistant_visual_workflow",
     expect.objectContaining({
       p_operation: "enable",
       p_revision: 4,

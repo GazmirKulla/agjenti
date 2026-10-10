@@ -1,0 +1,31 @@
+begin;
+insert into auth.users(id,email) values('00000000-0000-4000-8000-000000004101','orderflow-a@example.test'),('00000000-0000-4000-8000-000000004102','orderflow-b@example.test');
+insert into businesses(id,name,slug) values('00000000-0000-4000-8000-000000004101','Orderflow A','orderflow-a'),('00000000-0000-4000-8000-000000004102','Orderflow B','orderflow-b');
+insert into business_users(business_id,user_id,role) values('00000000-0000-4000-8000-000000004101','00000000-0000-4000-8000-000000004101','owner');
+do $$ declare
+ a uuid:='00000000-0000-4000-8000-000000004101'; b uuid:='00000000-0000-4000-8000-000000004102';
+ p uuid:=gen_random_uuid(); old_id uuid:=gen_random_uuid(); new_id uuid:=gen_random_uuid(); before_json jsonb; vals jsonb; product_data jsonb; result_id uuid;
+begin
+ insert into workflows(id,business_id,name) values(old_id,a,'Original');
+ insert into workflow_steps(workflow_id,key,kind,position,required,config) values(old_id,'customer','customer',0,true,'{"label":"Adresa","hint":"retain"}');
+ insert into products(id,business_id,name,workflow_id) values(p,a,'Produkt provë',old_id);
+ before_json:=assistant_orderflow_snapshot(a,old_id);
+ select jsonb_build_object('id',id,'name',name,'workflow_id',workflow_id,'updated_at',updated_at) into product_data from products where id=p;
+ vals:=jsonb_build_object('operation','update','name','Me konfirmim','scope','all','products',jsonb_build_array(product_data),'steps','[{"key":"confirm","kind":"confirm","label":"Konfirmoni?","required":true},{"key":"customer","kind":"customer","label":"Adresa","required":true}]'::jsonb);
+ begin perform apply_assistant_orderflow(a,b,new_id,'orderflow_update',before_json,vals); raise exception 'foreign actor accepted' using errcode='XX001'; exception when raise_exception then if sqlerrm<>'unauthorized' then raise; end if; end;
+ result_id:=apply_assistant_orderflow(a,a,new_id,'orderflow_update',before_json,vals);
+ if result_id<>new_id or (select workflow_id from products where id=p)<>new_id then raise exception 'assignment failed'; end if;
+ if assistant_orderflow_snapshot(a,old_id) is distinct from before_json then raise exception 'old definition mutated'; end if;
+ if not exists(select 1 from workflow_steps where workflow_id=new_id and key='customer' and config->>'hint'='retain') then raise exception 'step metadata lost'; end if;
+ if (select count(*) from workflow_steps where workflow_id=new_id)<>2 then raise exception 'new steps missing'; end if;
+ if apply_assistant_orderflow(a,a,new_id,'orderflow_update',before_json,vals)<>new_id then raise exception 'replay failed'; end if;
+ if (select count(*) from assistant_workflow_changes where id=new_id)<>1 then raise exception 'duplicate history'; end if;
+ begin perform apply_assistant_orderflow(a,a,gen_random_uuid(),'orderflow_update',before_json,vals); raise exception 'stale assignments accepted' using errcode='XX001'; exception when raise_exception then if sqlerrm<>'stale_assignments' then raise; end if; end;
+ begin perform apply_assistant_orderflow(a,a,new_id,'orderflow_update',before_json,jsonb_set(vals,'{name}','"Changed"')); raise exception 'altered replay accepted' using errcode='XX001'; exception when raise_exception then if sqlerrm<>'invalid_replay' then raise; end if; end;
+ vals:=jsonb_set(vals,'{products}','[]'); vals:=jsonb_set(vals,'{scope}','"selected"');
+ vals:=jsonb_set(vals,'{steps}','[{"key":"email","kind":"text","label":"Email?","required":true}]');
+ begin perform apply_assistant_orderflow(a,a,gen_random_uuid(),'orderflow_create',null,vals); raise exception 'missing customer accepted' using errcode='XX001'; exception when raise_exception then if sqlerrm<>'customer_must_be_last' then raise; end if; end;
+ if (select count(*) from workflows where business_id=a)<>2 then raise exception 'partial write'; end if;
+ if has_function_privilege('authenticated','apply_assistant_orderflow(uuid,uuid,uuid,text,jsonb,jsonb)','execute') or has_table_privilege('service_role','assistant_workflow_changes','insert') then raise exception 'write boundary exposed'; end if;
+end $$;
+rollback;

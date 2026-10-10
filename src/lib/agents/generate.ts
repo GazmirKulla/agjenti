@@ -32,8 +32,9 @@ export async function generateAgentReply(params: {
   source: "ai" | "fallback";
   fallbackReason: string | null;
 }> {
-  const fallback =
-    params.documentFallback || promptForStep(params.state.step_key);
+  const currentStep = params.workflowProgress?.find(step => step.status === "current");
+  const standardPrompt = promptForStep(params.state.step_key);
+  const fallback = params.documentFallback || (currentStep?.kind === "customer" ? promptForStep("collect_customer") : standardPrompt !== "Si mund t'ju ndihmoj?" ? standardPrompt : currentStep?.label || standardPrompt);
   if (!process.env.OPENAI_API_KEY?.trim()) {
     params.onTrace?.({ stage: "ai", label: "AI skipped: missing API key", status: "skipped" });
     return {
@@ -60,7 +61,7 @@ export async function generateAgentReply(params: {
         `Customer message: ${params.customerMessage}`,
         `Current step: ${params.state.step_key}`,
         `Order workflow progress:\n${progress}`,
-        `Collected state (source of truth): ${JSON.stringify(params.state)}`,
+        `Collected state (source of truth): ${JSON.stringify({ ...params.state, orderWorkflowSnapshot: undefined })}`,
         `Knowledge:\n${params.knowledge || "(none)"}`,
         `Catalog:\n${params.catalogSummary || "(none)"}`,
         "The workflow state above is authoritative. Do not invent completed steps or customer data that is missing.",

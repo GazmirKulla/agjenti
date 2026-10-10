@@ -35,6 +35,7 @@ export type WorkflowStepDef = {
 };
 
 export type ConversationStatePayload = {
+  orderWorkflowSnapshot?: string;
   visual?: import("./visual/types").VisualRunState;
   completedVisual?: import("./visual/types").VisualRunState;
   product_id?: string | null;

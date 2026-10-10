@@ -165,6 +165,7 @@ export function assistantSuggestions(
   external = false,
 ) {
   const all = [
+    { module: "workflows", label: "Hapat e porosive", text: "Më trego workflow-t e porosive të produkteve.", blocked: !modules.includes("products") },
     {
       module: "workflows",
       label: "Shiko rrjedhën",

@@ -2,7 +2,7 @@
 
 ## Statusi i dorëzimit
 
-Integrimi i workflow-t vizual nga Agjenti është i kompletuar për fazat 1–3 dhe mbylljen e fazës 5 (për workflow vizual):
+Integrimi në kod mbulon workflow-n vizual dhe rrjedhat lineare të porosive. Aktivizimi në databazën e vendosur mbetet hap operacional:
 
 - [x] Lexim/shpjegim i rrjedhës, kartë në chat, lidhje me editorin, kontekst faqje/hap
 - [x] Propozime të strukturuara për draft (shto/ndrysho/hiq hapa e lidhje), para/pas, konfirmim
@@ -10,11 +10,18 @@ Integrimi i workflow-t vizual nga Agjenti është i kompletuar për fazat 1–3 
 - [x] Butona në kartë: Publiko draftin, Aktivizo, Çaktivizo, Kthe si draft
 - [x] Sugjerime kontekstuale në home dhe në faqen Workflows
 - [x] Heqja e hyrjes së vjetër «Plotëso me AI» për seksionin workflows (BI mbetet për targete të tjera)
-- [x] Ruajtje atomike përmes RPC `save_visual_workflow` dhe kontroll revision
+- [x] Ruajtje atomike përmes RPC-ve të përbashkëta dhe kontroll revision
+- [x] Lexim/krijim/ndryshim i rrjedhave të porosive dhe lidhje me produktet
+- [x] Përzgjedhje eksplicite: të gjitha produktet e lidhura ose vetëm produktet e zgjedhura
+- [x] Kopje e re për çdo ndryshim të rrjedhës lineare; versioni i vjetër mbetet për porositë në proces
+- [x] Snapshot i enkriptuar i hapave në gjendjen e bisedës; bisedat e vjetra lexojnë workflow_id e ruajtur nga serveri
+- [x] Historik i pandryshueshëm i drafteve/publikimeve dhe i lidhjeve me produktet; konfirmime idempotente
 
 Migrimi `supabase/migrations/20261010110000_visual_workflows.sql` ekziston në repo. Aplikimi në mjedisin e vendosur është hap operacional; pa të, chati shfaq rrjedhë të sugjeruar dhe bllokon ruajtjen/publikimin.
 
-**Faza 4 (workflow lineare / lidhje produktesh) nuk është zbatuar.** Mos e trajto këtë dorëzim si zbatim të asaj faze.
+Faza 4 është implementuar për hapat që motori ekzekuton sot: text, choice, photo, confirm, customer. Hapi customer mbetet i fundit dhe mbledh emër/telefon/qytet/adresë. Nuk shtohen lloje të reja veprimesh si pagesa apo rezervime brenda grafikut.
+
+Migrimet e kërkuara, sipas rendit: `20261010110000_visual_workflows.sql`, `20261010130000_assistant_orderflows.sql`, `20261010140000_visual_workflow_history.sql`. Migrimet e reja janë verifikuar në PostgreSQL lokal të izoluar (PGlite); nuk janë aplikuar në databazën e prodhimit. Pa to leximi vazhdon, ndërsa ruajtja shfaq kufizimin real. Nuk u gjet CLI/lidhje SQL e konfiguruar për aplikim në databazën e vendosur. Kontrolli i fundit vetëm për lexim konfirmoi se `visual_workflows` tashmë ekziston, ndërsa `assistant_workflow_changes` dhe `visual_workflow_events` mungojnë: mbeten për aplikim dy migrimet e reja 130000 dhe 140000.
 
 ## Qëllimi
 
@@ -26,7 +33,7 @@ Biznesi mund t’i kërkojë Agjentit, me tekst ose audio, të shfaqë dhe shpje
 - Workflow-i vizual është një hapësirë për biznes, me draft, revision, version të publikuar dhe gjendje aktive/joaktive. Nuk është bibliotekë me disa workflow vizuale të pavarura.
 - `src/lib/workflows/visual/actions.ts` dhe `mutations.ts` mbështesin ruajtje drafti, publikim dhe aktivizim/çaktivizim. Publikimi e aktivizon rrjedhën.
 - `store.ts` dhe `execute.ts` ruajnë versionin e publikuar për bisedat vizuale në vazhdim.
-- Ekzistojnë edhe `workflows` dhe `workflow_steps` për porositë e produkteve. Hapi vizual `product` përdor motorin ekzistues të porosisë; Agjenti nuk i editojnë ato hapa lineare.
+- Ekzistojnë edhe `workflows` dhe `workflow_steps` për porositë e produkteve. Hapi vizual `product` përdor motorin ekzistues të porosisë; Agjenti i menaxhon përmes veprimeve `orderflow_*` dhe ruajtjes atomike me kopje të re.
 - `simulateVisualWorkflow` përdor motorin real në modalitet prove.
 
 ## Përvoja e klientit
@@ -72,3 +79,12 @@ Paraqiten hapat e shtuar/ndryshuar/hequr. Veprimet: Ruaj draftin, Provoje, Publi
 - Publikimi nuk ndërpret bisedat ekzistuese vizuale; bisedat e reja përdorin versionin e ri.
 - Ndryshimet paralele nga editori bllokojnë konfirmimin e vjetruar.
 - «Plotëso me AI» nuk shfaqet më në faqen Workflows.
+
+
+## Verifikimi i këtij dorëzimi
+
+- 192 teste kaluan për Agjentin, API-në, workflow-t, motorin e bisedës dhe përgjigjet e Agjentit; TypeScript dhe lint pa gabime në ndryshimet përkatëse.
+- Dy suitët e reja SQL kaluan në PostgreSQL lokal të izoluar (PGlite): izolim biznesi, ruajtje atomike, ruajtje e përkufizimeve të vjetra, replay idempotent, konflikte, validim dhe auditim i editorit/Agjentit.
+- Në shfletues u verifikua leximi i rrjedhave dhe propozimi i një workflow të ri me dy hapa; korrigjimi i emrit mbajti të njëjtët hapa. Propozimi u anulua, pa shkrime në të dhënat reale.
+- Simulimi real në chat u provua me “Dua të flas me stafin”; ktheu mesazhin e handoff-it dhe ndaloi hyrjen e provës pa dërguar mesazhe reale.
+- Publikimi/ruajtja në databazën e vendosur nuk u krye: kërkohen dy migrimet e reja. Implementimi nuk paraqitet si plotësisht aktiv përpara këtij hapi.

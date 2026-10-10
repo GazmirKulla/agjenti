@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ response: vi.fn(), load: vi.fn(), prepare: vi.fn() }));
+const m = vi.hoisted(() => ({ response: vi.fn(), load: vi.fn(), prepare: vi.fn(), orderLoad: vi.fn(), orderPrepare: vi.fn() }));
+vi.mock("./orderflow-service", () => ({ loadOrderFlows:m.orderLoad, prepareOrderFlow:m.orderPrepare, executeOrderFlow:vi.fn(), refineOrderFlowProposal:vi.fn(), orderFlowInstructions:"orderflow instructions" }));
 vi.mock("openai", () => ({ default: class { responses = { create: m.response }; } }));
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test" }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({}) }));
@@ -12,6 +13,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.OPENAI_API_KEY = "test-only";
   m.load.mockResolvedValue({ workspace: { graph: starterVisualGraph(), revision: 7 }, published: null });
+  m.orderLoad.mockResolvedValue({flows:[],products:[],partial:false});
+  m.orderPrepare.mockResolvedValue({message:"Kontrollo",token:"sealed"});
   m.prepare.mockResolvedValue({message:"Kontrollo",token:"sealed"});
 });
 it("loads a workflow on demand from home and ties the proposal to the version the model saw", async () => {
@@ -31,4 +34,13 @@ it("does not overwrite uncommitted editor work through the assistant", async () 
   m.response.mockResolvedValueOnce(respond("workflow_draft",[{field:"operations",value:'[{"op":"rename","name":"Shitjet"}]'}]));
   await expect(planRequest(access,"Ndrysho emrin",[],{page:"workflows",entryPoint:"contextual",workflowSelection:{revision:7,dirty:true,nodeId:"order"}})).rejects.toThrow("paruajtura");
   expect(m.prepare).not.toHaveBeenCalled();
+});
+
+it("treats an empty order-workflow library as loaded and removes repeated load from model choices",async()=>{
+  m.response.mockResolvedValueOnce(respond("orderflow_load")).mockResolvedValueOnce(respond("orderflow_create",[{field:"name",value:"Porosia"},{field:"steps",value:'[{"key":"customer","kind":"customer","label":"Adresa?","required":true}]'}]));
+  await planRequest(access,"Krijo workflow Porosia",[],{page:"home",entryPoint:"home"});
+  expect(m.orderLoad).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(m.response.mock.calls[1][0].input).data.orderflows.flows).toEqual([]);
+  expect(m.response.mock.calls[1][0].text.format.schema.properties.action.enum).not.toContain("orderflow_load");
+  expect(m.orderPrepare).toHaveBeenCalledWith(access,expect.objectContaining({action:"orderflow_create"}),undefined);
 });

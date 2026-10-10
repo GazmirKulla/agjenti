@@ -152,6 +152,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
     if (
       section === "products" ||
       section === "agents" ||
+      section === "workflows" ||
       section === "workflows"
     )
       return;
@@ -168,6 +169,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
     !initialTarget ||
     section === "products" ||
     section === "agents" ||
+      section === "workflows" ||
     section === "workflows" ||
     (section !== "products" && pathname.split("/").length > 4)
   )

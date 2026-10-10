@@ -119,6 +119,7 @@ describe("real inbound integration with shared processor", () => {
   it("persists the shared next state and sends its exact reply only from the real transport", async () => {
     await handleInboundMessage(message);
     expect(mocks.process).toHaveBeenCalledWith({
+      persistedWorkflowId: null,
       businessId: "business-a",
       message: "Bluzë",
       hasPhoto: false,

@@ -388,3 +388,16 @@ The editor's test conversation executes the same state machine as production wit
 Intent conditions currently use conservative Albanian/English word rules (shown in the inspector), while knowledge replies use the existing AI, source retrieval and saved business training. Field conditions use only accepted values, and confirmations require an explicit yes/no. Product nodes delegate only to configured product workflows; missing configuration hands off to staff.
 
 Validation: `yarn test`, `yarn build`, and `supabase/tests/visual_workflows.sql` in an isolated PostgreSQL database. The SQL suite checks draft/publish separation, optimistic revisions, immutable snapshots, tenant isolation and bounded graph validation.
+
+
+### Workflow-t nga Agjenti i biznesit
+
+Agjenti mund të tregojë rrjedhën vizuale dhe hapat e porosive, të propozojë ndryshime me krahasim para/pas, të ruajë draftin, të provojë rrjedhën, të publikojë/aktivizojë/çaktivizojë dhe të rikthejë një version të publikuar si draft. Workflow-t e produkteve krijohen ose ndryshohen si kopje të reja dhe lidhen me produktet e zgjedhura vetëm pas konfirmimit. Teksti dhe audio përdorin të njëjtën rrjedhë konfirmimi.
+
+Pas migrimeve ekzistuese aplikohen `20261010130000_assistant_orderflows.sql` dhe `20261010140000_visual_workflow_history.sql`; kjo e fundit kërkon `20261010110000_visual_workflows.sql`. Pa tabelat vizuale shfaqet vetëm propozimi fillestar; ruajtja kërkon migrimet. Nuk aplikohen automatikisht në prodhim.
+
+Hapat linearë mbështesin tekst, zgjedhje me përgjigje të lirë, foto, konfirmim dhe mbledhjen finale të të dhënave të klientit. Nuk ofrohet validim enum për zgjedhjet ose hapa pagesash. Ndryshimet nuk aktivizojnë produktet. Produktet nga katalogu i jashtëm mbeten të mbrojtura nga ndryshimi i lidhjeve përmes Agjentit.
+
+`orderWorkflowSnapshot` ruan hapat e verifikuar, të enkriptuar dhe të lidhur me biznesin/produktin. Për porositë që nisën përpara këtij ndryshimi, transporti i Instagram-it kalon `conversation_states.workflow_id` nga databaza. Kështu lidhja e produktit me një kopje të re nuk ndryshon hapat e porosisë në proces. Versionet vizuale ruajnë mekanizmin ekzistues të versionit të publikuar.
+
+`assistant_workflow_changes` regjistron ndryshimet lineare dhe produktet e prekura. `visual_workflow_events` regjistron çdo ruajtje të editorit ose Agjentit. RPC-të përdorin identitetet nga serveri, krahasime para shkrimit dhe çelësa idempotence. Testet SQL: `supabase/tests/assistant_orderflows.sql` dhe `supabase/tests/visual_workflow_history.sql`, vetëm në databazë të izoluar testimi.

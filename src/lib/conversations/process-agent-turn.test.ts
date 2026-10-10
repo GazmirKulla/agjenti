@@ -332,3 +332,29 @@ it("captures real context and workflow without changing the production result", 
   expect(onTrace.mock.calls.map(([event]) => event.label)).toEqual(["Message received", "loadBusinessContext", "Business context loaded", "Intent routed", "Context retrieval completed", "Workflow resolved"]);
   expect(onTrace.mock.calls.at(-1)?.[0].data).toMatchObject({ workflowId: "workflow-a", state: { step_key: "collect_size" }, steps: [{ key: "collect_size", required: true }, { key: "awaiting_photo", required: true }, { key: "collect_customer", required: true }] });
 });
+
+it("keeps the sealed order steps when the product is assigned to a new workflow", async () => {
+  vi.stubEnv("TOKEN_ENCRYPTION_KEY", "snapshot-test-key");
+  try {
+    const first = await processAgentTurn({businessId:"business-a",message:"Bluzë",hasPhoto:false});
+    expect(first.nextState.orderWorkflowSnapshot).toBeTruthy();
+    fixtures.products = [{id:"product-a",name:"Bluzë",product_type_id:"type-a",workflow_id:"workflow-new"}];
+    fixtures.workflows = {id:"workflow-new",name:"New"};
+    fixtures.workflow_steps = [{key:"new_question",kind:"text",position:0},{key:"customer",kind:"customer",position:1}];
+    queries = [];
+    const next = await processAgentTurn({businessId:"business-a",message:"M",hasPhoto:false,state:first.nextState});
+    expect(next.workflowId).toBe("workflow-a");
+    expect(next.nextState.step_key).toBe("awaiting_photo");
+    expect(queries.some(q => q.table === "workflow_steps")).toBe(false);
+    await expect(processAgentTurn({businessId:"business-b",message:"M",hasPhoto:false,state:first.nextState})).rejects.toThrow("nuk u verifikua");
+  } finally { vi.unstubAllEnvs(); }
+});
+it("resolves a pre-upgrade order from the workflow id persisted by the inbound server", async () => {
+  fixtures.products = [{id:"product-a",name:"Bluzë",workflow_id:"workflow-new"}];
+  fixtures.workflows = {id:"workflow-old",name:"Original"};
+  const state = {...emptyState(),product_id:"product-a",step_key:"collect_size"};
+  const result = await processAgentTurn({businessId:"business-a",message:"M",hasPhoto:false,state,persistedWorkflowId:"workflow-old"});
+  expect(result.workflowId).toBe("workflow-old");
+  expect(queries.find(q => q.table === "workflows")?.filters).toContainEqual(["id","workflow-old"]);
+  expect(queries.find(q => q.table === "workflows")?.filters).toContainEqual(["business_id","business-a"]);
+});

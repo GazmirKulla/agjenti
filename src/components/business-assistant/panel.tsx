@@ -12,6 +12,8 @@ import { AssistantComposer } from "./composer";
 import { Icon } from "@/components/dashboard/icon";
 import type { Preview } from "@/lib/business-assistant/model";
 
+import { OrderFlowCard } from "./orderflow-card";
+import type { OrderFlowContext } from "@/lib/business-assistant/orderflow-service";
 import { WorkflowCard } from "./workflow-card";
 import type { WorkflowCard as WorkflowCardData } from "@/lib/business-assistant/workflow";
 
@@ -20,6 +22,8 @@ type Result = {
   message?: string;
   preview?: Preview;
   workflow?: WorkflowCardData;
+  orderflows?: OrderFlowContext;
+  editableFlow?: boolean;
   token?: string;
   slots?: string[];
   transcript?: string;
@@ -159,7 +163,7 @@ export function BusinessAssistant({
         text: input,
         history: lastContext.current === contextKey ? history.slice(-6) : [],
         context,
-        ...(result?.workflow?.proposed && result.token ? { pendingToken: result.token } : {}),
+        ...((result?.workflow?.proposed || result?.editableFlow) && result.token ? { pendingToken: result.token } : {}),
       });
       lastContext.current = contextKey;
       setHistory((prev) => [
@@ -242,7 +246,7 @@ export function BusinessAssistant({
           style={{ bottom: viewport.bottom }}
         >
           <AssistantComposer id="assistant-dock-input" value={text} busy={Boolean(busy)} onOpen={onOpen}
-            onChange={(value) => { setText(value); if (result?.token && !result.workflow) setResult(null); }}
+            onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow) setResult(null); }}
             onSubmit={() => { onOpen(); setMode("text"); void analyze(); }}
             onVoice={() => { setMode("audio"); onOpen(); }} />
           <span className="assistant-dock-hint">
@@ -374,6 +378,7 @@ export function BusinessAssistant({
               ))}
             </div>
           )}
+          {result?.orderflows && <OrderFlowCard data={result.orderflows} slug={slug} onRequest={value => {setMode("text");setText(value);}} />}
           {result?.workflow && <WorkflowCard key={JSON.stringify(result.workflow)} data={result.workflow} slug={slug} pending={Boolean(result.token)} onRequest={value => { setMode("text"); setText(value); }} />}
           {result?.preview && (
             <section
@@ -478,7 +483,7 @@ export function BusinessAssistant({
           </div>
           {mode === "text" ? (
             <AssistantComposer id="business-assistant-input" value={text} busy={Boolean(busy)} multiline
-              onChange={(value) => { setText(value); if (result?.token && !result.workflow) setResult(null); }}
+              onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow) setResult(null); }}
               onSubmit={() => void analyze()} onVoice={() => setMode("audio")} />
           ) : (
             open && <AudioRecorder variant="assistant" purpose="request" busy={Boolean(busy)} onAnalyze={transcribe} analyzeLabel="Ktheje në tekst" />

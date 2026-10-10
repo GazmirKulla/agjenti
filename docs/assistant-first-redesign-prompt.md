@@ -30,8 +30,11 @@ The current business assistant supports one proposed operation at a time:
 - Update instructions of an existing customer-facing agent.
 - Check appointment availability and create or update bookings.
 - Perform internal bounded searches for products, services, knowledge, bookings and agents, and ask for clarification.
+- Read, edit, simulate and publish the business visual workflow; restore a published version as draft. Reuse the shared workflow writer and confirmation boundary.
+- Read/create/change linear product order workflows and assign chosen products atomically using copy-on-write definitions. A single workflow operation may affect several explicitly identified products; this does not enable bulk price or arbitrary product updates.
+- Workflow writes require the visual-workflow, assistant-orderflow and workflow-history database migrations. Distinguish code support from deployment availability.
 
-Do not advertise order lookup/status changes, Inbox search/summaries, WhatsApp connection, bulk price updates, publishing, deletion, full-catalog analytics or automatic integration setup as working assistant actions. These are not current assistant tools. An existing management page does not imply an assistant capability.
+Do not advertise order lookup/status changes, Inbox search/summaries, WhatsApp connection, bulk price updates, arbitrary content publishing, deletion, full-catalog analytics or automatic integration setup as working assistant actions. These are not current assistant tools. An existing management page does not imply an assistant capability.
 
 Instagram and Google Calendar have existing connection flows. A conversational entry may guide the user into an existing authorized flow, but must not claim the connection succeeded before the existing backend confirms it. No WhatsApp connection implementation was found during this inspection.
 

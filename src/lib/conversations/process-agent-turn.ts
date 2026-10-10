@@ -1,3 +1,4 @@
+import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
 import type { TraceObserver } from "./trace";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
@@ -91,6 +92,8 @@ function pickProduct<T extends { id: string; name: string }>(
  * Caller is responsible for authorization and, for real turns, persistence/send.
  */
 export type AgentTurnParams = {
+  /** Trusted conversation_states.workflow_id, supplied only by the inbound server. */
+  persistedWorkflowId?: string | null;
   visualPreview?: import("@/lib/workflows/visual/types").VisualVersion;
   onTrace?: TraceObserver;
   mode?: "production" | "test";
@@ -353,11 +356,15 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
       label: "Të dhënat e klientit",
     },
   ];
-  if (selected?.workflow_id) {
+  const pinnedOrder = selected && !justSelected ? readOrderSnapshot(state.orderWorkflowSnapshot, params.businessId, selected.id) : null;
+  const resolvedWorkflowId = pinnedOrder?.workflowId ?? (selected && !justSelected ? params.persistedWorkflowId : null) ?? selected?.workflow_id;
+  if (pinnedOrder) {
+    workflowId = pinnedOrder.workflowId; workflowName = pinnedOrder.name; steps = pinnedOrder.steps;
+  } else if (resolvedWorkflowId) {
     const workflow = await db
       .from("workflows")
       .select("id,name")
-      .eq("id", selected.workflow_id)
+      .eq("id", resolvedWorkflowId)
       .eq("business_id", params.businessId)
       .maybeSingle();
     if (workflow.error) throw new Error("Nuk u ngarkua workflow.");
@@ -385,6 +392,9 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
           };
         });
     }
+  }
+  if (selected && workflowId && !pinnedOrder) {
+    state.orderWorkflowSnapshot = sealOrderSnapshot({businessId:params.businessId,productId:selected.id,workflowId,name:workflowName ?? "Porosia",steps});
   }
   if (params.requireConfiguredWorkflow && selected && (!workflowId || !steps.length || workflowName === "Default customer collection")) {
     return { reply: "Ekipi do t’ju ndihmojë të vazhdoni me këtë produkt.", nextState: state, previousResponseId: null,

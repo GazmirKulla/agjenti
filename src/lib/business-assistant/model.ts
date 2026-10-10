@@ -2,6 +2,11 @@ import { parseService } from "@/lib/services/model";
 import { localInstant, validDate, validTime, uuid } from "@/lib/calendar/model";
 
 export const actions = [
+  "orderflow_load",
+  "orderflow_read",
+  "orderflow_create",
+  "orderflow_update",
+  "orderflow_assign",
   "workflow_load",
   "workflow_read",
   "workflow_draft",
@@ -39,6 +44,7 @@ export type Preview = {
 };
 export class AssistantError extends Error {}
 export const fields: Record<string, string[]> = {
+  orderflow: ["name", "steps", "scope", "product_ids"],
   workflow: ["operations", "version_id"],
   search: ["kind", "query"],
   product: ["name", "description", "sku", "price_amount", "currency"],
@@ -73,6 +79,7 @@ export function moduleFor(action: Action) {
     (
       {
         workflow: "workflows",
+        orderflow: "workflows",
         product: "products",
         service: "services",
         knowledge: "knowledge",
@@ -106,7 +113,7 @@ export function readProposal(input: unknown): Proposal {
       !change ||
       !allowed.includes(change.field) ||
       typeof change.value !== "string" ||
-      change.value.length > (p.action === "workflow_draft" ? 24000 : 8000) ||
+      change.value.length > (p.action === "workflow_draft" || p.action.startsWith("orderflow_") ? 24000 : 8000) ||
       seen.has(change.field)
     )
       throw new AssistantError("Asistenti propozoi një fushë të pavlefshme.");
@@ -122,7 +129,9 @@ export function readProposal(input: unknown): Proposal {
     throw new AssistantError("Kërkesë e pavlefshme për rrjedhën.");
   if (p.action === "workflow_draft" && (p.changes.length !== 1 || p.changes[0]?.field !== "operations")) throw new AssistantError("Mungojnë ndryshimet e rrjedhës.");
   if (p.action === "workflow_restore" && (p.changes.length !== 1 || p.changes[0]?.field !== "version_id" || !uuid(p.changes[0].value))) throw new AssistantError("Zgjidh një version të vlefshëm.");
-  if (p.action !== "clarify" && !p.action.startsWith("workflow_") && !p.changes.length)
+  if (p.action === "orderflow_assign" && !p.id) throw new AssistantError("Zgjidh rrjedhën për lidhjen.");
+  if (["orderflow_load","orderflow_read"].includes(p.action) && p.changes.length) throw new AssistantError("Leximi nuk mund të ndryshojë rrjedhën.");
+  if (p.action !== "clarify" && !p.action.startsWith("workflow_") && !["orderflow_load","orderflow_read"].includes(p.action) && !p.changes.length)
     throw new AssistantError("Nuk ka ndryshime për të ruajtur.");
   return p;
 }
