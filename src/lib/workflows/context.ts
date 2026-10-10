@@ -89,6 +89,8 @@ export function setFact(state: ConversationStatePayload, key: string, value: str
         return false;
     }
     state.context.execution.invalidFields = state.context.execution.invalidFields?.filter(k => k !== key);
+    const revisited = state.context.execution.linear?.steps.find(s=>s.key===state.revisitStep);
+    if (revisited && (revisited.fieldKey ?? revisited.key) === key) delete state.revisitStep;
     const prior = getFact(state, key);
     const fact: Fact = { value, type: actualType, source, validated: true };
     if (profile) {
@@ -116,6 +118,7 @@ export function resetOrder(state: ConversationStatePayload): ConversationStatePa
     if (Object.keys(next.context!.profile).length)
         next.context!.execution.profileConfirmation = "pending";
     next.completedVisual = state.completedVisual;
+    next.recentMessages = state.recentMessages;
     return next;
 }
 export function isQuestion(message: string) {
@@ -162,7 +165,7 @@ export function skipKnownSteps(state: ConversationStatePayload, steps: WorkflowS
         return;
     for (; index < steps.length; index++) {
         const step = steps[index];
-        const known = step.kind === "customer" ? !missingProfile(state).length && context.execution.profileConfirmation !== "pending" : step.kind !== "confirm" && Boolean(getFact(state, step.fieldKey ?? step.key));
+        const known = state.revisitStep === step.key ? false : step.kind === "customer" ? !missingProfile(state).length && context.execution.profileConfirmation !== "pending" : step.kind !== "confirm" && Boolean(getFact(state, step.fieldKey ?? step.key));
         if (!known) {
             state.step_key = step.key;
             return;
@@ -254,8 +257,10 @@ export function advanceSharedOrder(input: ConversationStatePayload, message: str
             const allowed = !step.options?.length || step.options.some(v => foldText(v) === foldText(message));
             complete = allowed && setFact(state, step.fieldKey ?? step.key, message, step.fieldType ?? "text", `step:${step.key}`);
         }
-        if (complete)
+        if (complete) {
+            delete state.revisitStep;
             state.step_key = steps[steps.indexOf(step) + 1]?.key ?? "order_confirm";
+        }
     }
     skipKnownSteps(state, steps);
     if (state.step_key === "order_confirm")

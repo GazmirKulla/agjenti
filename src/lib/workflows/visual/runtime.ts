@@ -1,14 +1,7 @@
 import { isQuestion, validValue, profileKey } from "../context";
 import { foldText } from "../engine";
 import type { VisualExecution, VisualGraph, VisualIntent, VisualRunState } from "./types";
-export function detectVisualIntent(message:string):VisualIntent {
-  const text=foldText(message);
-  if(/\b(problem|ankes\w*|rimburs\w*|refund|human|operator|staf\w*|nuk (?:erdhi|punon|funksionon)|cancel|anulo\w*)\b/.test(text))return 'support';
-  if (/\b(si|how|ku|where|status|track)\b.*\b(porosi\w*|order)\b/.test(text)) return 'question';
-  if (/\b(nuk dua|do not want|don t want)\b/.test(text)) return 'question';
-  if(/\b(porosis|porosit|blej|bleme|buy|purchase|dua (?:kete|ta marr)|e dua|want (?:this|to buy))\b/.test(text)||/^(porosi|order)[.!\s]*$/.test(text))return 'order';
-  return message.trim()?'question':'unknown';
-}
+export { explicitIntent as detectVisualIntent } from "../guidance";
 export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;productComplete?:boolean;inputAvailable?:boolean; sharedValues?:Record<string,string>}):VisualExecution {
   const state:VisualRunState=p.state?structuredClone(p.state):{versionId:p.versionId,nodeId:p.graph.nodes.find(n=>n.kind==='start')!.id,status:'running',visited:[],values:{},awaiting:false};
   if(p.sharedValues) {
@@ -64,7 +57,7 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       if(!yes && p.sharedValues && p.graph.nodes.find(node=>node.id===state.nodeId)?.kind==='collect') state.forceCollect=state.nodeId;
       continue;
     }
-    if(p.sharedValues&&isQuestion(text)) return result('prompt',n.id,n.config.prompt);
+    if(isQuestion(text)) return result('prompt',n.id,n.config.prompt);
     const type=fieldType;
     const valid=type==='photo'?p.hasPhoto:type==='email'?/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text):type==='phone'?/^\+?[\d\s().-]{7,24}$/.test(text)&&text.replace(/\D/g,'').length>=7:type==='number'?/^\d+(?:[.,]\d+)?$/.test(text):Boolean(text)&&text.length<=2000;
     if(!valid)return result('prompt',n.id,`${n.config.prompt} ${type==='email'?'Vendos një email të vlefshëm.':type==='photo'?'Dërgo një foto.':type==='number'?'Vendos një numër.':type==='phone'?'Vendos një numër telefoni të vlefshëm.':''}`.trim());

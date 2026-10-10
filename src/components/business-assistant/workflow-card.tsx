@@ -85,7 +85,7 @@ function WorkflowTrial({ graph, slug }: { graph: VisualGraph; slug: string }) {
         { from: "Agjenti", text: result.reply },
       ]);
       setSession(result.session);
-      setHandoff(result.handoff === true);
+      setHandoff(result.handoff === true && result.advisoryHandoff !== true);
       setMessage("");
     } catch (e) {
       setError((e as Error).message);

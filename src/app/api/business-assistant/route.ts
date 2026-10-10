@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       if (!access.modules.includes("workflows")) throw new AssistantError("Workflow-t nuk janë aktivë për këtë biznes.");
       const result = await simulateVisualWorkflow(slug, body.graph, body.message, body.session);
       if (result.error || !result.turn) throw new AssistantError(result.error ?? "Prova nuk përfundoi.");
-      return json({ reply: result.turn.reply, session: result.session, handoff: result.turn.handoff });
+      return json({ reply: result.turn.reply, session: result.session, handoff: result.turn.handoff, advisoryHandoff: result.turn.advisoryHandoff });
     }
     if (body.mode === "confirm") {
       if (typeof body.token !== "string" || body.token.length > 300000)

@@ -154,3 +154,59 @@ it("shares a collected phone with the product engine without requesting it twice
   const turn=await executeVisualTurn({...params(graph),message:"dua bluze",state},legacy);
   expect(legacy.mock.calls[0][0].state?.customer.phone).toBe("+355691234567");expect(turn.reply).not.toContain("Telefoni?");
 });
+
+it("leaves the staff branch when the customer has spoken to staff and now wants to order",async()=>{
+ const state={...emptyState(),customer:{name:"Ana",phone:"+355691234567",city:null,address:null},visual:{...waiting("handoff"),status:"handoff" as const,awaiting:false,advisory:true,values:{email:"ana@example.com"}}};
+ const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Cilin produkt dëshironi?"));
+ const turn=await executeVisualTurn({...params(),state,message:"ok ne rregull, fola ne telefon me stafin, dua te porosis produkt"},legacy);
+ expect(turn.nextState.visual).toMatchObject({nodeId:"product",status:"waiting",values:{email:"ana@example.com"}});
+ expect(turn.handoff).not.toBe(true);
+ expect(legacy).toHaveBeenCalledOnce();
+});
+it("returns to a collected step while retaining values and reopens confirmation",async()=>{
+ const graph=linear(node("name","collect",{fieldKey:"name",prompt:"Emri?"}),node("email","collect",{fieldKey:"email",prompt:"Email?",fieldType:"email"}));
+ const state={...emptyState(),visual:{...waiting("email"),visited:["start","name","email"],values:{name:"Ana"}}};
+ const legacy=vi.fn(async(p:LegacyParams)=>response(p));
+ const back=await executeVisualTurn({...params(graph),state,message:"Kthehu pas"},legacy);
+ expect(back.nextState.visual).toMatchObject({nodeId:"name",values:{name:"Ana"}});
+ expect(back.reply).toBe("Emri?");
+ const correction=await executeVisualTurn({...params(graph),state:back.nextState,message:"Bora"},legacy);
+ expect(correction.nextState.visual).toMatchObject({nodeId:"email",values:{name:"Bora"}});
+ expect(state.visual.values.name).toBe("Ana");
+});
+it("answers a question mid-collection without advancing or collecting the question",async()=>{
+ const graph=linear(node("name","collect",{fieldKey:"name",prompt:"Emri?"}),node("email","collect",{fieldKey:"email",prompt:"Email?",fieldType:"email"}));
+ const state={...emptyState(),visual:{...waiting("email"),values:{name:"Ana"}}};
+ const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Dorëzimi zgjat 2 ditë."));
+ const answer=await executeVisualTurn({...params(graph),state,message:"Sa zgjat dorëzimi?"},legacy);
+ expect(answer.reply).toBe("Dorëzimi zgjat 2 ditë.");
+ expect(answer.nextState.visual).toEqual(state.visual);
+ expect(answer.visualWorkflow?.traversedNodeIds).toEqual([]);
+ const continued=await executeVisualTurn({...params(graph),state:answer.nextState,message:"ana@example.com"},legacy);
+ expect(continued.nextState.visual?.values.email).toBe("ana@example.com");
+});
+it("makes visual staff guidance resumable without requesting an inbox pause",async()=>{
+ const turn=await executeVisualTurn({...params(),message:"Dua të flas me stafin"},async p=>response(p));
+ expect(turn).toMatchObject({handoff:true,advisoryHandoff:true});
+ expect(turn.nextState.visual).toMatchObject({status:"handoff",advisory:true});
+});
+it("resumes a suspended product without treating the resume request as a field value",async()=>{
+ const state={...emptyState(),product_id:"product-a",step_key:"collect_size",fields:{color:"blue"},visual:{...waiting("handoff"),status:"handoff" as const,awaiting:false,advisory:true}};
+ const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Madhësia?"));
+ await executeVisualTurn({...params(),state,message:"Fola me stafin, dua të porosis"},legacy);
+ expect(legacy.mock.calls[0][0]).toMatchObject({message:"",state:{product_id:"product-a",step_key:"collect_size",fields:{color:"blue"}}});
+});
+it("revisits a completed product subflow without starting an empty order",async()=>{
+ const state={...emptyState(),product_id:"product-a",step_key:"order_ready",fields:{size:"M"},visual:{...waiting("end"),status:"completed" as const,awaiting:false,visited:["start","product","end"]}};
+ const legacy=vi.fn(async(p:LegacyParams)=>({...response(p,"Adresa?"),nextState:{...p.state!,step_key:"customer"}}));
+ const turn=await executeVisualTurn({...params(),state,message:"Kthehu pas"},legacy);
+ expect(legacy.mock.calls[0][0]).toMatchObject({message:"Kthehu pas",state:{product_id:"product-a",fields:{size:"M"}}});
+ expect(turn.nextState.visual).toMatchObject({nodeId:"product",status:"waiting"});
+});
+it("uses a newly published version for a new order while preserving the old version for corrections",async()=>{
+ const state={...emptyState(),visual:{...waiting("end","old"),status:"completed" as const,awaiting:false,visited:["start","product","end"]}};
+ mocks.load.mockResolvedValueOnce(version(starterVisualGraph(),"old")).mockResolvedValueOnce(version(starterVisualGraph(),"new"));
+ const turn=await executeVisualTurn({...params(),visualPreview:undefined,state,message:"Dua të porosis"},async p=>response(p,"Cilin produkt?"));
+ expect(mocks.load.mock.calls).toEqual([["business-a","old"],["business-a"]]);
+ expect(turn.nextState.visual?.versionId).toBe("new");
+});

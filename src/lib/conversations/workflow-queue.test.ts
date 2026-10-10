@@ -48,3 +48,10 @@ it("persists inbound events with idempotency before processing", async () => {
     expect(await enqueueWorkflowMessage(message)).toBe(true);
     expect(m.writes).toContainEqual([expect.objectContaining({ participant_id: "person", external_id: "event", business_id: business }), { onConflict: "connection_id,external_id", ignoreDuplicates: true }]);
 });
+
+it.each([true,false])("pauses only actual staff ownership, advisory=%s",async advisoryHandoff=>{
+ m.rpc.mockResolvedValue({error:null});
+ const queued={...job,status:"processing",payload:job.payload as unknown as NormalizedIncomingMessage};
+ await prepareWorkflowReply(queued,"conversation",0,{nextState:{},reply:"Reply",handoff:true,advisoryHandoff} as AgentTurnResult);
+ expect(m.rpc).toHaveBeenCalledWith("prepare_workflow_reply",expect.objectContaining({p_handoff:!advisoryHandoff}));
+});

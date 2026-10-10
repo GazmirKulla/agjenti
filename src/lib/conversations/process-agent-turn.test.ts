@@ -391,3 +391,40 @@ it("preserves a sealed legacy order when shared context is enabled after reassig
     expect(queries.some(q => ["workflow_steps", "linear_workflow_versions"].includes(q.table))).toBe(false);
   } finally { vi.unstubAllEnvs(); }
 });
+
+it("returns to the previous product step and preserves collected customer and order data", async()=>{
+ const state={...emptyState(),product_id:"product-a",step_key:"awaiting_photo",fields:{collect_size:"M"},customer:{name:"Ana",phone:"+355691234567",city:"Tiranë",address:"Rruga A"}};
+ const back=await processAgentTurn({businessId:"business-a",state,message:"Kthehu pas",hasPhoto:false});
+ expect(back.nextState.step_key).toBe("collect_size");
+ expect(back.nextState.fields.collect_size).toBe("M");
+ expect(back.nextState.customer).toEqual(state.customer);
+ const corrected=await processAgentTurn({businessId:"business-a",state:back.nextState,message:"L",hasPhoto:false});
+ expect(corrected.nextState.step_key).toBe("awaiting_photo");
+ expect(corrected.nextState.fields.collect_size).toBe("L");
+ expect(corrected.nextState.recentMessages?.map(m=>m.role)).toEqual(["user","assistant","user","assistant"]);
+});
+it("does not record an informational question as a product answer",async()=>{
+ const state={...emptyState(),product_id:"product-a",step_key:"collect_size",fields:{},customer:{name:"Ana",phone:null,city:null,address:null}};
+ const next=await processAgentTurn({businessId:"business-a",state,message:"Sa kushton dërgesa?",hasPhoto:false});
+ expect(next.nextState.step_key).toBe("collect_size");
+ expect(next.nextState.fields.collect_size).toBeUndefined();
+ expect(next.nextState.customer).toEqual(state.customer);
+ expect(mocks.generate.mock.calls.at(-1)?.[0].instructions).toContain("informational question");
+});
+it("reopens a known shared field, retains other facts and invalidates final approval",async()=>{
+ const {migrateContext,setFact}=await import("@/lib/workflows/context");
+ const state=migrateContext({...emptyState(),product_id:"product-a",step_key:"order_ready"});
+ state.context!.execution.linear={id:"workflow-a",versionId:"v1",name:"Order",steps:[{key:"size",kind:"choice",label:"Madhësia"},{key:"customer",kind:"customer",label:"Adresa"}]};
+ setFact(state,"size","M","text","step:size");setFact(state,"customer_name","Ana","text","message");setFact(state,"customer_phone","+355691234567","phone","message");setFact(state,"customer_city","Tiranë","text","message");setFact(state,"customer_address","Rruga A","text","message");
+ state.context!.execution.orderConfirmed=true;
+ const back=await processAgentTurn({businessId:"business-a",state,message:"Ndrysho madhësinë",hasPhoto:false});
+ expect(back.nextState.step_key).toBe("size");expect(back.nextState.context?.execution.orderConfirmed).toBe(false);
+ expect(back.nextState.context?.order.size.value).toBe("M");
+ const correction=await processAgentTurn({businessId:"business-a",state:back.nextState,message:"L",hasPhoto:false});
+ expect(correction.nextState.context?.order.size.value).toBe("L");
+ expect(correction.nextState.customer).toEqual(state.customer);
+ expect(correction.nextState.step_key).toBe("order_confirm");
+ expect(correction.nextState.context?.execution.orderConfirmed).toBe(false);
+ const confirmed=await processAgentTurn({businessId:"business-a",state:correction.nextState,message:"Po",hasPhoto:false});
+ expect(confirmed.nextState.step_key).toBe("order_ready");
+});

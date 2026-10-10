@@ -24,6 +24,7 @@ export type VisualRunState = {
   values: Record<string, string>;
   awaiting: boolean;
   forceCollect?: string;
+  advisory?: boolean;
 };
 export type VisualExecution = {
   state: VisualRunState;

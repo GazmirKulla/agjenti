@@ -298,7 +298,7 @@ export async function handleInboundMessage(
   // staff explicitly resumed the conversation; start a new run without erasing data.
   let inboundState = structuredClone((stateRow?.collected as ConversationStatePayload | null) ?? emptyState());
   if(job) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState);
-  if (inboundState.visual?.status === "handoff") {
+  if (inboundState.visual?.status === "handoff" && !inboundState.visual.advisory) {
     inboundState.completedVisual = structuredClone(inboundState.visual);
     inboundState.visual.status = "completed";
   }
@@ -334,7 +334,7 @@ export async function handleInboundMessage(
     })
     .throwOnError();
 
-  if (turn.handoff) {
+  if (turn.handoff && !turn.advisoryHandoff) {
     await supabase.from("conversations").update({ status: "paused", auto_reply: false })
       .eq("id", conversationId).eq("business_id", businessId).throwOnError();
   }

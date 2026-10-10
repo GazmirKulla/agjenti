@@ -137,3 +137,16 @@ Testet e aplikacionit mbulojnë state-in, nxjerrjen me evidencë, kujtesën, pro
 - Në shfletues u verifikua leximi i rrjedhave dhe propozimi i një workflow të ri me dy hapa; korrigjimi i emrit mbajti të njëjtët hapa. Propozimi u anulua, pa shkrime në të dhënat reale.
 - Simulimi real në chat u provua me “Dua të flas me stafin”; ktheu mesazhin e handoff-it dhe ndaloi hyrjen e provës pa dërguar mesazhe reale.
 - Publikimi/ruajtja në databazën e vendosur nuk u krye: kërkohen dy migrimet e reja. Implementimi nuk paraqitet si plotësisht aktiv përpara këtij hapi.
+
+
+## Rrjedha sugjeruese dhe kthimi pas
+
+Ekzekutimi rishikon kërkesën e klientit duke përdorur hapin aktual, vlerat e ruajtura dhe deri në 10 mesazhet e fundit (1,200 karaktere secili). Mesazhet ruhen brenda gjendjes së bisedës dhe sesionit të provës; nuk shtohet tabelë ose migrim i ri. Fshirja ekzistuese e bisedës fshin edhe këtë kontekst.
+
+- “Fola me stafin, dua të porosis” rihap rrugën e porosisë. Përmendja e kontaktit të mëparshëm nuk interpretohet si kërkesë e re për staf.
+- “Kthehu pas” dhe korrigjimet mund të rihapin një hap të kaluar. Vlerat ruhen derisa klienti t'i zëvendësojë; konfirmimi final zhvlerësohet dhe kërkohet përsëri.
+- Pyetjet informative marrin përgjigje pa u regjistruar si përgjigje të hapit. Më pas biseda vazhdon nga e njëjta pikë.
+- AI zgjedh vetëm navigim të lejuar: vazhdim, pyetje informative, korrigjim në hap ekzistues, porosi, ndihmë ose sqarim. Nuk mund të shënojë vetë përfundim, të konfirmojë porosi, të krijojë aftësi të reja apo të anashkalojë validimin. Vendimet e paqarta dhe gabimet e ofruesit përdorin rregullat lokale ose kërkojnë sqarim.
+- Nyja vizuale `handoff` është orientim te stafi dhe ruhet si `advisory`; nuk çaktivizon përgjigjet automatike. Kjo vlen edhe në editor dhe në provën brenda asistentit. Pauzat manuale, dërgimet e paqarta dhe mungesa e konfigurimit të produktit ruajnë ndalimin ekzistues.
+
+Bisedat që ishin tashmë `paused` nga versioni i vjetër nuk riaktivizohen automatikisht. Stafi duhet t'i rifillojë përpara se të marrin përgjigje të reja. Versioni ekzistues ruhet gjatë korrigjimeve; një porosi e re pas përfundimit përdor versionin e fundit të publikuar.

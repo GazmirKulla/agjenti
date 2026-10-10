@@ -1,3 +1,4 @@
+import { rememberTurn, chooseGuidance, clarification, invalidateConfirmation } from "@/lib/workflows/guidance";
 import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
 import { detectVisualIntent } from "@/lib/workflows/visual/runtime";
@@ -27,6 +28,7 @@ import {
 export type AgentTurnResult = {
   visualWorkflow?: import("@/lib/workflows/visual/types").VisualTrace;
   handoff?: boolean;
+  advisoryHandoff?: boolean;
   reply: string;
   nextState: ConversationStatePayload;
   previousResponseId: string | null;
@@ -109,6 +111,11 @@ export type AgentTurnParams = {
   previousResponseId?: string | null;
 };
 export async function processAgentTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
+  const turn = await processTurn(params);
+  rememberTurn(params.state, turn.nextState, params.message, turn.reply);
+  return turn;
+}
+async function processTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
   if (sharedWorkflowEnabled(params.businessId) || params.state?.schemaVersion === 2) {
     params = { ...params, state: migrateContext(params.state) };
     extractExplicitFacts(params.state!, params.message);
@@ -182,7 +189,7 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
     businessId: params.businessId, instructions: agent?.instructions ?? null,
     products, knowledge, previousState: params.state ?? emptyState(),
     previousResponseId: params.previousResponseId ?? null,
-    history: "Production carries previous messages through previous_response_id; no local transcript or summary is loaded.",
+    history: params.state?.recentMessages ?? [],
   } });
   let state = structuredClone(params.state ?? emptyState());
   const text = params.message.trim();
@@ -427,17 +434,36 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
       workflowId: null, productName: selected.name, workflowProgress: [], handoff: true,
       debug: { model: agentModel(), source: "fallback", fallbackReason: "workflow_not_configured", agentConfigured: Boolean(agent?.instructions), knowledgeCount: knowledge.length, productCount: products.length, workflowSteps: [], elapsedMs: Date.now() - started } };
   }
+  let navigationReply: string | undefined;
+  let informationalTurn = false;
+  let revisiting = false;
+  if (selected && !justSelected && text) {
+    const index = steps.findIndex(s=>s.key===state.step_key);
+    const targets = steps.slice(0,index<0?steps.length:index).map(s=>({id:s.key,label:s.label??s.key,prompt:s.prompt,fieldKey:s.fieldKey}));
+    const current = steps.find(s=>s.key===state.step_key);
+    const guidance = await chooseGuidance({message:text,state,targets,current:current?{id:current.key,label:current.label??current.key,prompt:current.prompt,fieldKey:current.fieldKey}:undefined});
+    trace?.({stage:"workflow",label:"Order conversation guidance",data:guidance});
+    if(guidance.action==="revisit" && guidance.target) {
+      state.step_key=guidance.target;
+      state.revisitStep=guidance.target;
+      invalidateConfirmation(state);
+      if(state.context && steps.find(s=>s.key===guidance.target)?.kind==="customer") state.context.execution.profileConfirmation="pending";
+      revisiting=true;
+    } else if(guidance.action==="answer") informationalTurn=true;
+    else if(guidance.action==="clarify") navigationReply=clarification(targets);
+  }
   if (justSelected) {
     // Choosing a product is not an answer to its first workflow question.
     state.step_key = steps[0]?.key ?? "collect_customer";
   } else if (!selected) {
     if (text) state.fields.product_query = text;
     state.step_key = "choose_product";
-  } else if (!state.context) {
+  } else if (!state.context && !revisiting && !informationalTurn && !navigationReply) {
     state = applyInboundToState(state, text, params.hasPhoto, steps);
+    if (state.step_key !== state.revisitStep) delete state.revisitStep;
   }
 
-  if (state.context && selected) {
+  if (state.context && selected && !revisiting && !informationalTurn && !navigationReply) {
     const extracted=await extractMessageFacts(state,text,[...profileExtractionFields,...steps.filter(s=>!["confirm","customer","photo"].includes(s.kind)).map(s=>({key:s.fieldKey??s.key,type:s.fieldType??"text" as const,label:s.label,options:s.options}))]);
     state = advanceSharedOrder(state, text, params.hasPhoto, steps, justSelected,extracted);
   }
@@ -454,13 +480,13 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
     state, steps, progress: workflowProgress, selectedProduct: selected,
   } });
   const trainingContext = trainingFor(workflowId, state.step_key);
-  const generated = state.context && !isQuestion(text) ? { reply: sharedPrompt(state, steps, productName ?? undefined), responseId: null, source: "fallback" as const, fallbackReason: "shared_workflow_prompt" } : await generateAgentReply({
+  const generated = navigationReply ? {reply:navigationReply,responseId:params.previousResponseId??null,source:"fallback" as const,fallbackReason:"navigation_clarification"} : state.context && !informationalTurn && !isQuestion(text) ? { reply: sharedPrompt(state, steps, productName ?? undefined), responseId: null, source: "fallback" as const, fallbackReason: "shared_workflow_prompt" } : await generateAgentReply({
     businessProcess,
     trainingContext,
       ...(trace ? { onTrace: trace } : {}),
     instructions:
-      agent?.instructions ||
-      "You are a customer support agent. Write in the customer's language. Do not invent prices.",
+      (agent?.instructions || "You are a customer support agent. Write in the customer's language. Do not invent prices.") +
+      (informationalTurn ? "\nAnswer the current informational question using only verified knowledge/catalog. Do not repeat the workflow prompt or advance the order." : ""),
     state,
     knowledge: knowledge.map((k) => `${k.title}: ${k.body}`).join("\n"),
     customerMessage: text || "[media]",

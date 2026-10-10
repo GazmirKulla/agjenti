@@ -306,3 +306,16 @@ it("does not execute a message whose event cannot be persisted", async () => {
   await expect(handleInboundMessage(message)).rejects.toThrow();
   expect(mocks.process).not.toHaveBeenCalled();
 });
+
+it("keeps automatic replies on for advisory workflow handoffs",async()=>{
+ const nextState={...emptyState(),visual:{versionId:"v1",nodeId:"staff",status:"handoff" as const,awaiting:false,visited:["staff"],values:{},advisory:true}};
+ mocks.process.mockResolvedValue({reply:"Kontaktoni stafin",nextState,previousResponseId:null,workflowId:null,handoff:true,advisoryHandoff:true});
+ await handleInboundMessage(message);
+ expect(writes).not.toContainEqual({table:"conversations",operation:"update",data:{status:"paused",auto_reply:false}});
+ expect(mocks.send).toHaveBeenCalledOnce();
+});
+it("preserves the advisory cursor on the next live inbound turn",async()=>{
+ savedState={...emptyState(),visual:{versionId:"v1",nodeId:"staff",status:"handoff",awaiting:false,visited:["staff"],values:{},advisory:true}};
+ await handleInboundMessage(message);
+ expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({state:expect.objectContaining({visual:savedState.visual})}));
+});
