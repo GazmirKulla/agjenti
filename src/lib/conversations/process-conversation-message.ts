@@ -45,8 +45,12 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   if (isQuestion(message) && !/\b(ndrysho\w*|korrigjo\w*)\b/.test(text)) return { process: "information", source: "rules" };
   if (affirmative(message) || /^(jo|no)[.!\s]*$/.test(text)) return { process: state.processes!.auxiliary?.process ?? state.processes!.active ?? "information", source: "rules" };
   const active = state.processes!.active;
+  const auxiliary = state.processes!.auxiliary;
+  const lastReply = state.recentMessages?.filter(message => message.role === "assistant").at(-1)?.content;
   const guidance = await chooseGuidance({ message, state, targets: [],
-    current: active ? { id: active, label: active === "booking" ? "Plotësimi i rezervimit" : "Plotësimi i porosisë", kind: active } : undefined,
+    current: auxiliary ? { id: auxiliary.visual.nodeId, label: "Vazhdimi i bisedës", prompt: lastReply, kind: auxiliary.process }
+      : active ? { id: active, label: active === "booking" ? "Plotësimi i rezervimit" : "Plotësimi i porosisë", kind: active }
+        : lastReply ? { id: "conversation", label: "Vazhdimi i bisedës", prompt: lastReply, kind: "information" } : undefined,
     routes: [{ id: "order", label: "Nis ose rifillo porosinë e produktit", kind: "product" }, { id: "booking", label: "Nis ose rifillo rezervimin e shërbimit", kind: "booking" }],
     allowOrder: true, allowSupport: false,
   });
@@ -55,7 +59,9 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   if (guidance.action === "answer") return { process: "information", source: guidance.source };
   // Detailed corrections/backtracking are handled by the selected process's existing guidance engine.
   if (guidance.action === "clarify" && !active && state.visual?.status === "handoff") return { process: "information", source: guidance.source };
-  return { process: state.processes!.auxiliary?.process ?? active ?? (state.processes!.order?.status === "suspended" ? "information" : "order"), source: guidance.source };
+  // A conversational answer is not an implicit purchase. Only a selected order
+  // intent or an existing active task may enter the product collection engine.
+  return { process: auxiliary?.process ?? active ?? "information", source: guidance.source };
 }
 
 function plainResult(state: ConversationStatePayload, reply: string): AgentTurnResult {
@@ -277,7 +283,7 @@ export async function processConversationMessage(params: ConversationMessagePara
     if (processes.service) processes.service.promptCurrent = false;
     decision.action = "answer"; decision.reason = "Pyetja merr përgjigje; progresi i porosisë dhe rezervimit ruhet.";
     processes.promptOwner = null;
-    const version = graphVersion;
+    const version = freshEntityVersion ? serviceVersion : graphVersion;
     const entry = version?.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "information")?.entryNodeId : undefined;
     const knowledge = version?.graph.nodes.find(node => node.id === entry && node.kind === "knowledge") ?? version?.graph.nodes.find(node => node.kind === "knowledge");
     const configuredInformation = version?.graph.version === 2 && version.graph.flows.some(flow => flow.kind === "information");
@@ -298,7 +304,7 @@ export async function processConversationMessage(params: ConversationMessagePara
       }
       return finish(answer);
     }
-    const answer = await processLegacyAgentTurn({ ...params, state, informational: `Answer this informational question using verified business information. Preserve every unfinished task. Do not confirm or perform an action and do not repeat the previous workflow question.${knowledge?.config.prompt ? ` Configured informational workflow guidance: ${knowledge.config.prompt}` : ""}` });
+    const answer = await processLegacyAgentTurn({ ...params, state, informational: `Respond to the current message in the context of the recent conversation, including answers to a question you asked the customer. Use verified business information. Continue the relevant conversation without starting an order or asking which product they want unless they request ordering. Preserve every unfinished task. Do not confirm or perform an action and do not repeat the previous workflow question.${knowledge?.config.prompt ? ` Configured informational workflow guidance: ${knowledge.config.prompt}` : ""}` });
     answer.nextState = state;
     return finish(answer);
   }

@@ -33,6 +33,34 @@ beforeEach(() => {
   mocks.booking.mockImplementation(async ({ state }) => { const next = structuredClone(state); next.fields.booking = { nonce: "booking-1", phase: "collect", serviceId: "service", date: "2026-10-15", expires: Date.now() + 60000 }; next.step_key = "booking_request"; return result(next, "Në çfarë ore?"); });
 });
 const turn = (message: string, state?: ConversationStatePayload) => processConversationMessage({ businessId: "business", message, state, hasPhoto: false, mode: "test" });
+it("continues a business discovery answer without inventing an order", async () => {
+  const state = emptyState();
+  state.recentMessages = [{ role: "user", content: "si funksionon" }, { role: "assistant", content: "Çfarë lloj biznesi keni?" }];
+  const next = await turn("kam nje klinike dentare", state);
+  expect(next.conversationRouting?.process).toBe("information");
+  expect(next.nextState.processes?.active).toBeNull();
+  expect(next.nextState.processes?.order).toBeUndefined();
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.guidance).toHaveBeenCalledWith(expect.objectContaining({ current: expect.objectContaining({ prompt: "Çfarë lloj biznesi keni?", kind: "information" }) }));
+  expect(mocks.info.mock.lastCall![0].state.recentMessages).toEqual(expect.arrayContaining(state.recentMessages!));
+  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("without starting an order") }));
+});
+it.each(["Përshëndetje", "Kam një biznes", "Faleminderit"])("does not default %s to product selection", async message => {
+  const next = await turn(message);
+  expect(next.conversationRouting?.process).toBe("information");
+  expect(mocks.agent).not.toHaveBeenCalled();
+});
+it("still starts ordering when requested after business discovery", async () => {
+  const state = (await turn("kam nje klinike dentare")).nextState;
+  const next = await turn("Dua të porosis", state);
+  expect(next.conversationRouting?.process).toBe("order");
+  expect(mocks.agent).toHaveBeenCalled();
+});
+it("keeps ordinary field answers in an active order", async () => {
+  const next = await turn("M", order());
+  expect(next.conversationRouting?.process).toBe("order");
+  expect(mocks.agent).toHaveBeenCalled();
+});
 it("returns from WhatsApp referral to ordering without losing customer context", async () => {
   const state = order(); state.visual = { versionId: "visual-v1", nodeId: "whatsapp", status: "handoff", awaiting: false, visited: ["whatsapp"], values: {}, advisory: true };
   const next = await turn("Fola me stafin në WhatsApp, tani dua të porosis", state);
@@ -339,8 +367,9 @@ it.each(["removed", "disabled"])("does not reuse a completed product's old bindi
   mocks.version.mockImplementation(async (_b, id) => id ? entityVersion(id) : latest);
   mocks.entity.mockImplementation(async (_b, graph) => graph.flows.some((flow: { productIds?: string[] }) => flow.productIds?.includes("puzzle")) ? entityResult("puzzle") : {});
   await turn("Puzzle", state);
-  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: latest, state: expect.objectContaining({ product_id: null }) }));
-  expect(mocks.agent.mock.lastCall![0].state.visual).toBeUndefined();
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.info).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: latest }));
+  expect(state.processes!.order!.status).toBe("completed");
 });
 it.each(["removed", "disabled"])("does not restart a completed service on an obsolete graph when publication is %s", async scenario => {
   const state = migrateConversationProcesses(emptyState(), () => "id");
@@ -351,8 +380,9 @@ it.each(["removed", "disabled"])("does not restart a completed service on an obs
   mocks.version.mockImplementation(async (_b, id) => id ? entityVersion(id) : latest);
   mocks.entity.mockImplementation(async (_b, graph) => graph.flows.some((flow: { serviceIds?: string[] }) => flow.serviceIds?.includes("consult")) ? entityResult("consult") : {});
   await turn("Konsultë", state);
-  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: latest }));
-  expect(mocks.agent.mock.lastCall![0].state.visual).toBeUndefined();
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.info).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: latest }));
+  expect(state.processes!.service!.status).toBe("completed");
 });
 it.each(["removed", "disabled"])("a completed booking cannot reuse its old capability after latest publication is %s", async scenario => {
   const state = migrateConversationProcesses(emptyState(), () => "id");
