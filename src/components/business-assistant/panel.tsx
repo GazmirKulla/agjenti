@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { AudioRecorder } from "@/components/onboarding/audio-recorder";
 import { AssistantComposer } from "./composer";
 import { Icon } from "@/components/dashboard/icon";
@@ -19,7 +20,7 @@ import type { OrderFlowContext } from "@/lib/business-assistant/orderflow-servic
 import { WorkflowCard } from "./workflow-card";
 import type { WorkflowCard as WorkflowCardData } from "@/lib/business-assistant/workflow";
 
-type Message = { role: "user" | "assistant"; content: string };
+type Message = { role: "user" | "assistant"; content: string; materials?: { name: string; preview?: string; url?: string }[] };
 function MessageCopy({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -58,6 +59,7 @@ type Result = {
   path?: string;
 };
 export function BusinessAssistant({
+  materialDraft,
   external,
   sendRef,
   slug,
@@ -74,6 +76,7 @@ export function BusinessAssistant({
   panelWidth,
   setPanelWidth,
 }: {
+  materialDraft: ReturnType<typeof import("./materials").useMaterialDraft>;
   external: boolean;
   sendRef: React.RefObject<(() => void) | null>;
   slug: string;
@@ -90,6 +93,8 @@ export function BusinessAssistant({
   panelWidth: number;
   setPanelWidth: React.Dispatch<React.SetStateAction<number>>;
 }) {
+  const { materials, setMaterials, addFiles, addLink, removeMaterial, setSending, materialError, setMaterialError } = materialDraft;
+  const materialProps = { items: materials, onFiles: addFiles, onLink: addLink, onRemove: removeMaterial };
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -103,6 +108,7 @@ export function BusinessAssistant({
   const [requestContext, setRequestContext] =
     useState<AssistantUIContext | null>(null);
   const lastContext = useRef("");
+  const previousMaterials = useRef<{ context: string; tokens: string[]; links: string[] } | null>(null);
   const abort = useRef(new AbortController());
   useEffect(() => {
     const controller = new AbortController();
@@ -174,35 +180,58 @@ export function BusinessAssistant({
   }
   async function analyze(event?: React.FormEvent) {
     event?.preventDefault();
-    if (locked.current || text.trim().length < 3) return;
+    if (locked.current || (!text.trim() && !materials.length)) return;
     locked.current = true;
     setBusy("plan");
+    setSending(true);
     setError("");
     setResult(null);
     const input = text.trim();
-    setText("");
-    const contextKey = `${slug}:${context.page}`;
+    const contextKey = `${slug}:${JSON.stringify(context)}`;
     setRequestContext(context);
     try {
+      const tokens: string[] = [];
+      for (const item of materials) {
+        if (!item.file) continue;
+        if (item.token) { tokens.push(item.token); continue; }
+        setMaterials(current => current.map(m => m.id === item.id ? { ...m, status: "Po ngarkohet dhe lexohet…" } : m));
+        const form = new FormData(); form.set("file", item.file);
+        const response = await fetch(`/api/business-assistant/upload?slug=${encodeURIComponent(slug)}`, { method: "POST", body: form, signal: abort.current.signal });
+        const uploaded = await response.json();
+        if (!response.ok || !uploaded.attachment?.token) throw new Error(uploaded.error || "Skedari nuk u ngarkua.");
+        tokens.push(uploaded.attachment.token);
+        setMaterials(current => current.map(m => m.id === item.id ? { ...m, token: uploaded.attachment.token, status: "Gati" } : m));
+      }
+      const pastedLinks = (input.match(/https?:\/\/[^\s<>"']+/g) ?? []).map(url => url.replace(/[.,;!?)}\]]+$/, ""));
+      const reuse = !materials.length && !pastedLinks.length && previousMaterials.current?.context === contextKey ? previousMaterials.current : null;
+      const materialTokens = reuse?.tokens ?? tokens;
+      const materialLinks = [...new Set([...(pastedLinks.length ? [] : reuse?.links ?? []), ...materials.flatMap(item => item.url ? [item.url] : []), ...pastedLinks])];
       const data = await request({
         mode: "plan",
+        attachments: materialTokens,
+        links: materialLinks,
         text: input,
         history: lastContext.current === contextKey ? history.slice(-6) : [],
         context,
         ...((result?.workflow?.proposed || result?.editableFlow || result?.linear) && result.token ? { pendingToken: result.token } : {}),
       });
+      previousMaterials.current = { context: contextKey, tokens: materialTokens, links: materialLinks };
       lastContext.current = contextKey;
       setHistory((prev) => [
         ...prev.slice(-78),
-        { role: "user", content: input },
+        { role: "user", content: input, materials: [...materials.map(({name, preview, url}) => ({name, preview, url})), ...pastedLinks.filter(url => !materials.some(item => item.url === url)).map(url => ({name: url, url}))] },
         { role: "assistant", content: data.message || "Kontrollo propozimin." },
       ]);
       setResult(data);
+      setText("");
+      setMaterials([]);
+      setMaterialError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kërkesa nuk përfundoi.");
       setText((current) => (current.trim() ? current : input));
     } finally {
       locked.current = false;
+      setSending(false);
       setBusy(null);
     }
   }
@@ -257,6 +286,9 @@ export function BusinessAssistant({
     }
   }
   function reset() {
+    previousMaterials.current = null;
+    setMaterials([]);
+    setMaterialError("");
     setHistory([]);
     setResult(null);
     setText("");
@@ -271,7 +303,7 @@ export function BusinessAssistant({
           aria-label={agentName}
           style={{ bottom: viewport.bottom }}
         >
-          <AssistantComposer id="assistant-dock-input" value={text} busy={Boolean(busy)} onOpen={onOpen}
+          <AssistantComposer {...materialProps} id="assistant-dock-input" value={text} busy={Boolean(busy)} onOpen={onOpen}
             onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
             onSubmit={() => { onOpen(); setMode("text"); void analyze(); }}
             onVoice={() => { setMode("audio"); onOpen(); }} />
@@ -383,6 +415,7 @@ export function BusinessAssistant({
                 className={`assistant-message assistant-message-${message.role}`}
               >
                 <p>{message.content}</p>
+                {message.materials?.length ? <div className="unified-attachments">{message.materials.map((item, index) => <div className="unified-attachment" key={index}>{item.preview && <Image unoptimized width={40} height={40} src={item.preview} alt={item.name}/>}<span>{item.url ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.name}</a> : item.name}</span></div>)}</div> : null}
                 {message.role === "assistant" && (
                   <div className="assistant-message-actions">
                     <MessageCopy text={message.content} />
@@ -505,6 +538,7 @@ export function BusinessAssistant({
           <div ref={end} />
         </div>
         <div className="assistant-composer">
+          {materialError && <p className="assistant-error" role="alert">{materialError}</p>}
           <div className="assistant-composer-top">
             {mode === "audio" ? <button type="button" className="assistant-write-instead" disabled={Boolean(busy)} onClick={() => setMode("text")}>
               <Icon name="edit" size={16} /> Shkruaj
@@ -514,7 +548,7 @@ export function BusinessAssistant({
             </button>
           </div>
           {mode === "text" ? (
-            <AssistantComposer id="business-assistant-input" value={text} busy={Boolean(busy)} multiline
+            <AssistantComposer {...materialProps} id="business-assistant-input" value={text} busy={Boolean(busy)} multiline
               onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
               onSubmit={() => void analyze()} onVoice={() => setMode("audio")} />
           ) : (

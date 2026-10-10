@@ -1,3 +1,4 @@
+import { resolveMaterials, linksInText } from "@/lib/business-assistant/materials";
 import { simulateVisualWorkflow } from "@/lib/workflows/visual/test-actions";
 import { parseUIContext } from "@/lib/business-assistant/context";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
@@ -79,10 +80,10 @@ export async function POST(request: Request) {
     if (
       body.mode !== "plan" ||
       typeof body.text !== "string" ||
-      body.text.trim().length < 3 ||
+      (!body.text.trim() && !body.attachments?.length && !body.links?.length) ||
       body.text.length > 12000
     )
-      throw new AssistantError("Shkruaj kërkesën me 3–12000 karaktere.");
+      throw new AssistantError("Shkruaj deri në 12,000 karaktere ose shto një material.");
     const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
     if (
       history.some(
@@ -97,10 +98,12 @@ export async function POST(request: Request) {
         "Biseda është shumë e gjatë. Fillo një kërkesë të re.",
       );
     const context = parseUIContext(body.context);
-    if (body.pendingToken !== undefined) {
-      if (typeof body.pendingToken !== "string" || body.pendingToken.length > 300000) throw new AssistantError("Propozim i pavlefshëm.");
-      return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken));
-    }
+    if (body.pendingToken !== undefined && (typeof body.pendingToken !== "string" || body.pendingToken.length > 300000)) throw new AssistantError("Propozim i pavlefshëm.");
+    if (body.links !== undefined && !Array.isArray(body.links)) throw new AssistantError("Linke të pavlefshme.");
+    const links = [...new Set([...(body.links ?? []), ...linksInText(body.text)])];
+    const materials = await resolveMaterials(body.attachments ?? [], links, user.id, membership.business.id);
+    if (materials.length) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials));
+    if (body.pendingToken !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken));
     return json(context ? await planRequest(access, body.text.trim(), history, context) : await planRequest(access, body.text.trim(), history));
   } catch (error) {
     return json(

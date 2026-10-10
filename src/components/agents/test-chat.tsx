@@ -1,4 +1,5 @@
 "use client";
+import { AssistantComposer } from "@/components/business-assistant/composer";
 import { MessageRoutingView } from "@/components/workflows/message-routing";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -49,8 +50,8 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
   const [trainingBusy, setTrainingBusy] = useState(false);
   const [trainingFeedback, setTrainingFeedback] = useState<TrainingFeedback | null>(null);
   const chatLog = useRef<HTMLDivElement>(null);
-  const textarea = useRef<HTMLTextAreaElement>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const focusComposer = () => document.getElementById("agent-test-message")?.focus();
+
   const retry = useRef<{ index: number; original?: ChatEntry } | null>(null);
   const inFlight = useRef(false);
   const epoch = useRef(0);
@@ -82,11 +83,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
     window.addEventListener("keydown", escape);
     return () => window.removeEventListener("keydown", escape);
   }, []);
-  useEffect(() => {
-    if (!textarea.current) return;
-    textarea.current.style.height = "auto";
-    textarea.current.style.height = `${Math.min(textarea.current.scrollHeight, 180)}px`;
-  }, [draft, editing, voice]);
+
   useEffect(() => {
     if (chatLog.current && !showJump) chatLog.current.scrollTop = chatLog.current.scrollHeight;
   }, [messages.length, pending, phase, activeId, showJump]);
@@ -128,7 +125,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
   }
   function edit(index: number) {
     const entry = messages[index]; clearComposer(); setDraft(entry.text); setPhoto(entry.photo); setRetained(entry.attachments); setEditing(index);
-    textarea.current?.focus();
+    focusComposer();
   }
   async function send(index = editing ?? messages.length, original?: ChatEntry) {
     const text = original?.text ?? draft.trim();
@@ -150,6 +147,15 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
         if (!response.ok || !body.attachment) throw new Error(body.error || "Skedari nuk u ngarkua.");
         attachments.push({ ...body.attachment, preview: upload.preview });
       }
+      const links = [...new Set((text.match(/https?:\/\/[^\s<>"']+/g) ?? []).map(url => url.replace(/[.,;!?)}\]]+$/, "")))].filter(url => !attachments.some(a => a.name === url));
+      if (attachments.length + links.length > 3) throw new Error("Shto deri në 3 skedarë ose linke për mesazh.");
+      for (const url of links) {
+        setPhase("Po lexojmë linkun…");
+        const response = await fetch(`/api/agent-test/upload?slug=${encodeURIComponent(slug)}&mode=link&url=${encodeURIComponent(url)}`, { method: "POST", signal: controller.current.signal });
+        const body = await response.json();
+        if (!response.ok || !body.attachment) throw new Error(body.error || "Linku nuk u lexua.");
+        attachments.push(body.attachment);
+      }
       if (epoch.current !== run) return;
       setPhase("Agjenti po përgjigjet…");
       const result = await onTurn({ slug, message: text, hasMedia: simulated, attachments: attachments.map(a => a.token), session: replaySession(messages,index) });
@@ -167,7 +173,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
     } catch (e) {
       if (epoch.current === run) { retry.current = { index, original }; setError(e instanceof Error ? e.message : "Nuk u lidhëm. Provo përsëri; mesazhi u ruajt këtu."); }
     } finally {
-      if (epoch.current === run) { inFlight.current = false; setPending(null); setPendingIndex(null); setPhase(""); textarea.current?.focus(); }
+      if (epoch.current === run) { inFlight.current = false; setPending(null); setPendingIndex(null); setPhase(""); focusComposer(); }
     }
   }
   async function transcribe(file: File) {
@@ -221,7 +227,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
       </aside>}
       <div className="agent-test-conversation">
         <div className="agent-test-log" ref={chatLog} role="log" aria-label="Biseda e provës" aria-live="polite" onScroll={e=>{ const el=e.currentTarget; setShowJump(el.scrollHeight-el.scrollTop-el.clientHeight>120); }}>
-          {!messages.length && !pending && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti dhe përmirësoje gjatë bisedës.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);textarea.current?.focus();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
+          {!messages.length && !pending && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti dhe përmirësoje gjatë bisedës.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
           {(pendingIndex !== null ? messages.slice(0,pendingIndex) : messages).map((entry,index)=><div className="chat-exchange" key={entry.id}>
             <div className="agent-test-bubble customer"><p>{entry.text}</p>{entry.photo && <span className="chat-file-pill">Foto e simuluar</span>}{entry.attachments.map((a,i)=><span className="chat-file-pill" key={i}>{a.preview?.startsWith("blob:") ? <Image unoptimized width={80} height={80} src={a.preview} alt={a.name}/> : <Icon name="file" size={15}/>} {a.name}</span>)}</div>
             <div className="chat-message-actions customer"><CopyMessage text={entry.text}/><button type="button" className="chat-icon" aria-label="Ndrysho mesazhin" title="Ndrysho mesazhin" disabled={busy || voice} onClick={()=>edit(index)}><Icon name="edit" size={16}/></button></div>
@@ -233,18 +239,16 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
           {pending !== null && <div className="chat-exchange"><div className="agent-test-bubble customer"><p>{pending}</p></div><p className="agent-test-thinking" role="status"><span className="chat-thinking-dot"/>{phase || "Po përgatisim mesazhin…"}</p></div>}
         </div>
         {showJump && <button className="chat-jump chat-icon" type="button" aria-label="Shko te mesazhi i fundit" onClick={()=>{setShowJump(false);chatLog.current?.scrollTo({top:chatLog.current.scrollHeight,behavior:"smooth"});}}><Icon name="down" size={18}/></button>}
-        <form className="agent-test-composer" onSubmit={e=>{e.preventDefault();void send();}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();addFiles(Array.from(e.dataTransfer.files));}}>
+        <form className="agent-test-composer" onSubmit={e=>{e.preventDefault();void send();}}>
           {editing !== null && <div className="chat-edit-notice"><span>Po ndryshon mesazhin {editing+1}. Origjinali ruhet si bisedë më vete.</span><button type="button" className="chat-icon" aria-label="Anulo ndryshimin" disabled={busy} onClick={()=>clearComposer()}><Icon name="close" size={16}/></button></div>}
-          <div className="chat-compose-box">
-            {(uploads.length > 0 || retained.length > 0) && <div className="chat-attachments">{uploads.map(u=><div className="chat-attachment" key={u.id}>{u.preview ? <Image unoptimized width={36} height={36} src={u.preview} alt="Pamje e fotos së zgjedhur"/> : <Icon name="file"/>}<span>{u.file.name}<small>{Math.ceil(u.file.size/1024)} KB</small></span><button className="chat-icon" type="button" aria-label={`Hiq ${u.file.name}`} disabled={busy} onClick={()=>{if(u.preview){URL.revokeObjectURL(u.preview);objectUrls.current.delete(u.preview);}setUploads(v=>v.filter(x=>x.id!==u.id));}}><Icon name="close" size={14}/></button></div>)}{retained.map((a,i)=><div className="chat-attachment" key={i}><Icon name="file"/><span>{a.name}</span><button className="chat-icon" type="button" aria-label={`Hiq ${a.name}`} disabled={busy} onClick={()=>setRetained(v=>v.filter((_,n)=>n!==i))}><Icon name="close" size={14}/></button></div>)}</div>}
-            {voice ? <AudioRecorder busy={voiceBusy} variant="assistant" purpose="request" onAnalyze={transcribe} onBack={()=>setVoice(false)}/> : <textarea ref={textarea} id="agent-test-message" aria-label="Mesazhi i provës" value={draft} maxLength={2000} rows={1} placeholder="Shkruaj një mesazh si klient…" disabled={busy} onChange={e=>setDraft(e.target.value)} onPaste={e=>{if(e.clipboardData.files.length){e.preventDefault();addFiles(Array.from(e.clipboardData.files));}}} onKeyDown={e=>{if(e.key==="Enter" && !e.shiftKey && !e.nativeEvent.isComposing){e.preventDefault();void send();}}}/>}
-            <div className="chat-composer-tools"><div>
-              <input hidden ref={fileInput} type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md,.csv,.json" onChange={e=>{addFiles(Array.from(e.target.files??[]));e.target.value="";}}/>
-              <button className="chat-icon" type="button" title="Bashkëngjit skedarë" aria-label="Bashkëngjit skedarë" disabled={busy || voice} onClick={()=>fileInput.current?.click()}><Icon name="plus"/></button>
-              <button className={`chat-icon ${voice ? "active" : ""}`} type="button" title="Dikto me mikrofon" aria-label="Dikto me mikrofon" disabled={busy || voice} onClick={()=>setVoice(true)}><Icon name="microphone"/></button>
-              <label className="agent-test-photo"><input type="checkbox" checked={photo} disabled={busy || voice} onChange={e=>setPhoto(e.target.checked)}/> Simulo foto</label>
-            </div><div><span className="chat-character-count">{draft.length ? `${draft.length}/2000` : ""}</span>{pending !== null ? <button className="agent-test-send" type="button" title="Ndalo pritjen; përgjigjja nuk do të shtohet" aria-label="Ndalo pritjen" key="stop" onClick={e=>{e.preventDefault();stop();}}><Icon name="stop" size={18}/></button> : <button key="send" className="agent-test-send" type="submit" title="Dërgo mesazhin" aria-label="Dërgo mesazhin" disabled={busy || voice || (!draft.trim() && !photo && !uploads.length && !retained.length)}><Icon name="up" size={20}/></button>}</div></div>
-          </div>
+          {voice ? <AudioRecorder busy={voiceBusy} variant="assistant" purpose="request" onAnalyze={transcribe} onBack={()=>setVoice(false)}/> : <AssistantComposer
+            id="agent-test-message" value={draft} onChange={setDraft} maxLength={2000} placeholder="Shkruaj një mesazh si klient…"
+            busy={busy} onSubmit={()=>void send()} onVoice={()=>setVoice(true)} onFiles={addFiles}
+            canSubmit={Boolean(draft.trim() || photo || uploads.length || retained.length)} onStop={pending !== null ? stop : undefined}
+            items={[...uploads.map(u=>({id:u.id,name:u.file.name,preview:u.preview})), ...retained.map((a,i)=>({id:`retained-${i}`,name:a.name}))]}
+            onRemove={id=>{if(id.startsWith("retained-")) setRetained(current=>current.filter((_,i)=>`retained-${i}`!==id)); else setUploads(current=>current.filter(u=>{if(u.id!==id)return true;if(u.preview){URL.revokeObjectURL(u.preview);objectUrls.current.delete(u.preview);}return false;}));}}
+          />}
+          <div className="chat-composer-tools"><label className="agent-test-photo"><input type="checkbox" checked={photo} disabled={busy || voice} onChange={e=>setPhoto(e.target.checked)}/> Simulo foto</label><span className="chat-character-count">{draft.length ? `${draft.length}/2000` : ""}</span></div>
           {error && <p className="agent-test-error" role="alert">{error} <button type="button" disabled={busy} onClick={()=>void send(retry.current?.index ?? editing ?? messages.length, retry.current?.original)}>Provo përsëri</button></p>}
           <p className="agent-test-disclaimer">Enter për dërgim · Shift + Enter për rresht të ri · Foto, PDF, TXT, MD, CSV, JSON · 3 skedarë, 3 MB secili. Skedarët dhe audioja përpunohen nga AI; përdor të dhëna prove.</p>
         </form>

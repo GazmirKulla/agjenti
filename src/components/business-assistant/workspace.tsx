@@ -10,6 +10,7 @@ import {
   type SetStateAction,
 } from "react";
 import { usePathname } from "next/navigation";
+import { useMaterialDraft } from "./materials";
 import { BusinessAssistant } from "./panel";
 import { AssistantComposer } from "./composer";
 import {
@@ -25,7 +26,7 @@ export type CatalogAssistantContext = {
   selectedEntityIds: string[];
 };
 type PageAssistantContext = Partial<CatalogAssistantContext> & Pick<AssistantUIContext, "workflowSelection">;
-type Workspace = {
+type Workspace = ReturnType<typeof useMaterialDraft> & {
   setPageContext: Dispatch<
     SetStateAction<{ path: string; data: PageAssistantContext } | null>
   >;
@@ -61,6 +62,7 @@ export function AssistantWorkspaceProvider({
   modules: string[];
   external: boolean;
 }) {
+  const materialDraft = useMaterialDraft();
   const pathname = usePathname();
   const sendRef = useRef<(() => void) | null>(null);
   const [open, setOpen] = useState(false);
@@ -90,6 +92,7 @@ export function AssistantWorkspaceProvider({
   return (
     <AssistantContext.Provider
       value={{
+        ...materialDraft,
         setPageContext,
         send: () => sendRef.current?.(),
         sendRef,
@@ -131,6 +134,7 @@ export function AssistantWorkspaceSurface() {
   if (!w) return null;
   return (
     <BusinessAssistant
+      materialDraft={w}
       external={w.external}
       sendRef={w.sendRef}
       slug={w.slug}
@@ -171,9 +175,11 @@ export function AssistantEntry({ home = false }: { home?: boolean }) {
         </>
       )}
       <AssistantComposer id={home ? "assistant-home-input" : "assistant-context-input"}
+        items={w.materials} onFiles={w.addFiles} onLink={w.addLink} onRemove={w.removeMaterial} busy={w.sending}
         value={w.text} onChange={w.setText} onSubmit={w.send}
         placeholder={home ? "Pyet ose kërko një ndryshim…" : `Pyet për ${contextLabel(w.context).toLocaleLowerCase()}…`}
         onVoice={() => { w.setMode("audio"); w.setOpen(true); }} />
+      {w.materialError && <p className="assistant-error" role="alert">{w.materialError}</p>}
       <div className="assistant-quick-actions">
         {suggestions.map((s) => (
           <button key={s.label} onClick={() => w.launch(s.text)}>

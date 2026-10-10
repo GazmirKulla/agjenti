@@ -1,3 +1,4 @@
+import { resolveMaterials } from "@/lib/business-assistant/materials";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { inspectAttachment, readAttachmentForm, sealAttachment } from "@/lib/agents/test-chat/attachments";
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
@@ -13,6 +14,11 @@ export async function POST(request: Request) {
   const access = await requireBusinessAccess(user.id, url.searchParams.get("slug") ?? "");
   if (!access) return json({ error: "Nuk ke qasje në këtë biznes." }, 403);
   try {
+    if (url.searchParams.get("mode") === "link") {
+      const link = url.searchParams.get("url") ?? "";
+      const [material] = await resolveMaterials([], [link], user.id, access.business.id);
+      return json({ attachment: sealAttachment({ name: material.name, kind: "document", text: `Burimi: ${material.url}\n${material.text}`.slice(0,16000) }, user.id, access.business.id) });
+    }
     if (url.searchParams.get("mode") === "audio") {
       const { file } = await readAudioForm(request);
       const transcript = await transcribeAudio(file);

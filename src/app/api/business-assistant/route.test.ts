@@ -160,3 +160,23 @@ it("passes only a bounded sealed proposal for conversational refinement", async 
   expect((await POST(req({mode:"plan",text:"Ndrysho edhe emrin",pendingToken:42}))).status).toBe(400);
   expect(m.plan).not.toHaveBeenCalled();
 });
+
+it("allows attachment-only requests and forwards separately authenticated material data", async () => {
+  const { sealAttachment } = await import("@/lib/agents/test-chat/attachments");
+  vi.stubEnv("TOKEN_ENCRYPTION_KEY", "a".repeat(64));
+  try {
+    const file = sealAttachment({name:"foto.txt",kind:"document",text:"Bluza e kuqe"},"user","business");
+    expect((await POST(req({mode:"plan",text:"",attachments:[file.token]}))).status).toBe(200);
+    expect(m.plan).toHaveBeenCalledWith(expect.objectContaining({businessId:"business"}),"",[],undefined,undefined,[{name:"foto.txt",kind:"document",text:"Bluza e kuqe"}]);
+    m.plan.mockClear();
+    const foreign = sealAttachment({name:"foto.txt",kind:"document",text:"private"},"user","other");
+    expect((await POST(req({mode:"plan",text:"Përmblidh",attachments:[foreign.token]}))).status).toBe(400);
+    expect(m.plan).not.toHaveBeenCalled();
+  } finally { vi.unstubAllEnvs(); }
+});
+it("rejects empty requests and malformed attachment collections", async () => {
+  for (const body of [{text:""},{text:"Lexo",attachments:"bad"},{text:"Lexo",links:"bad"},{text:"Lexo",attachments:["x","y","z","w"]}]) {
+    expect((await POST(req({mode:"plan",...body}))).status).toBe(400);
+  }
+  expect(m.plan).not.toHaveBeenCalled();
+});
