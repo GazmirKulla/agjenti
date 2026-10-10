@@ -150,6 +150,7 @@ export function BusinessAssistant({
     setError("");
     setResult(null);
     const input = text.trim();
+    setText("");
     const contextKey = JSON.stringify(context);
     setRequestContext(context);
     try {
@@ -166,10 +167,10 @@ export function BusinessAssistant({
         { role: "user", content: input },
         { role: "assistant", content: data.message || "Kontrollo propozimin." },
       ]);
-      setText((current) => (current === input ? "" : current));
       setResult(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kërkesa nuk përfundoi.");
+      setText((current) => (current.trim() ? current : input));
     } finally {
       locked.current = false;
       setBusy(null);
