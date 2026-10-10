@@ -110,6 +110,12 @@ export function BusinessAssistant({
     }
   }, [open, mobile]);
   useEffect(() => {
+    if (!open || !mobile) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {document.body.style.overflow = previous;};
+  }, [open,mobile]);
+  useEffect(() => {
     if (open)
       end.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [history, result, open]);
@@ -151,11 +157,11 @@ export function BusinessAssistant({
       });
       lastContext.current = contextKey;
       setHistory((prev) => [
-        ...prev.slice(-6),
+        ...prev.slice(-78),
         { role: "user", content: input },
         { role: "assistant", content: data.message || "Kontrollo propozimin." },
       ]);
-      setText("");
+      setText((current) => (current === input ? "" : current));
       setResult(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kërkesa nuk përfundoi.");
@@ -165,8 +171,14 @@ export function BusinessAssistant({
     }
   }
   useEffect(() => {
-    sendRef.current = () => { onOpen(); void analyze(); };
-    return () => { sendRef.current = null; };
+    sendRef.current = () => {
+      setMode("text");
+      onOpen();
+      void analyze();
+    };
+    return () => {
+      sendRef.current = null;
+    };
   });
   async function confirm() {
     if (locked.current || !result?.token) return;
@@ -307,7 +319,7 @@ export function BusinessAssistant({
             <h2 id="business-assistant-title">{agentName}</h2>
             <p>
               Agjenti · {contextLabel(context)}
-              {context.entityId ? " · Elementi i hapur" : ""}
+              {context.entityId ? " · Elementi i zgjedhur" : ""}
             </p>
           </div>
           {mobile && (
@@ -351,21 +363,23 @@ export function BusinessAssistant({
                 kërkesë.
               </p>
               <div className="assistant-examples">
-                {assistantSuggestions(context, modules, external).map(({text: example}) => (
-                <button
-                    type="button"
-                    key={example}
-                    onClick={() => {
-                      setText(example);
-                      setMode("text");
-                    }}
-                    disabled={Boolean(busy)}
-                  >
-                    <Icon name="spark" size={16} />
-                    {example}
-                    <span aria-hidden="true">↗</span>
-                  </button>
-                ))}
+                {assistantSuggestions(context, modules, external).map(
+                  ({ text: example }) => (
+                    <button
+                      type="button"
+                      key={example}
+                      onClick={() => {
+                        setText(example);
+                        setMode("text");
+                      }}
+                      disabled={Boolean(busy)}
+                    >
+                      <Icon name="spark" size={16} />
+                      {example}
+                      <span aria-hidden="true">↗</span>
+                    </button>
+                  ),
+                )}
               </div>
             </div>
           )}

@@ -20,14 +20,13 @@ export default async function BusinessDashboard({
   return (
     <div className="assistant-first-home">
       <AssistantEntry home/>
-      <details className="assistant-business-overview" open><summary>Përmbledhja e biznesit</summary>
       <Suspense fallback={<DashboardLoading />}>
         <Overview
+          compact
           business={access.business}
           dashboardProfile={dashboardProfile}
         />
       </Suspense>
-      </details>
     </div>
   );
 }

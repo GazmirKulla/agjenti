@@ -17,9 +17,11 @@ import { resolveWidgets } from "@/lib/dashboard/widgets/resolver";
 export async function Overview({
   business,
   dashboardProfile = legacyDashboardProfile,
+  compact = false,
 }: {
   business?: { id: string; name: string; slug: string; auto_reply: boolean };
   dashboardProfile?: DashboardProfile;
+  compact?: boolean;
 }) {
   const db = createServiceSupabase();
   const base = business ? `/b/${business.slug}` : "/admin";
@@ -51,45 +53,7 @@ export async function Overview({
     business: Boolean(business),
   });
   const primaryActions = dashboardProfile.primaryActions;
-  return (
-    <div className="overview-page">
-      <PageHeading
-        eyebrow={business ? "Mirë se erdhe," : "PLATFORMA"}
-        title={business ? business.name : "Përmbledhja e platformës"}
-        description={
-          business
-            ? "Ja si po ecën biznesi yt me Agjentin AI."
-            : "Bizneset, bisedat dhe porositë në një vend."
-        }
-      >
-        {business && primaryActions[0] && (
-          <Link
-            className="btn btn-primary"
-            href={`${base}/${primaryActions[0].href}`}
-          >
-            <Icon name={primaryActions[0].icon} size={17} />
-            {primaryActions[0].label}
-          </Link>
-        )}
-        {!business && (
-          <span className="date-label">
-            <Icon name="calendar" size={17} />
-            Gjendja aktuale
-          </span>
-        )}
-      </PageHeading>
-      <div className="stats-grid">
-        {widgets.map((widget) => (
-          <StatCard
-            key={widget.id}
-            label={widget.label}
-            value={widget.value}
-            hint={widget.hint}
-            icon={widget.icon}
-            tone={widget.tone}
-          />
-        ))}
-      </div>
+  const operationalOverview = <>
       <div className="overview-primary">
         <section className="panel section-pad">
           <SectionTitle title="Biseda dhe aktiviteti" />
@@ -213,6 +177,53 @@ export async function Overview({
           )}
         </section>
       </div>
+  </>;
+  return (
+    <div className="overview-page">
+      {!compact && <PageHeading
+        eyebrow={business ? "Mirë se erdhe," : "PLATFORMA"}
+        title={business ? business.name : "Përmbledhja e platformës"}
+        description={
+          business
+            ? "Ja si po ecën biznesi yt me Agjentin AI."
+            : "Bizneset, bisedat dhe porositë në një vend."
+        }
+      >
+        {business && primaryActions[0] && (
+          <Link
+            className="btn btn-primary"
+            href={`${base}/${primaryActions[0].href}`}
+          >
+            <Icon name={primaryActions[0].icon} size={17} />
+            {primaryActions[0].label}
+          </Link>
+        )}
+        {!business && (
+          <span className="date-label">
+            <Icon name="calendar" size={17} />
+            Gjendja aktuale
+          </span>
+        )}
+      </PageHeading>}
+      {compact && <h2 className="assistant-overview-title">Biznesi yt sot</h2>}
+      <div className="stats-grid">
+        {widgets.map((widget) => (
+          <StatCard
+            key={widget.id}
+            label={widget.label}
+            value={widget.value}
+            hint={widget.hint}
+            icon={widget.icon}
+            tone={widget.tone}
+          />
+        ))}
+      </div>
+      {compact && business && <div className="assistant-attention">
+        <span><StatusBadge status={business.auto_reply ? "connected" : "paused"}/> Përgjigjet automatike</span>
+        {paused > 0 && <Link href={`${base}/inbox`}>{paused} biseda të pauzuara →</Link>}
+        {!business.auto_reply && <Link href={`${base}/agents`}>Rishiko konfigurimin e Agjentit →</Link>}
+      </div>}
+      {compact ? <details className="assistant-overview-details"><summary>Aktiviteti dhe hollësitë e biznesit</summary>{operationalOverview}</details> : operationalOverview}
     </div>
   );
 }

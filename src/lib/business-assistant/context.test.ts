@@ -64,8 +64,33 @@ it("advertises only available actions for the current page and catalog source", 
     ]).map((s) => s.label),
   ).toEqual(["Shto shërbim"]);
 });
-it('carries bounded catalog context and resolves a single checked product',()=>{
-  expect(parseUIContext({page:'products',entryPoint:'contextual',selectedEntityIds:[id],searchQuery:'barrier',filters:{status:'draft',forged:'ignored'}})).toMatchObject({entityType:'product',entityId:id,filters:{status:'draft'},searchQuery:'barrier'});
-  expect(()=>parseUIContext({page:'products',entryPoint:'contextual',selectedEntityIds:Array(21).fill(id)})).toThrow();
-  expect(()=>parseUIContext({page:'products',entryPoint:'contextual',filters:{status:'forged'}})).toThrow();
+it("carries bounded catalog context and resolves a single checked product", () => {
+  expect(
+    parseUIContext({
+      page: "products",
+      entryPoint: "contextual",
+      selectedEntityIds: [id],
+      searchQuery: "barrier",
+      filters: { status: "draft", forged: "ignored" },
+    }),
+  ).toMatchObject({
+    entityType: "product",
+    entityId: id,
+    filters: { status: "draft" },
+    searchQuery: "barrier",
+  });
+  expect(() =>
+    parseUIContext({
+      page: "products",
+      entryPoint: "contextual",
+      selectedEntityIds: Array(21).fill(id),
+    }),
+  ).toThrow();
+  expect(() =>
+    parseUIContext({
+      page: "products",
+      entryPoint: "contextual",
+      filters: { status: "forged" },
+    }),
+  ).toThrow();
 });

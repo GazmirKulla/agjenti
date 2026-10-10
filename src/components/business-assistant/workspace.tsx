@@ -19,9 +19,15 @@ import {
   type AssistantUIContext,
 } from "@/lib/business-assistant/context";
 
-export type CatalogAssistantContext = {searchQuery:string;filters:{status:string};selectedEntityIds:string[]};
+export type CatalogAssistantContext = {
+  searchQuery: string;
+  filters: { status: string };
+  selectedEntityIds: string[];
+};
 type Workspace = {
-  setPageContext: Dispatch<SetStateAction<{path:string;data:CatalogAssistantContext}|null>>;
+  setPageContext: Dispatch<
+    SetStateAction<{ path: string; data: CatalogAssistantContext } | null>
+  >;
   send: () => void;
   sendRef: React.RefObject<(() => void) | null>;
   slug: string;
@@ -60,10 +66,21 @@ export function AssistantWorkspaceProvider({
   const [panelWidth, setPanelWidth] = useState(440);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"text" | "audio">("text");
-  const [pageContext,setPageContext] = useState<{path:string;data:CatalogAssistantContext}|null>(null);
+  const [pageContext, setPageContext] = useState<{
+    path: string;
+    data: CatalogAssistantContext;
+  } | null>(null);
   const baseContext = contextFromPath(pathname, slug);
   const data = pageContext?.path === pathname ? pageContext.data : undefined;
-  const context: AssistantUIContext = {...baseContext,...data,...(baseContext.page==='products' && !baseContext.entityId && data?.selectedEntityIds.length===1 ? {entityType:'product' as const,entityId:data.selectedEntityIds[0]} : {})};
+  const context: AssistantUIContext = {
+    ...baseContext,
+    ...data,
+    ...(baseContext.page === "products" &&
+    !baseContext.entityId &&
+    data?.selectedEntityIds.length === 1
+      ? { entityType: "product" as const, entityId: data.selectedEntityIds[0] }
+      : {}),
+  };
   const launch = (prompt?: string) => {
     if (prompt !== undefined) setText(prompt);
     setMode("text");
@@ -95,15 +112,16 @@ export function AssistantWorkspaceProvider({
     </AssistantContext.Provider>
   );
 }
-export function useCatalogAssistantContext(data:CatalogAssistantContext) {
-  const workspace=useAssistantWorkspace();
-  const setter=workspace?.setPageContext;
-  const path=usePathname();
-  const serialized=JSON.stringify(data);
-  useEffect(()=>{
-    setter?.({path,data:JSON.parse(serialized)});
-    return ()=>setter?.(current=>current?.path===path ? null : current);
-  },[path,serialized,setter]);
+export function useCatalogAssistantContext(data: CatalogAssistantContext) {
+  const workspace = useAssistantWorkspace();
+  const setter = workspace?.setPageContext;
+  const path = usePathname();
+  const serialized = JSON.stringify(data);
+  useEffect(() => {
+    setter?.({ path, data: JSON.parse(serialized) });
+    return () =>
+      setter?.((current) => (current?.path === path ? null : current));
+  }, [path, serialized, setter]);
 }
 export function AssistantWorkspaceSurface() {
   const w = useAssistantWorkspace();
@@ -147,9 +165,7 @@ export function AssistantEntry({ home = false }: { home?: boolean }) {
             Agjenti “{w.name}”
           </span>
           <h1>Çfarë do të bëjmë sot?</h1>
-          <p>
-            Më trego çfarë dëshiron të përditësosh për biznesin tënd.
-          </p>
+          <p>Më trego çfarë dëshiron të përditësosh për biznesin tënd.</p>
         </>
       )}
       <form

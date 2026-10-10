@@ -58,18 +58,55 @@ export function parseUIContext(raw: unknown): AssistantUIContext | undefined {
     )
       throw new AssistantError("Elementi i zgjedhur nuk është i vlefshëm.");
   }
-  if (c.searchQuery !== undefined && (typeof c.searchQuery !== 'string' || c.searchQuery.length > 200)) throw new AssistantError('Kërkimi është shumë i gjatë.');
-  if (c.selectedEntityIds !== undefined && (c.page !== 'products' || !Array.isArray(c.selectedEntityIds) || c.selectedEntityIds.length > 20 || c.selectedEntityIds.some(id => typeof id !== 'string' || !idPattern.test(id)))) throw new AssistantError('Zgjidh deri në 20 produkte për kontekst. Veprimet kryhen një nga një.');
-  const status = c.filters && typeof c.filters === 'object' ? (c.filters as Record<string,unknown>).status : undefined;
-  if(c.filters !== undefined && (c.page !== 'products' || typeof status !== 'string' || !['all','active','draft','unlinked','imports'].includes(status))) throw new AssistantError('Filtri nuk është i vlefshëm.');
-  const selectedIds = Array.isArray(c.selectedEntityIds) ? [...new Set(c.selectedEntityIds as string[])] : [];
-  if(c.entityId && selectedIds.length && !selectedIds.includes(c.entityId as string)) throw new AssistantError("Zgjedhja e produktit ndryshoi. Provo përsëri.");
+  if (
+    c.searchQuery !== undefined &&
+    (typeof c.searchQuery !== "string" || c.searchQuery.length > 200)
+  )
+    throw new AssistantError("Kërkimi është shumë i gjatë.");
+  if (
+    c.selectedEntityIds !== undefined &&
+    (c.page !== "products" ||
+      !Array.isArray(c.selectedEntityIds) ||
+      c.selectedEntityIds.length > 20 ||
+      c.selectedEntityIds.some(
+        (id) => typeof id !== "string" || !idPattern.test(id),
+      ))
+  )
+    throw new AssistantError(
+      "Zgjidh deri në 20 produkte për kontekst. Veprimet kryhen një nga një.",
+    );
+  const status =
+    c.filters && typeof c.filters === "object"
+      ? (c.filters as Record<string, unknown>).status
+      : undefined;
+  if (
+    c.filters !== undefined &&
+    (c.page !== "products" ||
+      typeof status !== "string" ||
+      !["all", "active", "draft", "unlinked", "imports"].includes(status))
+  )
+    throw new AssistantError("Filtri nuk është i vlefshëm.");
+  const selectedIds = Array.isArray(c.selectedEntityIds)
+    ? [...new Set(c.selectedEntityIds as string[])]
+    : [];
+  if (
+    c.entityId &&
+    selectedIds.length &&
+    !selectedIds.includes(c.entityId as string)
+  )
+    throw new AssistantError("Zgjedhja e produktit ndryshoi. Provo përsëri.");
   return {
-    ...(selectedIds.length === 1 ? {entityType:"product" as const,entityId:selectedIds[0]} : {}),
+    ...(selectedIds.length === 1
+      ? { entityType: "product" as const, entityId: selectedIds[0] }
+      : {}),
     page: c.page,
-    ...(typeof c.searchQuery === "string" ? {searchQuery:c.searchQuery} : {}),
-    ...(status ? {filters:{status:status as string}} : {}),
-    ...(Array.isArray(c.selectedEntityIds) ? {selectedEntityIds:[...new Set(c.selectedEntityIds as string[])]} : {}),
+    ...(typeof c.searchQuery === "string"
+      ? { searchQuery: c.searchQuery }
+      : {}),
+    ...(status ? { filters: { status: status as string } } : {}),
+    ...(Array.isArray(c.selectedEntityIds)
+      ? { selectedEntityIds: [...new Set(c.selectedEntityIds as string[])] }
+      : {}),
     entryPoint: c.entryPoint as AssistantUIContext["entryPoint"],
     ...(c.entityId
       ? {

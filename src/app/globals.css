@@ -3793,3 +3793,9 @@ html[data-resolved="dark"] .business-assistant .onboarding-next { color: #21123d
   .assistant-workspace-panel.is-home .assistant-panel-resize { display: none; }
 }
 .assistant-panel-open .assistant-context-entry form { display: none; }
+.assistant-overview-title { font-size: 16px; margin: 0 0 16px; color: var(--ink-muted); }
+.assistant-attention { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; padding: 16px 0; margin-bottom: 12px; font-size: 13px; color: var(--ink-muted); }
+.assistant-attention > span { display: inline-flex; align-items: center; gap: 8px; }
+.assistant-attention a { color: var(--accent); }
+.assistant-overview-details > summary { color: var(--ink-muted); cursor: pointer; padding: 12px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.assistant-first-home .agent-illustration { display: none; }
