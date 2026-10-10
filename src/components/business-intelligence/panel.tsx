@@ -149,6 +149,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
     setIssues(current => current.filter(issue => issue.entityId !== id || issue.field !== field));
   }
   useEffect(() => {
+    if (section === "products" || section === "agents") return;
     const listener = (event: Event) => {
       const detail = (event as CustomEvent).detail;
       if (detail?.source) setSource(detail.source);
@@ -159,7 +160,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
       window.removeEventListener("business-intelligence:open", listener);
   });
   if (
-    !initialTarget ||
+    !initialTarget || section === "products" || section === "agents" ||
     (section !== "products" && pathname.split("/").length > 4)
   )
     return null;
@@ -212,7 +213,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                   }}
                 >
                   {Object.entries(labels)
-                    .filter(([k]) => Object.hasOwn(fields, k))
+                    .filter(([k]) => Object.hasOwn(fields, k) && k !== "product" && k !== "agent")
                     .map(([k, v]) => (
                       <option key={k} value={k}>
                         {v}

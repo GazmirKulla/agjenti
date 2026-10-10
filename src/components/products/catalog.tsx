@@ -136,7 +136,7 @@ export function ProductCatalog({
             <strong>{count("unlinked")} produkte të palidhura</strong>
             <p>
               Zgjidh llojin dhe workflow-n përpara aktivizimit. Produktet e
-              importuara me AI mbeten joaktive derisa t’i kontrollosh.
+              krijuara nga Agjenti mbeten joaktive derisa t’i kontrollosh.
             </p>
           </div>
         )}

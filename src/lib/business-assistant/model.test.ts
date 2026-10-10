@@ -189,3 +189,29 @@ describe("business assistant validation", () => {
     ]);
   });
 });
+
+it("allows only reviewed instruction changes for an existing AI agent", () => {
+  const changes = [
+    { field: "instructions", value: "Përgjigju shkurt. Mos shpik çmime." },
+  ];
+  const p = readProposal({
+    action: "agent_update",
+    id,
+    message: "Kontrollo udhëzimet.",
+    changes,
+  });
+  expect(
+    valuesFor(p, { name: "Shitjet", is_active: true }, "Europe/Tirane"),
+  ).toEqual({ instructions: changes[0].value });
+  expect(() =>
+    readProposal({ ...p, changes: [{ field: "is_active", value: "true" }] }),
+  ).toThrow();
+  expect(() => readProposal({ ...p, id: null })).toThrow();
+  expect(() =>
+    valuesFor(
+      { ...p, changes: [{ field: "instructions", value: "" }] },
+      {},
+      "Europe/Tirane",
+    ),
+  ).toThrow();
+});

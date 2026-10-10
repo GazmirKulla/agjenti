@@ -3678,8 +3678,6 @@ html[data-resolved="dark"] .dashboard-shell .status-badge.status-paused {
   .assistant-desktop-trigger { display: none; }
   .mobile-bottom-nav-with-assistant { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .assistant-mobile-trigger { grid-column: 3; grid-row: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: transparent; border: 0; color: var(--accent); cursor: pointer; min-width: 0; padding: 0; font-family: inherit; }
-  .assistant-mobile-trigger > span { display: grid; place-items: center; width: 44px; height: 38px; border-radius: 14px; background: var(--accent); color: white; box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 24%, transparent); }
-  .assistant-mobile-trigger small { font-size: 10px; font-weight: 650; }
   .business-assistant { width: 100%; max-width: 100%; height: min(880px, 94dvh); max-height: 94dvh; margin: auto 0 0; border-radius: 24px 24px 0 0; border-bottom: 0; }
   .assistant-heading { padding: 18px; }
   .assistant-body { padding: 18px; }
@@ -3691,5 +3689,34 @@ html[data-resolved="dark"] .dashboard-shell .status-badge.status-paused {
 @media (prefers-reduced-motion: reduce) { .business-assistant * { scroll-behavior: auto !important; } }
 .assistant-subject { margin: 8px 0 0; color: var(--ink-muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 html[data-resolved="dark"] .business-assistant .assistant-primary,
-html[data-resolved="dark"] .business-assistant .onboarding-next,
-html[data-resolved="dark"] .assistant-mobile-trigger > span { color: #21123d; }
+html[data-resolved="dark"] .business-assistant .onboarding-next { color: #21123d; }
+.assistant-desktop-trigger > span { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-heading > div { min-width: 0; }
+.assistant-heading h2 { overflow-wrap: anywhere; }
+.assistant-mark, .assistant-close { flex-shrink: 0; }
+
+/* The footer agent is a silent, decorative talking robot. */
+.assistant-mobile-trigger { min-height: 54px; border-radius: 18px; }
+.assistant-robot { display: block; flex-shrink: 0; overflow: visible; }
+.assistant-robot-halo { fill: var(--accent-soft); stroke: var(--accent); stroke-opacity: .16; animation: assistant-robot-breathe 3s ease-in-out infinite; transform-origin: center; }
+.assistant-robot-head { animation: assistant-robot-float 3s ease-in-out infinite; }
+.assistant-robot-antenna { stroke: var(--accent); stroke-width: 2; stroke-linecap: round; }
+.assistant-robot-light, .assistant-robot-ear { fill: var(--accent); }
+.assistant-robot-shell { fill: var(--accent); stroke: color-mix(in srgb, var(--accent) 60%, white); stroke-width: 1; }
+.assistant-robot-face { fill: #20133d; }
+.assistant-robot-eyes { fill: #b7ffec; transform-box: fill-box; transform-origin: center; animation: assistant-robot-blink 5.2s ease-in-out infinite; }
+.assistant-robot-voice { fill: #e4d6ff; }
+.assistant-robot-voice rect { transform-box: fill-box; transform-origin: center; animation: assistant-robot-talk 1.15s ease-in-out infinite; }
+.assistant-robot-voice rect:nth-child(2) { animation-delay: -.4s; }
+.assistant-robot-voice rect:nth-child(3) { animation-delay: -.7s; }
+.assistant-robot-voice rect:nth-child(4) { animation-delay: -.2s; }
+.assistant-robot-voice rect:nth-child(5) { animation-delay: -.55s; }
+.assistant-robot-highlight { stroke: white; stroke-opacity: .45; stroke-width: 1.5; stroke-linecap: round; }
+.assistant-mobile-trigger:active .assistant-robot { transform: scale(.94); }
+@keyframes assistant-robot-talk { 0%, 100% { transform: scaleY(.45); } 40% { transform: scaleY(1); } 70% { transform: scaleY(.65); } }
+@keyframes assistant-robot-blink { 0%, 42%, 46%, 100% { transform: scaleY(1); } 44% { transform: scaleY(.15); } }
+@keyframes assistant-robot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@keyframes assistant-robot-breathe { 0%, 100% { opacity: .65; transform: scale(.94); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .assistant-robot *, .assistant-mobile-trigger:active .assistant-robot { animation: none; transform: none; }
+}

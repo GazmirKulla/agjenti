@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { IntelligenceTrigger } from "@/components/business-intelligence/trigger";
 export function ProductHeading({
   slug,
   title,
@@ -23,7 +22,6 @@ export function ProductHeading({
         <p>{description}</p>
       </div>
       <div className="product-heading-actions">
-        <IntelligenceTrigger>✨ Plotëso me AI</IntelligenceTrigger>
         <Link className="btn btn-ghost" href={`/b/${slug}/products/imports`}>
           Importo
         </Link>
@@ -36,10 +34,8 @@ export function ProductHeading({
 }
 export const productMethods = [
   ["manual", "Dorazi", "Shkruaj emrin dhe çmimin", "✧"],
-  ["website", "Nga linku", "Skano faqen e produktit", "↗"],
   ["csv", "Skedar CSV", "Ngarko një listë", "▤"],
   ["instagram", "Instagram", "Nxirr nga postimet", "◎"],
-  ["audio", "Audio", "Përshkruaj me zë (AI)", "♩"],
 ] as const;
 export function ProductMethods({
   slug,
@@ -84,9 +80,9 @@ export function ProductTips() {
         Kontrollo aktivizimin, çmimin, llojin dhe workflow-n.
       </p>
       <p>
-        <strong>Plotëso më shpejt me AI</strong>
+        <strong>Shto përmes Agjentit</strong>
         <br />
-        Përshkruaje me audio ose skano faqen. Rishiko të dhënat para ruajtjes.
+        Hap Agjentin dhe përshkruaj produktin me tekst ose audio. Kontrollo propozimin para ruajtjes.
       </p>
     </section>
   );

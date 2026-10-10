@@ -1,7 +1,5 @@
 "use client";
 
-import { generateProductDescription } from "@/lib/products/ai-actions";
-import { AiSuggestButton } from "@/components/dashboard/ai-suggest-button";
 
 type ProductFieldValues = {
   name?: string;
@@ -16,7 +14,6 @@ type ProductFieldValues = {
 };
 
 export function ProductFields({
-  slug,
   product,
   types,
   workflows,
@@ -54,18 +51,12 @@ export function ProductFields({
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="form-label mb-0">Përshkrimi</span>
-            <AiSuggestButton
-              action={generateProductDescription.bind(null, slug)}
-              targetName="description"
-              collect={["name", "product_type_id"]}
-              label="Gjenero me AI"
-            />
           </div>
           <textarea
             name="description"
             className="field"
             rows={3}
-            placeholder="Shkruaj ose gjenero me AI nga emri (p.sh. barriera mbyllëse për parking)."
+            placeholder="Përshkruaj produktin, veçoritë dhe përdorimin e tij."
             defaultValue={product?.description ?? ""}
           />
         </div>

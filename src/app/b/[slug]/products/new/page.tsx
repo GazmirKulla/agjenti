@@ -6,7 +6,6 @@ import {
 } from "@/components/products/shared";
 import { ProductEditor } from "@/components/products/editor";
 import { ProductIntake } from "@/components/dashboard/product-intake";
-import { IntelligenceTrigger } from "@/components/business-intelligence/trigger";
 import { createProduct, importProductBatch } from "@/lib/products/actions";
 import { scanInstagramProducts } from "@/lib/products/import-actions";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -20,7 +19,7 @@ export default async function NewProductPage({
 }) {
   const { slug } = await params;
   const { method: requested } = await searchParams;
-  const method = ["manual", "csv", "website", "instagram", "audio"].includes(
+  const method = ["manual", "csv", "instagram"].includes(
     requested ?? "",
   )
     ? requested!
@@ -45,7 +44,7 @@ export default async function NewProductPage({
       <ProductHeading
         slug={slug}
         title="Shto produkt të ri"
-        description="Shto produktet dorazi, nga website, CSV, Instagram ose audio."
+        description="Shto produktet dorazi, nga CSV ose Instagram. Për tekst dhe audio, përdor Agjentin."
       />
       <ProductMethods slug={slug} active={method} />
       {method === "manual" ? (
@@ -54,7 +53,7 @@ export default async function NewProductPage({
           types={data.types}
           workflows={data.workflows}
         />
-      ) : method === "csv" || method === "instagram" ? (
+      ) : (
         <div className="products-workspace">
           <ProductIntake
             slug={slug}
@@ -72,27 +71,6 @@ export default async function NewProductPage({
             initialMethod={method === "instagram" ? "instagram" : "csv"}
             hideTabs
           />
-          <ProductTips />
-        </div>
-      ) : (
-        <div className="products-workspace">
-          <section className="panel section-pad">
-            <h2>
-              {method === "audio"
-                ? "Përshkruaj produktin me zë"
-                : "Importo nga website-i"}
-            </h2>
-            <p className="muted-copy">
-              Përdor panelin e përbashkët për të nxjerrë produktet, për të
-              plotësuar informacionin që mungon dhe për t’i konfirmuar. Pastaj
-              lidhi me llojin dhe workflow-n.
-            </p>
-            <IntelligenceTrigger
-              source={method as "audio" | "website"}
-            >
-              Hap {method === "audio" ? "regjistrimin" : "analizën"} →
-            </IntelligenceTrigger>
-          </section>
           <ProductTips />
         </div>
       )}

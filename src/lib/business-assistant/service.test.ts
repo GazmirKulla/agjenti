@@ -329,3 +329,43 @@ it("rejects records changed while the model was composing a proposal", async () 
     ),
   ).rejects.toThrow("gjatë analizës");
 });
+
+it("routes instruction edits through confirmation with tenant and content version checks", async () => {
+  const agentAccess = { ...access, modules: ["agents"] };
+  const before = {
+    id,
+    name: "Shitjet",
+    instructions: "Udhëzimet e vjetra",
+    updated_at: "v1",
+  };
+  m.responses.push({ data: before });
+  const result = await prepareProposal(
+    agentAccess,
+    {
+      action: "agent_update",
+      id,
+      message: "Kontrollo",
+      changes: [{ field: "instructions", value: "Përgjigju shkurt." }],
+    },
+    "Europe/Tirane",
+  );
+  expect(result.preview?.subject).toBe("Shitjet");
+  expect(m.queries).toHaveLength(1);
+  m.responses.push({ data: { id } });
+  expect(await executeTicket(agentAccess, result.token!)).toHaveProperty(
+    "path",
+    "agents",
+  );
+  expect(m.queries[1].table).toBe("ai_agents");
+  expect(m.queries[1].calls).toContainEqual([
+    "eq",
+    ["business_id", "business"],
+  ]);
+  expect(m.queries[1].calls).toContainEqual([
+    "eq",
+    ["instructions", before.instructions],
+  ]);
+  await expect(
+    executeTicket({ ...agentAccess, modules: [] }, result.token!),
+  ).rejects.toThrow();
+});

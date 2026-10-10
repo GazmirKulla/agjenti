@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { Icon } from "@/components/dashboard/icon";
-import { IntelligenceTrigger } from "@/components/business-intelligence/trigger";
 import { ProductFields } from "@/components/dashboard/product-fields";
 import {
   InstagramScanner,
@@ -23,12 +22,6 @@ const METHODS = [
     title: "Dorazi",
     hint: "Shkruaj emrin dhe çmimin",
     icon: "spark",
-  },
-  {
-    id: "url",
-    title: "Nga linku",
-    hint: "Skano faqen e produktit",
-    icon: "search",
   },
   { id: "csv", title: "Skedar CSV", hint: "Ngarko një listë", icon: "orders" },
   {
@@ -237,8 +230,7 @@ export function ProductIntake({
         className="product-method-panel"
       >
         <p className="muted-copy">
-          Plotëso fushat dhe ruaje. Përshkrimin mund ta gjenerosh me AI nga
-          emri.
+          Plotëso fushat dhe ruaj produktin.
         </p>
         <ActionForm action={createAction} className="grid gap-5">
           <ProductFields slug={slug} types={types} workflows={workflows} />
@@ -246,22 +238,6 @@ export function ProductIntake({
             Ruaj produktin
           </button>
         </ActionForm>
-      </div>
-
-      <div
-        role="tabpanel"
-        id="product-panel-url"
-        aria-labelledby="product-tab-url"
-        hidden={method !== "url"}
-        className="product-method-panel"
-      >
-        <p className="muted-copy">
-          Ngjit linkun e faqes së produktit, nga çdo dyqan. Kontrollo emrin,
-          çmimin dhe përshkrimin, pastaj ruaje.
-        </p>
-        <IntelligenceTrigger source="website">
-          Skano me AI dhe rishiko
-        </IntelligenceTrigger>
       </div>
 
       <div
@@ -326,14 +302,7 @@ export function ProductIntake({
             >
               {scanning ? "Duke skanuar…" : "Skano postimet"}
             </button>
-            <IntelligenceTrigger source="instagram">
-              Analizo me AI
-            </IntelligenceTrigger>
           </div>
-        ) : connected ? (
-          <IntelligenceTrigger source="instagram">
-            Analizo Instagram-in dhe rishiko
-          </IntelligenceTrigger>
         ) : (
           <Link href={`/b/${slug}/instagram`} className="btn btn-primary">
             Hap Instagram

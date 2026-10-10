@@ -11,6 +11,7 @@ export const actions = [
   "knowledge_create",
   "knowledge_update",
   "profile_update",
+  "agent_update",
   "availability",
   "booking_create",
   "booking_update",
@@ -47,6 +48,7 @@ export const fields: Record<string, string[]> = {
   ],
   knowledge: ["title", "body", "is_active"],
   profile: ["name"],
+  agent: ["instructions"],
   availability: ["service_id", "date"],
   booking: [
     "service_id",
@@ -66,6 +68,7 @@ export function moduleFor(action: Action) {
         service: "services",
         knowledge: "knowledge",
         profile: "settings",
+        agent: "agents",
         availability: "bookings",
         booking: "bookings",
       } as Record<string, string>
@@ -215,6 +218,8 @@ export function valuesFor(
       all.is_active = bool(value.is_active ?? true);
     return all;
   }
+  if (kind === "agent")
+    return { instructions: text(value.instructions, 1, 8000, "Udhëzimet") };
   if (kind === "profile")
     return { name: text(value.name, 2, 120, "Emri i biznesit") };
   if (!uuid(value.service_id))
@@ -257,6 +262,7 @@ const labels: Record<string, string> = {
   ends_at: "Përfundimi",
   status: "Statusi",
   notes: "Shënime",
+  instructions: "Udhëzimet e Agjentit",
 };
 const words: Record<string, string> = {
   pending: "Në pritje",
@@ -278,6 +284,7 @@ export function previewFor(
     service: "shërbimin",
     knowledge: "njohuritë",
     profile: "profilin e biznesit",
+    agent: "udhëzimet e Agjentit",
     booking: "takimin",
   };
   function display(key: string, value: unknown, previous = false) {

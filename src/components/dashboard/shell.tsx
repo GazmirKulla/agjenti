@@ -7,6 +7,7 @@ import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
 import { BusinessAssistant } from "@/components/business-assistant/panel";
+import { TalkingRobot } from "@/components/business-assistant/talking-robot";
 
 export function DashboardShell({
   children,
@@ -32,6 +33,7 @@ export function DashboardShell({
   mobileNavigationItems: NavItem[];
 }) {
   const pathname = usePathname();
+  const agentName = `Agjenti “${name}”`;
   const [open, setOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -302,7 +304,7 @@ export function DashboardShell({
             )}
           </div>
           <div className="topbar-actions">
-            {!admin && slug && <button type="button" className="assistant-desktop-trigger" onClick={() => setAssistantOpen(true)}><Icon name="spark" size={18}/> Asistenti</button>}
+            {!admin && slug && <button type="button" className="assistant-desktop-trigger" onClick={() => setAssistantOpen(true)}><Icon name="spark" size={18}/><span>{agentName}</span></button>}
             <Link
               href={`${base}/account`}
               className="topbar-profile account-profile-link"
@@ -344,9 +346,9 @@ export function DashboardShell({
             <span>{item.label}</span>
           </Link>
         ))}
-        {!admin && slug && <button type="button" className="assistant-mobile-trigger" onClick={() => { setOpen(false); setSearchOpen(false); setAssistantOpen(true); }} aria-label="Hap asistentin e biznesit" aria-haspopup="dialog"><span><Icon name="spark" size={24}/></span><small>Asistenti</small></button>}
+        {!admin && slug && <button type="button" className="assistant-mobile-trigger" onClick={() => { setOpen(false); setSearchOpen(false); setAssistantOpen(true); }} aria-label={`Hap ${agentName}`} aria-haspopup="dialog"><TalkingRobot /></button>}
       </nav>
-      {!admin && slug && <BusinessAssistant key={slug} modules={navigationItems.map(item => item.id)} slug={slug} open={assistantOpen} onClose={() => setAssistantOpen(false)} />}
+      {!admin && slug && <BusinessAssistant key={slug} agentName={agentName} modules={navigationItems.map(item => item.id)} slug={slug} open={assistantOpen} onClose={() => setAssistantOpen(false)} />}
     </div>
   );
 }

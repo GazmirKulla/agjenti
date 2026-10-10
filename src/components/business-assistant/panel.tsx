@@ -19,11 +19,13 @@ type Result = {
 };
 export function BusinessAssistant({
   slug,
+  agentName,
   open,
   onClose,
   modules,
 }: {
   slug: string;
+  agentName: string;
   open: boolean;
   onClose: () => void;
   modules: string[];
@@ -148,14 +150,14 @@ export function BusinessAssistant({
           <Icon name="spark" size={24} />
         </span>
         <div>
-          <h2 id="business-assistant-title">Asistenti i biznesit</h2>
+          <h2 id="business-assistant-title">{agentName}</h2>
           <p>Thuaje. Kontrolloje. Konfirmoje.</p>
         </div>
         <button
           type="button"
           className="assistant-close"
           onClick={onClose}
-          aria-label="Mbyll asistentin"
+          aria-label={`Mbyll ${agentName}`}
         >
           ×
         </button>
@@ -175,6 +177,9 @@ export function BusinessAssistant({
                   : []),
                 ...(modules.includes("services")
                   ? ["Shto një shërbim të ri"]
+                  : []),
+                ...(modules.includes("agents")
+                  ? ["Përditëso udhëzimet e Agjentit"]
                   : []),
                 ...(modules.includes("knowledge")
                   ? ["Përditëso njohuritë e biznesit"]
@@ -203,14 +208,14 @@ export function BusinessAssistant({
         <div
           className="assistant-conversation"
           role="log"
-          aria-label="Biseda me asistentin"
+          aria-label={`Biseda me ${agentName}`}
         >
           {history.map((message, i) => (
             <div
               key={i}
               className={`assistant-message assistant-message-${message.role}`}
             >
-              <small>{message.role === "user" ? "Ti" : "Asistenti"}</small>
+              <small>{message.role === "user" ? "Ti" : agentName}</small>
               <p>{message.content}</p>
             </div>
           ))}

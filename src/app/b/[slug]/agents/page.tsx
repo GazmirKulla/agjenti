@@ -1,5 +1,4 @@
 import { ActionForm } from "@/components/dashboard/action-form";
-import { IntelligenceTrigger } from "@/components/business-intelligence/trigger";
 import Link from "next/link";
 import { PageHeading } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
@@ -91,7 +90,7 @@ export default async function AgentsPage({
     if (id) {
       await supabase
         .from("ai_agents")
-        .update({ name, instructions, is_active: isActive })
+        .update({ name, instructions, is_active: isActive, updated_at: new Date().toISOString() })
         .eq("id", id)
         .eq("business_id", acc.business.id)
         .throwOnError();
@@ -143,9 +142,6 @@ export default async function AgentsPage({
           <span className="form-label mb-0">
             Udhëzimet për Agjentin (Prompt)
           </span>
-          <IntelligenceTrigger source="ai_inferred">
-            ✨ Gjenero Agent Instructions
-          </IntelligenceTrigger>
         </div>
         <textarea
           name="instructions"
@@ -158,8 +154,7 @@ export default async function AgentsPage({
           required
         />
         <p className="muted-copy">
-          AI vlerëson katalogun aktiv dhe propozon udhëzime; rishikoji para se
-          t’i ruash.
+          Shkruaji udhëzimet këtu ose kërkoja Agjentit t’i përditësojë me tekst ose audio.
         </p>
       </div>
       <label className="toggle-label">
