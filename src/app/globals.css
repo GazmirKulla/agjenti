@@ -1357,12 +1357,6 @@ html[data-resolved="dark"] .brand-logo-dark {
 .settings-detail-block {
   margin-top: 0;
 }
-#business-profile,
-#business-data,
-#modules,
-#external-catalog {
-  scroll-margin-top: 20px;
-}
 @media (min-width: 1001px) {
   .settings-side {
     position: sticky;
@@ -1436,26 +1430,38 @@ html[data-resolved="dark"] .brand-logo-dark {
   gap: 0;
   overflow-x: auto;
 }
-.settings-tabs a {
-  color: var(--ink-muted);
+.settings-tabs button {
+  appearance: none;
+  background: none;
+  border: 0;
   border-bottom: 2px solid transparent;
+  color: var(--ink-muted);
   padding: 15px 12px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  font: inherit;
   font-size: 13px;
   white-space: nowrap;
-  text-decoration: none;
+  cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
-.settings-tabs a:hover {
+.settings-tabs button:hover {
   color: var(--ink);
   border-bottom-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
-.settings-tabs a:focus-visible {
+.settings-tabs button[aria-selected="true"] {
   color: var(--accent);
-  outline: none;
   border-bottom-color: var(--accent);
+  font-weight: 550;
+}
+.settings-tabs button:focus-visible {
+  outline: none;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.settings-tab-panels > [hidden] {
+  display: none;
 }
 .profile-groups {
   display: grid;

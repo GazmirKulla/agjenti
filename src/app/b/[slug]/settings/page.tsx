@@ -6,6 +6,7 @@ import { IntegrationApiKeyField } from "@/components/dashboard/integration-api-k
 import { IntegrationProbe } from "@/components/dashboard/integration-probe";
 import { ModulesSettingsPanel } from "@/components/dashboard/modules-settings";
 import { BusinessProfile } from "@/components/dashboard/business-profile";
+import { SettingsTabs } from "@/components/dashboard/settings-tabs";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
@@ -186,23 +187,16 @@ export default async function SettingsPage({
         title={access.business.name}
         description="Shiko profilin e biznesit dhe menaxho cilësimet, modulet dhe lidhjet e katalogut."
       />
-      <nav className="settings-tabs" aria-label="Seksionet e cilësimeve">
-        <a href="#business-profile">
-          <Icon name="businesses" size={16} />
-          Profili
-        </a>
-        <a href="#business-data">Të dhënat</a>
-        <a href="#modules">Modulet</a>
-        <a href="#external-catalog">Katalogu</a>
-      </nav>
-      <div className="configuration-layout">
-        <div className="space-y-5">
-          <BusinessProfile
-            answers={onboarding?.answers}
-            slug={slug}
-            failed={!!onboardingError}
-          />
-          <div id="business-data">
+      <SettingsTabs
+        panels={{
+          profile: (
+            <BusinessProfile
+              answers={onboarding?.answers}
+              slug={slug}
+              failed={!!onboardingError}
+            />
+          ),
+          data: (
             <ActionForm
               action={saveBusiness}
               className="panel section-pad grid gap-5"
@@ -256,95 +250,98 @@ export default async function SettingsPage({
                 </p>
               )}
             </ActionForm>
-          </div>
-
-          <div id="modules">
+          ),
+          modules: (
             <ModulesSettingsPanel
               slug={slug}
               businessId={access.business.id}
               profile={dashboardProfile}
             />
-          </div>
-
-          <div id="external-catalog" className="grid gap-3">
-            <ActionForm
-              action={saveExternalCatalog}
-              className="panel section-pad grid gap-5 business-settings-form"
-            >
-              <div className="section-title">
-                <h2>Katalog i jashtëm</h2>
-                <StatusBadge status={linked ? "connected" : "draft"} />
-              </div>
-              <p className="muted-copy">
-                Plotëso URL-të dhe API key për të lidhur katalogun. Pa këtë
-                lidhje, përdoren vetëm produktet e krijuara te Produktet.
-              </p>
-              <label className="form-label">
-                URL e katalogut
-                <input
-                  type="url"
-                  name="catalog_url"
-                  defaultValue={integration?.catalog_url ?? ""}
-                  placeholder="https://…/catalog"
-                  className="field"
+          ),
+          catalog: (
+            <div className="grid gap-3">
+              <ActionForm
+                action={saveExternalCatalog}
+                className="panel section-pad grid gap-5 business-settings-form"
+              >
+                <div className="section-title">
+                  <h2>Katalog i jashtëm</h2>
+                  <StatusBadge status={linked ? "connected" : "draft"} />
+                </div>
+                <p className="muted-copy">
+                  Plotëso URL-të dhe API key për të lidhur katalogun. Pa këtë
+                  lidhje, përdoren vetëm produktet e krijuara te Produktet.
+                </p>
+                <label className="form-label">
+                  URL e katalogut
+                  <input
+                    type="url"
+                    name="catalog_url"
+                    defaultValue={integration?.catalog_url ?? ""}
+                    placeholder="https://…/catalog"
+                    className="field"
+                  />
+                </label>
+                <label className="form-label">
+                  URL e porosive
+                  <input
+                    type="url"
+                    name="orders_url"
+                    defaultValue={integration?.orders_url ?? ""}
+                    placeholder="https://…/orders"
+                    className="field"
+                  />
+                </label>
+                <IntegrationApiKeyField
+                  hasStoredSecret={Boolean(integration?.secret_ciphertext)}
+                  storedSecret={storedSecret}
                 />
-              </label>
-              <label className="form-label">
-                URL e porosive
-                <input
-                  type="url"
-                  name="orders_url"
-                  defaultValue={integration?.orders_url ?? ""}
-                  placeholder="https://…/orders"
-                  className="field"
+                <IntegrationProbe
+                  businessId={access.business.id}
+                  formSelector="form.business-settings-form"
                 />
-              </label>
-              <IntegrationApiKeyField
-                hasStoredSecret={Boolean(integration?.secret_ciphertext)}
-                storedSecret={storedSecret}
-              />
-              <IntegrationProbe
-                businessId={access.business.id}
-                formSelector="form.business-settings-form"
-              />
-              <button className="btn btn-primary w-fit" type="submit">
-                Ruaj lidhjen
-              </button>
-            </ActionForm>
-            {linked && (
-              <ActionForm action={disconnectExternalCatalog}>
-                <button className="btn btn-ghost" type="submit">
-                  Shkëput katalogun e jashtëm
+                <button className="btn btn-primary w-fit" type="submit">
+                  Ruaj lidhjen
                 </button>
               </ActionForm>
-            )}
-          </div>
-        </div>
-        <aside className="settings-side">
-          <section className="panel section-pad grid gap-4">
-            <span className="icon-tile">
-              <Icon name="products" size={25} />
-            </span>
-            <div className="grid gap-2">
-              <h2 className="text-lg">Si funksionon</h2>
-              <p className="muted-copy">
-                Dy mënyra: produkte të krijuara në panel, ose lidhje me katalog
-                të jashtëm. Nuk ka zgjedhës — mjafton të plotësosh këtë seksion.
-              </p>
-              <p className="muted-copy">
-                Vendos URL + API key, testo lidhjen, pastaj lidh produktet nga
-                faqja Produkte.
-              </p>
+              {linked && (
+                <ActionForm action={disconnectExternalCatalog}>
+                  <button className="btn btn-ghost" type="submit">
+                    Shkëput katalogun e jashtëm
+                  </button>
+                </ActionForm>
+              )}
             </div>
-          </section>
-          <DeleteBusinessPanel
-            businessId={access.business.id}
-            slug={slug}
-            businessName={access.business.name}
-            redirectTo="/auth/continue"
-          />
-        </aside>
-      </div>
+          ),
+        }}
+        aside={
+          <>
+            <section className="panel section-pad grid gap-4">
+              <span className="icon-tile">
+                <Icon name="products" size={25} />
+              </span>
+              <div className="grid gap-2">
+                <h2 className="text-lg">Si funksionon</h2>
+                <p className="muted-copy">
+                  Dy mënyra: produkte të krijuara në panel, ose lidhje me
+                  katalog të jashtëm. Nuk ka zgjedhës — mjafton të plotësosh
+                  këtë seksion.
+                </p>
+                <p className="muted-copy">
+                  Vendos URL + API key, testo lidhjen, pastaj lidh produktet
+                  nga faqja Produkte.
+                </p>
+              </div>
+            </section>
+            <DeleteBusinessPanel
+              businessId={access.business.id}
+              slug={slug}
+              businessName={access.business.name}
+              redirectTo="/auth/continue"
+            />
+          </>
+        }
+      />
     </>
   );
 }
