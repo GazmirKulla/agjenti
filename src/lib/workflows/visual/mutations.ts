@@ -2,6 +2,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { normalizeVisualDraft, validateVisualGraph } from "./model";
 import { loadWorkflowReadiness } from "../readiness";
 import { loadVisualVersion, loadVisualWorkspace } from "./store";
+import { unconfirmedSaveMessage } from "./save-result";
 
 export type WorkflowOperation = "draft" | "publish" | "enable" | "disable";
 /** Caller supplies server-verified identities. The RPC rechecks membership and revision atomically. */
@@ -37,7 +38,7 @@ export async function writeVisualWorkflow(
     const readiness = await loadWorkflowReadiness(businessId);
     if (!readiness.ready) return { error: `Ruaje si draft dhe provoje. Para aktivizimit: ${readiness.blockers.join(" ")}` };
   }
-  const { error } = await createServiceSupabase().rpc(
+  const { data, error } = await createServiceSupabase().rpc(
     requestId ? "apply_assistant_visual_workflow" : "save_visual_workflow",
     {
       p_business: businessId,
@@ -56,7 +57,12 @@ export async function writeVisualWorkflow(
           ? requestId
             ? "Apliko migrimet e workflow-ve vizuale dhe historikut për të ruajtur nga Agjenti."
             : "Apliko migrimin 20261010110000_visual_workflows.sql për të ruajtur rrjedhën."
-          : "Rrjedha nuk u ruajt. Provo përsëri.",
+          : !error.code || error.code.length !== 5
+            ? unconfirmedSaveMessage
+            : "Rrjedha nuk u ruajt. Provo përsëri.",
     };
-  return {};
+  // The RPC commits atomically and returns the new revision. Keep that
+  // acknowledgement even if refreshing the editor subsequently fails.
+  if (!Number.isInteger(data) || data !== revision + 1) return { error: unconfirmedSaveMessage };
+  return { savedRevision: data as number, savedGraph: graph ?? undefined };
 }

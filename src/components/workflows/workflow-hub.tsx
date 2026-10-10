@@ -1,10 +1,11 @@
 "use client";
-import { useId } from "react";
+import { useId, useRef, useState } from "react";
 import { Icon } from "@/components/dashboard/icon";
 import { upgradeVisualGraph } from "@/lib/workflows/visual/model";
-import type { VisualGraph, VisualFlowKind, VisualTrace } from "@/lib/workflows/visual/types";
+import type { VisualGraph, VisualFlow, VisualFlowKind, VisualTrace } from "@/lib/workflows/visual/types";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import type { AgentTurnResult } from "@/lib/conversations/process-agent-turn";
+import { workflowHubSelection } from "./hub-selection";
 
 export const processLabels: Record<VisualFlowKind | "clarify", string> = {
   information: "Informacion", order: "Porosi", booking: "Rezervim", support: "Staf", custom: "Rrjedhë tjetër", clarify: "Sqarim",
@@ -19,13 +20,30 @@ type Routing = AgentTurnResult["conversationRouting"];
 export type WorkflowHubProps = {
   graph?: VisualGraph; trace?: VisualTrace; state?: ConversationStatePayload;
   routing?: Routing; message?: string; bookingEnabled?: boolean; compact?: boolean;
-  onOpen?: (kind: VisualFlowKind) => void; onContext?: () => void;
+  onOpen?: (kind: VisualFlowKind) => void; onOpenFlow?: (flowId: string) => void; onContext?: () => void;
 };
 
+export function WorkflowFlowChooser({ flows, onSelect, onClose }: { flows: VisualFlow[]; onSelect: (flowId: string) => void; onClose: () => void }) {
+  return <div className="vf-hub-flow-chooser" role="group" aria-label="Zgjidh rrjedhën" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
+    <div className="vf-hub-chooser-heading"><div><strong>Zgjidh rrjedhën</strong><p>Çdo rrjedhë ka hapat dhe emrin e vet.</p></div><button type="button" onClick={onClose} aria-label="Mbyll zgjedhjen">×</button></div>
+    {flows.map((flow, index) => <button className="vf-hub-flow-option" type="button" key={flow.id} value={flow.id} autoFocus={index === 0} onClick={event => onSelect(event.currentTarget.value)}><span><strong>{flow.label}</strong><small>{flow.nodeIds.length} hapa</small></span><Icon name="arrow" size={16} /></button>)}
+  </div>;
+}
+
 /** The return arrows mean waiting for another message, never an automatic execution cycle. */
-export function WorkflowHub({ graph, trace, state, routing, message, bookingEnabled = false, compact = false, onOpen, onContext }: WorkflowHubProps) {
+export function WorkflowHub({ graph, trace, state, routing, message, bookingEnabled = false, compact = false, onOpen, onOpenFlow, onContext }: WorkflowHubProps) {
   const marker = `hub-${useId().replace(/:/g, "")}`;
+  const [choosing, setChoosing] = useState<VisualFlowKind | null>(null);
+  const chooserTrigger = useRef<HTMLButtonElement | null>(null);
   const flows = graph ? upgradeVisualGraph(graph).flows : [];
+  const choices = choosing ? flows.filter(flow => flow.kind === choosing) : [];
+  function closeChooser() { setChoosing(null); chooserTrigger.current?.focus(); }
+  function openProcess(kind: VisualFlowKind, trigger: HTMLButtonElement) {
+    const selection = workflowHubSelection(flows, kind);
+    if (selection.action === "create") onOpen?.(selection.kind);
+    else if (selection.action === "open") onOpenFlow?.(selection.flowId);
+    else { chooserTrigger.current = trigger; setChoosing(kind); }
+  }
   const nodeId = trace?.routing?.to ?? trace?.state.nodeId;
   const active = routing?.process ?? (trace?.routing?.action === "answer" ? "information" : flows.find(flow => flow.nodeIds.includes(nodeId ?? ""))?.kind);
   const profileCount = Object.values(state?.context?.profile ?? {}).filter(Boolean).length;
@@ -48,16 +66,19 @@ export function WorkflowHub({ graph, trace, state, routing, message, bookingEnab
       {processes.filter(item => item.kind !== "booking" || bookingVisible).map(item => {
         const group = flows.filter(flow => flow.kind === item.kind);
         const task = item.kind === "order" || item.kind === "booking" ? state?.processes?.[item.kind] : undefined;
-        return <button type="button" key={item.kind} className={`vf-hub-process is-${item.place} ${active === item.kind ? "is-current" : ""}`} disabled={!onOpen} onClick={() => onOpen?.(item.kind)} aria-label={`Hap rrjedhën: ${processLabels[item.kind]}`}>
+        const countLabel = `${group.length} ${group.length === 1 ? "rrjedhë" : "rrjedha"} · ${group.reduce((sum, flow) => sum + flow.nodeIds.length, 0)} hapa`;
+        return <button type="button" key={item.kind} className={`vf-hub-process is-${item.place} ${active === item.kind ? "is-current" : ""}`} disabled={group.length ? !onOpenFlow : !onOpen} onClick={event => openProcess(item.kind, event.currentTarget)} aria-expanded={group.length > 1 ? choosing === item.kind : undefined} aria-label={`${group.length > 1 ? "Zgjidh rrjedhën" : "Hap rrjedhën"}: ${processLabels[item.kind]}`}>
           <span className="vf-hub-process-icon"><Icon name={item.icon} size={21} /></span>
-          <strong>{processLabels[item.kind]}</strong><span>{item.detail}</span>
-          <small>{task?.status === "suspended" ? "E pezulluar · të dhënat ruhen" : task?.status === "completed" ? "E përfunduar" : active === item.kind ? "Rruga e këtij mesazhi" : group.length ? `${group.reduce((sum, flow) => sum + flow.nodeIds.length, 0)} hapa${onOpen ? " · Hap rrjedhën ↗" : ""}` : onOpen ? "Shto rrjedhën +" : "Sipas konfigurimit"}</small>
+          <strong>{processLabels[item.kind]}</strong><span title={group.map(flow => flow.label).join(" · ")}>{group.length ? group.map(flow => flow.label).join(" · ") : item.detail}</span>
+          <small>{group.length ? countLabel : onOpen ? "Shto rrjedhën +" : "Sipas konfigurimit"}{group.length > 1 && onOpenFlow ? " · Zgjidh ↗" : ""}</small>
+          {task?.status === "suspended" ? <em>E pezulluar · të dhënat ruhen</em> : task?.status === "completed" ? <em>E përfunduar</em> : active === item.kind ? <em>Rruga e këtij mesazhi</em> : null}
         </button>;
       })}
       <div className="vf-hub-return"><Icon name="refresh" size={15} /><span>Përgjigje → prit mesazhin tjetër</span></div>
     </div>
     <div className="vf-hub-decision" aria-live="polite"><Icon name="spark" size={16} /><div><strong>{routing ? `Vendimi i agjentit · ${processLabels[routing.process]}` : "Workflow udhëzon bisedën"}</strong><p>{routing?.reason ?? "Klienti mund të ndryshojë kërkesën ose të rikthehet te një proces i mëparshëm. Progresi ruhet."}</p></div></div>
-    {flows.some(flow => flow.kind === "custom") && <div className="vf-hub-custom"><button type="button" className="vf-button" disabled={!onOpen} onClick={() => onOpen?.("custom")}><Icon name="workflows" size={15} />Rrjedha të tjera</button></div>}
+    {flows.some(flow => flow.kind === "custom") && <div className="vf-hub-custom"><button type="button" className="vf-button" disabled={!onOpenFlow} onClick={event => openProcess("custom", event.currentTarget)} aria-expanded={choosing === "custom"}><Icon name="workflows" size={15} />Rrjedha të tjera · {flows.filter(flow => flow.kind === "custom").length}</button></div>}
+    {choices.length > 0 && onOpenFlow && <div className="vf-hub-choice-layer"><button className="vf-hub-choice-backdrop" type="button" aria-label="Mbyll zgjedhjen e rrjedhës" onClick={closeChooser} /><WorkflowFlowChooser flows={choices} onClose={closeChooser} onSelect={flowId => { setChoosing(null); onOpenFlow(flowId); }} /></div>}
   </section>;
 }
 

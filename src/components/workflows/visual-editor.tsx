@@ -2,22 +2,26 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useWorkflowAssistantContext, useAssistantWorkspace } from "@/components/business-assistant/workspace";
 import { Icon } from "@/components/dashboard/icon";
-import { saveVisualWorkflow, publishVisualWorkflow, setVisualWorkflowEnabled } from "@/lib/workflows/visual/actions";
+import { saveWorkflowFromEditor } from "@/lib/workflows/visual/save-client";
+import { unconfirmedSaveMessage } from "@/lib/workflows/visual/save-result";
+import { clearSavedWorkflowDraft, clearWorkflowDraft, persistWorkflowDraft, readWorkflowDraftRecovery, type WorkflowDraftRecovery } from "@/lib/workflows/visual/local-draft";
 import { simulateVisualWorkflow } from "@/lib/workflows/visual/test-actions";
 import { nodeLabels, outputPorts, validateVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
-import type { VisualGraph, VisualNode, VisualNodeKind, VisualPort, VisualTrace, VisualWorkspace, VisualFlowKind } from "@/lib/workflows/visual/types";
+import type { VisualGraph, VisualNode, VisualNodeKind, VisualPort, VisualTrace, VisualWorkspace } from "@/lib/workflows/visual/types";
 import { FlowIcon, VisualGraphView } from "./visual-graph";
-import { WorkflowHub, WorkflowContextPanel, processLabels } from "./workflow-hub";
+import { WorkflowHub, WorkflowContextPanel } from "./workflow-hub";
+import { addFlowTemplate, flowTemplateLabels, type FlowTemplate } from "./flow-templates";
 import type { AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 
 const descriptions: Record<VisualNodeKind, string> = {
   start: "Çdo mesazh i ri rivlerëson kërkesën e klientit.", condition: "Zgjidh rrugën sipas mesazhit ose të dhënave.",
   knowledge: "Përgjigjet nga njohuritë dhe katalogu i biznesit.", collect: "Pret përgjigjen dhe e ruan në fushën e zgjedhur.",
+  order_status: "Lexon statusin e ruajtur të porosive të këtij klienti. Nuk ndryshon porositë dhe nuk shpik përditësime.",
   confirm: "Pret Po ose Jo, pastaj ndjek degën përkatëse.", product: "Ndjek workflow-n e produktit të zgjedhur. Pa konfigurim, kërkesa i kalon stafit.",
   booking: "Kontrollon shërbimet dhe oraret e lira. Rezervimi ruhet vetëm pas konfirmimit të klientit.",
   handoff: "Orienton klientin te stafi. Agjenti mund të vazhdojë kur klienti ndryshon kërkesën.", end: "Përfundon këtë rrugë. Biseda mund të vazhdojë ose të kthehet te një hap i mëparshëm.",
 };
-const addKinds: VisualNodeKind[] = ["condition", "knowledge", "collect", "confirm", "product", "booking", "handoff", "end"];
+const addKinds: VisualNodeKind[] = ["condition", "knowledge", "order_status", "collect", "confirm", "product", "booking", "handoff", "end"];
 type Problem = { nodeId?: string; message: string };
 
 export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = false, readiness }: { slug: string; initialWorkspace: VisualWorkspace; bookingEnabled?: boolean; readiness?: { ready: boolean; blockers: string[] } }) {
@@ -38,6 +42,11 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   const [message, setMessage] = useState("");
   const [photo, setPhoto] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [refreshRequired, setRefreshRequired] = useState(false);
+  const [recovery, setRecovery] = useState<Extract<WorkflowDraftRecovery, { draft: unknown }> | null>(null);
+  const [recoveryChecked, setRecoveryChecked] = useState(false);
+  const [backupAvailable, setBackupAvailable] = useState(false);
+  const recoverySlug = useRef<string | null>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
   const graphRef = useRef(graph);
   graphRef.current = graph;
@@ -48,8 +57,22 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   const selected = graph.nodes.find(n => n.id === selectedId);
   const selectedFlow = definition.flows.find(flow => flow.nodeIds.includes(selectedId ?? "")) ?? activeFlow;
   const dirty = JSON.stringify(graph) !== JSON.stringify(workspace.graph);
-  const locked = pending || testing;
+  const canRestoreRecovery = recovery?.status === "recoverable" && recovery.draft.baseRevision === workspace.revision;
+  const locked = pending || testing || refreshRequired || Boolean(recovery);
   useWorkflowAssistantContext({ nodeId: selectedId ?? activeFlow?.entryNodeId, revision: workspace.revision, dirty });
+
+  useEffect(() => {
+    if (recoverySlug.current === slug) return;
+    recoverySlug.current = slug;
+    const stored = readWorkflowDraftRecovery(slug, workspace);
+    if (stored.status === "recoverable" || stored.status === "conflict") setRecovery(stored);
+    else if (stored.status === "saved") clearSavedWorkflowDraft(slug, workspace);
+    setRecoveryChecked(true);
+  }, [slug, workspace]);
+  useEffect(() => {
+    if (!recoveryChecked || recovery || !dirty) return;
+    setBackupAvailable(persistWorkflowDraft(slug, workspace.revision, graph).status === "saved");
+  }, [slug, workspace.revision, graph, dirty, recoveryChecked, recovery]);
 
   useEffect(() => {
     if (initialWorkspace.revision <= workspace.revision) return;
@@ -79,21 +102,19 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
     setSelectedId(id); setTab("edit"); setAdding(false);
     if (id && view !== "all") setView(definition.flows.find(flow => flow.nodeIds.includes(id))?.id ?? "all");
   }
-  function openProcess(kind: VisualFlowKind, createNew = false) {
-    const existing = definition.flows.find(flow => flow.kind === kind);
-    if (existing && !createNew) { setView(existing.id); setSelectedId(undefined); setTab("edit"); return; }
+  function openFlow(flowId: string) {
+    if (!definition.flows.some(flow => flow.id === flowId)) return;
+    setView(flowId); setSelectedId(undefined); setTab("edit"); setAdding(false);
+  }
+  function openProcess(kind: FlowTemplate, createNew = false) {
+    const existing = definition.flows.find(flow => kind === "order_status" ? graph.nodes.find(node => node.id === flow.entryNodeId)?.kind === "order_status" : flow.kind === kind);
+    if (existing && !createNew) { openFlow(existing.id); return; }
     if (locked || (kind === "booking" && !bookingEnabled)) return;
     if (graph.nodes.length > 30 || definition.flows.length >= 16) { setNotice({ text: "Workflow ka arritur kufirin e hapave ose rrjedhave. Përshtat një rrjedhë ekzistuese.", error: true }); return; }
     const id = `step_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
-    const terminalId = `${id}_end`;
-    const nodeKind: VisualNodeKind = kind === "order" ? "product" : kind === "booking" ? "booking" : kind === "support" ? "handoff" : "knowledge";
-    const nodes: VisualNode[] = [{ id, kind: nodeKind, label: processLabels[kind], position: { x: 300, y: 200 }, config: {} }];
-    const terminal = nodeKind !== "handoff";
-    if (terminal) nodes.push({ id: terminalId, kind: "end", label: "Prit mesazhin tjetër", position: { x: 620, y: 200 }, config: {} });
-    const count = definition.flows.filter(flow => flow.kind === kind).length;
-    const flow = { id: `flow_${id}`, label: `${processLabels[kind]}${count ? ` ${count + 1}` : ""}`, kind, entryNodeId: id, nodeIds: [id] };
-    edit({ ...definition, nodes: [...graph.nodes, ...nodes], edges: [...graph.edges, ...(terminal ? [{ id: `edge_${id}`, source: id, target: terminalId, port: "next" as const }] : [])], flows: [...definition.flows, flow] });
-    setView(flow.id); setSelectedId(id); setTab("edit");
+    const { graph: next, flow } = addFlowTemplate(graph, kind, id);
+    edit(next);
+    setView(flow.id); setSelectedId(undefined); setTab("edit"); setAdding(false);
   }
   function moveToFlow(flowId: string) {
     if (!selected || ["start", "end"].includes(selected.kind)) return;
@@ -138,21 +159,24 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
     if (publish && !validate()) return;
     startTransition(async () => {
       try {
-        const result = await (publish ? publishVisualWorkflow : saveVisualWorkflow)(slug, workspace.revision, graph);
+        const result = await saveWorkflowFromEditor(slug, workspace.revision, publish ? "publish" : "draft", graph);
         if (result.error) { setNotice({ text: result.error, error: true }); setProblems(result.errors ?? []); return; }
+        if (result.savedRevision !== undefined && result.savedGraph) clearSavedWorkflowDraft(slug, { revision: result.savedRevision, graph: result.savedGraph });
         if (result.workspace) { setWorkspace(result.workspace); setGraph(result.workspace.graph); }
-        setNotice({ text: publish ? "Rrjedha u aktivizua për bisedat e reja." : "Drafti u ruajt." });
-      } catch { setNotice({ text: "Ruajtja dështoi. Provo përsëri.", error: true }); }
+        setRefreshRequired(Boolean(result.refreshRequired));
+        setNotice({ text: result.warning ?? (publish ? "Rrjedha u aktivizua për bisedat e reja." : "Drafti u ruajt.") });
+      } catch { setNotice({ text: unconfirmedSaveMessage, error: true }); }
     });
   }
   function toggle() {
     startTransition(async () => {
       try {
-        const result = await setVisualWorkflowEnabled(slug, workspace.revision, !workspace.enabled);
+        const result = await saveWorkflowFromEditor(slug, workspace.revision, workspace.enabled ? "disable" : "enable");
         if (result.error) { setNotice({ text: result.error, error: true }); return; }
-        if (result.workspace) setWorkspace(result.workspace);
-        setNotice({ text: workspace.enabled ? "E çaktivizuar për bisedat e reja. Bisedat në proces ruajnë versionin e tyre." : "Versioni i publikuar u aktivizua." });
-      } catch { setNotice({ text: "Veprimi dështoi. Provo përsëri.", error: true }); }
+        if (result.workspace) { setWorkspace(result.workspace); setGraph(result.workspace.graph); }
+        setRefreshRequired(Boolean(result.refreshRequired));
+        setNotice({ text: result.warning ?? (workspace.enabled ? "E çaktivizuar për bisedat e reja. Bisedat në proces ruajnë versionin e tyre." : "Versioni i publikuar u aktivizua.") });
+      } catch { setNotice({ text: unconfirmedSaveMessage, error: true }); }
     });
   }
   async function send() {
@@ -176,14 +200,15 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
       <div className="vf-heading"><span className="vf-heading-icon"><Icon name="workflows" size={21} /></span><div><div className="vf-eyebrow">WORKFLOW <span className={`vf-status ${workspace.enabled ? "is-live" : ""}`}><i />{workspace.enabled ? "Aktive" : "Draft"}</span></div><input aria-label="Emri i rrjedhës" value={graph.name} maxLength={120} disabled={locked} onChange={e => edit({ ...graph, name: e.target.value })} /></div></div>
       <div className="vf-header-actions"><span className="vf-save-state">{dirty ? "Pa ruajtur" : workspace.hasUnpublishedChanges ? "Draft i papublikuar" : workspace.generated ? "Pikënisje" : "E ruajtur"}</span><button type="button" className="vf-button" disabled={locked} onClick={() => save()}>Ruaj draft</button><button type="button" className="vf-button vf-primary" disabled={locked} onClick={() => save(true)}>{pending ? "Duke ruajtur…" : workspace.publishedVersionId ? "Publiko" : "Aktivizo"}<Icon name="arrow" size={16} /></button></div>
     </header>
+    {recovery && <div className="vf-notice" role="status"><span>{canRestoreRecovery ? "Ka ndryshime të paruajtura nga kjo dritare. Mund t’i rikthesh." : "Ka një kopje lokale, por workflow është ndryshuar ndërkohë. Shkarkoje për ta krahasuar me versionin e ruajtur."}</span>{canRestoreRecovery && <button className="vf-button" type="button" onClick={() => { setGraph(recovery.draft.graph); setRecovery(null); resetTest(); }}>Rikthe ndryshimet</button>}<button className="vf-button" type="button" onClick={() => { const url = URL.createObjectURL(new Blob([JSON.stringify(recovery.draft.graph, null, 2)], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "workflow-kopje.json"; link.click(); URL.revokeObjectURL(url); }}>Shkarko kopjen</button><button className="vf-button" type="button" onClick={() => { if (clearWorkflowDraft(slug)) setRecovery(null); }}>Përdor versionin e ruajtur</button></div>}
     {readiness && <div className={`vf-readiness ${readiness.ready ? "is-ready" : ""}`}><Icon name={readiness.ready ? "check" : "settings"} size={15} /><span>{readiness.ready ? "Gati për aktivizim" : "Aktivizimi kërkon konfigurim"}</span>{!readiness.ready && <details><summary>Shiko çfarë mungon</summary><ul>{readiness.blockers.map(item => <li key={item}>{item}</li>)}</ul></details>}</div>}
     <nav className="vf-navigation" aria-label="Navigimi i workflow-t"><button type="button" className={view === "hub" ? "is-active" : ""} onClick={() => { setView("hub"); setSelectedId(undefined); setAdding(false); }}><Icon name="inbox" size={15} />Qendra e mesazhit</button><span>/</span>{activeFlow ? <select aria-label="Rrjedha e hapur" value={view} onChange={event => { setView(event.target.value); setSelectedId(undefined); setAdding(false); }}>{definition.flows.map(flow => <option key={flow.id} value={flow.id}>{flow.label}</option>)}</select> : <span>{view === "all" ? "Të gjithë hapat" : "Zgjidh një proces"}</span>}<button className={view === "all" ? "is-active" : ""} type="button" onClick={() => { setView("all"); setSelectedId(undefined); setAdding(false); }}>Të gjithë hapat</button></nav>
     <div className="vf-workbench">
       <div className="vf-diagram-area">
-        <div className="vf-toolbar"><div className="vf-add-wrap">{view === "hub" && <select className="vf-button" aria-label="Shto rrjedhë" value="" disabled={locked || graph.nodes.length > 30 || definition.flows.length >= 16} onChange={event => openProcess(event.target.value as VisualFlowKind, true)}><option value="" disabled>+ Shto rrjedhë</option>{(["information", "order", "booking", "support", "custom"] as const).filter(kind => kind !== "booking" || bookingEnabled).map(kind => <option key={kind} value={kind}>{processLabels[kind]}</option>)}</select>}{view !== "hub" && <button type="button" className={`vf-button vf-add ${adding ? "is-open" : ""}`} aria-expanded={adding} disabled={locked || graph.nodes.length >= 32} onClick={() => setAdding(!adding)}><span>+</span> Shto hap</button>}{adding && <><button className="vf-menu-dismiss" aria-label="Mbyll menunë" onClick={() => setAdding(false)} /><div className="vf-palette" role="menu" aria-label="Llojet e hapave">{addKinds.filter(kind => kind !== "booking" || bookingEnabled).map(kind => <button role="menuitem" type="button" key={kind} onClick={() => add(kind)}><span className={`vf-palette-icon vf-kind-${kind}`}><FlowIcon kind={kind} size={17} /></span>{nodeLabels[kind]}<span className="vf-palette-plus">+</span></button>)}</div></>}</div>
+        <div className="vf-toolbar"><div className="vf-add-wrap">{view === "hub" && <select className="vf-button" aria-label="Shto rrjedhë" value="" disabled={locked || graph.nodes.length > 30 || definition.flows.length >= 16} onChange={event => openProcess(event.target.value as FlowTemplate, true)}><option value="" disabled>+ Shto rrjedhë</option>{(["information", "order", "order_status", "booking", "support", "custom"] as const).filter(kind => kind !== "booking" || bookingEnabled).map(kind => <option key={kind} value={kind}>{flowTemplateLabels[kind]}</option>)}</select>}{view !== "hub" && <button type="button" className={`vf-button vf-add ${adding ? "is-open" : ""}`} aria-expanded={adding} disabled={locked || graph.nodes.length >= 32} onClick={() => setAdding(!adding)}><span>+</span> Shto hap</button>}{adding && <><button className="vf-menu-dismiss" aria-label="Mbyll menunë" onClick={() => setAdding(false)} /><div className="vf-palette" role="menu" aria-label="Llojet e hapave">{addKinds.filter(kind => kind !== "booking" || bookingEnabled).map(kind => <button role="menuitem" type="button" key={kind} onClick={() => add(kind)}><span className={`vf-palette-icon vf-kind-${kind}`}><FlowIcon kind={kind} size={17} /></span>{nodeLabels[kind]}<span className="vf-palette-plus">+</span></button>)}</div></>}</div>
           <button type="button" className={`vf-button ${tab === "test" ? "is-open" : ""}`} onClick={() => { if (validate()) { setTab("test"); setAdding(false); } }}><span aria-hidden="true">▷</span> Provo rrjedhën</button>
         </div>
-        {view === "hub" ? <WorkflowHub graph={graph} trace={trace} state={turn?.nextState} routing={turn?.conversationRouting} message={messages.filter(item => item.role === "user").at(-1)?.text} bookingEnabled={bookingEnabled} onOpen={openProcess} onContext={() => setTab("context")} /> : <VisualGraphView key={view} graph={displayGraph} selectedNodeId={selectedId} onSelect={selectNode} onMove={(id, position) => edit({ ...graph, nodes: graph.nodes.map(n => n.id === id ? { ...n, position } : n) })} invalidNodeIds={problems.flatMap(p => p.nodeId ? [p.nodeId] : [])} currentNodeId={trace?.state.nodeId} visitedNodeIds={trace?.state.visited} traversedNodeIds={trace?.traversedNodeIds} />}
+        {view === "hub" ? <WorkflowHub graph={graph} trace={trace} state={turn?.nextState} routing={turn?.conversationRouting} message={messages.filter(item => item.role === "user").at(-1)?.text} bookingEnabled={bookingEnabled} onOpen={openProcess} onOpenFlow={openFlow} onContext={() => setTab("context")} /> : <VisualGraphView key={view} graph={displayGraph} selectedNodeId={selectedId} onSelect={selectNode} onMove={(id, position) => edit({ ...graph, nodes: graph.nodes.map(n => n.id === id ? { ...n, position } : n) })} invalidNodeIds={problems.flatMap(p => p.nodeId ? [p.nodeId] : [])} currentNodeId={trace?.state.nodeId} visitedNodeIds={trace?.state.visited} traversedNodeIds={trace?.traversedNodeIds} />}
         {activeFlow && <div className="vf-flow-caption"><Icon name="refresh" size={14} />Pas përgjigjes, mesazhi tjetër rivlerëson kërkesën.</div>}
       </div>
       <aside className="vf-inspector">
@@ -194,6 +219,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
           <fieldset disabled={locked} className="vf-fields"><label>Emri<input value={selected.label} maxLength={100} onChange={e => updateNode({ label: e.target.value })} /></label>
             {!["start", "end"].includes(selected.kind) && <label>Procesi<select value={definition.flows.find(flow => flow.nodeIds.includes(selected.id))?.id ?? ""} onChange={event => moveToFlow(event.target.value)}><option value="">Lidhjet e përgjithshme</option>{definition.flows.map(flow => <option key={flow.id} value={flow.id}>{flow.label}</option>)}</select></label>}
             {selected.kind === "booking" && <p className="vf-help">{bookingEnabled ? "Përdor shërbimet, disponueshmërinë dhe rregullat e konfirmimit të kalendarit." : "Aktivizo rezervimet e agjentit dhe të paktën një shërbim në kalendar për të përdorur këtë rrjedhë."} <a href={`/b/${slug}/calendar`} className="soft-link">Hap kalendarin →</a></p>}
+            {selected.kind === "order_status" && <p className="vf-help">Përdor vetëm porositë e lidhura me klientin e kësaj bisede. Nëse porosia nuk gjendet, e sqaron me klientin. Prova nuk lexon apo ndryshon porositë reale. <a href={`/b/${slug}/orders`} className="soft-link">Hap porositë →</a></p>}
             {selected.kind === "condition" && <><label>Kushti<select value={selected.config.condition ?? "intent_order"} onChange={e => { edit({ ...definition, nodes: graph.nodes.map(node => node.id === selected.id ? { ...node, config: { ...node.config, condition: e.target.value as VisualNode["config"]["condition"] } } : node) }); }}><option value="intent_order">Mesazhi kërkon porosi</option><option value="intent_booking">Mesazhi kërkon rezervim</option><option value="intent_support">Mesazhi kërkon ndihmë</option><option value="field_present">Fusha është plotësuar</option><option value="field_equals">Fusha ka vlerën…</option></select></label>{selected.config.condition?.startsWith("intent_") && <p className="vf-field-hint">Njihet nga fjalët e mesazhit. Provoje me shprehjet e klientëve të tu.</p>}</>}
             {(selected.kind === "collect" || (selected.kind === "condition" && selected.config.condition?.startsWith("field_"))) && <label>Fusha<input placeholder="email_klienti" value={selected.config.fieldKey ?? ""} maxLength={60} onChange={e => updateConfig({ fieldKey: e.target.value, ...(e.target.value === "customer_phone" ? { fieldType: "phone" as const } : e.target.value === "customer_email" ? { fieldType: "email" as const } : {}) })} list="visual-field-keys" /><datalist id="visual-field-keys">{[["customer_name","Emri i klientit"],["customer_phone","Telefoni i klientit"],["customer_email","Email i klientit"],["customer_city","Qyteti"],["customer_address","Adresa"]].map(([key,label])=><option key={key} value={key}>{label}</option>)}{graph.nodes.filter(n => n.kind === "collect").map(n => <option key={n.id} value={n.config.fieldKey}>{n.label}</option>)}</datalist></label>}
             {selected.kind === "condition" && selected.config.condition === "field_equals" && <label>Vlera<input value={selected.config.value ?? ""} maxLength={300} onChange={e => updateConfig({ value: e.target.value })} /></label>}
@@ -211,8 +237,8 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
         </div>}
       </aside>
     </div>
-    <footer className="vf-footer"><span>{graph.nodes.length} hapa <i />{graph.edges.length} lidhje</span><div>{workspace.publishedVersionId && <button type="button" disabled={locked} onClick={toggle}>{workspace.enabled ? "Çaktivizo" : "Aktivizo versionin e publikuar"}</button>}<span>Ndryshimet hyjnë në fuqi pas publikimit.</span></div></footer>
-    {notice && <div className={`vf-notice ${notice.error ? "is-error" : ""}`} role={notice.error ? "alert" : "status"}>{notice.error ? "!" : "✓"}<span>{notice.text}</span><button type="button" aria-label="Mbyll njoftimin" onClick={() => setNotice(null)}>×</button></div>}
+    <footer className="vf-footer"><span>{graph.nodes.length} hapa <i />{graph.edges.length} lidhje</span><div>{workspace.publishedVersionId && <button type="button" disabled={locked || dirty} title={dirty ? "Ruaj ndryshimet përpara këtij veprimi." : undefined} onClick={toggle}>{workspace.enabled ? "Çaktivizo" : "Aktivizo versionin e publikuar"}</button>}<span>Ndryshimet hyjnë në fuqi pas publikimit.</span></div></footer>
+    {notice && <div className={`vf-notice ${notice.error ? "is-error" : ""}`} role={notice.error ? "alert" : "status"}>{notice.error ? "!" : "✓"}<span>{notice.text}{notice.error && dirty && <small>{backupAvailable ? " Kopja lokale ruhet edhe pas rifreskimit në këtë dritare." : " Mbaje këtë faqe hapur që të mos humbasësh ndryshimet."}</small>}</span>{(refreshRequired || (notice.error && (!dirty || backupAvailable))) && <button type="button" className="vf-button" onClick={() => window.location.reload()}>Rifresko faqen</button>}{!refreshRequired && <button type="button" aria-label="Mbyll njoftimin" onClick={() => setNotice(null)}>×</button>}</div>}
     {problems.length > 0 && <div className="vf-problems" role="alert"><strong>{problems.length} {problems.length === 1 ? "detaj për të plotësuar" : "detaje për të plotësuar"}</strong>{problems.map((problem, i) => <button key={i} type="button" onClick={() => { selectNode(problem.nodeId); }}>{problem.nodeId ? `${graph.nodes.find(n => n.id === problem.nodeId)?.label}: ` : ""}{problem.message}<span>↗</span></button>)}</div>}
   </section>;
 }

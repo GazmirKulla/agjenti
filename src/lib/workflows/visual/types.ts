@@ -1,4 +1,4 @@
-export type VisualNodeKind = "start" | "condition" | "knowledge" | "collect" | "confirm" | "product" | "booking" | "handoff" | "end";
+export type VisualNodeKind = "start" | "condition" | "knowledge" | "order_status" | "collect" | "confirm" | "product" | "booking" | "handoff" | "end";
 export type VisualPort = "next" | "yes" | "no";
 export type VisualIntent = "order" | "booking" | "support" | "question" | "unknown";
 export type VisualNode = {
@@ -32,7 +32,7 @@ export type VisualRunState = {
 };
 export type VisualExecution = {
   state: VisualRunState;
-  action: { kind: "knowledge" | "product" | "booking" | "prompt" | "handoff" | "end"; nodeId: string; message?: string };
+  action: { kind: "knowledge" | "order_status" | "product" | "booking" | "prompt" | "handoff" | "end"; nodeId: string; message?: string };
   traversedNodeIds: string[];
   inputConsumed: boolean;
   error?: string;

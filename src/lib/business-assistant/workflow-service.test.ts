@@ -47,7 +47,7 @@ beforeEach(() => {
     generated: false,
   });
   m.version.mockResolvedValue({ graph: starterVisualGraph() });
-  m.rpc.mockResolvedValue({ error: null });
+  m.rpc.mockImplementation(async (_name: string, input: { p_revision: number }) => ({ data: input.p_revision + 1, error: null }));
 });
 it("reads both draft and published without issuing a ticket or writing", async () => {
   const result = await prepareWorkflow(access, proposal("workflow_read"));
@@ -276,4 +276,24 @@ it("refuses enable or disable when no published version exists", async () => {
     prepareWorkflow(access, proposal("workflow_disable"), 1),
   ).rejects.toThrow("publikuar");
   expect(m.rpc).not.toHaveBeenCalled();
+});
+
+it("previews and confirms an actual order-status capability as a draft, without changing unrelated nodes", async () => {
+  const result = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: JSON.stringify([
+    { op: "upgrade" },
+    { op: "put_node", node: { id: "status", kind: "order_status", label: "Statusi i porosisë", position: { x: 800, y: 0 }, config: {} } },
+    { op: "put_edge", edge: { id: "status-end", source: "status", target: "end", port: "next" } },
+    { op: "put_flow", flow: { id: "status", kind: "information", label: "Statusi i porosisë", entryNodeId: "status", nodeIds: ["status"] } },
+  ]) }]), 3);
+  expect(m.rpc).not.toHaveBeenCalled();
+  const ticket = openTicket(result.token!, access);
+  expect(ticket).toMatchObject({ action: "workflow_draft", before: { revision: 3 }, values: { operation: "draft", graph: { version: 2 } } });
+  expect(result.workflow?.proposed?.nodes.find(node => node.id === "status")?.kind).toBe("order_status");
+  expect(result.workflow?.proposed?.nodes.filter(node => node.id !== "status")).toEqual(starterVisualGraph().nodes);
+  expect(result.preview?.fields.some(field => field.after.includes("Lexon vetëm statusin"))).toBe(true);
+  await executeTicket(access, result.token!);
+  expect(m.rpc).toHaveBeenCalledExactlyOnceWith("apply_assistant_visual_workflow", expect.objectContaining({
+    p_operation: "draft", p_revision: 3,
+    p_graph: expect.objectContaining({ nodes: expect.arrayContaining([expect.objectContaining({ kind: "order_status" })]) }),
+  }));
 });

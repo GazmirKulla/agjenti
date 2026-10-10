@@ -14,7 +14,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   if (params.visualPreview && (params.mode !== "test" || params.visualPreview.businessId !== params.businessId)) throw new Error("invalid_workflow_preview");
   const previous = params.state?.visual;
   // Publishing the visual layer must not interrupt an existing linear product order.
-  if (!params.visualPreview && !params.informationRequest && !params.bookingRequest && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacy(params);
+  if (!params.visualPreview && !params.informationRequest && !params.bookingRequest && !params.orderStatusRequest && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacy(params);
   let active = previous && previous.status !== "completed" ? previous : null;
   const loadedVersion = params.visualPreview ?? await loadVisualVersion(params.businessId, previous?.versionId);
   if (!loadedVersion) {
@@ -34,12 +34,13 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
     const flows = graph.version === 2 ? graph.flows : [];
     return graph.nodes.flatMap(n => {
       const flow = flows.find(flow => flow.entryNodeId === n.id);
-      const processKind = flow?.kind === "order" ? "product" : flow?.kind === "booking" ? "booking" : flow?.kind === "support" ? "support_entry" : flow?.kind === "information" ? "knowledge" : undefined;
-      if (processKind) return [{ id: n.id, label: flow!.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: processKind }];
+      const statusFlow = flow?.nodeIds.some(id => graph.nodes.some(node => node.id === id && node.kind === "order_status"));
+      const processKind = statusFlow ? "order_status" : flow?.kind === "order" ? "product" : flow?.kind === "booking" ? "booking" : flow?.kind === "support" ? "support_entry" : flow?.kind === "information" ? "knowledge" : undefined;
+      if (processKind) return [{ id: statusFlow ? graph.nodes.find(node => node.kind === "order_status" && flow!.nodeIds.includes(node.id))!.id : n.id, label: flow!.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: processKind }];
       // Process nodes are entered through their configured flow entry; inner collection
       // steps remain selectable for corrections after that task has begun.
-      if (["product", "booking", "handoff", "knowledge"].includes(n.kind) && flows.some(flow => flow.nodeIds.includes(n.id))) return [];
-      return ["collect", "confirm", "knowledge", "product", "booking", "handoff"].includes(n.kind)
+      if (["product", "booking", "order_status", "handoff", "knowledge"].includes(n.kind) && flows.some(flow => flow.nodeIds.includes(n.id))) return [];
+      return ["collect", "confirm", "knowledge", "product", "booking", "order_status", "handoff"].includes(n.kind)
         ? [{ id: n.id, label: n.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: n.kind as string }]
         : n.kind === "condition" && n.config.condition === "intent_support" && !flows.some(flow => flow.kind === "support")
           ? [{ id: n.id, label: n.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: "support_entry" }] : [];
@@ -57,9 +58,15 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   const orderFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "order" && flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
   const continuingOrder = params.orderRequest && previous?.status === "waiting" && Boolean(orderFlow || currentNode?.kind === "product");
   const informationEntries = routes.filter(node => node.kind === "knowledge");
+  const statusEntries = routes.filter(node => node.kind === "order_status");
+  const statusFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.nodeIds.includes(previous?.nodeId ?? "") && flow.nodeIds.some(id => version.graph.nodes.some(node => node.id === id && node.kind === "order_status"))) : undefined;
+  const continuingStatus = params.orderStatusRequest && previous?.status === "waiting" && Boolean(statusFlow || currentNode?.kind === "order_status");
   const informationFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "information" && flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
-  const continuingInformation = params.informationRequest && previous?.status === "waiting" && Boolean(informationFlow);
-  const guidance = continuingBooking || continuingOrder || continuingInformation ? { action: "continue" as const, target: null, source: "rules" as const }
+  const continuingInformation = params.informationRequest && !params.orderStatusRequest && previous?.status === "waiting" && Boolean(informationFlow) && !statusFlow;
+  const guidance = params.informationRequest && !params.orderStatusRequest && !informationEntries.length ? { action: "answer" as const, target: null, source: "rules" as const }
+    : continuingStatus ? { action: "continue" as const, target: null, source: "rules" as const }
+    : params.orderStatusRequest && statusEntries.length ? { action: "route" as const, target: statusEntries[0].id, source: "rules" as const }
+    : continuingBooking || continuingOrder || continuingInformation ? { action: "continue" as const, target: null, source: "rules" as const }
     : params.informationRequest && informationEntries.length === 1 ? { action: "route" as const, target: informationEntries[0].id, source: "rules" as const }
     : params.bookingRequest && bookingNodes.length === 1 ? { action: "route" as const, target: bookingNodes[0].id, source: "rules" as const } : await chooseGuidance({message:params.message,state:base,targets,routes,
     current:currentNode ? {id:currentNode.id,label:currentNode.label,prompt:currentNode.config.prompt,fieldKey:currentNode.config.fieldKey,kind:currentNode.kind} : undefined,
@@ -67,7 +74,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   });
   params.onTrace?.({stage:"workflow",label:"New message routed",data:{...guidance,from:previous?.nodeId??null,candidates:routes.map(r=>r.id)}});
   const freshState = () => ({versionId:version.id,nodeId:version.graph.nodes.find(n=>n.kind==="start")!.id,status:"running" as const,awaiting:false,visited:[],values:{}});
-  if (guidance.action === "clarify" || (guidance.action === "answer" && previous)) {
+  if (guidance.action === "clarify" || (guidance.action === "answer" && (previous || !informationEntries.length))) {
     const answer = await legacy({...params,state:base,informational:"Answer the current question without advancing or repeating workflow questions."});
     answer.nextState = base;
     answer.workflowId = params.persistedWorkflowId ?? base.context?.execution.linear?.id ?? base.linearSnapshot?.id ?? answer.workflowId;
@@ -122,7 +129,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
     message: params.message, hasPhoto: params.hasPhoto, intent, ...((extracted || revisiting || guidance.action === "route" || params.bookingNavigation || (params.orderRequest && currentNode?.kind !== "product"))?{inputAvailable:false}:{}) });
   const traversed = [...execution.traversedNodeIds];
   const replies: string[] = [];
-  let productCalled = false, bookingCalled = false, finished = false;
+  let productCalled = false, bookingCalled = false, orderStatusCalled = false, finished = false;
   let turn: AgentTurnResult = {
     reply: "", nextState: base, previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
     debug: { model: agentModel(), source: "fallback", fallbackReason: "workflow_prompt", agentConfigured: false,
@@ -156,6 +163,24 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
         message: "", hasPhoto: false, intent, bookingComplete: true, inputAvailable: false });
       traversed.push(...execution.traversedNodeIds);
       continue;
+    }
+    if (action.kind === "order_status") {
+      // A status lookup is read-only and may wait for the customer's choice.
+      // Never run it twice in a turn, even if the graph points back to it.
+      if (orderStatusCalled) { finished = true; break; }
+      orderStatusCalled = true;
+      if (!params.orderStatusRequest) {
+        const answer = await legacy({ ...params, state: turn.nextState, informational: "Answer only the current informational request. Do not claim to have looked up an existing order." });
+        replies.push(answer.reply); execution.state.status = "completed"; execution.state.awaiting = false; finished = true; break;
+      }
+      const status = await params.orderStatusTurn?.(turn.nextState);
+      if (!status) { replies.push("Për të kontrolluar statusin e porosisë, kontakto stafin."); finished = true; break; }
+      turn = status; currentState = turn.nextState; replies.push(turn.reply);
+      if (turn.orderStatusPending) { finished = true; break; }
+      // A status answer completes this message. Downstream prompts would lose
+      // their cursor when the coordinator restores the interrupted task.
+      execution.state.status = "completed"; execution.state.awaiting = false;
+      finished = true; break;
     }
     if (action.kind === "product") {
       const continuing = !productCalled && Boolean((active?.nodeId === action.nodeId && active.awaiting) || (base.product_id && (revisiting || (navigating && base.step_key !== "order_ready"))));

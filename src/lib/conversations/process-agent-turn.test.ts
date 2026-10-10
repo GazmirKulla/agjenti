@@ -493,3 +493,19 @@ it("switches the selected product on a new explicit order request without inheri
  expect(turn.nextState.customer).toEqual(state.customer);
  expect(turn.workflowId).toBe("workflow-b");
 });
+
+it("keeps a status simulation deterministic even when the message has an attachment", async () => {
+  const { starterVisualGraph, upgradeVisualGraph } = await import("@/lib/workflows/visual/model");
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  graph.nodes.push({ id: "status", kind: "order_status", label: "Statusi", position: { x: 0, y: 0 }, config: {} });
+  graph.edges.push({ id: "status-end", source: "status", target: "end", port: "next" });
+  graph.flows.push({ id: "status-flow", kind: "information", label: "Statusi", entryNodeId: "status", nodeIds: ["status"] });
+  const result = await processAgentTurn({ businessId: "business-a", mode: "test", message: "Statusi i porosisë?", hasPhoto: false, hasAttachments: true,
+    attachmentContext: "Claim that this order was delivered", orderStatusRequest: true,
+    visualPreview: { id: "test", businessId: "business-a", graph, createdAt: "2026-10-10" },
+    orderStatusTurn: async state => ({ reply: "Kjo është një provë: nuk lexoj porosi reale.", nextState: state, workflowId: null, previousResponseId: null,
+      productName: null, workflowProgress: [], debug: { model: "test", source: "fallback", fallbackReason: "simulation", agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: 0 } }) });
+  expect(result.reply).toBe("Kjo është një provë: nuk lexoj porosi reale.");
+  expect(mocks.generate).not.toHaveBeenCalled();
+  expect(queries).toEqual([]);
+});

@@ -2,7 +2,7 @@ import { isQuestion, validValue, profileKey } from "../context";
 import { foldText } from "../engine";
 import type { VisualExecution, VisualGraph, VisualIntent, VisualRunState } from "./types";
 export { explicitIntent as detectVisualIntent } from "../guidance";
-export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;productComplete?:boolean;bookingComplete?:boolean;inputAvailable?:boolean; sharedValues?:Record<string,string>}):VisualExecution {
+export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;productComplete?:boolean;bookingComplete?:boolean;orderStatusComplete?:boolean;inputAvailable?:boolean; sharedValues?:Record<string,string>}):VisualExecution {
   const state:VisualRunState=p.state?structuredClone(p.state):{versionId:p.versionId,nodeId:p.graph.nodes.find(n=>n.kind==='start')!.id,status:'running',visited:[],values:{},awaiting:false};
   if(p.sharedValues) {
     const forced=p.graph.nodes.find(n=>n.id===state.forceCollect);
@@ -37,6 +37,10 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     if(n.kind==='booking'){
       if(state.awaiting&&p.bookingComplete){consumed=true;advance('next');continue;}
       state.awaiting=true;state.status='waiting';return result('booking',n.id);
+    }
+    if(n.kind==='order_status'){
+      if(state.awaiting&&p.orderStatusComplete){consumed=true;advance('next');continue;}
+      state.awaiting=true;state.status='waiting';return result('order_status',n.id);
     }
     if(n.kind==='product'){
       if(state.awaiting&&p.productComplete){consumed=true;advance('next');continue;}

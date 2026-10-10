@@ -9,6 +9,14 @@ function bookingGraph() {
   return graph;
 }
 
+function orderStatusGraph() {
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  graph.nodes.push({ id: "order-status", kind: "order_status", label: "Statusi i porosisë", position: { x: 600, y: 700 }, config: {} });
+  graph.edges.push({ id: "order-status-end", source: "order-status", target: "end", port: "next" });
+  graph.flows.push({ id: "order-status", kind: "information", label: "Statusi i porosisë", entryNodeId: "order-status", nodeIds: ["order-status"] });
+  return graph;
+}
+
 describe("message hub definition compatibility", () => {
   it("upgrades a working copy while keeping v1 nodes, edges and original unchanged", () => {
     const original = starterVisualGraph(), graph = upgradeVisualGraph(original);
@@ -27,6 +35,22 @@ describe("message hub definition compatibility", () => {
     expect(normalizeVisualDraft(graph)).toEqual(graph);
     expect(validateVisualGraph(graph).errors).toEqual([]);
     expect(validateVisualGraph({...graph, version:1}).graph).toBeUndefined();
+  });
+
+  it("publishes an order-status capability as its own information flow in v2 only", () => {
+    const graph = orderStatusGraph();
+    expect(normalizeVisualDraft(graph)).toEqual(graph);
+    expect(validateVisualGraph(graph).errors).toEqual([]);
+    expect(normalizeVisualDraft({ ...graph, version: 1 })).toBeNull();
+    expect(graph.nodes.find(node => node.id === "knowledge")?.kind).toBe("knowledge");
+  });
+
+  it("requires the status response to have a next step and rejects immediate status loops", () => {
+    const graph = orderStatusGraph();
+    graph.edges = graph.edges.filter(edge => edge.source !== "order-status");
+    expect(validateVisualGraph(graph).errors).toContainEqual({ nodeId: "order-status", message: "Lidh daljen Vazhdo me një hap." });
+    graph.edges.push({ id: "order-status-loop", source: "order-status", target: "order-status", port: "next" });
+    expect(validateVisualGraph(graph).errors.some(error => error.message.includes("cikël"))).toBe(true);
   });
 
   it("rejects ambiguous membership and invalid entry references", () => {

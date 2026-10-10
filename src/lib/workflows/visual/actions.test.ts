@@ -13,7 +13,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   m.user.mockResolvedValue({ id: "user-a" });
   m.access.mockResolvedValue({ business: { id: "business-a" } });
-  m.rpc.mockResolvedValue({ error: null });
+  m.rpc.mockImplementation(async (_name, input) => ({ data: input.p_revision + 1, error: null }));
   m.load.mockResolvedValue({ graph: starterVisualGraph(), revision: 4 });
   m.version.mockResolvedValue({ graph: starterVisualGraph() });
   m.readiness.mockResolvedValue({ready:false,blockers:["Konfiguro rikuperimin."]});
@@ -109,4 +109,41 @@ it("publishes ready v2 with the authorized identities and unchanged expected rev
   m.readiness.mockResolvedValue({ready:true,blockers:[]});
   expect(await publishVisualWorkflow("studio",7,graph)).toHaveProperty("workspace");
   expect(m.rpc).toHaveBeenCalledExactlyOnceWith("save_visual_workflow",{p_business:"business-a",p_user:"user-a",p_revision:7,p_graph:graph,p_operation:"publish"});
+});
+
+it("reports a committed save even if loading the workspace fails afterward", async () => {
+  m.rpc.mockResolvedValueOnce({ data: 8, error: null });
+  m.load.mockRejectedValueOnce(new Error("connection lost"));
+  const result = await saveVisualWorkflow("studio", 7, upgradeVisualGraph(starterVisualGraph()));
+  expect(result).toMatchObject({ savedRevision: 8, refreshRequired: true, savedGraph: { version: 2 } });
+  expect(result.warning).toContain("u ruajt");
+  expect(result.error).toBeUndefined();
+  expect(m.rpc).toHaveBeenCalledTimes(1);
+});
+
+it("does not turn cache invalidation failure into a failed save", async () => {
+  m.rpc.mockResolvedValueOnce({ data: 4, error: null });
+  m.revalidate.mockImplementationOnce(() => { throw new Error("cache unavailable"); });
+  const result = await saveVisualWorkflow("studio", 3, starterVisualGraph());
+  expect(result.savedRevision).toBe(4);
+  expect(result.workspace?.revision).toBe(4);
+  expect(result.warning).toContain("u ruajt");
+  expect(result.error).toBeUndefined();
+});
+
+it("keeps a resolved RPC transport failure uncertain instead of claiming rollback", async () => {
+  m.rpc.mockResolvedValueOnce({ data: null, error: { code: "", message: "TypeError: fetch failed" } });
+  const result = await saveVisualWorkflow("studio", 3, starterVisualGraph());
+  expect(result.error).toContain("nuk u konfirmua");
+  expect(result.savedRevision).toBeUndefined();
+  expect(m.rpc).toHaveBeenCalledTimes(1);
+  expect(m.load).not.toHaveBeenCalled();
+});
+
+it.each([null, undefined, "4", 3, 5])("does not invent a save receipt from %s", async data => {
+  m.rpc.mockResolvedValueOnce({ data, error: null });
+  const result = await saveVisualWorkflow("studio", 3, starterVisualGraph());
+  expect(result.error).toContain("nuk u konfirmua");
+  expect(result.savedRevision).toBeUndefined();
+  expect(m.load).not.toHaveBeenCalled();
 });

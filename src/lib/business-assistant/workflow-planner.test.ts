@@ -4,9 +4,10 @@ vi.mock("./orderflow-service", () => ({ loadOrderFlows:m.orderLoad, prepareOrder
 vi.mock("openai", () => ({ default: class { responses = { create: m.response }; } }));
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test" }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({}) }));
-vi.mock("./workflow-service", () => ({ loadAssistantWorkflow: m.load, prepareWorkflow: m.prepare, executeWorkflow: vi.fn(), workflowInstructions: "workflow instructions" }));
+vi.mock("./workflow-service", async importOriginal => ({ ...await importOriginal<typeof import("./workflow-service")>(), loadAssistantWorkflow: m.load, prepareWorkflow: m.prepare, executeWorkflow: vi.fn() }));
 import { planRequest, type Access } from "./service";
-import { starterVisualGraph } from "@/lib/workflows/visual/model";
+import { starterVisualGraph, upgradeVisualGraph, validateVisualGraph } from "@/lib/workflows/visual/model";
+import { applyWorkflowOperations } from "./workflow";
 const access: Access = { userId: "user", businessId: "business", modules: ["workflows"], catalogSource: "internal" };
 const respond = (action: string, changes: {field:string;value:string}[] = []) => ({ output_text: JSON.stringify({action,id:null,message:"Kontrollo",changes}) });
 beforeEach(() => {
@@ -43,4 +44,24 @@ it("treats an empty order-workflow library as loaded and removes repeated load f
   expect(JSON.parse(m.response.mock.calls[1][0].input).data.orderflows.flows).toEqual([]);
   expect(m.response.mock.calls[1][0].text.format.schema.properties.action.enum).not.toContain("orderflow_load");
   expect(m.orderPrepare).toHaveBeenCalledWith(access,expect.objectContaining({action:"orderflow_create"}),undefined);
+});
+
+it("provides real order-status authoring capability and passes its explicit operations to draft preparation", async () => {
+  const existing = upgradeVisualGraph(starterVisualGraph());
+  m.load.mockResolvedValue({ workspace: { graph: existing, revision: 7 }, published: null });
+  const operations = [
+    { op: "put_node", node: { id: "status", kind: "order_status", label: "Statusi i porosisë", position: { x: 700, y: 0 }, config: {} } },
+    { op: "put_edge", edge: { id: "status-end", source: "status", target: "end", port: "next" } },
+    { op: "put_flow", flow: { id: "status", kind: "information", label: "Statusi i porosisë", entryNodeId: "status", nodeIds: ["status"] } },
+  ];
+  m.response.mockResolvedValueOnce(respond("workflow_load")).mockResolvedValueOnce(respond("workflow_draft", [{ field: "operations", value: JSON.stringify(operations) }]));
+  await planRequest(access, "Shto një rrjedhë për statusin e porosisë së klientit", [], { page: "workflows", entryPoint: "contextual", workflowSelection: { revision: 7, dirty: false } });
+  expect(m.response.mock.calls[1][0].instructions).toContain("propose an actual order_status node");
+  expect(m.response.mock.calls[1][0].instructions).toContain("Never fulfill status lookup by merely renaming a knowledge node");
+  const proposed = m.prepare.mock.calls[0][1];
+  expect(proposed.action).toBe("workflow_draft");
+  const graph = applyWorkflowOperations(existing, proposed.changes[0].value);
+  expect(validateVisualGraph(graph).errors).toEqual([]);
+  expect(graph.nodes.find(node => node.id === "status")?.kind).toBe("order_status");
+  expect(graph.version === 2 && graph.flows.filter(flow => flow.id !== "status")).toEqual(existing.flows);
 });

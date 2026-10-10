@@ -138,6 +138,7 @@ export function describeWorkflowNode(node: VisualNode) {
   };
   return [
     nodeLabels[node.kind],
+    node.kind === "order_status" && "Lexon vetëm statusin e porosive të klientit të kësaj bisede; nuk i ndryshon ato.",
     node.config.prompt,
     node.config.fieldKey && `Fusha: ${node.config.fieldKey}`,
     node.config.fieldType,

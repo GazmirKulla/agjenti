@@ -9,8 +9,11 @@ import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/ex
 import { chooseGuidance, explicitIntent, rememberTurn } from "@/lib/workflows/guidance";
 import { bookingAdapterState, migrateConversationProcesses, restoreOrder, snapshotOrder, type ConversationRouting, type ProcessKind } from "@/lib/workflows/conversation-processes";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
+import { customerOrderStatus, isOrderStatusFollowUp, isOrderStatusRequest, readOrderStatusLookup, setOrderStatusLookup, type OrderCustomerIdentity } from "@/lib/orders/customer-status";
 
 export type ConversationMessageParams = AgentTurnParams & {
+  /** Server webhook identity, never accepted from chat text or preview state. */
+  customerIdentity?: OrderCustomerIdentity;
   conversationKey?: string;
   bookingGuard?: BookingEffectGuard;
   /** Production adapter rechecks manual ownership immediately before booking effects. */
@@ -59,8 +62,8 @@ function plainResult(state: ConversationStatePayload, reply: string): AgentTurnR
     productName: null, workflowProgress: [], debug: { model: agentModel(), source: "fallback", fallbackReason: "conversation_routing", agentConfigured: true,
       knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: 0 } };
 }
-function explicitProfile(state: ConversationStatePayload, message: string) {
-  extractExplicitFacts(state, message, state.context?.execution.linear?.steps ?? []);
+function explicitProfile(state: ConversationStatePayload, message: string, profileOnly = false) {
+  extractExplicitFacts(state, message, profileOnly ? [] : state.context?.execution.linear?.steps ?? []);
   // Contact labels anchor the number to this customer's own statement, including mixed question/fact turns.
   const phone = message.match(/(?:telefoni?\s*(?:im)?|numri\s+im|my\s+(?:phone|number))\s*(?:(?:është|eshte|is)\s*|[:=]\s*)(\+?[\d ().-]{7,24}\d)/i);
   if (phone) setFact(state, "customer_phone", phone[1].trim(), "phone", "message_phone");
@@ -69,6 +72,52 @@ function explicitProfile(state: ConversationStatePayload, message: string) {
 /** One message coordinator for Instagram, isolated chat and graph previews. Adapters own persistence/send. */
 export async function processConversationMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
   if (params.canAct && !(await params.canAct())) throw new Error("conversation_manually_paused");
+  const statusRequested = isOrderStatusRequest(params.message) || isOrderStatusFollowUp(params.message, params.state);
+  const statusTurn = async (state: ConversationStatePayload) => {
+    const result = await customerOrderStatus({ businessId: params.businessId, message: params.message, state,
+      identity: params.customerIdentity, isolated: params.mode === "test" || Boolean(params.visualPreview) || Boolean(params.linearPreview) });
+    return { ...plainResult(result.nextState, result.reply), orderStatusPending: result.pending };
+  };
+  // The adapter is supplied here, never accepted from a customer-controlled chat payload.
+  params = { ...params, orderStatusTurn: statusTurn };
+  if (statusRequested) {
+    const state = migrateConversationProcesses(params.state, randomUUID);
+    const profileBefore = JSON.stringify(state.context!.profile);
+    explicitProfile(state, params.message, true);
+    if (JSON.stringify(state.context!.profile) !== profileBefore && state.processes!.order) {
+      state.processes!.order.snapshot.execution.orderConfirmed = false;
+      state.processes!.order.snapshot.execution.awaitingOrderConfirmation = false;
+    }
+    // The status answer replaces the last question. Preserve tasks, but do not let a
+    // later bare yes accept an older replace/process choice the customer no longer sees.
+    delete state.processes!.pendingChoice;
+    const lookup = readOrderStatusLookup(state);
+    const version = params.visualPreview ?? await loadVisualVersion(params.businessId, lookup?.visual?.versionId);
+    const statusNode = version?.graph.version === 2 ? version.graph.nodes.find(node => node.kind === "order_status") : undefined;
+    const configured = Boolean(statusNode);
+    const adapter = structuredClone(state);
+    adapter.visual = lookup?.visual ?? (statusNode && version ? { versionId: version.id, nodeId: statusNode.id, status: "waiting", awaiting: true, visited: [statusNode.id], values: {} } : undefined);
+    const result = configured ? await processAgentTurn({ ...params, state: adapter, orderStatusRequest: true })
+      : params.mode === "test" || params.visualPreview || params.linearPreview ? await statusTurn(state)
+      : plainResult(state, "Kontrolli automatik i statusit të porosisë nuk është aktiv për këtë biznes. Kontakto stafin për ta kontrolluar porosinë.");
+    // Status checks are read-only interruptions. Only their own lookup cursor changes.
+    const nextLookup = readOrderStatusLookup(result.nextState);
+    if (nextLookup && result.nextState.visual) nextLookup.visual = structuredClone(result.nextState.visual);
+    setOrderStatusLookup(state, nextLookup);
+    state.processes!.promptOwner = null;
+    const decision: ConversationRouting = { process: "information", action: result.orderStatusPending ? "clarify" : "answer", source: "rules",
+      reason: "Kontrollohet statusi i porosisë ekzistuese; proceset në vazhdim ruhen.", reusedFields: [], missingFields: result.orderStatusPending ? ["order_reference"] : [] };
+    state.processes!.lastDecision = decision;
+    result.nextState = state; result.conversationRouting = decision;
+    rememberTurn(params.state, state, params.message, result.reply);
+    params.onTrace?.({ stage: "workflow", label: "Customer order status", data: decision });
+    return result;
+  }
+  // An unrelated request ends the short-lived choice; a later number must not select an old list.
+  if (params.state && readOrderStatusLookup(params.state, true)) {
+    params = { ...params, state: structuredClone(params.state) };
+    setOrderStatusLookup(params.state!);
+  }
   if (params.linearPreview) return processAgentTurn(params);
   if (params.mode !== "test" && !params.bookingGuard && params.state?.schemaVersion !== 3 && !params.visualPreview) {
     if (sharedWorkflowEnabled(params.businessId)) throw new Error("workflow_queue_required");

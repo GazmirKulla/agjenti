@@ -311,6 +311,7 @@ export async function handleInboundMessage(
   };
   const turn = await processConversationMessage({
     conversationKey: conversationId,
+    customerIdentity: { conversationId, instagramParticipantId: message.externalParticipantId, instagramConnectionId: conn.id },
     bookingGuard: job ? { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: stateRow?.revision ?? 0 } : undefined,
     canAct,
     businessId,

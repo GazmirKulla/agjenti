@@ -2,7 +2,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { emptyState, type ConversationStatePayload } from "@/lib/workflows/engine";
 import { migrateContext, setFact } from "@/lib/workflows/context";
 import { migrateConversationProcesses } from "@/lib/workflows/conversation-processes";
-const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn() }));
+const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn(), status: vi.fn() }));
+vi.mock("@/lib/orders/customer-status", async original => ({ ...await original<object>(), customerOrderStatus: mocks.status }));
 vi.mock("./process-agent-turn", () => ({ processAgentTurn: mocks.agent, processLegacyAgentTurn: mocks.info }));
 vi.mock("@/lib/calendar/agent", () => ({ processBookingTurn: mocks.booking }));
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test" }));
@@ -24,6 +25,7 @@ beforeEach(() => {
   mocks.guidance.mockResolvedValue({ action: "continue", target: null, source: "rules" });
   mocks.version.mockResolvedValue(null);
   mocks.extract.mockResolvedValue(0);
+  mocks.status.mockImplementation(async ({ state }) => ({ reply: "Status i verifikuar.", nextState: structuredClone(state), pending: false }));
   mocks.agent.mockImplementation(async ({ state }) => result(state));
   mocks.info.mockImplementation(async ({ state }) => result(state, "Çmimi është 20 euro."));
   mocks.booking.mockImplementation(async ({ state }) => { const next = structuredClone(state); next.fields.booking = { nonce: "booking-1", phase: "collect", serviceId: "service", date: "2026-10-15", expires: Date.now() + 60000 }; next.step_key = "booking_request"; return result(next, "Në çfarë ore?"); });
@@ -148,4 +150,99 @@ it("treats a bare contact channel after handoff as support rather than an order"
   expect(mocks.agent).not.toHaveBeenCalled();
   expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("selected a contact channel") }));
   expect(next.advisoryHandoff).toBe(true);
+});
+
+it("answers existing order status without consuming an order or booking confirmation", async () => {
+  const state = migrateConversationProcesses(order(), () => "order-1");
+  state.context!.execution.awaitingOrderConfirmation = true;
+  state.processes!.order!.snapshot.execution.awaitingOrderConfirmation = true;
+  state.processes!.booking = { id: "booking-1", status: "suspended", draft: { nonce: "booking-1", phase: "confirm", date: "2026-10-15", expires: Date.now() + 60000 } };
+  const snapshot = structuredClone(state.processes!);
+  const next = await turn("Ku është porosia ime?", state);
+  expect(next.reply).toBe("Status i verifikuar.");
+  expect(next.nextState.processes?.order).toEqual(snapshot.order);
+  expect(next.nextState.processes?.booking).toEqual(snapshot.booking);
+  expect(next.nextState.processes?.promptOwner).toBeNull();
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.booking).not.toHaveBeenCalled();
+  expect(mocks.extract).not.toHaveBeenCalled();
+  expect((await turn("Po", next.nextState)).conversationRouting?.action).toBe("clarify");
+});
+it("routes configured status nodes with the isolated callback and restores the active cursor", async () => {
+  const state = migrateConversationProcesses(order(), () => "order-1");
+  state.visual = { versionId: "pinned", nodeId: "size", awaiting: true, status: "waiting", values: {}, visited: ["size"] };
+  mocks.version.mockResolvedValue({ id: "v2", graph: { version: 2, flows: [{ kind: "information", entryNodeId: "status" }], nodes: [{ id: "status", kind: "order_status", config: {} }] } });
+  mocks.agent.mockImplementation(async params => {
+    const answer = await params.orderStatusTurn(params.state);
+    answer.nextState.visual = { versionId: "v2", nodeId: "end", awaiting: false, status: "completed", values: {}, visited: ["status", "end"] };
+    return answer;
+  });
+  const next = await turn("Statusi i porosisë", state);
+  expect(mocks.version).toHaveBeenCalledWith("business", undefined);
+  expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ orderStatusRequest: true, state: expect.objectContaining({ visual: expect.objectContaining({ versionId: "v2", nodeId: "status" }) }) }));
+  expect(mocks.status).toHaveBeenCalledWith(expect.objectContaining({ isolated: true }));
+  expect(next.nextState.visual).toEqual(state.visual);
+  expect(next.nextState.step_key).toBe("size");
+});
+it("processes current reference choice before routing or extraction, and ends it on unrelated requests", async () => {
+  const state = migrateConversationProcesses(order(), () => "order-1");
+  state.fields.order_status_lookup = { references: [{ id: "aaaaaaaa-0000-4000-8000-000000000001", reference: "AAAAAAAA" }], createdAt: Date.now() };
+  const next = await turn("1", state);
+  expect(next.reply).toBe("Status i verifikuar.");
+  expect(mocks.extract).not.toHaveBeenCalled();
+  mocks.status.mockClear();
+  const resumed = await turn("Vazhdo porosinë", state);
+  expect(mocks.status).not.toHaveBeenCalled();
+  expect(resumed.nextState.fields.order_status_lookup).toBeUndefined();
+});
+it.each(["replace", "process"] as const)("does not accept a stale %s choice after an order status interruption", async kind => {
+  const state = migrateConversationProcesses(order(), () => "order-1");
+  state.processes!.pendingChoice = { kind, process: "order", message: "Dua porosi të re" };
+  const status = await turn("Ku është porosia ime?", state);
+  expect(status.nextState.processes?.pendingChoice).toBeUndefined();
+  const next = await turn("Po", status.nextState);
+  expect(next.conversationRouting?.action).toBe("clarify");
+  expect(next.nextState.product_id).toBe("product");
+  expect(next.nextState.processes?.order?.id).toBe("order-1");
+  expect(mocks.agent).not.toHaveBeenCalled();
+});
+it("retains labelled profile facts in a status question without consuming the pending order field", async () => {
+  const state = migrateConversationProcesses(order(), () => "order-1");
+  state.processes!.order!.snapshot.execution.orderConfirmed = true;
+  state.processes!.order!.snapshot.execution.awaitingOrderConfirmation = true;
+  const next = await turn("Telefoni im është 0691234567; ku është porosia ime?", state);
+  expect(next.nextState.customer.phone).toBe("0691234567");
+  expect(next.nextState.fields.size).toBe("L");
+  expect(next.nextState.step_key).toBe("size");
+  expect(next.nextState.processes?.order?.snapshot.execution.orderConfirmed).toBe(false);
+  expect(next.nextState.processes?.order?.snapshot.execution.awaitingOrderConfirmation).toBe(false);
+  expect(mocks.extract).not.toHaveBeenCalled();
+});
+it("keeps a pending status lookup on its version after publication changes", async () => {
+  const state = migrateConversationProcesses(order(), () => "order-1");
+  const cursor = { versionId: "status-v1", nodeId: "old-status", awaiting: true, status: "waiting" as const, values: {}, visited: ["old-status"] };
+  state.fields.order_status_lookup = { createdAt: Date.now(), references: [{ id: "aaaaaaaa-0000-4000-8000-000000000001", reference: "AAAAAAAA" }], visual: cursor };
+  mocks.version.mockResolvedValue({ id: "status-v1", graph: { version: 2, nodes: [{ id: "old-status", kind: "order_status" }] } });
+  mocks.agent.mockImplementation(params => params.orderStatusTurn(params.state));
+  await turn("1", state);
+  expect(mocks.version).toHaveBeenCalledWith("business", "status-v1");
+  expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ state: expect.objectContaining({ visual: cursor }) }));
+});
+it("keeps an expired status reference from answering an active numeric field", async () => {
+  const state = migrateConversationProcesses(order(), () => "order-1");
+  state.fields.order_status_lookup = { createdAt: Date.now() - 16 * 60 * 1000, references: [{ id: "aaaaaaaa-0000-4000-8000-000000000001", reference: "AAAAAAAA" }] };
+  await turn("2", state);
+  expect(mocks.status).toHaveBeenCalled();
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.extract).not.toHaveBeenCalled();
+});
+it("does not read real orders until the published workflow enables the status capability", async () => {
+  const state = migrateConversationProcesses(order(), () => "order-1");
+  mocks.version.mockResolvedValue({ id: "published-without-status", graph: { version: 2, nodes: [{ id: "information", kind: "knowledge" }] } });
+  const next = await processConversationMessage({ businessId: "business", message: "Ku është porosia ime?", state, hasPhoto: false, mode: "production",
+    customerIdentity: { conversationId: "verified-conversation", instagramParticipantId: "verified-instagram", instagramConnectionId: "verified-connection" } });
+  expect(next.reply).toContain("nuk është aktiv");
+  expect(mocks.status).not.toHaveBeenCalled();
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(next.nextState.processes?.order).toEqual(state.processes?.order);
 });

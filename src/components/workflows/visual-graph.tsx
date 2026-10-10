@@ -6,7 +6,7 @@ import type { VisualGraph, VisualNode, VisualNodeKind } from "@/lib/workflows/vi
 import "./visual-workflow.css";
 
 export const nodeIcons: Record<VisualNodeKind, string> = {
-  start: "inbox", condition: "workflows", knowledge: "knowledge", collect: "orders",
+  start: "inbox", condition: "workflows", knowledge: "knowledge", order_status: "search", collect: "orders",
   confirm: "check", product: "products", booking: "calendar", handoff: "customers", end: "finish",
 };
 export function FlowIcon({ kind, size = 20 }: { kind: VisualNodeKind; size?: number }) {

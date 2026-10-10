@@ -318,3 +318,62 @@ it.each(["Dua të flas me stafin.", "Telefoni im është 0690000000; dua të fla
   expect(result.nextState.customer.phone).toBe("0690000000");
   expect(legacy).not.toHaveBeenCalled();
 });
+
+function statusGraph(): VisualGraph {
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  graph.nodes.push(node("status", "order_status"));
+  graph.edges.push({ id: "status-end", source: "status", target: "end", port: "next" });
+  graph.flows.push({ id: "status-flow", kind: "information", label: "Statusi i porosisë", entryNodeId: "status", nodeIds: ["status"] });
+  return graph;
+}
+
+it("routes an existing-order question to the real lookup instead of general knowledge", async () => {
+  const graph = statusGraph();
+  const legacy = vi.fn(async (p: LegacyParams) => response(p, "General answer"));
+  const lookup = vi.fn(async (state: ReturnType<typeof emptyState>) => response({ ...params(graph), state }, "Porosia #ABCD1234 është konfirmuar."));
+  const result = await executeVisualTurn({ ...params(graph), message: "Në çfarë statusi është porosia ime?", informationRequest: true, orderStatusRequest: true, orderStatusTurn: lookup }, legacy);
+  expect(lookup).toHaveBeenCalledOnce();
+  expect(legacy).not.toHaveBeenCalled();
+  expect(result.reply).toContain("#ABCD1234");
+  expect(result.nextState.visual?.status).toBe("completed");
+  expect(result.visualWorkflow?.routing?.to).toBe("status");
+});
+
+it("keeps ordinary questions out of the existing-order lookup flow", async () => {
+  const graph = statusGraph();
+  const lookup = vi.fn();
+  const result = await executeVisualTurn({ ...params(graph), message: "Sa kushton?", informationRequest: true, orderStatusTurn: lookup }, async p => response(p, "Informacioni i produktit"));
+  expect(lookup).not.toHaveBeenCalled();
+  expect(result.reply).toBe("Informacioni i produktit");
+});
+
+it("keeps the lookup cursor while choosing an owned order, then completes without resetting the active order", async () => {
+  const graph = statusGraph();
+  const state = { ...emptyState(), product_id: "current-product", step_key: "size", fields: { color: "blue" } };
+  const lookup = vi.fn(async (state: ReturnType<typeof emptyState>) => ({ ...response({ ...params(graph), state }, "Cilën porosi?"), orderStatusPending: true }));
+  const first = await executeVisualTurn({ ...params(graph), state, message: "Statusi i porosisë", orderStatusRequest: true, orderStatusTurn: lookup }, async p => response(p));
+  expect(first.nextState.visual).toMatchObject({ nodeId: "status", status: "waiting", awaiting: true });
+  const second = await executeVisualTurn({ ...params(graph), state: first.nextState, message: "ABCD1234", orderStatusRequest: true,
+    orderStatusTurn: async state => response({ ...params(graph), state }, "Porosia është konfirmuar.") }, async p => response(p));
+  expect(second.nextState).toMatchObject({ product_id: "current-product", step_key: "size", fields: { color: "blue" }, visual: { status: "completed" } });
+});
+
+it("does not start booking or product side effects after an order-status answer", async () => {
+  const graph = statusGraph();
+  graph.edges.find(edge => edge.id === "status-end")!.target = "product";
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const result = await executeVisualTurn({ ...params(graph), message: "Statusi i porosisë", orderStatusRequest: true,
+    orderStatusTurn: async state => response({ ...params(graph), state }, "Porosia është konfirmuar.") }, legacy);
+  expect(result.reply).toBe("Porosia është konfirmuar.");
+  expect(legacy).not.toHaveBeenCalled();
+  expect(result.nextState.product_id).toBeNull();
+});
+
+it.each(["Sa kushton?", "Çmimi"])("answers %s without running a status-only graph's lookup", async message => {
+  const base = linear(node("status", "order_status"));
+  const graph: VisualGraph = { ...base, version: 2, flows: [{ id: "lookup", kind: "information", label: "Statusi", entryNodeId: "status", nodeIds: ["status"] }] };
+  const lookup = vi.fn();
+  const result = await executeVisualTurn({ ...params(graph), message, informationRequest: true, orderStatusTurn: lookup }, async p => response(p, "Çmimi"));
+  expect(lookup).not.toHaveBeenCalled();
+  expect(result.reply).toBe("Çmimi");
+});
