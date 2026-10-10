@@ -161,3 +161,13 @@ Bisedat që ishin tashmë `paused` nga versioni i vjetër nuk riaktivizohen auto
 Kërkesa për porosi shkon drejtpërdrejt te nyja product përkatëse, pa kaluar sërish nga kushte të vjetra si kanali WhatsApp. Nëse ka disa nyje produkti dhe qëllimi është i paqartë, kërkohet zgjedhje. Një kërkesë e re për produkt tjetër ruan profilin, por pastron variantet e produktit të mëparshëm. Rifillimi i porosisë nuk regjistrohet si vlerë e hapit në pritje.
 
 Hapat linearë mund të mblidhen jashtë radhës. Para se porosia të përfundojë, kontrollohen edhe hapat e kërkuar që mbetën pas; ndryshimi i rrugës nuk përbën plotësim ose konfirmim. Gjurma e provës përfshin vendimin dhe destinacionin për çdo mesazh. Pamja e provës paraqet mesazhin në qendër dhe grupet e rrjedhave rreth tij; pozicionet e ruajtura të editorit nuk ndryshojnë.
+
+### Chat-i i provës
+
+Chat-i ka një hapësirë qendrore për mesazhet dhe panele opsionale për historikun dhe rrjedhën. Mbështet Enter/Shift+Enter, kopjim, formatim teksti/kodi, redaktim, rigjenerim, eksport tekst, riemërtim/fshirje bisedash, pamje të zgjeruar dhe lexim me zë kur shfletuesi e mbështet. Leximi përdor zërat e pajisjes; disponueshmëria e shqipes varet prej saj.
+
+Redaktimi dhe rigjenerimi krijojnë version të ri nga checkpoint-i përpara mesazhit. Origjinali ruhet në historik. Historiku mban deri në 8 biseda në `sessionStorage`, i ndarë sipas përdoruesit dhe biznesit; nuk sinkronizohet mes pajisjeve dhe pastrohet kur mbyllet skeda. Checkpoint-et e serverit skadojnë pas një ore. Eksporti nuk përmban token-et e sesionit. “Ndalo pritjen” injoron rezultatin e vonuar dhe anulon ngarkimet në proces; një thirrje AI e nisur në server mund të përfundojë.
+
+Bashkëngjitjet reale mbështesin JPG/PNG/WEBP/PDF/TXT/MD/CSV/JSON, deri në 3 skedarë për mesazh dhe 3 MB për skedar. PDF/fotot lexohen përmes AI; dokumentet tekst kufizohen në 16,000 karaktere. Konteksti i enkriptuar ruan fragmente të 3 skedarëve të fundit (deri në 6 KB secili), jo përmbajtjen binare. Fragmentet janë të dhëna të paverifikuara të klientit; nuk përdoren për mbushje automatike të profilit. Endpoint-i kontrollon origjinën, anëtarësinë, madhësinë dhe llojin e skedarit. Diktimi përdor regjistruesin ekzistues deri në 2 minuta dhe e kthen audion në draft të redaktueshëm, pa e dërguar automatikisht.
+
+Nuk kërkohet migrim Supabase për këtë ndërfaqe. Përdoren konfigurimet ekzistuese `TOKEN_ENCRYPTION_KEY`, `OPENAI_API_KEY`, `AGENT_MODEL` dhe modeli ekzistues i transkriptimit. Përgjigjja shfaqet pasi përfundon ekzekutimi i workflow-t; nuk ka streaming të token-ëve ose bisedë zanore në kohë reale.

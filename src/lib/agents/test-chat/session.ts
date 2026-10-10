@@ -7,6 +7,7 @@ const PURPOSE = "agjenti-agent-test-v1";
 const TTL = 60 * 60 * 1000;
 export const MAX_TEST_TURNS = 40;
 type TestSession = {
+  attachments?: { name: string; kind: "image" | "document"; text: string }[];
   testConversationId?: string;
   setupSignature?: string | null;
   /** True once any turn in this session got a real AI reply under a stable config. */

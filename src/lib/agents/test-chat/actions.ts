@@ -10,11 +10,13 @@ import {
 } from "@/lib/conversations/process-agent-turn";
 import { readTestSession, sealTestSession } from "./session";
 import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
+import { readAttachment } from "./attachments";
 export type TestChatInput = {
   slug: string;
   message: string;
   hasMedia?: boolean;
   session?: string | null;
+  attachments?: string[];
 };
 export type TestChatResult =
   | { error: string }
@@ -55,6 +57,7 @@ export async function simulateAgentTurn(
       input.message.length > 2000 ||
       (input.hasMedia !== undefined && typeof input.hasMedia !== "boolean") ||
       (input.session != null && typeof input.session !== "string")
+      || (input.attachments !== undefined && (!Array.isArray(input.attachments) || input.attachments.length > 3 || input.attachments.some(token => typeof token !== "string" || token.length > 100000)))
     )
       return {
         error:
@@ -63,8 +66,8 @@ export async function simulateAgentTurn(
     const access = await requireBusinessAccess(user.id, input.slug);
     if (!access) return { error: "Nuk ke qasje në këtë biznes." };
     const text = input.message.trim();
-    if (!text && !input.hasMedia)
-      return { error: "Shkruaj një mesazh ose simulo një foto." };
+    if (!text && !input.hasMedia && !input.attachments?.length)
+      return { error: "Shkruaj një mesazh, bashkëngjit skedar ose simulo një foto." };
     let session;
     try {
       session = readTestSession(
@@ -83,6 +86,12 @@ export async function simulateAgentTurn(
         error:
           "Administratori duhet të konfigurojë çelësin e sesioneve të provës.",
       };
+    let attachments;
+    try { attachments = (input.attachments ?? []).map(token => readAttachment(token, user.id, access.business.id)); }
+    catch (error) { return { error: error instanceof Error ? error.message : "Ngarko skedarin përsëri." }; }
+    // Keep small excerpts, never file bytes, in the encrypted test-only checkpoint.
+    session.attachments = [...(session.attachments ?? []), ...attachments].slice(-3).map(a => ({ ...a, text: Buffer.from(a.text).subarray(0, 6000).toString("utf8") }));
+    const attachmentContext = session.attachments.map(a => `${a.name} (${a.kind}):\n${a.text}`).join("\n\n").slice(0, 18000);
     // Read before the turn so a concurrent config edit cannot certify a stale test.
     const setup = await loadSetupStatus(access.business.id).catch(() => null);
 
@@ -100,8 +109,10 @@ export async function simulateAgentTurn(
     const turn = bookingTurn ?? await processAgentTurn({
       mode: "test",
       businessId: access.business.id,
-      message: text,
-      hasPhoto: input.hasMedia === true,
+      message: text || (attachments.length ? "Çfarë mund të më thuash për skedarin që dërgova?" : text),
+      hasPhoto: input.hasMedia === true || attachments.some(a => a.kind === "image"),
+      attachmentContext,
+      hasAttachments: attachments.length > 0,
       state: session.state,
       previousResponseId: session.previousResponseId,
     });

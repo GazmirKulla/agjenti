@@ -1,5 +1,17 @@
 import type { CSSProperties } from "react";
 const paths: Record<string, string> = {
+  plus: "M12 5v14 M5 12h14",
+  close: "m6 6 12 12 M18 6 6 18",
+  refresh: "M3 10a9 9 0 1 1 2 8 M3 4v6h6",
+  stop: "M6 6h12v12H6z",
+  up: "M12 19V5 M5 12l7-7 7 7",
+  down: "M12 5v14 M5 12l7 7 7-7",
+  download: "M12 3v12 M7 10l5 5 5-5 M4 16v5h16v-5",
+  history: "M3 10a9 9 0 1 1 2 8 M3 4v6h6 M12 7v5l3 2",
+  volume: "M3 9h4l5-5v16l-5-5H3z M16 8a6 6 0 0 1 0 8 M19 5a10 10 0 0 1 0 14",
+  trash: "M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7",
+  expand: "M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5",
+  file: "M5 3h9l5 5v13H5z M14 3v6h5 M8 13h8 M8 17h6",
   edit: "m16 3 5 5 M4 20l4-1L21 6a2 2 0 0 0-4-4L4 15z",
   microphone: "M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0z M5 10v2a7 7 0 0 0 14 0v-2 M12 19v3 M8 22h8",
   store: "M3 10V6l2-3h14l2 3v4 M3 10c0 3 4 3 4 0 0 3 5 3 5 0 0 3 5 3 5 0 0 3 4 3 4 0 M4 13v8h16v-8 M9 21v-6h6v6",

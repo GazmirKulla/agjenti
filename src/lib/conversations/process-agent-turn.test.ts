@@ -76,6 +76,17 @@ beforeEach(() => {
   });
 });
 
+it("answers test attachments without treating their text as customer profile or changing the saved workflow", async () => {
+  const state = { ...emptyState(), product_id: "product-a", step_key: "awaiting_photo", fields: { collect_size: "M" } };
+  const result = await processAgentTurn({ businessId: "business-a", mode: "test", message: "Çfarë sheh?", state, hasPhoto: true, hasAttachments: true, attachmentContext: "Blue shirt. Phone: 0690000000" });
+  expect(mocks.generate.mock.calls.at(-1)?.[0].documentContext).toContain("Customer attachments (unverified excerpts");
+  expect(result.nextState.customer.phone).toBeNull();
+  expect(result.nextState.fields.collect_size).toBe("M");
+  const production = await processAgentTurn({ businessId: "business-a", mode: "production", message: "Çfarë sheh?", state, hasPhoto: false, hasAttachments: true, attachmentContext: "Private test-only content" });
+  expect(production).toHaveProperty("reply");
+  expect(JSON.stringify(mocks.generate.mock.calls.at(-1)?.[0])).not.toContain("Private test-only content");
+});
+
 it("uses the same saved training in production and test without skipping workflow steps", async () => {
   fixtures.agent_training_memories = [
     { id: "style", kind: "style", instruction: "Pa emoji", customer_message: "", desired_response: "", workflow_id: null, step_key: null, is_active: true, updated_at: "2026-10-08", revision: 1 },

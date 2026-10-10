@@ -21,6 +21,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { simulateAgentTurn } from "./actions";
 import { readTestSession, sealTestSession, MAX_TEST_TURNS } from "./session";
 import { emptyState } from "@/lib/workflows/engine";
+import { sealAttachment } from "./attachments";
 const input = { slug: "zana", message: "Bluzë" };
 beforeEach(() => {
   vi.clearAllMocks();
@@ -47,6 +48,21 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("test chat action", () => {
+  it("uses owned attachments as test context and carries them in checkpoints without collecting their text as profile fields", async () => {
+    const attachment = sealAttachment({name:"photo.png",kind:"image",text:"A blue shirt"},"user-a","business-a");
+    const first=await simulateAgentTurn({...input,message:"",attachments:[attachment.token]});
+    if ("error" in first) throw Error(first.error);
+    expect(mocks.process).toHaveBeenLastCalledWith(expect.objectContaining({hasPhoto:true,hasAttachments:true,attachmentContext:expect.stringContaining("A blue shirt")}));
+    expect(readTestSession(first.session,"user-a","business-a").attachments?.[0].text).toBe("A blue shirt");
+    await simulateAgentTurn({...input,message:"Po ngjyra?",session:first.session});
+    expect(mocks.process).toHaveBeenLastCalledWith(expect.objectContaining({hasPhoto:false,hasAttachments:false,attachmentContext:expect.stringContaining("A blue shirt")}));
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("rejects attachments from another tenant before processing a turn",async()=>{
+    const attachment=sealAttachment({name:"private.txt",kind:"document",text:"private"},"user-a","other-business");
+    expect(await simulateAgentTurn({...input,attachments:[attachment.token]})).toHaveProperty("error");
+    expect(mocks.process).not.toHaveBeenCalled();
+  });
   it("runs a turn with server-authorized business and no Meta sends", async () => {
     const result = await simulateAgentTurn(input);
     expect(result).toMatchObject({

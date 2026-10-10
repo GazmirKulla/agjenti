@@ -28,6 +28,7 @@ export default async function AgentTestPage({
       <AgentTestChat
         key={access.business.id}
         slug={slug}
+        userId={user.id}
         businessName={access.business.name}
       />
     </>
