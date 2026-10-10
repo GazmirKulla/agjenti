@@ -7,7 +7,6 @@ import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
 import { BusinessAssistant } from "@/components/business-assistant/panel";
-import { TalkingRobot } from "@/components/business-assistant/talking-robot";
 
 export function DashboardShell({
   children,
@@ -127,7 +126,7 @@ export function DashboardShell({
   const mobilePaths = new Set(primaryItems.map((item) => item.path));
   return (
     <div
-      className={`dashboard-shell ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
+      className={`dashboard-shell ${!admin && slug ? "has-assistant-dock" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
     >
       <aside
         ref={sidebar}
@@ -198,7 +197,7 @@ export function DashboardShell({
                 href={href}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setOpen(false)}
-                className={`dashboard-nav ${active ? "active" : ""} ${mobilePaths.has(item.path) ? "mobile-primary-item" : ""}`}
+                className={`dashboard-nav ${active ? "active" : ""} ${admin && mobilePaths.has(item.path) ? "mobile-primary-item" : ""}`}
               >
                 <Icon name={item.icon} />
                 {item.label}
@@ -324,8 +323,8 @@ export function DashboardShell({
         </header>
         <main className="dashboard-content">{children}</main>
       </div>
-      <nav
-        className={`mobile-bottom-nav${!admin && slug ? " mobile-bottom-nav-with-assistant" : ""}`}
+      {admin && <nav
+        className="mobile-bottom-nav"
         aria-label={admin ? "Navigimi kryesor i adminit" : "Navigimi kryesor"}
       >
         {primaryItems.map((item) => (
@@ -346,9 +345,8 @@ export function DashboardShell({
             <span>{item.label}</span>
           </Link>
         ))}
-        {!admin && slug && <button type="button" className="assistant-mobile-trigger" onClick={() => { setOpen(false); setSearchOpen(false); setAssistantOpen(true); }} aria-label={`Hap ${agentName}`} aria-haspopup="dialog"><TalkingRobot /></button>}
-      </nav>
-      {!admin && slug && <BusinessAssistant key={slug} agentName={agentName} modules={navigationItems.map(item => item.id)} slug={slug} open={assistantOpen} onClose={() => setAssistantOpen(false)} />}
+      </nav>}
+      {!admin && slug && <BusinessAssistant key={slug} agentName={agentName} modules={navigationItems.map(item => item.id)} slug={slug} onOpen={() => { setOpen(false); setSearchOpen(false); setAssistantOpen(true); }} open={assistantOpen} onClose={() => setAssistantOpen(false)} />}
     </div>
   );
 }

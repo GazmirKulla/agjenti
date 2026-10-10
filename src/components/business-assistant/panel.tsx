@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AudioRecorder } from "@/components/onboarding/audio-recorder";
+import { TalkingRobot } from "./talking-robot";
 import { Icon } from "@/components/dashboard/icon";
 import type { Preview } from "@/lib/business-assistant/model";
 
@@ -22,12 +23,14 @@ export function BusinessAssistant({
   agentName,
   open,
   onClose,
+  onOpen,
   modules,
 }: {
   slug: string;
   agentName: string;
   open: boolean;
   onClose: () => void;
+  onOpen: () => void;
   modules: string[];
 }) {
   const router = useRouter();
@@ -40,6 +43,15 @@ export function BusinessAssistant({
   const [history, setHistory] = useState<Message[]>([]);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
+  const [viewport, setViewport] = useState({ bottom: 0, height: 0 });
+  useEffect(() => {
+    const visual = window.visualViewport;
+    const sync = () => setViewport({bottom: visual ? Math.max(0, window.innerHeight - visual.height - visual.offsetTop) : 0, height: visual?.height ?? window.innerHeight});
+    sync();
+    visual?.addEventListener("resize", sync);
+    visual?.addEventListener("scroll", sync);
+    return () => { visual?.removeEventListener("resize", sync); visual?.removeEventListener("scroll", sync); };
+  }, []);
   useEffect(() => {
     if (open && !dialog.current?.open) dialog.current?.showModal();
     if (!open && dialog.current?.open) dialog.current.close();
@@ -101,7 +113,7 @@ export function BusinessAssistant({
     try {
       const data = await request({ mode: "confirm", token: result.token });
       setResult(data);
-      setHistory([]);
+      setHistory(prev => [...prev, {role: "assistant", content: data.message || "Ndryshimi u ruajt."}]);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ruajtja nuk përfundoi.");
@@ -138,9 +150,21 @@ export function BusinessAssistant({
     setMode("text");
   }
   return (
+    <>
+    {!open && <section className="assistant-mobile-dock" aria-label={agentName} style={{bottom:viewport.bottom}}>
+      <form onSubmit={event => { onOpen(); setMode("text"); void analyze(event); }}>
+        <button className="assistant-dock-robot" type="button" onClick={onOpen} aria-label={`Hap bisedën me ${agentName}`}><TalkingRobot /></button>
+        <label className="sr-only" htmlFor="assistant-dock-input">Shkruaji {agentName}</label>
+        <input id="assistant-dock-input" value={text} onChange={event => {setText(event.target.value); if(result?.token) setResult(null);}} maxLength={12000} placeholder="Pyet ose kërko një veprim…" disabled={Boolean(busy)} autoComplete="off" />
+        <button type="button" className="assistant-dock-audio" disabled={Boolean(busy)} onClick={() => {setMode("audio");onOpen();}} aria-label="Përgjigju me audio"><Icon name="microphone" size={20}/></button>
+        <button type="submit" className="assistant-dock-send" disabled={Boolean(busy) || text.trim().length < 3} aria-label="Dërgo kërkesën">↑</button>
+      </form>
+      <span className="assistant-dock-hint">{busy ? "Agjenti po punon…" : result?.token ? "Propozimi është gati · hap bisedën për konfirmim" : "Agjenti yt · çdo ndryshim e konfirmon ti"}</span>
+    </section>}
     <dialog
       ref={dialog}
       className="business-assistant"
+      style={{"--assistant-viewport-height": `${viewport.height || 800}px`, "--assistant-keyboard-bottom": `${viewport.bottom}px`} as React.CSSProperties}
       aria-labelledby="business-assistant-title"
       onCancel={onClose}
       onClose={onClose}
@@ -401,5 +425,6 @@ export function BusinessAssistant({
         )}
       </div>
     </dialog>
+    </>
   );
 }

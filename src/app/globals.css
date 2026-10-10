@@ -3720,3 +3720,24 @@ html[data-resolved="dark"] .business-assistant .onboarding-next { color: #21123d
 @media (prefers-reduced-motion: reduce) {
   .assistant-robot *, .assistant-mobile-trigger:active .assistant-robot { animation: none; transform: none; }
 }
+
+/* Mobile business navigation lives in the menu; the agent composer stays available. */
+.assistant-mobile-dock { display: none; }
+@media (max-width: 760px) {
+  .has-assistant-dock { --assistant-dock-height: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .has-assistant-dock .dashboard-content { padding-bottom: calc(var(--assistant-dock-height) + 20px); }
+  .assistant-mobile-dock { display: grid; gap: 7px; position: fixed; inset: auto 0 0; z-index: 45; padding: 10px max(12px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); background: var(--surface); border-top: 1px solid var(--line); }
+  .assistant-mobile-dock form { display: flex; align-items: center; gap: 4px; min-height: 54px; border: 1px solid var(--line); border-radius: 18px; padding: 4px; background: var(--paper); }
+  .assistant-mobile-dock form:focus-within { border-color: var(--accent); }
+  .assistant-mobile-dock input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 16px; padding: 8px 2px; }
+  .assistant-mobile-dock input::placeholder { font-size: 13px; color: var(--ink-muted); }
+  .assistant-mobile-dock button { flex-shrink: 0; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 13px; background: transparent; color: var(--accent); cursor: pointer; }
+  .assistant-mobile-dock button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .assistant-mobile-dock .assistant-robot { width: 38px; height: 38px; }
+  .assistant-mobile-dock .assistant-dock-send { background: var(--accent); color: var(--surface); font-size: 23px; }
+  .assistant-mobile-dock button:disabled { opacity: .4; cursor: default; }
+  .assistant-dock-hint { text-align: center; font-size: 10px; line-height: 14px; color: var(--ink-muted); }
+  .drawer-open .assistant-mobile-dock { visibility: hidden; }
+  .has-assistant-dock.inbox-detail-view .dashboard-content { height: calc(100dvh - var(--assistant-dock-height)); padding: 0; }
+  .has-assistant-dock .business-assistant { height: min(880px, calc(var(--assistant-viewport-height) - 8px)); max-height: calc(var(--assistant-viewport-height) - 8px); margin-bottom: var(--assistant-keyboard-bottom); }
+}
