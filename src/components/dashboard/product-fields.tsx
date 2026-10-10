@@ -1,7 +1,8 @@
 "use client";
-
+import { EntityFlowLink } from "@/components/workflows/entity-flow-link";
 
 type ProductFieldValues = {
+  id?: string;
   name?: string;
   sku?: string | null;
   description?: string | null;
@@ -11,9 +12,11 @@ type ProductFieldValues = {
   product_type_id?: string | null;
   workflow_id?: string | null;
   is_active?: boolean;
+  visual_workflow?: { flowId: string; name: string } | null;
 };
 
 export function ProductFields({
+  slug,
   product,
   types,
   workflows,
@@ -108,6 +111,8 @@ export function ProductFields({
 
       <fieldset id="product-process" className="grid gap-3">
         <legend className="font-semibold">Procesi i porosisë</legend>
+        {product?.id && <EntityFlowLink slug={slug} kind="product" id={product.id} binding={product.visual_workflow} />}
+        {!product?.id && <p className="muted-copy">Ruaj produktin si draft, pastaj lidhe drejtpërdrejt me një rrjedhë te Workflow.</p>}
         <label className="form-label">
           Lloji i produktit
           <select
@@ -126,8 +131,8 @@ export function ProductFields({
             ))}
           </select>
         </label>
-        <label className="form-label">
-          Workflow i biznesit
+        {product?.visual_workflow ? <input type="hidden" name="workflow_id" value={product.workflow_id ?? ""} /> : <label className="form-label">
+          Konfigurim ekzistues i porosisë (opsional)
           <select
             name="workflow_id"
             className="field"
@@ -140,7 +145,7 @@ export function ProductFields({
               </option>
             ))}
           </select>
-        </label>
+        </label>}
       </fieldset>
 
       <label className="toggle-label">

@@ -1,0 +1,6 @@
+.entity-flow-link { display: flex; align-items: flex-start; gap: 10px; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); }
+.entity-flow-link-icon { display: flex; color: var(--accent); padding-top: 2px; }
+.entity-flow-link > div { min-width: 0; }
+.entity-flow-link small { display: block; font-size: 10px; color: var(--ink-muted); line-height: 1.6; }
+.entity-flow-link strong { display: block; font-size: 13px; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
+.entity-flow-link a { display: inline-block; font-size: 11px; color: var(--accent); margin-top: 6px; }

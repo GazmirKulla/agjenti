@@ -11,26 +11,30 @@ import type { VisualGraph, VisualNode, VisualNodeKind, VisualPort, VisualTrace, 
 import { FlowIcon, VisualGraphView } from "./visual-graph";
 import { WorkflowHub, WorkflowContextPanel } from "./workflow-hub";
 import { addFlowTemplate, flowTemplateLabels, type FlowTemplate } from "./flow-templates";
+import { FlowBindings, type FlowBindingCatalog, type FlowBindingFocus } from "./flow-bindings";
 import type { AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 
 const descriptions: Record<VisualNodeKind, string> = {
   start: "Çdo mesazh i ri rivlerëson kërkesën e klientit.", condition: "Zgjidh rrugën sipas mesazhit ose të dhënave.",
   knowledge: "Përgjigjet nga njohuritë dhe katalogu i biznesit.", collect: "Pret përgjigjen dhe e ruan në fushën e zgjedhur.",
   order_status: "Lexon statusin e ruajtur të porosive të këtij klienti. Nuk ndryshon porositë dhe nuk shpik përditësime.",
-  confirm: "Pret Po ose Jo, pastaj ndjek degën përkatëse.", product: "Ndjek workflow-n e produktit të zgjedhur. Pa konfigurim, kërkesa i kalon stafit.",
+  confirm: "Pret Po ose Jo, pastaj ndjek degën përkatëse.", product: "Zgjedh produktin. Produktet e lidhura me këtë rrjedhë vazhdojnë hapat këtu; produktet e tjera përdorin rrjedhën e tyre të ruajtur.",
   booking: "Kontrollon shërbimet dhe oraret e lira. Rezervimi ruhet vetëm pas konfirmimit të klientit.",
   handoff: "Orienton klientin te stafi. Agjenti mund të vazhdojë kur klienti ndryshon kërkesën.", end: "Përfundon këtë rrugë. Biseda mund të vazhdojë ose të kthehet te një hap i mëparshëm.",
 };
 const addKinds: VisualNodeKind[] = ["condition", "knowledge", "order_status", "collect", "confirm", "product", "booking", "handoff", "end"];
 type Problem = { nodeId?: string; message: string };
 
-export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = false, readiness }: { slug: string; initialWorkspace: VisualWorkspace; bookingEnabled?: boolean; readiness?: { ready: boolean; blockers: string[] } }) {
+export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = false, readiness, bindingCatalog = { products: [], services: [] }, initialFlowId, bindingFocus }: { slug: string; initialWorkspace: VisualWorkspace; bookingEnabled?: boolean; readiness?: { ready: boolean; blockers: string[] }; bindingCatalog?: FlowBindingCatalog; initialFlowId?: string; bindingFocus?: FlowBindingFocus }) {
   const assistant=useAssistantWorkspace();
   const [workspace, setWorkspace] = useState(initialWorkspace);
   const [graph, setGraph] = useState(initialWorkspace.graph);
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [tab, setTab] = useState<"edit" | "context" | "test">("edit");
-  const [view, setView] = useState("hub");
+  const [view, setView] = useState(() => {
+    const flows = upgradeVisualGraph(initialWorkspace.graph).flows;
+    return flows.find(flow => flow.id === initialFlowId)?.id ?? (bindingFocus ? flows.find(flow => (bindingFocus.kind === "product" ? flow.productIds : flow.serviceIds)?.includes(bindingFocus.id))?.id : undefined) ?? "hub";
+  });
   const [turn, setTurn] = useState<AgentTurnResult>();
   const [adding, setAdding] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -59,7 +63,8 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   const dirty = JSON.stringify(graph) !== JSON.stringify(workspace.graph);
   const canRestoreRecovery = recovery?.status === "recoverable" && recovery.draft.baseRevision === workspace.revision;
   const locked = pending || testing || refreshRequired || Boolean(recovery);
-  useWorkflowAssistantContext({ nodeId: selectedId ?? activeFlow?.entryNodeId, revision: workspace.revision, dirty });
+  useWorkflowAssistantContext({ nodeId: selectedId ?? activeFlow?.entryNodeId, flowId: selectedFlow?.id, revision: workspace.revision, dirty });
+  const focusedItem = bindingFocus ? (bindingFocus.kind === "product" ? bindingCatalog.products : bindingCatalog.services).find(item => item.id === bindingFocus.id) : undefined;
 
   useEffect(() => {
     if (recoverySlug.current === slug) return;
@@ -202,6 +207,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
     </header>
     {recovery && <div className="vf-notice" role="status"><span>{canRestoreRecovery ? "Ka ndryshime të paruajtura nga kjo dritare. Mund t’i rikthesh." : "Ka një kopje lokale, por workflow është ndryshuar ndërkohë. Shkarkoje për ta krahasuar me versionin e ruajtur."}</span>{canRestoreRecovery && <button className="vf-button" type="button" onClick={() => { setGraph(recovery.draft.graph); setRecovery(null); resetTest(); }}>Rikthe ndryshimet</button>}<button className="vf-button" type="button" onClick={() => { const url = URL.createObjectURL(new Blob([JSON.stringify(recovery.draft.graph, null, 2)], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "workflow-kopje.json"; link.click(); URL.revokeObjectURL(url); }}>Shkarko kopjen</button><button className="vf-button" type="button" onClick={() => { if (clearWorkflowDraft(slug)) setRecovery(null); }}>Përdor versionin e ruajtur</button></div>}
     {readiness && <div className={`vf-readiness ${readiness.ready ? "is-ready" : ""}`}><Icon name={readiness.ready ? "check" : "settings"} size={15} /><span>{readiness.ready ? "Gati për aktivizim" : "Aktivizimi kërkon konfigurim"}</span>{!readiness.ready && <details><summary>Shiko çfarë mungon</summary><ul>{readiness.blockers.map(item => <li key={item}>{item}</li>)}</ul></details>}</div>}
+    {focusedItem && <div className="vf-binding-focus"><Icon name={bindingFocus?.kind === "product" ? "products" : "briefcase"} size={16} /><span>Për <strong>{focusedItem.name}</strong>: zgjidh rrjedhën dhe lidhe te “Përdoret për”.</span></div>}
     <nav className="vf-navigation" aria-label="Navigimi i workflow-t"><button type="button" className={view === "hub" ? "is-active" : ""} onClick={() => { setView("hub"); setSelectedId(undefined); setAdding(false); }}><Icon name="inbox" size={15} />Qendra e mesazhit</button><span>/</span>{activeFlow ? <select aria-label="Rrjedha e hapur" value={view} onChange={event => { setView(event.target.value); setSelectedId(undefined); setAdding(false); }}>{definition.flows.map(flow => <option key={flow.id} value={flow.id}>{flow.label}</option>)}</select> : <span>{view === "all" ? "Të gjithë hapat" : "Zgjidh një proces"}</span>}<button className={view === "all" ? "is-active" : ""} type="button" onClick={() => { setView("all"); setSelectedId(undefined); setAdding(false); }}>Të gjithë hapat</button></nav>
     <div className="vf-workbench">
       <div className="vf-diagram-area">
@@ -229,7 +235,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
           </fieldset>
           {problems.filter(p => p.nodeId === selected.id).map((p, i) => <p className="vf-inline-error" key={i}>{p.message}</p>)}
           {selected.kind !== "start" && <button type="button" className="vf-remove" disabled={locked} onClick={remove}>Hiq hapin</button>}
-        </> : <div className="vf-inspector-empty"><span className="vf-detail-icon"><Icon name={activeFlow ? "workflows" : "inbox"} size={26} /></span><h2>{activeFlow?.label ?? "Një bisedë. Shumë rrugë."}</h2><p>{activeFlow ? "Zgjidh një hap në diagram për ta ndryshuar. Të dhënat ruhen kur klienti kalon në një proces tjetër." : "Çdo mesazh mund të vazhdojë, të korrigjojë ose të rifillojë një proces. Hap një rrjedhë për të përshtatur hapat."}</p>{activeFlow && <fieldset className="vf-fields" disabled={locked}><label>Emri i rrjedhës<input maxLength={100} value={activeFlow.label} onChange={event => edit({ ...definition, flows: definition.flows.map(flow => flow.id === activeFlow.id ? { ...flow, label: event.target.value } : flow) })} /></label><label>Pikënisja<select value={activeFlow.entryNodeId} onChange={event => edit({ ...definition, flows: definition.flows.map(flow => flow.id === activeFlow.id ? { ...flow, entryNodeId: event.target.value } : flow) })}>{graph.nodes.filter(node => activeFlow.nodeIds.includes(node.id) && !["start", "end"].includes(node.kind)).map(node => <option key={node.id} value={node.id}>{node.label}</option>)}</select></label><button className="vf-button" type="button" disabled={dirty} onClick={() => assistant?.launch(`Dua të ndryshoj rrjedhën “${activeFlow.label}” (${activeFlow.id}) me AI. Ruaj rrjedhat e tjera.`)}>Ndrysho rrjedhën me AI</button></fieldset>}<div className="vf-legend"><span><i />Hapi i zgjedhur</span><span><i />Rruga e mesazhit të fundit</span></div></div>}</div> : <div className="vf-test">
+        </> : <div className="vf-inspector-empty"><span className="vf-detail-icon"><Icon name={activeFlow ? "workflows" : "inbox"} size={26} /></span><h2>{activeFlow?.label ?? "Një bisedë. Shumë rrugë."}</h2><p>{activeFlow ? "Zgjidh një hap në diagram për ta ndryshuar. Të dhënat ruhen kur klienti kalon në një proces tjetër." : "Çdo mesazh mund të vazhdojë, të korrigjojë ose të rifillojë një proces. Hap një rrjedhë për të përshtatur hapat."}</p>{activeFlow && <fieldset className="vf-fields" disabled={locked}><label>Emri i rrjedhës<input maxLength={100} value={activeFlow.label} onChange={event => edit({ ...definition, flows: definition.flows.map(flow => flow.id === activeFlow.id ? { ...flow, label: event.target.value } : flow) })} /></label><label>Pikënisja<select value={activeFlow.entryNodeId} onChange={event => edit({ ...definition, flows: definition.flows.map(flow => flow.id === activeFlow.id ? { ...flow, entryNodeId: event.target.value } : flow) })}>{graph.nodes.filter(node => activeFlow.nodeIds.includes(node.id) && !["start", "end"].includes(node.kind)).map(node => <option key={node.id} value={node.id}>{node.label}</option>)}</select></label><button className="vf-button" type="button" disabled={dirty} onClick={() => assistant?.launch(`Dua të ndryshoj rrjedhën “${activeFlow.label}” (${activeFlow.id}) me AI. Ruaj rrjedhat e tjera.`)}>Ndrysho rrjedhën me AI</button></fieldset>}<div className="vf-legend"><span><i />Hapi i zgjedhur</span><span><i />Rruga e mesazhit të fundit</span></div></div>}{selectedFlow && (!selected || !["start", "end"].includes(selected.kind)) && <FlowBindings key={selectedFlow.id} flow={selectedFlow} flows={definition.flows} catalog={bindingCatalog} disabled={locked} focus={bindingFocus} onOpenFlow={openFlow} onChange={patch => edit({ ...definition, flows: definition.flows.map(flow => flow.id === selectedFlow.id ? { ...flow, ...patch } : flow) })} />}</div> : <div className="vf-test">
           <div className="vf-test-heading"><span><i className="vf-live-dot" />Bisedë prove</span><button type="button" disabled={testing} onClick={() => { resetTest(); setNotice(null); }} aria-label="Rifillo provën">↻</button></div>
           <div className="vf-chat" aria-live="polite">{!messages.length && <div className="vf-test-empty"><span className="vf-detail-icon"><Icon name="inbox" size={24} /></span><h3>Provoje si klient.</h3><p>Diagrami ndriçon hapat që ndjek Agjenti.</p>{["Dua të porosis", "Çfarë ofroni?", "Dua të flas me stafin"].map(text => <button type="button" key={text} onClick={() => setMessage(text)}>{text}<span>↗</span></button>)}</div>}{messages.map((m, i) => <div key={i} className={`vf-chat-message is-${m.role}`}><small>{m.role === "user" ? "Ti" : "Agjenti"}</small><p>{m.text}</p></div>)}{testing && <div className="vf-typing" aria-label="Agjenti po përgjigjet"><i /><i /><i /></div>}<div ref={chatEnd} /></div>
           {trace && <div className="vf-test-state"><i /><span>{turn?.conversationRouting?.reason ?? (trace.state.status === "handoff" ? "Orientim te stafi · mund të vazhdosh" : trace.state.status === "completed" ? "Në pritje të mesazhit tjetër" : "Në pritje të përgjigjes")}</span></div>}

@@ -41,7 +41,7 @@ export function ProductEditor({
     ["Emri i produktit", preview.name.trim().length >= 2],
     ["Çmimi i produktit", preview.price !== null],
     ["Lloji i produktit", !!preview.type],
-    ["Workflow i biznesit", !!preview.workflow],
+    ["Rrjedha e produktit", !!preview.workflow || !!product?.visual_workflow],
     ["Foto e produktit", !!preview.image],
   ] as const;
   const completed = checks.filter(([, ok]) => ok).length;
@@ -138,7 +138,7 @@ export function ProductEditor({
             <strong>{money(preview.price, preview.currency)}</strong>
             <p>{types.find((t) => t.id === preview.type)?.name || "Pa lloj"}</p>
             <span className="product-tag">
-              {workflows.find((w) => w.id === preview.workflow)?.name ||
+              {product?.visual_workflow?.name || workflows.find((w) => w.id === preview.workflow)?.name ||
                 "Pa workflow"}
             </span>
           </section>
@@ -188,8 +188,7 @@ export function ProductEditor({
             )}
             {success && <p role="status">{success}</p>}
             <p className="muted-copy">
-              Draftet nuk përdoren nga Agjenti. Për aktivizim kërkohen çmimi,
-              lloji dhe workflow.
+              Draftet nuk përdoren nga Agjenti. Plotëso çmimin, llojin dhe rrjedhën e lidhur përpara aktivizimit.
             </p>
           </div>
         </aside>
@@ -197,13 +196,13 @@ export function ProductEditor({
       {product && (
         <div className="products-workspace product-detail-extras">
           <section className="panel section-pad">
-            <h2>Workflow i produktit</h2>
+            <h2>Rrjedha e produktit</h2>
             <p className="muted-copy">
-              {types.find((t) => t.id === product.product_type_id)
+              {product.visual_workflow ? `Produkti ndjek rrjedhën “${product.visual_workflow.name}”. Hapat ndryshohen te Workflow.` : types.find((t) => t.id === product.product_type_id)
                 ?.description ||
-                "Lidh workflow-n te Procesi i porosisë. Mund të përdorësh sugjerimin e llojit."}
+                "Lidhe produktin drejtpërdrejt me një rrjedhë te Procesi i porosisë."}
             </p>
-            {product.product_type_id && (
+            {product.product_type_id && !product.visual_workflow && (
               <ActionForm action={applyTypeSuggestion.bind(null, slug)}>
                 <input type="hidden" name="product_id" value={product.id} />
                 <input

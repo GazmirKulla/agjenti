@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductRow } from "./catalog";
-const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), from: vi.fn(), update: vi.fn() }));
+const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), from: vi.fn(), update: vi.fn(), bindings: vi.fn() }));
+vi.mock("./workflow-binding", () => ({ publishedProductBindings: m.bindings }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from }) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -15,6 +16,7 @@ let queries: { table: string; eq: Record<string, unknown>; changes?: Record<stri
 let workflowAvailable: boolean, typeAvailable: boolean, staleDuringWrite: boolean, writeFails: boolean;
 beforeEach(() => {
   vi.clearAllMocks(); queries = [];
+  m.bindings.mockResolvedValue(new Map());
   workflowAvailable = typeAvailable = true; staleDuringWrite = writeFails = false;
   product = { id, business_id: "business", name: "Puzzle", description: null, sku: null, image_url: null, source: "manual", external_id: null, price_amount: 25, currency: "EUR", product_type_id: type, workflow_id: workflow, is_active: false, updated_at: stamp };
   m.user.mockResolvedValue({ id: "user" }); m.access.mockResolvedValue({ business: { id: "business" } });
@@ -33,6 +35,28 @@ beforeEach(() => {
     } };
     return q;
   });
+});
+
+it("activates a product using its published visual assignment without a separate workflow", async () => {
+  product.workflow_id = null;
+  const visual = { versionId: "version", flowId: "order", name: "Rrjedha ime" };
+  m.bindings.mockResolvedValue(new Map([[id, visual]]));
+  const result = await activate();
+  expect(result.product).toMatchObject({ is_active: true, workflow_id: null, visual_workflow: visual });
+  expect(m.bindings).toHaveBeenCalledWith("business");
+});
+it("does not demote an active product when removing a legacy link while its visual assignment remains", async () => {
+  product.is_active = true;
+  m.bindings.mockResolvedValue(new Map([[id, { versionId: "version", flowId: "order", name: "Rrjedha ime" }]]));
+  const result = await updateCatalogField("test", { id, field: "workflow_id", value: null, updatedAt: stamp });
+  expect(result.product?.is_active).toBe(true);
+  expect(m.update.mock.calls[0][0]).not.toHaveProperty("is_active");
+});
+it("does not activate when the published assignment cannot be verified", async () => {
+  product.workflow_id = null;
+  m.bindings.mockRejectedValue(new Error("unavailable"));
+  expect((await activate()).error).toContain("verifikua");
+  expect(m.update).not.toHaveBeenCalled();
 });
 const activate = () => updateCatalogField("test", { id, field: "is_active", value: true, updatedAt: stamp });
 

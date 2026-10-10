@@ -26,6 +26,7 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       const c=n.config, key=c.fieldKey||'';
       const value=Object.hasOwn(state.values,key)&&typeof state.values[key]==='string'?state.values[key]:'';
       const yes=c.condition==='intent_order'?p.intent==='order':c.condition==='intent_support'?p.intent==='support':c.condition==='intent_booking'?p.intent==='booking':c.condition==='field_present'?Boolean(value):foldText(value||'')===foldText(c.value||'');
+      state.branchPorts = { ...state.branchPorts, [n.id]: yes ? 'yes' : 'no' };
       advance(yes?'yes':'no');continue;
     }
     if(n.kind==='handoff'){state.status='handoff';state.awaiting=false;return result('handoff',n.id,n.config.prompt||'Po ia kaloj kërkesën tuaj ekipit.');}
@@ -61,7 +62,7 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       const yes=/^(po|ok|okay|yes|dakord|konfirmoj|e konfirmoj|ne rregull|sure|po ju lutem)[\s.!]*$/.test(t);
       const no=/^(jo|no|nuk e konfirmoj|ndrysho|korrigjo)[\s.!]*$/.test(t);
       if(!yes&&!no)return result('prompt',n.id,`${n.config.prompt} Përgjigju me Po ose Jo.`);
-      state.values[n.id]=yes?'po':'jo';consumed=true;advance(yes?'yes':'no');
+      state.values[n.id]=yes?'po':'jo';state.branchPorts={...state.branchPorts,[n.id]:yes?'yes':'no'};consumed=true;advance(yes?'yes':'no');
       if(!yes && p.sharedValues && p.graph.nodes.find(node=>node.id===state.nodeId)?.kind==='collect') state.forceCollect=state.nodeId;
       continue;
     }

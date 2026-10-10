@@ -69,6 +69,13 @@ describe("visual workflow mutations", () => {
     expect(JSON.stringify(result)).not.toContain("private SQL");
     expect(m.rpc.mock.calls[0][1]).toMatchObject({ p_operation: "disable", p_graph: null });
   });
+  it("explains how to repair an unavailable catalog binding", async () => {
+    m.rpc.mockResolvedValueOnce({ error: { code: "P0001", message: "invalid_workflow_targets" } });
+    const result = await saveVisualWorkflow("studio", 3, upgradeVisualGraph(starterVisualGraph()));
+    expect(result.error).toContain("Hiqe lidhjen e padisponueshme");
+    expect(result.savedRevision).toBeUndefined();
+    expect(m.load).not.toHaveBeenCalled();
+  });
 });
 
 

@@ -2,7 +2,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { emptyState, type ConversationStatePayload } from "@/lib/workflows/engine";
 import { migrateContext, setFact } from "@/lib/workflows/context";
 import { migrateConversationProcesses } from "@/lib/workflows/conversation-processes";
-const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn(), status: vi.fn() }));
+const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn(), status: vi.fn(), entity: vi.fn() }));
+vi.mock("@/lib/workflows/visual/entity-routing", async original => ({ ...await original<object>(), resolveVisualEntity: mocks.entity }));
 vi.mock("@/lib/orders/customer-status", async original => ({ ...await original<object>(), customerOrderStatus: mocks.status }));
 vi.mock("./process-agent-turn", () => ({ processAgentTurn: mocks.agent, processLegacyAgentTurn: mocks.info }));
 vi.mock("@/lib/calendar/agent", () => ({ processBookingTurn: mocks.booking }));
@@ -24,6 +25,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.guidance.mockResolvedValue({ action: "continue", target: null, source: "rules" });
   mocks.version.mockResolvedValue(null);
+  mocks.entity.mockResolvedValue({});
   mocks.extract.mockResolvedValue(0);
   mocks.status.mockImplementation(async ({ state }) => ({ reply: "Status i verifikuar.", nextState: structuredClone(state), pending: false }));
   mocks.agent.mockImplementation(async ({ state }) => result(state));
@@ -245,4 +247,148 @@ it("does not read real orders until the published workflow enables the status ca
   expect(mocks.status).not.toHaveBeenCalled();
   expect(mocks.agent).not.toHaveBeenCalled();
   expect(next.nextState.processes?.order).toEqual(state.processes?.order);
+});
+
+function entityVersion(id = "bound-v1") {
+  return { id, businessId: "business", createdAt: "now", graph: { version: 2, name: "Bound", edges: [], nodes: [
+    { id: "product", kind: "product", config: {} }, { id: "details", kind: "collect", config: { fieldKey: "details" } },
+    { id: "booking", kind: "booking", config: {} },
+  ], flows: [
+    { id: "order-flow", kind: "order", entryNodeId: "product", nodeIds: ["product"], productIds: ["puzzle"] },
+    { id: "service-flow", kind: "custom", entryNodeId: "details", nodeIds: ["details"], serviceIds: ["consult"] },
+    { id: "booking-flow", kind: "booking", entryNodeId: "booking", nodeIds: ["booking"], serviceIds: ["session"] },
+  ] } };
+}
+function entityResult(id: "puzzle" | "consult" | "session") {
+  const kind = id === "puzzle" ? "product" : "service";
+  return { selected: { entity: { id, kind, name: id, bookingEnabled: id === "session" }, binding: { flowId: id === "puzzle" ? "order-flow" : id === "consult" ? "service-flow" : "booking-flow", entity: { id, kind } } } };
+}
+function boundState() {
+  const state = order(); state.product_id = "puzzle";
+  state.visual = { versionId: "bound-v1", nodeId: "product", status: "waiting", awaiting: true, visited: ["product"], values: {}, binding: { flowId: "order-flow", entity: { id: "puzzle", kind: "product" } } };
+  return migrateConversationProcesses(state, () => "order-task");
+}
+it("routes a named bound product out of an active booking before adapting state", async () => {
+  const state = migrateConversationProcesses(emptyState(), () => "id");
+  state.processes!.active = "booking"; state.processes!.promptOwner = "booking";
+  state.processes!.booking = { id: "b", status: "active", draft: { nonce: "b", phase: "collect", serviceId: "session", expires: Date.now()+60000 } };
+  mocks.version.mockResolvedValue(entityVersion()); mocks.entity.mockResolvedValue(entityResult("puzzle"));
+  const next = await turn("Puzzle", state);
+  expect(next.conversationRouting?.process).toBe("order");
+  expect(next.nextState.processes?.booking?.status).toBe("suspended");
+  expect(mocks.agent).toHaveBeenCalledWith(expect.not.objectContaining({ bookingRequest: true }));
+  expect(mocks.booking).not.toHaveBeenCalled();
+});
+it("resumes an order's pinned graph after visiting a service on a newer publication", async () => {
+  const state = boundState(); state.processes!.order!.status = "suspended"; state.processes!.active = null;
+  state.visual = { versionId: "bound-v2", nodeId: "details", status: "waiting", awaiting: true, visited: ["details"], values: {}, binding: { flowId: "service-flow", entity: { id: "consult", kind: "service" } } };
+  state.processes!.service = { id: "s", versionId: "bound-v2", status: "active", visual: state.visual, fields: {}, order: {} };
+  mocks.version.mockImplementation(async (_business, id) => entityVersion(id ?? "bound-v2"));
+  mocks.entity.mockImplementation(async (_b, _g, message) => message.includes("Puzzle") ? entityResult("puzzle") : {});
+  const next = await turn("Vazhdo porosinë Puzzle", state);
+  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: expect.objectContaining({ id: "bound-v1" }), state: expect.objectContaining({ visual: expect.objectContaining({ versionId: "bound-v1" }) }) }));
+  expect(next.nextState.processes?.order?.snapshot.visual?.versionId).toBe("bound-v1");
+  expect(next.nextState.processes?.service?.status).toBe("suspended");
+});
+it("uses latest bindings for a new service while keeping the previous order snapshot", async () => {
+  const state = boundState();
+  mocks.version.mockImplementation(async (_business, id) => entityVersion(id ?? "bound-v2"));
+  mocks.entity.mockImplementation(async (_b, graph, message) => message === "Konsultë" && graph ? entityResult("consult") : {});
+  mocks.agent.mockImplementation(async ({ state }) => { const next = structuredClone(state); next.visual.status = "waiting"; return result(next, "Çfarë të duhet?"); });
+  const next = await turn("Konsultë", state);
+  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: expect.objectContaining({ id: "bound-v2" }), state: expect.objectContaining({ product_id: null, fields: {} }) }));
+  expect(next.nextState.processes?.order?.snapshot.visual?.versionId).toBe("bound-v1");
+  expect(next.nextState.processes?.order?.status).toBe("suspended");
+  expect(next.nextState.processes?.service?.versionId).toBe("bound-v2");
+});
+it("does not turn product price questions into new orders or bookings", async () => {
+  mocks.version.mockResolvedValue(entityVersion());
+  const next = await turn("Sa kushton Puzzle?");
+  expect(next.conversationRouting?.process).toBe("information");
+  expect(next.nextState.processes?.order).toBeUndefined(); expect(next.nextState.processes?.booking).toBeUndefined();
+  expect(mocks.entity).not.toHaveBeenCalled();
+});
+it("resumes isolated nonbookable service fields using their original graph and rejects stale yes", async () => {
+  const state = boundState(); state.processes!.order!.status = "suspended"; state.processes!.active = null;
+  const visual = { versionId: "service-old", nodeId: "details", status: "waiting" as const, awaiting: true, visited: ["details"], values: { details: "Help" }, binding: { flowId: "service-flow", entity: { id: "consult", kind: "service" as const } } };
+  state.processes!.service = { id: "s", versionId: "service-old", status: "suspended", visual, fields: { details: "Help" }, order: {} };
+  mocks.version.mockImplementation(async (_b, id) => entityVersion(id ?? "latest"));
+  mocks.entity.mockImplementation(async (_b, _g, message, saved) => message === "Konsultë" || saved?.entity.id === "consult" ? entityResult("consult") : {});
+  const next = await turn("Konsultë", state);
+  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: expect.objectContaining({ id: "service-old" }), state: expect.objectContaining({ product_id: null, fields: { details: "Help" } }) }));
+  const info = await turn("Sa kushton?", next.nextState);
+  mocks.agent.mockClear();
+  const stale = await turn("Po", info.nextState);
+  expect(stale.reply).toContain("Cilën kërkesë"); expect(mocks.agent).not.toHaveBeenCalled();
+  expect(stale.nextState.processes?.order?.snapshot.product_id).toBe("puzzle");
+});
+it("requires replacement confirmation before changing a booked service", async () => {
+  const state = migrateConversationProcesses(emptyState(), () => "id"); state.processes!.active = "booking";
+  state.processes!.booking = { id: "b", status: "active", draft: { nonce: "b", phase: "collect", serviceId: "other", expires: Date.now()+60000 } };
+  mocks.version.mockResolvedValue(entityVersion()); mocks.entity.mockResolvedValue(entityResult("session"));
+  const next = await turn("Session", state);
+  expect(next.nextState.processes?.pendingChoice?.kind).toBe("replace");
+  expect(next.nextState.processes?.booking?.draft?.serviceId).toBe("other");
+  expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.booking).not.toHaveBeenCalled();
+});
+it.each(["removed", "disabled"])("does not reuse a completed product's old binding when latest publication is %s", async scenario => {
+  const state = boundState(); state.step_key = "order_ready"; state.visual!.status = "completed";
+  state.processes!.order!.status = "completed"; state.processes!.active = null;
+  const latest = scenario === "disabled" ? null : entityVersion("latest");
+  if (latest) latest.graph.flows.forEach(flow => { flow.productIds = []; });
+  mocks.version.mockImplementation(async (_b, id) => id ? entityVersion(id) : latest);
+  mocks.entity.mockImplementation(async (_b, graph) => graph.flows.some((flow: { productIds?: string[] }) => flow.productIds?.includes("puzzle")) ? entityResult("puzzle") : {});
+  await turn("Puzzle", state);
+  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: latest, state: expect.objectContaining({ product_id: null }) }));
+  expect(mocks.agent.mock.lastCall![0].state.visual).toBeUndefined();
+});
+it.each(["removed", "disabled"])("does not restart a completed service on an obsolete graph when publication is %s", async scenario => {
+  const state = migrateConversationProcesses(emptyState(), () => "id");
+  state.visual = { versionId: "old", nodeId: "details", status: "completed", awaiting: false, visited: ["details"], values: {}, binding: { flowId: "service-flow", entity: { id: "consult", kind: "service" } } };
+  state.processes!.service = { id: "s", versionId: "old", status: "completed", visual: state.visual, fields: {}, order: {} };
+  const latest = scenario === "disabled" ? null : entityVersion("latest");
+  if (latest) latest.graph.flows.forEach(flow => { flow.serviceIds = []; });
+  mocks.version.mockImplementation(async (_b, id) => id ? entityVersion(id) : latest);
+  mocks.entity.mockImplementation(async (_b, graph) => graph.flows.some((flow: { serviceIds?: string[] }) => flow.serviceIds?.includes("consult")) ? entityResult("consult") : {});
+  await turn("Konsultë", state);
+  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: latest }));
+  expect(mocks.agent.mock.lastCall![0].state.visual).toBeUndefined();
+});
+it.each(["removed", "disabled"])("a completed booking cannot reuse its old capability after latest publication is %s", async scenario => {
+  const state = migrateConversationProcesses(emptyState(), () => "id");
+  state.visual = { versionId: "old", nodeId: "booking", status: "completed", awaiting: false, visited: ["booking"], values: {}, binding: { flowId: "booking-flow", entity: { id: "session", kind: "service" } } };
+  state.processes!.booking = { id: "old-booking", versionId: "old", status: "completed", visual: state.visual };
+  const latest = scenario === "disabled" ? null : entityVersion("latest");
+  if (latest) { latest.graph.flows = latest.graph.flows.filter(flow => flow.kind !== "booking"); latest.graph.nodes = latest.graph.nodes.filter(node => node.kind !== "booking"); }
+  mocks.version.mockImplementation(async (_b, id) => id ? entityVersion(id) : latest);
+  mocks.entity.mockImplementation(async (_b, graph) => graph.flows.some((flow: { serviceIds?: string[] }) => flow.serviceIds?.includes("session")) ? entityResult("session") : {});
+  const next = await turn("Dua rezervim session", state);
+  expect(mocks.booking).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled();
+  expect(next.nextState.processes?.booking).toBeUndefined();
+  expect(next.reply).toContain("kontakto stafin");
+});
+it("a new booking uses latest version and a fresh task after the previous booking completed", async () => {
+  const state = migrateConversationProcesses(emptyState(), () => "id");
+  state.visual = { versionId: "old", nodeId: "booking", status: "completed", awaiting: false, visited: ["booking"], values: {}, binding: { flowId: "booking-flow", entity: { id: "session", kind: "service" } } };
+  state.processes!.booking = { id: "old-booking", versionId: "old", status: "completed", visual: state.visual };
+  mocks.version.mockImplementation(async (_b, id) => entityVersion(id ?? "latest")); mocks.entity.mockResolvedValue(entityResult("session"));
+  mocks.agent.mockImplementation(async ({ state, entityVersion }) => { const next = structuredClone(state); next.visual = { versionId: entityVersion.id, nodeId: "booking", status: "waiting", awaiting: true, values: {}, visited: ["booking"] }; next.fields.booking = { nonce: "new-nonce", phase: "collect" }; return result(next); });
+  const next = await turn("Dua rezervim session", state);
+  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: expect.objectContaining({ id: "latest" }), state: expect.objectContaining({ visual: undefined }) }));
+  expect(next.nextState.processes?.booking?.id).toBe("new-nonce"); expect(next.nextState.processes?.booking?.versionId).toBe("latest");
+});
+it("declining a product replacement restores the old graph instead of using the new publication", async () => {
+  const state = boundState(); state.processes!.pendingChoice = { kind: "replace", process: "order", message: "Dua Poster" };
+  mocks.version.mockImplementation(async (_b, id) => entityVersion(id ?? "latest"));
+  await turn("Jo", state);
+  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: undefined, message: "Vazhdo porosinë", state: expect.objectContaining({ visual: expect.objectContaining({ versionId: "bound-v1" }) }) }));
+});
+it("an ambiguous entity question cannot leave an older confirmation owned by the order", async () => {
+  const state = boundState(); state.context!.execution.awaitingOrderConfirmation = true;
+  mocks.version.mockResolvedValue(entityVersion());
+  mocks.entity.mockResolvedValue({ choices: [{ kind: "product", id: "a", name: "Puzzle" }, { kind: "service", id: "b", name: "Puzzle" }] });
+  const next = await turn("Puzzle", state);
+  expect(next.nextState.processes?.promptOwner).toBeNull();
+  mocks.entity.mockResolvedValue({});
+  expect((await turn("Po", next.nextState)).conversationRouting?.action).toBe("clarify");
 });

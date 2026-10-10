@@ -13,11 +13,14 @@ import { VisualWorkflowEditor } from "@/components/workflows/visual-editor";
 import { loadVisualWorkspace } from "@/lib/workflows/visual/store";
 import { loadWorkflowReadiness } from "@/lib/workflows/readiness";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { loadFlowBindingCatalog } from "@/lib/workflows/visual/binding-catalog";
 
 export default async function WorkflowsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ flow?: string; product?: string; service?: string }>;
 }) {
   const { slug } = await params;
   const user = await getSessionUser();
@@ -25,12 +28,14 @@ export default async function WorkflowsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const [operating, visual, readiness, profile, calendar, services] = await Promise.all([
+  const [operating, visual, readiness, profile, calendar, services, bindingCatalog, query] = await Promise.all([
     loadBusinessProcess(access.business.id), loadVisualWorkspace(access.business.id),
     loadWorkflowReadiness(access.business.id), loadDashboardProfile(access.business.id),
     db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", access.business.id).maybeSingle(),
     db.from("booking_services").select("id").eq("business_id", access.business.id).eq("is_active", true).eq("booking_enabled", true).limit(1),
+    loadFlowBindingCatalog(access.business.id), searchParams,
   ]);
+  const bindingFocus = bindingCatalog.products.some(item => item.id === query.product) ? { kind: "product" as const, id: query.product! } : bindingCatalog.services.some(item => item.id === query.service) ? { kind: "service" as const, id: query.service! } : undefined;
   const bookingEnabled = profile.enabledModules.includes("bookings") && !calendar.error && !services.error && !!calendar.data?.agent_booking_enabled && !!services.data?.length;
   const [{ data: workflows, error: loadError }, { data: types }] =
     await Promise.all([
@@ -84,14 +89,16 @@ export default async function WorkflowsPage({
         description="Çdo mesazh, rruga e duhur. Konteksti i klientit mbetet me bisedën."
       >
         <Link href={`/b/${slug}/products`} className="btn btn-ghost">
-          Lidh te produktet →
+          Produktet →
         </Link>
+        <Link href={`/b/${slug}/services`} className="btn btn-ghost">Shërbimet →</Link>
       </PageHeading>
-      <VisualWorkflowEditor slug={slug} initialWorkspace={visual} bookingEnabled={bookingEnabled} readiness={readiness} />
+      <VisualWorkflowEditor slug={slug} initialWorkspace={visual} bookingEnabled={bookingEnabled} readiness={readiness} bindingCatalog={bindingCatalog} initialFlowId={query.flow} bindingFocus={bindingFocus} />
       <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
         <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />
       </details>
-      <details className="vf-product-details"><summary>Workflow-t e produkteve · {workflows?.length ?? 0}</summary>
+      <details className="vf-product-details"><summary>Workflow-t linearë të mëparshëm · {workflows?.length ?? 0}</summary>
+      <p className="vf-help">Produktet dhe shërbimet lidhen drejtpërdrejt te “Përdoret për” brenda rrjedhës vizuale; konfigurimet e mëparshme mund t’i menaxhosh këtu.</p>
       <div className="configuration-layout">
         <div className="space-y-5">
           {(workflows ?? []).map((w) => (

@@ -1,22 +1,25 @@
 import { chooseGuidance, clarification, invalidateConfirmation } from "../guidance";
 import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
-import { getFact, setFact, resetOrder, isQuestion, recordPrompt } from "../context";
+import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext } from "../context";
 import { agentModel } from "@/lib/agents/generate";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { emptyState } from "../engine";
 import { advanceVisualWorkflow, detectVisualIntent } from "./runtime";
 import { loadVisualVersion } from "./store";
 import { validateVisualGraph } from "./model";
+import { isEntityInformationRequest, resolveVisualEntity } from "./entity-routing";
+import { advanceVisualOrderReview, missingVisualOrderNode } from "./product-order";
 
 type Legacy = (params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }) => Promise<AgentTurnResult>;
 
 export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy): Promise<AgentTurnResult> {
   if (params.visualPreview && (params.mode !== "test" || params.visualPreview.businessId !== params.businessId)) throw new Error("invalid_workflow_preview");
-  const previous = params.state?.visual;
+  let previous = params.state?.visual;
+  if (previous?.status === "completed" && params.entityVersion !== undefined && params.entityVersion?.id !== previous.versionId) previous = undefined;
   // Publishing the visual layer must not interrupt an existing linear product order.
   if (!params.visualPreview && !params.informationRequest && !params.bookingRequest && !params.orderStatusRequest && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacy(params);
   let active = previous && previous.status !== "completed" ? previous : null;
-  const loadedVersion = params.visualPreview ?? await loadVisualVersion(params.businessId, previous?.versionId);
+  const loadedVersion = params.visualPreview ?? (params.entityVersion !== undefined ? params.entityVersion : await loadVisualVersion(params.businessId, previous?.versionId));
   if (!loadedVersion) {
     if (active) throw new Error("missing_workflow_version");
     return legacy(params);
@@ -26,6 +29,40 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   const started = Date.now();
   // Completion does not erase order/customer data. Only entering a new product flow resets it.
   let base = structuredClone(params.state ?? emptyState());
+  if (!previous) delete base.visual;
+  const simple = (reply: string): AgentTurnResult => ({ reply, nextState: base, previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
+    debug: { model: agentModel(), source: "fallback", fallbackReason: "visual_entity", agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: Date.now() - started } });
+  const informationalEntity = !params.orderRequest && !params.bookingRequest && (isQuestion(params.message) || isEntityInformationRequest(params.message));
+  const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding) : {};
+  const selectedEntity = entityResolution.selected;
+  if (entityResolution.choices?.length) return simple(`Cilin produkt ose shërbim dëshironi: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`);
+  if (!selectedEntity && entityResolution.mentioned?.kind === "product" && previous?.binding && entityResolution.mentioned.id !== previous.binding.entity.id) {
+    if (base.product_id && base.step_key !== "order_ready") {
+      if (base.processes) base.processes.pendingChoice = { kind: "replace", process: "order", message: params.message };
+      return simple(`Ke një porosi të papërfunduar. Ta zëvendësojmë me ${entityResolution.mentioned.name}? Shkruaj “Po” ose “Jo”.`);
+    }
+    previous = undefined; active = null; delete base.visual;
+  }
+  if (previous?.binding && !params.informationRequest && !params.orderStatusRequest && !informationalEntity && !selectedEntity) return simple("Produkti ose shërbimi i këtij procesi nuk është më aktiv. Kontakto stafin për të vazhduar.");
+  if (!selectedEntity && entityResolution.mentioned?.kind === "product") return legacy({ ...params, state: base, requireConfiguredWorkflow: true });
+  const boundFlow = selectedEntity && version.graph.version === 2 ? version.graph.flows.find(flow => flow.id === selectedEntity.binding.flowId) : undefined;
+  const boundOrder = selectedEntity?.entity.kind === "product" && Boolean(boundFlow && (boundFlow.kind === "order" || boundFlow.nodeIds.some(id => version.graph.nodes.some(node => node.id === id && node.kind === "product")) || boundFlow.kind === "custom" && (params.orderRequest || base.product_id === selectedEntity.entity.id && previous?.binding?.entity.id === selectedEntity.entity.id)));
+  if (!selectedEntity && !base.product_id && !entityResolution.mentioned && (params.orderRequest || detectVisualIntent(params.message) === "order") && entityResolution.available?.some(entity => entity.kind === "product")) return simple(`Cilin produkt dëshironi? ${entityResolution.available.filter(entity => entity.kind === "product").map(entity => entity.name).join(", ")}.`);
+  const enteringEntity = Boolean(boundFlow && (!previous?.binding || previous.binding.entity.id !== selectedEntity!.entity.id || previous.status === "completed"));
+  if (enteringEntity && selectedEntity?.entity.kind === "product" && base.product_id && base.product_id !== selectedEntity.entity.id && base.step_key !== "order_ready") {
+    if (base.processes) base.processes.pendingChoice = { kind: "replace", process: "order", message: params.message };
+    return simple(`Ke një porosi të papërfunduar. Ta zëvendësojmë me ${selectedEntity.entity.name}? Shkruaj “Po” ose “Jo”.`);
+  }
+  if (selectedEntity && boundFlow) {
+    base = migrateContext(base);
+    if (boundOrder) {
+      base.product_id = selectedEntity.entity.id; base.product_type_id = selectedEntity.entity.productTypeId ?? null;
+      delete base.context!.execution.linear; delete base.linearSnapshot; delete base.orderWorkflowSnapshot;
+    }
+    if (enteringEntity) active = { versionId: version.id, nodeId: boundFlow.entryNodeId, status: "running", awaiting: false, visited: [], values: {}, binding: selectedEntity.binding };
+    else if (active) active = { ...active, binding: selectedEntity.binding };
+    base.visual = active ?? base.visual;
+  }
   let intent = params.bookingRequest ? "booking" as const : detectVisualIntent(params.message);
   let navigating = false;
   let revisiting = false;
@@ -34,6 +71,8 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
     const flows = graph.version === 2 ? graph.flows : [];
     return graph.nodes.flatMap(n => {
       const flow = flows.find(flow => flow.entryNodeId === n.id);
+      const owningFlow = flows.find(flow => flow.nodeIds.includes(n.id));
+      if (owningFlow && (owningFlow.productIds?.length || owningFlow.serviceIds?.length) && owningFlow.id !== boundFlow?.id) return [];
       const statusFlow = flow?.nodeIds.some(id => graph.nodes.some(node => node.id === id && node.kind === "order_status"));
       const processKind = statusFlow ? "order_status" : flow?.kind === "order" ? "product" : flow?.kind === "booking" ? "booking" : flow?.kind === "support" ? "support_entry" : flow?.kind === "information" ? "knowledge" : undefined;
       if (processKind) return [{ id: statusFlow ? graph.nodes.find(node => node.kind === "order_status" && flow!.nodeIds.includes(node.id))!.id : n.id, label: flow!.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: processKind }];
@@ -63,10 +102,12 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   const continuingStatus = params.orderStatusRequest && previous?.status === "waiting" && Boolean(statusFlow || currentNode?.kind === "order_status");
   const informationFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "information" && flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
   const continuingInformation = params.informationRequest && !params.orderStatusRequest && previous?.status === "waiting" && Boolean(informationFlow) && !statusFlow;
-  const guidance = params.informationRequest && !params.orderStatusRequest && !informationEntries.length ? { action: "answer" as const, target: null, source: "rules" as const }
+  const correctionRequest = /\b(ndrysho\w*|korrigjo\w*|ktheh\w*|pas|mbrapa|change|correct|instead|back)\b/.test(params.message.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase());
+  const guidance = enteringEntity ? { action: "route" as const, target: boundFlow!.entryNodeId, source: "rules" as const }
+    : params.informationRequest && !params.orderStatusRequest && !informationEntries.length ? { action: "answer" as const, target: null, source: "rules" as const }
     : continuingStatus ? { action: "continue" as const, target: null, source: "rules" as const }
     : params.orderStatusRequest && statusEntries.length ? { action: "route" as const, target: statusEntries[0].id, source: "rules" as const }
-    : continuingBooking || continuingOrder || continuingInformation ? { action: "continue" as const, target: null, source: "rules" as const }
+    : !correctionRequest && (continuingBooking || continuingOrder || continuingInformation) ? { action: "continue" as const, target: null, source: "rules" as const }
     : params.informationRequest && informationEntries.length === 1 ? { action: "route" as const, target: informationEntries[0].id, source: "rules" as const }
     : params.bookingRequest && bookingNodes.length === 1 ? { action: "route" as const, target: bookingNodes[0].id, source: "rules" as const } : await chooseGuidance({message:params.message,state:base,targets,routes,
     current:currentNode ? {id:currentNode.id,label:currentNode.label,prompt:currentNode.config.prompt,fieldKey:currentNode.config.fieldKey,kind:currentNode.kind} : undefined,
@@ -102,7 +143,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   }
   if (destination) {
     if (guidance.action === "order" || guidance.action === "support") intent = guidance.action;
-    active = {...structuredClone(previous ?? freshState()),versionId:version.id,nodeId:destination,status:"running",awaiting:false};
+    active = {...structuredClone(active ?? previous ?? freshState()),versionId:version.id,nodeId:destination,status:"running",awaiting:false};
     delete active.forceCollect;
     delete active.advisory;
     navigating = guidance.action === "order" || guidance.action === "support" || guidance.action === "route";
@@ -125,6 +166,15 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
     const fact=getFact(currentState,n.config.fieldKey!); return fact ? [[n.config.fieldKey!,fact.value]] : [];
   })) : currentState.visual?.values;
   const advance: typeof advanceVisualWorkflow = input => advanceVisualWorkflow({ ...input, sharedValues: sharedValues() });
+  const reviewingOrder = boundOrder && Boolean(previous?.binding) && currentNode?.kind === "end" && previous?.awaiting && (!destination || destination === previous.nodeId);
+  if (reviewingOrder) {
+    const review = advanceVisualOrderReview(base, params.orderRequest ? "" : params.message, params.hasPhoto, false, version.graph, selectedEntity!.entity.name);
+    base = review.nextState;
+    base.visual = { ...previous!, status: review.complete ? "completed" : "waiting", awaiting: !review.complete };
+    const result = simple(review.reply); result.nextState = base; result.productName = selectedEntity!.entity.name;
+    result.visualWorkflow = { graph: version.graph, state: base.visual, traversedNodeIds: [], routing: { action: "continue", from: previous!.nodeId, to: previous!.nodeId, source: "rules" } };
+    return result;
+  }
   let execution = advance({ graph: version.graph, versionId: version.id, state: active,
     message: params.message, hasPhoto: params.hasPhoto, intent, ...((extracted || revisiting || guidance.action === "route" || params.bookingNavigation || (params.orderRequest && currentNode?.kind !== "product"))?{inputAvailable:false}:{}) });
   const traversed = [...execution.traversedNodeIds];
@@ -183,6 +233,14 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
       finished = true; break;
     }
     if (action.kind === "product") {
+      if (selectedEntity) {
+        if (productCalled) { replies.push("Vazhdojmë procesin me mesazhin tjetër."); finished = true; break; }
+        productCalled = true;
+        turn.productName = selectedEntity.entity.kind === "product" ? selectedEntity.entity.name : null;
+        execution.state.awaiting = true;
+        execution = advance({ graph: version.graph, versionId: version.id, state: execution.state, message: "", hasPhoto: false, intent, productComplete: true, inputAvailable: false });
+        traversed.push(...execution.traversedNodeIds); continue;
+      }
       const continuing = !productCalled && Boolean((active?.nodeId === action.nodeId && active.awaiting) || (base.product_id && (revisiting || (navigating && base.step_key !== "order_ready"))));
       if (!continuing) {
         turn.nextState = { ...(turn.nextState.product_id ? (turn.nextState.context ? resetOrder(turn.nextState) : {...emptyState(),customer:turn.nextState.customer,recentMessages:turn.nextState.recentMessages}) : turn.nextState), visual: execution.state, completedVisual: base.completedVisual };
@@ -202,6 +260,17 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
         message: "", hasPhoto: false, intent, productComplete: true, inputAvailable: false });
       traversed.push(...execution.traversedNodeIds);
       continue;
+    }
+    if (action.kind === "end" && selectedEntity && boundOrder) {
+      const missing = missingVisualOrderNode(version.graph, execution.state, turn.nextState);
+      if (missing) {
+        execution = advance({ graph: version.graph, versionId: version.id, state: { ...execution.state, nodeId: missing, awaiting: false, status: "running" }, message: "", hasPhoto: false, intent, inputAvailable: false });
+        traversed.push(...execution.traversedNodeIds); continue;
+      }
+      const review = advanceVisualOrderReview(turn.nextState, "", false, true, version.graph, selectedEntity.entity.name);
+      turn.nextState = review.nextState; currentState = turn.nextState; turn.workflowId = null; turn.productName = selectedEntity.entity.name;
+      execution.state.status = review.complete ? "completed" : "waiting"; execution.state.awaiting = !review.complete;
+      replies.push(review.reply); finished = true; break;
     }
     if (action.kind === "prompt" && !revisiting && isQuestion(params.message) && !replies.length) {
       const answer = await legacy({ ...params, state: turn.nextState, informational: "Përgjigju pyetjes pa ndryshuar të dhënat e porosisë." });

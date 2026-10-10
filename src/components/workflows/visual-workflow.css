@@ -274,3 +274,25 @@
 .vf-hub-flow-option strong { display: block; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
 .vf-hub-flow-option small { display: block; font-size: 10px; color: var(--ink-muted); margin-top: 5px; }
 .vf-hub-flow-option svg { flex-shrink: 0; color: var(--accent); }
+.vf-binding-focus { display: flex; align-items: center; gap: 9px; padding: 12px 24px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); border-bottom: 1px solid var(--line); }
+.vf-binding-focus svg { color: var(--accent); flex-shrink: 0; }
+.vf-binding-focus strong { color: var(--ink); font-weight: 500; }
+.vf-bindings { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 20px; }
+.vf-bindings header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; }
+.vf-bindings header h3 { font-size: 14px; font-weight: 550; margin: 0; }
+.vf-bindings header > span { font-size: 10px; color: var(--ink-muted); }
+.vf-binding-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.vf-binding-tabs button { display: flex; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-muted); font-size: 11px; cursor: pointer; }
+.vf-binding-tabs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.vf-binding-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+.vf-binding-chips button { display: flex; align-items: center; gap: 7px; max-width: 100%; padding: 5px 8px; font-size: 10px; border-radius: 7px; color: var(--accent); background: var(--accent-soft); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.vf-binding-search { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-size: 12px; }
+.vf-binding-options { max-height: 250px; overflow: auto; margin-top: 8px; }
+.vf-binding-option { padding: 10px 5px; border-bottom: 1px solid var(--line); }
+.vf-binding-option.is-focused { background: var(--accent-soft); border-radius: 8px; }
+.vf-binding-option label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.vf-binding-option label > span { min-width: 0; }
+.vf-binding-option input { flex-shrink: 0; margin-top: 3px; accent-color: var(--accent); }
+.vf-binding-option strong { display: block; font-size: 12px; font-weight: 450; line-height: 1.6; overflow-wrap: anywhere; }
+.vf-binding-option small { display: block; font-size: 10px; color: var(--ink-muted); line-height: 1.5; }
+.vf-binding-owner { max-width: calc(100% - 21px); margin: 6px 0 0 21px; font-size: 10px; color: var(--accent); cursor: pointer; text-align: left; overflow-wrap: anywhere; }

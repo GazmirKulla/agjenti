@@ -660,3 +660,4 @@
   background: var(--accent-soft);
   color: var(--ink);
 }
+.catalog-flow-name { display: inline-block; margin: 6px 0 0 48px; font-size: 11px; color: var(--accent); }

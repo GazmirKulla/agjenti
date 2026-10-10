@@ -153,3 +153,35 @@ it("requires a v2 upgrade for order status and still rejects arbitrary executabl
     expect(() => applyWorkflowOperations(upgradeVisualGraph(starterVisualGraph()), JSON.stringify([{ op: "put_node", node: { ...node, kind } }]))).toThrow();
   }
 });
+
+it("preserves omitted assignments during flow edits and allows explicit clearing without touching other flows", () => {
+  const before = upgradeVisualGraph(starterVisualGraph());
+  before.flows[0].productIds = ["00000000-0000-4000-8000-000000000001"];
+  before.flows[0].serviceIds = ["00000000-0000-4000-8000-000000000002"];
+  const { productIds, serviceIds, ...definition } = before.flows[0];
+  const edited = applyWorkflowOperations(before, JSON.stringify([{ op: "put_flow", flow: { ...definition, label: "Emër i ri" } }]));
+  expect(edited.version === 2 && edited.flows[0]).toMatchObject({ productIds, serviceIds });
+  const cleared = applyWorkflowOperations(edited, JSON.stringify([{ op: "put_flow", flow: { ...definition, productIds: [] } }]));
+  expect(cleared.version === 2 && cleared.flows[0]).toMatchObject({ productIds: [], serviceIds });
+  expect(cleared.version === 2 && cleared.flows.slice(1)).toEqual(before.flows.slice(1));
+});
+
+it("previews verified before/after target names for binding changes", () => {
+  const before = upgradeVisualGraph(starterVisualGraph()), after = structuredClone(before);
+  const oldId = "00000000-0000-4000-8000-000000000001", newId = "00000000-0000-4000-8000-000000000002";
+  before.flows[0].productIds = [oldId]; after.flows[0].productIds = [newId];
+  const preview = workflowPreview(before, after, { products: [{ id: oldId, name: "Produkti i vjetër", isActive: true }, { id: newId, name: "Produkti i ri", isActive: false }], services: [] });
+  expect(preview.fields).toContainEqual(expect.objectContaining({ before: expect.stringContaining("Produkti i vjetër"), after: expect.stringContaining("Produkti i ri") }));
+  expect(JSON.stringify(preview)).not.toContain(newId);
+});
+
+it("shows binding replacements even when distinct targets have identical names", () => {
+  const a = "00000000-0000-4000-8000-000000000001", b = "00000000-0000-4000-8000-000000000002";
+  const before = upgradeVisualGraph(starterVisualGraph()); before.flows[0].productIds = [a];
+  const after = structuredClone(before); after.flows[0].productIds = [b];
+  const preview = workflowPreview(before, after, { products: [{ id: a, name: "Filxhan", isActive: true }, { id: b, name: "Filxhan", isActive: false }], services: [] });
+  expect(preview.fields).toHaveLength(1);
+  expect(preview.fields[0].label).toBe("Procesi në qendrën e mesazhit");
+  expect(preview.fields[0].before).toContain("Filxhan"); expect(preview.fields[0].after).toContain("Filxhan");
+  expect(preview.fields[0].before).not.toBe(preview.fields[0].after);
+});

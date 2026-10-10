@@ -25,7 +25,7 @@ export type CatalogAssistantContext = {
   filters: { status: string };
   selectedEntityIds: string[];
 };
-type PageAssistantContext = Partial<CatalogAssistantContext> & Pick<AssistantUIContext, "workflowSelection">;
+type PageAssistantContext = Partial<CatalogAssistantContext> & Pick<AssistantUIContext, "workflowSelection" | "entityId" | "entityType">;
 type Workspace = ReturnType<typeof useMaterialDraft> & {
   setPageContext: Dispatch<
     SetStateAction<{ path: string; data: PageAssistantContext } | null>

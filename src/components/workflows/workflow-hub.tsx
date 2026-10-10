@@ -89,6 +89,8 @@ export function WorkflowContextPanel({ state, routing }: { state?: ConversationS
   const profile = Object.entries(state?.context?.profile ?? {});
   const orderFacts = Object.entries(state?.processes?.order?.snapshot.order ?? state?.context?.order ?? {});
   const booking = state?.processes?.booking?.draft;
+  const service = state?.processes?.service;
+  const serviceFacts = Object.entries(service?.order ?? {});
   return <div className="vf-context-panel">
     <span className="vf-detail-icon"><Icon name="customers" size={23} /></span><h2>Kujtesa e bisedës</h2><p className="vf-help">Të dhënat e provës ndiqen në të gjitha rrjedhat.</p>
     <h3>Profili i klientit</h3>{profile.length ? <dl>{profile.map(([key, fact]) => <div key={key}><dt>{fieldLabels[key] ?? key}</dt><dd>{fact?.value}</dd></div>)}</dl> : <p className="vf-help">Ende nuk janë dhënë të dhëna në këtë provë.</p>}
@@ -96,7 +98,9 @@ export function WorkflowContextPanel({ state, routing }: { state?: ConversationS
       const task = state?.processes?.[kind];
       return <div className="vf-context-task" key={kind}><Icon name={kind === "order" ? "products" : "calendar"} size={17} /><strong>{processLabels[kind]}</strong><span>{task ? task.status === "active" ? "Në vazhdim" : task.status === "suspended" ? "E pezulluar" : "E përfunduar" : "Pa nisur"}</span></div>;
     })}
+    {service && <div className="vf-context-task"><Icon name="briefcase" size={17} /><strong>Shërbimi</strong><span>{service.status === "active" ? "Në vazhdim" : service.status === "suspended" ? "I pezulluar" : "I përfunduar"}</span></div>}
     {orderFacts.length > 0 && <details className="vf-context-values"><summary>Të dhënat e porosisë</summary><dl>{orderFacts.map(([key, fact]) => <div key={key}><dt>{fieldLabels[key] ?? key.replaceAll("_", " ")}</dt><dd>{fact.value}</dd></div>)}</dl></details>}
+    {serviceFacts.length > 0 && <details className="vf-context-values"><summary>Të dhënat e shërbimit</summary><dl>{serviceFacts.map(([key, fact]) => <div key={key}><dt>{fieldLabels[key] ?? key.replaceAll("_", " ")}</dt><dd>{fact.value}</dd></div>)}</dl></details>}
     {booking && <details className="vf-context-values"><summary>Të dhënat e rezervimit</summary><dl>{(["date", "time", "name", "contact"] as const).filter(key => booking[key]).map(key => <div key={key}><dt>{fieldLabels[key]}</dt><dd>{booking[key]}</dd></div>)}</dl></details>}
     {routing && <><h3>Vendimi i fundit</h3><p className="vf-help">{routing.reason}</p>{routing.resumed && <p className="vf-context-note">U rifillua: {processLabels[routing.resumed]}</p>}{routing.suspended && <p className="vf-context-note">U ruajt për më vonë: {processLabels[routing.suspended]}</p>}{[["U ripërdorën", routing.reusedFields], ["Mbeten për t’u plotësuar", routing.missingFields]].map(([label, fields]) => <div className="vf-context-fields" key={label as string}><h3>{label as string}</h3><p>{(fields as string[]).length ? (fields as string[]).map(key => fieldLabels[key] ?? key.replaceAll("_", " ")).join(" · ") : "—"}</p></div>)}</>}
   </div>;

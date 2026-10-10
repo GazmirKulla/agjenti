@@ -7,15 +7,21 @@ import { PageHeading } from "@/components/dashboard/ui";
 import { saveBusinessService } from "@/lib/services/actions";
 import { servicePrice, type BusinessService } from "@/lib/services/model";
 import { dayNames, type Hours } from "@/lib/calendar/model";
+import { EntityFlowLink } from "@/components/workflows/entity-flow-link";
+import { usePageAssistantContext } from "@/components/business-assistant/workspace";
 import "./services.css";
 function ServiceEditor({
   slug,
   service,
   onClose,
+  binding,
+  workflowsEnabled,
 }: {
   slug: string;
   service?: BusinessService;
   onClose: () => void;
+  binding?: { flowId: string; name: string };
+  workflowsEnabled: boolean;
 }) {
   const router = useRouter(),
     [bookable, setBookable] = useState(service?.booking_enabled ?? false),
@@ -46,6 +52,7 @@ function ServiceEditor({
           </>
         )}
         <div className="service-fields">
+          {service && <div className="service-wide"><EntityFlowLink slug={slug} kind="service" id={service.id} binding={binding} enabled={workflowsEnabled} /></div>}
           <label>
             Emri
             <input
@@ -270,14 +277,19 @@ export function ServicesWorkspace({
   slug,
   businessName,
   services,
+  flowBindings = [],
+  workflowsEnabled = false,
 }: {
   slug: string;
   businessName: string;
   services: BusinessService[];
+  flowBindings?: { id: string; flowId: string; name: string }[];
+  workflowsEnabled?: boolean;
 }) {
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("all"),
     [editor, setEditor] = useState<BusinessService | "new" | null>(null);
+  usePageAssistantContext(editor && editor !== "new" ? { entityType: "service", entityId: editor.id } : {});
   const shown = services.filter(
     (s) =>
       (filter === "all" ||
@@ -304,6 +316,8 @@ export function ServicesWorkspace({
           key={editor === "new" ? "new" : `${editor.id}:${editor.updated_at}`}
           slug={slug}
           service={editor === "new" ? undefined : editor}
+          binding={editor === "new" ? undefined : flowBindings.find(item => item.id === editor.id)}
+          workflowsEnabled={workflowsEnabled}
           onClose={() => setEditor(null)}
         />
       )}
@@ -343,6 +357,7 @@ export function ServicesWorkspace({
                 {s.description || "Pa përshkrim"}
               </p>
               <strong>{servicePrice(s)}</strong>
+              <EntityFlowLink slug={slug} kind="service" id={s.id} binding={flowBindings.find(item => item.id === s.id)} enabled={workflowsEnabled} />
               <p className="muted-copy">
                 {s.booking_enabled
                   ? `${s.duration_minutes} min · ${s.hours ? "Orar i veçantë" : "Orari i biznesit"}`

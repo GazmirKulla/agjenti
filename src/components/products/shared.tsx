@@ -137,7 +137,7 @@ export function ProductTips() {
       <p>
         <strong>Produkti nuk përdoret nga Agjenti?</strong>
         <br />
-        Kontrollo aktivizimin, çmimin, llojin dhe workflow-n.
+        Kontrollo çmimin, llojin, rrjedhën e lidhur dhe aktivizimin.
       </p>
       <p>
         <strong>Shto përmes Agjentit</strong>

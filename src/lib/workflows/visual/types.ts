@@ -16,11 +16,13 @@ export type VisualNode = {
 };
 export type VisualEdge = { id: string; source: string; target: string; port: VisualPort };
 export type VisualFlowKind = "order" | "booking" | "information" | "support" | "custom";
-export type VisualFlow = { id: string; label: string; kind: VisualFlowKind; entryNodeId: string; nodeIds: string[] };
+export type VisualFlow = { id: string; label: string; kind: VisualFlowKind; entryNodeId: string; nodeIds: string[]; productIds?: string[]; serviceIds?: string[] };
 type VisualGraphBody = { name: string; nodes: VisualNode[]; edges: VisualEdge[] };
 export type VisualGraphV2 = VisualGraphBody & { version: 2; flows: VisualFlow[] };
 export type VisualGraph = (VisualGraphBody & { version: 1 }) | VisualGraphV2;
 export type VisualRunState = {
+  binding?: { flowId: string; entity: { kind: "product" | "service"; id: string } };
+  branchPorts?: Record<string, "yes" | "no">;
   versionId: string;
   nodeId: string;
   status: "running" | "waiting" | "completed" | "handoff";

@@ -14,7 +14,7 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 import { prepareWorkflow, loadAssistantWorkflow } from "./workflow-service";
 import { executeTicket, openTicket, type Access } from "./service";
-import { starterVisualGraph } from "@/lib/workflows/visual/model";
+import { starterVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
 import type { Proposal } from "./model";
 const access: Access = {
   businessId: "business-a",
@@ -296,4 +296,43 @@ it("previews and confirms an actual order-status capability as a draft, without 
     p_operation: "draft", p_revision: 3,
     p_graph: expect.objectContaining({ nodes: expect.arrayContaining([expect.objectContaining({ kind: "order_status" })]) }),
   }));
+});
+
+it("previews verified visual bindings including inactive catalog entries without creating linear workflows", async () => {
+  const productId = "00000000-0000-4000-8000-000000000001";
+  const serviceId = "00000000-0000-4000-8000-000000000002";
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  m.workspace.mockResolvedValue({ graph, revision: 3, publishedVersionId: null, enabled: false, available: true });
+  const tenants: string[] = [];
+  m.from.mockImplementation((table: string) => {
+    const query = {
+      select: () => query, eq: (_key: string, tenant: string) => { tenants.push(tenant); return query; }, order: () => query,
+      limit: async () => ({ data: [], error: null }),
+      in: async () => ({ data: table === "products" ? [{ id: productId, name: "Filxhan", is_active: false }] : [{ id: serviceId, name: "Personalizim", is_active: false, booking_enabled: false }], error: null }),
+    }; return query;
+  });
+  const result = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: JSON.stringify([{ op: "put_flow", flow: { ...graph.flows[0], productIds: [productId], serviceIds: [serviceId] } }]) }]), 3);
+  const preview = JSON.stringify(result.preview);
+  expect(preview).toContain("Filxhan"); expect(preview).toContain("Personalizim");
+  expect(preview).not.toContain(productId); expect(preview).not.toContain(serviceId);
+  expect(openTicket(result.token!, access).values).toMatchObject({ operation: "draft", graph: { flows: [expect.objectContaining({ productIds: [productId], serviceIds: [serviceId] }), ...graph.flows.slice(1)] } });
+  expect(tenants.every(tenant => tenant === access.businessId)).toBe(true);
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+
+it.each(["productIds", "serviceIds"])("rejects foreign or missing %s before creating a proposal and permits removing stale bindings", async field => {
+  const targetId = "00000000-0000-4000-8000-000000000001";
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  const boundFlow = { ...graph.flows[0], [field]: [targetId] };
+  m.workspace.mockResolvedValue({ graph, revision: 3, publishedVersionId: null, enabled: false, available: true });
+  m.from.mockImplementation(() => {
+    const query = { select: () => query, eq: () => query, order: () => query, limit: async () => ({ data: [], error: null }), in: async () => ({ data: [], error: null }) }; return query;
+  });
+  await expect(prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: JSON.stringify([{ op: "put_flow", flow: boundFlow }]) }]), 3)).rejects.toThrow("nuk gjendet në këtë biznes");
+  graph.flows[0] = boundFlow;
+  await expect(prepareWorkflow(access, proposal("workflow_publish"), 3)).rejects.toThrow("nuk gjendet në këtë biznes");
+  const removal = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: JSON.stringify([{ op: "put_flow", flow: { ...boundFlow, [field]: [] } }]) }]), 3);
+  expect(removal.token).toBeTruthy();
+  expect(JSON.stringify(removal.preview)).toContain("padisponueshëm");
+  expect(m.rpc).not.toHaveBeenCalled();
 });

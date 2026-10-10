@@ -46,6 +46,8 @@ export async function processBookingTurn(params: {
   resume?: boolean;
   bookingGuard?: BookingEffectGuard;
   canAct?: () => Promise<boolean>;
+  /** Server-resolved service selected by a published visual binding. */
+  selectedServiceId?: string;
 }): Promise<AgentTurnResult | null> {
   const existingState = structuredClone(params.state ?? emptyState());
   if (!params.routed && existingState.product_id) return null;
@@ -89,7 +91,8 @@ export async function processBookingTurn(params: {
   )
     return null;
   const settings = (cfg.data ?? defaultSettings) as CalendarSettings;
-  const activeServices = services.data as BookingService[];
+  const activeServices = (services.data as BookingService[]).filter(service => !params.selectedServiceId || service.id === params.selectedServiceId);
+  if (!activeServices.length) return null;
   const started = Date.now();
   let draft: BookingDraft =
     raw && typeof raw.nonce === "string"
@@ -99,6 +102,10 @@ export async function processBookingTurn(params: {
           nonce: randomUUID(),
           expires: Date.now() + 30 * 60000,
         };
+  if (params.selectedServiceId) {
+    if (draft.serviceId && draft.serviceId !== params.selectedServiceId) return null;
+    draft.serviceId = params.selectedServiceId;
+  }
   const reply = (text: string, clear = false): AgentTurnResult => {
     existingState.fields = { ...existingState.fields };
     if (clear) delete existingState.fields.booking;

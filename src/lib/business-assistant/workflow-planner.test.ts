@@ -65,3 +65,28 @@ it("provides real order-status authoring capability and passes its explicit oper
   expect(graph.nodes.find(node => node.id === "status")?.kind).toBe("order_status");
   expect(graph.version === 2 && graph.flows.filter(flow => flow.id !== "status")).toEqual(existing.flows);
 });
+
+it("links the selected visual flow even when no separate linear workflow exists", async () => {
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  const flow = graph.flows.find(flow => flow.kind === "order")!;
+  const productId = "00000000-0000-4000-8000-000000000001";
+  m.load.mockResolvedValue({ workspace: { graph, revision: 7 }, published: null });
+  m.response.mockResolvedValueOnce(respond("workflow_load")).mockResolvedValueOnce(respond("workflow_draft", [{ field: "operations", value: JSON.stringify([{ op: "put_flow", flow: { ...flow, productIds: [productId] } }]) }]));
+  await planRequest(access, "Lidhe këtë rrjedhë ekzistuese me produktin e zgjedhur", [], { page: "workflows", entryPoint: "contextual", workflowSelection: { revision: 7, dirty: false, flowId: flow.id } });
+  const modelRequest = m.response.mock.calls[1][0];
+  expect(modelRequest.instructions).toContain("An empty linear workflow list does not prevent a visual binding");
+  expect(JSON.parse(modelRequest.input).uiContext.workflowSelection.flowId).toBe(flow.id);
+  const operation = m.prepare.mock.calls[0][1];
+  expect(operation.action).toBe("workflow_draft");
+  const after = applyWorkflowOperations(graph, operation.changes[0].value);
+  expect(after.nodes).toEqual(graph.nodes); expect(after.edges).toEqual(graph.edges);
+  expect(after.version === 2 && after.flows.find(candidate => candidate.id === flow.id)?.productIds).toEqual([productId]);
+  expect(m.orderLoad).not.toHaveBeenCalled(); expect(m.orderPrepare).not.toHaveBeenCalled();
+});
+
+it("rejects a selected flow that is no longer in the saved graph", async () => {
+  m.load.mockResolvedValue({ workspace: { graph: upgradeVisualGraph(starterVisualGraph()), revision: 7 }, published: null });
+  m.response.mockResolvedValueOnce(respond("workflow_load"));
+  await expect(planRequest(access, "Lidhe këtë rrjedhë", [], { page: "workflows", entryPoint: "contextual", workflowSelection: { revision: 7, dirty: false, flowId: "missing-flow" } })).rejects.toThrow("nuk ekziston më");
+  expect(m.response).not.toHaveBeenCalled(); expect(m.prepare).not.toHaveBeenCalled();
+});

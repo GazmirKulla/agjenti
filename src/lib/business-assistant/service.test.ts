@@ -310,6 +310,13 @@ it("searches beyond the initial context using tenant-scoped escaped names", asyn
     }),
   ).rejects.toThrow();
 });
+it("allows read-only external catalog search for bindings while still blocking product mutations", async () => {
+  const external = { ...access, catalogSource: "external" };
+  m.responses.push({ data: [{ id, name: "Produkt i importuar" }], error: null });
+  expect(await searchContext(external, { action: "search", id: null, message: "", changes: [{ field: "kind", value: "product" }, { field: "query", value: "importuar" }] })).toMatchObject({ rows: [{ id }] });
+  expect(() => openTicket(ticket(), external)).toThrow();
+  await expect(searchContext({ ...external, modules: [] }, { action: "search", id: null, message: "", changes: [{ field: "kind", value: "product" }, { field: "query", value: "importuar" }] })).rejects.toThrow();
+});
 it("rejects records changed while the model was composing a proposal", async () => {
   m.responses.push({
     data: { id, name: "Barrierë", updated_at: "v2" },

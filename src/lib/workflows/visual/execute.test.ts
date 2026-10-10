@@ -4,7 +4,8 @@ import { emptyState } from "../engine";
 import { migrateContext, setFact } from "../context";
 import type { VisualGraph, VisualNode, VisualRunState, VisualVersion } from "./types";
 
-const mocks = vi.hoisted(() => ({ load: vi.fn() }));
+const mocks = vi.hoisted(() => ({ load: vi.fn(), entity: vi.fn() }));
+vi.mock("./entity-routing", async original => ({ ...await original<object>(), resolveVisualEntity: mocks.entity }));
 vi.mock("./store", () => ({ loadVisualVersion: mocks.load }));
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test-model" }));
 import { executeVisualTurn } from "./execute";
@@ -34,7 +35,7 @@ function response(input: LegacyParams, reply = "Përgjigje nga njohuritë"): Age
 function waiting(nodeId: string, versionId = "version-1"): VisualRunState {
   return { versionId, nodeId, status: "waiting", values: {}, visited: ["start", nodeId], awaiting: true };
 }
-beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(null); });
+beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(null); mocks.entity.mockResolvedValue({}); });
 
 describe("visual execution integration", () => {
   it("retains legacy behavior for a business without an enabled graph", async () => {
@@ -376,4 +377,118 @@ it.each(["Sa kushton?", "Çmimi"])("answers %s without running a status-only gra
   const result = await executeVisualTurn({ ...params(graph), message, informationRequest: true, orderStatusTurn: lookup }, async p => response(p, "Çmimi"));
   expect(lookup).not.toHaveBeenCalled();
   expect(result.reply).toBe("Çmimi");
+});
+
+const boundProductId = "aaaaaaaa-0000-4000-8000-000000000001";
+function boundGraph(...nodes: VisualNode[]): VisualGraph {
+  const base = linear(...nodes);
+  return { ...base, version: 2, flows: [{ id: "bound", kind: "order", label: "Personalizim", entryNodeId: nodes[0].id, nodeIds: nodes.map(node => node.id), productIds: [boundProductId] }] };
+}
+function mockBoundProduct() {
+  mocks.entity.mockResolvedValue({ selected: { entity: { kind: "product", id: boundProductId, name: "Puzzle", productTypeId: "puzzle" }, binding: { flowId: "bound", entity: { kind: "product", id: boundProductId } } } });
+}
+it("runs bound visual collection and final review without any separate linear workflow", async () => {
+  mockBoundProduct();
+  const graph = boundGraph(node("product", "product"), node("size", "collect", { fieldKey: "size", prompt: "Madhësia?" }));
+  const state = migrateContext(emptyState());
+  for (const [key, value] of Object.entries({ name: "Ana", phone: "0691234567", city: "Tiranë", address: "Rruga 1" })) setFact(state, `customer_${key}`, value, key === "phone" ? "phone" : "text", "message");
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const first = await executeVisualTurn({ ...params(graph), state, message: "Dua Puzzle", orderRequest: true }, legacy);
+  expect(first.reply).toBe("Madhësia?");
+  expect(first.nextState.product_id).toBe(boundProductId);
+  const review = await executeVisualTurn({ ...params(graph), state: first.nextState, message: "M" }, legacy);
+  expect(review.nextState.step_key).toBe("order_confirm");
+  expect(review.reply).toContain("Konfirmoni porosinë për Puzzle");
+  expect(review.reply).toContain("size: M");
+  expect(review.nextState.context?.order.size.value).toBe("M");
+  const ready = await executeVisualTurn({ ...params(graph), state: review.nextState, message: "Po" }, legacy);
+  expect(ready.nextState.step_key).toBe("order_ready");
+  expect(ready.nextState.context?.execution.orderConfirmed).toBe(true);
+  expect(ready.workflowId).toBeNull();
+  expect(ready.nextState.context?.execution.linear).toBeUndefined();
+  expect(legacy).not.toHaveBeenCalled();
+});
+it("a product-to-end visual binding collects missing customer data before explicit confirmation", async () => {
+  mockBoundProduct();
+  const graph = boundGraph(node("product", "product"));
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const first = await executeVisualTurn({ ...params(graph), state: migrateContext(emptyState()), message: "Puzzle" }, legacy);
+  expect(first.nextState.step_key).toBe("collect_customer");
+  expect(first.reply).toContain("emrin");
+  const review = await executeVisualTurn({ ...params(graph), state: first.nextState, message: "Emri: Ana; telefoni: 0691234567; qyteti: Tiranë; adresa: Rruga 1" }, legacy);
+  expect(review.nextState.step_key).toBe("order_confirm");
+  expect(review.nextState.context?.execution.orderConfirmed).toBe(false);
+  expect(legacy).not.toHaveBeenCalled();
+});
+it("refuses switching an unfinished bound product without confirmation", async () => {
+  mockBoundProduct();
+  const graph = boundGraph(node("product", "product"));
+  const state = migrateContext(emptyState()); state.product_id = "other-product"; state.processes = { active: "order" };
+  const result = await executeVisualTurn({ ...params(graph), state, message: "Dua Puzzle" }, async p => response(p));
+  expect(result.nextState.product_id).toBe("other-product");
+  expect(result.nextState.processes?.pendingChoice?.kind).toBe("replace");
+});
+it("a service binding can share visual product-selection steps without invoking a linear order", async () => {
+  const base = boundGraph(node("product", "product"), node("details", "collect", { fieldKey: "details", prompt: "Çfarë të duhet?" }));
+  const graph = { ...base, version: 2 as const, flows: [{ id: "bound", kind: "custom" as const, label: "Kërkesa", entryNodeId: "product", nodeIds: ["product", "details"], serviceIds: [boundProductId] }] };
+  mocks.entity.mockResolvedValue({ selected: { entity: { kind: "service", id: boundProductId, name: "Konsultë", bookingEnabled: false }, binding: { flowId: "bound", entity: { kind: "service", id: boundProductId } } } });
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const booking = vi.fn();
+  const result = await executeVisualTurn({ ...params(graph), state: migrateContext(emptyState()), message: "Konsultë", bookingTurn: booking }, legacy);
+  expect(result.reply).toBe("Çfarë të duhet?");
+  expect(result.nextState.product_id).toBeNull();
+  expect(legacy).not.toHaveBeenCalled(); expect(booking).not.toHaveBeenCalled();
+});
+it("revisits a visual answer from final review and invalidates the old confirmation", async () => {
+  mockBoundProduct();
+  const size = node("size", "collect", { fieldKey: "size", prompt: "Madhësia?" }); size.label = "Madhësia";
+  const graph = boundGraph(node("product", "product"), size);
+  const state = migrateContext(emptyState());
+  for (const [key, value] of Object.entries({ name: "Ana", phone: "0691234567", city: "Tiranë", address: "Rruga 1" })) setFact(state, `customer_${key}`, value, key === "phone" ? "phone" : "text", "message");
+  const first = await executeVisualTurn({ ...params(graph), state, message: "Puzzle" }, async p => response(p));
+  const review = await executeVisualTurn({ ...params(graph), state: first.nextState, message: "M" }, async p => response(p));
+  expect(review.nextState.context?.execution.awaitingOrderConfirmation).toBe(true);
+  const corrected = await executeVisualTurn({ ...params(graph), state: review.nextState, message: "Ndrysho madhësinë" }, async p => response(p));
+  expect(corrected.reply).toBe("Madhësia?");
+  expect(corrected.nextState.visual?.nodeId).toBe("size");
+  expect(corrected.nextState.context?.execution.awaitingOrderConfirmation).toBe(false);
+  const nextReview = await executeVisualTurn({ ...params(graph), state: corrected.nextState, message: "L" }, async p => response(p));
+  expect(nextReview.reply).toContain("Madhësia: L"); expect(nextReview.nextState.step_key).toBe("order_confirm");
+});
+it("offers bound products before entering a generic legacy selection", async () => {
+  const entity = { id: boundProductId, kind: "product", name: "Puzzle" };
+  mocks.entity.mockResolvedValue({ available: [entity] });
+  const graph = boundGraph(node("product", "product"));
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const first = await executeVisualTurn({ ...params(graph), message: "Dua të porosis", orderRequest: true }, legacy);
+  expect(first.reply).toBe("Cilin produkt dëshironi? Puzzle."); expect(legacy).not.toHaveBeenCalled();
+  mockBoundProduct();
+  const selected = await executeVisualTurn({ ...params(graph), message: "Puzzle", state: first.nextState }, legacy);
+  expect(selected.nextState.product_id).toBe(boundProductId); expect(selected.nextState.step_key).toBe("collect_customer");
+});
+it("a product bound to an information flow does not trigger order completion", async () => {
+  mockBoundProduct();
+  const base = boundGraph(node("info", "knowledge"));
+  const graph = { ...base, version: 2 as const, flows: [{ ...base.version === 2 ? base.flows[0] : {}, id: "bound", label: "Info", kind: "information" as const, entryNodeId: "info", nodeIds: ["info"], productIds: [boundProductId] }] };
+  const result = await executeVisualTurn({ ...params(graph), message: "Puzzle", state: migrateContext(emptyState()) }, async p => response(p, "Informacion për Puzzle"));
+  expect(result.reply).toBe("Informacion për Puzzle"); expect(result.nextState.product_id).toBeNull();
+  expect(result.nextState.step_key).toBe("choose_product"); expect(result.nextState.context?.execution.orderConfirmed).not.toBe(true);
+});
+it("keeps an explicitly started custom product order through its later short answers", async () => {
+  mockBoundProduct();
+  const base = boundGraph(node("size", "collect", { fieldKey: "size", prompt: "Madhësia?" }));
+  if (base.version !== 2) throw new Error("graph"); base.flows[0].kind = "custom";
+  const first = await executeVisualTurn({ ...params(base), message: "Dua të porosis Puzzle", orderRequest: true }, async p => response(p));
+  const next = await executeVisualTurn({ ...params(base), message: "L", state: first.nextState }, async p => response(p));
+  expect(next.nextState.product_id).toBe(boundProductId); expect(next.nextState.step_key).toBe("collect_customer");
+});
+it("asks before leaving a bound order for a different unbound legacy product", async () => {
+  const graph = boundGraph(node("product", "product"));
+  const state = migrateContext(emptyState()); state.product_id = boundProductId; state.processes = { active: "order" };
+  state.visual = { ...waiting("product"), binding: { flowId: "bound", entity: { kind: "product", id: boundProductId } } };
+  mocks.entity.mockResolvedValue({ mentioned: { kind: "product", id: "legacy-product", name: "Poster" } });
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const result = await executeVisualTurn({ ...params(graph), message: "Dua Poster", state }, legacy);
+  expect(result.reply).toContain("Ta zëvendësojmë me Poster"); expect(result.nextState.product_id).toBe(boundProductId);
+  expect(result.nextState.processes?.pendingChoice?.kind).toBe("replace"); expect(legacy).not.toHaveBeenCalled();
 });

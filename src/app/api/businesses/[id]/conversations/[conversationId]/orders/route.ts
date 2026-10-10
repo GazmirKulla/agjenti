@@ -5,6 +5,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
+import { restoreOrder } from "@/lib/workflows/conversation-processes";
 
 async function canAccess(userId: string, businessId: string) {
 	if (await isPlatformAdmin(userId)) return true;
@@ -45,13 +46,34 @@ export async function POST(
 		.select("collected")
 		.eq("conversation_id", conversationId)
 		.maybeSingle();
-	const state = (stateRow?.collected ?? {}) as ConversationStatePayload;
-	if(state.schemaVersion===2 && (state.step_key!=="order_ready" || !state.context?.execution.orderConfirmed)) return NextResponse.json({error:"Porosia pret plotësimin dhe konfirmimin e klientit."},{status:400});
+	const storedState = (stateRow?.collected ?? {}) as ConversationStatePayload;
+	// Another process can own the current cursor while the confirmed order waits for staff.
+	const state = storedState.schemaVersion === 3 && storedState.context && storedState.processes?.order
+		? restoreOrder(storedState) : storedState;
+	if((state.schemaVersion===2 || state.schemaVersion===3) && (state.step_key!=="order_ready" || !state.context?.execution.orderConfirmed || !state.product_id)) return NextResponse.json({error:"Porosia pret plotësimin dhe konfirmimin e klientit."},{status:400});
 	const customer = state.customer ?? { name: null, phone: null, city: null, address: null };
 	if (!customer.name || !customer.phone || !customer.address) {
 		return NextResponse.json({ error: "Mungojnë të dhënat e klientit." }, { status: 400 });
 	}
 
+	const { data: product } = state.product_id
+		? await service
+				.from("products")
+				.select("id,name,external_id,product_type_id,price_amount")
+				.eq("id", state.product_id)
+				.eq("business_id", businessId)
+				.maybeSingle()
+		: { data: null };
+	if (state.product_id && !product) return NextResponse.json({ error: "Produkti nuk u gjet në këtë biznes." }, { status: 400 });
+	const { data: productType } = product?.product_type_id
+		? await service
+				.from("product_types")
+				.select("external_key")
+				.eq("id", product.product_type_id)
+				.maybeSingle()
+		: { data: null };
+	const productTypeKey =
+		productType?.external_key ?? product?.product_type_id ?? null;
 	const ensured = await ensureCustomerForConversation({
 		businessId,
 		conversationId,
@@ -63,23 +85,6 @@ export async function POST(
 	if (!ensured.ok) {
 		return NextResponse.json({ error: ensured.error }, { status: ensured.status });
 	}
-
-	const { data: product } = state.product_id
-		? await service
-				.from("products")
-				.select("id,name,external_id,product_type_id,price_amount")
-				.eq("id", state.product_id)
-				.maybeSingle()
-		: { data: null };
-	const { data: productType } = product?.product_type_id
-		? await service
-				.from("product_types")
-				.select("external_key")
-				.eq("id", product.product_type_id)
-				.maybeSingle()
-		: { data: null };
-	const productTypeKey =
-		productType?.external_key ?? product?.product_type_id ?? null;
 
 	const { data: order } = await service
 		.from("orders")

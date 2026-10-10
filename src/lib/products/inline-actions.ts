@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { productCatalogColumns, type ProductRow } from "./catalog";
+import { publishedProductBindings } from "./workflow-binding";
 
 export type CatalogField = "workflow_id" | "product_type_id" | "is_active";
 type Change = { id: string; field: CatalogField; value: string | boolean | null; updatedAt: string };
@@ -25,11 +26,14 @@ export async function updateCatalogField(slug: string, change: Change): Promise<
   if (row.updated_at !== change.updatedAt) return { error: "Produkti ndryshoi ndërkohë. Rifresko listën dhe provo përsëri." };
   const changes: Record<string, unknown> = { [change.field]: change.value, updated_at: new Date().toISOString() };
   const next = { ...row, ...changes } as ProductRow;
+  let visual: ProductRow["visual_workflow"];
+  try { visual = (await publishedProductBindings(businessId)).get(next.id); }
+  catch { if (!next.workflow_id && next.is_active) return { error: "Nuk u verifikua rrjedha e publikuar. Provo përsëri." }; }
   // Clearing a mapping explicitly returns a published product to draft.
-  const demoted = next.is_active && (!next.product_type_id || !next.workflow_id) && change.field !== "is_active";
+  const demoted = next.is_active && (!next.product_type_id || (!next.workflow_id && !visual)) && change.field !== "is_active";
   if (demoted) changes.is_active = next.is_active = false;
   if (next.is_active) {
-    const missing = [next.price_amount == null || !Number.isFinite(Number(next.price_amount)) || Number(next.price_amount) < 0 ? "çmimin" : "", !next.product_type_id ? "llojin" : "", !next.workflow_id ? "workflow-n" : ""].filter(Boolean);
+    const missing = [next.price_amount == null || !Number.isFinite(Number(next.price_amount)) || Number(next.price_amount) < 0 ? "çmimin" : "", !next.product_type_id ? "llojin" : "", !next.workflow_id && !visual ? "workflow-n e publikuar" : ""].filter(Boolean);
     if (missing.length) return { error: `Për aktivizim, plotëso ${missing.join(" dhe ")}.` };
   }
   // Validate only references being changed, or all references for activation.
@@ -45,5 +49,5 @@ export async function updateCatalogField(slug: string, change: Change): Promise<
   if (saved.error) return { error: "Ndryshimi nuk u ruajt. Provo përsëri." };
   if (!saved.data) return { error: "Produkti ndryshoi ndërkohë. Rifresko listën dhe provo përsëri." };
   revalidatePath(`/b/${slug}`, "layout");
-  return { product: saved.data as ProductRow, success: demoted ? "U ruajt. Produkti kaloi në draft sepse lidhja u hoq." : "U ruajt." };
+  return { product: { ...saved.data, visual_workflow: visual ?? null } as ProductRow, success: demoted ? "U ruajt. Produkti kaloi në draft sepse lidhja u hoq." : "U ruajt." };
 }

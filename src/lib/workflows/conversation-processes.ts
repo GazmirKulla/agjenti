@@ -25,6 +25,7 @@ export type ConversationProcesses = {
   promptOwner?: ProcessKind | null;
   order?: { id: string; status: "active" | "suspended" | "completed"; snapshot: OrderTaskSnapshot };
   booking?: { id: string; status: "active" | "suspended" | "completed"; draft?: BookingDraft; versionId?: string; visual?: ConversationStatePayload["visual"] };
+  service?: { id: string; status: "active" | "suspended" | "completed"; promptCurrent?: boolean; versionId: string; visual: NonNullable<ConversationStatePayload["visual"]>; fields: ConversationStatePayload["fields"]; order: SharedContext["order"] };
   auxiliary?: { process: "information" | "support"; visual: NonNullable<ConversationStatePayload["visual"]> };
   pendingChoice?: { kind: "process" | "replace"; process?: ProcessKind; message: string };
   lastDecision?: ConversationRouting;

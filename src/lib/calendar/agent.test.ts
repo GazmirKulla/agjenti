@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
       duration_minutes: 30,
       buffer_minutes: 0,
       is_active: true,
+      booking_enabled: true,
+      business_id: "business",
     },
   ],
 }));
@@ -34,10 +36,11 @@ vi.mock("@/lib/dashboard/profile/service", () => ({
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({
     from: () => {
+      const filters: [string, unknown][] = [];
       const chain = {
         select: () => chain,
-        eq: () => chain,
-        order: async () => ({ data: mocks.services }),
+        eq: (key: string, value: unknown) => { filters.push([key, value]); return chain; },
+        order: async () => ({ data: mocks.services.filter(service => filters.every(([key, value]) => service[key as keyof typeof service] === value)) }),
         maybeSingle: async () => ({ data: mocks.cfg }),
       };
       return chain;
@@ -55,6 +58,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-10-09T12:00Z"));
   mocks.cfg.agent_booking_enabled = true;
   mocks.cfg.confirmation_mode = "manual";
+  mocks.services = [{ id: "service", name: "Prerje", duration_minutes: 30, buffer_minutes: 0, is_active: true, booking_enabled: true, business_id: "business" }];
   mocks.profile.mockResolvedValue({ enabledModules: ["bookings"] });
   mocks.visual.mockResolvedValue(null);
   mocks.extract.mockResolvedValue({
@@ -243,4 +247,53 @@ it("retains the confirmation and nonce when a write response is uncertain", asyn
   const turn=await processBookingTurn({businessId:"business",message:"Konfirmoj",state:confirmState(),conversationKey:"conversation"});
   expect(turn?.nextState.fields.booking).toMatchObject({phase:"confirm",nonce:"request-1",time:"09:00"});
   expect(turn?.reply).toContain("sërish konfirmimin");
+});
+
+it("seeds the bound service and keeps it through collection and confirmation", async () => {
+  mocks.services.push({ ...mocks.services[0], id: "other-service", name: "Ngjyrosje" });
+  mocks.extract.mockResolvedValue({ bookingIntent: true, cancel: false, serviceId: null, date: "2026-10-15", time: null, name: "Klienti", contact: null });
+  const first = await processBookingTurn({ businessId: "business", message: "Dua më 15 tetor", routed: true, selectedServiceId: "service" });
+  expect(first?.nextState.fields.booking).toMatchObject({ serviceId: "service", date: "2026-10-15", phase: "collect" });
+  expect(first?.reply).not.toContain("Cilin shërbim");
+  expect(mocks.extract.mock.calls[0][1].map((service: { id: string }) => service.id)).toEqual(["service"]);
+  expect(mocks.slots).toHaveBeenCalledWith("business", "service", "2026-10-15");
+
+  mocks.extract.mockResolvedValue({ bookingIntent: true, cancel: false, serviceId: null, date: null, time: "09:00", name: null, contact: null });
+  const second = await processBookingTurn({ businessId: "business", message: "09:00", state: first!.nextState, routed: true, selectedServiceId: "service" });
+  expect(second?.nextState.fields.booking).toMatchObject({ serviceId: "service", time: "09:00", phase: "confirm" });
+  expect(second?.reply).toContain("Konfirmon Prerje");
+  expect(mocks.persist).not.toHaveBeenCalled();
+  const guard = { jobId: 1, leaseToken: "lease", conversationId: "conversation", revision: 1 };
+  await processBookingTurn({ businessId: "business", message: "Konfirmoj", state: second!.nextState, routed: true, selectedServiceId: "service", conversationKey: "conversation", bookingGuard: guard });
+  expect(mocks.persist).toHaveBeenCalledOnce();
+  expect(mocks.persist).toHaveBeenCalledWith("business", expect.objectContaining({ serviceId: "service", name: "Klienti" }), guard);
+});
+
+it.each([
+  { name: "missing", override: null },
+  { name: "inactive", override: { is_active: false } },
+  { name: "not bookable", override: { booking_enabled: false } },
+  { name: "another business", override: { business_id: "other-business" } },
+])("rejects a $name bound service before a confirmation can write", async ({ override }) => {
+  if (override) mocks.services.push({ ...mocks.services[0], id: "unavailable-service", ...override });
+  const state = confirmState();
+  state.fields.booking.serviceId = "unavailable-service";
+  const original = structuredClone(state);
+  expect(await processBookingTurn({ businessId: "business", message: "Konfirmoj", state, selectedServiceId: "unavailable-service", conversationKey: "conversation" })).toBeNull();
+  expect(state).toEqual(original);
+  expect(mocks.extract).not.toHaveBeenCalled();
+  expect(mocks.slots).not.toHaveBeenCalled();
+  expect(mocks.persist).not.toHaveBeenCalled();
+});
+
+it("does not silently replace an existing booking with another bound service", async () => {
+  mocks.services.push({ ...mocks.services[0], id: "other-service", name: "Ngjyrosje" });
+  const state = confirmState();
+  const original = structuredClone(state);
+  const result = await processBookingTurn({ businessId: "business", message: "Konfirmoj", state, selectedServiceId: "other-service", conversationKey: "conversation" });
+  expect(result).toBeNull();
+  expect(state).toEqual(original);
+  expect(mocks.extract).not.toHaveBeenCalled();
+  expect(mocks.slots).not.toHaveBeenCalled();
+  expect(mocks.persist).not.toHaveBeenCalled();
 });

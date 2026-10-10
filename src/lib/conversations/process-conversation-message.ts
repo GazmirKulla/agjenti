@@ -3,13 +3,14 @@ import { processBookingTurn, type BookingDraft } from "@/lib/calendar/agent";
 import type { BookingEffectGuard } from "@/lib/calendar/service";
 import { agentModel } from "@/lib/agents/generate";
 import { processAgentTurn, processLegacyAgentTurn, type AgentTurnParams, type AgentTurnResult } from "./process-agent-turn";
-import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
-import { affirmative, extractExplicitFacts, isQuestion, resetOrder, setFact, sharedWorkflowEnabled } from "@/lib/workflows/context";
+import { emptyState, foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
+import { affirmative, extractExplicitFacts, isQuestion, migrateContext, resetOrder, setFact, sharedWorkflowEnabled } from "@/lib/workflows/context";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
 import { chooseGuidance, explicitIntent, rememberTurn } from "@/lib/workflows/guidance";
 import { bookingAdapterState, migrateConversationProcesses, restoreOrder, snapshotOrder, type ConversationRouting, type ProcessKind } from "@/lib/workflows/conversation-processes";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
 import { customerOrderStatus, isOrderStatusFollowUp, isOrderStatusRequest, readOrderStatusLookup, setOrderStatusLookup, type OrderCustomerIdentity } from "@/lib/orders/customer-status";
+import { isEntityInformationRequest, resolveVisualEntity } from "@/lib/workflows/visual/entity-routing";
 
 export type ConversationMessageParams = AgentTurnParams & {
   /** Server webhook identity, never accepted from chat text or preview state. */
@@ -91,6 +92,7 @@ export async function processConversationMessage(params: ConversationMessagePara
     // The status answer replaces the last question. Preserve tasks, but do not let a
     // later bare yes accept an older replace/process choice the customer no longer sees.
     delete state.processes!.pendingChoice;
+    if (state.processes!.service) state.processes!.service.promptCurrent = false;
     const lookup = readOrderStatusLookup(state);
     const version = params.visualPreview ?? await loadVisualVersion(params.businessId, lookup?.visual?.versionId);
     const statusNode = version?.graph.version === 2 ? version.graph.nodes.find(node => node.kind === "order_status") : undefined;
@@ -128,6 +130,69 @@ export async function processConversationMessage(params: ConversationMessagePara
   const processes = state.processes!;
   const oldProfile = JSON.stringify(state.context!.profile);
   const graphVersion = params.visualPreview ?? await loadVisualVersion(params.businessId, processes.active === "booking" ? processes.booking?.versionId : state.visual?.versionId);
+  const entityMessage = processes.pendingChoice?.kind === "replace" && affirmative(params.message) ? processes.pendingChoice.message : params.message;
+  const ordinaryQuestion = isEntityInformationRequest(entityMessage) || isQuestion(entityMessage) && !/\b(dua|kerkoj|rezervo|book|want|vazhdo|rifillo)\b/.test(foldText(entityMessage));
+  const continueService = processes.service?.status === "active" && !ordinaryQuestion && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
+  let serviceVersion = continueService ? params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service!.versionId) : graphVersion;
+  let entityResolution = !ordinaryQuestion && serviceVersion ? await resolveVisualEntity(params.businessId, serviceVersion.graph, entityMessage, continueService ? processes.service?.visual.binding : undefined) : {};
+  let resumingService = Boolean(continueService && entityResolution.selected?.entity.id === processes.service?.visual.binding?.entity.id);
+  if (!ordinaryQuestion && !continueService && processes.service && processes.service.status !== "completed") {
+    const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service.versionId);
+    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage) : {};
+    if (match.selected && match.selected.entity.id === processes.service.visual.binding?.entity.id && match.selected.entity.kind === processes.service.visual.binding.entity.kind) { entityResolution = match; serviceVersion = pinned; resumingService = true; }
+  }
+  let resumingOrder = false;
+  const orderVisual = processes.order?.status !== "completed" ? processes.order?.snapshot.visual : undefined;
+  if (!ordinaryQuestion && orderVisual?.binding && !processes.pendingChoice) {
+    const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, orderVisual.versionId);
+    const continuing = processes.active === "order" && explicitIntent(entityMessage) !== "support" && !bookingRequest(foldText(entityMessage));
+    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, resumeOrder(foldText(entityMessage)) || continuing ? orderVisual.binding : undefined) : {};
+    if (match.selected?.entity.kind === "product" && match.selected.entity.id === orderVisual.binding.entity.id) { entityResolution = match; serviceVersion = pinned; resumingOrder = true; resumingService = false; }
+  }
+  let resumingBooking = false;
+  const bookingVisual = processes.booking?.status !== "completed" ? processes.booking?.visual : undefined;
+  if (!ordinaryQuestion && bookingVisual?.binding && !processes.pendingChoice) {
+    const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, bookingVisual.versionId);
+    const continuing = processes.active === "booking" && !["order", "support"].includes(explicitIntent(entityMessage)) && !resumeOrder(foldText(entityMessage));
+    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, continuing ? bookingVisual.binding : undefined) : {};
+    if (match.selected?.entity.kind === "service" && match.selected.entity.id === bookingVisual.binding.entity.id) { entityResolution = match; serviceVersion = pinned; resumingBooking = true; resumingService = false; resumingOrder = false; }
+  }
+  const freshEntityVersion = !ordinaryQuestion && !resumingService && !resumingOrder && !resumingBooking && Boolean(state.visual);
+  if (freshEntityVersion && !params.visualPreview) {
+    const latest = await loadVisualVersion(params.businessId);
+    entityResolution = latest ? await resolveVisualEntity(params.businessId, latest.graph, entityMessage) : {};
+    serviceVersion = latest;
+  }
+  const selectedEntity = entityResolution.selected;
+  if (entityResolution.choices?.length) {
+    processes.promptOwner = null;
+    if (processes.service) processes.service.promptCurrent = false;
+    return plainResult(state, `Cilin produkt ose shërbim dëshiron: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`);
+  }
+  const entityFlow = selectedEntity && serviceVersion?.graph.version === 2 ? serviceVersion.graph.flows.find(flow => flow.id === selectedEntity.binding.flowId) : undefined;
+  const serviceBooking = selectedEntity?.entity.kind === "service" && entityFlow?.nodeIds.some(id => serviceVersion!.graph.nodes.some(node => node.id === id && node.kind === "booking"));
+  const productOrder = selectedEntity?.entity.kind === "product" && Boolean(entityFlow && (entityFlow.kind === "order" || entityFlow.nodeIds.some(id => serviceVersion!.graph.nodes.some(node => node.id === id && node.kind === "product")) || entityFlow.kind === "custom" && (explicitIntent(entityMessage) === "order" || processes.order?.snapshot.product_id === selectedEntity.entity.id && orderVisual?.binding?.entity.id === selectedEntity.entity.id)));
+  if (selectedEntity && entityFlow && !productOrder && !serviceBooking && serviceVersion && !processes.pendingChoice) {
+    if (affirmative(params.message) && processes.service && !processes.service.promptCurrent) return plainResult(state, "Cilën kërkesë dëshiron të konfirmosh? Shkruaj shërbimin që dëshiron të vazhdosh.");
+    if (processes.active === "order" && processes.order) processes.order.snapshot = snapshotOrder(state);
+    if (processes.active && processes[processes.active]) processes[processes.active]!.status = "suspended";
+    const old = processes.service?.status !== "completed" && processes.service?.visual.binding?.entity.id === selectedEntity.entity.id ? processes.service : undefined;
+    const adapter = migrateContext(emptyState()); adapter.schemaVersion = 3; adapter.processes = processes;
+    adapter.context!.profile = structuredClone(state.context!.profile); adapter.customer = structuredClone(state.customer); adapter.recentMessages = state.recentMessages;
+    adapter.fields = structuredClone(old?.fields ?? {}); adapter.context!.order = structuredClone(old?.order ?? {});
+    adapter.visual = old?.visual ?? { versionId: serviceVersion.id, nodeId: entityFlow.entryNodeId, status: "running", awaiting: false, visited: [], values: {}, binding: selectedEntity.binding };
+    const answer = await processAgentTurn({ ...params, state: adapter, entityVersion: serviceVersion });
+    const visual = answer.nextState.visual!;
+    processes.service = { id: old?.id ?? randomUUID(), versionId: serviceVersion.id, visual, status: visual.status === "waiting" ? "active" : "completed", promptCurrent: visual.status === "waiting", fields: answer.nextState.fields, order: answer.nextState.context?.order ?? {} };
+    state.context!.profile = answer.nextState.context?.profile ?? state.context!.profile; state.customer = answer.nextState.customer;
+    if (JSON.stringify(state.context!.profile) !== oldProfile && processes.order) { processes.order.snapshot.execution.orderConfirmed = false; processes.order.snapshot.execution.awaitingOrderConfirmation = false; }
+    state.visual = visual;
+    processes.active = null; processes.promptOwner = null; delete processes.pendingChoice;
+    const decision: ConversationRouting = { process: "information", action: old ? "continue" : "start", source: "rules", reason: `Vazhdon rrjedha e lidhur me ${selectedEntity.entity.name}.`, reusedFields: Object.keys(state.context!.profile), missingFields: [] };
+    processes.lastDecision = decision; answer.nextState = state; answer.workflowId = null; answer.conversationRouting = decision;
+    rememberTurn(params.state, state, params.message, answer.reply); return answer;
+  }
+  if (selectedEntity || freshEntityVersion || (!orderVisual && explicitIntent(entityMessage) === "order" && serviceVersion)) params = { ...params, entityVersion: serviceVersion };
   explicitProfile(state, params.message);
   const steps = state.context?.execution.linear?.steps ?? [];
   await extractMessageFacts(state, params.message, [...profileExtractionFields,
@@ -153,7 +218,10 @@ export async function processConversationMessage(params: ConversationMessagePara
   }
   let message = params.message;
   let replacementResolved = false;
+  let replacementDeclined = false;
   let route = await routeMessage(message, state);
+  if (serviceBooking) route = { process: "booking", source: "rules" };
+  else if (productOrder) route = { process: "order", source: "rules" };
   const decision: ConversationRouting = { ...route, action: "continue", reason: "Mesazhi vazhdon procesin aktual.", reusedFields: [], missingFields: [] };
   const finish = (result: AgentTurnResult) => {
     result.nextState.schemaVersion = 3;
@@ -179,6 +247,7 @@ export async function processConversationMessage(params: ConversationMessagePara
       else delete processes.booking;
       delete processes.pendingChoice;
     } else if (/^(jo|no)[.!\s]*$/.test(foldText(message))) {
+      replacementDeclined = true;
       route = { process: pending.process!, source: "rules" };
       message = pending.process === "order" ? "Vazhdo porosinë" : "Vazhdo rezervimin";
       delete processes.pendingChoice;
@@ -205,6 +274,7 @@ export async function processConversationMessage(params: ConversationMessagePara
     message = "Konfirmoj";
   }
   if (route.process === "information") {
+    if (processes.service) processes.service.promptCurrent = false;
     decision.action = "answer"; decision.reason = "Pyetja merr përgjigje; progresi i porosisë dhe rezervimit ruhet.";
     processes.promptOwner = null;
     const version = graphVersion;
@@ -233,6 +303,7 @@ export async function processConversationMessage(params: ConversationMessagePara
     return finish(answer);
   }
   if (route.process === "support") {
+    if (processes.service) processes.service.promptCurrent = false;
     decision.action = "answer"; decision.reason = "Klienti kërkon ndihmë; proceset e papërfunduara mbeten të ruajtura.";
     if (processes.active) {
       const task = processes[processes.active]; if (task) task.status = "suspended";
@@ -252,9 +323,12 @@ export async function processConversationMessage(params: ConversationMessagePara
     return finish(result);
   }
   const target = route.process;
+  if (processes.service?.status === "active") processes.service.status = "suspended";
   delete processes.auxiliary;
+  if (target === "booking" && processes.booking?.status === "completed") delete processes.booking;
   const task = processes[target];
-  if (task && task.status !== "completed" && newRequest(foldText(message), target) && !replacementResolved) {
+  const changedBookedService = target === "booking" && serviceBooking && selectedEntity && processes.booking?.draft?.serviceId && processes.booking.draft.serviceId !== selectedEntity.entity.id;
+  if (task && task.status !== "completed" && (newRequest(foldText(message), target) || changedBookedService) && !replacementResolved) {
     processes.pendingChoice = { kind: "replace", process: target, message };
     return clarify(`Ke një ${target === "order" ? "porosi" : "rezervim"} të papërfunduar. Ta zëvendësojmë me kërkesën e re? Shkruaj “Po” ose “Jo”.`);
   }
@@ -270,13 +344,14 @@ export async function processConversationMessage(params: ConversationMessagePara
   if (target === "booking") {
     if (params.canAct && !(await params.canAct())) throw new Error("conversation_manually_paused");
     const adapter = bookingAdapterState(state);
-    const bookingVersion = processes.booking?.versionId && graphVersion?.id !== processes.booking.versionId ? await loadVisualVersion(params.businessId, processes.booking.versionId) : graphVersion;
+    const bookingVersion = processes.booking?.versionId ? params.visualPreview ?? await loadVisualVersion(params.businessId, processes.booking.versionId)
+      : params.entityVersion !== undefined ? params.entityVersion : params.visualPreview ?? (processes.booking ? graphVersion : await loadVisualVersion(params.businessId));
     const bookingTurn = (bookingState: ConversationStatePayload) => processBookingTurn({ businessId: params.businessId, message, state: bookingState, mode: params.mode,
       conversationKey: params.conversationKey, onTrace: params.onTrace, routed: true, resume: decision.action === "resume",
-      bookingGuard: params.bookingGuard, canAct: params.canAct });
-    const configuredBooking = bookingVersion?.graph.version !== 2 || bookingVersion.graph.flows.some(flow => flow.kind === "booking");
+      bookingGuard: params.bookingGuard, canAct: params.canAct, selectedServiceId: bookingState.visual?.binding?.entity.kind === "service" ? bookingState.visual.binding.entity.id : undefined });
+    const configuredBooking = (Boolean(serviceBooking) || Boolean(processes.booking?.visual?.binding) || bookingVersion?.graph.version !== 2 || bookingVersion.graph.flows.some(flow => flow.kind === "booking")) && !(params.entityVersion === null && !processes.booking);
     const result = !configuredBooking ? null : bookingVersion?.graph.nodes.some(node => node.kind === "booking")
-      ? await processAgentTurn({ ...params, message, state: adapter, bookingRequest: true, bookingNavigation: decision.action === "resume" || bookingRequest(foldText(message)), bookingTurn })
+      ? await processAgentTurn({ ...params, message, state: adapter, entityVersion: bookingVersion ?? undefined, bookingRequest: true, bookingNavigation: decision.action === "resume" || bookingRequest(foldText(message)), bookingTurn })
       : await bookingTurn(adapter);
     if (!result) {
       // Disabled capability cannot consume an unrelated pending field or discard its task.
@@ -300,12 +375,15 @@ export async function processConversationMessage(params: ConversationMessagePara
   }
   if (processes.order?.status === "completed") { delete processes.order; state = resetOrder(state); }
   else if (processes.order) state = restoreOrder(state);
+  else if (freshEntityVersion && state.visual?.binding && (!selectedEntity || selectedEntity.binding.flowId !== state.visual.binding.flowId || params.entityVersion?.id !== state.visual.versionId)) delete state.visual;
   let usedBookingNode = false;
+  if (replacementDeclined) params = { ...params, entityVersion: undefined };
   const result = await processAgentTurn({ ...params, message, state, orderRequest: decision.action === "resume" || resumeOrder(foldText(message)) || explicitIntent(message) === "order",
     bookingTurn: async bookingState => {
       const adapter = bookingAdapterState(bookingState);
       const booking = await processBookingTurn({ businessId: params.businessId, message, state: adapter, mode: params.mode,
-        conversationKey: params.conversationKey, onTrace: params.onTrace, routed: true, bookingGuard: params.bookingGuard, canAct: params.canAct });
+        conversationKey: params.conversationKey, onTrace: params.onTrace, routed: true, bookingGuard: params.bookingGuard, canAct: params.canAct,
+        selectedServiceId: bookingState.visual?.binding?.entity.kind === "service" ? bookingState.visual.binding.entity.id : undefined });
       usedBookingNode = Boolean(booking);
       return booking;
     } });

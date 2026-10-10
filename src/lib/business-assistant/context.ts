@@ -6,7 +6,7 @@ export type AssistantUIContext = {
   searchQuery?: string;
   filters?: { status: string };
   selectedEntityIds?: string[];
-  workflowSelection?: { nodeId?: string; revision: number; dirty: boolean };
+  workflowSelection?: { nodeId?: string; flowId?: string; revision: number; dirty: boolean };
   entryPoint: "home" | "contextual";
 };
 const pages = [
@@ -97,9 +97,9 @@ export function parseUIContext(raw: unknown): AssistantUIContext | undefined {
   )
     throw new AssistantError("Zgjedhja e produktit ndryshoi. Provo përsëri.");
   const selection = c.workflowSelection as AssistantUIContext["workflowSelection"];
-  if (selection !== undefined && (c.page !== "workflows" || !selection || typeof selection !== "object" || !Number.isInteger(selection.revision) || selection.revision < 0 || typeof selection.dirty !== "boolean" || (selection.nodeId !== undefined && (typeof selection.nodeId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(selection.nodeId))))) throw new AssistantError("Zgjedhja e hapit nuk është e vlefshme.");
+  if (selection !== undefined && (c.page !== "workflows" || !selection || typeof selection !== "object" || !Number.isInteger(selection.revision) || selection.revision < 0 || typeof selection.dirty !== "boolean" || [selection.nodeId, selection.flowId].some(id => id !== undefined && (typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(id))))) throw new AssistantError("Zgjedhja e hapit nuk është e vlefshme.");
   return {
-    ...(selection ? { workflowSelection: { revision: selection.revision, dirty: selection.dirty, ...(selection.nodeId ? {nodeId: selection.nodeId} : {}) } } : {}),
+    ...(selection ? { workflowSelection: { revision: selection.revision, dirty: selection.dirty, ...(selection.nodeId ? {nodeId: selection.nodeId} : {}), ...(selection.flowId ? {flowId: selection.flowId} : {}) } } : {}),
     ...(selectedIds.length === 1
       ? { entityType: "product" as const, entityId: selectedIds[0] }
       : {}),

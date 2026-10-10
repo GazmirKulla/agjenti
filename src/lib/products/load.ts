@@ -3,13 +3,14 @@ import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { productCatalogColumns, type ProductRow, type Option } from "./catalog";
+import { loadVisualBindings } from "@/lib/workflows/visual/bindings";
 export const loadProducts = cache(async (slug: string) => {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const [products, types, workflows] = await Promise.all([
+  const [products, types, workflows, bindings] = await Promise.all([
     db
       .from("products")
       .select(productCatalogColumns)
@@ -25,12 +26,16 @@ export const loadProducts = cache(async (slug: string) => {
       .select("id,name")
       .eq("business_id", access.business.id)
       .order("name"),
+    loadVisualBindings(access.business.id),
   ]);
   if (products.error || types.error || workflows.error)
     throw new Error("Nuk u ngarkua katalogu.");
   return {
     business: access.business,
-    products: (products.data ?? []) as ProductRow[],
+    products: ((products.data ?? []) as ProductRow[]).map(product => {
+      const binding = bindings.enabled && bindings.versionId ? bindings.products.find(item => item.id === product.id) : undefined;
+      return { ...product, visual_workflow: binding && bindings.versionId ? { versionId: bindings.versionId, flowId: binding.flowId, name: binding.flowLabel } : null };
+    }),
     types: (types.data ?? []) as Option[],
     workflows: (workflows.data ?? []) as Option[],
   };

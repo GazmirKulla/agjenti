@@ -116,6 +116,8 @@ export type AgentTurnParams = {
   /** A routed order request is not an answer to the pending product field. */
   orderRequest?: boolean;
   visualPreview?: import("@/lib/workflows/visual/types").VisualVersion;
+  /** Immutable version selected by the server entity router; never accepted from client payloads. */
+  entityVersion?: import("@/lib/workflows/visual/types").VisualVersion | null;
   onTrace?: TraceObserver;
   mode?: "production" | "test";
   source?: "instagram" | "admin_chat_lab";

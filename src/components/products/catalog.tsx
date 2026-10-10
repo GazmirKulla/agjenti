@@ -13,6 +13,7 @@ import {
 import { bulkConfigureProducts } from "@/lib/products/actions";
 import { updateCatalogField, type CatalogField } from "@/lib/products/inline-actions";
 import { productMoney as money } from "@/lib/products/catalog";
+import { EntityFlowLink, entityWorkflowHref } from "@/components/workflows/entity-flow-link";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "Aktiv",
@@ -184,8 +185,7 @@ export function ProductCatalog({
             produkte të palidhura
           </strong>
           <p>
-            Hap «Konfiguro» te çdo produkt ose zgjidh disa dhe përdor «Veprime»
-            për llojin dhe workflow-n.
+            Hap «Konfiguro» te çdo produkt për llojin dhe rrjedhën e tij. Rrjedhat lidhen drejtpërdrejt te Workflow.
           </p>
         </div>
       )}
@@ -311,6 +311,7 @@ export function ProductCatalog({
                           </small>
                         </span>
                       </Link>
+                      {p.visual_workflow && <Link className="catalog-flow-name" href={entityWorkflowHref(slug, "product", p.id, p.visual_workflow.flowId)}>{p.visual_workflow.name} ↗</Link>}
                     </td>
                     <td>{money(p.price_amount, p.currency)}</td>
                     <td>
@@ -447,8 +448,9 @@ export function ProductCatalog({
                   ))}
                 </select>
               </label>
-              <label className="form-label">
-                Workflow
+              <EntityFlowLink slug={slug} kind="product" id={configProduct.id} binding={configProduct.visual_workflow} />
+              {!configProduct.visual_workflow && <label className="form-label">
+                Konfigurim ekzistues i porosisë (opsional)
                 <select
                   className="field"
                   value={
@@ -482,7 +484,7 @@ export function ProductCatalog({
                     </option>
                   ))}
                 </select>
-              </label>
+              </label>}
               <label className="form-label">
                 Statusi
                 <select
@@ -513,8 +515,7 @@ export function ProductCatalog({
               </label>
               {!isMapped(configProduct) && (
                 <p className="muted-copy">
-                  Produkti është i palidhur — cakto llojin dhe workflow-n para
-                  aktivizimit.
+                  Plotëso llojin dhe lidh produktin me një rrjedhë para aktivizimit. Lidhjet e reja hyjnë në fuqi pas publikimit.
                 </p>
               )}
               <small

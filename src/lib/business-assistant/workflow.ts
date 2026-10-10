@@ -12,6 +12,7 @@ import type {
   VisualFlow,
 } from "@/lib/workflows/visual/types";
 import { AssistantError, type Preview } from "./model";
+import type { VisualBindingCatalog } from "@/lib/workflows/visual/bindings";
 
 export type WorkflowCard = {
   workspace: VisualWorkspace;
@@ -61,7 +62,11 @@ export function applyWorkflowOperations(
         graph = upgradeVisualGraph(graph);
         const index = graph.flows.findIndex(flow => flow.id === operation.flow.id);
         if (index < 0) graph.flows.push(operation.flow);
-        else graph.flows[index] = operation.flow;
+        else graph.flows[index] = {
+          ...operation.flow,
+          ...(operation.flow.productIds === undefined && graph.flows[index].productIds !== undefined ? { productIds: graph.flows[index].productIds } : {}),
+          ...(operation.flow.serviceIds === undefined && graph.flows[index].serviceIds !== undefined ? { serviceIds: graph.flows[index].serviceIds } : {}),
+        };
         break;
       }
       case "remove_flow": {
@@ -151,16 +156,35 @@ export function describeWorkflowNode(node: VisualNode) {
 export function workflowPreview(
   before: VisualGraph,
   after: VisualGraph,
+  catalog?: VisualBindingCatalog,
 ): Preview {
   const fields: Preview["fields"] = [];
   if (before.name !== after.name)
     fields.push({ label: "Emri", before: before.name, after: after.name });
   const oldFlows = before.version === 2 ? before.flows : [], newFlows = after.version === 2 ? after.flows : [];
-  const flowDescription = (flow: VisualFlow | undefined, graph: VisualGraph) => flow ? `${flow.label} · ${flow.kind} · Fillon te ${graph.nodes.find(n => n.id === flow.entryNodeId)?.label ?? flow.entryNodeId}
-${flow.nodeIds.map(id => graph.nodes.find(n => n.id === id)?.label ?? id).join(", ")}` : "—";
+  const targetLabel = (id: string, kind: "products" | "services") => {
+    const items = catalog?.[kind] ?? [], item = items.find(target => target.id === id);
+    if (!item) return kind === "products" ? "Produkt i padisponueshëm" : "Shërbim i padisponueshëm";
+    const duplicates = items.filter(target => target.name === item.name);
+    if (duplicates.length < 2) return item.name;
+    let length = 8;
+    while (length < id.length && duplicates.some(target => target.id !== id && target.id.slice(0, length) === id.slice(0, length))) length += 4;
+    return `${item.name} (${id.slice(0, length)}${length < id.length ? "…" : ""})`;
+  };
+  const flowSignature = (flow: VisualFlow | undefined) => flow && JSON.stringify({
+    id: flow.id, label: flow.label, kind: flow.kind, entryNodeId: flow.entryNodeId,
+    nodeIds: flow.nodeIds, productIds: flow.productIds ?? [], serviceIds: flow.serviceIds ?? [],
+  });
+  const flowDescription = (flow: VisualFlow | undefined, graph: VisualGraph) => flow ? [
+    `${flow.label} · ${flow.kind} · Fillon te ${graph.nodes.find(n => n.id === flow.entryNodeId)?.label ?? flow.entryNodeId}`,
+    flow.nodeIds.map(id => graph.nodes.find(n => n.id === id)?.label ?? id).join(", "),
+    flow.productIds?.length ? `Produktet: ${flow.productIds.map(id => targetLabel(id, "products")).join(", ")}` : "",
+    flow.serviceIds?.length ? `Shërbimet: ${flow.serviceIds.map(id => targetLabel(id, "services")).join(", ")}` : "",
+  ].filter(Boolean).join("\n") : "—";
   for (const id of new Set([...oldFlows, ...newFlows].map(flow => flow.id))) {
-    const old = flowDescription(oldFlows.find(f => f.id === id), before), next = flowDescription(newFlows.find(f => f.id === id), after);
-    if (old !== next) fields.push({label:"Procesi në qendrën e mesazhit",before:old,after:next});
+    const oldFlow = oldFlows.find(f => f.id === id), newFlow = newFlows.find(f => f.id === id);
+    const old = flowDescription(oldFlow, before), next = flowDescription(newFlow, after);
+    if (flowSignature(oldFlow) !== flowSignature(newFlow) || old !== next) fields.push({label:"Procesi në qendrën e mesazhit",before:old,after:next});
   }
   const nodes = new Set([...before.nodes, ...after.nodes].map((n) => n.id));
   const describe = (graph: VisualGraph, id: string) => {

@@ -110,3 +110,9 @@ it("carries bounded catalog context and resolves a single checked product", () =
     }),
   ).toThrow();
 });
+
+it("preserves a syntactically valid selected visual flow without accepting authority fields", () => {
+  expect(parseUIContext({ page: "workflows", entryPoint: "contextual", workflowSelection: { flowId: "flow_product", nodeId: "product", revision: 9, dirty: false, productIds: [id] } })?.workflowSelection)
+    .toEqual({ flowId: "flow_product", nodeId: "product", revision: 9, dirty: false });
+  expect(() => parseUIContext({ page: "workflows", entryPoint: "contextual", workflowSelection: { flowId: "not a flow", revision: 9, dirty: false } })).toThrow();
+});

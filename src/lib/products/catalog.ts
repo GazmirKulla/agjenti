@@ -10,6 +10,8 @@ export type ProductRow = {
   currency: string;
   product_type_id: string | null;
   workflow_id: string | null;
+  /** Enriched on the server from the enabled published visual graph, never a form field. */
+  visual_workflow?: { versionId: string; flowId: string; name: string } | null;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -17,7 +19,7 @@ export type ProductRow = {
 export const productCatalogColumns = "id,name,description,sku,image_url,source,external_id,price_amount,currency,product_type_id,workflow_id,is_active,created_at,updated_at";
 export type Option = { id: string; name: string; description?: string | null };
 export function isMapped(p: ProductRow) {
-  return Boolean(p.product_type_id && p.workflow_id);
+  return Boolean(p.product_type_id && (p.workflow_id || p.visual_workflow));
 }
 export function catalogStatus(p: ProductRow) {
   return !isMapped(p) ? "unlinked" : p.is_active ? "active" : "draft";

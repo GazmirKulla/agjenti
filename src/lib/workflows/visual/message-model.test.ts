@@ -18,6 +18,32 @@ function orderStatusGraph() {
 }
 
 describe("message hub definition compatibility", () => {
+  it("round trips product and service assignments without changing the source graph", () => {
+    const graph = upgradeVisualGraph(starterVisualGraph());
+    graph.flows[0].productIds = ["AAAAAAAA-0000-4000-8000-000000000001"];
+    graph.flows[1].serviceIds = ["bbbbbbbb-0000-4000-8000-000000000002"];
+    const original = structuredClone(graph);
+    const normalized = normalizeVisualDraft(graph);
+    expect(normalized?.version === 2 && normalized.flows[0].productIds).toEqual(["aaaaaaaa-0000-4000-8000-000000000001"]);
+    expect(normalized?.version === 2 && normalized.flows[1].serviceIds).toEqual(graph.flows[1].serviceIds);
+    expect(validateVisualGraph(graph).errors).toEqual([]);
+    expect(graph).toEqual(original);
+  });
+
+  it.each(["productIds", "serviceIds"] as const)("rejects malformed, oversized and ambiguous %s assignments", field => {
+    const id = "aaaaaaaa-0000-4000-8000-000000000001";
+    for (const values of [null, "all", ["not-an-id"], [id, id.toUpperCase()], Array.from({ length: 201 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`)]) {
+      const graph = upgradeVisualGraph(starterVisualGraph());
+      Object.assign(graph.flows[0], { [field]: values });
+      expect(normalizeVisualDraft(graph)).toBeNull();
+    }
+    const graph = upgradeVisualGraph(starterVisualGraph());
+    graph.flows[0][field] = [id]; graph.flows[1][field] = [id.toUpperCase()];
+    expect(normalizeVisualDraft(graph)).toBeNull();
+    graph.flows[1][field] = [];
+    expect(validateVisualGraph(graph).errors).toEqual([]);
+  });
+
   it("upgrades a working copy while keeping v1 nodes, edges and original unchanged", () => {
     const original = starterVisualGraph(), graph = upgradeVisualGraph(original);
     expect(original.version).toBe(1);

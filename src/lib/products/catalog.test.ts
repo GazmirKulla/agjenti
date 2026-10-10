@@ -21,6 +21,7 @@ describe("catalog organization", () => {
     expect(catalogStatus(product("1"))).toBe("active");
     expect(catalogStatus(product("2", { is_active: false }))).toBe("draft");
     expect(catalogStatus(product("3", { workflow_id: null }))).toBe("unlinked");
+    expect(catalogStatus(product("4", { workflow_id: null, visual_workflow: { versionId: "v", flowId: "order", name: "Porosi" } }))).toBe("active");
   });
   it("combines search, type, import and status filters then sorts", () => {
     const rows = [

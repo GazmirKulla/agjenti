@@ -53,6 +53,8 @@ export async function writeVisualWorkflow(
     return {
       error: error.message.includes("stale_workflow")
         ? "Rrjedha ndryshoi në një dritare tjetër. Rifresko faqen para ruajtjes."
+        : error.message.includes("invalid_workflow_targets")
+          ? "Një produkt ose shërbim i lidhur nuk gjendet më në këtë biznes. Hiqe lidhjen e padisponueshme dhe provo përsëri."
         : ["PGRST202", "42883", "42P01"].includes(error.code)
           ? requestId
             ? "Apliko migrimet e workflow-ve vizuale dhe historikut për të ruajtur nga Agjenti."

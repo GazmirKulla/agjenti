@@ -1,9 +1,10 @@
 import type { BusinessProcess } from "@/lib/discovery/business-process";
 import type { VisualGraph, VisualGraphV2, VisualFlow, VisualFlowKind, VisualNodeKind, VisualPort } from "./types";
-export const nodeLabels: Record<VisualNodeKind, string> = { start: "Mesazh i ri", condition: "Kusht", knowledge: "Përgjigje nga njohuritë", order_status: "Statusi i porosisë", collect: "Kërko të dhëna", confirm: "Konfirmim", product: "Workflow i produktit", booking: "Rezervim", handoff: "Kalo te stafi", end: "Përfundim" };
+export const nodeLabels: Record<VisualNodeKind, string> = { start: "Mesazh i ri", condition: "Kusht", knowledge: "Përgjigje nga njohuritë", order_status: "Statusi i porosisë", collect: "Kërko të dhëna", confirm: "Konfirmim", product: "Produkti i porosisë", booking: "Rezervim", handoff: "Kalo te stafi", end: "Përfundim" };
 export function outputPorts(kind: VisualNodeKind): VisualPort[] { return kind === "condition" || kind === "confirm" ? ["yes", "no"] : kind === "handoff" || kind === "end" ? [] : ["next"]; }
 const idPattern = /^[a-zA-Z0-9_-]{1,80}$/;
 const fieldPattern = /^[a-zA-Z][a-zA-Z0-9_]{0,59}$/;
+const bindingIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const badKeys = new Set(["__proto__", "prototype", "constructor"]);
 export function normalizeVisualDraft(raw: unknown): VisualGraph | null {
   if (!raw || typeof raw !== "object" || new TextEncoder().encode(JSON.stringify(raw)).length > 100000) return null;
@@ -27,9 +28,18 @@ export function normalizeVisualDraft(raw: unknown): VisualGraph | null {
   if (g.version === 2) {
     if (!Array.isArray(g.flows) || g.flows.length > 16) return null;
     const flowIds = new Set<string>(), members = new Set<string>();
+    const boundProducts = new Set<string>(), boundServices = new Set<string>();
     for (const flow of g.flows) {
       if (!flow || typeof flow.id !== "string" || !idPattern.test(flow.id) || badKeys.has(flow.id) || flowIds.has(flow.id) || typeof flow.label !== "string" || flow.label.length > 100 || !["order","booking","information","support","custom"].includes(flow.kind) || !Array.isArray(flow.nodeIds) || !flow.nodeIds.length || flow.nodeIds.length > 32 || !flow.nodeIds.includes(flow.entryNodeId)) return null;
       flowIds.add(flow.id);
+      for (const [bindingIds, assigned] of [[flow.productIds, boundProducts], [flow.serviceIds, boundServices]] as const) {
+        if (bindingIds === undefined) continue;
+        if (!Array.isArray(bindingIds) || bindingIds.length > 200) return null;
+        for (const id of bindingIds) {
+          if (typeof id !== "string" || !bindingIdPattern.test(id) || assigned.has(id.toLowerCase())) return null;
+          assigned.add(id.toLowerCase());
+        }
+      }
       for (const id of flow.nodeIds) {
         if (!ids.has(id) || members.has(id)) return null;
         members.add(id);
@@ -38,7 +48,7 @@ export function normalizeVisualDraft(raw: unknown): VisualGraph | null {
     }
   }
   const body = { name:g.name.trim(),nodes:g.nodes.map(n=>({id:n.id,kind:n.kind,label:n.label.trim(),position:{x:n.position.x,y:n.position.y},config:{prompt:n.config.prompt,fieldKey:n.config.fieldKey,fieldType:n.config.fieldType,condition:n.config.condition,value:n.config.value}})),edges:g.edges.map(e=>({id:e.id,source:e.source,target:e.target,port:e.port})) };
-  return g.version === 2 ? { ...body, version: 2, flows: g.flows.map(f => ({id:f.id,label:f.label.trim(),kind:f.kind,entryNodeId:f.entryNodeId,nodeIds:[...f.nodeIds]})) } : { ...body, version: 1 };
+  return g.version === 2 ? { ...body, version: 2, flows: g.flows.map(f => ({id:f.id,label:f.label.trim(),kind:f.kind,entryNodeId:f.entryNodeId,nodeIds:[...f.nodeIds], ...(f.productIds !== undefined ? { productIds: f.productIds.map(id => id.toLowerCase()) } : {}), ...(f.serviceIds !== undefined ? { serviceIds: f.serviceIds.map(id => id.toLowerCase()) } : {})})) } : { ...body, version: 1 };
 }
 export function validateVisualGraph(raw: unknown): { graph?: VisualGraph; errors: {nodeId?:string;message:string}[] } {
   const graph=normalizeVisualDraft(raw), errors:{nodeId?:string;message:string}[]=[];

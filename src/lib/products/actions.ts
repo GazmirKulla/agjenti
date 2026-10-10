@@ -5,6 +5,7 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { batchSummary, optionalUuid, parseProductBatch } from "./batch";
 import { parseProductForm } from "./parse";
+import { publishedProductBindings } from "./workflow-binding";
 
 async function assertTypeAndWorkflow(
   businessId: string,
@@ -72,7 +73,7 @@ export async function createProduct(
   )
     return {
       error:
-        "Për aktivizim duhen çmimi, lloji dhe workflow. Mund ta ruash si draft.",
+        "Ruaje produktin si draft, lidhe me rrjedhën te Workflow dhe publiko lidhjen. Për aktivizim duhen edhe çmimi dhe lloji.",
     };
   const check = await assertTypeAndWorkflow(
     access.business.id,
@@ -111,13 +112,18 @@ export async function updateProduct(
   const parsed = parseProductForm(form);
   if ("error" in parsed) return parsed;
   if (form.get("save_mode") === "draft") parsed.isActive = false;
+  let hasVisualFlow = false;
+  if (parsed.isActive && !parsed.workflowId) {
+    try { hasVisualFlow = (await publishedProductBindings(access.business.id)).has(id); }
+    catch { return { error: "Nuk u verifikua rrjedha e publikuar. Provo përsëri." }; }
+  }
   if (
     parsed.isActive &&
-    (parsed.price == null || !parsed.productTypeId || !parsed.workflowId)
+    (parsed.price == null || !parsed.productTypeId || (!parsed.workflowId && !hasVisualFlow))
   )
     return {
       error:
-        "Për aktivizim duhen çmimi, lloji dhe workflow. Mund ta ruash si draft.",
+        "Për aktivizim duhen çmimi, lloji dhe një rrjedhë e publikuar. Mund ta ruash si draft dhe ta lidhësh te Workflow.",
     };
 
   const check = await assertTypeAndWorkflow(
@@ -197,6 +203,13 @@ export async function linkExternalProduct(slug: string, form: FormData) {
     .maybeSingle();
   if (existingError)
     return { error: "Nuk u verifikua lidhja e produktit. Provo përsëri." };
+  let hasVisualFlow = false;
+  if (parsed.isActive && !parsed.workflowId && existing) {
+    try { hasVisualFlow = (await publishedProductBindings(access.business.id)).has(existing.id); }
+    catch { return { error: "Nuk u verifikua rrjedha e publikuar. Provo përsëri." }; }
+  }
+  if (parsed.isActive && (parsed.price == null || !parsed.productTypeId || (!parsed.workflowId && !hasVisualFlow)))
+    return { error: "Për aktivizim duhen çmimi, lloji dhe një rrjedhë e publikuar. Ruaje si draft për ta lidhur te Workflow." };
 
   const row = {
     ...rowFromParsed(access.business.id, { ...parsed, name }, "linked"),
@@ -354,12 +367,17 @@ export async function bulkConfigureProducts(
     return {
       error: "Disa produkte nuk u gjetën në këtë biznes. Rifresko listën.",
     };
+  let visualIds: string[] = [];
+  if (payload.mode === "activate" && !payload.workflowId && rows.some(p => !p.workflow_id)) {
+    try { visualIds = [...(await publishedProductBindings(access.business.id)).keys()].filter(id => ids.includes(id)); }
+    catch { return { error: "Nuk u verifikuan rrjedhat e publikuara. Provo përsëri." }; }
+  }
   if (
     payload.mode === "activate" &&
     rows.some(
       (p) =>
         !(payload.productTypeId || p.product_type_id) ||
-        !(payload.workflowId || p.workflow_id) ||
+        !(payload.workflowId || p.workflow_id || visualIds.includes(p.id)) ||
         p.price_amount == null,
     )
   )
@@ -392,7 +410,9 @@ export async function bulkConfigureProducts(
     mutation = mutation.not("price_amount", "is", null);
     if (!payload.productTypeId)
       mutation = mutation.not("product_type_id", "is", null);
-    if (!payload.workflowId) mutation = mutation.not("workflow_id", "is", null);
+    if (!payload.workflowId) mutation = visualIds.length
+      ? mutation.or(`workflow_id.not.is.null,id.in.(${visualIds.join(",")})`)
+      : mutation.not("workflow_id", "is", null);
   }
   const saved = await mutation.select("id");
   if (saved.error) return { error: "Ndryshimet nuk u ruajtën." };
