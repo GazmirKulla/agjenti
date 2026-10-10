@@ -1,3 +1,4 @@
+import { parseUIContext } from "@/lib/business-assistant/context";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { transcribeAudio } from "@/lib/business-intelligence/transcription";
@@ -88,7 +89,8 @@ export async function POST(request: Request) {
       throw new AssistantError(
         "Biseda është shumë e gjatë. Fillo një kërkesë të re.",
       );
-    return json(await planRequest(access, body.text.trim(), history));
+    const context = parseUIContext(body.context);
+    return json(context ? await planRequest(access, body.text.trim(), history, context) : await planRequest(access, body.text.trim(), history));
   } catch (error) {
     return json(
       {

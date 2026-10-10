@@ -1,3 +1,4 @@
+import { AssistantWorkspaceProvider } from "@/components/business-assistant/workspace";
 import { BusinessIntelligencePanel } from "@/components/business-intelligence/panel";
 import { redirect } from "next/navigation";
 import {
@@ -32,6 +33,7 @@ export default async function BusinessLayout({
     "mobile",
   );
   return (
+    <AssistantWorkspaceProvider key={business.slug} slug={business.slug} name={business.name} modules={dashboardProfile.enabledModules} external={business.catalog_source === "external"}>
     <DashboardShell
       name={business.name}
       slug={business.slug}
@@ -59,5 +61,6 @@ export default async function BusinessLayout({
       <BusinessIntelligencePanel slug={business.slug} />
       {children}
     </DashboardShell>
+    </AssistantWorkspaceProvider>
   );
 }

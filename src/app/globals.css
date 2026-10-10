@@ -3741,3 +3741,55 @@ html[data-resolved="dark"] .business-assistant .onboarding-next { color: #21123d
   .has-assistant-dock.inbox-detail-view .dashboard-content { height: calc(100dvh - var(--assistant-dock-height)); padding: 0; }
   .has-assistant-dock .business-assistant { height: min(880px, calc(var(--assistant-viewport-height) - 8px)); max-height: calc(var(--assistant-viewport-height) - 8px); margin-bottom: var(--assistant-keyboard-bottom); }
 }
+
+/* One assistant workspace, shared by Home, contextual entries and the mobile dock. */
+.assistant-home-workspace { padding: clamp(24px, 4vw, 48px); border: 1px solid var(--line); background: var(--surface); border-radius: 24px; margin-bottom: 28px; }
+.assistant-home-identity { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+.assistant-home-workspace h1 { margin: 20px 0 12px; font-size: clamp(26px, 3vw, 38px); letter-spacing: -1px; }
+.assistant-home-workspace p { color: var(--ink-muted); line-height: 1.7; margin-bottom: 24px; }
+.assistant-home-workspace form, .assistant-context-entry form { display: flex; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--line); background: var(--paper); border-radius: 16px; }
+.assistant-home-workspace input,.assistant-context-entry input { flex: 1; width: 0; min-width: 80px; padding: 12px; font: inherit; font-size: 15px; border: 0; color: var(--ink); background: transparent; }
+.assistant-home-workspace button,.assistant-context-entry button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; min-height: 44px; padding: 10px 14px; cursor: pointer; font: inherit; font-size: 13px; }
+.assistant-home-workspace form button:last-child,.assistant-context-entry form button:last-child { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+.assistant-quick-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.assistant-quick-actions button { display: inline-flex; gap: 20px; align-items: center; }
+.assistant-quick-actions span { color: var(--ink-muted); }
+.assistant-home-workspace small { display: block; margin-top: 20px; color: var(--ink-muted); font-size: 12px; }
+.assistant-context-entry { margin-bottom: 24px; }
+.assistant-context-entry .assistant-quick-actions { margin-top: 8px; }
+.assistant-context-entry .assistant-quick-actions button { border: 0; background: transparent; color: var(--ink-muted); padding-left: 4px; }
+.assistant-business-overview > summary { cursor: pointer; font-weight: 650; margin-bottom: 20px; color: var(--ink-muted); }
+.assistant-first-home .overview-page > .page-heading { display: none; }
+.assistant-first-home .overview-primary { margin-top: 20px; }
+.assistant-workspace-panel .assistant-panel-resize { display: flex; align-items: center; gap: 12px; padding: 10px 24px; font-size: 11px; color: var(--ink-muted); border-bottom: 1px solid var(--line); }
+.assistant-panel-resize input { width: 100px; accent-color: var(--accent); }
+.assistant-expand { width: 36px; height: 36px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; margin-left: auto; }
+.assistant-expand + .assistant-close { margin-left: 0; }
+.assistant-home-workspace :focus-visible,.assistant-context-entry :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media(min-width:761px) {
+  .assistant-workspace-panel { position: fixed; inset: 12px 12px 12px auto; width: min(var(--assistant-panel-width), 48vw); max-width: 48vw; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); margin: 0; z-index: 55; border-radius: 18px; }
+  .assistant-panel-open .dashboard-main { margin-right: calc(min(var(--assistant-panel-width), 48vw) + 24px); }
+  .assistant-panel-open .topbar-profile > span:last-child { display: none; }
+  .assistant-workspace-panel .assistant-examples { grid-template-columns: 1fr; }
+  .assistant-workspace-panel .assistant-examples button { min-height: 54px; }
+}
+@media(max-width:760px) {
+  .assistant-home-workspace { padding: 24px 20px; border-radius: 20px; }
+  .assistant-home-workspace form,.assistant-context-entry form { display: none; }
+  .assistant-home-workspace .assistant-robot { width: 42px; height: 42px; }
+  .assistant-home-workspace h1 { font-size: 28px; }
+  .assistant-home-workspace p { font-size: 14px; }
+  .assistant-context-entry { margin-bottom: 12px; }
+  .assistant-context-entry .assistant-quick-actions { flex-wrap: nowrap; overflow-x: auto; }
+  .assistant-context-entry .assistant-quick-actions button { white-space: nowrap; }
+  .has-assistant-dock .assistant-workspace-panel { height: calc(var(--assistant-viewport-height) * .72); max-height: calc(var(--assistant-viewport-height) - 8px); }
+  .has-assistant-dock .assistant-workspace-panel.is-expanded { height: calc(var(--assistant-viewport-height) - 8px); }
+  .has-assistant-dock.keyboard-open .assistant-workspace-panel { height: calc(var(--assistant-viewport-height) - 8px); }
+}
+@media(min-width:1100px) {
+  .assistant-workspace-panel.is-home { left: 242px; right: 12px; width: auto; max-width: none; }
+  .assistant-workspace-panel.is-home .assistant-body,.assistant-workspace-panel.is-home .assistant-composer { padding-left: max(24px, calc((100% - 850px) / 2)); padding-right: max(24px, calc((100% - 850px) / 2)); }
+  .assistant-workspace-panel.is-home .assistant-examples { grid-template-columns: 1fr 1fr; }
+  .assistant-workspace-panel.is-home .assistant-panel-resize { display: none; }
+}
+.assistant-panel-open .assistant-context-entry form { display: none; }

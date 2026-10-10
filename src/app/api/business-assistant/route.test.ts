@@ -131,3 +131,10 @@ it("does not leak provider or database error details", async () => {
   expect(response.status).toBe(500);
   expect(JSON.stringify(await response.json())).not.toContain("private-secret");
 });
+it('validates page context before the planner and does not trust client business identity',async()=>{
+  expect((await POST(req({mode:'plan',text:'Ndrysho këtë produkt',context:{page:'products',entryPoint:'contextual',entityType:'product',entityId:'bad'}}))).status).toBe(400);
+  expect(m.plan).not.toHaveBeenCalled();
+  const context={page:'products',entryPoint:'contextual',entityType:'product',entityId:'11111111-1111-4111-8111-111111111111'};
+  expect((await POST(req({mode:'plan',text:'Ndrysho këtë produkt',context:{...context,businessId:'forged'}}))).status).toBe(200);
+  expect(m.plan).toHaveBeenCalledWith(expect.objectContaining({businessId:'business'}),'Ndrysho këtë produkt',[],context);
+});

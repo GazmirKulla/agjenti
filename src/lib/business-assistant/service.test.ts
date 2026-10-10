@@ -369,3 +369,21 @@ it("routes instruction edits through confirmation with tenant and content versio
     executeTicket({ ...agentAccess, modules: [] }, result.token!),
   ).rejects.toThrow();
 });
+it('loads a selected entity directly with tenant ownership, independently of initial list limits', async()=>{
+  const {loadSelectedContext}=await import('./service');
+  m.responses.push({data:{id,name:'Selected product',updated_at:'v1'},error:null});
+  const row=await loadSelectedContext(access,{page:'products',entryPoint:'contextual',entityType:'product',entityId:id});
+  expect(row?.id).toBe(id);
+  expect(m.queries[0].calls).toContainEqual(['eq',['id',id]]);
+  expect(m.queries[0].calls).toContainEqual(['eq',['business_id',access.businessId]]);
+});
+it('does not fall back to another entity when the selected record is inaccessible',async()=>{
+  const {loadSelectedContext}=await import('./service');
+  m.responses.push({data:null,error:null});
+  await expect(loadSelectedContext(access,{page:'products',entryPoint:'contextual',entityType:'product',entityId:id})).rejects.toThrow('nuk u gjet');
+});
+it('blocks selections from disabled modules before reading business data',async()=>{
+  const {loadSelectedContext}=await import('./service');
+  await expect(loadSelectedContext({...access,modules:[]},{page:'products',entryPoint:'contextual',entityType:'product',entityId:id})).rejects.toThrow();
+  expect(m.from).not.toHaveBeenCalled();
+});

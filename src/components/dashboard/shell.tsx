@@ -6,7 +6,7 @@ import { isDashboardRoute } from "./navigation";
 import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
-import { BusinessAssistant } from "@/components/business-assistant/panel";
+import { AssistantWorkspaceSurface, AssistantEntry, useAssistantWorkspace } from "@/components/business-assistant/workspace";
 
 export function DashboardShell({
   children,
@@ -34,7 +34,7 @@ export function DashboardShell({
   const pathname = usePathname();
   const agentName = `Agjenti “${name}”`;
   const [open, setOpen] = useState(false);
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const assistant = useAssistantWorkspace();
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -126,7 +126,8 @@ export function DashboardShell({
   const mobilePaths = new Set(primaryItems.map((item) => item.path));
   return (
     <div
-      className={`dashboard-shell ${!admin && slug ? "has-assistant-dock" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
+      style={{"--assistant-panel-width": `${assistant?.panelWidth ?? 440}px`} as React.CSSProperties}
+      className={`dashboard-shell ${!admin && slug ? "has-assistant-dock" : ""} ${assistant?.open ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
     >
       <aside
         ref={sidebar}
@@ -303,7 +304,7 @@ export function DashboardShell({
             )}
           </div>
           <div className="topbar-actions">
-            {!admin && slug && <button type="button" className="assistant-desktop-trigger" onClick={() => setAssistantOpen(true)}><Icon name="spark" size={18}/><span>{agentName}</span></button>}
+            {!admin && slug && <button type="button" className="assistant-desktop-trigger" onClick={() => assistant?.setOpen(true)}><Icon name="spark" size={18}/><span>{agentName}</span></button>}
             <Link
               href={`${base}/account`}
               className="topbar-profile account-profile-link"
@@ -321,7 +322,7 @@ export function DashboardShell({
             </Link>
           </div>
         </header>
-        <main className="dashboard-content">{children}</main>
+        <main className="dashboard-content">{!admin && pathname !== base && <AssistantEntry/>}{children}</main>
       </div>
       {admin && <nav
         className="mobile-bottom-nav"
@@ -346,7 +347,8 @@ export function DashboardShell({
           </Link>
         ))}
       </nav>}
-      {!admin && slug && <BusinessAssistant key={slug} agentName={agentName} modules={navigationItems.map(item => item.id)} slug={slug} onOpen={() => { setOpen(false); setSearchOpen(false); setAssistantOpen(true); }} open={assistantOpen} onClose={() => setAssistantOpen(false)} />}
+
+      {!admin && <AssistantWorkspaceSurface/>}
     </div>
   );
 }

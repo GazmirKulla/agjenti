@@ -1,4 +1,5 @@
 "use client";
+import { useCatalogAssistantContext } from "@/components/business-assistant/workspace";
 import { useState, useMemo, useTransition, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -32,6 +33,7 @@ export function ProductCatalog({
   const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
+  useCatalogAssistantContext({searchQuery:query,filters:{status:filter},selectedEntityIds:selected});
   const [pending, start] = useTransition();
   const [notice, setNotice] = useState("");
   const [typeId, setTypeId] = useState("");
