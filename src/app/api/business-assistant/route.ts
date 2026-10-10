@@ -1,3 +1,4 @@
+import { simulateVisualWorkflow } from "@/lib/workflows/visual/test-actions";
 import { parseUIContext } from "@/lib/business-assistant/context";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
@@ -20,7 +21,7 @@ async function readJson(request: Request) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 96000) {
+      if (size > 320000) {
         await reader.cancel();
         throw new AssistantError("Kërkesa është shumë e gjatë.");
       }
@@ -62,8 +63,14 @@ export async function POST(request: Request) {
     const body = await readJson(request);
     if (!body || typeof body !== "object")
       throw new AssistantError("Kërkesë e pavlefshme.");
+    if (body.mode === "workflow_test") {
+      if (!access.modules.includes("workflows")) throw new AssistantError("Workflow-t nuk janë aktivë për këtë biznes.");
+      const result = await simulateVisualWorkflow(slug, body.graph, body.message, body.session);
+      if (result.error || !result.turn) throw new AssistantError(result.error ?? "Prova nuk përfundoi.");
+      return json({ reply: result.turn.reply, session: result.session, handoff: result.turn.handoff });
+    }
     if (body.mode === "confirm") {
-      if (typeof body.token !== "string" || body.token.length > 80000)
+      if (typeof body.token !== "string" || body.token.length > 300000)
         throw new AssistantError("Konfirmim i pavlefshëm.");
       const result = await executeTicket(access, body.token);
       revalidatePath(`/b/${slug}`, "layout");
@@ -90,6 +97,10 @@ export async function POST(request: Request) {
         "Biseda është shumë e gjatë. Fillo një kërkesë të re.",
       );
     const context = parseUIContext(body.context);
+    if (body.pendingToken !== undefined) {
+      if (typeof body.pendingToken !== "string" || body.pendingToken.length > 300000) throw new AssistantError("Propozim i pavlefshëm.");
+      return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken));
+    }
     return json(context ? await planRequest(access, body.text.trim(), history, context) : await planRequest(access, body.text.trim(), history));
   } catch (error) {
     return json(

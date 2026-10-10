@@ -2,6 +2,13 @@ import { parseService } from "@/lib/services/model";
 import { localInstant, validDate, validTime, uuid } from "@/lib/calendar/model";
 
 export const actions = [
+  "workflow_load",
+  "workflow_read",
+  "workflow_draft",
+  "workflow_restore",
+  "workflow_publish",
+  "workflow_enable",
+  "workflow_disable",
   "clarify",
   "search",
   "product_create",
@@ -32,6 +39,7 @@ export type Preview = {
 };
 export class AssistantError extends Error {}
 export const fields: Record<string, string[]> = {
+  workflow: ["operations", "version_id"],
   search: ["kind", "query"],
   product: ["name", "description", "sku", "price_amount", "currency"],
   service: [
@@ -64,6 +72,7 @@ export function moduleFor(action: Action) {
   return (
     (
       {
+        workflow: "workflows",
         product: "products",
         service: "services",
         knowledge: "knowledge",
@@ -97,7 +106,7 @@ export function readProposal(input: unknown): Proposal {
       !change ||
       !allowed.includes(change.field) ||
       typeof change.value !== "string" ||
-      change.value.length > 8000 ||
+      change.value.length > (p.action === "workflow_draft" ? 24000 : 8000) ||
       seen.has(change.field)
     )
       throw new AssistantError("Asistenti propozoi një fushë të pavlefshme.");
@@ -109,7 +118,11 @@ export function readProposal(input: unknown): Proposal {
     throw new AssistantError(
       "Krijimi nuk mund të ndryshojë një element ekzistues.",
     );
-  if (p.action !== "clarify" && !p.changes.length)
+  if (p.action.startsWith("workflow_") && (p.id !== null || (!["workflow_draft", "workflow_restore"].includes(p.action) && p.changes.length > 0)))
+    throw new AssistantError("Kërkesë e pavlefshme për rrjedhën.");
+  if (p.action === "workflow_draft" && (p.changes.length !== 1 || p.changes[0]?.field !== "operations")) throw new AssistantError("Mungojnë ndryshimet e rrjedhës.");
+  if (p.action === "workflow_restore" && (p.changes.length !== 1 || p.changes[0]?.field !== "version_id" || !uuid(p.changes[0].value))) throw new AssistantError("Zgjidh një version të vlefshëm.");
+  if (p.action !== "clarify" && !p.action.startsWith("workflow_") && !p.changes.length)
     throw new AssistantError("Nuk ka ndryshime për të ruajtur.");
   return p;
 }

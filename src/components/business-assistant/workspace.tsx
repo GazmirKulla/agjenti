@@ -24,9 +24,10 @@ export type CatalogAssistantContext = {
   filters: { status: string };
   selectedEntityIds: string[];
 };
+type PageAssistantContext = Partial<CatalogAssistantContext> & Pick<AssistantUIContext, "workflowSelection">;
 type Workspace = {
   setPageContext: Dispatch<
-    SetStateAction<{ path: string; data: CatalogAssistantContext } | null>
+    SetStateAction<{ path: string; data: PageAssistantContext } | null>
   >;
   send: () => void;
   sendRef: React.RefObject<(() => void) | null>;
@@ -68,7 +69,7 @@ export function AssistantWorkspaceProvider({
   const [mode, setMode] = useState<"text" | "audio">("text");
   const [pageContext, setPageContext] = useState<{
     path: string;
-    data: CatalogAssistantContext;
+    data: PageAssistantContext;
   } | null>(null);
   const baseContext = contextFromPath(pathname, slug);
   const data = pageContext?.path === pathname ? pageContext.data : undefined;
@@ -77,7 +78,7 @@ export function AssistantWorkspaceProvider({
     ...data,
     ...(baseContext.page === "products" &&
     !baseContext.entityId &&
-    data?.selectedEntityIds.length === 1
+    data?.selectedEntityIds?.length === 1
       ? { entityType: "product" as const, entityId: data.selectedEntityIds[0] }
       : {}),
   };
@@ -112,7 +113,7 @@ export function AssistantWorkspaceProvider({
     </AssistantContext.Provider>
   );
 }
-export function useCatalogAssistantContext(data: CatalogAssistantContext) {
+export function usePageAssistantContext(data: PageAssistantContext) {
   const workspace = useAssistantWorkspace();
   const setter = workspace?.setPageContext;
   const path = usePathname();
@@ -123,6 +124,8 @@ export function useCatalogAssistantContext(data: CatalogAssistantContext) {
       setter?.((current) => (current?.path === path ? null : current));
   }, [path, serialized, setter]);
 }
+export function useCatalogAssistantContext(data: CatalogAssistantContext) { usePageAssistantContext(data); }
+export function useWorkflowAssistantContext(selection: NonNullable<AssistantUIContext["workflowSelection"]>) { usePageAssistantContext({ workflowSelection: selection }); }
 export function AssistantWorkspaceSurface() {
   const w = useAssistantWorkspace();
   if (!w) return null;

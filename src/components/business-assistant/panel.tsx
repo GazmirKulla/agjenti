@@ -12,10 +12,14 @@ import { TalkingRobot } from "./talking-robot";
 import { Icon } from "@/components/dashboard/icon";
 import type { Preview } from "@/lib/business-assistant/model";
 
+import { WorkflowCard } from "./workflow-card";
+import type { WorkflowCard as WorkflowCardData } from "@/lib/business-assistant/workflow";
+
 type Message = { role: "user" | "assistant"; content: string };
 type Result = {
   message?: string;
   preview?: Preview;
+  workflow?: WorkflowCardData;
   token?: string;
   slots?: string[];
   transcript?: string;
@@ -154,6 +158,7 @@ export function BusinessAssistant({
         text: input,
         history: lastContext.current === contextKey ? history.slice(-6) : [],
         context,
+        ...(result?.workflow?.proposed && result.token ? { pendingToken: result.token } : {}),
       });
       lastContext.current = contextKey;
       setHistory((prev) => [
@@ -258,7 +263,7 @@ export function BusinessAssistant({
               value={text}
               onChange={(event) => {
                 setText(event.target.value);
-                if (result?.token) setResult(null);
+                if (result?.token && !result.workflow) setResult(null);
               }}
               maxLength={12000}
               placeholder="Pyet ose kërko një veprim…"
@@ -415,6 +420,7 @@ export function BusinessAssistant({
               ))}
             </div>
           )}
+          {result?.workflow && <WorkflowCard key={JSON.stringify(result.workflow)} data={result.workflow} slug={slug} pending={Boolean(result.token)} onRequest={value => { setMode("text"); setText(value); }} />}
           {result?.preview && (
             <section
               className="assistant-preview"
@@ -456,7 +462,7 @@ export function BusinessAssistant({
                   onClick={confirm}
                   disabled={Boolean(busy)}
                 >
-                  {busy === "confirm" ? "Po ruhet…" : "Konfirmo ndryshimin"}
+                  {busy === "confirm" ? "Po ruhet…" : result.workflow ? result.preview.title : "Konfirmo ndryshimin"}
                 </button>
                 <button
                   type="button"
@@ -552,7 +558,7 @@ export function BusinessAssistant({
                 value={text}
                 onChange={(e) => {
                   setText(e.target.value);
-                  if (result?.token) setResult(null);
+                  if (result?.token && !result.workflow) setResult(null);
                 }}
                 maxLength={12000}
                 rows={3}

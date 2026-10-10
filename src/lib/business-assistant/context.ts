@@ -6,6 +6,7 @@ export type AssistantUIContext = {
   searchQuery?: string;
   filters?: { status: string };
   selectedEntityIds?: string[];
+  workflowSelection?: { nodeId?: string; revision: number; dirty: boolean };
   entryPoint: "home" | "contextual";
 };
 const pages = [
@@ -95,7 +96,10 @@ export function parseUIContext(raw: unknown): AssistantUIContext | undefined {
     !selectedIds.includes(c.entityId as string)
   )
     throw new AssistantError("Zgjedhja e produktit ndryshoi. Provo përsëri.");
+  const selection = c.workflowSelection as AssistantUIContext["workflowSelection"];
+  if (selection !== undefined && (c.page !== "workflows" || !selection || typeof selection !== "object" || !Number.isInteger(selection.revision) || selection.revision < 0 || typeof selection.dirty !== "boolean" || (selection.nodeId !== undefined && (typeof selection.nodeId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(selection.nodeId))))) throw new AssistantError("Zgjedhja e hapit nuk është e vlefshme.");
   return {
+    ...(selection ? { workflowSelection: { revision: selection.revision, dirty: selection.dirty, ...(selection.nodeId ? {nodeId: selection.nodeId} : {}) } } : {}),
     ...(selectedIds.length === 1
       ? { entityType: "product" as const, entityId: selectedIds[0] }
       : {}),
@@ -150,6 +154,7 @@ export function contextLabel(c: AssistantUIContext) {
         settings: "Profili i biznesit",
         inbox: "Inbox",
         orders: "Porositë",
+        workflows: "Rrjedha e Agjentit",
       } as Record<string, string>
     )[c.page] ?? "Biznesi"
   );
@@ -160,6 +165,8 @@ export function assistantSuggestions(
   external = false,
 ) {
   const all = [
+    { module: "workflows", label: "Shiko rrjedhën", text: "Më trego rrjedhën aktuale të Agjentit." },
+    { module: "workflows", label: "Përshtat hapat", text: "Dua të ndryshoj hapat e rrjedhës së biznesit." },
     {
       module: "products",
       label: "Shto produkt",

@@ -8,6 +8,7 @@ const m = vi.hoisted(() => ({
   audio: vi.fn(),
   transcribe: vi.fn(),
   revalidate: vi.fn(),
+  simulate: vi.fn(),
 }));
 vi.mock("@/lib/tenant/access", () => ({
   getSessionUser: m.user,
@@ -24,6 +25,7 @@ vi.mock("@/lib/onboarding/audio-upload", () => ({ readAudioForm: m.audio }));
 vi.mock("@/lib/business-intelligence/transcription", () => ({
   transcribeAudio: m.transcribe,
 }));
+vi.mock("@/lib/workflows/visual/test-actions", () => ({ simulateVisualWorkflow: m.simulate }));
 vi.mock("next/cache", () => ({ revalidatePath: m.revalidate }));
 import { POST } from "./route";
 beforeEach(() => {
@@ -137,4 +139,24 @@ it('validates page context before the planner and does not trust client business
   const context={page:'products',entryPoint:'contextual',entityType:'product',entityId:'11111111-1111-4111-8111-111111111111'};
   expect((await POST(req({mode:'plan',text:'Ndrysho këtë produkt',context:{...context,businessId:'forged'}}))).status).toBe(200);
   expect(m.plan).toHaveBeenCalledWith(expect.objectContaining({businessId:'business'}),'Ndrysho këtë produkt',[],context);
+});
+
+it("gates workflow simulation by server modules and never executes a write", async () => {
+  const body = { mode: "workflow_test", graph: { version: 1 }, message: "Dua të porosis", session: null, modules: ["workflows"] };
+  expect((await POST(req(body))).status).toBe(400);
+  expect(m.simulate).not.toHaveBeenCalled();
+  m.profile.mockResolvedValue({ enabledModules: ["workflows"] });
+  m.simulate.mockResolvedValue({ turn: { reply: "Cilin produkt?", handoff: false }, session: "sealed" });
+  const response = await POST(req(body));
+  expect(await response.json()).toEqual({ reply: "Cilin produkt?", handoff: false, session: "sealed" });
+  expect(m.simulate).toHaveBeenCalledWith("demo", body.graph, body.message, null);
+  expect(m.execute).not.toHaveBeenCalled();
+  expect(m.revalidate).not.toHaveBeenCalled();
+});
+it("passes only a bounded sealed proposal for conversational refinement", async () => {
+  await POST(req({mode:"plan",text:"Ndrysho edhe emrin",pendingToken:"sealed"}));
+  expect(m.plan).toHaveBeenCalledWith(expect.objectContaining({businessId:"business"}),"Ndrysho edhe emrin",[],undefined,"sealed");
+  m.plan.mockClear();
+  expect((await POST(req({mode:"plan",text:"Ndrysho edhe emrin",pendingToken:42}))).status).toBe(400);
+  expect(m.plan).not.toHaveBeenCalled();
 });

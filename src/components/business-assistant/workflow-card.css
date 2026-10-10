@@ -1,0 +1,105 @@
+.assistant-flow-card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+  background: var(--surface);
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.assistant-flow-card header small {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+}
+.assistant-flow-card h3 {
+  margin: 6px 0;
+  font-size: 18px;
+}
+.assistant-flow-card p {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.assistant-flow-tabs {
+  display: flex;
+  gap: 6px;
+}
+.assistant-flow-tabs button {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 12px;
+  background: transparent;
+  color: inherit;
+}
+.assistant-flow-tabs button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.assistant-flow-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  max-height: 360px;
+  overflow: auto;
+}
+.assistant-flow-steps li {
+  border-left: 2px solid var(--line);
+  padding: 0 0 18px 14px;
+  margin-left: 5px;
+}
+.assistant-flow-steps strong {
+  font-size: 14px;
+}
+.assistant-flow-steps li div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.assistant-flow-steps li span {
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+.assistant-flow-card summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.assistant-flow-card footer,
+.assistant-flow-trial form > div {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.assistant-flow-card footer a {
+  font-size: 13px;
+  color: var(--accent);
+}
+.assistant-flow-trial textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  padding: 10px;
+  font: inherit;
+  font-size: 14px;
+}
+.assistant-flow-trial > div {
+  max-height: 240px;
+  overflow: auto;
+}
+.assistant-flow-card button:focus-visible,
+.assistant-flow-card summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}

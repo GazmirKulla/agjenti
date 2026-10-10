@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useWorkflowAssistantContext } from "@/components/business-assistant/workspace";
 import { Icon } from "@/components/dashboard/icon";
 import { saveVisualWorkflow, publishVisualWorkflow, setVisualWorkflowEnabled } from "@/lib/workflows/visual/actions";
 import { simulateVisualWorkflow } from "@/lib/workflows/visual/test-actions";
@@ -37,6 +38,18 @@ export function VisualWorkflowEditor({ slug, initialWorkspace }: { slug: string;
   const selected = graph.nodes.find(n => n.id === selectedId);
   const dirty = JSON.stringify(graph) !== JSON.stringify(workspace.graph);
   const locked = pending || testing;
+  useWorkflowAssistantContext({ nodeId: selectedId, revision: workspace.revision, dirty });
+
+  useEffect(() => {
+    if (initialWorkspace.revision === workspace.revision) return;
+    if (dirty) {
+      setNotice({ text: "Rrjedha u ndryshua nga Agjenti ose në një dritare tjetër. Ndryshimet e tua lokale janë ruajtur në editor; rifresko faqen për versionin e ri.", error: true });
+      return;
+    }
+    setWorkspace(initialWorkspace); setGraph(initialWorkspace.graph);
+    setSession(null); setMessages([]); setTrace(undefined); setProblems([]);
+    setNotice({ text: "Editori u përditësua me rrjedhën e ruajtur." });
+  }, [initialWorkspace, workspace.revision, dirty]);
 
   useEffect(() => {
     if (!dirty) return;
