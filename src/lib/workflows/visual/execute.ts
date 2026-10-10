@@ -17,7 +17,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   let previous = params.state?.visual;
   if (previous?.status === "completed" && params.entityVersion !== undefined && params.entityVersion?.id !== previous.versionId) previous = undefined;
   // Publishing the visual layer must not interrupt an existing linear product order.
-  if (!params.visualPreview && !params.informationRequest && !params.bookingRequest && !params.orderStatusRequest && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacy(params);
+  if (!params.visualPreview && !params.informationRequest && !params.supportRequest && !params.bookingRequest && !params.orderStatusRequest && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacy(params);
   let active = previous && previous.status !== "completed" ? previous : null;
   const loadedVersion = params.visualPreview ?? (params.entityVersion !== undefined ? params.entityVersion : await loadVisualVersion(params.businessId, previous?.versionId));
   if (!loadedVersion) {
@@ -187,6 +187,17 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   };
   for (let count = 0; count < 32; count++) {
     const action = execution.action;
+    // An information reply cannot implicitly start/resume an order or booking
+    // merely because a configured edge crosses into that process.
+    if (params.informationRequest && (action.kind === "product" || action.kind === "booking")) {
+      if (!replies.length) {
+        turn = await legacy({ ...params, state: turn.nextState, informational: "Answer only the current informational request using verified business knowledge. Do not ask the previous order/booking question or advance either process." });
+        replies.push(turn.reply);
+      }
+      execution.state.status = "completed"; execution.state.awaiting = false;
+      turn.nextState.visual = execution.state; currentState = turn.nextState;
+      finished = true; break;
+    }
     turn.nextState.visual = execution.state;
     if(turn.nextState.context) for(const node of version.graph.nodes.filter(n=>n.kind==='collect')) {
       const value=execution.state.values[node.config.fieldKey!];

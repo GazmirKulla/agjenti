@@ -60,3 +60,10 @@ it("asks which order flow when several products flows are configured instead of 
  vi.stubEnv("OPENAI_API_KEY","");
  expect(await chooseGuidance({...input,message:"Dua të porosis",allowOrder:true,routes:[{id:"a",label:"Dhurata",kind:"product"},{id:"b",label:"Veshje",kind:"product"}]})).toMatchObject({action:"clarify"});
 });
+
+it.each(["nuk dua produkt, dua te kontaktohem ne whatsapp", "nuk dua produkt dua te kontaktohem ne whatsapp", "Dua të flas në WhatsApp", "ku do me kontakoni ?", "Nuk dua të blej; me lidh me stafin"])("recognizes current contact intent without reviving a declined order: %s", message => {
+ expect(explicitIntent(message)).toBe("support");
+});
+it.each(["Nuk dua të flas në WhatsApp", "Fola në WhatsApp, tani dua të porosis"])("does not mistake declined or past contact for support: %s", message => {
+ expect(explicitIntent(message)).not.toBe("support");
+});

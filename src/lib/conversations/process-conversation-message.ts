@@ -315,7 +315,10 @@ export async function processConversationMessage(params: ConversationMessagePara
       result.nextState = state; result.handoff = true; result.advisoryHandoff = true;
       return finish(result);
     }
-    const result = await processAgentTurn({ ...params, state });
+    const result = graphVersion
+      ? await processAgentTurn({ ...params, state, supportRequest: true })
+      : await processLegacyAgentTurn({ ...params, state, informational: "Respond only to the current staff/contact request using verified business contact information. Preserve unfinished orders. Do not ask for a product, advance an order, or claim staff has already contacted the customer." });
+    if (!graphVersion) { result.nextState = state; result.handoff = true; }
     if (result.nextState.visual?.status === "waiting") processes.auxiliary = { process: "support", visual: result.nextState.visual };
     else delete processes.auxiliary;
     // Routing to staff must not replace the saved order task with the handoff cursor.

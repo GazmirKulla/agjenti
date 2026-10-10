@@ -17,10 +17,19 @@ export function explicitIntent(message: string): "order" | "support" | "question
   const text = foldText(message);
   // Past contact is context, not a new request for human assistance.
   const current = text.replace(/\b(?:fola|folur|bisedova|biseduar|komunikova|komunikuar|spoke|talked)\b[^,;.!]*?(?=\b(?:dhe|tani|dua|now|and|want)\b|[,;.!]|$)/g, " ");
-  if (/\b(si|how|ku|where|status|track)\b.*\b(porosi\w*|order)\b/.test(current) || /\b(nuk dua|s dua|do not want|don t want)\b/.test(current)) return "question";
+  const requested = current.replace(/\b(?:nuk dua|s dua|do not want|don t want)\b.*?(?=[,;.!]|\b(?:dua|kerkoj|want|need)\b|$)/g, " ");
+  const clauses = requested.split(/[,;.!]+/);
+  const contactRequest = clauses.some(clause => {
+    if (/\b(nuk dua|s dua|do not want|don t want)\b/.test(clause)) return false;
+    return /\b(?:dua|kerkoj|me lidh|kalo|flas|fol|need|speak|talk|contact|kontak\w*)\b.*\b(?:staf\w*|operator\w*|human|ekipi\w*|whatsapp|telefon\w*)\b/.test(clause)
+      || /\b(?:ku|si|where|how)\b.*\b(?:kontak\w*|contact)\b/.test(clause)
+      || /^(?:staf\w*|operator\w*|human)[!\s]*$/.test(clause.trim());
+  });
+  // Declining a product does not negate a separate current request for staff/contact.
+  if (contactRequest) return "support";
+  if (/\b(si|how|ku|where|status|track)\b.*\b(porosi\w*|order)\b/.test(requested)) return "question";
   if (/\b(problem|ankes\w*|rimburs\w*|refund|nuk (?:erdhi|punon|funksionon)|cancel|anulo\w*)\b/.test(current)) return "support";
-  if (/\b(?:dua|kerkoj|me lidh|kalo|flas|fol|need|speak|talk|contact)\b.*\b(?:staf\w*|operator\w*|human|ekipi\w*)\b/.test(current) || /^(?:staf\w*|operator\w*|human)[.!\s]*$/.test(current)) return "support";
-  if (/\b(porosis|porosit|blej|bleme|buy|purchase|dua (?:kete|ta marr)|e dua|want (?:this|to buy))\b/.test(current) || /^(porosi|order)[.!\s]*$/.test(current)) return "order";
+  if (/\b(porosis|porosit|blej|bleme|buy|purchase|dua (?:kete|ta marr)|e dua|want (?:this|to buy))\b/.test(requested) || /^(porosi|order)[.!\s]*$/.test(requested)) return "order";
   return message.trim() ? "question" : "unknown";
 }
 export function invalidateConfirmation(state: ConversationStatePayload) {

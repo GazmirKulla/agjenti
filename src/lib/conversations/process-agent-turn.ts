@@ -107,6 +107,7 @@ export type AgentTurnParams = {
   bookingRequest?: boolean;
   bookingNavigation?: boolean;
   informationRequest?: boolean;
+  supportRequest?: boolean;
   /** Server-verified excerpts from the isolated test chat; never persisted to CRM. */
   attachmentContext?: string;
   hasAttachments?: boolean;

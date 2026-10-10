@@ -421,3 +421,14 @@ it("reuses phone followed by a staff sentence after the turn processor extracts 
   expect(next.reply).not.toContain("Kontrollo");
   expect(next.nextState.customer.phone).toBe("0690000000");
 });
+
+it("suspends an unfinished order for explicit WhatsApp contact without repeating its product prompt", async () => {
+  const state = order();
+  const next = await turn("nuk dua produkt, dua te kontaktohem ne whatsapp", state);
+  expect(next.conversationRouting?.process).toBe("support");
+  expect(next.nextState.processes?.active).toBeNull();
+  expect(next.nextState.processes?.order?.status).toBe("suspended");
+  expect(next.nextState.processes?.order?.snapshot.product_id).toBe("product");
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.info.mock.calls[0][0].informational).toContain("Do not ask for a product");
+});

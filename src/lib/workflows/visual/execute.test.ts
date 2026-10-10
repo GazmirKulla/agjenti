@@ -498,3 +498,27 @@ it.each(["test", "production"] as const)("only enables inactive binding previews
   await executeVisualTurn({ ...params(graph), mode, visualPreview: undefined, message: "Puzzle" }, async p => response(p));
   expect(mocks.entity).toHaveBeenCalledWith("business-a", graph, "Puzzle", undefined, mode === "test");
 });
+
+it.each(["product", "booking"] as const)("does not append a %s question when an information flow crosses into another process", async kind => {
+  const graph = upgradeVisualGraph(linear(node("info", "knowledge"), node("age", "collect", { fieldKey: "child_age", prompt: "Sa vjeç?" }), node("task", kind)));
+  const state = migrateContext(emptyState());
+  setFact(state, "child_age", "5", "text", "message");
+  const legacy = vi.fn(async (p: LegacyParams) => response(p, "Mund të na kontaktoni në WhatsApp."));
+  const result = await executeVisualTurn({ ...params(graph), message: "Ku do të më kontaktoni?", state, informationRequest: true }, legacy);
+  expect(result.reply).toBe("Mund të na kontaktoni në WhatsApp.");
+  expect(legacy).toHaveBeenCalledTimes(1);
+  expect(legacy.mock.calls[0][0].requireConfiguredWorkflow).toBeUndefined();
+  expect(result.nextState.product_id).toBeNull();
+  expect(result.nextState.visual?.status).toBe("completed");
+});
+it("does not bypass support routing for a saved linear order with no visual cursor", async () => {
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  mocks.load.mockResolvedValue(version(graph));
+  const state = migrateContext({ ...emptyState(), product_id: "p", step_key: "size" });
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const result = await executeVisualTurn({ ...params(graph), visualPreview: undefined, state, supportRequest: true, message: "Nuk dua produkt, dua të kontaktohem në WhatsApp" }, legacy);
+  expect(result.handoff).toBe(true);
+  expect(result.reply).not.toContain("Cilin produkt");
+  expect(result.nextState.product_id).toBe("p");
+  expect(legacy).not.toHaveBeenCalled();
+});
