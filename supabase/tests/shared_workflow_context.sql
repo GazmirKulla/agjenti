@@ -1,6 +1,7 @@
 begin;
 insert into auth.users(id,email) values ('00000000-0000-4000-8000-000000004101','shared-a@example.test'),('00000000-0000-4000-8000-000000004102','shared-b@example.test');
 insert into businesses(id,name,slug) values ('00000000-0000-4000-8000-000000004101','Shared A','shared-a'),('00000000-0000-4000-8000-000000004102','Shared B','shared-b');
+update businesses set auto_reply=true where id in ('00000000-0000-4000-8000-000000004101','00000000-0000-4000-8000-000000004102');
 insert into business_users(business_id,user_id,role) values ('00000000-0000-4000-8000-000000004101','00000000-0000-4000-8000-000000004101','owner'),('00000000-0000-4000-8000-000000004102','00000000-0000-4000-8000-000000004102','owner');
 insert into workflows(id,business_id,name) values('00000000-0000-4000-8000-000000004111','00000000-0000-4000-8000-000000004101','Original');
 insert into workflow_steps(workflow_id,key,position,kind,config) values('00000000-0000-4000-8000-000000004111','customer',0,'customer','{"label":"Adresa"}');

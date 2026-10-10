@@ -4,7 +4,7 @@ do $$
 declare bid uuid:=gen_random_uuid(); other_bid uuid:=gen_random_uuid(); sid uuid; b bookings; same bookings; start_at timestamptz:=date_trunc('day',now())+interval '2 days 12 hours';
 begin
  insert into businesses(id,name,slug) values(bid,'Calendar test','calendar-test'),(other_bid,'Other test','other-calendar-test');
- insert into booking_services(business_id,name,duration_minutes,buffer_minutes) values(bid,'Haircut',30,15) returning id into sid;
+ insert into booking_services(business_id,name,duration_minutes,buffer_minutes,booking_enabled) values(bid,'Haircut',30,15,true) returning id into sid;
  insert into business_calendar_settings(business_id,timezone,hours) values(bid,'UTC',(select jsonb_agg(jsonb_build_object('day',n,'start','09:00','end','17:00')) from generate_series(0,6)n));
  b:=save_calendar_booking(bid,null,0,sid,'Client One','',start_at,'pending','','request-1');
  if b.ends_at<>start_at+interval '30 minutes' or b.blocked_until<>start_at+interval '45 minutes' then raise exception 'duration/buffer mismatch';end if;

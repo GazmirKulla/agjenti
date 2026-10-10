@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { migrateContext, setFact } from "@/lib/workflows/context";
 import { emptyState } from "@/lib/workflows/engine";
 const mocks = vi.hoisted(() => ({
   extract: vi.fn(),
@@ -73,7 +74,7 @@ beforeEach(() => {
     },
   ]);
   mocks.persist.mockResolvedValue({
-    booking: { status: "pending" },
+    booking: { id:"booking-1",service_id:"service",service_name:"Prerje",customer_name:"Klienti",customer_contact:"",starts_at:"2026-10-15T07:00:00Z",status:"pending" },
     syncError: null,
   });
 });
@@ -133,12 +134,13 @@ it("creates a pending request when business approval is required", async () => {
       status: "pending",
       requestKey: "ig:conversation:request-1",
     }),
+    undefined,
   );
   expect(turn?.reply).toContain("ende nuk është konfirmuar");
 });
 it("creates a confirmed booking only in explicitly enabled automatic mode", async () => {
   mocks.cfg.confirmation_mode = "automatic";
-  mocks.persist.mockResolvedValue({ booking: { status: "confirmed" } });
+  mocks.persist.mockResolvedValue({ booking: { id:"booking-1",service_id:"service",service_name:"Prerje",customer_name:"Klienti",customer_contact:"",starts_at:"2026-10-15T07:00:00Z",status:"confirmed" } });
   await processBookingTurn({
     businessId: "business",
     message: "Po",
@@ -148,6 +150,7 @@ it("creates a confirmed booking only in explicitly enabled automatic mode", asyn
   expect(mocks.persist).toHaveBeenCalledWith(
     "business",
     expect.objectContaining({ status: "confirmed" }),
+    undefined,
   );
 });
 it("test chat confirmation cannot write any reservation", async () => {
@@ -194,4 +197,50 @@ it("rejects expired confirmation without a write", async () => {
   });
   expect(turn?.reply).toContain("skadoi");
   expect(mocks.persist).not.toHaveBeenCalled();
+});
+
+
+it("preserves an explicit booking recipient and contact instead of overwriting them from profile", async () => {
+  const state=migrateContext(confirmState());
+  setFact(state,"customer_name","Ana","text","prior_order");
+  setFact(state,"customer_phone","+355691234567","phone","prior_order");
+  const draft=state.fields.booking as BookingDraft;
+  draft.name="Bora"; draft.contact="+355699876543";
+  const turn=await processBookingTurn({businessId:"business",message:"Konfirmoj",state,conversationKey:"conversation"});
+  expect(mocks.persist).toHaveBeenCalledWith("business",expect.objectContaining({name:"Bora",contact:"+355699876543"}),undefined);
+  expect(turn?.nextState.context?.profile.name?.value).toBe("Ana");
+  expect(turn?.nextState.context?.profile.phone?.value).toBe("+355691234567");
+});
+
+it("seeds missing booking contact from shared profile without promoting another person's name", async () => {
+  const state=migrateContext(emptyState());
+  setFact(state,"customer_name","Ana","text","prior_order");
+  setFact(state,"customer_phone","+355691234567","phone","prior_order");
+  mocks.extract.mockResolvedValue({bookingIntent:true,cancel:false,serviceId:"service",date:"2026-10-15",time:"09:00",name:null,contact:null});
+  const turn=await processBookingTurn({businessId:"business",message:"Dua rezervim",state,mode:"test"});
+  expect(turn?.nextState.fields.booking).toMatchObject({name:"Ana",contact:"+355691234567",phase:"confirm"});
+  expect(mocks.persist).not.toHaveBeenCalled();
+});
+
+it("reports the persisted booking when a replay returns details different from a later draft", async () => {
+  const state=confirmState();
+  state.fields.booking.time="11:00"; state.fields.booking.name="Bora";
+  const turn=await processBookingTurn({businessId:"business",message:"Konfirmoj",state,conversationKey:"conversation"});
+  expect(turn?.reply).toContain("09:00");
+  expect(turn?.reply).toContain("Klienti");
+  expect(turn?.reply).toContain("ndryshimet e fundit nuk u aplikuan");
+  expect(turn?.reply).not.toContain("11:00");
+  expect(turn?.nextState.fields.booking).toBeUndefined();
+});
+
+it.each(["stale_state","ownership_lost","lease_lost","invalid_conversation","workflow_booking_guard_unavailable"])("rethrows %s so the queue can reconcile safely", async error => {
+  mocks.persist.mockRejectedValue(new Error(error));
+  await expect(processBookingTurn({businessId:"business",message:"Konfirmoj",state:confirmState(),conversationKey:"conversation"})).rejects.toThrow(error);
+});
+
+it("retains the confirmation and nonce when a write response is uncertain", async () => {
+  mocks.persist.mockRejectedValue(new Error("Temporary timeout"));
+  const turn=await processBookingTurn({businessId:"business",message:"Konfirmoj",state:confirmState(),conversationKey:"conversation"});
+  expect(turn?.nextState.fields.booking).toMatchObject({phase:"confirm",nonce:"request-1",time:"09:00"});
+  expect(turn?.reply).toContain("sërish konfirmimin");
 });

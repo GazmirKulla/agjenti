@@ -68,7 +68,7 @@ export function migrateContext(input?: ConversationStatePayload | null): Convers
     }
     if (state.linearSnapshot && !state.orderWorkflowSnapshot && !state.context.execution.linear)
         state.context.execution.linear = state.linearSnapshot;
-    state.schemaVersion = 2;
+    state.schemaVersion = state.schemaVersion === 3 ? 3 : 2;
     return state;
 }
 export function getFact(state: ConversationStatePayload, key: string): Fact | undefined {
@@ -117,6 +117,8 @@ export function resetOrder(state: ConversationStatePayload): ConversationStatePa
     }
     if (Object.keys(next.context!.profile).length)
         next.context!.execution.profileConfirmation = "pending";
+    next.schemaVersion = state.schemaVersion ?? 2;
+    next.processes = state.processes;
     next.completedVisual = state.completedVisual;
     next.recentMessages = state.recentMessages;
     return next;

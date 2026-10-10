@@ -1,11 +1,11 @@
 "use server";
-import { processBookingTurn } from "@/lib/calendar/agent";
+import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 
 import { randomUUID } from "node:crypto";
 import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { processAgentTurn } from "@/lib/conversations/process-agent-turn";
+
 import { readTestSession, sealTestSession, snapshotTestSession } from "@/lib/agents/test-chat/session";
 import type { TimedTraceEvent } from "@/lib/conversations/trace";
 import type { WorkflowStepDef } from "@/lib/workflows/engine";
@@ -71,8 +71,7 @@ export async function runLabTurn(input: { businessId: string; message: string; h
     // Deliberately call the read-only production core, never the inbound delivery
     // handler or onboarding test action. No persistence, order, booking or webhook
     // capability is supplied to this adapter. New side effects belong outside core.
-    const bookingTurn = await processBookingTurn({businessId: input.businessId, message: input.message.trim(), state: session.state, mode: "test", onTrace: (event) => trace.push({ ...structuredClone(event), elapsedMs: Date.now() - start })});
-    const result = bookingTurn ?? await processAgentTurn({
+    const result = await processConversationMessage({
       businessId: input.businessId, message: input.message.trim(), hasPhoto: input.hasPhoto === true,
       state: session.state, previousResponseId: session.previousResponseId,
       mode: "test", source: "admin_chat_lab",

@@ -205,7 +205,13 @@ export type BookingInput = {
   notes: string;
   requestKey?: string;
 };
-export async function persistBooking(businessId: string, input: BookingInput) {
+export type BookingEffectGuard = {
+  jobId: number;
+  leaseToken: string;
+  conversationId: string;
+  revision: number;
+};
+export async function persistBooking(businessId: string, input: BookingInput, guard?: BookingEffectGuard) {
   if (
     !uuid(input.serviceId) ||
     (input.id && !uuid(input.id)) ||
@@ -216,10 +222,12 @@ export async function persistBooking(businessId: string, input: BookingInput) {
     !Number.isFinite(Date.parse(input.start)) ||
     !["pending", "confirmed", "cancelled"].includes(input.status) ||
     (input.id && (!Number.isInteger(input.revision) || input.revision! < 1)) ||
-    (input.requestKey && input.requestKey.length > 200)
+    (input.requestKey && input.requestKey.length > 200) ||
+    (guard && (input.id || !input.requestKey?.startsWith(`ig:${guard.conversationId}:`)))
   )
     throw new Error("Kontrollo të dhënat e rezervimit.");
   const db = createServiceSupabase();
+  let replay: Booking | null = null;
   if (input.requestKey) {
     const previous = await db
       .from("bookings")
@@ -228,8 +236,11 @@ export async function persistBooking(businessId: string, input: BookingInput) {
       .eq("request_key", input.requestKey)
       .maybeSingle();
     if (previous.error) throw new Error("Nuk u verifikua kërkesa e mëparshme.");
-    if (previous.data)
-      return { booking: previous.data as Booking, syncError: null };
+    if (previous.data) {
+      replay = previous.data as Booking;
+      // Queued effects must still pass the ownership/lease/revision guard.
+      if (!guard) return synchronizeSavedBooking(businessId, replay);
+    }
   }
   let existing: Booking | null = null;
   if (input.id) {
@@ -243,7 +254,7 @@ export async function persistBooking(businessId: string, input: BookingInput) {
     existing = row.data;
   }
   // Both pending and confirmed reservations hold a slot locally. Fail closed if Google cannot be checked.
-  if (input.status !== "cancelled") {
+  if (!replay && input.status !== "cancelled") {
     const service = await db
       .from("booking_services")
       .select("duration_minutes,buffer_minutes")
@@ -264,10 +275,10 @@ export async function persistBooking(businessId: string, input: BookingInput) {
     if (busy.some((b) => overlaps(input.start, blocked, b.start, b.end)))
       throw new Error("Ky orar është i zënë në Google Calendar.");
   }
-  const result = await db.rpc("save_calendar_booking", {
-    p_business: businessId,
-    p_id: input.id ?? null,
-    p_revision: input.revision ?? 0,
+  const result = await db.rpc(guard ? "save_workflow_booking" : "save_calendar_booking", {
+    ...(guard ? { p_job: guard.jobId, p_token: guard.leaseToken, p_conversation: guard.conversationId, p_revision: guard.revision } : {
+      p_business: businessId, p_id: input.id ?? null, p_revision: input.revision ?? 0,
+    }),
     p_service: input.serviceId,
     p_name: input.name,
     p_contact: input.contact,
@@ -277,6 +288,8 @@ export async function persistBooking(businessId: string, input: BookingInput) {
     p_request_key: input.requestKey ?? null,
   });
   if (result.error) {
+    if (guard && ["ownership_lost", "lease_lost", "stale_state", "invalid_conversation"].includes(result.error.message))
+      throw new Error(result.error.message);
     if (result.error.code === "23P01")
       throw new Error("Ky orar sapo u rezervua. Zgjidh një tjetër.");
     throw new Error(
@@ -287,6 +300,9 @@ export async function persistBooking(businessId: string, input: BookingInput) {
   const booking = (
     Array.isArray(result.data) ? result.data[0] : result.data
   ) as Booking;
+  return synchronizeSavedBooking(businessId, booking);
+}
+async function synchronizeSavedBooking(businessId: string, booking: Booking) {
   let syncError: string | null = null;
   if (["pending", "error"].includes(booking.sync_status)) {
     try {

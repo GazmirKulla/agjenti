@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { emptyState } from "../engine";
+import { migrateContext, setFact } from "../context";
 import type { VisualGraph, VisualNode, VisualRunState, VisualVersion } from "./types";
 
 const mocks = vi.hoisted(() => ({ load: vi.fn() }));
@@ -233,4 +234,65 @@ it("evaluates the message at a product node and can move to a different configur
   expect(turn.nextState.fields.color).toBe("blue");
   expect(turn.nextState.product_id).toBe("product-a");
  } finally {spy.mockRestore();}
+});
+
+describe("message-centered process entries", () => {
+  it("enters a booking flow through its required collection and calls the adapter only afterward", async () => {
+    const base = linear(node("phone", "collect", { fieldKey: "customer_phone", fieldType: "phone", prompt: "Telefoni?" }), node("booking", "booking"));
+    const graph: VisualGraph = { ...base, version: 2, flows: [{ id: "reservation", kind: "booking", label: "Rezervim", entryNodeId: "phone", nodeIds: ["phone", "booking"] }] };
+    const bookingTurn = vi.fn(async (state: ReturnType<typeof emptyState>) => { const turn = response({ ...params(graph), state }, "Cila datë?"); turn.nextState.fields.booking = { nonce: "b", phase: "collect" }; return turn; });
+    const first = await executeVisualTurn({ ...params(graph), message: "Dua rezervim", bookingRequest: true, bookingNavigation: true, bookingTurn }, async p => response(p));
+    expect(first.reply).toBe("Telefoni?");
+    expect(first.nextState.visual?.nodeId).toBe("phone");
+    expect(bookingTurn).not.toHaveBeenCalled();
+    const next = await executeVisualTurn({ ...params(graph), message: "0691234567", state: first.nextState, bookingRequest: true, bookingTurn }, async p => response(p));
+    expect(bookingTurn).toHaveBeenCalledTimes(1);
+    expect(next.nextState.visual?.nodeId).toBe("booking");
+    expect(next.nextState.visual?.values.customer_phone).toBe("0691234567");
+    expect(next.reply).toBe("Cila datë?");
+  });
+  it("continues beyond booking only after the isolated adapter reports completion", async () => {
+    const base = linear(node("booking", "booking"), node("after", "knowledge", { prompt: "Shpjego përgatitjen" }));
+    const graph: VisualGraph = { ...base, version: 2, flows: [{ id: "reservation", kind: "booking", label: "Rezervim", entryNodeId: "booking", nodeIds: ["booking", "after"] }] };
+    const legacy = vi.fn(async (p: LegacyParams) => response(p, "Përgatitja"));
+    const result = await executeVisualTurn({ ...params(graph), state: { ...emptyState(), visual: waiting("booking") }, message: "Konfirmoj", bookingRequest: true,
+      bookingTurn: async state => response({ ...params(graph), state }, "Rezervimi gati") }, legacy);
+    expect(result.nextState.visual?.status).toBe("completed");
+    expect(result.reply).toBe("Rezervimi gati\n\nPërgatitja");
+    expect(legacy).toHaveBeenCalledWith(expect.objectContaining({ informational: "Shpjego përgatitjen" }));
+  });
+  it("honors an informational flow's collection entry instead of skipping to knowledge", async () => {
+    const base = linear(node("topic", "collect", { fieldKey: "topic", prompt: "Cila temë?" }), node("info", "knowledge", { prompt: "Përdor temën" }));
+    const graph: VisualGraph = { ...base, version: 2, flows: [{ id: "information", kind: "information", label: "Informacion", entryNodeId: "topic", nodeIds: ["topic", "info"] }] };
+    const legacy = vi.fn(async (p: LegacyParams) => response(p));
+    const first = await executeVisualTurn({ ...params(graph), message: "Informacion", informationRequest: true }, legacy);
+    expect(first.nextState.visual?.nodeId).toBe("topic");
+    expect(first.reply).toBe("Cila temë?");
+    const next = await executeVisualTurn({ ...params(graph), message: "Transporti", state: first.nextState, informationRequest: true }, legacy);
+    expect(next.nextState.visual?.status).toBe("completed");
+    expect(legacy).toHaveBeenCalledWith(expect.objectContaining({ informational: "Përdor temën" }));
+  });
+});
+
+it.each(["order", "booking"] as const)("reuses a known phone at the %s flow entry instead of forcing recollection", async kind => {
+  const processNode = kind === "order" ? "product" : "booking";
+  const base = linear(node("phone", "collect", { fieldKey: "customer_phone", fieldType: "phone", prompt: "Telefoni?" }), node("process", processNode));
+  const graph: VisualGraph = { ...base, version: 2, flows: [{ id: "flow", kind, label: kind, entryNodeId: "phone", nodeIds: ["phone", "process"] }] };
+  const state = migrateContext(); setFact(state, "customer_phone", "0691234567", "phone", "message");
+  const result = await executeVisualTurn({ ...params(graph), state, message: kind === "order" ? "Dua të porosis" : "Dua rezervim",
+    bookingRequest: kind === "booking", bookingTurn: async state => { const result = response({ ...params(graph), state }, "Cila datë?"); result.nextState.fields.booking = { nonce: "b" }; return result; } }, async p => response(p, "Cilin produkt?"));
+  expect(result.reply).not.toContain("Telefoni?");
+  expect(result.nextState.visual?.nodeId).toBe("process");
+  expect(result.nextState.customer.phone).toBe("0691234567");
+});
+
+it("opens a published information flow during a pinned linear order", async () => {
+  const base = linear(node("topic", "collect", { fieldKey: "topic", prompt: "Cila temë?" }), node("info", "knowledge"));
+  const graph: VisualGraph = { ...base, version: 2, flows: [{ id: "info-flow", kind: "information", label: "Informacion", entryNodeId: "topic", nodeIds: ["topic", "info"] }] };
+  mocks.load.mockResolvedValue(version(graph));
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const result = await executeVisualTurn({ ...params(graph), visualPreview: undefined, informationRequest: true, message: "Informacion", state: { ...emptyState(), product_id: "p", step_key: "size" } }, legacy);
+  expect(result.reply).toBe("Cila temë?");
+  expect(result.nextState.product_id).toBe("p");
+  expect(legacy).not.toHaveBeenCalled();
 });

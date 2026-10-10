@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({ from: mocks.from }),
 }));
-vi.mock("./process-agent-turn", () => ({ processAgentTurn: mocks.process }));
+vi.mock("./process-conversation-message", () => ({ processConversationMessage: mocks.process }));
 vi.mock("@/lib/crypto/tokens", () => ({
   decryptSecret: () => "fake-meta-token",
 }));
@@ -118,14 +118,14 @@ beforeEach(() => {
 describe("real inbound integration with shared processor", () => {
   it("persists the shared next state and sends its exact reply only from the real transport", async () => {
     await handleInboundMessage(message);
-    expect(mocks.process).toHaveBeenCalledWith({
+    expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({
       persistedWorkflowId: null,
       businessId: "business-a",
       message: "Bluzë",
       hasPhoto: false,
       state: emptyState(),
       previousResponseId: "resp_old",
-    });
+    }));
     expect(writes.some((w) => w.table === "customers")).toBe(false);
     expect(writes).toContainEqual({
       table: "conversation_states",

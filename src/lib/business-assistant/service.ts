@@ -47,7 +47,7 @@ const columns: Record<string, string> = {
   profile: "id,name,updated_at",
   booking: bookingColumns,
 };
-export type PlanResult = { linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[] };
+export type PlanResult = { clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[] };
 export type Access = {
   userId: string;
   businessId: string;
@@ -420,7 +420,7 @@ export async function prepareProposal(
 ): Promise<PlanResult> {
   p = readProposal(p);
   assertEnabled(access, p.action);
-  if (p.action === "clarify") return { message: p.message, ...(p.choices?.length?{choices:p.choices}:{}) };
+  if (p.action === "clarify") return { clarifying: true, message: p.message, ...(p.choices?.length?{choices:p.choices}:{}) };
   if(p.action.startsWith("linear_")) return prepareLinear(access,p);
   if (p.action.startsWith("orderflow_")) return prepareOrderFlow(access, p);
   if (p.action.startsWith("workflow_")) return prepareWorkflow(access, p, expected?.revision as number | undefined);

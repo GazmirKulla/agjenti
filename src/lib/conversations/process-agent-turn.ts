@@ -26,6 +26,7 @@ import {
 } from "@/lib/workflows/engine";
 
 export type AgentTurnResult = {
+  conversationRouting?: import("@/lib/workflows/conversation-processes").ConversationRouting;
   visualWorkflow?: import("@/lib/workflows/visual/types").VisualTrace;
   handoff?: boolean;
   advisoryHandoff?: boolean;
@@ -97,6 +98,11 @@ function pickProduct<T extends { id: string; name: string }>(
  * Caller is responsible for authorization and, for real turns, persistence/send.
  */
 export type AgentTurnParams = {
+  /** Only supplied by the server coordinator; graph previews use the same isolated adapter. */
+  bookingTurn?: (state: ConversationStatePayload) => Promise<AgentTurnResult | null>;
+  bookingRequest?: boolean;
+  bookingNavigation?: boolean;
+  informationRequest?: boolean;
   /** Server-verified excerpts from the isolated test chat; never persisted to CRM. */
   attachmentContext?: string;
   hasAttachments?: boolean;
@@ -126,7 +132,7 @@ export async function processAgentTurn(params: AgentTurnParams): Promise<AgentTu
   return turn;
 }
 async function processTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
-  if (sharedWorkflowEnabled(params.businessId) || params.state?.schemaVersion === 2) {
+  if (sharedWorkflowEnabled(params.businessId) || Boolean(params.state?.context)) {
     params = { ...params, state: migrateContext(params.state) };
     extractExplicitFacts(params.state!, params.message);
   }
@@ -139,7 +145,7 @@ async function processTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
   const { executeVisualTurn } = await import("@/lib/workflows/visual/execute");
   return executeVisualTurn(params, processLegacyAgentTurn);
 }
-async function processLegacyAgentTurn(params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }): Promise<AgentTurnResult> {
+export async function processLegacyAgentTurn(params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }): Promise<AgentTurnResult> {
   const db = createServiceSupabase();
   const started = Date.now();
   const trace = params.onTrace;
@@ -368,6 +374,11 @@ async function processLegacyAgentTurn(params: AgentTurnParams & { informational?
   if (selected && orderRequest) {
     const requested = pickProduct(products,text);
     if (requested && requested.id !== selected.id) {
+      if (state.schemaVersion === 3 && state.processes) {
+        state.processes.pendingChoice = { kind: "replace", process: "order", message: text };
+        return { reply: `Ke një porosi të papërfunduar për ${selected.name}. Ta zëvendësojmë me ${requested.name}? Shkruaj “Po” ose “Jo”.`, nextState: state, previousResponseId: null, workflowId: params.persistedWorkflowId ?? state.context?.execution.linear?.id ?? null,
+          productName: selected.name, workflowProgress: [], debug: { model: agentModel(), source: "fallback", fallbackReason: "replace_order_confirmation", agentConfigured: Boolean(agent), knowledgeCount: knowledge.length, productCount: products.length, workflowSteps: [], elapsedMs: Date.now() - started } };
+      }
       state = state.context ? resetOrder(state) : {...emptyState(),customer:state.customer,recentMessages:state.recentMessages};
       selected=null;
     }

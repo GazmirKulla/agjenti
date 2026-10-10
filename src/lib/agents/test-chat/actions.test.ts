@@ -11,8 +11,8 @@ vi.mock("@/lib/tenant/access", () => ({
   getSessionUser: mocks.user,
   requireBusinessAccess: mocks.access,
 }));
-vi.mock("@/lib/conversations/process-agent-turn", () => ({
-  processAgentTurn: mocks.process,
+vi.mock("@/lib/conversations/process-conversation-message", () => ({
+  processConversationMessage: mocks.process,
 }));
 vi.mock("@/lib/instagram/send", () => ({ sendInstagramText: mocks.send }));
 vi.mock("@/lib/setup/status", () => ({ loadSetupStatus: mocks.setup }));

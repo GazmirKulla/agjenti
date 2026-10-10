@@ -255,8 +255,8 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
       </div>
         {showDetails && <aside className="agent-test-debug">
           {last?.setupNotice && <p className="agent-test-notice" role="status">{last.setupNotice}</p>}
-          {last?.visualWorkflow && <MessageRoutingView trace={last.visualWorkflow} />}
-          <h3>{last?.visualWorkflow ? "Rrjedha e bisedës" : "Workflow i porosisë"}</h3>
+          {last && <MessageRoutingView trace={last.visualWorkflow} state={last.nextState} routing={last.conversationRouting} message={messages.at(-1)?.text} />}
+          <h3>{last?.conversationRouting ? "Rrjedha e bisedës" : "Workflow i porosisë"}</h3>
           {!last ? (
             <p className="agent-test-disclaimer">
               Pas mesazhit të parë shfaqen hapat: çfarë u plotësua dhe çfarë

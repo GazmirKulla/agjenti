@@ -7,7 +7,7 @@ import "./visual-workflow.css";
 
 export const nodeIcons: Record<VisualNodeKind, string> = {
   start: "inbox", condition: "workflows", knowledge: "knowledge", collect: "orders",
-  confirm: "check", product: "products", handoff: "customers", end: "finish",
+  confirm: "check", product: "products", booking: "calendar", handoff: "customers", end: "finish",
 };
 export function FlowIcon({ kind, size = 20 }: { kind: VisualNodeKind; size?: number }) {
   if (kind === "confirm" || kind === "end") return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{kind === "end" ? <><circle cx="12" cy="12" r="8" /><path d="m8 12 3 3 5-6" /></> : <path d="m5 12 4 4L19 6" />}</svg>;
@@ -70,6 +70,12 @@ export function VisualGraphView({ graph, currentNodeId, visitedNodeIds = [], tra
       return { scale, x: el.clientWidth / 2 - (el.clientWidth / 2 - v.x) * ratio, y: el.clientHeight / 2 - (el.clientHeight / 2 - v.y) * ratio };
     });
   }
+  const bounds = {
+    x: Math.min(0, ...graph.nodes.map(node => node.position.x)) - 40,
+    y: Math.min(0, ...graph.nodes.map(node => node.position.y)) - 40,
+    right: Math.max(W, ...graph.nodes.map(node => node.position.x + W)) + 40,
+    bottom: Math.max(H, ...graph.nodes.map(node => node.position.y + H)) + 40,
+  };
   return <div className={`vf-canvas ${compact ? "vf-compact" : ""}`} ref={container} onPointerDown={e => { if (e.target === e.currentTarget) begin(e); }} onPointerMove={move} onPointerUp={finish} onPointerCancel={() => { gesture.current = null; setMoving(null); }}>
     {compact && <div className="vf-canvas-label"><span className="vf-live-dot" />{currentNodeId ? "Rruga e bisedës" : "Rrjedha e klientit"}</div>}
     <div className="vf-world" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
@@ -109,6 +115,11 @@ export function VisualGraphView({ graph, currentNodeId, visitedNodeIds = [], tra
       })}
     </div>
     <div className="vf-canvas-tools" onPointerDown={e => e.stopPropagation()}><button type="button" aria-label="Zvogëlo diagramin" onClick={() => zoom(.8)}>−</button><span>{Math.round(view.scale * 100)}%</span><button type="button" aria-label="Zmadho diagramin" onClick={() => zoom(1.25)}>+</button><span className="vf-tool-divider" /><button type="button" onClick={fit} aria-label="Shfaq të gjithë diagramin"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m6 0h5v-5" /></svg></button></div>
-    {!compact && <span className="vf-canvas-hint">Tërhiq për të lëvizur · Zgjidh një hap</span>}
+    {!compact && <><span className="vf-canvas-hint">Tërhiq për të lëvizur · Zgjidh një hap</span><button type="button" className="vf-minimap" aria-label="Përshtat diagramin në ekran" title="Kliko për të shfaqur të gjithë diagramin" onPointerDown={event => event.stopPropagation()} onClick={fit}>
+      <svg viewBox={`${bounds.x} ${bounds.y} ${bounds.right - bounds.x} ${bounds.bottom - bounds.y}`} aria-hidden="true">{graph.edges.map(edge => {
+        const source = graph.nodes.find(node => node.id === edge.source), target = graph.nodes.find(node => node.id === edge.target);
+        return source && target ? <line key={edge.id} x1={source.position.x + W / 2} y1={source.position.y + H / 2} x2={target.position.x + W / 2} y2={target.position.y + H / 2} /> : null;
+      })}{graph.nodes.map(node => <rect key={node.id} className={node.id === selectedNodeId || node.id === currentNodeId ? "is-active" : ""} x={node.position.x} y={node.position.y} width={W} height={H} rx={14} />)}</svg>
+    </button></>}
   </div>;
 }

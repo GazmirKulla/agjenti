@@ -1,8 +1,9 @@
 "use server";
+import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 import { createHash } from "node:crypto";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { readTestSession, sealTestSession } from "@/lib/agents/test-chat/session";
-import { processAgentTurn, type AgentTurnResult } from "@/lib/conversations/process-agent-turn";
+import { type AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { validateVisualGraph } from "./model";
 
 export async function simulateVisualWorkflow(slug: string, raw: unknown, message: string, token?: string | null, hasPhoto = false): Promise<{ turn?: AgentTurnResult; session?: string; error?: string }> {
@@ -17,7 +18,7 @@ export async function simulateVisualWorkflow(slug: string, raw: unknown, message
     const session = readTestSession(token ?? null, user.id, access.business.id);
     const id = `preview:${createHash("sha256").update(JSON.stringify(graph)).digest("hex")}`;
     if (session.state.visual && session.state.visual.versionId !== id) return { error: "Rrjedha ndryshoi. Rifillo provën." };
-    const turn = await processAgentTurn({ businessId: access.business.id, mode: "test", message: message.trim(), hasPhoto,
+    const turn = await processConversationMessage({ businessId: access.business.id, mode: "test", message: message.trim(), hasPhoto,
       state: session.state, previousResponseId: session.previousResponseId,
       visualPreview: { id, businessId: access.business.id, graph, createdAt: new Date().toISOString() } });
     return { turn, session: sealTestSession(session, turn.nextState, turn.previousResponseId) };

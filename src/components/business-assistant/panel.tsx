@@ -20,6 +20,8 @@ import type { OrderFlowContext } from "@/lib/business-assistant/orderflow-servic
 import { WorkflowCard } from "./workflow-card";
 import type { WorkflowCard as WorkflowCardData } from "@/lib/business-assistant/workflow";
 
+import { pinnedWorkflowContext, continuesWorkflowRequest, workflowRequestHistory, type WorkflowRequestPin } from "./request-context";
+
 type Message = { role: "user" | "assistant"; content: string; materials?: { name: string; preview?: string; url?: string }[] };
 function MessageCopy({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -44,6 +46,7 @@ function MessageCopy({ text }: { text: string }) {
   );
 }
 type Result = {
+  clarifying?: boolean;
   choices?: string[];
   message?: string;
   preview?: Preview;
@@ -75,9 +78,11 @@ export function BusinessAssistant({
   context,
   panelWidth,
   setPanelWidth,
+  requestKey = 0,
 }: {
   materialDraft: ReturnType<typeof import("./materials").useMaterialDraft>;
   external: boolean;
+  requestKey?: number;
   sendRef: React.RefObject<(() => void) | null>;
   slug: string;
   agentName: string;
@@ -109,6 +114,16 @@ export function BusinessAssistant({
     useState<AssistantUIContext | null>(null);
   const lastContext = useRef("");
   const previousMaterials = useRef<{ context: string; tokens: string[]; links: string[] } | null>(null);
+  const workflowRequest = useRef<WorkflowRequestPin | null>(null);
+  const requestGeneration = useRef(0);
+  useEffect(() => {
+    requestGeneration.current++;
+    workflowRequest.current = null;
+    previousMaterials.current = null;
+    lastContext.current = "";
+    setRequestContext(null);
+    setResult(null);
+  }, [requestKey, slug]);
   const abort = useRef(new AbortController());
   useEffect(() => {
     const controller = new AbortController();
@@ -187,8 +202,13 @@ export function BusinessAssistant({
     setError("");
     setResult(null);
     const input = text.trim();
-    const contextKey = `${slug}:${JSON.stringify(context)}`;
-    setRequestContext(context);
+    const contextKey = context.page === "workflows" ? `${slug}:workflows` : `${slug}:${JSON.stringify(context)}`;
+    const generation = requestGeneration.current;
+    const pin = workflowRequest.current?.scope === contextKey ? workflowRequest.current : null;
+    const effectiveContext = pinnedWorkflowContext(context, pin);
+    const materialContext = `${slug}:${JSON.stringify(effectiveContext)}`;
+    setRequestContext(effectiveContext);
+    if (effectiveContext.page === "workflows" && effectiveContext.workflowSelection) workflowRequest.current = pin ?? { scope: contextKey, context: effectiveContext, history: [] };
     try {
       const tokens: string[] = [];
       for (const item of materials) {
@@ -203,7 +223,7 @@ export function BusinessAssistant({
         setMaterials(current => current.map(m => m.id === item.id ? { ...m, token: uploaded.attachment.token, status: "Gati" } : m));
       }
       const pastedLinks = (input.match(/https?:\/\/[^\s<>"']+/g) ?? []).map(url => url.replace(/[.,;!?)}\]]+$/, ""));
-      const reuse = !materials.length && !pastedLinks.length && previousMaterials.current?.context === contextKey ? previousMaterials.current : null;
+      const reuse = !materials.length && !pastedLinks.length && previousMaterials.current?.context === materialContext ? previousMaterials.current : null;
       const materialTokens = reuse?.tokens ?? tokens;
       const materialLinks = [...new Set([...(pastedLinks.length ? [] : reuse?.links ?? []), ...materials.flatMap(item => item.url ? [item.url] : []), ...pastedLinks])];
       const data = await request({
@@ -211,11 +231,16 @@ export function BusinessAssistant({
         attachments: materialTokens,
         links: materialLinks,
         text: input,
-        history: lastContext.current === contextKey ? history.slice(-6) : [],
-        context,
-        ...((result?.workflow?.proposed || result?.editableFlow || result?.linear) && result.token ? { pendingToken: result.token } : {}),
+        history: pin ? workflowRequestHistory(pin.history) : lastContext.current === contextKey ? history.slice(-6) : [],
+        context: effectiveContext,
+        ...(lastContext.current === contextKey && (result?.workflow?.proposed || result?.editableFlow || result?.linear) && result.token ? { pendingToken: result.token } : {}),
       });
-      previousMaterials.current = { context: contextKey, tokens: materialTokens, links: materialLinks };
+      if (generation !== requestGeneration.current) return;
+      previousMaterials.current = { context: materialContext, tokens: materialTokens, links: materialLinks };
+      workflowRequest.current = effectiveContext.page === "workflows" && effectiveContext.workflowSelection && continuesWorkflowRequest(data) ? {
+        scope: contextKey, context: effectiveContext,
+        history: [...(pin?.history ?? []), { role: "user", content: input }, { role: "assistant", content: data.message || "Kontrollo propozimin." }],
+      } : null;
       lastContext.current = contextKey;
       setHistory((prev) => [
         ...prev.slice(-78),
@@ -227,6 +252,8 @@ export function BusinessAssistant({
       setMaterials([]);
       setMaterialError("");
     } catch (e) {
+      if (generation !== requestGeneration.current) return;
+      setResult(result);
       setError(e instanceof Error ? e.message : "Kërkesa nuk përfundoi.");
       setText((current) => (current.trim() ? current : input));
     } finally {
@@ -252,6 +279,8 @@ export function BusinessAssistant({
     setError("");
     try {
       const data = await request({ mode: "confirm", token: result.token });
+      workflowRequest.current = null;
+      setRequestContext(null);
       setResult(data);
       setHistory((prev) => [
         ...prev,
@@ -270,7 +299,6 @@ export function BusinessAssistant({
     locked.current = true;
     setBusy("audio");
     setError("");
-    setResult(null);
     try {
       const body = new FormData();
       body.set("audio", file);
@@ -289,6 +317,10 @@ export function BusinessAssistant({
     previousMaterials.current = null;
     setMaterials([]);
     setMaterialError("");
+    requestGeneration.current++;
+    workflowRequest.current = null;
+    lastContext.current = "";
+    setRequestContext(null);
     setHistory([]);
     setResult(null);
     setText("");
@@ -493,6 +525,8 @@ export function BusinessAssistant({
                   className="assistant-secondary"
                   disabled={Boolean(busy)}
                   onClick={() => {
+                    workflowRequest.current = null;
+                    setRequestContext(null);
                     setResult(null);
                     setHistory((prev) => [
                       ...prev,

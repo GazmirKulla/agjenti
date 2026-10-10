@@ -46,6 +46,7 @@ type Workspace = ReturnType<typeof useMaterialDraft> & {
   external: boolean;
   name: string;
   launch: (text?: string) => void;
+  requestKey: number;
 };
 const AssistantContext = createContext<Workspace | null>(null);
 export const useAssistantWorkspace = () => useContext(AssistantContext);
@@ -66,6 +67,7 @@ export function AssistantWorkspaceProvider({
   const pathname = usePathname();
   const sendRef = useRef<(() => void) | null>(null);
   const [open, setOpen] = useState(false);
+  const [requestKey, setRequestKey] = useState(0);
   const [panelWidth, setPanelWidth] = useState(440);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"text" | "audio">("text");
@@ -85,7 +87,7 @@ export function AssistantWorkspaceProvider({
       : {}),
   };
   const launch = (prompt?: string) => {
-    if (prompt !== undefined) setText(prompt);
+    if (prompt !== undefined) { setText(prompt); setRequestKey(key => key + 1); }
     setMode("text");
     setOpen(true);
   };
@@ -110,6 +112,7 @@ export function AssistantWorkspaceProvider({
         external,
         name,
         launch,
+        requestKey,
       }}
     >
       {children}
@@ -136,6 +139,7 @@ export function AssistantWorkspaceSurface() {
     <BusinessAssistant
       materialDraft={w}
       external={w.external}
+      requestKey={w.requestKey}
       sendRef={w.sendRef}
       slug={w.slug}
       agentName={`Agjenti “${w.name}”`}

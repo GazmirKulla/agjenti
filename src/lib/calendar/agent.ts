@@ -18,7 +18,7 @@ import {
   type BookingService,
   type CalendarSettings,
 } from "./model";
-import { availableSlots, persistBooking } from "./service";
+import { availableSlots, persistBooking, type BookingEffectGuard } from "./service";
 import { extractBookingDetails } from "./agent-parser";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
 export type BookingDraft = {
@@ -42,14 +42,18 @@ export async function processBookingTurn(params: {
   mode?: "production" | "test";
   conversationKey?: string;
   onTrace?: TraceObserver;
+  routed?: boolean;
+  resume?: boolean;
+  bookingGuard?: BookingEffectGuard;
+  canAct?: () => Promise<boolean>;
 }): Promise<AgentTurnResult | null> {
   const existingState = structuredClone(params.state ?? emptyState());
-  if (existingState.product_id) return null;
+  if (!params.routed && existingState.product_id) return null;
   // Published visual rules own routing; booking cannot bypass a collect/confirm or handoff.
-  if (existingState.visual && existingState.visual.status !== "completed") return null;
+  if (!params.routed && existingState.visual && existingState.visual.status !== "completed") return null;
   const raw = existingState.fields.booking as BookingDraft | undefined;
   if (
-    !raw &&
+    !params.routed && !raw &&
     !/rezerv|takim|appointment|booking|termin|orare?\s+(?:te|të)\s+lir/i.test(
       foldText(params.message),
     )
@@ -58,7 +62,7 @@ export async function processBookingTurn(params: {
   const profile = await loadDashboardProfile(params.businessId);
   if (!profile.enabledModules.includes("bookings")) return null;
   // Finish reservations already in progress, but let new runs follow the published graph.
-  if (!raw && await loadVisualVersion(params.businessId)) return null;
+  if (!params.routed && !raw && await loadVisualVersion(params.businessId)) return null;
   const db = createServiceSupabase();
   const [cfg, services] = await Promise.all([
     db
@@ -88,7 +92,7 @@ export async function processBookingTurn(params: {
   const activeServices = services.data as BookingService[];
   const started = Date.now();
   let draft: BookingDraft =
-    raw && raw.expires > Date.now() && typeof raw.nonce === "string"
+    raw && typeof raw.nonce === "string"
       ? raw
       : {
           phase: "collect",
@@ -129,10 +133,15 @@ export async function processBookingTurn(params: {
       },
     };
   };
-  if (raw && raw.expires <= Date.now())
-    return reply(
-      "Kërkesa e mëparshme skadoi. Për cilin shërbim dhe datë dëshiron rezervimin?",
-    );
+  const expired = Boolean(raw && raw.expires <= Date.now());
+  const needsReview = expired || params.resume;
+  if (needsReview) {
+    draft.phase = "collect";
+    draft.expires = Date.now() + 30 * 60000;
+  }
+  // A booking may be for somebody else. Profile memory only seeds missing data.
+  draft.name ??= existingState.context?.profile.name?.value;
+  draft.contact ??= existingState.context?.profile.phone?.value ?? existingState.context?.profile.email?.value;
   if (
     draft.phase === "confirm" &&
     explicitBookingConfirmation(params.message)
@@ -146,6 +155,15 @@ export async function processBookingTurn(params: {
       };
       return reply("Le ta rishikojmë kërkesën. Cilin shërbim dëshiron?");
     }
+    // Simulation rechecks availability without writes. Production persistence first
+    // reconciles the stable request key, then checks availability transactionally.
+    if (params.mode === "test") try {
+      const slots = await availableSlots(params.businessId, service.id, draft.date);
+      if (!slots.some(slot => zonedParts(slot.start, settings.timezone).time === draft.time)) {
+        draft.phase = "collect"; draft.time = undefined;
+        return reply("Ky orar nuk është më i lirë. Zgjidh një orë tjetër.");
+      }
+    } catch { return reply("Nuk u verifikua kalendari. Provo përsëri më vonë ose kontakto biznesin."); }
     if (params.mode === "test")
       return reply(
         `Provë: kërkesa për ${service.name}, më ${draft.date} në ${draft.time}, për ${draft.name} është gati. Nuk u krijua rezervim real.`,
@@ -153,6 +171,9 @@ export async function processBookingTurn(params: {
       );
     if (!params.conversationKey)
       return reply("Për ta përfunduar rezervimin, kontakto biznesin.");
+    if (params.routed && !params.bookingGuard)
+      return reply("Rezervimi nuk mund të ruhet tani. Provo përsëri ose kontakto stafin.");
+    if (params.canAct && !(await params.canAct())) throw new Error("conversation_manually_paused");
     try {
       const result = await persistBooking(params.businessId, {
         serviceId: service.id,
@@ -163,27 +184,35 @@ export async function processBookingTurn(params: {
           settings.confirmation_mode === "automatic" ? "confirmed" : "pending",
         notes: "Kërkesë nga biseda Instagram",
         requestKey: `ig:${params.conversationKey}:${draft.nonce}`,
-      });
-      return reply(
-        result.booking.status === "confirmed"
-          ? `Rezervimi u konfirmua: ${service.name}, më ${draft.date} në ${draft.time}.`
-          : `Kërkesa u ruajt: ${service.name}, më ${draft.date} në ${draft.time}. Biznesi duhet ta miratojë; takimi ende nuk është konfirmuar.`,
-        true,
-      );
+      }, params.bookingGuard);
+      // A stable request key can return a booking committed before a lost response.
+      // Report its persisted data, never claim a corrected draft changed that booking.
+      const saved = result.booking;
+      const local = zonedParts(new Date(saved.starts_at), settings.timezone);
+      const summary = `${saved.service_name}, më ${local.date} në ${local.time}, në emër të ${saved.customer_name}`;
+      const changed = saved.service_id !== service.id || local.date !== draft.date || local.time !== draft.time || saved.customer_name !== draft.name || saved.customer_contact !== (draft.contact ?? "");
+      if (saved.status === "cancelled") return reply(`Rezervimi i kësaj kërkese është anuluar: ${summary}. Për një rezervim të ri, nis një kërkesë të re.`, true);
+      const status = saved.status === "confirmed" ? "Rezervimi u konfirmua" : "Kërkesa u ruajt";
+      const review = saved.status === "pending" ? " Biznesi duhet ta miratojë; takimi ende nuk është konfirmuar." : "";
+      const reconciliation = changed ? " Kërkesa ishte ruajtur më parë me këto të dhëna; ndryshimet e fundit nuk u aplikuan. Për ndryshimin, kontakto stafin." : "";
+      const sync = result.syncError ? " Përditësimi i kalendarit pret verifikimin e stafit." : "";
+      return reply(`${status}: ${summary}.${review}${reconciliation}${sync}`, true);
     } catch (err) {
-      draft.phase = "collect";
-      draft.time = undefined;
-      return reply(
-        `${err instanceof Error ? err.message : "Rezervimi nuk u ruajt."} Zgjidh një orë tjetër.`,
-      );
+      const message = err instanceof Error ? err.message : "Rezervimi nuk u ruajt.";
+      if (/lease|revision|stale_state|invalid_conversation|paused|ownership|workflow_(?:booking_)?guard|conversation_control/.test(message)) throw err;
+      if (/orar.*(?:zënë|rezervua)|slot.*(?:busy|unavailable)/i.test(message)) {
+        draft.phase = "collect"; draft.time = undefined;
+        return reply(`${message} Zgjidh një orë tjetër.`);
+      }
+      // A timeout can occur after commit: retain the nonce and confirmation so retries reconcile.
+      return reply(`${message} Provo sërish konfirmimin ose kontakto stafin.`);
     }
   }
-  const details = await extractBookingDetails(
-    params.message,
-    activeServices,
-    zonedParts(new Date(), settings.timezone).date,
-    settings.timezone,
-  );
+  // A bare yes after an expired/interrupted prompt only requests a fresh review.
+  const reviewOnly = needsReview && explicitBookingConfirmation(params.message);
+  const details = reviewOnly ? { bookingIntent: true, cancel: false, serviceId: null, date: null, time: null, name: null, contact: null }
+    : await extractBookingDetails(params.message, activeServices,
+      zonedParts(new Date(), settings.timezone).date, settings.timezone, draft);
   if (!details)
     return reply(
       "Nuk e kuptova plotësisht kërkesën. Shkruaj shërbimin, datën dhe orën; ose kontakto biznesin.",
@@ -193,7 +222,7 @@ export async function processBookingTurn(params: {
       "Kërkesa u ndërpre. Nëse ke një takim të rezervuar më parë, kontakto biznesin për ta ndryshuar ose anuluar.",
       true,
     );
-  if (!raw && !details.bookingIntent) return null;
+  if (!params.routed && !raw && !details.bookingIntent) return null;
   if (details.serviceId && details.serviceId !== draft.serviceId) {
     draft.serviceId = details.serviceId;
     draft.time = undefined;
@@ -252,6 +281,6 @@ export async function processBookingTurn(params: {
     return reply("Në emër të kujt ta përgatis kërkesën?");
   draft.phase = "confirm";
   return reply(
-    `Konfirmon ${service.name} (${service.duration_minutes} min), më ${draft.date} në ${draft.time}, në emër të ${draft.name}? Shkruaj “Konfirmoj” ose korrigjo të dhënat.${settings.confirmation_mode === "manual" ? " Pas konfirmimit tënd, kërkesa pret miratimin e biznesit." : ""}`,
+    `${expired ? "Konfirmimi i mëparshëm skadoi; orari u kontrollua sërish. " : ""}Konfirmon ${service.name} (${service.duration_minutes} min), më ${draft.date} në ${draft.time}, në emër të ${draft.name}? Shkruaj “Konfirmoj” ose korrigjo të dhënat.${settings.confirmation_mode === "manual" ? " Pas konfirmimit tënd, kërkesa pret miratimin e biznesit." : ""}`,
   );
 }

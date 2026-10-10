@@ -1,7 +1,6 @@
 import { hydrateProfile } from "./profile";
 import { prepareWorkflowReply, type WorkflowJob } from "./workflow-queue";
-import { processBookingTurn } from "@/lib/calendar/agent";
-import { processAgentTurn } from "./process-agent-turn";
+import { processConversationMessage } from "./process-conversation-message";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { sendInstagramText } from "@/lib/instagram/send";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
@@ -303,11 +302,17 @@ export async function handleInboundMessage(
     inboundState.visual.status = "completed";
   }
   const started = Date.now();
-  const bookingTurn = job && inboundState.product_id && inboundState.step_key!=="order_ready" ? null : await processBookingTurn({
-    businessId, message: message.text ?? "", conversationKey: conversationId,
-    state: inboundState,
-  });
-  const turn = bookingTurn ?? await processAgentTurn({
+  const canAct = async () => {
+    const [{ data: current, error }, { data: business, error: businessError }] = await Promise.all([
+      supabase.from("conversations").select("status,auto_reply").eq("id", conversationId!).eq("business_id", businessId).maybeSingle(),
+      supabase.from("businesses").select("auto_reply").eq("id", businessId).maybeSingle(),
+    ]);
+    return !error && !businessError && current?.status === "active" && Boolean(current.auto_reply ?? business?.auto_reply ?? false);
+  };
+  const turn = await processConversationMessage({
+    conversationKey: conversationId,
+    bookingGuard: job ? { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: stateRow?.revision ?? 0 } : undefined,
+    canAct,
     businessId,
     message: message.text ?? "",
     hasPhoto: message.attachments.some((a) => a.kind === "image"),
@@ -321,6 +326,7 @@ export async function handleInboundMessage(
     await prepareWorkflowReply(job,conversationId,stateRow?.revision??0,turn);
     return;
   }
+  if (!await canAct()) return;
   await supabase
     .from("conversation_states")
     .upsert({
@@ -338,6 +344,7 @@ export async function handleInboundMessage(
     await supabase.from("conversations").update({ status: "paused", auto_reply: false })
       .eq("id", conversationId).eq("business_id", businessId).throwOnError();
   }
+  if (!(turn.handoff && !turn.advisoryHandoff) && !await canAct()) return;
   const send = await sendInstagramText({
     accountId: conn.ig_user_id,
     token: accessToken,

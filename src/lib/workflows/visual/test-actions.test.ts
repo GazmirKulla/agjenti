@@ -4,7 +4,7 @@ import { emptyState } from "../engine";
 
 const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), process: vi.fn(), send: vi.fn(), db: vi.fn() }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access }));
-vi.mock("@/lib/conversations/process-agent-turn", () => ({ processAgentTurn: m.process }));
+vi.mock("@/lib/conversations/process-conversation-message", () => ({ processConversationMessage: m.process }));
 vi.mock("@/lib/instagram/send", () => ({ sendInstagramText: m.send }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: m.db }));
 import { simulateVisualWorkflow } from "./test-actions";

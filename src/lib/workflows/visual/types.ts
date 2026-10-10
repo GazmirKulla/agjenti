@@ -1,6 +1,6 @@
-export type VisualNodeKind = "start" | "condition" | "knowledge" | "collect" | "confirm" | "product" | "handoff" | "end";
+export type VisualNodeKind = "start" | "condition" | "knowledge" | "collect" | "confirm" | "product" | "booking" | "handoff" | "end";
 export type VisualPort = "next" | "yes" | "no";
-export type VisualIntent = "order" | "support" | "question" | "unknown";
+export type VisualIntent = "order" | "booking" | "support" | "question" | "unknown";
 export type VisualNode = {
   id: string;
   kind: VisualNodeKind;
@@ -10,12 +10,16 @@ export type VisualNode = {
     prompt?: string;
     fieldKey?: string;
     fieldType?: "text" | "email" | "phone" | "number" | "photo";
-    condition?: "intent_order" | "intent_support" | "field_present" | "field_equals";
+    condition?: "intent_order" | "intent_booking" | "intent_support" | "field_present" | "field_equals";
     value?: string;
   };
 };
 export type VisualEdge = { id: string; source: string; target: string; port: VisualPort };
-export type VisualGraph = { version: 1; name: string; nodes: VisualNode[]; edges: VisualEdge[] };
+export type VisualFlowKind = "order" | "booking" | "information" | "support" | "custom";
+export type VisualFlow = { id: string; label: string; kind: VisualFlowKind; entryNodeId: string; nodeIds: string[] };
+type VisualGraphBody = { name: string; nodes: VisualNode[]; edges: VisualEdge[] };
+export type VisualGraphV2 = VisualGraphBody & { version: 2; flows: VisualFlow[] };
+export type VisualGraph = (VisualGraphBody & { version: 1 }) | VisualGraphV2;
 export type VisualRunState = {
   versionId: string;
   nodeId: string;
@@ -28,7 +32,7 @@ export type VisualRunState = {
 };
 export type VisualExecution = {
   state: VisualRunState;
-  action: { kind: "knowledge" | "product" | "prompt" | "handoff" | "end"; nodeId: string; message?: string };
+  action: { kind: "knowledge" | "product" | "booking" | "prompt" | "handoff" | "end"; nodeId: string; message?: string };
   traversedNodeIds: string[];
   inputConsumed: boolean;
   error?: string;

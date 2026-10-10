@@ -44,7 +44,8 @@ export type ConversationStatePayload = {
   unorderedWorkflow?: boolean;
   orderWorkflowSnapshot?: string;
   linearSnapshot?: { id: string; versionId: string; name: string; steps: WorkflowStepDef[] };
-  schemaVersion?: 2;
+  schemaVersion?: 2 | 3;
+  processes?: import("./conversation-processes").ConversationProcesses;
   context?: import("./context").SharedContext;
   visual?: import("./visual/types").VisualRunState;
   completedVisual?: import("./visual/types").VisualRunState;

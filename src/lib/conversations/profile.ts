@@ -3,7 +3,7 @@ import { migrateContext, profileKeys, setFact, type Fact } from "@/lib/workflows
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 export async function hydrateProfile(businessId: string, participantId: string, input: ConversationStatePayload) {
     const state = migrateContext(input);
-    if (input.schemaVersion === 2)
+    if (input.schemaVersion === 2 || input.schemaVersion === 3)
         return state;
     const { data, error } = await createServiceSupabase().from("conversation_profiles").select("profile").eq("business_id", businessId).eq("participant_id", participantId).maybeSingle();
     if (error)

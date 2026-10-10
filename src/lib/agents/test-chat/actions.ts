@@ -1,11 +1,10 @@
 "use server";
-import { processBookingTurn } from "@/lib/calendar/agent";
+import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 import { loadSetupStatus } from "@/lib/setup/status";
 import { recordSetupTest } from "@/lib/setup/record-test";
 import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import {
-  processAgentTurn,
   type AgentTurnResult,
 } from "@/lib/conversations/process-agent-turn";
 import { readTestSession, sealTestSession } from "./session";
@@ -105,8 +104,7 @@ export async function simulateAgentTurn(
       setupSignature = null;
     }
 
-    const bookingTurn = await processBookingTurn({businessId: access.business.id, message: text, state: session.state, mode: "test"});
-    const turn = bookingTurn ?? await processAgentTurn({
+    const turn = await processConversationMessage({
       mode: "test",
       businessId: access.business.id,
       message: text || (attachments.length ? "Çfarë mund të më thuash për skedarin që dërgova?" : text),

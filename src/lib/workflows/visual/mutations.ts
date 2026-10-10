@@ -1,5 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { normalizeVisualDraft, validateVisualGraph } from "./model";
+import { loadWorkflowReadiness } from "../readiness";
+import { loadVisualVersion, loadVisualWorkspace } from "./store";
 
 export type WorkflowOperation = "draft" | "publish" | "enable" | "disable";
 /** Caller supplies server-verified identities. The RPC rechecks membership and revision atomically. */
@@ -24,6 +26,17 @@ export async function writeVisualWorkflow(
       error: "Kontrollo hapat e shënuar.",
       errors: validateVisualGraph(raw).errors,
     };
+  let activationGraph = graph;
+  if (operation === "enable") {
+    const workspace = await loadVisualWorkspace(businessId);
+    activationGraph = workspace.publishedVersionId
+      ? (await loadVisualVersion(businessId, workspace.publishedVersionId))?.graph ?? null
+      : null;
+  }
+  if ((operation === "publish" || operation === "enable") && activationGraph?.version === 2) {
+    const readiness = await loadWorkflowReadiness(businessId);
+    if (!readiness.ready) return { error: `Ruaje si draft dhe provoje. Para aktivizimit: ${readiness.blockers.join(" ")}` };
+  }
   const { error } = await createServiceSupabase().rpc(
     requestId ? "apply_assistant_visual_workflow" : "save_visual_workflow",
     {

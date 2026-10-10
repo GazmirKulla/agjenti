@@ -43,8 +43,9 @@ async function sendPrepared(job: WorkflowJob) {
         throw new Error("Connection unavailable");
     const token = decryptSecret(connection.access_token_ciphertext);
     const { data: claimed, error: claimError } = await db.rpc("begin_workflow_send", { p_id: job.id, p_token: job.lease_token });
-    if (claimError || !claimed)
+    if (claimError)
         throw new Error("Send lease lost");
+    if (!claimed) return; // A staff takeover can discard prepared output atomically.
     job.status = "sending";
     const sent = await sendInstagramText({ accountId: connection.ig_user_id, token, to: job.participant_id, body: job.reply ?? "" });
     const { error: finishError } = await db.rpc("finish_workflow_send", { p_id: job.id, p_token: job.lease_token, p_ok: sent.ok, p_external: sent.ok ? sent.messageId ?? null : null, p_error: sent.ok ? null : sent.error });

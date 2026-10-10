@@ -2,7 +2,7 @@ import { isQuestion, validValue, profileKey } from "../context";
 import { foldText } from "../engine";
 import type { VisualExecution, VisualGraph, VisualIntent, VisualRunState } from "./types";
 export { explicitIntent as detectVisualIntent } from "../guidance";
-export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;productComplete?:boolean;inputAvailable?:boolean; sharedValues?:Record<string,string>}):VisualExecution {
+export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;productComplete?:boolean;bookingComplete?:boolean;inputAvailable?:boolean; sharedValues?:Record<string,string>}):VisualExecution {
   const state:VisualRunState=p.state?structuredClone(p.state):{versionId:p.versionId,nodeId:p.graph.nodes.find(n=>n.kind==='start')!.id,status:'running',visited:[],values:{},awaiting:false};
   if(p.sharedValues) {
     const forced=p.graph.nodes.find(n=>n.id===state.forceCollect);
@@ -25,7 +25,7 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     if(n.kind==='condition'){
       const c=n.config, key=c.fieldKey||'';
       const value=Object.hasOwn(state.values,key)&&typeof state.values[key]==='string'?state.values[key]:'';
-      const yes=c.condition==='intent_order'?p.intent==='order':c.condition==='intent_support'?p.intent==='support':c.condition==='field_present'?Boolean(value):foldText(value||'')===foldText(c.value||'');
+      const yes=c.condition==='intent_order'?p.intent==='order':c.condition==='intent_support'?p.intent==='support':c.condition==='intent_booking'?p.intent==='booking':c.condition==='field_present'?Boolean(value):foldText(value||'')===foldText(c.value||'');
       advance(yes?'yes':'no');continue;
     }
     if(n.kind==='handoff'){state.status='handoff';state.awaiting=false;return result('handoff',n.id,n.config.prompt||'Po ia kaloj kërkesën tuaj ekipit.');}
@@ -33,6 +33,10 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     if(n.kind==='knowledge'){
       advance('next');
       return result('knowledge',n.id,n.config.prompt);
+    }
+    if(n.kind==='booking'){
+      if(state.awaiting&&p.bookingComplete){consumed=true;advance('next');continue;}
+      state.awaiting=true;state.status='waiting';return result('booking',n.id);
     }
     if(n.kind==='product'){
       if(state.awaiting&&p.productComplete){consumed=true;advance('next');continue;}

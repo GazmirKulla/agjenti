@@ -11,6 +11,8 @@ import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { BusinessProcessView } from "@/components/workflows/business-process";
 import { VisualWorkflowEditor } from "@/components/workflows/visual-editor";
 import { loadVisualWorkspace } from "@/lib/workflows/visual/store";
+import { loadWorkflowReadiness } from "@/lib/workflows/readiness";
+import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 
 export default async function WorkflowsPage({
   params,
@@ -23,7 +25,13 @@ export default async function WorkflowsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const [operating, visual] = await Promise.all([loadBusinessProcess(access.business.id), loadVisualWorkspace(access.business.id)]);
+  const [operating, visual, readiness, profile, calendar, services] = await Promise.all([
+    loadBusinessProcess(access.business.id), loadVisualWorkspace(access.business.id),
+    loadWorkflowReadiness(access.business.id), loadDashboardProfile(access.business.id),
+    db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", access.business.id).maybeSingle(),
+    db.from("booking_services").select("id").eq("business_id", access.business.id).eq("is_active", true).eq("booking_enabled", true).limit(1),
+  ]);
+  const bookingEnabled = profile.enabledModules.includes("bookings") && !calendar.error && !services.error && !!calendar.data?.agent_booking_enabled && !!services.data?.length;
   const [{ data: workflows, error: loadError }, { data: types }] =
     await Promise.all([
       db
@@ -73,13 +81,13 @@ export default async function WorkflowsPage({
     <>
       <PageHeading
         title="Workflow"
-        description="Nga mesazhi i parë, te hapi i duhur."
+        description="Çdo mesazh, rruga e duhur. Konteksti i klientit mbetet me bisedën."
       >
         <Link href={`/b/${slug}/products`} className="btn btn-ghost">
           Lidh te produktet →
         </Link>
       </PageHeading>
-      <VisualWorkflowEditor slug={slug} initialWorkspace={visual} />
+      <VisualWorkflowEditor slug={slug} initialWorkspace={visual} bookingEnabled={bookingEnabled} readiness={readiness} />
       <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
         <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />
       </details>

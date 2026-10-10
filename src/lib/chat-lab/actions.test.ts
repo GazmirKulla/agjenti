@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ user: vi.fn(), admin: vi.fn(), from: vi.fn(), process: vi.fn() }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: mocks.user, isPlatformAdmin: mocks.admin }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: mocks.from }) }));
-vi.mock("@/lib/conversations/process-agent-turn", () => ({ processAgentTurn: mocks.process }));
+vi.mock("@/lib/conversations/process-conversation-message", () => ({ processConversationMessage: mocks.process }));
 import { runLabTurn, searchLabBusinesses, loadLabSetup } from "./actions";
 import { emptyState } from "@/lib/workflows/engine";
 import { readTestSession, snapshotTestSession } from "@/lib/agents/test-chat/session";

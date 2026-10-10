@@ -104,3 +104,25 @@ describe("assistant workflow operations", () => {
     ).toThrow();
   });
 });
+
+it("adds a booking flow through explicit operations without changing existing branches", () => {
+  const before=starterVisualGraph();
+  const after=applyWorkflowOperations(before,JSON.stringify([
+    {op:"upgrade"},
+    {op:"put_node",node:{id:"booking",kind:"booking",label:"Rezervim",position:{x:800,y:0},config:{}}},
+    {op:"put_edge",edge:{id:"booking-end",source:"booking",target:"end",port:"next"}},
+    {op:"put_flow",flow:{id:"booking",kind:"booking",label:"Rezervimet",entryNodeId:"booking",nodeIds:["booking"]}},
+  ]));
+  expect(after.version).toBe(2);
+  expect(validateVisualGraph(after).errors).toEqual([]);
+  expect(after.edges.filter(e=>e.source!=="booking")).toEqual(before.edges);
+  expect(workflowPreview(before,after).fields.some(f=>f.label==="Procesi në qendrën e mesazhit"&&f.after.includes("Rezervimet"))).toBe(true);
+});
+
+it("preserves grouped flow definitions when editing a node and requires an explicit replacement entry", () => {
+  const grouped=applyWorkflowOperations(starterVisualGraph(),JSON.stringify([{op:"upgrade"}]));
+  if(grouped.version!==2) throw new Error("Expected v2");
+  const edited=applyWorkflowOperations(grouped,JSON.stringify([{op:"put_node",node:{...grouped.nodes.find(n=>n.id==="product")!,label:"Porosia"}}]));
+  expect(edited.version===2&&edited.flows).toEqual(grouped.flows);
+  expect(()=>applyWorkflowOperations(grouped,JSON.stringify([{op:"put_flow",flow:{...grouped.flows[0],entryNodeId:"absent"}}]))).toThrow();
+});

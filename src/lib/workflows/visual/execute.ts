@@ -14,7 +14,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   if (params.visualPreview && (params.mode !== "test" || params.visualPreview.businessId !== params.businessId)) throw new Error("invalid_workflow_preview");
   const previous = params.state?.visual;
   // Publishing the visual layer must not interrupt an existing linear product order.
-  if (!params.visualPreview && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacy(params);
+  if (!params.visualPreview && !params.informationRequest && !params.bookingRequest && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacy(params);
   let active = previous && previous.status !== "completed" ? previous : null;
   const loadedVersion = params.visualPreview ?? await loadVisualVersion(params.businessId, previous?.versionId);
   if (!loadedVersion) {
@@ -26,22 +26,42 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   const started = Date.now();
   // Completion does not erase order/customer data. Only entering a new product flow resets it.
   let base = structuredClone(params.state ?? emptyState());
-  let intent = detectVisualIntent(params.message);
+  let intent = params.bookingRequest ? "booking" as const : detectVisualIntent(params.message);
   let navigating = false;
   let revisiting = false;
   const currentNode = version.graph.nodes.find(n => n.id === previous?.nodeId);
-  const routesFor = (graph: typeof version.graph) => graph.nodes.flatMap(n =>
-    ["collect", "confirm", "knowledge", "product", "handoff"].includes(n.kind)
-      ? [{id:n.id,label:n.label,prompt:n.config.prompt,fieldKey:n.config.fieldKey,kind:n.kind as string}]
-      : n.kind === "condition" && n.config.condition === "intent_support"
-        ? [{id:n.id,label:n.label,prompt:n.config.prompt,fieldKey:n.config.fieldKey,kind:"support_entry"}] : []);
+  const routesFor = (graph: typeof version.graph) => {
+    const flows = graph.version === 2 ? graph.flows : [];
+    return graph.nodes.flatMap(n => {
+      const flow = flows.find(flow => flow.entryNodeId === n.id);
+      const processKind = flow?.kind === "order" ? "product" : flow?.kind === "booking" ? "booking" : flow?.kind === "support" ? "support_entry" : flow?.kind === "information" ? "knowledge" : undefined;
+      if (processKind) return [{ id: n.id, label: flow!.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: processKind }];
+      // Process nodes are entered through their configured flow entry; inner collection
+      // steps remain selectable for corrections after that task has begun.
+      if (["product", "booking", "handoff", "knowledge"].includes(n.kind) && flows.some(flow => flow.nodeIds.includes(n.id))) return [];
+      return ["collect", "confirm", "knowledge", "product", "booking", "handoff"].includes(n.kind)
+        ? [{ id: n.id, label: n.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: n.kind as string }]
+        : n.kind === "condition" && n.config.condition === "intent_support"
+          ? [{ id: n.id, label: n.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: "support_entry" }] : [];
+    });
+  };
   let routes = routesFor(version.graph);
   const targets = (previous?.visited ?? []).flatMap(id => {
     const n = routes.find(n=>n.id===id);
     return n && n.id !== previous?.nodeId && ["collect","confirm","product"].includes(n.kind) ? [n] : [];
   });
   // The new message is evaluated before the saved cursor, including product and terminal states.
-  const guidance = await chooseGuidance({message:params.message,state:base,targets,routes,
+  const bookingNodes = routes.filter(node => node.kind === "booking");
+  const bookingFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "booking" && flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
+  const continuingBooking = params.bookingRequest && previous?.status === "waiting" && Boolean(bookingFlow || currentNode?.kind === "booking");
+  const orderFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "order" && flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
+  const continuingOrder = params.orderRequest && previous?.status === "waiting" && Boolean(orderFlow || currentNode?.kind === "product");
+  const informationEntries = routes.filter(node => node.kind === "knowledge");
+  const informationFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "information" && flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
+  const continuingInformation = params.informationRequest && previous?.status === "waiting" && Boolean(informationFlow);
+  const guidance = continuingBooking || continuingOrder || continuingInformation ? { action: "continue" as const, target: null, source: "rules" as const }
+    : params.informationRequest && informationEntries.length === 1 ? { action: "route" as const, target: informationEntries[0].id, source: "rules" as const }
+    : params.bookingRequest && bookingNodes.length === 1 ? { action: "route" as const, target: bookingNodes[0].id, source: "rules" as const } : await chooseGuidance({message:params.message,state:base,targets,routes,
     current:currentNode ? {id:currentNode.id,label:currentNode.label,prompt:currentNode.config.prompt,fieldKey:currentNode.config.fieldKey,kind:currentNode.kind} : undefined,
     allowOrder:routes.some(n=>n.kind==="product"), allowSupport:routes.some(n=>n.kind==="handoff" || n.kind==="support_entry"),
   });
@@ -81,8 +101,11 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
     navigating = guidance.action === "order" || guidance.action === "support" || guidance.action === "route";
     revisiting = guidance.action === "revisit";
     const node = version.graph.nodes.find(n=>n.id===destination)!;
-    if ((revisiting || guidance.action === "route") && node.kind === "collect") active.forceCollect=destination;
-    if (revisiting || (guidance.action === "route" && ["collect","confirm"].includes(node.kind))) {
+    const processEntry = version.graph.version === 2 && version.graph.flows.some(flow => flow.entryNodeId === destination);
+    const explicitCorrection = /\b(ndrysho\w*|korrigjo\w*|ktheh\w*|change|correct|instead)\b/.test(params.message.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase());
+    const forceRecollection = revisiting || (guidance.action === "route" && (!processEntry || explicitCorrection));
+    if (forceRecollection && node.kind === "collect") active.forceCollect=destination;
+    if (revisiting || (forceRecollection && ["collect","confirm"].includes(node.kind))) {
       invalidateConfirmation(base);
       for (const n of version.graph.nodes.filter(n=>n.kind==="confirm")) delete active.values[n.id];
     }
@@ -96,10 +119,10 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   })) : currentState.visual?.values;
   const advance: typeof advanceVisualWorkflow = input => advanceVisualWorkflow({ ...input, sharedValues: sharedValues() });
   let execution = advance({ graph: version.graph, versionId: version.id, state: active,
-    message: params.message, hasPhoto: params.hasPhoto, intent, ...((extracted || revisiting || guidance.action === "route")?{inputAvailable:false}:{}) });
+    message: params.message, hasPhoto: params.hasPhoto, intent, ...((extracted || revisiting || guidance.action === "route" || params.bookingNavigation || (params.orderRequest && currentNode?.kind !== "product"))?{inputAvailable:false}:{}) });
   const traversed = [...execution.traversedNodeIds];
   const replies: string[] = [];
-  let productCalled = false, finished = false;
+  let productCalled = false, bookingCalled = false, finished = false;
   let turn: AgentTurnResult = {
     reply: "", nextState: base, previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
     debug: { model: agentModel(), source: "fallback", fallbackReason: "workflow_prompt", agentConfigured: false,
@@ -118,6 +141,19 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
       replies.push(turn.reply);
       execution = advance({ graph: version.graph, versionId: version.id, state: execution.state,
         message: "", hasPhoto: false, intent, inputAvailable: false });
+      traversed.push(...execution.traversedNodeIds);
+      continue;
+    }
+    if (action.kind === "booking") {
+      if (bookingCalled) { replies.push("Për cilin shërbim dëshironi rezervimin?"); finished = true; break; }
+      bookingCalled = true;
+      const booking = await params.bookingTurn?.(turn.nextState);
+      if (!booking) { replies.push("Për rezervimin, kontakto stafin e biznesit."); finished = true; break; }
+      turn = booking; currentState = turn.nextState;
+      replies.push(turn.reply);
+      if (turn.nextState.fields.booking) { finished = true; break; }
+      execution = advance({ graph: version.graph, versionId: version.id, state: execution.state,
+        message: "", hasPhoto: false, intent, bookingComplete: true, inputAvailable: false });
       traversed.push(...execution.traversedNodeIds);
       continue;
     }

@@ -1,0 +1,33 @@
+begin;
+insert into auth.users(id,email) values('00000000-0000-4000-8000-000000003201','hub@example.test');
+insert into businesses(id,name,slug) values('00000000-0000-4000-8000-000000003201','Hub test','hub-definition-test');
+insert into business_users(business_id,user_id,role) values('00000000-0000-4000-8000-000000003201','00000000-0000-4000-8000-000000003201','owner');
+do $$ declare
+ tenant uuid:='00000000-0000-4000-8000-000000003201'; old_version uuid; new_version uuid;
+ legacy jsonb:='{"version":1,"name":"Legacy","nodes":[{"id":"start","kind":"start","label":"Start","position":{"x":0,"y":0},"config":{}},{"id":"end","kind":"end","label":"End","position":{"x":300,"y":0},"config":{}}],"edges":[{"id":"start-end","source":"start","target":"end","port":"next"}]}';
+ graph jsonb;
+begin
+ graph:=legacy||'{"version":2,"flows":[{"id":"booking","kind":"booking","label":"Bookings","entryNodeId":"booking","nodeIds":["booking"]}]}'::jsonb;
+ graph:=jsonb_set(graph,'{nodes}',graph->'nodes'||'[{"id":"booking","kind":"booking","label":"Booking","position":{"x":300,"y":200},"config":{}}]'::jsonb);
+ graph:=jsonb_set(graph,'{edges}',graph->'edges'||'[{"id":"booking-end","source":"booking","target":"end","port":"next"}]'::jsonb);
+ if not valid_visual_graph(legacy,true) then raise exception 'Legacy compatibility lost'; end if;
+ if not valid_visual_graph(graph,true) then raise exception 'Independent hub booking entry rejected'; end if;
+ if valid_visual_graph(jsonb_set(graph,'{version}','1'),true) then raise exception 'Booking accepted in v1'; end if;
+ if valid_visual_graph(jsonb_set(graph,'{flows,0,entryNodeId}','"missing"'),false) then raise exception 'Missing entry accepted'; end if;
+ if valid_visual_graph(jsonb_set(graph,'{flows,0,nodeIds}','["booking","booking"]'),false) then raise exception 'Repeated membership accepted'; end if;
+ if valid_visual_graph(jsonb_set(graph,'{flows,0,id}','null'),false) then raise exception 'Null flow id accepted'; end if;
+ if valid_visual_graph(jsonb_set(graph,'{flows}',(graph->'flows')||'[ {"id":"other","kind":"booking","label":"Other","entryNodeId":"booking","nodeIds":["booking"]} ]'),false) then raise exception 'Ambiguous membership accepted'; end if;
+ if not valid_visual_graph(jsonb_set(graph,'{flows,0,label}','""'),false) then raise exception 'Unfinished draft rejected'; end if;
+ if valid_visual_graph(jsonb_set(graph,'{flows,0,label}','""'),true) then raise exception 'Unnamed flow published'; end if;
+ if not valid_visual_graph(jsonb_set(graph,'{edges,1,target}','"booking"'),true) then raise exception 'Booking wait loop rejected'; end if;
+ perform save_visual_workflow(tenant,tenant,0,legacy,'publish');
+ select published_version_id into old_version from visual_workflows where business_id=tenant;
+ perform save_visual_workflow(tenant,tenant,1,graph,'draft');
+ if (select published_version_id from visual_workflows where business_id=tenant)<>old_version then raise exception 'Draft changed published pointer'; end if;
+ perform save_visual_workflow(tenant,tenant,2,graph,'publish');
+ select published_version_id into new_version from visual_workflows where business_id=tenant;
+ if new_version=old_version or (select v.graph from visual_workflow_versions v where id=old_version)<>legacy then raise exception 'Pinned legacy version changed'; end if;
+ if (select draft->'flows' from visual_workflows where business_id=tenant) is distinct from graph->'flows' then raise exception 'Flow grouping not persisted'; end if;
+ begin perform save_visual_workflow(tenant,tenant,2,graph,'draft'); raise exception 'Stale write accepted' using errcode='XX001'; exception when raise_exception then if sqlerrm<>'stale_workflow' then raise; end if; end;
+end $$;
+rollback;
