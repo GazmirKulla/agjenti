@@ -1,11 +1,10 @@
 "use client";
-import { useId, useRef, useState } from "react";
+import { useId } from "react";
 import { Icon } from "@/components/dashboard/icon";
 import { upgradeVisualGraph } from "@/lib/workflows/visual/model";
 import type { VisualGraph, VisualFlow, VisualFlowKind, VisualTrace } from "@/lib/workflows/visual/types";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import type { AgentTurnResult } from "@/lib/conversations/process-agent-turn";
-import { workflowHubSelection } from "./hub-selection";
 
 export const processLabels: Record<VisualFlowKind | "clarify", string> = {
   information: "Informacion", order: "Porosi", booking: "Rezervim", support: "Staf", custom: "Rrjedhë tjetër", clarify: "Sqarim",
@@ -33,28 +32,30 @@ export function WorkflowFlowChooser({ flows, onSelect, onClose }: { flows: Visua
 /** The return arrows mean waiting for another message, never an automatic execution cycle. */
 export function WorkflowHub({ graph, trace, state, routing, message, bookingEnabled = false, compact = false, onOpen, onOpenFlow, onContext }: WorkflowHubProps) {
   const marker = `hub-${useId().replace(/:/g, "")}`;
-  const [choosing, setChoosing] = useState<VisualFlowKind | null>(null);
-  const chooserTrigger = useRef<HTMLButtonElement | null>(null);
   const flows = graph ? upgradeVisualGraph(graph).flows : [];
-  const choices = choosing ? flows.filter(flow => flow.kind === choosing) : [];
-  function closeChooser() { setChoosing(null); chooserTrigger.current?.focus(); }
-  function openProcess(kind: VisualFlowKind, trigger: HTMLButtonElement) {
-    const selection = workflowHubSelection(flows, kind);
-    if (selection.action === "create") onOpen?.(selection.kind);
-    else if (selection.action === "open") onOpenFlow?.(selection.flowId);
-    else { chooserTrigger.current = trigger; setChoosing(kind); }
-  }
   const nodeId = trace?.routing?.to ?? trace?.state.nodeId;
   const active = routing?.process ?? (trace?.routing?.action === "answer" ? "information" : flows.find(flow => flow.nodeIds.includes(nodeId ?? ""))?.kind);
   const profileCount = Object.values(state?.context?.profile ?? {}).filter(Boolean).length;
   const bookingVisible = bookingEnabled || flows.some(flow => flow.kind === "booking") || !!state?.processes?.booking;
+  const cards = [
+    ...flows.map(flow => ({ flow, kind: flow.kind, label: flow.label })),
+    ...processes.filter(item => !flows.some(flow => flow.kind === item.kind) && (item.kind !== "booking" || bookingVisible)).map(item => ({ flow: undefined, kind: item.kind, label: processLabels[item.kind] })),
+  ];
+  const columns = [cards.filter((_, index) => index % 2 === 0), cards.filter((_, index) => index % 2 === 1)];
+  const orbitHeight = Math.max(445, Math.max(...columns.map(column => column.length)) * 160 + 140);
+  const activeFlowId = flows.find(flow => flow.nodeIds.includes(nodeId ?? ""))?.id;
   return <section className={`vf-hub ${compact ? "is-compact" : ""}`} aria-label="Mesazhi në qendër të workflow-t">
     <div className="vf-hub-caption"><span className="vf-live-dot" />Çdo mesazh hap rrugën e duhur</div>
-    <div className="vf-hub-orbit">
-      <svg className="vf-hub-lines" viewBox="0 0 800 460" preserveAspectRatio="none" aria-hidden="true">
+    <div className="vf-hub-orbit is-flow-board" style={{ height: orbitHeight, flexBasis: orbitHeight }}>
+      <svg className="vf-hub-lines" viewBox={`0 0 800 ${orbitHeight}`} preserveAspectRatio="none" aria-hidden="true">
         <defs><marker id={marker} markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto-start-reverse"><path d="m2 1 4 3-4 3" fill="none" stroke="currentColor" strokeWidth="1.3" /></marker></defs>
-        <ellipse cx="400" cy="230" rx="265" ry="180" />
-        {["M 280 195 Q 225 180 165 130", "M 280 270 Q 220 285 165 340", ...(bookingVisible ? ["M 520 195 Q 585 180 635 130"] : []), "M 520 270 Q 580 285 635 340"].map((d, i) => <path key={i} d={d} markerStart={`url(#${marker})`} markerEnd={`url(#${marker})`} />)}
+        <ellipse cx="400" cy={orbitHeight / 2} rx="265" ry={orbitHeight / 2 - 40} />
+        {columns.flatMap((column, side) => column.map((card, index) => {
+          const x = side === 0 ? 165 : 635;
+          const centerX = side === 0 ? 280 : 520;
+          const y = 80 + index * 160 + 70;
+          return <path key={card.flow?.id ?? card.kind} d={`M ${centerX} ${orbitHeight / 2} Q ${side === 0 ? 225 : 585} ${y} ${x} ${y}`} markerStart={`url(#${marker})`} markerEnd={`url(#${marker})`} />;
+        }))}
       </svg>
       <button type="button" className="vf-hub-context" onClick={onContext} disabled={!onContext}><Icon name="customers" size={16} /><span>Konteksti i klientit</span><small>{profileCount ? `${profileCount} të dhëna të ruajtura` : "Një kujtesë për çdo proces"}</small></button>
       <div className="vf-hub-center">
@@ -63,22 +64,22 @@ export function WorkflowHub({ graph, trace, state, routing, message, bookingEnab
         <div className="vf-hub-message">{message ? <q>{message}</q> : <span>Provo një mesazh për të parë rrugën e ndjekur.</span>}</div>
         <span className="vf-hub-channels"><Icon name="instagram" size={13} /> Instagram <i /> Bisedë prove</span>
       </div>
-      {processes.filter(item => item.kind !== "booking" || bookingVisible).map(item => {
-        const group = flows.filter(flow => flow.kind === item.kind);
-        const task = item.kind === "order" || item.kind === "booking" ? state?.processes?.[item.kind] : undefined;
-        const countLabel = `${group.length} ${group.length === 1 ? "rrjedhë" : "rrjedha"} · ${group.reduce((sum, flow) => sum + flow.nodeIds.length, 0)} hapa`;
-        return <button type="button" key={item.kind} className={`vf-hub-process is-${item.place} ${active === item.kind ? "is-current" : ""}`} disabled={group.length ? !onOpenFlow : !onOpen} onClick={event => openProcess(item.kind, event.currentTarget)} aria-expanded={group.length > 1 ? choosing === item.kind : undefined} aria-label={`${group.length > 1 ? "Zgjidh rrjedhën" : "Hap rrjedhën"}: ${processLabels[item.kind]}`}>
-          <span className="vf-hub-process-icon"><Icon name={item.icon} size={21} /></span>
-          <strong>{processLabels[item.kind]}</strong><span title={group.map(flow => flow.label).join(" · ")}>{group.length ? group.map(flow => flow.label).join(" · ") : item.detail}</span>
-          <small>{group.length ? countLabel : onOpen ? "Shto rrjedhën +" : "Sipas konfigurimit"}{group.length > 1 && onOpenFlow ? " · Zgjidh ↗" : ""}</small>
-          {task?.status === "suspended" ? <em>E pezulluar · të dhënat ruhen</em> : task?.status === "completed" ? <em>E përfunduar</em> : active === item.kind ? <em>Rruga e këtij mesazhi</em> : null}
-        </button>;
-      })}
+      {columns.map((column, side) => <div className={`vf-hub-flow-column is-${side === 0 ? "left" : "right"}`} key={side}>
+        {column.map(({ flow, kind, label }) => {
+          const item = processes.find(item => item.kind === kind);
+          const task = kind === "order" || kind === "booking" ? state?.processes?.[kind] : undefined;
+          const current = activeFlowId ? flow?.id === activeFlowId : active === kind && cards.filter(card => card.kind === kind).length === 1;
+          return <button type="button" key={flow?.id ?? kind} value={flow?.id} className={`vf-hub-process is-${kind} ${current ? "is-current" : ""}`} disabled={flow ? !onOpenFlow : !onOpen} onClick={() => flow ? onOpenFlow?.(flow.id) : onOpen?.(kind)} aria-label={`${flow ? "Hap rrjedhën" : "Shto rrjedhën"}: ${label}`}>
+            <span className="vf-hub-process-icon"><Icon name={item?.icon ?? "workflows"} size={21} /></span>
+            <strong>{label}</strong><span>{processLabels[kind]}</span>
+            <small>{flow ? `${flow.nodeIds.length} hapa · Hap rrjedhën ↗` : onOpen ? "Shto rrjedhën +" : "Sipas konfigurimit"}</small>
+            {current && task?.status === "suspended" ? <em>E pezulluar · të dhënat ruhen</em> : current && task?.status === "completed" ? <em>E përfunduar</em> : current ? <em>Rruga e këtij mesazhi</em> : null}
+          </button>;
+        })}
+      </div>)}
       <div className="vf-hub-return"><Icon name="refresh" size={15} /><span>Përgjigje → prit mesazhin tjetër</span></div>
     </div>
     <div className="vf-hub-decision" aria-live="polite"><Icon name="spark" size={16} /><div><strong>{routing ? `Vendimi i agjentit · ${processLabels[routing.process]}` : "Workflow udhëzon bisedën"}</strong><p>{routing?.reason ?? "Klienti mund të ndryshojë kërkesën ose të rikthehet te një proces i mëparshëm. Progresi ruhet."}</p></div></div>
-    {flows.some(flow => flow.kind === "custom") && <div className="vf-hub-custom"><button type="button" className="vf-button" disabled={!onOpenFlow} onClick={event => openProcess("custom", event.currentTarget)} aria-expanded={choosing === "custom"}><Icon name="workflows" size={15} />Rrjedha të tjera · {flows.filter(flow => flow.kind === "custom").length}</button></div>}
-    {choices.length > 0 && onOpenFlow && <div className="vf-hub-choice-layer"><button className="vf-hub-choice-backdrop" type="button" aria-label="Mbyll zgjedhjen e rrjedhës" onClick={closeChooser} /><WorkflowFlowChooser flows={choices} onClose={closeChooser} onSelect={flowId => { setChoosing(null); onOpenFlow(flowId); }} /></div>}
   </section>;
 }
 

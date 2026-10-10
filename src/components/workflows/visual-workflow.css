@@ -300,3 +300,16 @@
 .vf-binding-option strong { display: block; font-size: 12px; font-weight: 450; line-height: 1.6; overflow-wrap: anywhere; }
 .vf-binding-option small { display: block; font-size: 10px; color: var(--ink-muted); line-height: 1.5; }
 .vf-binding-owner { max-width: calc(100% - 21px); margin: 6px 0 0 21px; font-size: 10px; color: var(--accent); cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+
+/* Each configured flow has a direct card in the message board. */
+.vf-hub-flow-column { position: absolute; top: 80px; width: 23%; display: flex; flex-direction: column; gap: 16px; }
+.vf-hub-flow-column.is-left { left: 3%; }
+.vf-hub-flow-column.is-right { right: 3%; }
+.vf-hub-flow-column .vf-hub-process { position: static; width: 100%; height: 144px; flex-shrink: 0; }
+.vf-hub-flow-column .vf-hub-process strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.4; }
+.vf-hub.is-compact .vf-hub-orbit.is-flow-board { flex-shrink: 0; }
+@media (max-width: 600px) {
+ .vf-hub-orbit.is-flow-board { height: auto !important; flex-basis: auto !important; }
+ .vf-hub-flow-column { display: contents; }
+ .vf-hub-flow-column .vf-hub-process { height: auto; min-height: 144px; }
+}

@@ -14,9 +14,9 @@ describe("message workflow presentation", () => {
     const graph = starterVisualGraph();
     const before = structuredClone(graph);
     const initial = renderToStaticMarkup(createElement(WorkflowHub, { graph }));
-    expect(initial).not.toContain("Hap rrjedhën: Rezervim");
+    expect(initial).not.toContain("Shto rrjedhën: Rezervim");
     const enabled = renderToStaticMarkup(createElement(WorkflowHub, { graph, bookingEnabled: true }));
-    expect(enabled).toContain("Hap rrjedhën: Rezervim");
+    expect(enabled).toContain("Shto rrjedhën: Rezervim");
     expect(graph).toEqual(before);
   });
   it("shows an actual booking decision even when no visual trace was returned", () => {
@@ -54,13 +54,16 @@ describe("message workflow presentation", () => {
     expect(html).toContain("Ndihmë pas porosisë");
     expect(workflowHubSelection([flows[1]], kind)).toEqual({ action: "open", flowId: "flow-second" });
   });
-  it("shows multiple flow labels and their count in the hub", () => {
+  it("shows each new flow as a direct named card in the hub", () => {
     const graph = upgradeVisualGraph(starterVisualGraph());
+    graph.flows.push({ id: "custom-extra", kind: "custom", label: "Rrjedha ime e re", entryNodeId: "custom-node", nodeIds: ["custom-node"] });
     graph.flows.push({ id: "support-extra", kind: "support", label: "Ndihma pas shitjes", entryNodeId: "handoff-extra", nodeIds: ["handoff-extra"] });
     const html = renderToStaticMarkup(createElement(WorkflowHub, { graph, onOpenFlow: () => undefined }));
-    expect(html).toContain("2 rrjedha · 2 hapa");
+    expect(html).toContain('value="support-extra"');
     expect(html).toContain("Ndihma pas shitjes");
-    expect(html).toContain('aria-label="Zgjidh rrjedhën: Staf"');
+    expect(html).toContain('aria-label="Hap rrjedhën: Ndihma pas shitjes"');
+    expect(html).not.toContain("Rrjedha të tjera");
+    expect(html).toContain('aria-label="Hap rrjedhën: Rrjedha ime e re"');
     expect(workflowHubSelection([], "booking")).toEqual({ action: "create", kind: "booking" });
   });
 });
