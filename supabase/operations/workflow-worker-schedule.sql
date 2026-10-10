@@ -1,6 +1,8 @@
 -- Run after the message-runtime migrations. Create these two secrets through
--- Supabase Vault first: agjenti_app_url (production HTTPS origin), and
+-- Supabase Vault first: agjenti_app_url (canonical production HTTPS origin), and
 -- agjenti_cron_secret (the same CRON_SECRET configured in the deployment).
+-- Use the final origin (for this deployment, https://www.agjenti.app): redirects
+-- to another host can strip Authorization and make the worker return 401.
 -- Never put their values in this file, migration history or application logs.
 create extension if not exists pg_cron;
 create extension if not exists pg_net;

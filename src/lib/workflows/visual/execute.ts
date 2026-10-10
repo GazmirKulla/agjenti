@@ -41,7 +41,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
       if (["product", "booking", "handoff", "knowledge"].includes(n.kind) && flows.some(flow => flow.nodeIds.includes(n.id))) return [];
       return ["collect", "confirm", "knowledge", "product", "booking", "handoff"].includes(n.kind)
         ? [{ id: n.id, label: n.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: n.kind as string }]
-        : n.kind === "condition" && n.config.condition === "intent_support"
+        : n.kind === "condition" && n.config.condition === "intent_support" && !flows.some(flow => flow.kind === "support")
           ? [{ id: n.id, label: n.label, prompt: n.config.prompt, fieldKey: n.config.fieldKey, kind: "support_entry" }] : [];
     });
   };

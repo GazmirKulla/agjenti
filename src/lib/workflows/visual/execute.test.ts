@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({ load: vi.fn() }));
 vi.mock("./store", () => ({ loadVisualVersion: mocks.load }));
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test-model" }));
 import { executeVisualTurn } from "./execute";
-import { starterVisualGraph } from "./model";
+import { starterVisualGraph, upgradeVisualGraph } from "./model";
 
 function node(id: string, kind: VisualNode["kind"], config: VisualNode["config"] = {}): VisualNode {
   return { id, kind, label: id, position: { x: 0, y: 0 }, config };
@@ -303,4 +303,18 @@ it("answers once when an informational question reaches knowledge followed by co
   const result = await executeVisualTurn({ ...params(graph), message: "Sa kushton?" }, legacy);
   expect(legacy).toHaveBeenCalledTimes(1);
   expect(result.reply).toBe("Çmimi mungon.\n\nSa vjeç është fëmija?");
+});
+
+it.each(["Dua të flas me stafin.", "Telefoni im është 0690000000; dua të flas me stafin."])("uses only the declared v2 support entry for %s", async message => {
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  expect(graph.nodes.some(node => node.kind === "condition" && node.config.condition === "intent_support")).toBe(true);
+  expect(graph.flows.find(flow => flow.kind === "support")?.entryNodeId).toBe("handoff");
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const state = migrateContext(); setFact(state, "customer_phone", "0690000000", "phone", "message");
+  const result = await executeVisualTurn({ ...params(graph), message, state }, legacy);
+  expect(result.reply).toBe("Po ia kaloj kërkesën tuaj ekipit.");
+  expect(result.visualWorkflow?.routing).toMatchObject({ action: "support", source: "rules", to: "handoff" });
+  expect(result.nextState.visual?.status).toBe("handoff");
+  expect(result.nextState.customer.phone).toBe("0690000000");
+  expect(legacy).not.toHaveBeenCalled();
 });
