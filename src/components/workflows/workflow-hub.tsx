@@ -1,5 +1,6 @@
 "use client";
 import { useId } from "react";
+import { flowVisibleNodeIds } from "./flow-visibility";
 import { Icon } from "@/components/dashboard/icon";
 import { upgradeVisualGraph } from "@/lib/workflows/visual/model";
 import type { VisualGraph, VisualFlow, VisualFlowKind, VisualTrace } from "@/lib/workflows/visual/types";
@@ -32,7 +33,8 @@ export function WorkflowFlowChooser({ flows, onSelect, onClose }: { flows: Visua
 /** The return arrows mean waiting for another message, never an automatic execution cycle. */
 export function WorkflowHub({ graph, trace, state, routing, message, bookingEnabled = false, compact = false, onOpen, onOpenFlow, onContext }: WorkflowHubProps) {
   const marker = `hub-${useId().replace(/:/g, "")}`;
-  const flows = graph ? upgradeVisualGraph(graph).flows : [];
+  const definition = graph ? upgradeVisualGraph(graph) : undefined;
+  const flows = definition?.flows ?? [];
   const nodeId = trace?.routing?.to ?? trace?.state.nodeId;
   const active = routing?.process ?? (trace?.routing?.action === "answer" ? "information" : flows.find(flow => flow.nodeIds.includes(nodeId ?? ""))?.kind);
   const profileCount = Object.values(state?.context?.profile ?? {}).filter(Boolean).length;
@@ -72,7 +74,7 @@ export function WorkflowHub({ graph, trace, state, routing, message, bookingEnab
           return <button type="button" key={flow?.id ?? kind} value={flow?.id} className={`vf-hub-process is-${kind} ${current ? "is-current" : ""}`} disabled={flow ? !onOpenFlow : !onOpen} onClick={() => flow ? onOpenFlow?.(flow.id) : onOpen?.(kind)} aria-label={`${flow ? "Hap rrjedhën" : "Shto rrjedhën"}: ${label}`}>
             <span className="vf-hub-process-icon"><Icon name={item?.icon ?? "workflows"} size={21} /></span>
             <strong>{label}</strong><span>{processLabels[kind]}</span>
-            <small>{flow ? `${flow.nodeIds.length} hapa · Hap rrjedhën ↗` : onOpen ? "Shto rrjedhën +" : "Sipas konfigurimit"}</small>
+            <small>{flow ? `${definition ? flowVisibleNodeIds(definition, flow.id).size : flow.nodeIds.length} hapa · Hap rrjedhën ↗` : onOpen ? "Shto rrjedhën +" : "Sipas konfigurimit"}</small>
             {current && task?.status === "suspended" ? <em>E pezulluar · të dhënat ruhen</em> : current && task?.status === "completed" ? <em>E përfunduar</em> : current ? <em>Rruga e këtij mesazhi</em> : null}
           </button>;
         })}

@@ -10,6 +10,7 @@ import { nodeLabels, outputPorts, validateVisualGraph, upgradeVisualGraph } from
 import type { VisualGraph, VisualNode, VisualNodeKind, VisualPort, VisualTrace, VisualWorkspace } from "@/lib/workflows/visual/types";
 import { FlowIcon, VisualGraphView } from "./visual-graph";
 import { WorkflowHub, WorkflowContextPanel } from "./workflow-hub";
+import { flowVisibleNodeIds } from "./flow-visibility";
 import { addFlowTemplate, flowTemplateLabels, type FlowTemplate } from "./flow-templates";
 import { FlowBindings, type FlowBindingCatalog, type FlowBindingFocus } from "./flow-bindings";
 import type { AgentTurnResult } from "@/lib/conversations/process-agent-turn";
@@ -56,10 +57,10 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   graphRef.current = graph;
   const definition = upgradeVisualGraph(graph);
   const activeFlow = definition.flows.find(flow => flow.id === view);
-  const visibleIds = activeFlow ? new Set([...activeFlow.nodeIds, ...graph.edges.filter(edge => activeFlow.nodeIds.includes(edge.source)).map(edge => edge.target)]) : null;
+  const visibleIds = activeFlow ? flowVisibleNodeIds(definition, activeFlow.id) : null;
   const displayGraph: VisualGraph = visibleIds ? { ...graph, nodes: graph.nodes.filter(node => visibleIds.has(node.id)), edges: graph.edges.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target)) } : graph;
   const selected = graph.nodes.find(n => n.id === selectedId);
-  const selectedFlow = definition.flows.find(flow => flow.nodeIds.includes(selectedId ?? "")) ?? activeFlow;
+  const selectedFlow = definition.flows.find(flow => flow.nodeIds.includes(selectedId ?? "")) ?? activeFlow ?? definition.flows.find(flow => flowVisibleNodeIds(definition, flow.id).has(selectedId ?? ""));
   const dirty = JSON.stringify(graph) !== JSON.stringify(workspace.graph);
   const canRestoreRecovery = recovery?.status === "recoverable" && recovery.draft.baseRevision === workspace.revision;
   const locked = pending || testing || refreshRequired || Boolean(recovery);
@@ -105,7 +106,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   }
   function selectNode(id?: string) {
     setSelectedId(id); setTab("edit"); setAdding(false);
-    if (id && view !== "all") setView(definition.flows.find(flow => flow.nodeIds.includes(id))?.id ?? "all");
+    if (id && view !== "all") setView(definition.flows.find(flow => flow.nodeIds.includes(id))?.id ?? (activeFlow && visibleIds?.has(id) ? activeFlow.id : definition.flows.find(flow => flowVisibleNodeIds(definition, flow.id).has(id))?.id ?? "all"));
   }
   function openFlow(flowId: string) {
     if (!definition.flows.some(flow => flow.id === flowId)) return;
@@ -145,7 +146,8 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
     const anchor = selected?.position ?? { x: 620, y: 300 };
     const node: VisualNode = { id, kind, label: nodeLabels[kind], position: { x: Math.min(4000, anchor.x + 280), y: Math.min(4000, anchor.y + 140) },
       config: kind === "condition" ? { condition: "intent_order" } : kind === "collect" ? { fieldType: "text", fieldKey: `fusha_${graph.nodes.length}` } : {} };
-    edit({ ...definition, nodes: [...graph.nodes, node], flows: definition.flows.map(flow => flow.id === activeFlow?.id && kind !== "end" ? { ...flow, nodeIds: [...flow.nodeIds, id] } : flow) }); setSelectedId(id); setAdding(false); setTab("edit");
+    edit({ ...definition, nodes: [...graph.nodes, node], flows: definition.flows.map(flow => flow.id === activeFlow?.id ? { ...flow, nodeIds: [...flow.nodeIds, id] } : flow) }); setSelectedId(id); setAdding(false); setTab("edit");
+    setNotice({ text: "Hapi u shtua në rrjedhë. Përshtat kushtet/lidhjet dhe ruaj draftin." });
   }
   function remove() {
     if (!selected || selected.kind === "start") return;
@@ -225,7 +227,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
           <div className={`vf-detail-icon vf-kind-${selected.kind}`}><FlowIcon kind={selected.kind} size={24} /></div><h2>{nodeLabels[selected.kind]}</h2><p className="vf-help">{descriptions[selected.kind]}</p>
           <div className="vf-assistant-actions"><button type="button" className="vf-button" disabled={locked||dirty} onClick={()=>assistant?.launch(`Dua të ndryshoj hapin “${selected.label}” (${selected.id}) në procesin “${selectedFlow?.label ?? "Lidhjet e përgjithshme"}” me AI.`)}>Ndrysho me AI</button><button type="button" className="vf-button" disabled={locked||dirty||!["next","yes","no"].some(p=>outputPorts(selected.kind).includes(p as VisualPort))} onClick={()=>assistant?.launch(`Dua të shtoj një hap pas “${selected.label}” (${selected.id}) në procesin “${selectedFlow?.label ?? "Lidhjet e përgjithshme"}”.`)}>Shto hap pas këtij</button></div>{dirty&&<p className="vf-field-hint">Ruaj draftin që Agjenti të përdorë ndryshimet e fundit.</p>}
           <fieldset disabled={locked} className="vf-fields"><label>Emri<input value={selected.label} maxLength={100} onChange={e => updateNode({ label: e.target.value })} /></label>
-            {!["start", "end"].includes(selected.kind) && <label>Procesi<select value={definition.flows.find(flow => flow.nodeIds.includes(selected.id))?.id ?? ""} onChange={event => moveToFlow(event.target.value)}><option value="">Lidhjet e përgjithshme</option>{definition.flows.map(flow => <option key={flow.id} value={flow.id}>{flow.label}</option>)}</select></label>}
+            {!["start", "end"].includes(selected.kind) && <label>Procesi<select value={selectedFlow?.id ?? ""} onChange={event => moveToFlow(event.target.value)}><option value="">Lidhjet e përgjithshme</option>{definition.flows.map(flow => <option key={flow.id} value={flow.id}>{flow.label}</option>)}</select></label>}
             {selected.kind === "booking" && <p className="vf-help">{bookingEnabled ? "Përdor shërbimet, disponueshmërinë dhe rregullat e konfirmimit të kalendarit." : "Aktivizo rezervimet e agjentit dhe të paktën një shërbim në kalendar për të përdorur këtë rrjedhë."} <a href={`/b/${slug}/calendar`} className="soft-link">Hap kalendarin →</a></p>}
             {selected.kind === "order_status" && <p className="vf-help">Përdor vetëm porositë e lidhura me klientin e kësaj bisede. Nëse porosia nuk gjendet, e sqaron me klientin. Prova nuk lexon apo ndryshon porositë reale. <a href={`/b/${slug}/orders`} className="soft-link">Hap porositë →</a></p>}
             {selected.kind === "condition" && <><label>Kushti<select value={selected.config.condition ?? "intent_order"} onChange={e => { edit({ ...definition, nodes: graph.nodes.map(node => node.id === selected.id ? { ...node, config: { ...node.config, condition: e.target.value as VisualNode["config"]["condition"] } } : node) }); }}><option value="intent_order">Mesazhi kërkon porosi</option><option value="intent_booking">Mesazhi kërkon rezervim</option><option value="intent_support">Mesazhi kërkon ndihmë</option><option value="field_present">Fusha është plotësuar</option><option value="field_equals">Fusha ka vlerën…</option></select></label>{selected.config.condition?.startsWith("intent_") && <p className="vf-field-hint">Njihet nga fjalët e mesazhit. Provoje me shprehjet e klientëve të tu.</p>}</>}
