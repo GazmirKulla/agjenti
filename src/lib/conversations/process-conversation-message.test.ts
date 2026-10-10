@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { emptyState, type ConversationStatePayload } from "@/lib/workflows/engine";
-import { migrateContext, setFact } from "@/lib/workflows/context";
+import { advanceSharedOrder, extractExplicitFacts, migrateContext, setFact, sharedPrompt } from "@/lib/workflows/context";
 import { migrateConversationProcesses } from "@/lib/workflows/conversation-processes";
 const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn(), status: vi.fn(), entity: vi.fn() }));
 vi.mock("@/lib/workflows/visual/entity-routing", async original => ({ ...await original<object>(), resolveVisualEntity: mocks.entity }));
@@ -397,4 +397,27 @@ it.each(["test", "production"] as const)("derives inactive entity preview access
   await processConversationMessage({ businessId: "business", message: "Puzzle", mode, hasPhoto: false, state: migrateConversationProcesses(emptyState(), () => "id") });
   expect(mocks.entity).toHaveBeenCalled();
   expect(mocks.entity.mock.calls.every(call => call[4] === (mode === "test"))).toBe(true);
+});
+it("reuses phone followed by a staff sentence after the turn processor extracts it again", async () => {
+  const customerSteps = [{ key: "collect_customer", kind: "customer" as const }];
+  mocks.agent.mockImplementation(async ({ state, message }) => {
+    const next = structuredClone(state);
+    // processAgentTurn deliberately repeats this extraction at its public boundary.
+    extractExplicitFacts(next, message);
+    if (message.includes("Dua të flas")) {
+      next.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: ["staff"], values: {}, advisory: true };
+      return result(next, "Po ia kaloj kërkesën stafit.");
+    }
+    next.product_id = "puzzle"; next.step_key = "collect_customer";
+    const orderState = advanceSharedOrder(next, "", false, customerSteps, true);
+    return result(orderState, sharedPrompt(orderState, customerSteps));
+  });
+  const first = await turn("Telefoni: 0690000000. Dua të flas me stafin.");
+  expect(first.nextState.customer.phone).toBe("0690000000");
+  expect(first.nextState.context?.execution.invalidFields ?? []).toEqual([]);
+  const next = await turn("Fola me stafin në WhatsApp. Tani dua të porosis Puzzle.", first.nextState);
+  expect(next.conversationRouting?.process).toBe("order");
+  expect(next.reply).toContain("emrin"); expect(next.reply).not.toContain("telefonin");
+  expect(next.reply).not.toContain("Kontrollo");
+  expect(next.nextState.customer.phone).toBe("0690000000");
 });

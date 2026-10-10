@@ -284,6 +284,7 @@
 .vf-bindings header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; }
 .vf-bindings header h3 { font-size: 14px; font-weight: 550; margin: 0; }
 .vf-bindings header > span { font-size: 10px; color: var(--ink-muted); }
+.vf-bindings > .vf-field-hint { margin: 10px 0 0; }
 .vf-binding-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
 .vf-binding-tabs button { display: flex; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-muted); font-size: 11px; cursor: pointer; }
 .vf-binding-tabs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }

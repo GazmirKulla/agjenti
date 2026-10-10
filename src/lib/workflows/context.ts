@@ -141,15 +141,23 @@ export function extractExplicitFacts(state: ConversationStatePayload, message: s
     let count = 0;
     for (const part of message.split(/[\n;,]+/)) {
         const match = part.trim().match(/^(.{1,80}?)\s*:\s*(.+)$/);
-        if (!match || isQuestion(match[2]))
+        if (!match)
             continue;
         const key = labels[foldText(match[1])];
         if (!key)
             continue;
         const step = steps.find(s => (s.fieldKey ?? s.key) === key);
-        if (step?.options?.length && !step.options.some(v => foldText(v) === foldText(match[2])))
+        const type = key === "customer_phone" ? "phone" : key === "customer_email" ? "email" : step?.fieldType ?? "text";
+        // A labelled contact value may precede a separate sentence. Bound typed
+        // values without splitting dots inside emails or formatted phone numbers.
+        const raw = match[2].trim();
+        const value = type === "phone" ? raw.match(/^(\+?[\d\s().-]*\d)(?:[.!?](?=\s|$)|$)/)?.[1] ?? raw
+            : type === "email" ? raw.match(/^([^\s@]+@[^\s@]+\.[^\s@]+?)(?:[.!?](?=\s|$)|$)/)?.[1] ?? raw : raw;
+        if (isQuestion(value))
             continue;
-        if (setFact(state, key, match[2], step?.fieldType ?? "text", "message_label"))
+        if (step?.options?.length && !step.options.some(v => foldText(v) === foldText(value)))
+            continue;
+        if (setFact(state, key, value, type, "message_label"))
             count++;
     }
     return count;

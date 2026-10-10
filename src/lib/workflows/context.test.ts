@@ -96,3 +96,21 @@ it("does not silently retain an old phone after an invalid correction", () => {
     expect(sharedPrompt(s, steps)).toContain("Konfirmoni porosinë");
     expect(s.context?.execution.orderConfirmed).toBe(false);
 });
+it.each([
+    ["Telefoni: 0690000000. Dua të flas me stafin.", "customer_phone", "0690000000"],
+    ["Telefon: +355 (69) 000.0000. Sa kushton?", "customer_phone", "+355 (69) 000.0000"],
+    ["Email: ana@example.com. Dua të porosis.", "customer_email", "ana@example.com"],
+    ["Email: ana.name@example.co.uk! Sa kushton?", "customer_email", "ana.name@example.co.uk"],
+])("extracts a labelled contact before another sentence repeatedly without false validation failure: %s", (message, key, value) => {
+    const state = order();
+    expect(extractExplicitFacts(state, message)).toBe(1);
+    expect(extractExplicitFacts(state, message)).toBe(1);
+    expect(getFact(state, key)?.value).toBe(value);
+    expect(state.context?.execution.invalidFields ?? []).toEqual([]);
+    expect(state.context?.execution.validationFailures).toBeUndefined();
+});
+it.each(["Telefon: 123. Dua të flas me stafin.", "Telefon: 0690000000gabim. Dua të flas me stafin.", "Email: ana@. Dua të porosis."])("still rejects invalid contact values followed by another sentence: %s", message => {
+    const state = order();
+    expect(extractExplicitFacts(state, message)).toBe(0);
+    expect(state.context?.execution.invalidFields).toHaveLength(1);
+});
