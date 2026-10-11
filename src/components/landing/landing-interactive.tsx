@@ -11,6 +11,7 @@ export function LandingHeader() {
         <BrandLogo size={36} priority />
       </a>
       <nav
+        id="landing-navigation"
         className={open ? "lp-navigation open" : "lp-navigation"}
         aria-label="Navigimi kryesor"
       >
@@ -24,6 +25,9 @@ export function LandingHeader() {
             {label}
           </a>
         ))}
+        <Link className="lp-navigation-signin" href="/login">
+          Hyr në platformë
+        </Link>
       </nav>
       <div className="lp-header-actions">
         <Link className="lp-signin" href="/login">
@@ -37,6 +41,7 @@ export function LandingHeader() {
           type="button"
           aria-label={open ? "Mbyll menunë" : "Hap menunë"}
           aria-expanded={open}
+          aria-controls="landing-navigation"
           onClick={() => setOpen(!open)}
         >
           {open ? (

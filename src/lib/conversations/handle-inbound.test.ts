@@ -568,3 +568,10 @@ it("recognizes staff ownership even when its reply is outside the bounded recent
   expect(params.previousResponseId).toBeNull();
   expect(params.state).toMatchObject({ conversationPaused:true, processes:{active:null,promptOwner:null,order:{status:"suspended",snapshot:{product_id:"product",fields:{size:"L"}}}} });
 });
+
+it.each(["uncertain", "failed", "ignored"])("does not consume a field after an unconfirmed prompt (%s)", async status => {
+ savedState = { ...emptyState(), product_id:"product", step_key:"collect_customer", fields:{ size:"L" } };
+ deliveryAttempt = { status, reply:"Në cilin qytet?" };
+ await handleInboundMessage({ ...message, text:"Tiranë" }, queuedJob());
+ expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ previousResponseId:null, state:expect.objectContaining({ conversationPaused:true, fields:{size:"L"} }) }));
+});

@@ -54,9 +54,19 @@ async function sendPrepared(job: WorkflowJob) {
     const sent = job.payload.channel !== "whatsapp" || isInstagramMessagingWindowOpen(new Date(job.payload.timestamp).toISOString())
       ? await adapter.send({ accountId: String("phone_number_id" in connection ? connection.phone_number_id : connection.ig_user_id), token: String(token), to: job.participant_id, body: job.reply ?? "" })
       : { ok: false as const, error: "Dritarja 24-orëshe ka mbaruar." };
-    const { error: finishError } = await db.rpc("finish_workflow_send", { p_id: job.id, p_token: job.lease_token, p_ok: sent.ok, p_external: sent.ok ? sent.messageId ?? null : null, p_error: sent.ok ? null : sent.error });
-    if (finishError)
-        throw new Error("Send receipt unavailable");
+    const confirmed = sent.ok && typeof sent.messageId === "string" && Boolean(sent.messageId.trim());
+    const receipt = { p_id: job.id, p_token: job.lease_token, p_ok: confirmed,
+        p_external: confirmed && sent.ok ? sent.messageId! : null,
+        p_error: confirmed ? null : sent.ok ? "Provider receipt missing" : sent.error };
+    // A lost database response may follow a committed receipt. Retry the
+    // idempotent receipt transaction, never the provider request.
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const { error: finishError } = await db.rpc("finish_workflow_send", receipt);
+            if (!finishError) return;
+        } catch { /* Retry receipt persistence only; sending is never replayed. */ }
+    }
+    throw new Error("Send receipt unavailable");
 }
 export async function runWorkflowQueue(maxJobs = 10) {
     const db = createServiceSupabase();
@@ -93,7 +103,7 @@ export async function runWorkflowQueue(maxJobs = 10) {
         catch (error) {
             // Retain prepared output after a pre-send failure. A send with an unknown result is never replayed.
             const detail = error instanceof InboundPersistenceError ? error.message : "Workflow processing failed";
-            await db.from("workflow_inbound_queue").update({ leased_until: new Date(Date.now() + 30000).toISOString(), error: detail }).eq("id", job.id).eq("lease_token", job.lease_token).throwOnError();
+            await db.from("workflow_inbound_queue").update({ leased_until: new Date(Date.now() + 30000).toISOString(), error: detail }).eq("id", job.id).eq("lease_token", job.lease_token).eq("status", job.status).throwOnError();
         }
     }
     return processed;

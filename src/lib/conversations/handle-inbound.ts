@@ -1,4 +1,3 @@
-import { shortReply } from "./conversation-control";
 import { inboxHistory, type InboxHistoryMessage } from "./inbox-history";
 import { inboundBatch } from "./message-batch";
 import { randomUUID } from "node:crypto";
@@ -371,17 +370,26 @@ export async function handleInboundMessage(
     ]);
     return !error && !businessError && current?.status === "active" && Boolean(current.auto_reply ?? business?.auto_reply ?? false);
   };
-  let deliveredReply: string | null = null;
-  if (shortReply(message.text ?? "")) {
-    if (lastOutbound?.source === "agent" && lastOutbound.delivery_status === "sent") deliveredReply = lastOutbound.body;
-    if (job && deliveredReply) {
-      const { data: attempted, error: attemptError } = await supabase.from("workflow_inbound_queue")
-        .select("status,reply").eq("business_id", businessId).eq("conversation_id", conversationId)
-        .eq("connection_id", job.connection_id).eq("participant_id", job.participant_id)
-        .lt("id", job.id).not("reply", "is", null).order("id", { ascending: false }).limit(1).maybeSingle();
-      if (attemptError) throw new Error("Latest prompt attempt unavailable");
-      // An identical older sent reply is not proof that the latest attempt arrived.
-      if (!attempted || attempted.status !== "sent" || attempted.reply !== deliveredReply) deliveredReply = null;
+  let deliveredReply: string | null = lastOutbound?.source === "agent" && lastOutbound.delivery_status === "sent" ? lastOutbound.body : null;
+  let unconfirmedPrompt = false;
+  if (job) {
+    const { data: attempted, error: attemptError } = await supabase.from("workflow_inbound_queue")
+      .select("status,reply").eq("business_id", businessId).eq("conversation_id", conversationId)
+      .eq("connection_id", job.connection_id).eq("participant_id", job.participant_id)
+      .lt("id", job.id).not("reply", "is", null).order("id", { ascending: false }).limit(1).maybeSingle();
+    if (attemptError) throw new Error("Latest prompt attempt unavailable");
+    // Check every turn, including free-text field answers after a staff resume.
+    // An older identical sent reply is not evidence for this pending transition.
+    unconfirmedPrompt = Boolean(attempted && attempted.status !== "sent");
+    if (!attempted || unconfirmedPrompt || attempted.reply !== deliveredReply) deliveredReply = null;
+    if (unconfirmedPrompt) {
+      inboundState.conversationPaused = true;
+      if (inboundState.processes) {
+        inboundState.processes.promptOwner = null;
+        delete inboundState.processes.pendingChoice;
+        delete inboundState.processes.auxiliary;
+        if (inboundState.processes.service) inboundState.processes.service.promptCurrent = false;
+      }
     }
   }
   const turn = await processConversationMessage({
@@ -401,7 +409,7 @@ export async function handleInboundMessage(
     hasPhoto: message.attachments.some((a) => a.kind === "image"),
     state: inboundState,
     persistedWorkflowId: stateRow?.workflow_id ?? null,
-    previousResponseId: resumedHandoff || staffReplied ? null : open?.openai_previous_response_id ?? null,
+    previousResponseId: resumedHandoff || staffReplied || unconfirmedPrompt ? null : open?.openai_previous_response_id ?? null,
   });
   const state = turn.nextState;
   const generated = { reply: turn.reply, responseId: turn.previousResponseId };

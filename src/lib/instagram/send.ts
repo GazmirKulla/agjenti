@@ -53,7 +53,10 @@ async function postMessage(
 			error: data?.error?.error_user_msg || data?.error?.message || `Instagram API error (${response.status})`,
 		};
 	}
-	return { ok: true, messageId: data?.message_id };
+	if (typeof data?.message_id !== "string" || !data.message_id.trim()) {
+		return { ok: false, error: "Instagram nuk konfirmoi dërgimin.", code: "receipt_missing" };
+	}
+	return { ok: true, messageId: data.message_id };
 }
 
 export async function sendInstagramText(params: {

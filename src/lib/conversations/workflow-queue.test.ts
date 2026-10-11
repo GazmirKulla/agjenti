@@ -137,3 +137,20 @@ it("wakes after the quiet interval without consuming the job budget or replying 
   expect(m.send).toHaveBeenCalledOnce();
  } finally { vi.useRealTimers(); }
 });
+
+it("retries only the receipt commit after a database timeout, never the provider send", async () => {
+ m.rpc.mockResolvedValueOnce({ data: [structuredClone(job)], error: null })
+  .mockResolvedValueOnce({ data: true, error: null })
+  .mockResolvedValueOnce({ error: { message: "timeout after commit" } })
+  .mockResolvedValueOnce({ error: null });
+ expect(await runWorkflowQueue(1)).toBe(1);
+ expect(m.send).toHaveBeenCalledTimes(1);
+ expect(m.rpc.mock.calls.filter(([name]) => name === "finish_workflow_send")).toHaveLength(2);
+ expect(m.writes).toEqual([]);
+});
+it("does not mark delivery successful when the provider omits its receipt", async () => {
+ m.send.mockResolvedValue({ ok: true });
+ m.rpc.mockResolvedValueOnce({ data: [structuredClone(job)], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ error: null });
+ await runWorkflowQueue(1);
+ expect(m.rpc).toHaveBeenCalledWith("finish_workflow_send", expect.objectContaining({ p_ok: false, p_external: null }));
+});

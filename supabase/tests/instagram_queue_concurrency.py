@@ -44,7 +44,7 @@ try:
  for p in sorted((root/'supabase/migrations').glob('*.sql')):
   run(cmd+(['-1'] if 'begin;' not in p.read_text().lower() else [])+['-f',str(p)])
  print('PASS all migrations from scratch',flush=True)
- for name in ['shared_workflow_context.sql', 'workflow_message_runtime.sql', 'instagram_message_batches.sql', 'workflow_staff_handoff.sql']:
+ for name in ['shared_workflow_context.sql', 'workflow_message_runtime.sql', 'instagram_message_batches.sql', 'workflow_staff_handoff.sql', 'workflow_delivery_receipts.sql']:
   run(cmd+['-f',str(root/'supabase/tests'/name)])
   print('PASS '+name,flush=True)
  # Dedicated committed fixtures let independent sessions contend on actual row locks.

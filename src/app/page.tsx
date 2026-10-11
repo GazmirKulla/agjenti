@@ -77,7 +77,6 @@ export default function HomePage() {
               className="lp-hero-visual"
               aria-label="Shembull i panelit dhe bisedës në Instagram"
             >
-              <div className="lp-visual-glow" />
               <div className="lp-desktop-preview">
                 <div className="lp-preview-sidebar">
                   <span className="lp-logo mini">
@@ -150,7 +149,6 @@ export default function HomePage() {
                   <p className="lp-bubble">
                     Po, dua të porosis. Si funksionon?
                   </p>
-                  <span className="lp-chat-time">10:26</span>
                 </div>
                 <div className="lp-phone-compose">
                   <span>
@@ -163,7 +161,6 @@ export default function HomePage() {
               <span className="lp-instagram-float">
                 <Icon name="instagram" size={42} />
               </span>
-              <span className="lp-hero-spark">✦</span>
               <span className="lp-visual-caption">
                 Pamje ilustruese e produktit
               </span>
@@ -227,7 +224,7 @@ export default function HomePage() {
           <div className="lp-feature-copy">
             <span className="lp-eyebrow">Më shumë se një chatbot</span>
             <h2>
-              Kupton produktet tuaja
+              Kupton produktet tuaja{" "}
               <br />
               dhe ndjek çdo hap të porosisë
             </h2>
@@ -261,7 +258,7 @@ export default function HomePage() {
           <div>
             <span className="lp-eyebrow">Inbox i zgjuar për biznesin tuaj</span>
             <h2>
-              Të gjitha bisedat
+              Të gjitha bisedat{" "}
               <br />
               në një vend
             </h2>
@@ -379,7 +376,7 @@ export default function HomePage() {
           <div>
             <span className="lp-eyebrow">Një pamje e qartë e aktivitetit</span>
             <h2>
-              Shihni si po ecën
+              Shihni si po ecën{" "}
               <br />
               biznesi juaj
             </h2>
@@ -402,7 +399,7 @@ export default function HomePage() {
           <div>
             <span className="lp-eyebrow">Pyetje të shpeshta</span>
             <h2>
-              Le ta bëjmë
+              Le ta bëjmë{" "}
               <br />
               më të thjeshtë.
             </h2>
