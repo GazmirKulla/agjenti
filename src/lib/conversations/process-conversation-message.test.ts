@@ -33,6 +33,55 @@ beforeEach(() => {
   mocks.booking.mockImplementation(async ({ state }) => { const next = structuredClone(state); next.fields.booking = { nonce: "booking-1", phase: "collect", serviceId: "service", date: "2026-10-15", expires: Date.now() + 60000 }; next.step_key = "booking_request"; return result(next, "Në çfarë ore?"); });
 });
 const turn = (message: string, state?: ConversationStatePayload) => processConversationMessage({ businessId: "business", message, state, hasPhoto: false, mode: "test" });
+it.each([true, false])("migrates a production booking using its pinned graph (draft=%s)", async withDraft => {
+  const state = emptyState(); state.schemaVersion = 2;
+  state.visual = { versionId: "old-booking", nodeId: "booking", status: "waiting", awaiting: true, visited: ["booking"], values: { note: "Keep me" } };
+  if (withDraft) { state.step_key = "booking_request"; state.fields.booking = { nonce: "legacy-booking", phase: "collect", date: "2026-10-15", expires: 1900000000000 }; }
+  mocks.version.mockImplementation(async (_business, id) => entityVersion(id ?? "new-publication"));
+  const guard = { jobId: 1, leaseToken: "lease", conversationId: "conversation", revision: 2 };
+  const next = await processConversationMessage({ businessId: "business", message: "09:00", state, hasPhoto: false, source: "whatsapp", bookingGuard: guard });
+  expect(mocks.version).toHaveBeenCalledWith("business", "old-booking");
+  expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ bookingRequest: true, bookingGuard: guard,
+    state: expect.objectContaining({ visual: state.visual }), entityVersion: expect.objectContaining({ id: "old-booking" }) }));
+  expect(next.nextState.processes?.order).toBeUndefined();
+  expect(next.nextState.processes?.booking?.visual).toEqual(state.visual);
+  expect(next.nextState.processes?.booking?.versionId).toBe("old-booking");
+});
+
+it("preserves a legacy booking cursor when migration starts with an order-status interruption", async () => {
+  const state = emptyState(); state.schemaVersion = 2;
+  state.visual = { versionId: "old-booking", nodeId: "booking", status: "waiting", awaiting: true, visited: [], values: {} };
+  mocks.version.mockImplementation(async (_business, id) => entityVersion(id ?? "new-publication"));
+  const answer = await turn("Ku eshte porosia ime?", state);
+  expect(answer.nextState.processes?.booking?.visual).toEqual(state.visual);
+  expect(answer.nextState.processes?.booking?.versionId).toBe("old-booking");
+  expect(answer.nextState.processes?.order).toBeUndefined();
+  expect(answer.nextState.processes?.promptOwner).toBeNull();
+});
+
+it("resumes the migrated booking's pinned cursor after switching to an order", async () => {
+  const state = emptyState(); state.schemaVersion = 2;
+  state.visual = { versionId: "old-booking", nodeId: "booking", status: "waiting", awaiting: true, visited: ["booking"], values: { note: "Kontroll" } };
+  state.step_key = "booking_request";
+  state.fields.booking = { nonce: "legacy-booking", phase: "collect", date: "2026-10-15", expires: 1900000000000 };
+  mocks.version.mockImplementation(async (_business, id) => entityVersion(id ?? "new-publication"));
+  mocks.agent.mockImplementation(async params => {
+    const next = structuredClone(params.state);
+    if (!params.bookingRequest) {
+      next.product_id = "puzzle"; next.step_key = "size"; delete next.fields.booking;
+      next.visual = { versionId: "new-publication", nodeId: "product", status: "waiting", awaiting: true, visited: ["product"], values: {} };
+    }
+    return result(next);
+  });
+  const orderTurn = await turn("Dua të porosis", state);
+  expect(orderTurn.nextState.processes?.booking?.status).toBe("suspended");
+  const resumed = await turn("Vazhdo rezervimin", orderTurn.nextState);
+  expect(resumed.conversationRouting?.action).toBe("resume");
+  expect(resumed.nextState.processes?.booking).toMatchObject({ id: "legacy-booking", versionId: "old-booking", visual: state.visual, draft: state.fields.booking });
+  expect(resumed.nextState.processes?.order?.status).toBe("suspended");
+  expect(mocks.agent.mock.lastCall![0].state.visual).toEqual(state.visual);
+});
+
 it("continues a business discovery answer without inventing an order", async () => {
   const state = emptyState();
   state.recentMessages = [{ role: "user", content: "si funksionon" }, { role: "assistant", content: "Çfarë lloj biznesi keni?" }];

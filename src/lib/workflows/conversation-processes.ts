@@ -1,6 +1,7 @@
 import type { BookingDraft } from "@/lib/calendar/agent";
 import { emptyState, type ConversationStatePayload } from "./engine";
 import { migrateContext, type SharedContext } from "./context";
+import type { VisualVersion } from "./visual/types";
 
 export type ProcessKind = "order" | "booking";
 export type ConversationRouting = {
@@ -49,15 +50,97 @@ export function restoreOrder(state: ConversationStatePayload): ConversationState
   return { ...state, ...legacy, context: { profile: structuredClone(state.context!.profile), order, execution } };
 }
 
+type CursorOwner = ProcessKind | "information" | "support" | "service";
+
+/** Classify only from the saved cursor and its immutable graph, never from node names. */
+function cursorOwner(state: ConversationStatePayload, version?: VisualVersion | null): CursorOwner | undefined {
+  const visual = state.visual;
+  if (!visual) return;
+  if (!version) {
+    if (state.step_key === "booking_request" && bookingDraft(state.fields.booking)) return "booking";
+    if (visual.binding?.entity.kind === "product") return "order";
+    return;
+  }
+  if (version.id !== visual.versionId) throw new Error("workflow_version_mismatch");
+  const graph = version.graph;
+  const node = graph.nodes.find(node => node.id === visual.nodeId);
+  if (!node) return;
+  if (graph.version === 2) {
+    const flows = graph.flows.filter(flow => visual.binding ? flow.id === visual.binding.flowId && flow.nodeIds.includes(node.id) : flow.nodeIds.includes(node.id));
+    if (flows.length !== 1) return;
+    const flow = flows[0];
+    // A flow can embed an action of another process; the live action wins over its label.
+    if (node.kind === "booking") return "booking";
+    if (node.kind === "product") return "order";
+    if (flow.kind !== "custom") return flow.kind;
+    const kinds = new Set(graph.nodes.filter(node => flow.nodeIds.includes(node.id) && ["booking", "product"].includes(node.kind)).map(node => node.kind));
+    if (kinds.size === 1) return kinds.has("booking") ? "booking" : "order";
+    if (!kinds.size && visual.binding) return "service";
+    return;
+  }
+  // V1 has no named flows: a current/visited action identifies its cursor. For
+  // a collect before an action, classify only when all reachable actions agree.
+  const actionOwner = (nodeId: string) => {
+    const kind = graph.nodes.find(node => node.id === nodeId)?.kind;
+    return kind === "booking" ? "booking" as const : kind === "product" ? "order" as const : undefined;
+  };
+  const known = actionOwner(node.id) ?? [...visual.visited].reverse().map(actionOwner).find(Boolean);
+  if (known) return known;
+  const pending = [node.id], seen = new Set<string>(), owners = new Set<ProcessKind>();
+  while (pending.length) {
+    const current = pending.pop()!;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    const owner = actionOwner(current);
+    if (owner) owners.add(owner);
+    else pending.push(...graph.edges.filter(edge => edge.source === current).map(edge => edge.target));
+  }
+  return owners.size === 1 ? [...owners][0] : undefined;
+}
+
+function bookingDraft(value: unknown): BookingDraft | undefined {
+  if (!value || typeof value !== "object") return;
+  const draft = value as BookingDraft;
+  return typeof draft.nonce === "string" && draft.nonce.trim() && ["collect", "confirm"].includes(draft.phase) ? draft : undefined;
+}
+
 /** Upgrade the adapter state without rewriting pinned workflow versions or guessing identity. */
-export function migrateConversationProcesses(input: ConversationStatePayload | null | undefined, id: () => string): ConversationStatePayload {
+export function migrateConversationProcesses(input: ConversationStatePayload | null | undefined, id: () => string, version?: VisualVersion | null): ConversationStatePayload {
   const state = migrateContext(input);
   if (!state.processes) {
-    const booking = state.fields.booking as BookingDraft | undefined;
-    const hasOrder = Boolean(state.product_id || (state.visual && !["completed", "handoff"].includes(state.visual.status)));
-    state.processes = { active: booking ? "booking" : hasOrder ? "order" : null };
-    if (hasOrder) state.processes.order = { id: id(), status: booking ? "suspended" : state.step_key === "order_ready" ? "completed" : "active", snapshot: snapshotOrder(state) };
-    if (booking && typeof booking.nonce === "string") state.processes.booking = { id: booking.nonce, draft: structuredClone(booking), status: "active" };
+    const booking = bookingDraft(state.fields.booking);
+    const owner = cursorOwner(state, version);
+    const visual = state.visual;
+    const hasOrder = Boolean(state.product_id || state.context?.execution.linear || state.orderWorkflowSnapshot || owner === "order");
+    state.processes = { active: null };
+    if (hasOrder) {
+      const snapshot = snapshotOrder(state);
+      // A legacy state may contain an independent linear order plus a booking.
+      // Restoring that order must never execute the booking graph as its cursor.
+      if (owner !== "order") snapshot.visual = undefined;
+      const completed = state.step_key === "order_ready" || owner === "order" && visual?.status === "completed";
+      state.processes.order = { id: id(), status: completed ? "completed" : "suspended", snapshot };
+    }
+    if (booking || owner === "booking") {
+      const cursor = owner === "booking" ? structuredClone(visual) : undefined;
+      state.processes.booking = { id: booking?.nonce ?? id(), draft: booking ? structuredClone(booking) : undefined,
+        status: cursor?.status === "completed" ? "completed" : "suspended", versionId: cursor?.versionId, visual: cursor };
+    }
+    if (owner === "service" && visual) {
+      state.processes.service = { id: id(), versionId: visual.versionId, visual: structuredClone(visual),
+        status: visual.status === "completed" ? "completed" : visual.status === "handoff" ? "suspended" : "active",
+        promptCurrent: visual.status === "waiting" && visual.awaiting, fields: structuredClone(state.fields), order: structuredClone(state.context!.order) };
+    }
+    if ((owner === "information" || owner === "support") && visual && visual.status !== "completed") {
+      state.processes.auxiliary = { process: owner, visual: structuredClone(visual) };
+    }
+    const terminal = visual?.status === "completed" || visual?.status === "handoff";
+    const active = terminal ? null : owner === "booking" || owner === "order" ? owner
+      : owner ? null : booking ? "booking" : hasOrder ? "order" : null;
+    if (active && state.processes[active]?.status !== "completed") {
+      state.processes.active = active;
+      state.processes[active]!.status = "active";
+    }
     state.processes.promptOwner = state.processes.active;
   }
   state.schemaVersion = 3;
@@ -71,7 +154,7 @@ export function bookingAdapterState(state: ConversationStatePayload) {
   next.customer = structuredClone(state.customer);
   next.recentMessages = state.recentMessages;
   next.processes = state.processes;
-  next.visual = state.processes?.booking?.visual;
+  next.visual = structuredClone(state.processes?.booking?.visual);
   if (state.processes?.booking?.draft) next.fields.booking = structuredClone(state.processes.booking.draft);
   return next;
 }

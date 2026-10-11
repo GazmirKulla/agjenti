@@ -90,8 +90,16 @@ export async function processConversationMessage(params: ConversationMessagePara
   };
   // The adapter is supplied here, never accepted from a customer-controlled chat payload.
   params = { ...params, orderStatusTurn: statusTurn };
+  const migrateState = async () => {
+    // Resolve the saved version before classifying a legacy cursor. The latest
+    // publication may have renamed/removed the flow this conversation is using.
+    const pinned = !params.state?.processes && params.state?.visual
+      ? params.visualPreview ?? await loadVisualVersion(params.businessId, params.state.visual.versionId)
+      : undefined;
+    return migrateConversationProcesses(params.state, randomUUID, pinned);
+  };
   if (statusRequested) {
-    const state = migrateConversationProcesses(params.state, randomUUID);
+    const state = await migrateState();
     const profileBefore = JSON.stringify(state.context!.profile);
     explicitProfile(state, params.message, true);
     if (JSON.stringify(state.context!.profile) !== profileBefore && state.processes!.order) {
@@ -136,7 +144,7 @@ export async function processConversationMessage(params: ConversationMessagePara
     // Queue ownership does not opt legacy Instagram conversations into a new router.
     return await processBookingTurn(params) ?? processAgentTurn(params);
   }
-  let state = migrateConversationProcesses(params.state, randomUUID);
+  let state = await migrateState();
   const processes = state.processes!;
   const oldProfile = JSON.stringify(state.context!.profile);
   const graphVersion = params.visualPreview ?? await loadVisualVersion(params.businessId, processes.active === "booking" ? processes.booking?.versionId : state.visual?.versionId);

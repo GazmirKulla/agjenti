@@ -1,5 +1,9 @@
 # Menaxhimi i workflow-ve nga Agjenti
 
+## Plani aktiv i përmirësimeve
+
+Vazhdo sipas [planit të ruajtur për Astra](AGJENTI_ASTRA_PLAN.md), fazë pas faze. Për gjendjen e verifikuar, ndryshimet që tashmë janë publikuar dhe hapin pasues, lexo [baseline-in e orkestrimit](orchestration-baseline.md). Përshkrimet historike më poshtë nuk zëvendësojnë këtë verifikim; sidomos, radha e mesazheve tashmë mbulon edhe Instagram-in jashtë pilotit, ndërsa unifikimi i coordinator-it mbetet i veçantë.
+
 ## Statusi i dorëzimit
 
 Integrimi në kod mbulon një qendër mesazhesh me rrjedha për porosi, rezervime të konfiguruara, informacion dhe staf. Përkufizimi vizual është v2; gjendja e bisedës është v3. Aktivizimi në prodhim mbetet hap operacional dhe nuk konfirmohet vetëm nga deployment-i:
