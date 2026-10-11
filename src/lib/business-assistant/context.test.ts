@@ -12,6 +12,13 @@ it("recognizes the activity destination without falling back to home context", (
   expect(contextLabel(context)).toBe("Aktiviteti");
 });
 const id = "11111111-1111-4111-8111-111111111111";
+it("recognizes WhatsApp without showing the home assistant entry", () => {
+  const context = contextFromPath("/b/demo/whatsapp", "demo");
+  expect(context).toEqual({ page: "whatsapp", entryPoint: "contextual" });
+  expect(parseUIContext(context)).toEqual(context);
+  expect(contextLabel(context)).toBe("WhatsApp");
+  expect(assistantSuggestions(context, ["agents", "products", "knowledge", "workflows", "whatsapp"])).toEqual([]);
+});
 it("recognizes an open product but never treats new/imports as entity IDs", () => {
   expect(contextFromPath(`/b/demo/products/${id}`, "demo")).toEqual({
     page: "products",

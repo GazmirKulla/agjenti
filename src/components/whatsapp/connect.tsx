@@ -7,7 +7,7 @@ type FacebookSDK = {
   login: (callback: (response: { authResponse?: { code?: string } }) => void, options: Record<string, unknown>) => void;
 };
 declare global { interface Window { FB?: FacebookSDK } }
-export function WhatsAppConnect({ businessId, appId, configId, version, connected }: { businessId: string; appId: string; configId: string; version: string; connected: boolean }) {
+export function WhatsAppConnect({ businessId, appId, configId, version, connected, compact = false }: { businessId: string; appId: string; configId: string; version: string; connected: boolean; compact?: boolean }) {
   const router = useRouter();
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   const [active, setActive] = useState(false), [code, setCode] = useState("");
@@ -44,16 +44,16 @@ export function WhatsAppConnect({ businessId, appId, configId, version, connecte
       setNotice("WhatsApp u shkëput nga Agjenti."); router.refresh();
     } catch { setNotice("Shkëputja dështoi. Provo përsëri."); } finally { setBusy(false); }
   }
-  return <div className="mt-6 space-y-4">
+  return <div className={compact ? "space-y-4" : "mt-6 flex flex-wrap items-center gap-5"}>
     {appId && configId && <Script src="https://connect.facebook.net/en_US/sdk.js" strategy="afterInteractive" onReady={() => { window.FB?.init({ appId, version, xfbml: false }); setReady(Boolean(window.FB)); }} onError={() => setNotice("Nuk u ngarkua Meta. Provo përsëri ose kontrollo bllokuesin e reklamave.")} />}
-    {!appId || !configId ? <p className="muted-copy">Lidhja me Meta po përgatitet. Administratori duhet të aktivizojë WhatsApp për këtë aplikacion.</p> : <button className="btn btn-primary" disabled={!ready || busy} onClick={() => {
+    {!appId || !configId ? <>{compact && <button className="btn btn-primary" disabled>Lidh WhatsApp</button>}<p className="muted-copy">{compact ? "Lidhja nuk është ende e disponueshme." : "Lidhja me Meta po përgatitet. Administratori duhet të aktivizojë WhatsApp për këtë aplikacion."}</p></> : <button className="btn btn-primary" disabled={!ready || busy} onClick={() => {
       setCode(""); setAssets(null); setNotice(""); setActive(true);
       window.FB?.login(response => {
         if (response.authResponse?.code) setCode(response.authResponse.code);
         else { setActive(false); setNotice("Autorizimi nuk u përfundua."); }
       }, { config_id: configId, response_type: "code", override_default_response_type: true, extras: { setup: {}, sessionInfoVersion: "3" } });
     }}>{connected ? "Rilidh WhatsApp" : "Lidh WhatsApp"}</button>}
-    {code && assets && <div className="space-y-3">
+    {code && assets && <div className="w-full space-y-3">
       <label className="block">PIN-i i verifikimit me dy hapa (6 shifra)
         <input className="field-input" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))} />
       </label>
@@ -61,6 +61,6 @@ export function WhatsAppConnect({ businessId, appId, configId, version, connecte
       <button className="btn btn-primary" disabled={busy || pin.length !== 6} onClick={save}>{busy ? "Po lidhet…" : "Përfundo lidhjen"}</button>
     </div>}
     {connected && <button className="btn btn-ghost text-danger" disabled={busy} onClick={disconnect}>Shkëput WhatsApp</button>}
-    {notice && <p role="status">{notice}</p>}
+    {notice && <p className="w-full" role="status">{notice}</p>}
   </div>;
 }

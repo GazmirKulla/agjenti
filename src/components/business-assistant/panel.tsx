@@ -364,13 +364,6 @@ export function BusinessAssistant({
             onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
             onSubmit={() => { onOpen(); setMode("text"); void analyze(); }}
             onVoice={() => { setMode("audio"); onOpen(); }} />
-          <span className="assistant-dock-hint">
-            {busy
-              ? "Agjenti po punon…"
-              : result?.token
-                ? "Propozimi është gati · hap bisedën për konfirmim"
-                : "Ndryshimet i konfirmon ti."}
-          </span>
         </section>
       )}
       <dialog

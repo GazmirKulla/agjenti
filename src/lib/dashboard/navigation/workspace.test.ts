@@ -8,12 +8,12 @@ const allItems = navigationOrder.map(id => ({ ...moduleRegistry[id] }));
 const navigation = organizeWorkspace(allItems);
 
 it("retains a reachable destination and search result for every existing module", () => {
-  const destinations = [...navigation.primary, ...navigation.agent, ...navigation.settings, ...navigation.business];
+  const destinations = [...navigation.primary, ...navigation.agent, ...navigation.settings, ...navigation.integrations, ...navigation.business];
   for (const item of allItems) {
     expect(destinations.some(destination => destination.path === item.path), item.id).toBe(true);
     expect(navigation.search.some(destination => destination.path === item.path && destination.label === item.label), item.id).toBe(true);
   }
-  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Agjenti im", "Aktiviteti", "Cilësimet"]);
+  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Agjenti im", "Aktiviteti", "Integrimet", "Cilësimet"]);
 });
 
 it("groups workflow and its deep links under the agent while keeping the original URL", () => {
@@ -27,7 +27,7 @@ it("groups workflow and its deep links under the agent while keeping the origina
 it("keeps operational details, channel settings, onboarding and accounts reachable", () => {
   expect(workspaceSection("/b/shop/products/record", "/b/shop", navigation)).toBe("business");
   expect(workspaceSection("/b/shop/inbox/record/customer", "/b/shop", navigation)).toBe("conversations");
-  for (const path of ["staff", "instagram", "whatsapp", "setup", "account"]) expect(workspaceSection(`/b/shop/${path}`, "/b/shop", navigation)).toBe("settings");
+  for (const path of ["staff", "setup", "account"]) expect(workspaceSection(`/b/shop/${path}`, "/b/shop", navigation)).toBe("settings");
   expect(workspaceSection("/b/shop/activity", "/b/shop", navigation)).toBe("activity");
   expect(workspaceSection("/b/other/workflows", "/b/shop", navigation)).toBeUndefined();
   expect(workspaceSection("/b/shop/workflows-other", "/b/shop", navigation)).toBeUndefined();
@@ -42,4 +42,19 @@ it("does not expose optional modules omitted by the business profile", () => {
 
 it("leaves administrator navigation independent of the business grouping", () => {
   expect(buildAdminNavigation("mobile").map(item => item.path)).toEqual(["", "businesses", "conversations", "app"]);
+});
+
+
+it("groups channels under Integrimet using available existing destinations", () => {
+  for (const path of ["instagram", "whatsapp"]) {
+    expect(workspaceSection(`/b/shop/${path}`, "/b/shop", navigation)).toBe("integrations");
+    expect(navigation.settings.some(item => item.path === path)).toBe(false);
+    expect(navigation.business.some(item => item.path === path)).toBe(false);
+  }
+  expect(workspaceSection("/b/shop/integrations", "/b/shop", navigation)).toBe("integrations");
+  const whatsappOnly = organizeWorkspace(allItems.filter(item => item.id !== "instagram"));
+  expect(workspaceSection("/b/shop/instagram", "/b/shop", whatsappOnly)).toBe("integrations");
+  expect(whatsappOnly.primary.find(item => item.id === "integrations")?.path).toBe("integrations");
+  const noChannels = organizeWorkspace(allItems.filter(item => !["instagram", "whatsapp"].includes(item.id)));
+  expect(noChannels.primary.some(item => item.id === "integrations")).toBe(false);
 });

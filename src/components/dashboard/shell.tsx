@@ -211,6 +211,19 @@ export function DashboardShell({
             );
           }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} onNavigate={() => setOpen(false)} />}
         </nav>
+        <footer className="dashboard-sidebar-footer">
+          <Link
+            href={`${base}/account`}
+            className={`dashboard-nav sidebar-account-link ${isDashboardRoute(pathname, base, "account") ? "active" : ""}`}
+            aria-current={isDashboardRoute(pathname, base, "account") ? "page" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            <span className="profile-avatar" aria-hidden="true">
+              {(userName || email || name).slice(0, 2).toUpperCase()}
+            </span>
+            Llogaria
+          </Link>
+        </footer>
       </aside>
       {open && (
         <button
@@ -234,7 +247,7 @@ export function DashboardShell({
             aria-expanded={open}
             onClick={() => setOpen(!open)}
           >
-            <Icon name="dashboard" />
+            <Icon name="menu" size={28} />
           </button>
           <Link className="mobile-workspace-title" href={base}>
             <strong>{name}</strong>
@@ -300,21 +313,6 @@ export function DashboardShell({
           </div>
           <div className="topbar-actions">
             {!admin && slug && <button type="button" className="assistant-desktop-trigger" onClick={() => assistant?.setOpen(true)}><Icon name="spark" size={18}/><span>{agentName}</span></button>}
-            <Link
-              href={`${base}/account`}
-              className="topbar-profile account-profile-link"
-              aria-current={isDashboardRoute(pathname, base, "account") ? "page" : undefined}
-              aria-label="Hap profilin dhe cilësimet e llogarisë"
-              title="Profili dhe cilësimet"
-            >
-              <span className="profile-avatar">
-                {(userName || email || name).slice(0, 2).toUpperCase()}
-              </span>
-              <span>
-                <strong>{userName || email || name}</strong>
-                <small>Profili dhe cilësimet</small>
-              </span>
-            </Link>
           </div>
         </header>
         <main className="dashboard-content">{!admin && <WorkspaceSectionNavigation navigation={workspace} section={section} base={base} pathname={pathname} />}{!admin && pathname !== base && <AssistantEntry/>}{children}</main>

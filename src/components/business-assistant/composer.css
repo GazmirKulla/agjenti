@@ -124,7 +124,30 @@
   }
   .unified-composer .assistant-prompt > button { grid-column: 1; grid-row: 2; }
   .unified-composer .assistant-prompt .assistant-prompt-actions { grid-column: 2; grid-row: 2; justify-self: end; gap: 8px; }
-  :is(.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt .assistant-prompt-send { background: var(--ink); color: var(--surface); }
+  .assistant-mobile-dock .unified-composer .assistant-prompt.is-multiline {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .unified-composer .assistant-prompt > button,
+  .unified-composer .assistant-prompt .assistant-prompt-actions > button {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    background: transparent;
+    color: var(--ink-muted);
+  }
+  .unified-composer .assistant-prompt .assistant-prompt-actions > .assistant-prompt-send {
+    background: var(--accent);
+    color: var(--paper);
+    border-radius: 50%;
+  }
+  .unified-composer .assistant-prompt > button > svg,
+  .unified-composer .assistant-prompt .assistant-prompt-actions > button > svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.5;
+  }
 }
 
 /* Keep attached files inside the same input surface as the message. */

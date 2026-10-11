@@ -19,6 +19,7 @@ export function WorkspaceNavigation({ navigation, section, base, pathname, onNav
 }
 
 export function WorkspaceSectionNavigation({ navigation, section, base, pathname }: Omit<Props, "onNavigate">) {
+  if (section === "integrations") return pathname === `${base}/integrations` ? null : <div className={s.context}><Link className="soft-link" href={`${base}/integrations`}>← Integrimet</Link></div>;
   const links = section === "agent" ? navigation.agent : section === "settings" ? navigation.settings : section === "business" ? navigation.business : [];
   if (!links.length) return null;
   const title = section === "agent" ? "Agjenti im" : section === "settings" ? "Cilësimet" : "Biznesi";

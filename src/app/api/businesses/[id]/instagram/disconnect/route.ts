@@ -7,6 +7,9 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  if (request.headers.get("origin") !== new URL(request.url).origin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const { id } = await context.params;
   const supabase = await createServerSupabase();
   const {
@@ -31,11 +34,15 @@ export async function POST(
     .eq("id", id)
     .maybeSingle();
 
-  await service
+  const { error } = await service
     .from("instagram_connections")
     .update({ status: "disconnected", updated_at: new Date().toISOString() })
     .eq("business_id", id)
     .neq("status", "disconnected");
+  if (error) return NextResponse.json({ error: "Shkëputja dështoi." }, { status: 500 });
+  if (request.headers.get("accept")?.includes("application/json")) {
+    return NextResponse.json({ ok: true });
+  }
 
   const fallback = new URL("/admin/conversations", request.url);
   const destination = business?.slug

@@ -1,9 +1,8 @@
 import {
-  PageHeading,
   StatusBadge,
   formatDate,
 } from "@/components/dashboard/ui";
-import { Icon } from "@/components/dashboard/icon";
+import { IntegrationAccountPanel } from "@/components/dashboard/integration-account-panel";
 import { SecretReveal } from "@/components/dashboard/secret-reveal";
 import { redirect } from "next/navigation";
 import { decryptSecret } from "@/lib/crypto/tokens";
@@ -61,32 +60,12 @@ export default async function InstagramPage({
 
   return (
     <>
-      <PageHeading
-        title="Instagram"
-        description="Lidh llogarinë e biznesit për të menaxhuar bisedat me Agjentin AI."
-      />
       {query.disconnected === "1" && (
         <p className="mb-5 rounded-lg bg-danger-soft p-4 text-sm text-danger">
           Llogaria Instagram u shkëput.
         </p>
       )}
-      <div className="panel section-pad mb-5 flex flex-wrap items-center gap-5">
-        <span className="icon-tile tone-pink">
-          <Icon name="instagram" size={29} />
-        </span>
-        <div className="flex-1">
-          <h2 className="text-xl">Instagram Business</h2>
-          <p className="muted-copy">Mesazhet e klientëve në një vend.</p>
-        </div>
-        <StatusBadge status={conn?.status || "disconnected"} />
-      </div>
-      <p className="mb-5 muted-copy">Përdor edhe WhatsApp Business? <a className="soft-link" href={`/b/${slug}/whatsapp`}>Lidh WhatsApp →</a></p>
-      <div className="configuration-layout">
-        <section className="panel section-pad">
-          <div className="section-title">
-            <h2>Llogaria Instagram</h2>
-            <StatusBadge status={conn?.status || "disconnected"} />
-          </div>
+      <IntegrationAccountPanel name="Instagram" status={conn?.status || "disconnected"}>
           <InstagramAccountProfile profile={profile} username={conn ? conn.username || conn.ig_user_id : null} businessName={access.business.name} />
           {conn && (
             <div className="detail-block">
@@ -147,22 +126,7 @@ export default async function InstagramPage({
             Nëse je brenda Instagram-it ose Facebook-ut, hape Agjenti.app në Safari
             dhe lidhu aty. Pas lidhjes, rifresko këtë faqe për të parë statusin.
           </p>
-        </section>
-        <aside className="panel section-pad">
-          <span className="icon-tile">
-            <Icon name="inbox" size={25} />
-          </span>
-          <h2 className="text-lg mt-5">Nga Instagram në Inbox</h2>
-          <p className="muted-copy">
-            Pas lidhjes, mesazhet e reja të klientëve regjistrohen automatikisht
-            në Inbox. Agjenti përgjigjet sipas konfigurimit të biznesit dhe
-            statusit të bisedës.
-          </p>
-          <a className="soft-link" href={`/b/${slug}/inbox`}>
-            Hap Inbox-in →
-          </a>
-        </aside>
-      </div>
+      </IntegrationAccountPanel>
     </>
   );
 }
