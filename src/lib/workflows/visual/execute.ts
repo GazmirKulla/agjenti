@@ -283,9 +283,11 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       if (productCalled) { replies.push("Cilin produkt dëshironi?"); finished = true; break; }
       productCalled = true;
       const startingGeneralOrder = !continuing && generalOrderFlows().some(flow => flow.entryNodeId === action.nodeId) && (params.orderRequest || guidance.action === "order");
+      // Keep the coordinator's resume intent: a command is not an answer to
+      // the pending product field, even when the visual cursor already waits here.
       turn = await legacy({ ...params, message: startingGeneralOrder || revisiting && base.product_id ? params.message : execution.inputConsumed && (!extracted || continuing) ? "" : params.message,
         hasPhoto: !execution.inputConsumed && params.hasPhoto, state: turn.nextState, previousResponseId: continuing ? params.previousResponseId : null,
-        orderRequest: navigating && !revisiting, requireConfiguredWorkflow: !generalOrderFlows().some(flow => flow.nodeIds.includes(action.nodeId)) });
+        orderRequest: params.orderRequest || (navigating && !revisiting), requireConfiguredWorkflow: !generalOrderFlows().some(flow => flow.nodeIds.includes(action.nodeId)) });
       currentState=turn.nextState;
       replies.push(turn.reply);
       if (turn.handoff) { execution.state.status = "handoff"; execution.state.advisory = turn.advisoryHandoff === true; execution.state.awaiting = false; finished = true; break; }

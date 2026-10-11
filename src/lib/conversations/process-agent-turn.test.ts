@@ -16,7 +16,25 @@ vi.mock("@/lib/catalogs/retrieval", () => ({
 }));
 import { processAgentTurn } from "./process-agent-turn";
 import { emptyState } from "@/lib/workflows/engine";
+import { migrateContext } from "@/lib/workflows/context";
+import { starterVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
 const fixtures: Record<string, unknown> = {};
+it.each([null, "Ana"])("resumes a visual product order without consuming the command as customer data (name: %s)", async (name) => {
+  const state = migrateContext({ ...emptyState(), product_id: "product-a", product_type_id: "type-a", step_key: "collect_customer", customer: { name, phone: null, city: null, address: null } });
+  state.context!.execution.linear = { id: "workflow-a", versionId: "linear-a", name: "Porosia", steps: [{ key: "collect_customer", kind: "customer" }] };
+  state.visual = { versionId: "visual-a", nodeId: "product", status: "waiting", awaiting: true, values: {}, visited: ["start", "product"] };
+  const visualPreview = { id: "visual-a", businessId: "business-a", createdAt: "2026-10-12T00:00:00Z", graph: upgradeVisualGraph(starterVisualGraph()) };
+  const result = await processAgentTurn({ businessId: "business-a", mode: "test", message: "Vazhdo porosinë", hasPhoto: false, state, orderRequest: true, visualPreview });
+  expect(result.nextState.product_id).toBe("product-a");
+  expect(result.nextState.customer).toEqual(state.customer);
+  expect(result.nextState.context?.execution.validationFailures ?? 0).toBe(0);
+  expect(result.nextState.step_key).toBe("collect_customer");
+  expect(result.reply).not.toContain("Kontrollo telefonin");
+  // A real answer on the next turn must still fill the pending field.
+  const answer = name ? "+355691234567" : "Ana";
+  const next = await processAgentTurn({ businessId: "business-a", mode: "test", message: answer, hasPhoto: false, state: result.nextState, visualPreview });
+  expect(next.nextState.customer[name ? "phone" : "name"]).toBe(answer);
+});
 it("keeps the Montessori product from a combined greeting, purchase and availability request", async () => {
  fixtures.products = [{ id: "montessori", name: "Aktivitetet Montessori", description: "Material PDF", product_type_id: "type-a", workflow_id: "workflow-a", price_amount: 690, currency: "ALL" }];
  const text = "Ckemi\nSi jeni\nDua te porosis montesori\nE keni ne gjendje?";
