@@ -22,7 +22,7 @@ async function readJson(request: Request) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 320000) {
+      if (size > 2200000) {
         await reader.cancel();
         throw new AssistantError("Kërkesa është shumë e gjatë.");
       }

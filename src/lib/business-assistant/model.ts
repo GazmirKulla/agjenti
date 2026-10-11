@@ -18,6 +18,7 @@ export const actions = [
   "workflow_disable",
   "clarify",
   "search",
+  "product_import",
   "product_create",
   "product_update",
   "service_create",
@@ -112,7 +113,8 @@ export function readProposal(input: unknown): Proposal {
   )
     throw new AssistantError("Përgjigjja e asistentit nuk është e vlefshme.");
   if(p.choices!==undefined&&(!Array.isArray(p.choices)||p.choices.length>4||p.choices.some(c=>typeof c!=="string"||!c.trim()||c.length>160))) throw new AssistantError("Zgjedhje të pavlefshme.");
-  const allowed = fields[p.action.split("_")[0]] ?? [];
+  if (p.action === "product_import" && (p.id !== null || p.changes.length > 1)) throw new AssistantError("Importi përdor vetëm CSV-në ngarkuar.");
+  const allowed = p.action === "product_import" ? ["fields"] : fields[p.action.split("_")[0]] ?? [];
   const seen = new Set<string>();
   for (const change of p.changes) {
     if (
@@ -137,7 +139,7 @@ export function readProposal(input: unknown): Proposal {
   if (p.action === "workflow_restore" && (p.changes.length !== 1 || p.changes[0]?.field !== "version_id" || !uuid(p.changes[0].value))) throw new AssistantError("Zgjidh një version të vlefshëm.");
   if (p.action === "orderflow_assign" && !p.id) throw new AssistantError("Zgjidh rrjedhën për lidhjen.");
   if (["orderflow_load","orderflow_read"].includes(p.action) && p.changes.length) throw new AssistantError("Leximi nuk mund të ndryshojë rrjedhën.");
-  if (p.action !== "clarify" && !p.action.startsWith("workflow_") && !["orderflow_load","orderflow_read"].includes(p.action) && !p.action.startsWith("linear_") && !p.changes.length)
+  if (p.action !== "clarify" && !p.action.startsWith("workflow_") && !["orderflow_load","orderflow_read","product_import"].includes(p.action) && !p.action.startsWith("linear_") && !p.changes.length)
     throw new AssistantError("Nuk ka ndryshime për të ruajtur.");
   if(p.action.startsWith("linear_")) {
     if(!["linear_load","linear_read"].includes(p.action)&&!p.id) throw new AssistantError("Zgjidh produktin.");

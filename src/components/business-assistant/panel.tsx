@@ -1,5 +1,7 @@
 "use client";
 import "./workspace-layout.css";
+import { ProductCsvImport } from "@/components/dashboard/product-csv-import";
+import type { ImportSource } from "@/lib/products/import-model";
 import { LinearWorkflowCard } from "./linear-workflow-card";
 import type { LinearCard } from "@/lib/business-assistant/linear-service";
 import {
@@ -47,6 +49,7 @@ function MessageCopy({ text }: { text: string }) {
   );
 }
 type Result = {
+  productImport?: ImportSource;
   clarifying?: boolean;
   choices?: string[];
   message?: string;
@@ -494,6 +497,7 @@ export function BusinessAssistant({
           )}
           {result?.orderflows && <OrderFlowCard data={result.orderflows} slug={slug} onRequest={value => {setMode("text");setText(value);}} />}
           {result?.choices?.length ? <div className="assistant-quick-actions">{result.choices.map(choice=><button type="button" key={choice} disabled={Boolean(busy)} onClick={()=>{setMode("text");setText(choice);}}>{choice}</button>)}</div> : null}
+          {result?.productImport && <ProductCsvImport key={result.productImport.token} slug={slug} initialSource={result.productImport} />}
           {result?.workflow && <WorkflowCard key={JSON.stringify(result.workflow)} data={result.workflow} slug={slug} pending={Boolean(result.token)} onRequest={value => { setMode("text"); setText(value); }} />}
           {result?.linear && <LinearWorkflowCard data={result.linear} slug={slug} pending={Boolean(result.token)} onRequest={value=>{setMode("text");setText(value);}} />}
           {result?.preview && (

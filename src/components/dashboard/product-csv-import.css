@@ -1,0 +1,14 @@
+.csv-import { display:grid; gap:16px; min-width:0; padding:16px 0; }
+.csv-import fieldset { border:1px solid var(--border, #433953); border-radius:12px; padding:12px; min-width:0; }
+.csv-mapping { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr)); gap:12px; }
+.csv-mapping > div { display:grid; gap:8px; }
+.csv-import select { max-width:100%; }
+.csv-buttons,.csv-lines { display:flex; flex-wrap:wrap; gap:12px; }
+.csv-results { display:grid; gap:12px; margin:16px 0; }
+.csv-results details { border:1px solid var(--border,#433953); padding:12px; border-radius:12px; overflow-wrap:anywhere; }
+.csv-import summary { cursor:pointer; padding:6px 0; }
+.csv-results dl > div { display:grid; grid-template-columns:100px minmax(0,1fr); gap:8px; border-bottom:1px solid var(--border,#433953); padding:8px 0; }
+.csv-results dd { margin:0; white-space:pre-wrap; }
+.csv-advice { white-space:pre-wrap; }
+.csv-import button:disabled { opacity:.5; }
+.csv-import input[type=checkbox] { accent-color:#b999ff; }

@@ -100,7 +100,7 @@ function headerIndexes(cells: string[]): Partial<Record<HeaderKey, number>> | nu
   return found ? map : null;
 }
 
-function headerKey(value: string): HeaderKey | null {
+export function headerKey(value: string): HeaderKey | null {
   const folded = fold(value);
   if (!folded) return null;
   for (const key of ORDER) {
@@ -117,7 +117,7 @@ function fold(value: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function parseTable(text: string): string[][] | { error: string } {
+export function parseTable(text: string): string[][] | { error: string } {
   const delimiter = detectDelimiter(text);
   const rows: string[][] = [];
   let row: string[] = [];
@@ -125,7 +125,7 @@ function parseTable(text: string): string[][] | { error: string } {
   let quoted = false;
 
   const pushCell = () => {
-    row.push(cell.length > 5000 ? cell.slice(0, 5000) : cell);
+    row.push(cell);
     cell = "";
   };
   const pushRow = () => {
@@ -167,7 +167,7 @@ function parseTable(text: string): string[][] | { error: string } {
   return rows;
 }
 
-function detectDelimiter(text: string): "," | ";" | "\t" {
+export function detectDelimiter(text: string): "," | ";" | "\t" {
   const first = text.split("\n", 1)[0] ?? "";
   const counts = { ",": 0, ";": 0, "\t": 0 };
   let quoted = false;

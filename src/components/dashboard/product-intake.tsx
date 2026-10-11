@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActionForm } from "@/components/dashboard/action-form";
@@ -14,7 +14,7 @@ import {
   ProductReview,
   type ReviewDraft,
 } from "@/components/dashboard/product-review";
-import { parseProductCsv, type CsvProduct } from "@/lib/products/csv";
+import { ProductCsvImport } from "./product-csv-import";
 
 const METHODS = [
   {
@@ -81,7 +81,6 @@ export function ProductIntake({
   }>;
 }) {
   const [method, setMethod] = useState<MethodId>(initialMethod);
-  const csv = useBatchSave(importAction);
   const instagram = useBatchSave(importAction);
   const [scanning, setScanning] = useState(false);
   const [scanner, setScanner] = useState<{
@@ -154,35 +153,6 @@ export function ProductIntake({
     }
   }
 
-  function onCsvFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (file.size > 512 * 1024) {
-      csv.setRows([]);
-      csv.setNotice({ error: "Skedari është më i madh se 512 KB." });
-      return;
-    }
-    const reader = new FileReader();
-    reader.onerror = () => csv.setNotice({ error: "Skedari nuk u lexua." });
-    reader.onload = () => {
-      const parsed = parseProductCsv(String(reader.result ?? ""));
-      if ("error" in parsed) {
-        csv.setRows([]);
-        csv.setNotice({ error: parsed.error });
-        return;
-      }
-      csv.setRows(draftsFromCsv(parsed.rows));
-      const count = parsed.rows.length;
-      csv.setNotice({
-        success:
-          count === 1
-            ? `U lexua 1 rresht nga ${fileLabel(file.name)}. Kontrolloje, pastaj ruaje.`
-            : `U lexuan ${count} rreshta nga ${fileLabel(file.name)}. Hiq ato që nuk duhen, pastaj ruaji.`,
-      });
-    };
-    reader.readAsText(file);
-  }
 
   return (
     <section className="panel section-pad product-intake">
@@ -252,15 +222,6 @@ export function ProductIntake({
           jetë presje ose pikëpresje, si në Excel. Zgjidh rreshtat dhe ruaji.
         </p>
         <div className="import-link-row">
-          <label className="btn btn-ghost">
-            Zgjidh CSV
-            <input
-              className="sr-only"
-              type="file"
-              accept=".csv,text/csv,text/plain"
-              onChange={onCsvFile}
-            />
-          </label>
           <button
             type="button"
             className="btn btn-ghost"
@@ -269,17 +230,7 @@ export function ProductIntake({
             Shkarko një shembull
           </button>
         </div>
-        <Notice notice={csv.notice} />
-        {csv.rows.length > 0 ? (
-          <ProductReview
-            rows={csv.rows}
-            onChange={csv.setRows}
-            types={types}
-            workflows={workflows}
-            pending={csv.saving}
-            onSave={csv.save}
-          />
-        ) : null}
+        <ProductCsvImport slug={slug} />
       </div>
 
       <div
@@ -389,19 +340,6 @@ function Notice({ notice }: { notice: NoticeState }) {
   return null;
 }
 
-function draftsFromCsv(rows: CsvProduct[]): ReviewDraft[] {
-  return rows.map((row) => ({
-    key: `csv-${row.line}`,
-    selected: !row.invalidPrice && row.name.trim().length >= 2,
-    name: row.name,
-    price: row.priceText,
-    currency: row.currency,
-    description: row.description ?? "",
-    sku: row.sku ?? "",
-    imageUrl: row.imageUrl ?? "",
-    sourceLabel: `Rreshti ${row.line}`,
-  }));
-}
 
 function draftFromInstagram(product: ScanProduct): ReviewDraft {
   return {
@@ -435,12 +373,6 @@ function instagramIntro(
   if (status === "revoked")
     return "Lidhja e Instagram është hequr. Lidhe përsëri llogarinë.";
   return "Lidh Instagram-in e biznesit. Pastaj këtu lexohen postimet dhe nxirren produktet që kanë çmim në tekst.";
-}
-
-function fileLabel(name: string): string {
-  const text = name.trim();
-  if (!text) return "skedarit";
-  return text.length > 80 ? `${text.slice(0, 79)}…` : text;
 }
 
 function downloadSample() {

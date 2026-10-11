@@ -1,7 +1,16 @@
-import { inspectAttachment, readAttachmentForm, readAttachment, sealAttachment } from "@/lib/agents/test-chat/attachments";
+import { inspectAttachment as inspectStandardAttachment, readAttachmentForm, readAttachment, sealAttachment } from "@/lib/agents/test-chat/attachments";
 import { readPublicMaterial } from "./public-page";
 import { AssistantError } from "./model";
-export { inspectAttachment, readAttachmentForm, sealAttachment };
+export { readAttachmentForm, sealAttachment };
+export async function inspectAttachment(file: File) {
+  if (!/\.csv$/i.test(file.name)) return inspectStandardAttachment(file);
+  if (!file.size || file.size > 512000) throw Error("Skedari CSV duhet të jetë deri në 500 KB.");
+  let text: string;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer()); }
+  catch { throw Error("Skedari CSV duhet të jetë UTF-8."); }
+  if (!text.trim() || text.includes("\0") || text.length > 500000) throw Error("Skedari CSV nuk përmban tekst të vlefshëm.");
+  return { name: file.name.replace(/[\x00-\x1f]/g, "").slice(0,120), kind: "document" as const, text };
+}
 export type AssistantMaterial = { name: string; text: string; kind: string; url?: string };
 export async function resolveMaterials(tokens: unknown, links: unknown, userId: string, businessId: string): Promise<AssistantMaterial[]> {
   if (!Array.isArray(tokens) || !Array.isArray(links) || tokens.length + links.length > 3 || tokens.some(t => typeof t !== "string") || links.some(u => typeof u !== "string" || u.length > 2048)) throw new AssistantError("Shto deri në 3 materiale të vlefshme.");

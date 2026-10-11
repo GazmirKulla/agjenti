@@ -42,9 +42,9 @@ export function sealAttachment(content: Content, userId: string, businessId: str
 }
 export function readAttachment(token: string, userId: string, businessId: string): Content {
   try {
-    if (typeof token !== "string" || token.length > 100000) throw Error();
+    if (typeof token !== "string" || token.length > 1000000) throw Error();
     const data = JSON.parse(decryptSecret(token));
-    if (data.purpose !== PURPOSE || data.userId !== userId || data.businessId !== businessId || !Number.isFinite(data.expires) || data.expires <= Date.now() || typeof data.text !== "string" || data.text.length > 16000 || typeof data.name !== "string" || !["image", "document"].includes(data.kind)) throw Error();
+    if (data.purpose !== PURPOSE || data.userId !== userId || data.businessId !== businessId || !Number.isFinite(data.expires) || data.expires <= Date.now() || typeof data.text !== "string" || data.text.length > (/\.csv$/i.test(data.name ?? "") ? 500000 : 16000) || typeof data.name !== "string" || !["image", "document"].includes(data.kind)) throw Error();
     return { name: data.name, kind: data.kind, text: data.text };
   } catch { throw new Error("Skedari ka skaduar ose nuk është i vlefshëm. Ngarkoje përsëri."); }
 }
