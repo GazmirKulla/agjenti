@@ -178,7 +178,7 @@ it("treats a bare contact channel after handoff as support rather than an order"
   expect(next.conversationRouting?.process).toBe("support");
   expect(next.nextState.processes?.order).toBeUndefined();
   expect(mocks.agent).not.toHaveBeenCalled();
-  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("selected a contact channel") }));
+  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("after being referred to staff") }));
   expect(next.advisoryHandoff).toBe(true);
 });
 
@@ -461,4 +461,25 @@ it("suspends an unfinished order for explicit WhatsApp contact without repeating
   expect(next.nextState.processes?.order?.snapshot.product_id).toBe("product");
   expect(mocks.agent).not.toHaveBeenCalled();
   expect(mocks.info.mock.calls[0][0].informational).toContain("Do not ask for a product");
+});
+
+it.each(["ku?", "si?", "ne cilin numer?", "where?"])("keeps %s on the staff-contact request without entering product qualification", async message => {
+  const state = emptyState();
+  state.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: ["staff"], values: {}, advisory: true };
+  state.recentMessages = [{ role: "user", content: "dua te kontaktoj me stafin ne whatsapp" }, { role: "assistant", content: "Kontakto stafin." }];
+  const next = await turn(message, state);
+  expect(next.conversationRouting?.process).toBe("support");
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("immediately preceding contact request") }));
+});
+
+it("does not route a new catalog question to staff just because an earlier handoff exists", async () => {
+  const state = emptyState(); state.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: [], values: {} };
+  expect((await turn("Sa kushton Montessori?", state)).conversationRouting?.process).toBe("information");
+});
+
+it("resolves a short follow-up against the latest topic, not a historical staff handoff", async () => {
+  const state = emptyState(); state.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: [], values: {} };
+  const catalog = await turn("Sa kushton Montessori?", state);
+  expect((await turn("ku?", catalog.nextState)).conversationRouting?.process).toBe("information");
 });

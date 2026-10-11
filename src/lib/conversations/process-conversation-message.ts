@@ -23,6 +23,9 @@ export type ConversationMessageParams = AgentTurnParams & {
 type Route = Pick<ConversationRouting, "process" | "source">;
 const namedConfirmation = (message: string): ProcessKind | null => { const match = foldText(message).match(/^(?:po )?(?:e )?konfirmoj (porosine|rezervimin)[.!\s]*$/); return match ? match[1] === "porosine" ? "order" : "booking" : null; };
 const contactChannel = (message: string) => /^(?:whatsapp|telefon|phone|instagram)[.!\s]*$/.test(foldText(message));
+const contactFollowUp = (message: string, state: ConversationStatePayload) => state.visual?.status === "handoff"
+  && (contactChannel(message) || (!state.processes?.lastDecision || state.processes.lastDecision.process === "support")
+    && /^(?:ku|si|ne cilin numer|cili numer|where|how)[?!.\s]*$/.test(foldText(message)));
 const bookingRequest = (text: string) => /\b(rezerv\w*|takim\w*|appointment|booking|termin|orar\w* (?:te )?lir\w*)\b/.test(text);
 const informationalQuestion = (text: string) => /\b(sa kushton|cmimi|price|ku ndodhe|ku jeni|kur hap|orar(?:i)? (?:i punes|punes)|si pagu|pagesa|sa zgjat|what.*cost|how much)\b/.test(text);
 const resumeOrder = (text: string) => /\b(vazhdo\w*|ktheh\w*|rifill\w*|resume)\b.*\b(porosi\w*|order)\b/.test(text);
@@ -32,7 +35,7 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   const text = foldText(message), intent = explicitIntent(message);
   const confirmation = namedConfirmation(message);
   if (confirmation) return { process: confirmation, source: "rules" };
-  if (state.visual?.status === "handoff" && contactChannel(message)) return { process: "support", source: "rules" };
+  if (contactFollowUp(message, state)) return { process: "support", source: "rules" };
   // Managing an already persisted appointment remains a staff action.
   if (/\b(ndrysho\w*|anulo\w*|cancel|reschedule)\b/.test(text) && bookingRequest(text) && /\b(ekzistues\w*|konfirmuar|mepar\w*|existing|confirmed)\b/.test(text)) return { process: "support", source: "rules" };
   const order = intent === "order" || resumeOrder(text) || /^(porosia|porosine|order)[.!\s]*$/.test(text);
@@ -316,8 +319,8 @@ export async function processConversationMessage(params: ConversationMessagePara
       decision.suspended = processes.active;
     }
     processes.active = null; processes.promptOwner = null;
-    if (state.visual?.status === "handoff" && contactChannel(message)) {
-      const result = await processLegacyAgentTurn({ ...params, state, informational: "The customer selected a contact channel after being referred to staff. Give the business contact for that channel only when explicitly present in verified business knowledge. If unavailable, clearly say that contact detail is unavailable. Never substitute customer contact data, ask which workflow step to edit, or claim staff has already responded." });
+    if (contactFollowUp(message, state)) {
+      const result = await processLegacyAgentTurn({ ...params, state, informational: "The customer is following up after being referred to staff. Resolve short questions such as ku/where using the immediately preceding contact request. Give the business contact for that channel only when explicitly present in verified business knowledge. If unavailable, clearly say that contact detail is unavailable. Never substitute customer contact data, ask which workflow step to edit, or claim staff has already responded." });
       result.nextState = state; result.handoff = true; result.advisoryHandoff = true;
       return finish(result);
     }

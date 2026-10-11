@@ -121,13 +121,27 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     allowOrder:routes.some(n=>n.kind==="product"), allowSupport:routes.some(n=>n.kind==="handoff" || n.kind==="support_entry"),
   });
   params.onTrace?.({stage:"workflow",label:"New message routed",data:{...guidance,from:previous?.nodeId??null,candidates:routes.map(r=>r.id)}});
+  let extractedValues: Record<string, string> = {};
+  const extractFacts = async () => {
+    const fields = version.graph.nodes.filter(n => n.kind === "collect").map(n => ({ key: n.config.fieldKey!, type: n.config.fieldType || "text" as const, label: n.config.prompt || n.label }));
+    if (!fields.length && !base.context) return 0;
+    // Older visual conversations store fields on the cursor. Do not enable the
+    // shared order engine merely to remember a fact for their visual workflow.
+    const target = base.context ? base : migrateContext();
+    const count = await extractMessageFacts(target, params.message, [...(base.context ? profileExtractionFields : []), ...fields], { questionFacts: true });
+    if (!base.context) extractedValues = Object.fromEntries(fields.flatMap(field => {
+      const fact = getFact(target, field.key); return fact ? [[field.key, fact.value]] : [];
+    }));
+    return count;
+  };
   const freshState = () => ({versionId:version.id,nodeId:version.graph.nodes.find(n=>n.kind==="start")!.id,status:"running" as const,awaiting:false,visited:[],values:{}});
   if (guidance.action === "clarify" || (guidance.action === "answer" && (previous || !informationEntries.length))) {
+    if (guidance.action === "answer") await extractFacts();
     const answer = await legacy({...params,state:base,informational:"Answer the current question without advancing or repeating workflow questions."});
     answer.nextState = base;
     answer.workflowId = params.persistedWorkflowId ?? base.context?.execution.linear?.id ?? base.linearSnapshot?.id ?? answer.workflowId;
     if (guidance.action === "clarify") answer.reply = clarification(routes);
-    const visual = previous ?? freshState();
+    const visual = { ...(previous ?? freshState()), values: { ...previous?.values, ...extractedValues } };
     answer.nextState.visual = visual;
     answer.visualWorkflow = {graph:version.graph,state:visual,traversedNodeIds:[],routing:{action:guidance.action,from:previous?.nodeId??null,to:visual.nodeId,source:guidance.source}};
     return answer;
@@ -168,10 +182,10 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   }
   if(base.context && !active && base.product_id && intent==="order") base=resetOrder(base);
   let currentState=base;
-  const extracted=base.context ? await extractMessageFacts(base,params.message,[...profileExtractionFields,...version.graph.nodes.filter(n=>n.kind==='collect').map(n=>({key:n.config.fieldKey!,type:n.config.fieldType||"text" as const,label:n.label}))]) : 0;
+  const extracted = await extractFacts();
   const sharedValues = () => currentState.context ? Object.fromEntries(version.graph.nodes.filter(n=>n.config.fieldKey).flatMap(n=> {
     const fact=getFact(currentState,n.config.fieldKey!); return fact ? [[n.config.fieldKey!,fact.value]] : [];
-  })) : currentState.visual?.values;
+  })) : { ...currentState.visual?.values, ...extractedValues };
   const advance: typeof advanceVisualWorkflow = input => advanceVisualWorkflow({ ...input, sharedValues: sharedValues() });
   const reviewingOrder = boundOrder && Boolean(previous?.binding) && currentNode?.kind === "end" && previous?.awaiting && (!destination || destination === previous.nodeId);
   if (reviewingOrder) {
@@ -291,10 +305,15 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       execution.state.status = review.complete ? "completed" : "waiting"; execution.state.awaiting = !review.complete;
       replies.push(review.reply); finished = true; break;
     }
+    const informationalInterruption = action.kind === "prompt" && !revisiting && !correctionRequest
+      && (isQuestion(params.message) || params.informationRequest)
+      && (replies.length > 0 || previous?.nodeId === action.nodeId && previous.awaiting);
     if (action.kind === "prompt" && !revisiting && isQuestion(params.message) && !replies.length) {
       const answer = await legacy({ ...params, state: turn.nextState, informational: "Përgjigju pyetjes pa ndryshuar të dhënat e porosisë." });
       replies.push(answer.reply);
     }
+    // Keep required collection pending, but never append it to an unrelated answer.
+    if (informationalInterruption) { finished = true; break; }
     if(action.kind==="prompt") recordPrompt(turn.nextState,action.nodeId);
     if (action.message) replies.push(action.message);
     if (action.kind === "end" && !replies.length) replies.push("Faleminderit. Të dhënat u plotësuan.");

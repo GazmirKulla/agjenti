@@ -22,3 +22,18 @@ it("keeps known state if extraction fails and does not interpret a question as a
     expect(await extractMessageFacts(s, "Cili është telefoni?", profileExtractionFields)).toBe(0);
     expect(m.create).toHaveBeenCalledTimes(1);
 });
+
+it("extracts a configured dependent fact supplied inside a recommendation question", async () => {
+    m.create.mockResolvedValue({ output_text: JSON.stringify({ facts: [{ key: "child_age", value: "5", evidence: "moshen 5 vjec", confidence: 0.99 }] }) });
+    const state = migrateContext();
+    expect(await extractMessageFacts(state, "cilin me sugjeroni per moshen 5 vjec?", [{ key: "child_age", type: "number", label: "Sa vjeç është fëmija?" }], { questionFacts: true })).toBe(1);
+    expect(state.context?.order.child_age.value).toBe("5");
+    expect(state.customer).toEqual(migrateContext().customer);
+});
+
+it("does not store an invented age for a question asking its unknown value", async () => {
+    m.create.mockResolvedValue({ output_text: JSON.stringify({ facts: [{ key: "child_age", value: "5", evidence: "5 vjec", confidence: 1 }] }) });
+    const state = migrateContext();
+    expect(await extractMessageFacts(state, "Per cfare moshe eshte libri?", [{ key: "child_age", type: "number" }], { questionFacts: true })).toBe(0);
+    expect(state.context?.order.child_age).toBeUndefined();
+});

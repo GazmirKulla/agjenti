@@ -4,7 +4,8 @@ import { emptyState } from "../engine";
 import { migrateContext, setFact } from "../context";
 import type { VisualGraph, VisualNode, VisualRunState, VisualVersion } from "./types";
 
-const mocks = vi.hoisted(() => ({ load: vi.fn(), entity: vi.fn() }));
+const mocks = vi.hoisted(() => ({ load: vi.fn(), entity: vi.fn(), extract: vi.fn() }));
+vi.mock("../extract-facts", async original => ({ ...await original<object>(), extractMessageFacts: mocks.extract }));
 vi.mock("./entity-routing", async original => ({ ...await original<object>(), resolveVisualEntity: mocks.entity }));
 vi.mock("./store", () => ({ loadVisualVersion: mocks.load }));
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test-model" }));
@@ -35,7 +36,7 @@ function response(input: LegacyParams, reply = "Përgjigje nga njohuritë"): Age
 function waiting(nodeId: string, versionId = "version-1"): VisualRunState {
   return { versionId, nodeId, status: "waiting", values: {}, visited: ["start", nodeId], awaiting: true };
 }
-beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(null); mocks.entity.mockResolvedValue({}); });
+beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(null); mocks.entity.mockResolvedValue({}); mocks.extract.mockResolvedValue(0); });
 
 describe("visual execution integration", () => {
   it("retains legacy behavior for a business without an enabled graph", async () => {
@@ -303,7 +304,8 @@ it("answers once when an informational question reaches knowledge followed by co
   const legacy = vi.fn(async (p: LegacyParams) => response(p, "Çmimi mungon."));
   const result = await executeVisualTurn({ ...params(graph), message: "Sa kushton?" }, legacy);
   expect(legacy).toHaveBeenCalledTimes(1);
-  expect(result.reply).toBe("Çmimi mungon.\n\nSa vjeç është fëmija?");
+  expect(result.reply).toBe("Çmimi mungon.");
+  expect(result.nextState.visual).toMatchObject({ nodeId: "age", status: "waiting", awaiting: true, values: {} });
 });
 
 it.each(["Dua të flas me stafin.", "Telefoni im është 0690000000; dua të flas me stafin."])("uses only the declared v2 support entry for %s", async message => {
@@ -528,4 +530,47 @@ it("passes the current visual flow and node to training, replacing any untrusted
   const legacy = vi.fn(async (p: LegacyParams) => response(p));
   await executeVisualTurn({ ...params(graph), informationRequest: true, trainingVisualScope: { flowId: "foreign", nodeId: "other" } }, legacy);
   expect(legacy).toHaveBeenCalledWith(expect.objectContaining({ trainingVisualScope: { flowId: "information", nodeId: "info" } }));
+});
+
+it("answers repeated catalog questions without appending pending qualification, then accepts the field answer", async () => {
+  const graph = upgradeVisualGraph(linear(node("info", "knowledge"), node("age", "collect", { fieldKey: "child_age", fieldType: "number", prompt: "Sa vjeç është fëmija?" })));
+  let state = migrateContext();
+  const legacy = vi.fn(async (p: LegacyParams) => response(p, "Aktivitetet Montessori kushtojnë 690 ALL."));
+  for (const message of ["A keni aktivitete me kafshe?", "Sa kushton Montessori?"]) {
+    const turn = await executeVisualTurn({ ...params(graph), message, informationRequest: true, state }, legacy);
+    expect(turn.reply).toBe("Aktivitetet Montessori kushtojnë 690 ALL.");
+    expect(turn.nextState.visual).toMatchObject({ nodeId: "age", awaiting: true });
+    state = turn.nextState;
+  }
+  const answered = await executeVisualTurn({ ...params(graph), message: "5", informationRequest: true, state }, legacy);
+  expect(answered.reply).not.toContain("Sa vjeç");
+  expect(answered.nextState.visual?.values.child_age).toBe("5");
+  expect(answered.nextState.context?.order.child_age.value).toBe("5");
+});
+
+it("reuses known age when entering the information flow again", async () => {
+  const graph = upgradeVisualGraph(linear(node("info", "knowledge"), node("age", "collect", { fieldKey: "child_age", fieldType: "number", prompt: "Sa vjeç është fëmija?" })));
+  const state = migrateContext(); setFact(state, "child_age", "5", "number", "message");
+  const result = await executeVisualTurn({ ...params(graph), message: "Cilin sugjeroni?", informationRequest: true, state }, async p => response(p, "Për moshën 5 vjeç, kontrolloni këto mundësi."));
+  expect(result.reply).not.toContain("Sa vjeç");
+  expect(result.nextState.visual?.status).toBe("completed");
+});
+
+it.each([false, true])("remembers a supplied age on an informational interruption, shared context=%s", async shared => {
+  const graph = upgradeVisualGraph(linear(node("info", "knowledge"), node("age", "collect", { fieldKey: "child_age", fieldType: "number", prompt: "Sa vjeç është fëmija?" })));
+  const state = shared ? migrateContext() : emptyState(); state.visual = waiting("age");
+  mocks.extract.mockImplementationOnce(async target => { setFact(target, "child_age", "5", "number", "message:moshen 5 vjec"); return 1; });
+  const result = await executeVisualTurn({ ...params(graph), state, message: "Cilin sugjeroni per moshen 5 vjec?" }, async p => response(p, "Këto janë mundësitë."));
+  expect(result.reply).not.toContain("Sa vjeç");
+  expect(shared ? result.nextState.context?.order.child_age.value : result.nextState.visual?.values.child_age).toBe("5");
+  expect(Boolean(result.nextState.context)).toBe(shared);
+  expect(mocks.extract).toHaveBeenCalledWith(expect.anything(), "Cilin sugjeroni per moshen 5 vjec?", expect.arrayContaining([expect.objectContaining({ key: "child_age", label: "Sa vjeç është fëmija?" })]), { questionFacts: true });
+});
+
+it("does not overwrite a legacy visual answer with stale order fields during an information interruption", async () => {
+  const graph = upgradeVisualGraph(linear(node("info", "knowledge"), node("age", "collect", { fieldKey: "child_age", fieldType: "number", prompt: "Sa vjeç?" })));
+  const state = emptyState(); state.fields.child_age = "3"; state.visual = { ...waiting("age"), values: { child_age: "5" } };
+  const result = await executeVisualTurn({ ...params(graph), state, message: "Sa kushton?" }, async p => response(p, "690 ALL."));
+  expect(result.nextState.visual?.values.child_age).toBe("5");
+  expect(result.nextState.context).toBeUndefined();
 });

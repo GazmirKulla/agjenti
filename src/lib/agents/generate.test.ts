@@ -102,3 +102,13 @@ it("keeps customer contact data separate from business contact claims", async ()
   expect(request.instructions).toContain("including indirect references such as the number you sent");
   expect(request.instructions).toContain("Business contact details must be explicitly identified as belonging to the business");
 });
+
+it("retains collected qualification facts in document answers after the original message leaves recent history", async () => {
+  const { migrateContext, setFact } = await import("@/lib/workflows/context");
+  const state = migrateContext(); setFact(state, "child_age", "5", "number", "message");
+  mocks.create.mockResolvedValue({ output_text: "Kushton 690 ALL." });
+  await generateAgentReply({ ...params, state, customerMessage: "Sa kushton Montessori?", documentContext: "Montessori: 690 ALL" });
+  const request = mocks.create.mock.calls[0][0];
+  expect(request.input).toContain('"child_age":{"value":"5"');
+  expect(request.instructions).toContain("Never ask again for a fact already supplied");
+});
