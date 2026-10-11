@@ -3,6 +3,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { isDashboardRoute } from "./navigation";
+import { organizeWorkspace, workspaceSection } from "@/lib/dashboard/navigation/workspace";
+import { WorkspaceNavigation, WorkspaceSectionNavigation } from "./workspace-navigation";
 import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
@@ -122,6 +124,9 @@ export function DashboardShell({
   const base = admin ? "/admin" : `/b/${slug}`;
   const inboxDetailView = !admin && pathname.startsWith(`${base}/inbox/`);
   const items = navigationItems;
+  const workspace = organizeWorkspace(items);
+  const section = workspaceSection(pathname, base, workspace);
+  const searchItems = admin ? items : workspace.search;
   const primaryItems = mobileNavigationItems;
   const mobilePaths = new Set(primaryItems.map((item) => item.path));
   return (
@@ -189,7 +194,7 @@ export function DashboardShell({
         <nav
           aria-label={admin ? "Menuja e administratorit" : "Menuja e biznesit"}
         >
-          {items.map((item) => {
+          {admin ? items.map((item) => {
             const href = `${base}${item.path ? `/${item.path}` : ""}`;
             const active = isDashboardRoute(pathname, base, item.path);
             return (
@@ -204,17 +209,7 @@ export function DashboardShell({
                 {item.label}
               </Link>
             );
-          })}
-          {!admin && (
-            <Link
-              href={`${base}/setup`}
-              className={`dashboard-nav ${isDashboardRoute(pathname, base, "setup") ? "active" : ""}`}
-              aria-current={isDashboardRoute(pathname, base, "setup") ? "page" : undefined}
-              onClick={() => setOpen(false)}
-            >
-              <Icon name="spark" /> Onboarding
-            </Link>
-          )}
+          }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} onNavigate={() => setOpen(false)} />}
         </nav>
       </aside>
       {open && (
@@ -275,7 +270,7 @@ export function DashboardShell({
             />
             {search && (
               <div className="search-results">
-                {items
+                {searchItems
                   .filter((item) =>
                     item.label
                       .toLocaleLowerCase()
@@ -283,7 +278,7 @@ export function DashboardShell({
                   )
                   .map((item) => (
                     <Link
-                      key={item.id}
+                      key={`${item.id}-${item.label}`}
                       onClick={() => {
                         setSearch("");
                         setSearchOpen(false);
@@ -295,7 +290,7 @@ export function DashboardShell({
                       <Icon name="arrow" size={15} />
                     </Link>
                   ))}
-                {!items.some((item) =>
+                {!searchItems.some((item) =>
                   item.label
                     .toLocaleLowerCase()
                     .includes(search.toLocaleLowerCase()),
@@ -322,7 +317,7 @@ export function DashboardShell({
             </Link>
           </div>
         </header>
-        <main className="dashboard-content">{!admin && pathname !== base && <AssistantEntry/>}{children}</main>
+        <main className="dashboard-content">{!admin && <WorkspaceSectionNavigation navigation={workspace} section={section} base={base} pathname={pathname} />}{!admin && pathname !== base && <AssistantEntry/>}{children}</main>
       </div>
       {admin && <nav
         className="mobile-bottom-nav"

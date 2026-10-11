@@ -176,7 +176,7 @@ export async function KnowledgeWorkspace({
           title: e.title,
           subtitle: e.body,
           badge: (
-            <span className="status-badge">
+            <span key={e.id} className="status-badge">
               {services ? "Shërbim" : "Njohuri"} · {e.is_active ? "Aktive" : "Joaktive"}
             </span>
           ),

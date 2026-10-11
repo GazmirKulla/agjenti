@@ -3,7 +3,14 @@ import {
   parseUIContext,
   contextFromPath,
   assistantSuggestions,
+  contextLabel,
 } from "./context";
+it("recognizes the activity destination without falling back to home context", () => {
+  const context = contextFromPath("/b/demo/activity", "demo");
+  expect(context).toEqual({ page: "activity", entryPoint: "contextual" });
+  expect(parseUIContext(context)).toEqual(context);
+  expect(contextLabel(context)).toBe("Aktiviteti");
+});
 const id = "11111111-1111-4111-8111-111111111111";
 it("recognizes an open product but never treats new/imports as entity IDs", () => {
   expect(contextFromPath(`/b/demo/products/${id}`, "demo")).toEqual({

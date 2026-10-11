@@ -6,6 +6,7 @@ import type { NormalizedAttachment } from "@/lib/instagram/types";
 import { StatusBadge } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import Link from "next/link";
+import { IntegrationActivity, type IntegrationActivityLog } from "@/components/dashboard/integration-activity";
 type Message = {
   id: string;
   direction: string;
@@ -16,13 +17,6 @@ type Message = {
   delivery_status: string | null;
   delivery_error: string | null;
 };
-type Log = {
-  id: string;
-  target: string;
-  status: string;
-  error: string | null;
-  created_at: string;
-};
 export function ThreadClient(props: {
   businessId: string;
   conversationId: string;
@@ -30,7 +24,7 @@ export function ThreadClient(props: {
   status: string;
   customerName: string;
   messages: Message[];
-  logs: Log[];
+  logs: IntegrationActivityLog[];
 }) {
   const router = useRouter();
   const messageList = useRef<HTMLDivElement>(null);
@@ -264,16 +258,7 @@ export function ThreadClient(props: {
       </form>
       <details className="chat-logs">
         <summary>Aktiviteti i integrimit të biznesit</summary>
-        {props.logs.length ? (
-          props.logs.map((l) => (
-            <p key={l.id}>
-              {l.target} · {l.status}
-              {l.error ? ` · ${l.error}` : ""}
-            </p>
-          ))
-        ) : (
-          <p>Ende nuk ka aktivitet.</p>
-        )}
+        <IntegrationActivity logs={props.logs} />
       </details>
     </section>
   );
