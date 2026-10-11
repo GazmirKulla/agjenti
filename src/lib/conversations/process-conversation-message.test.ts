@@ -2,6 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { emptyState, type ConversationStatePayload } from "@/lib/workflows/engine";
 import { advanceSharedOrder, extractExplicitFacts, migrateContext, setFact, sharedPrompt } from "@/lib/workflows/context";
 import { migrateConversationProcesses } from "@/lib/workflows/conversation-processes";
+import { rememberTurn } from "@/lib/workflows/guidance";
 const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn(), status: vi.fn(), entity: vi.fn() }));
 vi.mock("@/lib/workflows/visual/entity-routing", async original => ({ ...await original<object>(), resolveVisualEntity: mocks.entity }));
 vi.mock("@/lib/orders/customer-status", async original => ({ ...await original<object>(), customerOrderStatus: mocks.status }));
@@ -478,10 +479,81 @@ it("an ambiguous entity question cannot leave an older confirmation owned by the
   const state = boundState(); state.context!.execution.awaitingOrderConfirmation = true;
   mocks.version.mockResolvedValue(entityVersion());
   mocks.entity.mockResolvedValue({ choices: [{ kind: "product", id: "a", name: "Puzzle" }, { kind: "service", id: "b", name: "Puzzle" }] });
-  const next = await turn("Puzzle", state);
+  const onTrace = vi.fn();
+  const next = await processConversationMessage({ businessId: "business", message: "Puzzle", state, mode: "test", hasPhoto: false, onTrace });
   expect(next.nextState.processes?.promptOwner).toBeNull();
+  expect(next.conversationRouting).toMatchObject({ process: "clarify", action: "clarify" });
+  expect(next.nextState.processes?.lastDecision).toEqual(next.conversationRouting);
+  expect(onTrace.mock.calls.filter(([event]) => event.label === "Conversation process selected")).toHaveLength(1);
+  expect(onTrace.mock.calls.find(([event]) => event.label === "Conversation coordinator completed")![0].data).toMatchObject({ process: "clarify", action: "clarify" });
+  expect(next.nextState.recentMessages?.slice(-2)).toEqual([{ role: "user", content: "Puzzle" }, { role: "assistant", content: next.reply }]);
   mocks.entity.mockResolvedValue({});
+  mocks.info.mockImplementationOnce(async ({ state }) => {
+    expect(state.recentMessages).toEqual(next.nextState.recentMessages);
+    return result(state, "Sqarimi");
+  });
+  await turn("ku?", next.nextState);
+  expect(mocks.info).toHaveBeenCalledOnce();
   expect((await turn("Po", next.nextState)).conversationRouting?.action).toBe("answer");
+});
+it("remembers a stale service confirmation refusal before the next question", async () => {
+  const state = boundState();
+  state.recentMessages = [{ role: "assistant", content: "Ta konfirmojmë porosinë?" }];
+  state.processes!.service = { id: "s", versionId: "bound-v1", status: "suspended", promptCurrent: false,
+    visual: { versionId: "bound-v1", nodeId: "details", status: "waiting", awaiting: true, visited: ["details"], values: {}, binding: { flowId: "service-flow", entity: { id: "consult", kind: "service" } } }, fields: {}, order: {} };
+  mocks.version.mockResolvedValue(entityVersion());
+  mocks.entity.mockResolvedValue(entityResult("consult"));
+  const next = await turn("Po", state);
+  expect(next.reply).toContain("Cilën kërkesë");
+  expect(next.conversationRouting).toMatchObject({ process: "clarify", action: "clarify" });
+  expect(next.nextState.processes?.lastDecision).toEqual(next.conversationRouting);
+  expect(next.nextState.recentMessages?.slice(-2)).toEqual([{ role: "user", content: "Po" }, { role: "assistant", content: next.reply }]);
+  expect(next.nextState.processes?.order?.snapshot).toEqual(state.processes?.order?.snapshot);
+  mocks.entity.mockResolvedValue({});
+  mocks.info.mockImplementationOnce(async ({ state }) => {
+    expect(state.recentMessages).toEqual(next.nextState.recentMessages);
+    return result(state, "Sqarimi");
+  });
+  await turn("Çfarë do të thotë?", next.nextState);
+  expect(mocks.info).toHaveBeenCalledOnce();
+});
+it("finalizes only the final reply from an already-recorded nested processor with bounded history", async () => {
+  const state = order();
+  state.recentMessages = Array.from({ length: 10 }, (_, index) => ({ role: index % 2 ? "assistant" as const : "user" as const, content: `Previous ${index}` }));
+  const original = structuredClone(state);
+  mocks.agent.mockImplementation(async ({ state, message }) => {
+    const answer = result(state, "Hapi tjetër");
+    rememberTurn(state, answer.nextState, message, answer.reply);
+    return answer;
+  });
+  const message = "Dua të porosis, sa kushton?";
+  const next = await turn(message, state);
+  expect(next.reply).toBe("Çmimi është 20 euro.\n\nHapi tjetër");
+  expect(next.nextState.recentMessages).toEqual([...original.recentMessages!.slice(2), { role: "user", content: message }, { role: "assistant", content: next.reply }]);
+  expect(state).toEqual(original);
+});
+it("does not record a failed processor as a completed conversation turn", async () => {
+  const state = order(), original = structuredClone(state), onTrace = vi.fn();
+  mocks.agent.mockRejectedValueOnce(new Error("processor_failed"));
+  await expect(processConversationMessage({ businessId: "business", message: "M", state, mode: "test", hasPhoto: false, onTrace })).rejects.toThrow("processor_failed");
+  expect(state).toEqual(original);
+  expect(onTrace.mock.calls.some(([event]) => event.label === "Conversation coordinator completed")).toBe(false);
+});
+it.each(["test", "instagram", "whatsapp"] as const)("keeps one history pair per completed %s turn, including repeated messages", async channel => {
+  let state = order();
+  const expected: NonNullable<ConversationStatePayload["recentMessages"]> = [];
+  for (const message of ["Sa kushton?", "Dua të flas me stafin", "OK", "OK"]) {
+    const before = structuredClone(state);
+    const params = { businessId: "business", message, state, hasPhoto: false, ...(channel === "test" ? { mode: "test" as const } : { source: channel }) };
+    const next = await processConversationMessage(params);
+    // Retry the same input state; it must not gain a second pair before commit.
+    const retry = await processConversationMessage(params);
+    expected.push({ role: "user", content: message }, { role: "assistant", content: next.reply.slice(0, 1200) });
+    expect(next.nextState.recentMessages).toEqual(expected);
+    expect(retry.nextState.recentMessages).toEqual(expected);
+    expect(state).toEqual(before);
+    state = next.nextState;
+  }
 });
 it.each(["test", "production"] as const)("derives inactive entity preview access only from trusted %s mode", async mode => {
   mocks.version.mockResolvedValue(entityVersion()); mocks.entity.mockResolvedValue(entityResult("puzzle"));

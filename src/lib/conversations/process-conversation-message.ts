@@ -8,7 +8,7 @@ import { processAgentTurn, processLegacyAgentTurn, type AgentTurnParams, type Ag
 import { emptyState, foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
 import { affirmative, extractExplicitFacts, isQuestion, migrateContext, resetOrder, setFact } from "@/lib/workflows/context";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
-import { chooseGuidance, explicitIntent, rememberTurn } from "@/lib/workflows/guidance";
+import { chooseGuidance, explicitIntent, recentConversation, rememberTurn } from "@/lib/workflows/guidance";
 import { bookingAdapterState, migrateConversationProcesses, restoreOrder, snapshotOrder, type ConversationRouting, type ProcessKind } from "@/lib/workflows/conversation-processes";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
 import { customerOrderStatus, isOrderStatusFollowUp, isOrderStatusRequest, readOrderStatusLookup, setOrderStatusLookup, type OrderCustomerIdentity } from "@/lib/orders/customer-status";
@@ -74,6 +74,11 @@ function plainResult(state: ConversationStatePayload, reply: string): AgentTurnR
     productName: null, workflowProgress: [], debug: { model: agentModel(), source: "fallback", fallbackReason: "conversation_routing", agentConfigured: true,
       knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: 0 } };
 }
+function entityClarification(state: ConversationStatePayload, reply: string): AgentTurnResult {
+  state.processes!.promptOwner = null;
+  if (state.processes!.service) state.processes!.service.promptCurrent = false;
+  return { ...plainResult(state, reply), conversationRouting: { process: "clarify", action: "clarify", source: "rules", reason: reply, reusedFields: [], missingFields: [] } };
+}
 function explicitProfile(state: ConversationStatePayload, message: string, profileOnly = false) {
   extractExplicitFacts(state, message, profileOnly ? [] : state.context?.execution.linear?.steps ?? []);
   // Contact labels anchor the number to this customer's own statement, including mixed question/fact turns.
@@ -84,7 +89,15 @@ function explicitProfile(state: ConversationStatePayload, message: string, profi
 /** One message coordinator for Instagram, isolated chat and graph previews. Adapters own persistence/send. */
 export async function processConversationMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
   const started = Date.now();
+  const before = { ...emptyState(), recentMessages: recentConversation(params.state) };
   const result = await processMessage(params);
+  // Always rebuild from the inbound history. Nested processors may have recorded
+  // an intermediate reply; the coordinator owns the final pair, exactly once.
+  rememberTurn(before, result.nextState, params.message, result.reply);
+  if (result.conversationRouting) {
+    if (result.nextState.processes) result.nextState.processes.lastDecision = result.conversationRouting;
+    params.onTrace?.({ stage: "workflow", label: "Conversation process selected", data: result.conversationRouting });
+  }
   // Operational metadata only: never copy messages, profile values or lease tokens.
   params.onTrace?.({ stage: "workflow", label: "Conversation coordinator completed", data: {
     coordinator: params.linearPreview ? "linear_preview" : usesSharedCoordinator(params) ? "shared_v3" : "legacy",
@@ -147,9 +160,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     state.processes!.promptOwner = null;
     const decision: ConversationRouting = { process: "information", action: result.orderStatusPending ? "clarify" : "answer", source: "rules",
       reason: "Kontrollohet statusi i porosisë ekzistuese; proceset në vazhdim ruhen.", reusedFields: [], missingFields: result.orderStatusPending ? ["order_reference"] : [] };
-    state.processes!.lastDecision = decision;
     result.nextState = state; result.conversationRouting = decision;
-    rememberTurn(params.state, state, params.message, result.reply);
     params.onTrace?.({ stage: "workflow", label: "Customer order status", data: decision });
     return result;
   }
@@ -162,10 +173,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   if (!usesSharedCoordinator(params)) {
     // Keep non-pilot conversations on legacy until explicitly enrolled.
     const booking = await processBookingTurn(params);
-    if (booking) {
-      rememberTurn(params.state, booking.nextState, params.message, booking.reply);
-      return booking;
-    }
+    if (booking) return booking;
     return processAgentTurn(params);
   }
   let state = await migrateState();
@@ -207,15 +215,13 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   }
   const selectedEntity = entityResolution.selected;
   if (entityResolution.choices?.length) {
-    processes.promptOwner = null;
-    if (processes.service) processes.service.promptCurrent = false;
-    return plainResult(state, `Cilin produkt ose shërbim dëshiron: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`);
+    return entityClarification(state, `Cilin produkt ose shërbim dëshiron: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`);
   }
   const entityFlow = selectedEntity && serviceVersion?.graph.version === 2 ? serviceVersion.graph.flows.find(flow => flow.id === selectedEntity.binding.flowId) : undefined;
   const serviceBooking = selectedEntity?.entity.kind === "service" && entityFlow?.nodeIds.some(id => serviceVersion!.graph.nodes.some(node => node.id === id && node.kind === "booking"));
   const productOrder = selectedEntity?.entity.kind === "product" && Boolean(entityFlow && (entityFlow.kind === "order" || entityFlow.nodeIds.some(id => serviceVersion!.graph.nodes.some(node => node.id === id && node.kind === "product")) || entityFlow.kind === "custom" && (explicitIntent(entityMessage) === "order" || processes.order?.snapshot.product_id === selectedEntity.entity.id && orderVisual?.binding?.entity.id === selectedEntity.entity.id)));
   if (selectedEntity && entityFlow && !productOrder && !serviceBooking && serviceVersion && !processes.pendingChoice) {
-    if (affirmative(params.message) && processes.service && !processes.service.promptCurrent) return plainResult(state, "Cilën kërkesë dëshiron të konfirmosh? Shkruaj shërbimin që dëshiron të vazhdosh.");
+    if (affirmative(params.message) && processes.service && !processes.service.promptCurrent) return entityClarification(state, "Cilën kërkesë dëshiron të konfirmosh? Shkruaj shërbimin që dëshiron të vazhdosh.");
     if (processes.active === "order" && processes.order) processes.order.snapshot = snapshotOrder(state);
     if (processes.active && processes[processes.active]) processes[processes.active]!.status = "suspended";
     const old = processes.service?.status !== "completed" && processes.service?.visual.binding?.entity.id === selectedEntity.entity.id ? processes.service : undefined;
@@ -231,8 +237,8 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     state.visual = visual;
     processes.active = null; processes.promptOwner = null; delete processes.pendingChoice;
     const decision: ConversationRouting = { process: "information", action: old ? "continue" : "start", source: "rules", reason: `Vazhdon rrjedha e lidhur me ${selectedEntity.entity.name}.`, reusedFields: Object.keys(state.context!.profile), missingFields: [] };
-    processes.lastDecision = decision; answer.nextState = state; answer.workflowId = null; answer.conversationRouting = decision;
-    rememberTurn(params.state, state, params.message, answer.reply); return answer;
+    answer.nextState = state; answer.workflowId = null; answer.conversationRouting = decision;
+    return answer;
   }
   if (selectedEntity || freshEntityVersion || (!orderVisual && explicitIntent(entityMessage) === "order" && serviceVersion)) params = { ...params, entityVersion: serviceVersion };
   explicitProfile(state, params.message);
@@ -269,9 +275,6 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     result.nextState.schemaVersion = 3;
     result.nextState.processes = processes;
     result.conversationRouting = decision;
-    processes.lastDecision = decision;
-    rememberTurn(params.state, result.nextState, params.message, result.reply);
-    params.onTrace?.({ stage: "workflow", label: "Conversation process selected", data: decision });
     return result;
   };
   const clarify = (reply: string) => {
