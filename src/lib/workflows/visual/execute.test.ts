@@ -522,3 +522,10 @@ it("does not bypass support routing for a saved linear order with no visual curs
   expect(result.nextState.product_id).toBe("p");
   expect(legacy).not.toHaveBeenCalled();
 });
+
+it("passes the current visual flow and node to training, replacing any untrusted scope", async () => {
+  const graph: VisualGraph = { ...linear(node("info", "knowledge")), version: 2, flows: [{ id: "information", kind: "information", label: "Informacion", entryNodeId: "info", nodeIds: ["info"] }] };
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  await executeVisualTurn({ ...params(graph), informationRequest: true, trainingVisualScope: { flowId: "foreign", nodeId: "other" } }, legacy);
+  expect(legacy).toHaveBeenCalledWith(expect.objectContaining({ trainingVisualScope: { flowId: "information", nodeId: "info" } }));
+});

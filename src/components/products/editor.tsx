@@ -92,7 +92,7 @@ export function ProductEditor({
       >
         <fieldset className="product-editor-fields" disabled={pending}>
           {product && (
-            <input type="hidden" name="product_id" value={product.id} />
+            <><input type="hidden" name="product_id" value={product.id} /><input type="hidden" name="updated_at" value={product.updated_at ?? ""} /></>
           )}
           {product && (
             <section className="panel product-summary">

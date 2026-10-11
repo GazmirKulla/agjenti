@@ -12,19 +12,25 @@ import { advanceVisualOrderReview, missingVisualOrderNode } from "./product-orde
 
 type Legacy = (params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }) => Promise<AgentTurnResult>;
 
-export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy): Promise<AgentTurnResult> {
+export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Legacy): Promise<AgentTurnResult> {
   if (params.visualPreview && (params.mode !== "test" || params.visualPreview.businessId !== params.businessId)) throw new Error("invalid_workflow_preview");
   let previous = params.state?.visual;
   if (previous?.status === "completed" && params.entityVersion !== undefined && params.entityVersion?.id !== previous.versionId) previous = undefined;
   // Publishing the visual layer must not interrupt an existing linear product order.
-  if (!params.visualPreview && !params.informationRequest && !params.supportRequest && !params.bookingRequest && !params.orderStatusRequest && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacy(params);
+  if (!params.visualPreview && !params.informationRequest && !params.supportRequest && !params.bookingRequest && !params.orderStatusRequest && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacyReply({ ...params, trainingVisualScope: undefined });
   let active = previous && previous.status !== "completed" ? previous : null;
   const loadedVersion = params.visualPreview ?? (params.entityVersion !== undefined ? params.entityVersion : await loadVisualVersion(params.businessId, previous?.versionId));
   if (!loadedVersion) {
     if (active) throw new Error("missing_workflow_version");
-    return legacy(params);
+    return legacyReply({ ...params, trainingVisualScope: undefined });
   }
   let version = loadedVersion;
+  const legacy = (p: Parameters<Legacy>[0], executedNodeId?: string) => {
+    const nodeId = executedNodeId ?? p.state?.visual?.nodeId;
+    const flow = version.graph.version === 2 && p.state?.visual?.versionId === version.id
+      ? version.graph.flows.find(f => f.nodeIds.includes(nodeId ?? "")) : undefined;
+    return legacyReply({ ...p, trainingVisualScope: flow && nodeId ? { flowId: flow.id, nodeId } : undefined });
+  };
   if (version.businessId !== params.businessId || !validateVisualGraph(version.graph).graph) throw new Error("invalid_visual_workflow");
   const started = Date.now();
   // Completion does not erase order/customer data. Only entering a new product flow resets it.
@@ -129,7 +135,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
   if (guidance.action === "answer" && !previous) destination = routes.find(n=>n.kind==="knowledge")?.id ?? null;
   if (guidance.action === "order" && previous?.status === "completed" && !params.visualPreview) {
     const latest = await loadVisualVersion(params.businessId);
-    if (!latest) return legacy(params);
+    if (!latest) return legacyReply({ ...params, trainingVisualScope: undefined });
     if (latest.businessId !== params.businessId || !validateVisualGraph(latest.graph).graph) throw new Error("invalid_visual_workflow");
     version = latest;
     routes = routesFor(version.graph);
@@ -204,7 +210,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacy: Legacy)
       if(value) setFact(turn.nextState,node.config.fieldKey!,value,node.config.fieldType||"text",`visual:${node.id}`);
     }
     if (action.kind === "knowledge") {
-      turn = await legacy({ ...params, state: turn.nextState, informational: action.message ?? "" });
+      turn = await legacy({ ...params, state: turn.nextState, informational: action.message ?? "" }, action.nodeId);
       currentState=turn.nextState;
       replies.push(turn.reply);
       execution = advance({ graph: version.graph, versionId: version.id, state: execution.state,

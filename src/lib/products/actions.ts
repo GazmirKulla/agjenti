@@ -1,5 +1,6 @@
 "use server";
 
+import { visualSelection, saveProductsWithVisualFlow } from "./visual-selection";
 import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -67,6 +68,18 @@ export async function createProduct(
   const parsed = parseProductForm(form);
   if ("error" in parsed) return parsed;
   if (form.get("save_mode") === "draft") parsed.isActive = false;
+  try {
+    const visual = visualSelection(parsed.workflowId);
+    if (visual) {
+      parsed.workflowId = null;
+      const check = await assertTypeAndWorkflow(access.business.id, parsed.productTypeId, null);
+      if ("error" in check) return check;
+      const result = await saveProductsWithVisualFlow(access.business.id, user.id, visual, "create", [rowFromParsed(access.business.id, parsed, "manual")]);
+      if (!result.error) revalidatePath(`/b/${slug}`, "layout");
+      return result;
+    }
+  } catch { return { error: "Zgjedhja e rrjedhës nuk është e vlefshme." }; }
+
   if (
     parsed.isActive &&
     (parsed.price == null || !parsed.productTypeId || !parsed.workflowId)
@@ -112,6 +125,18 @@ export async function updateProduct(
   const parsed = parseProductForm(form);
   if ("error" in parsed) return parsed;
   if (form.get("save_mode") === "draft") parsed.isActive = false;
+  try {
+    const visual = visualSelection(parsed.workflowId);
+    if (visual) {
+      parsed.workflowId = null;
+      const check = await assertTypeAndWorkflow(access.business.id, parsed.productTypeId, null);
+      if ("error" in check) return check;
+      const result = await saveProductsWithVisualFlow(access.business.id, user.id, visual, "update", [{ ...rowFromParsed(access.business.id, parsed), id, expected_updated_at: form.get("updated_at") }]);
+      if (!result.error) revalidatePath(`/b/${slug}`, "layout");
+      return result;
+    }
+  } catch { return { error: "Zgjedhja e rrjedhës nuk është e vlefshme." }; }
+
   let hasVisualFlow = false;
   if (parsed.isActive && !parsed.workflowId) {
     try { hasVisualFlow = (await publishedProductBindings(access.business.id)).has(id); }
@@ -247,6 +272,18 @@ export async function importProductBatch(
   const productTypeId = optionalUuid(payload?.productTypeId);
   if (typeof productTypeId !== "string" && productTypeId !== null)
     return productTypeId;
+
+  try {
+    const visual = visualSelection(payload?.workflowId);
+    if (visual) {
+      const check = await assertTypeAndWorkflow(access.business.id, productTypeId, null);
+      if ("error" in check) return check;
+      const rows = parsed.items.map(item => ({ name: item.name, description: item.description, image_url: item.imageUrl, price_amount: item.price, currency: item.currency, sku: item.sku, external_id: item.externalId, ...(productTypeId ? { product_type_id: productTypeId } : {}) }));
+      const result = await saveProductsWithVisualFlow(access.business.id, user.id, visual, "import", rows);
+      if (!result.error) revalidatePath(`/b/${slug}`, "layout");
+      return result;
+    }
+  } catch { return { error: "Zgjedhja e rrjedhës nuk është e vlefshme." }; }
   const workflowId = optionalUuid(payload?.workflowId);
   if (typeof workflowId !== "string" && workflowId !== null) return workflowId;
 
@@ -351,10 +388,21 @@ export async function bulkConfigureProducts(
     !["map", "activate", "draft"].includes(payload.mode)
   )
     return { error: "Zgjidh 1–100 produkte të vlefshme." };
+  try {
+    const visual = visualSelection(payload.workflowId);
+    if (visual && payload.mode !== "draft") {
+      if (payload.mode === "activate") return { error: "Ruaj lidhjen si draft dhe publikoje te Workflow para aktivizimit." };
+      const check = await assertTypeAndWorkflow(access.business.id, payload.productTypeId, null);
+      if ("error" in check) return check;
+      const result = await saveProductsWithVisualFlow(access.business.id, user.id, visual, "bind", ids.map(id => ({ id, ...(payload.productTypeId ? { product_type_id: payload.productTypeId } : {}) })));
+      if (!result.error) revalidatePath(`/b/${slug}`, "layout");
+      return result;
+    }
+  } catch { return { error: "Zgjedhja e rrjedhës nuk është e vlefshme." }; }
   const check = await assertTypeAndWorkflow(
     access.business.id,
     payload.productTypeId,
-    payload.workflowId,
+    payload.mode === "draft" ? null : payload.workflowId,
   );
   if ("error" in check) return check;
   const db = createServiceSupabase();

@@ -206,7 +206,7 @@ export function ProductReview({
           </select>
         </label>
       </div>
-      <p className="muted-copy">Nëse i zgjedh, lloji dhe workflow-i zbatohen te produktet që ruan tani.</p>
+      <p className="muted-copy">Lloji zbatohet te produktet që ruan tani. Lidhjet me flow-t vizualë ruhen si draft; publikohen te Workflow.</p>
       <button
         type="button"
         className="btn btn-primary"

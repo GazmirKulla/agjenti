@@ -12,6 +12,7 @@ export type ProductRow = {
   workflow_id: string | null;
   /** Enriched on the server from the enabled published visual graph, never a form field. */
   visual_workflow?: { versionId: string; flowId: string; name: string } | null;
+  visual_draft?: { id: string; name: string; status: string } | null;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;

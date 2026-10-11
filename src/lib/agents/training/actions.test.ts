@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), admin: vi.fn(), from: vi.fn(), revalidate: vi.fn() }));
+const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), admin: vi.fn(), from: vi.fn(), revalidate: vi.fn(), visual: vi.fn() }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access, isPlatformAdmin: m.admin }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from }) }));
+vi.mock("@/lib/workflows/visual/choices", () => ({ loadVisualFlowChoices: m.visual }));
 vi.mock("next/cache", () => ({ revalidatePath: m.revalidate }));
 import { changeAgentTraining, listAgentTraining, saveAgentTraining } from "./actions";
 import { issueTrainingReceipt } from "./receipt";
@@ -16,6 +17,7 @@ beforeEach(() => {
   vi.clearAllMocks(); vi.stubEnv("TOKEN_ENCRYPTION_KEY", "a".repeat(64));
   m.user.mockResolvedValue({ id: "owner" }); m.admin.mockResolvedValue(false);
   m.access.mockResolvedValue({ business: { id: business, slug: "shop" } });
+  m.visual.mockResolvedValue({ revision: 1, flows: [] });
   queries = []; resultData = { id }; resultError = null; foreignWorkflow = false;
   m.from.mockImplementation((table: string) => {
     const query = { table, filters: [] as unknown[][], operation: "", values: undefined as unknown }; queries.push(query);
@@ -86,4 +88,17 @@ describe("explicit business training mutations", () => {
     expect(JSON.stringify(result)).toContain("migrimin");
     expect(JSON.stringify(result)).not.toContain("internal details");
   });
+});
+
+it("lists visual draft scopes and validates the node before saving a scoped lesson", async () => {
+  m.visual.mockResolvedValue({ revision: 2, flows: [{ id: "info", name: "Informacion", status: "Draft", steps: [{ key: "answer", label: "Përgjigju" }] }] });
+  resultData = [];
+  const listing = await listAgentTraining({ slug: "shop" });
+  expect(listing).toMatchObject({ workflows: [expect.objectContaining({ id: "visual:info", visualFlowId: "info", status: "Draft" })] });
+  resultData = { id }; queries = [];
+  expect(await saveAgentTraining({ slug: "shop" }, { kind: "workflow", instruction: "Answer accurately", visualFlowId: "info", visualNodeId: "answer" })).toEqual({ success: true });
+  expect(queries[0].values).toMatchObject({ business_id: business, workflow_id: null, step_key: null, visual_flow_id: "info", visual_node_id: "answer" });
+  queries = [];
+  expect(await saveAgentTraining({ slug: "shop" }, { kind: "workflow", instruction: "Answer", visualFlowId: "info", visualNodeId: "missing" })).toHaveProperty("error");
+  expect(queries).toEqual([]);
 });

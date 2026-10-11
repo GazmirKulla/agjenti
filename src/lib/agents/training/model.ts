@@ -6,12 +6,14 @@ export type TrainingMemory = {
   id: string; business_id: string; kind: TrainingKind; instruction: string;
   customer_message: string; desired_response: string;
   workflow_id: string | null; step_key: string | null;
+  visual_flow_id?: string | null; visual_node_id?: string | null;
   is_active: boolean; revision: number; updated_at: string;
 };
-export type TrainingWorkflow = { id: string; name: string; steps: { key: string; label: string }[] };
+export type TrainingWorkflow = { id: string; name: string; visualFlowId?: string; status?: string; steps: { key: string; label: string }[] };
 export type TrainingInput = {
   kind: TrainingKind; instruction: string; customerMessage?: string; desiredResponse?: string;
   workflowId?: string | null; stepKey?: string | null; receipt?: string;
+  visualFlowId?: string | null; visualNodeId?: string | null;
   id?: string; revision?: number;
 };
 export type TrainingContext = { rules: { id: string; kind: TrainingKind; instruction: string; question: string; response: string; scope: string }[] };
@@ -26,18 +28,21 @@ export function validateTrainingInput(input: TrainingInput) {
   }
   if (input.kind === "example" && (!input.customerMessage?.trim() || !input.desiredResponse?.trim())) throw new Error("Shembulli kërkon pyetjen dhe përgjigjen e dëshiruar.");
   if (input.workflowId != null && !isUuid(input.workflowId)) throw new Error("Workflow nuk është i vlefshëm.");
-  if (input.kind === "workflow" && !input.workflowId) throw new Error("Zgjidh workflow-n ku do të përdoret udhëzimi.");
-  if (input.kind === "style" && (input.workflowId || input.stepKey)) throw new Error("Preferencat e stilit vlejnë për të gjithë biznesin.");
+  if (input.visualFlowId != null && (typeof input.visualFlowId !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(input.visualFlowId))) throw new Error("Rrjedha vizuale nuk është e vlefshme.");
+  if (input.visualNodeId != null && (typeof input.visualNodeId !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(input.visualNodeId) || !input.visualFlowId)) throw new Error("Hapi vizual nuk është i vlefshëm.");
+  if (input.visualFlowId && (input.workflowId || input.stepKey)) throw new Error("Zgjidh vetëm një rrjedhë për mësimin.");
+  if (input.kind === "workflow" && !input.workflowId && !input.visualFlowId) throw new Error("Zgjidh workflow-n ku do të përdoret udhëzimi.");
+  if (input.kind === "style" && (input.workflowId || input.stepKey || input.visualFlowId || input.visualNodeId)) throw new Error("Preferencat e stilit vlejnë për të gjithë biznesin.");
   if (input.stepKey != null && (typeof input.stepKey !== "string" || !input.stepKey.trim() || input.stepKey.length > 100 || !input.workflowId)) throw new Error("Zgjidh një hap të vlefshëm të workflow-t.");
   if (input.id !== undefined && (!isUuid(input.id) || !Number.isInteger(input.revision) || input.revision! < 1)) throw new Error("Versioni i mësimit nuk është i vlefshëm. Rifresko listën.");
   if (input.receipt !== undefined && (typeof input.receipt !== "string" || input.receipt.length > 32000)) throw new Error("Përgjigjja e provës nuk është e vlefshme.");
 }
 
 /** Always include bounded style/rules; retrieve only examples relevant to this turn. */
-export function selectTrainingContext(memories: TrainingMemory[], workflowId: string | null, stepKey: string | null | undefined, message: string): TrainingContext {
-  const scoped = memories.filter(m => m.is_active && (!m.workflow_id || m.workflow_id === workflowId) && (!m.step_key || m.step_key === stepKey));
+export function selectTrainingContext(memories: TrainingMemory[], workflowId: string | null, stepKey: string | null | undefined, message: string, visual?: { flowId: string; nodeId: string }): TrainingContext {
+  const scoped = memories.filter(m => m.is_active && (m.visual_flow_id ? m.visual_flow_id === visual?.flowId && (!m.visual_node_id || m.visual_node_id === visual?.nodeId) : (!m.workflow_id || m.workflow_id === workflowId) && (!m.step_key || m.step_key === stepKey)));
   const latest = [...scoped].sort((a, b) => b.updated_at.localeCompare(a.updated_at) || a.id.localeCompare(b.id));
-  const specificity = (m: TrainingMemory) => m.step_key ? 2 : m.workflow_id ? 1 : 0;
+  const specificity = (m: TrainingMemory) => m.step_key || m.visual_node_id ? 2 : m.workflow_id || m.visual_flow_id ? 1 : 0;
   const rules = latest.filter(m => m.kind !== "example").sort((a, b) => specificity(b) - specificity(a)).slice(0, 16);
   const tokens = [...new Set(foldText(message).split(/[^a-z0-9]+/).filter(t => t.length > 2))];
   const examples = latest.filter(m => m.kind === "example").map(m => {
@@ -45,7 +50,7 @@ export function selectTrainingContext(memories: TrainingMemory[], workflowId: st
     const score = question === foldText(message) ? 2 : tokens.filter(t => question.includes(t)).length / Math.max(tokens.length, 1);
     return { m, score };
   }).filter(item => item.score >= 0.35).sort((a, b) => b.score - a.score).slice(0, 4).map(item => item.m);
-  return { rules: [...rules, ...examples].map(m => ({ id: m.id, kind: m.kind, instruction: m.instruction, question: m.customer_message, response: m.desired_response, scope: m.step_key ? `workflow ${m.workflow_id}, step ${m.step_key}` : m.workflow_id ? `workflow ${m.workflow_id}` : "business" })) };
+  return { rules: [...rules, ...examples].map(m => ({ id: m.id, kind: m.kind, instruction: m.instruction, question: m.customer_message, response: m.desired_response, scope: m.visual_flow_id ? `visual flow ${m.visual_flow_id}${m.visual_node_id ? `, node ${m.visual_node_id}` : ""}` : m.step_key ? `workflow ${m.workflow_id}, step ${m.step_key}` : m.workflow_id ? `workflow ${m.workflow_id}` : "business" })) };
 }
 
 export function trainingPrompt(context?: TrainingContext) {

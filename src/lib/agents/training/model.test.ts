@@ -36,3 +36,14 @@ describe("business training context", () => {
     expect(() => validateTrainingInput({ kind: "style", instruction: "Hi", id: workflow, revision: 0 })).toThrow();
   });
 });
+
+it("keeps visual lessons scoped to their flow and node instead of leaking to all replies", () => {
+  const lesson = { id: "visual-lesson", business_id: "b", kind: "workflow" as const, instruction: "Explain materials", customer_message: "", desired_response: "", workflow_id: null, step_key: null, visual_flow_id: "sales", visual_node_id: "details", is_active: true, revision: 1, updated_at: "2026-10-11" };
+  expect(selectTrainingContext([lesson], null, null, "help").rules).toEqual([]);
+  expect(selectTrainingContext([lesson], null, null, "help", { flowId: "other", nodeId: "details" }).rules).toEqual([]);
+  expect(selectTrainingContext([lesson], null, null, "help", { flowId: "sales", nodeId: "other" }).rules).toEqual([]);
+  expect(selectTrainingContext([lesson], null, null, "help", { flowId: "sales", nodeId: "details" }).rules.map(r => r.id)).toEqual([lesson.id]);
+  expect(() => validateTrainingInput({ kind: "workflow", instruction: "Help", visualFlowId: "sales", visualNodeId: "details" })).not.toThrow();
+  expect(() => validateTrainingInput({ kind: "style", instruction: "Help", visualFlowId: "sales" })).toThrow();
+  expect(() => validateTrainingInput({ kind: "workflow", instruction: "Help", visualFlowId: "sales", workflowId: "11111111-1111-4111-8111-111111111111" })).toThrow();
+});

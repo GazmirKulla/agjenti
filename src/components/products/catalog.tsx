@@ -118,6 +118,7 @@ export function ProductCatalog({
         if (!result.error) {
           setSelected([]);
           setBulkOpen(false);
+          setWorkflowId("");
           router.refresh();
         }
       } catch {
@@ -150,8 +151,9 @@ export function ProductCatalog({
         ...current,
         [product.id]: { error: result.error, success: result.success },
       }));
-      if (!result.error && result.product) {
-        setRowUpdates((current) => ({
+      if (!result.error) {
+        if (!result.product) setRowUpdates(current => { const next = { ...current }; delete next[product.id]; return next; });
+        if (result.product) setRowUpdates((current) => ({
           ...current,
           [product.id]: result.product!,
         }));
@@ -448,9 +450,9 @@ export function ProductCatalog({
                   ))}
                 </select>
               </label>
-              <EntityFlowLink slug={slug} kind="product" id={configProduct.id} binding={configProduct.visual_workflow} />
-              {!configProduct.visual_workflow && <label className="form-label">
-                Konfigurim ekzistues i porosisë (opsional)
+              <EntityFlowLink slug={slug} kind="product" id={configProduct.id} binding={configProduct.visual_workflow} draft={configProduct.visual_draft} />
+              {<label className="form-label">
+                Workflow për produktin
                 <select
                   className="field"
                   value={
@@ -469,7 +471,7 @@ export function ProductCatalog({
                     )
                   }
                 >
-                  <option value="">Pa workflow</option>
+                  <option value="">Pa konfigurim linear</option>
                   {configProduct.workflow_id &&
                     !workflows.some(
                       (workflow) => workflow.id === configProduct.workflow_id,

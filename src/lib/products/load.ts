@@ -1,3 +1,4 @@
+import { loadVisualFlowChoices } from "@/lib/workflows/visual/choices";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
@@ -10,7 +11,7 @@ export const loadProducts = cache(async (slug: string) => {
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const [products, types, workflows, bindings] = await Promise.all([
+  const [products, types, workflows, bindings, choices] = await Promise.all([
     db
       .from("products")
       .select(productCatalogColumns)
@@ -27,6 +28,7 @@ export const loadProducts = cache(async (slug: string) => {
       .eq("business_id", access.business.id)
       .order("name"),
     loadVisualBindings(access.business.id),
+    loadVisualFlowChoices(access.business.id),
   ]);
   if (products.error || types.error || workflows.error)
     throw new Error("Nuk u ngarkua katalogu.");
@@ -34,9 +36,10 @@ export const loadProducts = cache(async (slug: string) => {
     business: access.business,
     products: ((products.data ?? []) as ProductRow[]).map(product => {
       const binding = bindings.enabled && bindings.versionId ? bindings.products.find(item => item.id === product.id) : undefined;
-      return { ...product, visual_workflow: binding && bindings.versionId ? { versionId: bindings.versionId, flowId: binding.flowId, name: binding.flowLabel } : null };
+      const draft = choices.flows.find(f => f.productIds.includes(product.id));
+      return { ...product, visual_draft: draft ? { id: draft.id, name: draft.name, status: draft.status } : null, visual_workflow: binding && bindings.versionId ? { versionId: bindings.versionId, flowId: binding.flowId, name: binding.flowLabel } : null };
     }),
     types: (types.data ?? []) as Option[],
-    workflows: (workflows.data ?? []) as Option[],
+    workflows: [...choices.flows.filter(f => f.inDraft).map(f => ({ id: `visual:${choices.revision}:${f.id}`, name: `${f.name} · Vizual · ${f.status}`, description: "Lidhja ruhet si draft." })), ...(workflows.data ?? []).map(w => ({ ...w, name: `${w.name} · Linear` }))] as Option[],
   };
 });

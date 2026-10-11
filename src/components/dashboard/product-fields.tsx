@@ -12,6 +12,7 @@ type ProductFieldValues = {
   product_type_id?: string | null;
   workflow_id?: string | null;
   is_active?: boolean;
+  visual_draft?: { id: string; name: string; status: string } | null;
   visual_workflow?: { flowId: string; name: string } | null;
 };
 
@@ -111,8 +112,8 @@ export function ProductFields({
 
       <fieldset id="product-process" className="grid gap-3">
         <legend className="font-semibold">Procesi i porosisë</legend>
-        {product?.id && <EntityFlowLink slug={slug} kind="product" id={product.id} binding={product.visual_workflow} />}
-        {!product?.id && <p className="muted-copy">Ruaj produktin si draft, pastaj lidhe drejtpërdrejt me një rrjedhë te Workflow.</p>}
+        {product?.id && <EntityFlowLink slug={slug} kind="product" id={product.id} binding={product.visual_workflow} draft={product.visual_draft} />}
+        <p className="muted-copy">Lidhjet vizuale ruhen si draft. Publikoji te Workflow përpara aktivizimit.</p>
         <label className="form-label">
           Lloji i produktit
           <select
@@ -131,14 +132,15 @@ export function ProductFields({
             ))}
           </select>
         </label>
-        {product?.visual_workflow ? <input type="hidden" name="workflow_id" value={product.workflow_id ?? ""} /> : <label className="form-label">
-          Konfigurim ekzistues i porosisë (opsional)
+        {<label className="form-label">
+          Workflow për produktin
           <select
             name="workflow_id"
+            key={workflows.map(workflow => workflow.id).join("|")}
             className="field"
             defaultValue={product?.workflow_id ?? ""}
           >
-            <option value="">Pa workflow</option>
+            <option value="">{product?.visual_workflow || product?.visual_draft ? "Ruaj lidhjen vizuale ekzistuese" : "Pa workflow"}</option>
             {workflows.map((workflow) => (
               <option key={workflow.id} value={workflow.id}>
                 {workflow.name}

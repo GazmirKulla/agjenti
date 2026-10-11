@@ -99,6 +99,8 @@ function pickProduct<T extends { id: string; name: string }>(
  * Caller is responsible for authorization and, for real turns, persistence/send.
  */
 export type AgentTurnParams = {
+  /** Set only by the validated visual executor, never from a client request. */
+  trainingVisualScope?: { flowId: string; nodeId: string };
   /** Server-owned, customer-scoped lookup; previews receive an isolated implementation. */
   orderStatusTurn?: (state: ConversationStatePayload) => Promise<AgentTurnResult>;
   orderStatusRequest?: boolean;
@@ -199,7 +201,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   const products = productResult.data ?? [];
   const agent = agentResult.data;
   function trainingFor(workflowId: string | null, stepKey: string | null | undefined) {
-    const context = selectTrainingContext(trainingMemories, workflowId, stepKey, params.message);
+    const context = selectTrainingContext(trainingMemories, workflowId, stepKey, params.message, params.trainingVisualScope);
     if (context.rules.length) trace?.({ stage: "context", label: "Business training selected", data: { workflowId, stepKey, rules: context.rules } });
     return context;
   }

@@ -3,6 +3,7 @@ const m = vi.hoisted(() => ({
   user: vi.fn(),
   access: vi.fn(),
   from: vi.fn(),
+  rpc: vi.fn(),
   update: vi.fn(),
   insert: vi.fn(),
   bindings: vi.fn(),
@@ -14,14 +15,15 @@ vi.mock("@/lib/tenant/access", () => ({
   requireBusinessAccess: m.access,
 }));
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceSupabase: () => ({ from: m.from }),
+  createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-import { bulkConfigureProducts, createProduct, updateProduct } from "./actions";
+import { bulkConfigureProducts, createProduct, importProductBatch, updateProduct } from "./actions";
 let rows: Record<string, unknown>[];
 const id = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => {
   vi.clearAllMocks();
+  m.rpc.mockResolvedValue({ data: 1, error: null });
   m.bindings.mockResolvedValue(new Map());
   rows = [
     { id, product_type_id: "type", workflow_id: "workflow", price_amount: 25 },
@@ -83,6 +85,21 @@ const payload = {
   mode: "activate" as const,
 };
 describe("catalog writes", () => {
+  it.each(["create", "update", "import", "bind"] as const)("saves %s with its visual draft binding in one transaction", async (mode) => {
+    const form = new FormData();
+    Object.entries({ name: "Puzzle", price: "790", currency: "ALL", workflow_id: "visual:2:info", product_id: id, updated_at: "2026-10-11T10:00:00Z" }).forEach(([key, value]) => form.set(key, value));
+    const result = mode === "create" ? await createProduct("test", form)
+      : mode === "update" ? await updateProduct("test", form)
+      : mode === "import" ? await importProductBatch("test", { items: [{ name: "Puzzle", price: 790 }], workflowId: "visual:2:info" })
+      : await bulkConfigureProducts("test", { ...payload, workflowId: "visual:2:info", mode: "map" });
+    expect(result).toHaveProperty("success", expect.any(String));
+    expect(m.rpc).toHaveBeenCalledExactlyOnceWith("save_products_with_visual_flow", expect.objectContaining({
+      p_business: "business", p_user: "user", p_revision: 2, p_flow: "info", p_mode: mode,
+    }));
+    expect(m.insert).not.toHaveBeenCalled();
+    expect(m.update).not.toHaveBeenCalled();
+    if (mode === "update") expect(m.rpc.mock.calls[0][1].p_products[0]).toMatchObject({ id, expected_updated_at: "2026-10-11T10:00:00Z" });
+  });
   it("enforces authentication and tenant ownership for bulk edits", async () => {
     m.user.mockResolvedValue(null);
     expect((await bulkConfigureProducts("test", payload)).error).toBeTruthy();

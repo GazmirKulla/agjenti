@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionUser, isPlatformAdmin, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isUuid, MEMORY_LIMIT, validateTrainingInput, type TrainingInput, type TrainingMemory, type TrainingTarget, type TrainingWorkflow } from "./model";
+import { loadVisualFlowChoices } from "@/lib/workflows/visual/choices";
 import { readTrainingReceipt } from "./receipt";
 
 async function accessTraining(target: TrainingTarget) {
@@ -19,7 +20,7 @@ async function accessTraining(target: TrainingTarget) {
   return { userId: user.id, business: result.data as { id: string; slug: string } };
 }
 function databaseError(code?: string): never {
-  if (["42P01", "PGRST205"].includes(code ?? "")) throw new Error("Trajnimi kërkon migrimin e ri të databazës. Kontakto administratorin.");
+  if (["42P01", "PGRST205", "42703", "PGRST204"].includes(code ?? "")) throw new Error("Trajnimi kërkon migrimin e ri të databazës. Kontakto administratorin.");
   throw new Error("Ndryshimi nuk u ruajt. Rifresko dhe provo përsëri.");
 }
 function refresh(slug: string) {
@@ -28,19 +29,25 @@ function refresh(slug: string) {
 }
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Trajnimi nuk u përfundua. Provo përsëri.";
 
-export async function listAgentTraining(target: TrainingTarget): Promise<{ memories: TrainingMemory[]; workflows: TrainingWorkflow[] } | { error: string }> {
+export async function listAgentTraining(target: TrainingTarget): Promise<{ memories: TrainingMemory[]; workflows: TrainingWorkflow[]; migrationRequired?: boolean } | { error: string }> {
   try {
     const { business } = await accessTraining(target);
     const db = createServiceSupabase();
-    const [memories, workflows] = await Promise.all([
-      db.from("agent_training_memories").select("id,business_id,kind,instruction,customer_message,desired_response,workflow_id,step_key,is_active,revision,updated_at").eq("business_id", business.id).order("updated_at", { ascending: false }).limit(MEMORY_LIMIT),
+    const [visual, loadedMemories, workflows] = await Promise.all([
+      loadVisualFlowChoices(business.id),
+      db.from("agent_training_memories").select("id,business_id,kind,instruction,customer_message,desired_response,workflow_id,step_key,visual_flow_id,visual_node_id,is_active,revision,updated_at").eq("business_id", business.id).order("updated_at", { ascending: false }).limit(MEMORY_LIMIT),
       db.from("workflows").select("id,name").eq("business_id", business.id).order("name").limit(200),
     ]);
+    const migrationRequired = Boolean(loadedMemories.error && ["42703", "PGRST204"].includes(loadedMemories.error.code));
+    let memories: { data: TrainingMemory[] | null; error: { code: string } | null } = loadedMemories;
+    if (memories.error && ["42703", "PGRST204"].includes(memories.error.code)) {
+      memories = await db.from("agent_training_memories").select("id,business_id,kind,instruction,customer_message,desired_response,workflow_id,step_key,is_active,revision,updated_at").eq("business_id", business.id).order("updated_at", { ascending: false }).limit(MEMORY_LIMIT);
+    }
     if (memories.error) databaseError(memories.error.code);
     if (workflows.error) databaseError(workflows.error.code);
     const definitions = workflows.data?.length ? await db.from("workflow_steps").select("workflow_id,key,config").in("workflow_id", workflows.data.map(w => w.id)).order("position").limit(4000) : { data: [], error: null };
     if (definitions.error) databaseError(definitions.error.code);
-    return { memories: (memories.data ?? []) as TrainingMemory[], workflows: (workflows.data ?? []).map(w => ({ ...w, steps: (definitions.data ?? []).filter(s => s.workflow_id === w.id).map(s => ({ key: s.key, label: typeof s.config?.label === "string" ? s.config.label : s.key })) })) };
+    return { migrationRequired, memories: (memories.data ?? []) as TrainingMemory[], workflows: [...visual.flows.map(f => ({ id: `visual:${f.id}`, visualFlowId: f.id, name: f.name, status: f.status, steps: f.steps })), ...(workflows.data ?? []).map(w => ({ ...w, steps: (definitions.data ?? []).filter(s => s.workflow_id === w.id).map(s => ({ key: s.key, label: typeof s.config?.label === "string" ? s.config.label : s.key })) }))] };
   } catch (error) { return { error: errorMessage(error) }; }
 }
 
@@ -60,13 +67,24 @@ export async function saveAgentTraining(target: TrainingTarget, input: TrainingI
         if (step.error || !step.data) throw new Error("Ky hap nuk ekziston në workflow. Rifresko listën.");
       }
     }
+    if (input.visualFlowId) {
+      const choices = await loadVisualFlowChoices(business.id);
+      const flow = choices.flows.find(f => f.id === input.visualFlowId);
+      if (!flow || (input.visualNodeId && !flow.steps.some(n => n.key === input.visualNodeId))) throw new Error("Rrjedha ose hapi nuk gjendet në këtë biznes. Rifresko listën.");
+    }
     const values = {
       kind: input.kind, instruction: input.instruction.trim(), customer_message: input.kind === "example" ? input.customerMessage?.trim() ?? "" : "", desired_response: input.kind === "example" ? input.desiredResponse?.trim() ?? "" : "",
-      workflow_id: input.workflowId ?? null, step_key: input.stepKey ?? null, updated_by: userId,
+      workflow_id: input.workflowId ?? null, step_key: input.stepKey ?? null, visual_flow_id: input.visualFlowId ?? null, visual_node_id: input.visualNodeId ?? null, updated_by: userId,
     };
-    const result = input.id
-      ? await db.from("agent_training_memories").update(values).eq("business_id", business.id).eq("id", input.id).eq("revision", input.revision!).select("id").maybeSingle()
-      : await db.from("agent_training_memories").insert({ ...values, business_id: business.id, created_by: userId, source: receipt ? "test_feedback" : "manual" }).select("id").single();
+    const persist = (payload: Record<string, unknown>) => input.id
+      ? db.from("agent_training_memories").update(payload).eq("business_id", business.id).eq("id", input.id).eq("revision", input.revision!).select("id").maybeSingle()
+      : db.from("agent_training_memories").insert({ ...payload, business_id: business.id, created_by: userId, source: receipt ? "test_feedback" : "manual" }).select("id").single();
+    let result = await persist(values);
+    if (result.error && ["42703", "PGRST204"].includes(result.error.code) && !input.visualFlowId) {
+      const legacyValues: Record<string, unknown> = { ...values };
+      delete legacyValues.visual_flow_id; delete legacyValues.visual_node_id;
+      result = await persist(legacyValues);
+    }
     if (result.error) {
       if (result.error.message?.includes("training_memory_limit")) throw new Error(`Ky biznes ka arritur ${MEMORY_LIMIT} mësime. Hiq një mësim përpara se të shtosh tjetër.`);
       databaseError(result.error.code);
