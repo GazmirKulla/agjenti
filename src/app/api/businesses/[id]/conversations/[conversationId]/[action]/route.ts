@@ -36,7 +36,7 @@ export async function POST(
     const setup = await loadSetupStatus(businessId);
     if (!setup.connected || (!setup.launched && !isReady(setup)))
       return NextResponse.json(
-        { error: "Lidh Instagram-in dhe përfundo konfigurimin nga Dashboard." },
+        { error: "Lidh Instagram-in ose WhatsApp-in dhe përfundo konfigurimin nga Dashboard." },
         { status: 409 },
       );
   }
