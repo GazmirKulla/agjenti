@@ -171,6 +171,16 @@ it("keeps pre-pilot production booking behavior behind the single entry point", 
   await processConversationMessage({ businessId: "business", message: "Dua rezervim", hasPhoto: false, state: emptyState(), mode: "production" });
   expect(mocks.booking).toHaveBeenCalledWith(expect.not.objectContaining({ routed: true }));
 });
+it("keeps legacy Instagram routing while passing the queue guard to effects", async () => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  const bookingGuard = { jobId: 1, leaseToken: "lease", conversationId: "conversation", revision: 4 };
+  const state = emptyState();
+  mocks.booking.mockResolvedValueOnce(null);
+  await processConversationMessage({ businessId: "business", source: "instagram", message: "M", hasPhoto: false, state, mode: "production", bookingGuard });
+  expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ state, bookingGuard }));
+  expect(mocks.guidance).not.toHaveBeenCalled();
+  expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ bookingGuard }));
+});
 
 it("treats a bare contact channel after handoff as support rather than an order", async () => {
   const state = emptyState(); state.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: ["staff"], values: {}, advisory: true };

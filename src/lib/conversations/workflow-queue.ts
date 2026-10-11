@@ -1,6 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
-import { sharedWorkflowEnabled } from "@/lib/workflows/context";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import { channelAdapter } from "./channel";
@@ -17,14 +16,14 @@ export type WorkflowJob = {
     reply: string | null;
 };
 export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage) {
-    if ((message.channel !== "whatsapp" && !process.env.SHARED_WORKFLOW_BUSINESS_IDS?.trim()) || isMetaDashboardTestMessage(message))
+    if (isMetaDashboardTestMessage(message))
         return false;
     const db = createServiceSupabase();
     const adapter = channelAdapter(message.channel);
     const { data: connection, error } = await db.from(adapter.table).select("id,business_id").eq(adapter.account, message.contextMetadata?.[adapter.metadata]).eq("status", "connected").maybeSingle();
     if (error)
         throw new Error("Queue connection lookup failed");
-    if (!connection || (message.channel !== "whatsapp" && !sharedWorkflowEnabled(connection.business_id)))
+    if (!connection)
         return false;
     const { error: insertError } = await db.from("workflow_inbound_queue").upsert({ business_id: connection.business_id, channel: message.channel, connection_id: connection.id, participant_id: message.externalParticipantId, external_id: message.externalMessageId, payload: message }, { onConflict: "connection_id,external_id", ignoreDuplicates: true });
     if (insertError)
@@ -58,12 +57,12 @@ async function sendPrepared(job: WorkflowJob) {
         throw new Error("Send receipt unavailable");
 }
 export async function runWorkflowQueue(maxJobs = 10) {
-    const businesses = (process.env.SHARED_WORKFLOW_BUSINESS_IDS ?? "").split(",").map(s => s.trim()).filter(s => /^[0-9a-f-]{36}$/i.test(s));
     const db = createServiceSupabase();
     let processed = 0;
     const started = Date.now();
     for (let i = 0; i < maxJobs && Date.now() - started < 45000; i++) {
-        const { data, error } = await db.rpc("claim_workflow_inbound", { p_businesses: businesses });
+        // Transport safety applies to every tenant, independently of workflow rollout.
+        const { data, error } = await db.rpc("claim_workflow_inbound", { p_businesses: null });
         if (error)
             throw new Error("Queue claim failed");
         const job = data?.[0] as WorkflowJob | undefined;

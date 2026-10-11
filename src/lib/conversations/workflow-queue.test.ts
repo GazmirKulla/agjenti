@@ -44,9 +44,16 @@ it("does not expose a reply as prepared if the atomic commit fails", async () =>
     expect(queued.status).toBe("processing");
 });
 it("persists inbound events with idempotency before processing", async () => {
+    vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
     const message = { channel: "instagram", externalMessageId: "event", externalParticipantId: "person", contextMetadata: { instagramAccountId: "account" }, timestamp: new Date(), rawPayload: {}, attachments: [] } as unknown as NormalizedIncomingMessage;
     expect(await enqueueWorkflowMessage(message)).toBe(true);
     expect(m.writes).toContainEqual([expect.objectContaining({ participant_id: "person", external_id: "event", business_id: business }), { onConflict: "connection_id,external_id", ignoreDuplicates: true }]);
+});
+it("claims every tenant independently of the shared workflow pilot", async () => {
+    vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+    m.rpc.mockResolvedValue({ data: [], error: null });
+    await runWorkflowQueue();
+    expect(m.rpc).toHaveBeenCalledWith("claim_workflow_inbound", { p_businesses: null });
 });
 
 it.each([true,false])("pauses only actual staff ownership, advisory=%s",async advisoryHandoff=>{

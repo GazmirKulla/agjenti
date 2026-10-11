@@ -130,9 +130,10 @@ export async function processConversationMessage(params: ConversationMessagePara
     setOrderStatusLookup(params.state!);
   }
   if (params.linearPreview) return processAgentTurn(params);
-  if (params.mode !== "test" && !params.bookingGuard && params.state?.schemaVersion !== 3 && !params.visualPreview) {
-    if (sharedWorkflowEnabled(params.businessId)) throw new Error("workflow_queue_required");
-    // Keep the existing production behavior until this tenant's queue/migration pilot is enabled.
+  const legacyInstagram = params.source === "instagram" && !sharedWorkflowEnabled(params.businessId);
+  if (params.mode !== "test" && (!params.bookingGuard || legacyInstagram) && params.state?.schemaVersion !== 3 && !params.visualPreview) {
+    if (sharedWorkflowEnabled(params.businessId) && !params.bookingGuard) throw new Error("workflow_queue_required");
+    // Queue ownership does not opt legacy Instagram conversations into a new router.
     return await processBookingTurn(params) ?? processAgentTurn(params);
   }
   let state = migrateConversationProcesses(params.state, randomUUID);

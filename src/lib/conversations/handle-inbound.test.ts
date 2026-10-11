@@ -4,9 +4,10 @@ const mocks = vi.hoisted(() => ({
   process: vi.fn(),
   send: vi.fn(),
   whatsappSend: vi.fn(),
+  rpc: vi.fn(),
 }));
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceSupabase: () => ({ from: mocks.from }),
+  createServiceSupabase: () => ({ from: mocks.from, rpc: mocks.rpc }),
 }));
 vi.mock("./process-conversation-message", () => ({ processConversationMessage: mocks.process }));
 vi.mock("@/lib/crypto/tokens", () => ({
@@ -332,3 +333,15 @@ it("preserves the advisory cursor on the next live inbound turn",async()=>{
   expect(writes).toContainEqual(expect.objectContaining({ table: "messages", data: expect.objectContaining({ whatsapp_connection_id: "connection-a", direction: "inbound" }) }));
   expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ source: "whatsapp", customerIdentity: expect.objectContaining({ channel: "whatsapp" }) }));
  });
+
+it("commits a non-pilot Instagram turn with a revision and lease before the queue sends it", async () => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  mocks.rpc.mockResolvedValue({ error: null });
+  const job = { id: 1, business_id: "business-a", connection_id: "connection-a", participant_id: message.externalParticipantId, payload: message, status: "processing", lease_token: "lease-a", reply: null };
+  await handleInboundMessage(message, job);
+  expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_id: 1, p_token: "lease-a", p_revision: 0, p_conversation: "conversation-a" }));
+  expect(writes.filter(w => w.table === "conversation_states" && w.operation === "upsert")).toEqual([]);
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(job.status).toBe("prepared");
+  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: emptyState(), bookingGuard: expect.objectContaining({ revision: 0, leaseToken: "lease-a" }) }));
+});

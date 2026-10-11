@@ -11,6 +11,7 @@ import {
 import {
 	type InstagramWebhookPayload,
 	parseInstagramWebhookPayload,
+	isMetaDashboardTestMessage,
 } from "@/lib/instagram/parse-webhook";
 
 export const maxDuration = 180;
@@ -64,11 +65,14 @@ export async function POST(request: Request) {
 			matchedSecret: verified.matched,
 		});
 
-		const legacy: typeof messages=[];
-		for(const message of messages) { if(!await enqueueWorkflowMessage(message)) legacy.push(message); }
+		for (const message of messages) {
+			// Only Meta's synthetic dashboard event bypasses the durable queue.
+			if (isMetaDashboardTestMessage(message)) await handleInboundMessage(message);
+			else await enqueueWorkflowMessage(message);
+		}
 		after(async () => {
 			try {
-				await Promise.all([runWorkflowQueue(), ...legacy.map((message) => handleInboundMessage(message))]);
+				await runWorkflowQueue();
 			} catch (err) {
 				console.error("[meta webhook][POST] processing error:", err);
 			}
