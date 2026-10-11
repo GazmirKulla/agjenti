@@ -134,7 +134,7 @@ it("preserves order and booking through information interruptions and task resum
 it("does not let yes after an informational question confirm an earlier task", async () => {
   const info = await turn("Sa kushton?", order());
   const next = await turn("Po", info.nextState);
-  expect(next.conversationRouting?.action).toBe("clarify");
+  expect(next.conversationRouting?.action).toBe("answer");
   expect(mocks.agent).not.toHaveBeenCalled();
   expect(mocks.booking).not.toHaveBeenCalled();
 });
@@ -255,7 +255,7 @@ it("answers existing order status without consuming an order or booking confirma
   expect(mocks.agent).not.toHaveBeenCalled();
   expect(mocks.booking).not.toHaveBeenCalled();
   expect(mocks.extract).not.toHaveBeenCalled();
-  expect((await turn("Po", next.nextState)).conversationRouting?.action).toBe("clarify");
+  expect((await turn("Po", next.nextState)).conversationRouting?.action).toBe("answer");
 });
 it("routes configured status nodes with the isolated callback and restores the active cursor", async () => {
   const state = migrateConversationProcesses(order(), () => "order-1");
@@ -290,7 +290,7 @@ it.each(["replace", "process"] as const)("does not accept a stale %s choice afte
   const status = await turn("Ku është porosia ime?", state);
   expect(status.nextState.processes?.pendingChoice).toBeUndefined();
   const next = await turn("Po", status.nextState);
-  expect(next.conversationRouting?.action).toBe("clarify");
+  expect(next.conversationRouting?.action).toBe("answer");
   expect(next.nextState.product_id).toBe("product");
   expect(next.nextState.processes?.order?.id).toBe("order-1");
   expect(mocks.agent).not.toHaveBeenCalled();
@@ -406,7 +406,7 @@ it("resumes isolated nonbookable service fields using their original graph and r
   const info = await turn("Sa kushton?", next.nextState);
   mocks.agent.mockClear();
   const stale = await turn("Po", info.nextState);
-  expect(stale.reply).toContain("Cilën kërkesë"); expect(mocks.agent).not.toHaveBeenCalled();
+  expect(stale.reply).toBe("Në rregull 😊"); expect(mocks.agent).not.toHaveBeenCalled();
   expect(stale.nextState.processes?.order?.snapshot.product_id).toBe("puzzle");
 });
 it("requires replacement confirmation before changing a booked service", async () => {
@@ -468,6 +468,7 @@ it("a new booking uses latest version and a fresh task after the previous bookin
 });
 it("declining a product replacement restores the old graph instead of using the new publication", async () => {
   const state = boundState(); state.processes!.pendingChoice = { kind: "replace", process: "order", message: "Dua Poster" };
+  state.recentMessages=[{role:"assistant",content:"Ta zëvendësojmë porosinë me Poster? Shkruaj Po ose Jo."}];
   mocks.version.mockImplementation(async (_b, id) => entityVersion(id ?? "latest"));
   await turn("Jo", state);
   expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: undefined, message: "Vazhdo porosinë", state: expect.objectContaining({ visual: expect.objectContaining({ versionId: "bound-v1" }) }) }));
@@ -479,7 +480,7 @@ it("an ambiguous entity question cannot leave an older confirmation owned by the
   const next = await turn("Puzzle", state);
   expect(next.nextState.processes?.promptOwner).toBeNull();
   mocks.entity.mockResolvedValue({});
-  expect((await turn("Po", next.nextState)).conversationRouting?.action).toBe("clarify");
+  expect((await turn("Po", next.nextState)).conversationRouting?.action).toBe("answer");
 });
 it.each(["test", "production"] as const)("derives inactive entity preview access only from trusted %s mode", async mode => {
   mocks.version.mockResolvedValue(entityVersion()); mocks.entity.mockResolvedValue(entityResult("puzzle"));
@@ -541,4 +542,21 @@ it("resolves a short follow-up against the latest topic, not a historical staff 
   const state = emptyState(); state.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: [], values: {} };
   const catalog = await turn("Sa kushton Montessori?", state);
   expect((await turn("ku?", catalog.nextState)).conversationRouting?.process).toBe("information");
+});
+
+it.each(["test", "production"] as const)("stops acknowledgement before either router in %s", async mode => {
+ const state=order(); state.recentMessages=[{role:"assistant",content:"Material PDF. Porosite në website."}];
+ const next=await processConversationMessage({businessId:"business",message:"Ok",state,hasPhoto:false,mode,source:"instagram"});
+ expect(next.reply).toBe("Në rregull 😊"); expect(next.nextState.product_id).toBe(state.product_id);
+ expect(next.nextState.step_key).toBe(state.step_key);
+ expect(mocks.booking).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.extract).not.toHaveBeenCalled();
+});
+it("retains the draft across deferral and resumes only on a clear order request",async()=>{
+ const paused=await turn("Ok, jo tani",order());
+ expect(paused.nextState.product_id).toBe("product");
+ expect(mocks.agent).not.toHaveBeenCalled();
+ const thanks=await turn("Faleminderit",paused.nextState);
+ const resumed=await turn("Vazhdo porosinë",thanks.nextState);
+ expect(mocks.agent).toHaveBeenCalledOnce();
+ expect(resumed.nextState.conversationPaused).toBeUndefined();
 });

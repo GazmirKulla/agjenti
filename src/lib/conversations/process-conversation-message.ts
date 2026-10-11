@@ -1,3 +1,4 @@
+import { conversationControl, resumeConversation } from "./conversation-control";
 import { randomUUID } from "node:crypto";
 import { processBookingTurn, type BookingDraft } from "@/lib/calendar/agent";
 import type { BookingEffectGuard } from "@/lib/calendar/service";
@@ -82,6 +83,9 @@ function explicitProfile(state: ConversationStatePayload, message: string, profi
 /** One message coordinator for Instagram, isolated chat and graph previews. Adapters own persistence/send. */
 export async function processConversationMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
   if (params.canAct && !(await params.canAct())) throw new Error("conversation_manually_paused");
+  const controlled = conversationControl(params);
+  if (controlled) return controlled;
+  params = resumeConversation(params);
   const statusRequested = isOrderStatusRequest(params.message) || isOrderStatusFollowUp(params.message, params.state);
   const statusTurn = async (state: ConversationStatePayload) => {
     const result = await customerOrderStatus({ businessId: params.businessId, message: params.message, state,
@@ -142,7 +146,12 @@ export async function processConversationMessage(params: ConversationMessagePara
   if (params.mode !== "test" && (!params.bookingGuard || legacyInstagram) && params.state?.schemaVersion !== 3 && !params.visualPreview) {
     if (sharedWorkflowEnabled(params.businessId) && !params.bookingGuard) throw new Error("workflow_queue_required");
     // Queue ownership does not opt legacy Instagram conversations into a new router.
-    return await processBookingTurn(params) ?? processAgentTurn(params);
+    const booking = await processBookingTurn(params);
+    if (booking) {
+      rememberTurn(params.state, booking.nextState, params.message, booking.reply);
+      return booking;
+    }
+    return processAgentTurn(params);
   }
   let state = await migrateState();
   const processes = state.processes!;

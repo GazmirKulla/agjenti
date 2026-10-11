@@ -121,6 +121,7 @@ export function resetOrder(state: ConversationStatePayload): ConversationStatePa
     next.processes = state.processes;
     next.completedVisual = state.completedVisual;
     next.recentMessages = state.recentMessages;
+    next.conversationPaused = state.conversationPaused;
     return next;
 }
 export function isQuestion(message: string) {

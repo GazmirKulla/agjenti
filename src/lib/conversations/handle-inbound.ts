@@ -1,3 +1,4 @@
+import { shortReply } from "./conversation-control";
 import { inboundBatch } from "./message-batch";
 import { randomUUID } from "node:crypto";
 import { InboundPersistenceError } from "./inbound-persistence-error";
@@ -337,7 +338,25 @@ export async function handleInboundMessage(
     ]);
     return !error && !businessError && current?.status === "active" && Boolean(current.auto_reply ?? business?.auto_reply ?? false);
   };
+  let deliveredReply: string | null = null;
+  if (shortReply(message.text ?? "")) {
+    const { data: outbound, error } = await supabase.from("messages")
+      .select("body,source,delivery_status").eq("business_id", businessId).eq("conversation_id", conversationId)
+      .eq("direction", "outbound").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (error) throw new Error("Latest prompt delivery unavailable");
+    if (outbound?.source === "agent" && outbound.delivery_status === "sent") deliveredReply = outbound.body;
+    if (job && deliveredReply) {
+      const { data: attempted, error: attemptError } = await supabase.from("workflow_inbound_queue")
+        .select("status,reply").eq("business_id", businessId).eq("conversation_id", conversationId)
+        .eq("connection_id", job.connection_id).eq("participant_id", job.participant_id)
+        .lt("id", job.id).not("reply", "is", null).order("id", { ascending: false }).limit(1).maybeSingle();
+      if (attemptError) throw new Error("Latest prompt attempt unavailable");
+      // An identical older sent reply is not proof that the latest attempt arrived.
+      if (!attempted || attempted.status !== "sent" || attempted.reply !== deliveredReply) deliveredReply = null;
+    }
+  }
   const turn = await processConversationMessage({
+    deliveredReply,
     conversationKey: conversationId,
     customerIdentity: { conversationId, instagramParticipantId: message.externalParticipantId, instagramConnectionId: conn.id, channel: message.channel },
     source: message.channel,

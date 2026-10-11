@@ -38,6 +38,8 @@ const message: NormalizedIncomingMessage = {
   contextMetadata: { instagramAccountId: "ig-a" },
   rawPayload: {},
 };
+let deliveryAttempt: {status:string;reply:string} | null;
+let outboundResult: { data: {body:string;source:string;delivery_status:string} | null; error: {message:string} | null };
 let paused = false;
 let auto = true;
 let webhookInsertCode: string | null = null;
@@ -52,6 +54,8 @@ let duplicateFilters: Record<string, unknown>;
 beforeEach(() => {
   vi.clearAllMocks();
   paused = false;
+  outboundResult = {data:null,error:null};
+  deliveryAttempt = null;
   auto = true;
   webhookInsertCode = null;
   savedState = emptyState();
@@ -81,6 +85,8 @@ beforeEach(() => {
         if (inboundException) throw inboundException;
         return inboundResult;
       }
+      if (table === "workflow_inbound_queue" && op === "select") return {data:deliveryAttempt,error:null};
+      if (table === "messages" && op === "select" && filters.direction === "outbound") return outboundResult;
       if (table === "messages" && op === "select") {
         duplicateFilters = filters;
         return duplicateResult;
@@ -127,6 +133,8 @@ beforeEach(() => {
       select: vi.fn(() => chain),
       eq: vi.fn((key: string, value: unknown) => { filters[key] = value; return chain; }),
       neq: vi.fn(() => chain),
+      lt: vi.fn(() => chain),
+      not: vi.fn(() => chain),
       in: vi.fn(() => chain),
       order: vi.fn(() => chain),
       limit: vi.fn(() => chain),
@@ -335,6 +343,8 @@ describe("real inbound integration with shared processor", () => {
         }),
         eq: vi.fn(() => chain),
         neq: vi.fn(() => chain),
+      lt: vi.fn(() => chain),
+      not: vi.fn(() => chain),
         in: vi.fn(() => chain),
         order: vi.fn(() => chain),
         limit: vi.fn(() => chain),
@@ -378,6 +388,8 @@ describe("real inbound integration with shared processor", () => {
     paused = true;
     await handleInboundMessage(message);
     paused = false;
+  outboundResult = {data:null,error:null};
+  deliveryAttempt = null;
     auto = false;
     await handleInboundMessage({ ...message, externalMessageId: "second" });
     expect(mocks.process).not.toHaveBeenCalled();
@@ -479,4 +491,29 @@ it("commits a non-pilot Instagram turn with a revision and lease before the queu
   expect(mocks.send).not.toHaveBeenCalled();
   expect(job.status).toBe("prepared");
   expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: emptyState(), bookingGuard: expect.objectContaining({ revision: 0, leaseToken: "lease-a" }) }));
+});
+
+
+it.each(["sent", "failed", "pending"])("passes only confirmed prompt delivery to the processor (%s)",async delivery_status=>{
+ outboundResult={data:{body:"Ta konfirmojmë porosinë?",source:"agent",delivery_status},error:null};
+ await handleInboundMessage({...message,text:"Po"});
+ expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({deliveredReply:delivery_status==="sent"?"Ta konfirmojmë porosinë?":null}));
+});
+it("does not use a staff reply as approval of an older agent prompt",async()=>{
+ outboundResult={data:{body:"Po",source:"staff",delivery_status:"sent"},error:null};
+ await handleInboundMessage({...message,text:"Ok"});
+ expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({deliveredReply:null}));
+});
+it("stops before the processor if delivery evidence cannot be read",async()=>{
+ outboundResult={data:null,error:{message:"unavailable"}};
+ await expect(handleInboundMessage({...message,text:"Po"})).rejects.toThrow("Latest prompt delivery unavailable");
+ expect(mocks.process).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();
+});
+
+it.each(["sent", "uncertain", "prepared"])("checks the latest queue attempt even when an old identical reply was sent (%s)",async status=>{
+ const body="Ta konfirmojmë porosinë?";
+ outboundResult={data:{body,source:"agent",delivery_status:"sent"},error:null};
+ deliveryAttempt={status,reply:body};
+ await handleInboundMessage({...message,text:"Po"},queuedJob());
+ expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({deliveredReply:status==="sent"?body:null}));
 });

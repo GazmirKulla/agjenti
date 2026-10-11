@@ -39,6 +39,8 @@ export type WorkflowStepDef = {
 };
 
 export type ConversationStatePayload = {
+  /** Customer acknowledged information or deferred; explicit intent is needed to resume. */
+  conversationPaused?: boolean;
   recentMessages?: import("./guidance").ConversationMessage[];
   revisitStep?: string;
   unorderedWorkflow?: boolean;

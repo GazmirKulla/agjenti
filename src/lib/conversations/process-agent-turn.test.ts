@@ -390,7 +390,7 @@ it("pins linear product versions and reuses a phone collected before product sel
   const second=await processAgentTurn({businessId:"business-a",message:"Emri: Ana; Qyteti: Tiranë; Adresa: Rruga A",hasPhoto:false,state:first.nextState});
   expect(second.nextState.context?.execution.linear?.versionId).toBe("version-a");
   expect(second.nextState.step_key).toBe("order_confirm");
-  const third=await processAgentTurn({businessId:"business-a",message:"po",hasPhoto:false,state:second.nextState});
+  const third=await processAgentTurn({businessId:"business-a",message:"po",hasPhoto:false,state:second.nextState,deliveredReply:second.reply});
   expect(third.nextState.step_key).toBe("order_ready");expect(third.reply).toContain("gati për stafin");
   expect(queries.some(q=>["orders","order_items","conversation_profiles"].includes(q.table))).toBe(false);
 });
@@ -445,7 +445,7 @@ it("reopens a known shared field, retains other facts and invalidates final appr
  expect(correction.nextState.customer).toEqual(state.customer);
  expect(correction.nextState.step_key).toBe("order_confirm");
  expect(correction.nextState.context?.execution.orderConfirmed).toBe(false);
- const confirmed=await processAgentTurn({businessId:"business-a",state:correction.nextState,message:"Po",hasPhoto:false});
+ const confirmed=await processAgentTurn({businessId:"business-a",state:correction.nextState,message:"Po",hasPhoto:false,deliveredReply:correction.reply});
  expect(confirmed.nextState.step_key).toBe("order_ready");
 });
 
@@ -558,4 +558,12 @@ it("asks which product to order when recent interest is ambiguous or no longer a
     const answer = await processLegacyAgentTurn({ businessId: "business-a", message: "Dua ta blej", state, hasPhoto: false, orderRequest: true });
     expect(answer.nextState.product_id).toBeNull();
   }
+});
+
+it("does not request customer details after OK acknowledging PDF information", async () => {
+ const state={...emptyState(),product_id:"product-a",step_key:"collect_customer",recentMessages:[{role:"assistant" as const,content:"Material PDF për shkarkim. Mund ta porosisni në website."}]};
+ const result=await processAgentTurn({businessId:"business-a",message:"Ok",state,hasPhoto:false,mode:"test"});
+ expect(result.reply).not.toMatch(/telefon|qytet|adres|cilin produkt/i);
+ expect(result.nextState.step_key).toBe("collect_customer");
+ expect(mocks.generate).not.toHaveBeenCalled();
 });

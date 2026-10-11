@@ -2,6 +2,7 @@
 
 Verifikuar më 11 tetor 2026, mbi commit `9e5445e7a9b38af4460e449507beee9363c1b8cc`.
 Plani burim: [AGJENTI_ASTRA_PLAN.md](AGJENTI_ASTRA_PLAN.md), kopje e pandryshuar e dokumentit të përdoruesit.
+Plani pasues: [AGJENTI_AGENTIC_ORCHESTRATION_PHASE2.md](AGJENTI_AGENTIC_ORCHESTRATION_PHASE2.md), kopje e pandryshuar e dokumentit të përdoruesit, shtuar më 11 tetor 2026. Ruajtja e tij si dokumentim nuk nis implementimin; përpara tij duhen verifikuar kushtet e Phase 1. “Phase 2” në titullin e këtij dokumenti është plani pasues i orkestrimit agentik, jo Faza 2 “Një coordinator” e tabelës më poshtë.
 Ky skedar mban progresin dhe korrigjimet ndaj auditimit fillestar; nuk shënon një fazë si të përfunduar vetëm sepse ekziston një pjesë e implementimit.
 
 ## Progresi
@@ -12,15 +13,64 @@ Ky skedar mban progresin dhe korrigjimet ndaj auditimit fillestar; nuk shënon n
 | 1.1 — Migrimi v2 → v3 | Përfunduar, push `a8dda95` | Cursor-i klasifikohet me graph-in e fiksuar dhe ruhet te procesi përkatës. 23 teste të reja; deployment-i i këtij commit-i nuk është verifikuar. |
 | 1.2 — Konkurrenca Instagram | Verifikimi përfunduar lokalisht | Korrigjimi i queue është publikuar më herët. Provat e zgjeruara kalojnë për FIFO, revision, cursor, participantë të ndryshëm dhe duplicate webhook; pa ndryshim të motorit. |
 | 1.3 — Dështimi i ruajtjes inbound | Push `5c7f0ff` | Ruajtja konfirmohet përpara processor-it; duplicate verifikohet në bisedën përkatëse. 15 teste të reja; deployment-i nuk është verifikuar. |
-| Shtesë — Mesazhe të njëpasnjëshme | Migrimi aplikuar në production; kodi gati për push | Grupim Instagram 3s/10s/20 mesazhe, ruajtje e origjinaleve dhe njohje më e mirë e emrave. Shih kufijtë e provës më poshtë. |
+| Shtesë — Mesazhe të njëpasnjëshme | Migrimi aplikuar në production; push `b5bcc25`, deployment Vercel i konfirmuar | Grupim Instagram 3s/10s/20 mesazhe, ruajtje e origjinaleve dhe njohje më e mirë e emrave. Shih kufijtë e provës më poshtë. |
 | 2 — Një coordinator | Në pritje | Siguria e queue nuk nënkupton kalim global në schema-v3. |
 | 3 — Konteksti/handoff | Në pritje | Ka suspend/resume dhe retention, por edhe early returns pa finalizim. |
+| 3.2A — Përgjigje të shkurtra dhe qëllimi i klientit | Kontrolli i avancimit implementuar lokalisht; verifikimi live dhe fushat sipas përmbushjes mbeten | “OK” pas informacionit nuk nis/rifillon porosi dhe nuk kërkon të dhëna. Specifikimi dhe provat më poshtë; zgjerim i Fazës 3.2 të planit burim. |
 | 4 — Delivery/queue | Pjesërisht ekziston | Ka prepared/sending/sent/uncertain; mungojnë pjesë të politikës së gabimeve dhe kontrollit të dërgimit. |
 | 5 — Pariteti test/production | Në pritje | Adapterët dhe previews kanë dallime të dokumentuara. |
 | 6 — Aftësitë e biznesit | Në pritje | Verifiko dhe ripërdor kontrollet ekzistuese të moduleve/shërbimeve para zgjerimit. |
 | 7 — Roadmap | Jashtë implementimit aktual | Kërkon kërkesë dhe miratim të veçantë. |
 
 Ritmi: një fazë ose nënfazë e kufizuar → test që riprodhon problemin → ndryshim minimal → verifikim → përditësim i këtij statusi. Publikimi i korrigjimit të mëparshëm nuk autorizon automatikisht rollout global të coordinator-it.
+
+## Faza 3.2A — Përgjigje të shkurtra dhe qëllimi i klientit
+
+**Statusi:** planifikuar më 11 tetor 2026; kontrolli i avancimit u implementua lokalisht pas miratimit të përdoruesit. Zgjeron Fazën 3.2 të dokumentit burim, që ruhet i pandryshuar. Duhet verifikuar përpara rollout-it global të coordinator-it, në bashkërendim me historikun e Fazës 3.1 dhe konfirmimin e dërgimit të Fazës 4.1.
+
+**Rasti i raportuar:** pas informacionit për materialet PDF dhe linkut të Filiz Studio, klienti shkruan “Ok”. Agjenti përgjigjet “Na jepni telefonin, qytetin, adresën.” Përdoruesi sqaron se kishte marrë informacionin dhe nuk dëshironte të vazhdonte. Screenshot-i dëshmon sjelljen; shkaku në kod/state duhet riprodhuar përpara korrigjimit.
+
+**Objektivi:** agjenti dallon marrjen e informacionit, mbylljen e bisedës, pranimin e një propozimi konkret dhe kërkesën për veprim. Një përgjigje e shkurtër interpretohet sipas mesazhit të fundit të dërguar realisht dhe procesit aktiv, jo vetëm sipas fjalës ose cursor-it të mbetur.
+
+### Sjellja e kërkuar
+
+- Pas informacionit, “ok”, “në rregull”, “faleminderit” ose një reagim i shkurtër nuk janë vetvetiu miratim porosie. Agjenti mund ta mbyllë shkurt, p.sh. “Në rregull 😊”, pa kërkuar të dhëna apo duke insistuar për blerje.
+- Pas një pyetjeje të drejtpërdrejtë për një veprim të përcaktuar, p.sh. “Ta vazhdojmë porosinë për Aktivitetet Montessori?”, “po”/“ok” mund të pranohet vetëm për atë veprim. Pyetja duhet të jetë ende aktive, e dërguar me sukses dhe të mos jetë zëvendësuar nga një temë/propozim tjetër.
+- “Dua ta porosis” është qëllim i qartë: vazhdo procesin ekzistues pa shtuar miratime të panevojshme, duke respektuar kontrollet dhe konfirmimin përfundimtar që ai kërkon.
+- “Do ta mendoj”, “jo tani”, “vetëm po pyes” ndalin nxitjen drejt porosisë; ruaj kontekstin dhe draftin sipas politikës ekzistuese. “Anulo” trajtohet veçmas sipas rregullave të anulimit.
+- Një pyetje e ndërmjetme për çmimin ose produktin nuk plotëson fushën që pritej dhe nuk miraton porosinë. Një “ok” pas këtij shpjegimi nuk ringjall automatikisht miratimin e vjetër.
+- Kur është realisht e paqartë nëse klienti kërkon veprim, bëj vetëm një pyetje neutrale sqaruese. Mos shto pyetje sqaruese pas çdo falënderimi dhe mos e përsërit kërkesën nëse klienti nuk dëshiron të vazhdojë.
+- Kërko vetëm të dhënat e nevojshme për mënyrën e përmbushjes së porosisë së konfiguruar. Për PDF ose blerje në website, mos kërko automatikisht adresë fizike; mos supozo se chat-i e kryen porosinë kur procesi real vazhdon në website.
+
+### Hapat e implementimit
+
+1. Riprodho rastin me historikun dhe state-in përkatës; identifiko degën që e trajton “ok” si vazhdim. Kontrollo legacy, coordinator-in dhe rrjedhën vizuale, si edhe dallimet laborator/production.
+2. Përcakto një rregull të përbashkët për interpretimin e përgjigjes dhe për lejimin e avancimit. Ripërdor gjendjen ekzistuese për procesin, pyetjen dhe dërgimin; shto vetëm informacionin që mungon, me migrim të sigurt nëse nevojitet.
+3. Zbato kontrollin përpara avancimit të workflow-t ose efekteve në server. Udhëzimet për AI ndihmojnë interpretimin; një klasifikim i pasigurt ose dështim i modelit nuk mjafton për të miratuar veprim.
+4. Ruaj arsyen e vendimit në trace-in ekzistues, pa kopjuar të dhëna personale të panevojshme. Testo të njëjtët skenarë në laborator dhe rrugën reale të përpunimit.
+
+### Pranimi dhe provat
+
+- Informacion/link → “ok” ose “faleminderit”: asnjë kërkesë të dhënash, nisje/rifillim porosie apo efekt biznesi. Regjistrimi i mesazhit dhe historikut vazhdon normalisht.
+- Propozim konkret i dërguar → “po”: avancon vetëm procesin përkatës; një përgjigje e shkurtër e vlefshme nuk humbet.
+- Propozim i vjetër, ndryshim teme ose dërgim i dështuar/pasigurt → “ok”: nuk konfirmon veprimin e vjetër.
+- “Dua ta porosis” vazhdon; “jo tani” pezullon; “anulo” ndjek anulimin ekzistues. Draftet dhe komponentët ekzistues ruhen.
+- Pyetje për çmim gjatë mbledhjes së të dhënave: jep informacionin pa konsumuar fushën dhe pa shtyrë klientin në hapin pasues.
+- PDF/website kundrejt dërgesës fizike: të dhënat kërkohen sipas procesit të konfiguruar.
+- Provo edhe grupin “ok” + “jo tani” dhe webhook-un e përsëritur: vlerëso gjithë mesazhin e grupuar dhe mos dyfisho avancimin/efektet.
+- Testet me AI të simuluar dhe fallback kalojnë; prova e kontrolluar në aplikacion verifikon formulimin. Raporto veçmas kodin lokal, publikimin dhe provën reale; nuk premtohet interpretim pa gabime për çdo përgjigje njerëzore.
+
+**Kufiri:** kjo fazë përmirëson interpretimin dhe kalimet e proceseve ekzistuese. Nuk ridizenjon editorin dhe nuk shton mënyra të reja porosie, pagesash apo rezervimesh. Implementimi lokal u autorizua më pas; nuk është bërë push/deploy për këtë fazë.
+
+### Rezultati lokal i Fazës 3.2A
+
+- Rasti me produkt të zgjedhur, cursor `collect_customer`, shpjegim PDF/website dhe “Ok” u kthye në test regresioni: përpara korrigjimit mesazhi hynte përsëri në pipeline-in e produktit. Pas korrigjimit, ndalet përpara routing/extraction dhe nuk kërkon të dhëna. Ky riprodhim përdor katalog/model të simuluar; nuk është auditim i state-it të bisedës reale në screenshot.
+- `conversation-control.ts` zbaton të njëjtin kontroll në hyrjen e coordinator-it dhe të `processAgentTurn`, përfshirë degën legacy të Instagram-it dhe preview-t. “OK/faleminderit” pas informacionit mbyllen shkurt; shprehjet e njohura të shtyrjes/pasigurisë ruajnë draftin. `conversationPaused` ruhet në JSON-in ekzistues dhe kërkon qëllim të qartë për rifillim; nuk është pauzim administrativ/handoff.
+- Një përgjigje e shkurtër vazhdon vetëm kundrejt një propozimi/pyetjeje të njohur ende aktuale. Për production, inbound lexon përgjigjen e fundit outbound dhe tentativën e fundit të queue në të njëjtën bisedë/biznes/lidhje. Ato duhet të jenë `sent` dhe të përputhen me historikun. Gabimi i leximit ndalon përpunimin; një tentativë `prepared/uncertain` nuk justifikohet nga një përgjigje identike e dërguar më herët. Laboratori përdor historikun e vet të shfaqur. Dega legacy e rezervimeve tani regjistron edhe historikun e përgjigjes që prodhon.
+- Nuk shtohet thirrje AI për këtë kontroll. Rregullat janë konservative për format e mbuluara shqip/anglisht; nuk garantojnë interpretimin e çdo formulimi ose gjuhe. Një propozim i panjohur mund të kërkojë riformulim të qartë. Njoftimi/trace shënon arsyen pa shtuar të dhëna klientësh.
+- Verifikim: **1,182 teste / 150 skedarë** kaluan, si edhe typecheck dhe ESLint i skedarëve të ndryshuar. Më pas u shtuan tre raste pasigurie dhe kaluan të **27 testet** e kontrollit, typecheck dhe lint i modulit të ri. Mbulohen të dyja hyrjet, ruajtja/rifillimi i draftit, konfirmimi i vlefshëm, ndërprerjet informative, emoji, grupi “ok + jo tani”, dërgimi i pasigurt, mesazhi i stafit dhe dështimi i leximit të dëshmisë. Deduplikimi mbetet në queue-n e testuar ekzistuese.
+- **Të mbetura:** prova në aplikacion/Instagram dhe publikimi. Nuk u ndryshuan rregullat ekzistuese të fushave `customer` ose konfigurimi i biznesit: pas një kërkese eksplicite për porosi, workflow-t që kërkojnë adresë fizike ende e kërkojnë. Dallimi sistematik PDF/website/dërgesë fizike kërkon kontratë të qartë të përmbushjes; nuk u hamendësua nga emri ose përshkrimi i produktit. Prandaj kjo pjesë e pranimit mbetet e hapur dhe faza e plotë nuk shënohet e përfunduar.
+- Nuk nevojitet migrim SQL për kontrollin e ri. Ndryshimet e landing-ut mbeten jashtë kësaj pune. Nuk u dërguan mesazhe klientëve dhe nuk u ndryshuan të dhëna production.
 
 ## Rruga reale e mesazhit
 

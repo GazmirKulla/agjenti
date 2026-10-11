@@ -1,3 +1,4 @@
+import { conversationControl, resumeConversation } from "./conversation-control";
 import { matchingCatalogNames } from "@/lib/products/match-name";
 import { rememberTurn, chooseGuidance, clarification, invalidateConfirmation } from "@/lib/workflows/guidance";
 import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
@@ -76,6 +77,8 @@ function pickProduct<T extends { id: string; name: string }>(
  * Caller is responsible for authorization and, for real turns, persistence/send.
  */
 export type AgentTurnParams = {
+  /** Server-read latest outbound message; never supplied by a customer. */
+  deliveredReply?: string | null;
   /** Set only by the validated visual executor, never from a client request. */
   trainingVisualScope?: { flowId: string; nodeId: string };
   /** Server-owned, customer-scoped lookup; previews receive an isolated implementation. */
@@ -108,6 +111,9 @@ export type AgentTurnParams = {
   previousResponseId?: string | null;
 };
 export async function processAgentTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
+  const controlled = conversationControl(params);
+  if (controlled) return controlled;
+  params = resumeConversation(params);
   const turn = await processTurn(params);
   if (!params.orderStatusRequest && params.mode === "test" && params.attachmentContext && (params.hasAttachments || isQuestion(params.message))) {
     const answer = await processLegacyAgentTurn({ ...params, state: structuredClone(turn.nextState),
