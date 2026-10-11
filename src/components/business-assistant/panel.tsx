@@ -166,10 +166,16 @@ export function BusinessAssistant({
   useEffect(() => {
     const el = dialog.current;
     if (!el) return;
+    // Keep an open review above the assistant when switching to its mobile modal.
+    const childModals = Array.from(el.querySelectorAll<HTMLDialogElement>("dialog:modal"));
+    const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    childModals.forEach(child => child.close());
     if (el.open) el.close();
     if (open) {
       if (mobile) el.showModal();
       else el.show();
+      childModals.forEach(child => child.showModal());
+      if (childModals.some(child => focused && child.contains(focused))) focused?.focus();
     }
   }, [open, mobile]);
   useEffect(() => {

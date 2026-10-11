@@ -19,23 +19,16 @@
 .csv-ready small { color: var(--ink-muted); font-size: 12px; }
 .csv-main-action { margin: 8px 0; }
 .csv-import summary { cursor: pointer; padding: 8px 0; color: var(--ink-muted); font-size: 12px; }
-.csv-advanced { border-top: 1px solid var(--line); padding-top: 12px; }
-.csv-advanced > summary { padding: 0; }
-.csv-advanced[open] > summary { margin-bottom: 16px; }
 .csv-source-options { color: var(--ink-muted); font-size: 12px; }
 .csv-source-options > label { display: block; }
 .csv-source-options textarea { margin: 8px 0; font-size: 13px; }
 .csv-customize-body { display: grid; gap: 14px; padding: 16px 0; }
-.csv-preview { display: grid; gap: 12px; min-width: 0; }
-.csv-review-heading { display: flex; align-items: center; gap: 8px; font-size: 15px; }
-.csv-review-heading strong { font-weight: 600; }
 .csv-ai-review > summary { display: flex; align-items: center; gap: 8px; padding: 0; }
 .csv-ai-review > summary::after { content: '+'; margin-left: auto; }
 .csv-ai-review[open] > summary::after { content: '−'; }
 .csv-ai-review .csv-advice { margin-top: 12px; white-space: pre-wrap; line-height: 1.7; color: var(--ink-muted); }
 .csv-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px; color: var(--ink-muted); }
 .csv-summary [data-conflict=true] { color: #cf656d; }
-.csv-change-details > summary { width: fit-content; color: var(--ink); }
 .csv-results { max-height: 310px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 12px; margin-top: 8px; }
 .csv-results details { padding: 0 12px; overflow-wrap: anywhere; border-bottom: 1px solid var(--line); }
 .csv-results details:last-child { border-bottom: 0; }
@@ -64,3 +57,29 @@
 @keyframes csv-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .csv-spinner { animation: none; } }
 @media(max-width:480px) { .csv-import { padding: 16px; } .csv-row-status { max-width: 78px; } .csv-approval .btn { width: 100%; } }
+.csv-file-actions { display: flex; flex: none; gap: 2px; }
+.csv-result { display: grid; gap: 8px; justify-items: start; }
+.csv-result-title { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.csv-result-title strong { font-weight: 600; }
+.csv-result > p,.csv-result > small { color: var(--ink-muted); font-size: 12px; }
+.csv-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
+.csv-import .csv-text-button { padding: 4px 0; border: 0; background: transparent; color: var(--ink-muted); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.csv-import .csv-text-button:hover { color: var(--ink); text-decoration: underline; }
+.csv-dialog { width: min(700px,calc(100vw - 32px)); max-height: min(820px,calc(100dvh - 48px)); margin: auto; padding: 0; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 90px #0004; overflow: hidden; }
+.csv-dialog[open] { display: flex; flex-direction: column; }
+.csv-dialog::backdrop { background: #09081280; backdrop-filter: blur(4px); }
+.csv-dialog > header { display: flex; flex: none; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--line); gap: 16px; }
+.csv-dialog > header h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+.csv-import .csv-icon-button { display: grid; place-items: center; width: 36px; height: 36px; border: 0; background: transparent; color: var(--ink-muted); border-radius: 50%; cursor: pointer; }
+.csv-icon-button:hover { background: var(--paper); }
+.csv-dialog-content { display: grid; gap: 18px; padding: 24px; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.csv-dialog > footer { flex: none; padding: 16px 24px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
+.csv-dialog .csv-approval { flex: 1; padding: 0; }
+.csv-dialog .csv-results { max-height: none; overflow: visible; margin: 0; }
+.csv-dialog .csv-dialog-filename { color: var(--ink-muted); overflow-wrap: anywhere; font-size: 12px; }
+@media(max-width:480px) {
+  .csv-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 24px); border-radius: 18px; }
+  .csv-dialog > header,.csv-dialog > footer { padding: 14px 16px; }
+  .csv-dialog-content { padding: 16px; }
+  .csv-file-actions { flex-direction: column; }
+}
