@@ -336,3 +336,70 @@ it.each(["productIds", "serviceIds"])("rejects foreign or missing %s before crea
   expect(JSON.stringify(removal.preview)).toContain("padisponueshëm");
   expect(m.rpc).not.toHaveBeenCalled();
 });
+
+function catalogCounts(count = 73, error: unknown = null) {
+  const calls: { table: string; filters: [string, unknown][] }[] = [];
+  m.from.mockImplementation((table: string) => {
+    const call = { table, filters: [] as [string, unknown][] };
+    calls.push(call);
+    const query = {
+      select: () => query,
+      eq: (key: string, value: unknown) => { call.filters.push([key, value]); return query; },
+      order: () => query,
+      limit: async () => ({ data: [], error: null }),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ count, error }).then(resolve),
+    };
+    return query;
+  });
+  return calls;
+}
+
+it("reports the live main name and exact tenant counts without binding or activating products", async () => {
+  const calls = catalogCounts();
+  m.workspace.mockResolvedValue({ graph: { ...starterVisualGraph(), name: "Draft i ri" }, revision: 3, publishedVersionId: "version-a", enabled: true, available: true, generated: false, hasUnpublishedChanges: true });
+  m.version.mockResolvedValue({ graph: { ...upgradeVisualGraph(starterVisualGraph()), name: "Rrjedha e workflow 1" } });
+  const result = await prepareWorkflow({ ...access, modules: ["workflows", "products"] }, proposal("workflow_catalog"));
+  expect(result.message).toContain('“Rrjedha e workflow 1” është i publikuar dhe aktiv');
+  expect(result.message).toContain("73 aktive, 73 joaktive");
+  expect(result.message).toContain("ndryshime draft");
+  expect(result.message).toContain("Nuk duhet t’i lidhësh një nga një");
+  expect(result.token).toBeUndefined();
+  expect(m.rpc).not.toHaveBeenCalled();
+  expect(calls.filter(call => call.table === "products")).toEqual([
+    { table: "products", filters: [["business_id", "business-a"], ["is_active", true]] },
+    { table: "products", filters: [["business_id", "business-a"], ["is_active", false]] },
+  ]);
+  expect(calls.some(call => call.table === "booking_services")).toBe(false);
+});
+
+it.each([
+  { generated: true, enabled: false, publishedVersionId: null, expected: "Nuk ka ende një workflow kryesor të ruajtur" },
+  { generated: false, enabled: false, publishedVersionId: null, expected: "është draft; ende nuk është publikuar" },
+  { generated: false, enabled: false, publishedVersionId: "version-a", expected: "është joaktiv" },
+])("does not claim live inheritance for $expected", async ({ expected, ...state }) => {
+  m.workspace.mockResolvedValue({ graph: starterVisualGraph(), revision: 3, available: true, ...state });
+  const result = await prepareWorkflow(access, proposal("workflow_catalog"));
+  expect(result.message).toContain(expected);
+  expect(result.message.split("\n\n")[0]).not.toContain("është i publikuar dhe aktiv");
+  expect(result.token).toBeUndefined();
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+
+it("preserves specific assignments and reports missing generic order capability", async () => {
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  graph.flows = graph.flows.map(flow => flow.kind === "order" ? { ...flow, productIds: ["00000000-0000-4000-8000-000000000001"] } : flow);
+  m.version.mockResolvedValue({ graph });
+  const before = structuredClone(graph);
+  const result = await prepareWorkflow(access, proposal("workflow_catalog"));
+  expect(result.message).toContain("lidhje me degë të posaçme. Ato ruhen");
+  expect(result.message).toContain("nuk ka degë të përgjithshme porosie");
+  expect(graph).toEqual(before);
+  expect(result.token).toBeUndefined();
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+
+it("fails closed instead of claiming an empty catalog when counts cannot be read", async () => {
+  catalogCounts(0, { message: "Unavailable" });
+  await expect(prepareWorkflow({ ...access, modules: ["workflows", "products"] }, proposal("workflow_catalog"))).rejects.toThrow("Gjendja e katalogut nuk u lexua");
+  expect(m.rpc).not.toHaveBeenCalled();
+});

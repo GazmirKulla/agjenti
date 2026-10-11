@@ -11,7 +11,7 @@ import { applyWorkflowOperations } from "./workflow";
 const access: Access = { userId: "user", businessId: "business", modules: ["workflows"], catalogSource: "internal" };
 const respond = (action: string, changes: {field:string;value:string}[] = []) => ({ output_text: JSON.stringify({action,id:null,message:"Kontrollo",changes}) });
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   process.env.OPENAI_API_KEY = "test-only";
   m.load.mockResolvedValue({ workspace: { graph: starterVisualGraph(), revision: 7 }, published: null });
   m.orderLoad.mockResolvedValue({flows:[],products:[],partial:false});
@@ -89,4 +89,27 @@ it("rejects a selected flow that is no longer in the saved graph", async () => {
   m.response.mockResolvedValueOnce(respond("workflow_load"));
   await expect(planRequest(access, "Lidhe këtë rrjedhë", [], { page: "workflows", entryPoint: "contextual", workflowSelection: { revision: 7, dirty: false, flowId: "missing-flow" } })).rejects.toThrow("nuk ekziston më");
   expect(m.response).not.toHaveBeenCalled(); expect(m.prepare).not.toHaveBeenCalled();
+});
+
+it("routes a main-workflow clarification to a read without requiring a branch, even after outdated advice", async () => {
+  m.response.mockResolvedValueOnce(respond("workflow_catalog"));
+  m.prepare.mockResolvedValueOnce({ message: "Produktet trashëgojnë workflow-in kryesor." });
+  const history = [
+    { role: "user" as const, content: "A mund te lidhesh te gjithe produktet me workflow?" },
+    { role: "assistant" as const, content: "Produktet mund të lidhen vetëm me një rrjedhë të emërtuar. Me cilën?" },
+  ];
+  const result = await planRequest(access, "me workflow kryesor, jo me rrjedha specifike", history, { page: "home", entryPoint: "home" });
+  expect(result.token).toBeUndefined();
+  expect(m.prepare).toHaveBeenCalledExactlyOnceWith(access, expect.objectContaining({ action: "workflow_catalog", changes: [] }), undefined, undefined);
+  expect(m.load).not.toHaveBeenCalled();
+  expect(m.orderLoad).not.toHaveBeenCalled();
+  expect(m.orderPrepare).not.toHaveBeenCalled();
+});
+
+it("allows inheritance inspection with a dirty selected branch, without treating it as a mutation", async () => {
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  m.load.mockResolvedValueOnce({ workspace: { graph, revision: 7 }, published: graph });
+  m.response.mockResolvedValueOnce(respond("workflow_catalog"));
+  await planRequest(access, "Lidhi me workflow kryesor, jo kete dege", [], { page: "workflows", entryPoint: "contextual", workflowSelection: { flowId: graph.flows[0].id, revision: 7, dirty: true } });
+  expect(m.prepare).toHaveBeenCalledWith(access, expect.objectContaining({ action: "workflow_catalog" }), 7, undefined);
 });

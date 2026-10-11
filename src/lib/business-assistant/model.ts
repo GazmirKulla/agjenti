@@ -10,6 +10,7 @@ export const actions = [
   "linear_load", "linear_read", "linear_draft", "linear_link", "linear_publish",
   "workflow_load",
   "workflow_read",
+  "workflow_catalog",
   "workflow_draft",
   "workflow_restore",
   "workflow_publish",

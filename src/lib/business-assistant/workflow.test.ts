@@ -185,3 +185,10 @@ it("shows binding replacements even when distinct targets have identical names",
   expect(preview.fields[0].before).toContain("Filxhan"); expect(preview.fields[0].after).toContain("Filxhan");
   expect(preview.fields[0].before).not.toBe(preview.fields[0].after);
 });
+
+it("accepts main catalog inspection only as a read with no target or operations", () => {
+  const read = { action: "workflow_catalog", id: null, message: "", changes: [] };
+  expect(readProposal(read).action).toBe("workflow_catalog");
+  expect(() => readProposal({ ...read, id: "00000000-0000-4000-8000-000000000001" })).toThrow();
+  expect(() => readProposal({ ...read, changes: [{ field: "operations", value: "[]" }] })).toThrow();
+});
