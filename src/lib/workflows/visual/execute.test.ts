@@ -188,10 +188,10 @@ it("answers a question mid-collection without advancing or collecting the questi
  const continued=await executeVisualTurn({...params(graph),state:answer.nextState,message:"ana@example.com"},legacy);
  expect(continued.nextState.visual?.values.email).toBe("ana@example.com");
 });
-it("makes visual staff guidance resumable without requesting an inbox pause",async()=>{
+it("requests real staff ownership at a handoff node",async()=>{
  const turn=await executeVisualTurn({...params(),message:"Dua të flas me stafin"},async p=>response(p));
- expect(turn).toMatchObject({handoff:true,advisoryHandoff:true});
- expect(turn.nextState.visual).toMatchObject({status:"handoff",advisory:true});
+ expect(turn).toMatchObject({handoff:true,advisoryHandoff:false});
+ expect(turn.nextState.visual).toMatchObject({status:"handoff",advisory:false});
 });
 it("resumes a suspended product without treating the resume request as a field value",async()=>{
  const state={...emptyState(),product_id:"product-a",step_key:"collect_size",fields:{color:"blue"},visual:{...waiting("handoff"),status:"handoff" as const,awaiting:false,advisory:true}};
@@ -315,7 +315,7 @@ it.each(["Dua të flas me stafin.", "Telefoni im është 0690000000; dua të fla
   const legacy = vi.fn(async (p: LegacyParams) => response(p));
   const state = migrateContext(); setFact(state, "customer_phone", "0690000000", "phone", "message");
   const result = await executeVisualTurn({ ...params(graph), message, state }, legacy);
-  expect(result.reply).toBe("Po ia kaloj kërkesën tuaj ekipit.");
+  expect(result.reply).toBe("Në këtë provë, biseda do t’i kalohej stafit dhe përgjigjet automatike do të ndaleshin.");
   expect(result.visualWorkflow?.routing).toMatchObject({ action: "support", source: "rules", to: "handoff" });
   expect(result.nextState.visual?.status).toBe("handoff");
   expect(result.nextState.customer.phone).toBe("0690000000");
@@ -585,4 +585,21 @@ it("does not overwrite a legacy visual answer with stale order fields during an 
   const result = await executeVisualTurn({ ...params(graph), state, message: "Sa kushton?" }, async p => response(p, "690 ALL."));
   expect(result.nextState.visual?.values.child_age).toBe("5");
   expect(result.nextState.context).toBeUndefined();
+});
+
+it("returns business contact advice without entering the handoff node or collecting a field", async () => {
+  const state = { ...emptyState(), product_id: "p", fields: { size: "L" }, visual: waiting("product") };
+  const legacy = vi.fn(async (p: LegacyParams) => response(p, "Nuk kemi kontakt të verifikuar."));
+  const next = await executeVisualTurn({ ...params(), state, message: "Cili është numri i stafit?" }, legacy);
+  expect(next).toMatchObject({ handoff: true, advisoryHandoff: true, nextState: state });
+  expect(legacy).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("Never claim or promise") }));
+});
+
+it("preserves an informational answer before handoff without repeating an unsupported callback promise", async () => {
+  const graph = linear(node("knowledge","knowledge"), node("staff","handoff",{prompt:"Stafi do t'ju telefonojë patjetër."}));
+  graph.edges = graph.edges.filter(edge => edge.source !== "staff");
+  graph.nodes = graph.nodes.filter(node => node.id !== "end");
+  const next = await executeVisualTurn(params(graph), async p => response(p,"Dorëzimi zgjat 2 ditë."));
+  expect(next.reply).toBe("Dorëzimi zgjat 2 ditë.\n\nNë këtë provë, biseda do t’i kalohej stafit dhe përgjigjet automatike do të ndaleshin.");
+  expect(next.advisoryHandoff).toBe(false);
 });

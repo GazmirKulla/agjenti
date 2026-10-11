@@ -461,7 +461,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     state.orderWorkflowSnapshot = sealOrderSnapshot({businessId:params.businessId,productId:selected.id,workflowId,name:workflowName ?? "Porosia",steps});
   }
   if (params.requireConfiguredWorkflow && selected && (!workflowId || !steps.length || workflowName === "Default customer collection")) {
-    return { reply: "Ekipi do t’ju ndihmojë të vazhdoni me këtë produkt.", nextState: state, previousResponseId: null,
+    return { reply: "Për këtë produkt, kontakto stafin për të vazhduar.", nextState: state, previousResponseId: null,
       workflowId: null, productName: selected.name, workflowProgress: [], handoff: true, advisoryHandoff: true,
       debug: { model: agentModel(), source: "fallback", fallbackReason: "workflow_not_configured", agentConfigured: Boolean(agent?.instructions), knowledgeCount: knowledge.length, productCount: products.length, workflowSteps: [], elapsedMs: Date.now() - started } };
   }

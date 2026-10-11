@@ -294,7 +294,7 @@ it("treats a bare contact channel after handoff as support rather than an order"
   expect(next.conversationRouting?.process).toBe("support");
   expect(next.nextState.processes?.order).toBeUndefined();
   expect(mocks.agent).not.toHaveBeenCalled();
-  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("after being referred to staff") }));
+  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("no handoff, staff notification or callback has been performed") }));
   expect(next.advisoryHandoff).toBe(true);
 });
 
@@ -648,7 +648,8 @@ it("suspends an unfinished order for explicit WhatsApp contact without repeating
   expect(next.nextState.processes?.order?.status).toBe("suspended");
   expect(next.nextState.processes?.order?.snapshot.product_id).toBe("product");
   expect(mocks.agent).not.toHaveBeenCalled();
-  expect(mocks.info.mock.calls[0][0].informational).toContain("Do not ask for a product");
+  expect(mocks.info).not.toHaveBeenCalled();
+  expect(next).toMatchObject({ handoff: true, advisoryHandoff: false });
 });
 
 it.each(["ku?", "si?", "ne cilin numer?", "where?"])("keeps %s on the staff-contact request without entering product qualification", async message => {
@@ -658,7 +659,7 @@ it.each(["ku?", "si?", "ne cilin numer?", "where?"])("keeps %s on the staff-cont
   const next = await turn(message, state);
   expect(next.conversationRouting?.process).toBe("support");
   expect(mocks.agent).not.toHaveBeenCalled();
-  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("immediately preceding contact request") }));
+  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("staff/contact question") }));
 });
 
 it("does not route a new catalog question to staff just because an earlier handoff exists", async () => {
@@ -769,4 +770,29 @@ it("emits bounded coordinator metadata for an early acknowledgement without cust
   const event = onTrace.mock.calls.map(([e]) => e).find(e => e.label === "Conversation coordinator completed");
   expect(event.data).toEqual({ coordinator: "shared_v3", channel: "instagram", revision: 4, workflowVersion: "v1", process: "information", action: "answer", elapsedMs: expect.any(Number) });
   expect(JSON.stringify(event)).not.toMatch(/secret-lease|Informacion privat|Ana/);
+});
+
+it.each(["instagram", "whatsapp"] as const)("preserves a pausing handoff from the visual executor on %s", async source => {
+  mocks.version.mockResolvedValue(entityVersion());
+  mocks.agent.mockImplementation(async ({ state }) => ({ ...result(state, "Biseda iu kalua stafit. Përgjigjet automatike janë ndalur."), handoff: true, advisoryHandoff: false }));
+  const next = await processConversationMessage({ businessId: "business", source, message: "Dua të flas me stafin", state: migrateConversationProcesses(order(), () => "order-1"), hasPhoto: false });
+  expect(next).toMatchObject({ handoff: true, advisoryHandoff: false, reply: "Biseda iu kalua stafit. Përgjigjet automatike janë ndalur." });
+  expect(next.nextState.staffHandoff).toBe(true);
+  expect(next.nextState.processes?.order).toMatchObject({ status: "suspended", snapshot: { product_id: "product", fields: { size: "L" } } });
+  expect(next.nextState.recentMessages?.at(-1)?.content).toBe(next.reply);
+});
+it("keeps contact advice advisory and retains its topic without a visual cursor", async () => {
+  const contact = await turn("Cili është numri juaj?", order());
+  expect(contact).toMatchObject({ handoff: true, advisoryHandoff: true });
+  expect(contact.nextState.staffHandoff).toBeUndefined();
+  const followup = await turn("ku?", contact.nextState);
+  expect(followup.conversationRouting?.process).toBe("support");
+  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("no handoff") }));
+});
+it("supports a real handoff for a non-pilot business with no visual graph", async () => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  const next = await processConversationMessage({ businessId: "business", source: "instagram", message: "Dua të flas me stafin", state: emptyState(), hasPhoto: false });
+  expect(next).toMatchObject({ handoff: true, advisoryHandoff: false, nextState: { staffHandoff: true } });
+  expect(mocks.info).not.toHaveBeenCalled();
+  expect(mocks.booking).not.toHaveBeenCalled();
 });

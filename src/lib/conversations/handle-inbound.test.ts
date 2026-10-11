@@ -40,6 +40,7 @@ const message: NormalizedIncomingMessage = {
 };
 let deliveryAttempt: {status:string;reply:string} | null;
 let outboundResult: { data: {body:string;source:string;delivery_status:string} | null; error: {message:string} | null };
+let historyResult: {data: unknown[]; error: {message:string} | null} | undefined;
 let paused = false;
 let auto = true;
 let webhookInsertCode: string | null = null;
@@ -55,6 +56,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
   paused = false;
+  historyResult = undefined;
   outboundResult = {data:null,error:null};
   deliveryAttempt = null;
   auto = true;
@@ -78,6 +80,7 @@ beforeEach(() => {
   mocks.whatsappSend.mockResolvedValue({ ok: true, messageId: "wa-reply" });
   mocks.from.mockImplementation((table: string) => {
     let op = "select";
+    let columns = "";
     let inserted: Record<string, unknown> = {};
     const filters: Record<string, unknown> = {};
     const result = () => {
@@ -87,6 +90,7 @@ beforeEach(() => {
         return inboundResult;
       }
       if (table === "workflow_inbound_queue" && op === "select") return {data:deliveryAttempt,error:null};
+      if (table === "messages" && op === "select" && columns.startsWith("body,direction")) return historyResult ?? {data: [...(savedState.recentMessages ?? [])].reverse().map((row, i) => ({ body: row.content, direction: row.role === "user" ? "inbound" : "outbound", source: row.role === "user" ? "customer" : "agent", delivery_status: "sent", external_message_id: `history-${i}` })), error:null};
       if (table === "messages" && op === "select" && filters.direction === "outbound") return outboundResult;
       if (table === "messages" && op === "select") {
         duplicateFilters = filters;
@@ -131,9 +135,10 @@ beforeEach(() => {
     });
     };
     const chain = {
-      select: vi.fn(() => chain),
+      select: vi.fn((value: string) => {columns=value; return chain;}),
       eq: vi.fn((key: string, value: unknown) => { filters[key] = value; return chain; }),
       neq: vi.fn(() => chain),
+      or: vi.fn(() => chain),
       lt: vi.fn(() => chain),
       not: vi.fn(() => chain),
       in: vi.fn(() => chain),
@@ -272,7 +277,7 @@ describe("real inbound integration with shared processor", () => {
       businessId: "business-a",
       message: "Bluzë",
       hasPhoto: false,
-      state: emptyState(),
+      state: { ...emptyState(), recentMessages: [] },
       previousResponseId: "resp_old",
     }));
     expect(writes.some((w) => w.table === "customers")).toBe(false);
@@ -494,7 +499,7 @@ it("commits a non-pilot Instagram turn with a revision and lease before the queu
   expect(writes.filter(w => w.table === "conversation_states" && w.operation === "upsert")).toEqual([]);
   expect(mocks.send).not.toHaveBeenCalled();
   expect(job.status).toBe("prepared");
-  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: emptyState(), bookingGuard: expect.objectContaining({ revision: 0, leaseToken: "lease-a" }) }));
+  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: { ...emptyState(), recentMessages: [] }, bookingGuard: expect.objectContaining({ revision: 0, leaseToken: "lease-a" }) }));
 });
 
 
@@ -510,7 +515,7 @@ it("does not use a staff reply as approval of an older agent prompt",async()=>{
 });
 it("stops before the processor if delivery evidence cannot be read",async()=>{
  outboundResult={data:null,error:{message:"unavailable"}};
- await expect(handleInboundMessage({...message,text:"Po"})).rejects.toThrow("Latest prompt delivery unavailable");
+ await expect(handleInboundMessage({...message,text:"Po"})).rejects.toThrow("Conversation history unavailable");
  expect(mocks.process).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();
 });
 
@@ -539,4 +544,49 @@ it.each(["instagram", "whatsapp"] as const)("hydrates queued %s pilot state befo
   expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_revision: 0 }));
   expect(mocks.send).not.toHaveBeenCalled();
   expect(mocks.whatsappSend).not.toHaveBeenCalled();
+});
+
+it("persists every paused inbound without executing or sending, including queue batches", async () => {
+  paused = true;
+  const second = { ...message, externalMessageId: "paused-2", text: "Edhe një pyetje" };
+  await handleInboundMessage(message, { ...queuedJob(), batch_payloads: [message, second] });
+  const inbound = writes.filter(write => write.table === "messages" && (write.data as {direction:string}).direction === "inbound");
+  expect(inbound.map(write => (write.data as {external_message_id:string}).external_message_id)).toEqual(["msg-a", "paused-2"]);
+  expect(mocks.process).not.toHaveBeenCalled();
+  expect(mocks.rpc).not.toHaveBeenCalled();
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+it("uses staff and paused customer history after reactivation without feeding it into fields", async () => {
+  savedState = { ...emptyState(), staffHandoff: true, product_id: "product", fields: { size: "L" } };
+  historyResult = { data: [
+    { body: message.text, direction: "inbound", source: "customer", delivery_status: "delivered", external_message_id: message.externalMessageId },
+    { body: "Mund të vazhdojmë porosinë", direction: "outbound", source: "staff", delivery_status: "sent", external_message_id: "staff-1" },
+    { body: "Dua të ndryshoj adresën", direction: "inbound", source: "customer", delivery_status: "delivered", external_message_id: "paused-1" },
+  ], error: null };
+  await handleInboundMessage(message, queuedJob());
+  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ message: message.text, previousResponseId: null,
+    state: expect.objectContaining({ conversationPaused: true, product_id: "product", fields: { size: "L" }, recentMessages: [
+      { role: "user", content: "Dua të ndryshoj adresën" }, { role: "assistant", content: "[Stafi] Mund të vazhdojmë porosinë" },
+    ] }) }));
+  expect(mocks.process.mock.calls[0][0].state.staffHandoff).toBeUndefined();
+  expect(savedState.staffHandoff).toBe(true);
+});
+it("does not generate an answer with missing inbox context when history read fails", async () => {
+  historyResult = { data: [], error: { message: "unavailable" } };
+  await expect(handleInboundMessage(message, queuedJob())).rejects.toThrow("Conversation history unavailable");
+  expect(writes.some(write => write.table === "messages" && (write.data as {direction:string}).direction === "inbound")).toBe(true);
+  expect(mocks.process).not.toHaveBeenCalled();
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+
+it("recognizes staff ownership even when its reply is outside the bounded recent history", async () => {
+  const { migrateConversationProcesses } = await import("@/lib/workflows/conversation-processes");
+  const { migrateContext } = await import("@/lib/workflows/context");
+  savedState = migrateConversationProcesses(migrateContext({ ...emptyState(), product_id: "product", fields: { size: "L" }, step_key: "collect_customer" }), () => "saved-task");
+  outboundResult = { data: { body: "Stafi ju përgjigjet", source: "staff", delivery_status: "sent" }, error: null };
+  historyResult = { data: Array.from({length:10}, (_,i) => ({ body:`Pyetja ${i}`, source:"customer", direction:"inbound", delivery_status:"delivered", external_message_id:`paused-${i}` })), error:null };
+  await handleInboundMessage(message, queuedJob());
+  const params = mocks.process.mock.calls[0][0];
+  expect(params.previousResponseId).toBeNull();
+  expect(params.state).toMatchObject({ conversationPaused:true, processes:{active:null,promptOwner:null,order:{status:"suspended",snapshot:{product_id:"product",fields:{size:"L"}}}} });
 });

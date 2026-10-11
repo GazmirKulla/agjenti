@@ -1,3 +1,4 @@
+import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "./handoff";
 import { conversationControl, resumeConversation } from "./conversation-control";
 import { usesSharedCoordinator } from "./coordinator-policy";
 import { randomUUID } from "node:crypto";
@@ -25,7 +26,7 @@ export type ConversationMessageParams = AgentTurnParams & {
 type Route = Pick<ConversationRouting, "process" | "source"> & { clarification?: string };
 const namedConfirmation = (message: string): ProcessKind | null => { const match = foldText(message).match(/^(?:po )?(?:e )?konfirmoj (porosine|rezervimin)[.!\s]*$/); return match ? match[1] === "porosine" ? "order" : "booking" : null; };
 const contactChannel = (message: string) => /^(?:whatsapp|telefon|phone|instagram)[.!\s]*$/.test(foldText(message));
-const contactFollowUp = (message: string, state: ConversationStatePayload) => state.visual?.status === "handoff"
+const contactFollowUp = (message: string, state: ConversationStatePayload) => (state.visual?.status === "handoff" || state.processes?.lastDecision?.process === "support")
   && (contactChannel(message) || (!state.processes?.lastDecision || state.processes.lastDecision.process === "support")
     && /^(?:ku|si|ne cilin numer|cili numer|where|how)[?!.\s]*$/.test(foldText(message)));
 const bookingRequest = (text: string) => /\b(rezerv\w*|takim\w*|appointment|booking|termin|orar\w* (?:te )?lir\w*)\b/.test(text);
@@ -37,7 +38,7 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   const text = foldText(message), intent = explicitIntent(message);
   const confirmation = namedConfirmation(message);
   if (confirmation) return { process: confirmation, source: "rules" };
-  if (contactFollowUp(message, state)) return { process: "support", source: "rules" };
+  if (contactFollowUp(message, state) || isStaffContactRequest(message) && intent !== "order") return { process: "support", source: "rules" };
   // Managing an already persisted appointment remains a staff action.
   if (/\b(ndrysho\w*|anulo\w*|cancel|reschedule)\b/.test(text) && bookingRequest(text) && /\b(ekzistues\w*|konfirmuar|mepar\w*|existing|confirmed)\b/.test(text)) return { process: "support", source: "rules" };
   const order = intent === "order" || resumeOrder(text) || /^(porosia|porosine|order)[.!\s]*$/.test(text);
@@ -96,6 +97,9 @@ export async function processConversationMessage(params: ConversationMessagePara
   const started = Date.now();
   const before = { ...emptyState(), recentMessages: recentConversation(params.state) };
   const result = await processMessage(params);
+  if (result.handoff && !result.advisoryHandoff) {
+    result.nextState.staffHandoff = true;
+  }
   // Always rebuild from the inbound history. Nested processors may have recorded
   // an intermediate reply; the coordinator owns the final pair, exactly once.
   rememberTurn(before, result.nextState, params.message, result.reply);
@@ -177,6 +181,17 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   if (params.linearPreview) return processAgentTurn(params);
   if (!usesSharedCoordinator(params)) {
     // Keep non-pilot conversations on legacy until explicitly enrolled.
+    if (isStaffContactRequest(params.message) && explicitIntent(params.message) !== "order") {
+      const state = structuredClone(params.state ?? emptyState());
+      const result = await processLegacyAgentTurn({ ...params, state, informational: staffContactInstructions });
+      result.nextState = state; result.handoff = true; result.advisoryHandoff = true;
+      return result;
+    }
+    if (explicitIntent(params.message) === "support") {
+      const version = await loadVisualVersion(params.businessId, params.state?.visual?.versionId);
+      if (!version) return { ...plainResult(structuredClone(params.state ?? emptyState()), staffHandoffReply(params.mode === "test")), handoff: true, advisoryHandoff: false };
+      return processAgentTurn({ ...params, supportRequest: true });
+    }
     const booking = await processBookingTurn(params);
     if (booking) return booking;
     return processAgentTurn(params);
@@ -365,19 +380,19 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       decision.suspended = processes.active;
     }
     processes.active = null; processes.promptOwner = null;
-    if (contactFollowUp(message, state)) {
-      const result = await processLegacyAgentTurn({ ...params, state, informational: "The customer is following up after being referred to staff. Resolve short questions such as ku/where using the immediately preceding contact request. Give the business contact for that channel only when explicitly present in verified business knowledge. If unavailable, clearly say that contact detail is unavailable. Never substitute customer contact data, ask which workflow step to edit, or claim staff has already responded." });
+    if (contactFollowUp(message, state) || isStaffContactRequest(message)) {
+      const result = await processLegacyAgentTurn({ ...params, state, informational: staffContactInstructions });
       result.nextState = state; result.handoff = true; result.advisoryHandoff = true;
       return finish(result);
     }
     const result = graphVersion
       ? await processAgentTurn({ ...params, state, supportRequest: true })
-      : await processLegacyAgentTurn({ ...params, state, informational: "Respond only to the current staff/contact request using verified business contact information. Preserve unfinished orders. Do not ask for a product, advance an order, or claim staff has already contacted the customer." });
+      : { ...plainResult(state, staffHandoffReply(params.mode === "test")), handoff: true, advisoryHandoff: false };
     if (!graphVersion) { result.nextState = state; result.handoff = true; }
     if (result.nextState.visual?.status === "waiting") processes.auxiliary = { process: "support", visual: result.nextState.visual };
     else delete processes.auxiliary;
     // Routing to staff must not replace the saved order task with the handoff cursor.
-    result.advisoryHandoff = result.handoff ? true : result.advisoryHandoff;
+    // Preserve the executor's ownership decision; only contact advice is advisory.
     return finish(result);
   }
   const target = route.process;

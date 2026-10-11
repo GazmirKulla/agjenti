@@ -76,6 +76,11 @@ export async function POST(
 		return NextResponse.json({ error: "Token i pavlefshëm." }, { status: 500 });
 	}
 
+	// Claim staff ownership before sending so queued AI output is discarded.
+	const { data: owned, error: ownershipError } = await service.from("conversations")
+		.update({ status: "paused", auto_reply: false, openai_previous_response_id: null, updated_at: new Date().toISOString() })
+		.eq("id", conversationId).eq("business_id", businessId).select("id").maybeSingle();
+	if (ownershipError || !owned) return NextResponse.json({ error: "Biseda nuk u kalua te stafi. Mesazhi nuk u dërgua." }, { status: 409 });
 	const send = await adapter.send({
 		accountId: String("phone_number_id" in conn ? conn.phone_number_id : conn.ig_user_id),
 		token,
@@ -86,7 +91,7 @@ export async function POST(
 		return NextResponse.json({ error: send.error, code: send.code }, { status: 400 });
 	}
 
-	await service.from("messages").insert({
+	const { error: historyError } = await service.from("messages").insert({
 		business_id: businessId,
 		conversation_id: conversationId,
 		[adapter.connection]: connectionId,
@@ -96,14 +101,14 @@ export async function POST(
 		external_message_id: send.messageId ?? null,
 		delivery_status: "sent",
 	});
+	if (historyError) return NextResponse.json({ error: "Mesazhi u dërgua, por nuk u ruajt në historik. Mos e ridërgo; agjenti mbetet në pauzë.", delivered: true, messageId: send.messageId }, { status: 502 });
 	await service
 		.from("conversations")
 		.update({
 			last_message_at: new Date().toISOString(),
 			last_message_preview: text.slice(0, 140),
-			status: conversation.status === "completed" ? "active" : conversation.status,
 		})
-		.eq("id", conversationId);
+		.eq("id", conversationId).eq("business_id", businessId);
 
 	return NextResponse.json({ ok: true, messageId: send.messageId });
 }

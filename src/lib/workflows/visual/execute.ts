@@ -1,3 +1,4 @@
+import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
 import { chooseGuidance, clarification, invalidateConfirmation } from "../guidance";
 import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
 import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext } from "../context";
@@ -70,6 +71,12 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     if (enteringEntity) active = { versionId: version.id, nodeId: boundFlow.entryNodeId, status: "running", awaiting: false, visited: [], values: {}, binding: selectedEntity.binding };
     else if (active) active = { ...active, binding: selectedEntity.binding };
     base.visual = active ?? base.visual;
+  }
+  if (isStaffContactRequest(params.message) && !explicitOrder && !params.bookingRequest && !params.informationRequest) {
+    const answer = await legacy({ ...params, state: base, informational: staffContactInstructions });
+    answer.nextState = base;
+    answer.handoff = true; answer.advisoryHandoff = true;
+    return answer;
   }
   let intent = params.bookingRequest ? "booking" as const : detectVisualIntent(params.message);
   let navigating = false;
@@ -318,9 +325,12 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     // Keep required collection pending, but never append it to an unrelated answer.
     if (informationalInterruption) { finished = true; break; }
     if(action.kind==="prompt") recordPrompt(turn.nextState,action.nodeId);
-    if (action.message) replies.push(action.message);
+    if (action.message && action.kind !== "handoff") replies.push(action.message);
     if (action.kind === "end" && !replies.length) replies.push("Faleminderit. Të dhënat u plotësuan.");
-    if (action.kind === "handoff") { turn.handoff = true; turn.advisoryHandoff = true; execution.state.advisory = true; }
+    if (action.kind === "handoff") {
+      turn.handoff = true; turn.advisoryHandoff = false; execution.state.advisory = false;
+      replies.push(staffHandoffReply(params.mode === "test"));
+    }
     finished = true;
     break;
   }

@@ -39,6 +39,8 @@ export type WorkflowStepDef = {
 };
 
 export type ConversationStatePayload = {
+  /** Staff ownership requested by the engine; transport commits the pause before acknowledgement. */
+  staffHandoff?: boolean;
   /** Customer acknowledged information or deferred; explicit intent is needed to resume. */
   conversationPaused?: boolean;
   recentMessages?: import("./guidance").ConversationMessage[];

@@ -516,7 +516,7 @@ it("routes every message through staff, ordering and back while preserving a liv
  expect(product.nextState.step_key).toBe("collect_size");
  const staff=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state:product.nextState,message:"Dua të flas me stafin",hasPhoto:false});
  expect(staff.nextState.visual?.status).toBe("handoff");
- expect(staff.advisoryHandoff).toBe(true);
+ expect(staff.advisoryHandoff).toBe(false);
  const back=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state:staff.nextState,message:"Fola me stafin, tani dua të porosis",hasPhoto:false});
  expect(back.nextState.product_id).toBe("product-a");
  expect(back.nextState.step_key).toBe("collect_size");

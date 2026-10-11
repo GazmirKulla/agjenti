@@ -1,4 +1,5 @@
 import { shortReply } from "./conversation-control";
+import { inboxHistory, type InboxHistoryMessage } from "./inbox-history";
 import { inboundBatch } from "./message-batch";
 import { randomUUID } from "node:crypto";
 import { InboundPersistenceError } from "./inbound-persistence-error";
@@ -326,6 +327,34 @@ export async function handleInboundMessage(
   // and sends for shared conversations must always pass through the durable queue.
   if (shared && !job) throw new Error("workflow_queue_required");
   if(job && (shared || inboundState.context)) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState,message.channel);
+  // Persisted inbox history also includes customers and staff who spoke while AI
+  // was paused. Never replay those messages as workflow commands or field values.
+  const [{ data: historyRows, error: historyError }, { data: lastOutbound, error: outboundError }] = await Promise.all([
+    supabase.from("messages").select("body,direction,source,delivery_status,external_message_id")
+      .eq("business_id", businessId).eq("conversation_id", conversationId)
+      .or("and(direction.eq.inbound,source.eq.customer),and(direction.eq.outbound,delivery_status.eq.sent,source.in.(agent,staff))")
+      .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(10 + batch.originals.length),
+    // Ownership evidence must not disappear when many messages arrive during pause.
+    supabase.from("messages").select("body,source,delivery_status")
+      .eq("business_id", businessId).eq("conversation_id", conversationId).eq("direction", "outbound")
+      .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  if (historyError || outboundError) throw new Error("Conversation history unavailable");
+  const history = inboxHistory((historyRows ?? []) as InboxHistoryMessage[], new Set(batch.originals.map(original => original.externalMessageId)));
+  inboundState.recentMessages = history.messages;
+  const staffReplied = history.staffReplied || lastOutbound?.source === "staff" && lastOutbound.delivery_status === "sent";
+  const resumedHandoff = inboundState.staffHandoff || inboundState.visual?.status === "handoff" && !inboundState.visual.advisory;
+  if (resumedHandoff || staffReplied) {
+    delete inboundState.staffHandoff;
+    inboundState.conversationPaused = true;
+    if (inboundState.processes) {
+      const processes = inboundState.processes;
+      if (processes.active && processes[processes.active]) processes[processes.active]!.status = "suspended";
+      processes.active = null; processes.promptOwner = null;
+      delete processes.pendingChoice; delete processes.auxiliary;
+      if (processes.service) processes.service.promptCurrent = false;
+    }
+  }
   if (inboundState.visual?.status === "handoff" && !inboundState.visual.advisory) {
     inboundState.completedVisual = structuredClone(inboundState.visual);
     inboundState.visual.status = "completed";
@@ -344,11 +373,7 @@ export async function handleInboundMessage(
   };
   let deliveredReply: string | null = null;
   if (shortReply(message.text ?? "")) {
-    const { data: outbound, error } = await supabase.from("messages")
-      .select("body,source,delivery_status").eq("business_id", businessId).eq("conversation_id", conversationId)
-      .eq("direction", "outbound").order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (error) throw new Error("Latest prompt delivery unavailable");
-    if (outbound?.source === "agent" && outbound.delivery_status === "sent") deliveredReply = outbound.body;
+    if (lastOutbound?.source === "agent" && lastOutbound.delivery_status === "sent") deliveredReply = lastOutbound.body;
     if (job && deliveredReply) {
       const { data: attempted, error: attemptError } = await supabase.from("workflow_inbound_queue")
         .select("status,reply").eq("business_id", businessId).eq("conversation_id", conversationId)
@@ -376,7 +401,7 @@ export async function handleInboundMessage(
     hasPhoto: message.attachments.some((a) => a.kind === "image"),
     state: inboundState,
     persistedWorkflowId: stateRow?.workflow_id ?? null,
-    previousResponseId: open?.openai_previous_response_id ?? null,
+    previousResponseId: resumedHandoff || staffReplied ? null : open?.openai_previous_response_id ?? null,
   });
   const state = turn.nextState;
   const generated = { reply: turn.reply, responseId: turn.previousResponseId };
