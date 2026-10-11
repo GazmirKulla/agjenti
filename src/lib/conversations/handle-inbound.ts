@@ -163,17 +163,21 @@ export async function handleInboundMessage(
 
   let conversationId = open?.id as string | undefined;
   let previousId: string | null = null;
+  let createdFresh = false;
   if (!conversationId) {
-    const { data: last } = await supabase
-      .from("conversations")
-      .select("id")
-      .eq("business_id", businessId)
-      .eq(adapter.participant, message.externalParticipantId)
-    .eq(adapter.connection, conn.id)
-      .eq("status", "completed")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const [{ data: last }, { data: businessAuto }] = await Promise.all([
+      supabase
+        .from("conversations")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq(adapter.participant, message.externalParticipantId)
+        .eq(adapter.connection, conn.id)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase.from("businesses").select("auto_reply").eq("id", businessId).maybeSingle(),
+    ]);
     previousId = last?.id ?? null;
     const { data: created, error: createConversationError } = await supabase
       .from("conversations")
@@ -186,6 +190,7 @@ export async function handleInboundMessage(
         participant_display_name: displayName,
         [adapter.connection]: conn.id,
         status: "active",
+        auto_reply: Boolean(businessAuto?.auto_reply),
         previous_conversation_id: previousId,
         last_inbound_at: message.timestamp.toISOString(),
         last_message_at: message.timestamp.toISOString(),
@@ -195,6 +200,7 @@ export async function handleInboundMessage(
       .select("id")
       .single();
     conversationId = created?.id;
+    createdFresh = Boolean(conversationId);
     console.log("[inbound] conversation insert", {
       ok: !createConversationError,
       conversationId: conversationId ?? null,
@@ -300,12 +306,13 @@ export async function handleInboundMessage(
     .select("auto_reply")
     .eq("id", businessId)
     .maybeSingle();
-  const convAuto = open?.auto_reply;
+  const conversationStatus = createdFresh ? "active" : open?.status;
+  const convAuto = createdFresh ? business?.auto_reply : open?.auto_reply;
   const autoOn = convAuto ?? business?.auto_reply ?? false;
-  if (!autoOn || open?.status === "paused") {
+  if (!autoOn || conversationStatus === "paused") {
     console.log("[inbound] skip auto-reply", {
       autoOn,
-      conversationStatus: open?.status ?? null,
+      conversationStatus: conversationStatus ?? null,
     });
     return;
   }

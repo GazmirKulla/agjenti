@@ -34,6 +34,7 @@ beforeEach(() => {
     update: mocks.update,
     delete: mocks.delete,
     eq: mocks.eq,
+    in: vi.fn(() => query),
     select: mocks.select,
     maybeSingle: mocks.maybeSingle,
   };
@@ -90,17 +91,37 @@ describe("conversation status actions", () => {
     },
   );
   it("deletes the conversation only within the requested business", async () => {
+    mocks.maybeSingle
+      .mockResolvedValueOnce({
+        data: {
+          id: "conversation-a",
+          channel: "whatsapp",
+          whatsapp_participant_id: "3556",
+          whatsapp_connection_id: "conn-a",
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: { id: "conversation-a" }, error: null });
     expect((await request("delete")).status).toBe(200);
     expect(mocks.delete).toHaveBeenCalled();
-    expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.eq).toHaveBeenCalledWith("id", "conversation-a");
     expect(mocks.eq).toHaveBeenCalledWith("business_id", "business-a");
   });
   it("does not claim success when the database rejects the delete", async () => {
-    mocks.maybeSingle.mockResolvedValue({
-      data: null,
-      error: { message: "database unavailable" },
-    });
+    mocks.maybeSingle
+      .mockResolvedValueOnce({
+        data: {
+          id: "conversation-a",
+          channel: "instagram",
+          instagram_participant_id: "ig",
+          instagram_connection_id: "conn-a",
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "database unavailable" },
+      });
     const response = await request("delete");
     expect(response.status).toBe(500);
     expect(await response.json()).toHaveProperty("error");

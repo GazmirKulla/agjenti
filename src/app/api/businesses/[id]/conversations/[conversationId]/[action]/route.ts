@@ -42,6 +42,40 @@ export async function POST(
   }
 
   if (action === "delete") {
+    const { data: existing } = await service
+      .from("conversations")
+      .select(
+        "id,channel,whatsapp_participant_id,whatsapp_connection_id,instagram_participant_id,instagram_connection_id",
+      )
+      .eq("id", conversationId)
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (!existing)
+      return NextResponse.json(
+        { error: "Biseda nuk u gjet në këtë biznes." },
+        { status: 404 },
+      );
+    const participant =
+      existing.channel === "whatsapp"
+        ? existing.whatsapp_participant_id
+        : existing.instagram_participant_id;
+    const connection =
+      existing.channel === "whatsapp"
+        ? existing.whatsapp_connection_id
+        : existing.instagram_connection_id;
+    if (participant && connection) {
+      await service
+        .from("workflow_inbound_queue")
+        .update({
+          status: "ignored",
+          leased_until: null,
+          error: "Conversation deleted",
+        })
+        .eq("business_id", businessId)
+        .eq("connection_id", connection)
+        .eq("participant_id", participant)
+        .in("status", ["queued", "processing", "prepared", "sending"]);
+    }
     const { data, error } = await service
       .from("conversations")
       .delete()
@@ -87,5 +121,38 @@ export async function POST(
       { error: "Biseda nuk u gjet në këtë biznes." },
       { status: 404 },
     );
+  if (action === "resume") {
+    const { data: collected } = await service
+      .from("conversation_states")
+      .select("collected")
+      .eq("conversation_id", conversationId)
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (collected?.collected && typeof collected.collected === "object") {
+      const next = { ...(collected.collected as Record<string, unknown>) };
+      delete next.staffHandoff;
+      delete next.conversationPaused;
+      const visual = next.visual as { status?: string; advisory?: boolean } | undefined;
+      if (visual?.status === "handoff" && !visual.advisory) {
+        next.completedVisual = visual;
+        next.visual = { ...visual, status: "completed" };
+      }
+      await service
+        .from("conversation_states")
+        .update({ collected: next, updated_at: new Date().toISOString() })
+        .eq("conversation_id", conversationId)
+        .eq("business_id", businessId);
+    }
+    await service
+      .from("workflow_inbound_queue")
+      .update({
+        status: "ignored",
+        leased_until: null,
+        error: "Staff resumed the agent",
+      })
+      .eq("business_id", businessId)
+      .eq("conversation_id", conversationId)
+      .in("status", ["queued", "processing", "prepared", "sending", "uncertain"]);
+  }
   return NextResponse.json({ ok: true });
 }
