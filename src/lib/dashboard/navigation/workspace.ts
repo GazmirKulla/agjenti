@@ -1,7 +1,8 @@
 import type { NavItem } from "./builder";
 
 export type WorkspaceLink = { id: string; path: string; label: string; icon: string };
-export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "settings" | "integrations" | "business";
+export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "settings" | "integrations" | "business" | "products" | "orders" | "customers";
+const standaloneIds = ["products", "orders", "customers"] as const;
 const agentIds = new Set(["agents", "knowledge", "workflows", "sources"]);
 const settingsIds = new Set(["settings", "staff"]);
 const integrationIds = new Set(["instagram", "whatsapp"]);
@@ -19,7 +20,7 @@ export function organizeWorkspace(items: NavItem[]) {
     { id: "account", path: "account", label: "Llogaria ime", icon: "settings" },
   );
   const integrations: WorkspaceLink[] = items.filter(item => integrationIds.has(item.id));
-  const business = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !["dashboard", "inbox"].includes(item.id));
+  const business = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !["dashboard", "inbox", ...standaloneIds].includes(item.id));
   const groups = [
     { label: "Oferta", items: business.filter(item => ["products", "services", "catalogs"].includes(item.id)) },
     { label: "Operacionet", items: business.filter(item => ["orders", "bookings", "calendar"].includes(item.id)) },
@@ -29,6 +30,10 @@ export function organizeWorkspace(items: NavItem[]) {
   const primary: (WorkspaceLink & { section: WorkspaceSection })[] = [
     { id: "home", section: "home", path: "", label: "Kreu", icon: "home" },
     { id: "conversations", section: "conversations", path: "inbox", label: "Bisedat", icon: "inbox" },
+    ...standaloneIds.flatMap(id => {
+      const item = items.find(item => item.id === id);
+      return item ? [{ ...item, section: id }] : [];
+    }),
     { id: "agent", section: "agent", path: "agents", label: "Agjenti im", icon: "agents" },
     { id: "activity", section: "activity", path: "activity", label: "Aktiviteti", icon: "history" },
     ...(integrations.length ? [{ id: "integrations", section: "integrations" as const, path: "integrations", label: "Integrimet", icon: "integrations" }] : []),
@@ -47,6 +52,9 @@ export function activeWorkspaceLink(pathname: string, base: string, links: Works
 
 export function workspaceSection(pathname: string, base: string, navigation: ReturnType<typeof organizeWorkspace>): WorkspaceSection | undefined {
   if (pathname === base) return "home";
+  for (const id of standaloneIds) {
+    if (navigation.primary.some(item => item.id === id) && (pathname === `${base}/${id}` || pathname.startsWith(`${base}/${id}/`))) return id;
+  }
   if (navigation.integrations.length && ["integrations", ...integrationIds].some(path => pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`))) return "integrations";
   if (pathname === `${base}/activity`) return "activity";
   if (pathname === `${base}/inbox` || pathname.startsWith(`${base}/inbox/`)) return "conversations";

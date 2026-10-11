@@ -13,7 +13,7 @@ it("retains a reachable destination and search result for every existing module"
     expect(destinations.some(destination => destination.path === item.path), item.id).toBe(true);
     expect(navigation.search.some(destination => destination.path === item.path && destination.label === item.label), item.id).toBe(true);
   }
-  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Agjenti im", "Aktiviteti", "Integrimet", "Cilësimet"]);
+  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Produkte", "Porosi", "Klientë", "Agjenti im", "Aktiviteti", "Integrimet", "Cilësimet"]);
 });
 
 it("groups workflow and its deep links under the agent while keeping the original URL", () => {
@@ -25,7 +25,7 @@ it("groups workflow and its deep links under the agent while keeping the origina
 });
 
 it("keeps operational details, channel settings, onboarding and accounts reachable", () => {
-  expect(workspaceSection("/b/shop/products/record", "/b/shop", navigation)).toBe("business");
+  expect(workspaceSection("/b/shop/products/record", "/b/shop", navigation)).toBe("products");
   expect(workspaceSection("/b/shop/inbox/record/customer", "/b/shop", navigation)).toBe("conversations");
   for (const path of ["staff", "setup", "account"]) expect(workspaceSection(`/b/shop/${path}`, "/b/shop", navigation)).toBe("settings");
   expect(workspaceSection("/b/shop/activity", "/b/shop", navigation)).toBe("activity");
@@ -57,4 +57,12 @@ it("groups channels under Integrimet using available existing destinations", () 
   expect(whatsappOnly.primary.find(item => item.id === "integrations")?.path).toBe("integrations");
   const noChannels = organizeWorkspace(allItems.filter(item => !["instagram", "whatsapp"].includes(item.id)));
   expect(noChannels.primary.some(item => item.id === "integrations")).toBe(false);
+});
+
+it("keeps standalone business modules out of nested navigation and selects their detail routes", () => {
+  for (const id of ["products", "orders", "customers"]) {
+    expect(navigation.business.some(item => item.id === id)).toBe(false);
+    expect(navigation.groups.flatMap(group => group.items).some(item => item.id === id)).toBe(false);
+    expect(workspaceSection(`/b/shop/${id}/record`, "/b/shop", navigation)).toBe(id);
+  }
 });
