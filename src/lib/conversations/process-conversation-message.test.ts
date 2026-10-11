@@ -275,17 +275,48 @@ it("does not invoke a booking capability removed from a v2 definition", async ()
 it("keeps pre-pilot production booking behavior behind the single entry point", async () => {
   vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
   await processConversationMessage({ businessId: "business", message: "Dua rezervim", hasPhoto: false, state: emptyState(), mode: "production" });
-  expect(mocks.booking).toHaveBeenCalledWith(expect.not.objectContaining({ routed: true }));
+  expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ routed: true }));
 });
-it("keeps legacy Instagram routing while passing the queue guard to effects", async () => {
+it.each(["instagram", "whatsapp"] as const)("routes %s through business conversation handling without a pilot flag", async source => {
   vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
   const bookingGuard = { jobId: 1, leaseToken: "lease", conversationId: "conversation", revision: 4 };
-  const state = emptyState();
-  mocks.booking.mockResolvedValueOnce(null);
-  await processConversationMessage({ businessId: "business", source: "instagram", message: "M", hasPhoto: false, state, mode: "production", bookingGuard });
-  expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ state, bookingGuard }));
-  expect(mocks.guidance).not.toHaveBeenCalled();
-  expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ bookingGuard }));
+  const next = await processConversationMessage({ businessId: "business", source, message: "Pershendetje", hasPhoto: false, state: emptyState(), mode: "production", bookingGuard });
+  expect(next.nextState.schemaVersion).toBe(3);
+  expect(next.conversationRouting?.process).toBe("information");
+  expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ businessId: "business", bookingGuard, source }));
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.booking).not.toHaveBeenCalled();
+});
+
+it.each(["instagram", "whatsapp"] as const)("uses the business agent for ambiguous %s messages without inventing workflow changes", async source => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  mocks.guidance.mockResolvedValue({ action: "clarify", target: null, source: "ai" });
+  mocks.info.mockImplementation(async ({ state }) => result(state, "Përshëndetje! Si mund t’ju ndihmojmë?"));
+  let state = emptyState();
+  for (const message of ["Shsnsj", "Helpo", "Pershendetje"]) {
+    const before = structuredClone(state);
+    const next = await processConversationMessage({ businessId: "business", source, mode: "production", message, state, hasPhoto: false });
+    expect(state).toEqual(before);
+    expect(next.reply).toBe("Përshëndetje! Si mund t’ju ndihmojmë?");
+    expect(next.conversationRouting?.process).toBe("information");
+    expect(next.nextState.processes?.active).toBeNull();
+    expect(next.nextState.processes?.order).toBeUndefined();
+    expect(next.nextState.processes?.booking).toBeUndefined();
+    expect(mocks.info).toHaveBeenLastCalledWith(expect.objectContaining({ businessId: "business", message, informational: expect.stringContaining("configured agent's tone") }));
+    state = next.nextState;
+  }
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.booking).not.toHaveBeenCalled();
+});
+
+it("keeps task clarification for ambiguous corrections to an active order", async () => {
+  mocks.guidance.mockResolvedValue({ action: "clarify", target: null, source: "ai" });
+  const state = order();
+  const next = await turn("ndrysho", state);
+  expect(next.conversationRouting?.process).toBe("clarify");
+  expect(next.nextState.processes?.order?.snapshot.product_id).toBe("product");
+  expect(next.nextState.fields.size).toBe("L");
+  expect(mocks.info).not.toHaveBeenCalled();
 });
 
 it("treats a bare contact channel after handoff as support rather than an order", async () => {
@@ -698,7 +729,7 @@ const channelCases = [
   { source: "admin_chat_lab" as const, mode: "test" as const, guarded: false },
 ];
 it.each(channelCases)("shares routing and task resumption in $source / guard=$guarded", async ({ source, mode, guarded }) => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business");
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
   const bookingGuard = guarded ? { jobId: 1, leaseToken: "lease", conversationId: "conversation", revision: 4 } : undefined;
   const run = (message: string, state: ConversationStatePayload) => processConversationMessage({ businessId: "business", source, mode, bookingGuard, message, state, hasPhoto: false });
   const original = order();
@@ -725,7 +756,7 @@ it.each(channelCases)("shares routing and task resumption in $source / guard=$gu
   expect(support.nextState.processes?.order?.snapshot.product_id).toBe("product");
   expect(support.nextState.processes?.order?.status).toBe("suspended");
 });
-it("stops enrolling new Instagram threads when the pilot is removed but preserves migrated work", async () => {
+it("keeps both migrated and new Instagram threads on the shared coordinator without a pilot", async () => {
   vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business");
   const migrated = await processConversationMessage({ businessId: "business", source: "instagram", message: "M", state: order(), hasPhoto: false });
   expect(migrated.nextState.schemaVersion).toBe(3);
@@ -735,7 +766,7 @@ it("stops enrolling new Instagram threads when the pilot is removed but preserve
   expect(continued.nextState.processes?.order?.snapshot.execution.linear?.versionId).toBe("v1");
   mocks.booking.mockClear();
   await processConversationMessage({ businessId: "business", source: "instagram", message: "Dua rezervim", state: emptyState(), hasPhoto: false });
-  expect(mocks.booking).toHaveBeenCalledWith(expect.not.objectContaining({ routed: true }));
+  expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ routed: true }));
 });
 
 it.each(["instagram", "whatsapp"] as const)("preserves a migrated booking's pinned graph through an order detour in %s production", async source => {

@@ -24,6 +24,7 @@ vi.mock("@/lib/instagram/user-profile", () => ({
 
 import { handleInboundMessage } from "./handle-inbound";
 import { emptyState } from "@/lib/workflows/engine";
+import { migrateContext } from "@/lib/workflows/context";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 const message: NormalizedIncomingMessage = {
   channel: "instagram",
@@ -210,13 +211,10 @@ describe("inbound persistence boundary", () => {
     inboundResult = { data: null, error: { code: "57014", message: "timeout" } };
     await expect(handleInboundMessage(message, queued ? queuedJob() : undefined)).rejects.toThrow();
     inboundResult = { data: { id: "inbound-a" }, error: null };
-    await handleInboundMessage(message, queued ? queuedJob() : undefined);
+    await handleInboundMessage(message, queuedJob());
     expect(mocks.process).toHaveBeenCalledOnce();
-    if (!queued) {
-      await handleInboundMessage(message);
-      expect(mocks.process).toHaveBeenCalledOnce();
-      expect(mocks.send).toHaveBeenCalledOnce();
-    }
+    expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.anything());
+    expect(mocks.send).not.toHaveBeenCalled();
   });
   it.each([false, true])("rejects an unconfirmed insert with no ID, queued=%s", async queued => {
     inboundResult = { data: null, error: null };
@@ -229,7 +227,7 @@ describe("inbound persistence boundary", () => {
     expect(mocks.process).not.toHaveBeenCalled();
     inboundException = null;
     inboundResult = { data: null, error: { code: "23505", message: "duplicate" } };
-    await handleInboundMessage(message, queued ? queuedJob() : undefined);
+    await handleInboundMessage(message, queuedJob());
     expect(mocks.process).toHaveBeenCalledOnce();
     expect(duplicateFilters).toEqual({ business_id: "business-a", conversation_id: "conversation-a", instagram_connection_id: "connection-a", external_message_id: "msg-a", direction: "inbound", source: "customer" });
   });
@@ -256,10 +254,10 @@ describe("inbound persistence boundary", () => {
     expect(webhookEvents.size).toBe(0);
     webhookInsertCode = null;
     inboundResult = { data: null, error: { code: "23505", message: "already stored" } };
-    await handleInboundMessage(message);
-    await handleInboundMessage(message);
+    await handleInboundMessage(message, queuedJob());
     expect(mocks.process).toHaveBeenCalledOnce();
-    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.anything());
   });
   it("verifies WhatsApp duplicates against the WhatsApp connection", async () => {
     inboundResult = { data: null, error: { code: "23505", message: "duplicate" } };
@@ -270,40 +268,20 @@ describe("inbound persistence boundary", () => {
   });
 });
 describe("real inbound integration with shared processor", () => {
-  it("persists the shared next state and sends its exact reply only from the real transport", async () => {
-    await handleInboundMessage(message);
+  it("prepares the shared next state and exact reply for queue delivery", async () => {
+    const job = queuedJob();
+    await handleInboundMessage(message, job);
     expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({
-      persistedWorkflowId: null,
-      businessId: "business-a",
-      message: "Bluzë",
-      hasPhoto: false,
-      state: { ...emptyState(), recentMessages: [] },
-      previousResponseId: "resp_old",
+      persistedWorkflowId: null, businessId: "business-a", message: "Bluzë", hasPhoto: false,
+      state: { ...migrateContext(emptyState()), recentMessages: [] }, previousResponseId: "resp_old",
     }));
-    expect(writes.some((w) => w.table === "customers")).toBe(false);
-    expect(writes).toContainEqual({
-      table: "conversation_states",
-      operation: "upsert",
-      data: expect.objectContaining({
-        workflow_id: "workflow-a",
-        collected: expect.objectContaining({ step_key: "collect_size" }),
-        business_id: "business-a",
-      }),
-    });
-    expect(mocks.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: "Përgjigje nga pipeline",
-        accountId: "ig-a",
-        to: "customer-ig",
-      }),
-    );
-    expect(writes).toContainEqual({
-      table: "conversations",
-      operation: "update",
-      data: expect.objectContaining({
-        openai_previous_response_id: "resp_new",
-      }),
-    });
+    expect(writes.some(w => w.table === "customers")).toBe(false);
+    expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({
+      p_workflow: "workflow-a", p_state: expect.objectContaining({ step_key: "collect_size" }),
+      p_reply: "Përgjigje nga pipeline", p_response: "resp_new",
+    }));
+    expect(job.status).toBe("prepared");
+    expect(mocks.send).not.toHaveBeenCalled();
   });
   it("does not create a CRM customer on first inbound message", async () => {
     // Force new conversation path: open lookup returns null.
@@ -444,14 +422,13 @@ describe("real inbound integration with shared processor", () => {
 it("pauses a visual handoff before sending and preserves its collected state", async () => {
   const nextState = { ...emptyState(), visual: { versionId: "v1", nodeId: "staff", status: "handoff" as const, awaiting: false, visited: ["start", "staff"], values: { email: "demo@example.test" } } };
   mocks.process.mockResolvedValue({ reply: "Kaloi te stafi", nextState, previousResponseId: null, workflowId: null, handoff: true });
-  await handleInboundMessage(message);
-  expect(writes).toContainEqual({ table: "conversations", operation: "update", data: { status: "paused", auto_reply: false } });
-  expect(writes).toContainEqual(expect.objectContaining({ table: "conversation_states", data: expect.objectContaining({ collected: nextState }) }));
-  expect(mocks.send).toHaveBeenCalledOnce();
+  await handleInboundMessage(message, queuedJob());
+  expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_handoff: true, p_state: nextState }));
+  expect(mocks.send).not.toHaveBeenCalled();
 });
 it("allows an explicitly resumed handoff to start a new run without erasing collected data", async () => {
   savedState = { ...emptyState(), visual: { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: ["staff"], values: { email: "demo@example.test" } } };
-  await handleInboundMessage(message);
+  await handleInboundMessage(message, queuedJob());
   expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: expect.objectContaining({ visual: expect.objectContaining({ status: "completed", values: { email: "demo@example.test" } }), completedVisual: savedState.visual }) }));
 });
 it("does not execute the same webhook twice when concurrent inserts collide", async () => {
@@ -469,13 +446,14 @@ it("does not execute a message whose event cannot be persisted", async () => {
 it("keeps automatic replies on for advisory workflow handoffs",async()=>{
  const nextState={...emptyState(),visual:{versionId:"v1",nodeId:"staff",status:"handoff" as const,awaiting:false,visited:["staff"],values:{},advisory:true}};
  mocks.process.mockResolvedValue({reply:"Kontaktoni stafin",nextState,previousResponseId:null,workflowId:null,handoff:true,advisoryHandoff:true});
- await handleInboundMessage(message);
+ await handleInboundMessage(message, queuedJob());
  expect(writes).not.toContainEqual({table:"conversations",operation:"update",data:{status:"paused",auto_reply:false}});
- expect(mocks.send).toHaveBeenCalledOnce();
+ expect(mocks.send).not.toHaveBeenCalled();
+ expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply",expect.objectContaining({p_handoff:false}));
 });
 it("preserves the advisory cursor on the next live inbound turn",async()=>{
  savedState={...emptyState(),visual:{versionId:"v1",nodeId:"staff",status:"handoff",awaiting:false,visited:["staff"],values:{},advisory:true}};
- await handleInboundMessage(message);
+ await handleInboundMessage(message, queuedJob());
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({state:expect.objectContaining({visual:savedState.visual})}));
 });
 
@@ -499,23 +477,23 @@ it("commits a non-pilot Instagram turn with a revision and lease before the queu
   expect(writes.filter(w => w.table === "conversation_states" && w.operation === "upsert")).toEqual([]);
   expect(mocks.send).not.toHaveBeenCalled();
   expect(job.status).toBe("prepared");
-  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: { ...emptyState(), recentMessages: [] }, bookingGuard: expect.objectContaining({ revision: 0, leaseToken: "lease-a" }) }));
+  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: { ...migrateContext(emptyState()), recentMessages: [] }, bookingGuard: expect.objectContaining({ revision: 0, leaseToken: "lease-a" }) }));
 });
 
 
 it.each(["sent", "failed", "pending"])("passes only confirmed prompt delivery to the processor (%s)",async delivery_status=>{
  outboundResult={data:{body:"Ta konfirmojmë porosinë?",source:"agent",delivery_status},error:null};
- await handleInboundMessage({...message,text:"Po"});
+ await handleInboundMessage({...message,text:"Po"},queuedJob());
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({deliveredReply:delivery_status==="sent"?"Ta konfirmojmë porosinë?":null}));
 });
 it("does not use a staff reply as approval of an older agent prompt",async()=>{
  outboundResult={data:{body:"Po",source:"staff",delivery_status:"sent"},error:null};
- await handleInboundMessage({...message,text:"Ok"});
+ await handleInboundMessage({...message,text:"Ok"},queuedJob());
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({deliveredReply:null}));
 });
 it("stops before the processor if delivery evidence cannot be read",async()=>{
  outboundResult={data:null,error:{message:"unavailable"}};
- await expect(handleInboundMessage({...message,text:"Po"})).rejects.toThrow("Conversation history unavailable");
+ await expect(handleInboundMessage({...message,text:"Po"},queuedJob())).rejects.toThrow("Conversation history unavailable");
  expect(mocks.process).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();
 });
 
@@ -527,7 +505,7 @@ it.each(["sent", "uncertain", "prepared"])("checks the latest queue attempt even
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({deliveredReply:status==="sent"?body:null}));
 });
 
-it.each(["pilot", "migrated"])("requires the queue for live %s Instagram state even when routing can be tested without it", async kind => {
+it.each(["new", "pilot", "migrated"])("requires the queue for live %s Instagram state even when routing can be tested without it", async kind => {
   vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", kind === "pilot" ? "business-a" : "");
   if (kind === "migrated") savedState.schemaVersion = 3;
   await expect(handleInboundMessage(message)).rejects.toThrow("workflow_queue_required");

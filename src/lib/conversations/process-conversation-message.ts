@@ -68,7 +68,9 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   if (guidance.action === "order" || (guidance.action === "route" && guidance.target === "order")) return { process: "order", source: guidance.source };
   if (guidance.action === "answer") return { process: "information", source: guidance.source };
   // Detailed corrections/backtracking are handled by the selected process's existing guidance engine.
-  if (guidance.action === "clarify" && !active && state.visual?.status === "handoff") return { process: "information", source: guidance.source };
+  // Without a pending task, ambiguous text is ordinary conversation. Let the
+  // business agent greet/clarify instead of inventing a request to edit a workflow.
+  if (guidance.action === "clarify" && !active && (!auxiliary && !state.processes!.pendingChoice || state.visual?.status === "handoff")) return { process: "information", source: guidance.source };
   if (guidance.action === "clarify") return { process: "clarify", source: guidance.source, clarification: "Çfarë dëshiron të ndryshosh ose të vazhdosh?" };
   // A conversational answer is not an implicit purchase. Only a selected order
   // intent or an existing active task may enter the product collection engine.
@@ -368,7 +370,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       }
       return finish(answer);
     }
-    const answer = await processLegacyAgentTurn({ ...params, state, informational: `Respond to the current message in the context of the recent conversation, including answers to a question you asked the customer. Use verified business information. Continue the relevant conversation without starting an order or asking which product they want unless they request ordering. Preserve every unfinished task. Do not confirm or perform an action and do not repeat the previous workflow question.${knowledge?.config.prompt ? ` Configured informational workflow guidance: ${knowledge.config.prompt}` : ""}` });
+    const answer = await processLegacyAgentTurn({ ...params, state, informational: `Respond to the current message in the context of the recent conversation, including answers to a question you asked the customer. Use verified business information and the configured agent's tone. Respond naturally to greetings, including obvious typos. If the message is unclear, briefly ask what the customer needs; do not assume there is a request to change or resume an order or booking. Continue the relevant conversation without starting an order or asking which product they want unless they request ordering. Preserve every unfinished task. Do not confirm or perform an action and do not repeat the previous workflow question.${knowledge?.config.prompt ? ` Configured informational workflow guidance: ${knowledge.config.prompt}` : ""}` });
     answer.nextState = state;
     return finish(answer);
   }
