@@ -13,7 +13,9 @@ import {
 import { bulkConfigureProducts } from "@/lib/products/actions";
 import { updateCatalogField, type CatalogField } from "@/lib/products/inline-actions";
 import { productMoney as money } from "@/lib/products/catalog";
-import { EntityFlowLink, entityWorkflowHref } from "@/components/workflows/entity-flow-link";
+import { entityWorkflowHref } from "@/components/workflows/entity-flow-link";
+
+import { ProductBusinessWorkflow } from "./business-workflow";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "Aktiv",
@@ -450,9 +452,9 @@ export function ProductCatalog({
                   ))}
                 </select>
               </label>
-              <EntityFlowLink slug={slug} kind="product" id={configProduct.id} binding={configProduct.visual_workflow} draft={configProduct.visual_draft} />
-              {<label className="form-label">
-                Workflow për produktin
+              <ProductBusinessWorkflow slug={slug} workflow={configProduct.business_workflow} product={configProduct} />
+              <details open={Boolean(configProduct.workflow_id)}><summary>Proces i posaçëm (opsional)</summary><label className="form-label">
+                Procesi pas zgjedhjes së produktit
                 <select
                   className="field"
                   value={
@@ -471,7 +473,7 @@ export function ProductCatalog({
                     )
                   }
                 >
-                  <option value="">Pa konfigurim linear</option>
+                  <option value="">{configProduct.visual_workflow || configProduct.visual_draft ? "Ruaj procesin vizual ekzistues" : "Përdor workflow-in kryesor"}</option>
                   {configProduct.workflow_id &&
                     !workflows.some(
                       (workflow) => workflow.id === configProduct.workflow_id,
@@ -480,13 +482,13 @@ export function ProductCatalog({
                         Workflow aktual
                       </option>
                     )}
-                  {workflows.map((workflow) => (
+                  {workflows.filter(w => w.id).map((workflow) => (
                     <option key={workflow.id} value={workflow.id}>
                       {workflow.name}
                     </option>
                   ))}
                 </select>
-              </label>}
+              </label></details>
               <label className="form-label">
                 Statusi
                 <select
@@ -517,7 +519,7 @@ export function ProductCatalog({
               </label>
               {!isMapped(configProduct) && (
                 <p className="muted-copy">
-                  Plotëso llojin dhe lidh produktin me një rrjedhë para aktivizimit. Lidhjet e reja hyjnë në fuqi pas publikimit.
+                  Produkti aktiv është i disponueshëm për workflow-in kryesor. Procesi i posaçëm është opsional.
                 </p>
               )}
               <small
@@ -599,14 +601,14 @@ export function ProductCatalog({
               </select>
             </label>
             <label className="form-label">
-              Workflow i biznesit
+              Proces i posaçëm (opsional)
               <select
                 className="field"
                 value={workflowId}
                 onChange={(e) => setWorkflowId(e.target.value)}
               >
                 <option value="">Mos e ndrysho</option>
-                {workflows.map((w) => (
+                {workflows.filter(w => w.id).map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
                   </option>

@@ -22,6 +22,8 @@ describe("catalog organization", () => {
     expect(catalogStatus(product("2", { is_active: false }))).toBe("draft");
     expect(catalogStatus(product("3", { workflow_id: null }))).toBe("unlinked");
     expect(catalogStatus(product("4", { workflow_id: null, visual_workflow: { versionId: "v", flowId: "order", name: "Porosi" } }))).toBe("active");
+    expect(catalogStatus(product("5", { workflow_id: null, business_workflow: { name: "Main", active: true, status: "Aktiv" } }))).toBe("active");
+    expect(catalogStatus(product("6", { workflow_id: null, business_workflow: { name: "Main", active: false, status: "Draft" } }))).toBe("unlinked");
   });
   it("combines search, type, import and status filters then sorts", () => {
     const rows = [

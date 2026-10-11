@@ -23,6 +23,7 @@ export function ProductEditor({
   types: Option[];
   workflows: Option[];
 }) {
+  const businessWorkflow = workflows.find(w => w.businessWorkflow)?.businessWorkflow;
   const [preview, setPreview] = useState({
     name: product?.name ?? "",
     description: product?.description ?? "",
@@ -41,7 +42,7 @@ export function ProductEditor({
     ["Emri i produktit", preview.name.trim().length >= 2],
     ["Çmimi i produktit", preview.price !== null],
     ["Lloji i produktit", !!preview.type],
-    ["Rrjedha e produktit", !!preview.workflow || !!product?.visual_workflow],
+    ["Workflow kryesor / proces i posaçëm", !!preview.workflow || !!product?.visual_workflow || !!businessWorkflow?.active],
     ["Foto e produktit", !!preview.image],
   ] as const;
   const completed = checks.filter(([, ok]) => ok).length;
@@ -138,7 +139,7 @@ export function ProductEditor({
             <strong>{money(preview.price, preview.currency)}</strong>
             <p>{types.find((t) => t.id === preview.type)?.name || "Pa lloj"}</p>
             <span className="product-tag">
-              {product?.visual_workflow?.name || workflows.find((w) => w.id === preview.workflow)?.name ||
+              {businessWorkflow?.name || product?.visual_workflow?.name || workflows.find((w) => w.id === preview.workflow)?.name ||
                 "Pa workflow"}
             </span>
           </section>
@@ -188,7 +189,7 @@ export function ProductEditor({
             )}
             {success && <p role="status">{success}</p>}
             <p className="muted-copy">
-              Draftet nuk përdoren nga Agjenti. Plotëso çmimin, llojin dhe rrjedhën e lidhur përpara aktivizimit.
+              Produktet aktive përdoren nga Agjenti në workflow-in kryesor. Draftet qëndrojnë jashtë përgjigjeve për klientët.
             </p>
           </div>
         </aside>
@@ -196,11 +197,11 @@ export function ProductEditor({
       {product && (
         <div className="products-workspace product-detail-extras">
           <section className="panel section-pad">
-            <h2>Rrjedha e produktit</h2>
+            <h2>Proces i posaçëm i porosisë (opsional)</h2>
             <p className="muted-copy">
               {product.visual_workflow ? `Produkti ndjek rrjedhën “${product.visual_workflow.name}”. Hapat ndryshohen te Workflow.` : types.find((t) => t.id === product.product_type_id)
                 ?.description ||
-                "Lidhe produktin drejtpërdrejt me një rrjedhë te Procesi i porosisë."}
+                "Workflow-i kryesor drejton mesazhet. Shto një proces të posaçëm vetëm nëse ky produkt kërkon hapa të tjerë."}
             </p>
             {product.product_type_id && !product.visual_workflow && (
               <ActionForm action={applyTypeSuggestion.bind(null, slug)}>

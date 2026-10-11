@@ -1,4 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
+const businessWorkflow = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/workflows/visual/business-workflow", () => ({ publishedBusinessWorkflow: businessWorkflow }));
 const m = vi.hoisted(() => ({
   user: vi.fn(),
   access: vi.fn(),
@@ -23,6 +25,7 @@ let rows: Record<string, unknown>[];
 const id = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => {
   vi.clearAllMocks();
+  businessWorkflow.mockResolvedValue(null);
   m.rpc.mockResolvedValue({ data: 1, error: null });
   m.bindings.mockResolvedValue(new Map());
   rows = [
@@ -85,6 +88,23 @@ const payload = {
   mode: "activate" as const,
 };
 describe("catalog writes", () => {
+  it("creates and activates a catalog product through the published business workflow without binding a branch", async () => {
+    businessWorkflow.mockResolvedValue({ name: "Rrjedha e workflow 1", active: true, status: "Aktiv" });
+    const form = new FormData();
+    Object.entries({ name: "Libri i Shkronjave", price: "520", product_type_id: "type", is_active: "on" }).forEach(([key, value]) => form.set(key, value));
+    expect(await createProduct("test", form)).toHaveProperty("success");
+    expect(businessWorkflow).toHaveBeenCalledWith("business");
+    expect(m.insert).toHaveBeenCalledWith(expect.objectContaining({ workflow_id: null, is_active: true }));
+    expect(m.rpc).not.toHaveBeenCalled();
+  });
+  it("bulk activates products inheriting the main workflow without adding branch assignments", async () => {
+    rows[0].workflow_id = null;
+    businessWorkflow.mockResolvedValue({ name: "Rrjedha e workflow 1", active: true, status: "Aktiv" });
+    expect(await bulkConfigureProducts("test", payload)).toHaveProperty("success");
+    expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }));
+    expect(m.or).not.toHaveBeenCalled();
+    expect(m.rpc).not.toHaveBeenCalled();
+  });
   it.each(["create", "update", "import", "bind"] as const)("saves %s with its visual draft binding in one transaction", async (mode) => {
     const form = new FormData();
     Object.entries({ name: "Puzzle", price: "790", currency: "ALL", workflow_id: "visual:2:info", product_id: id, updated_at: "2026-10-11T10:00:00Z" }).forEach(([key, value]) => form.set(key, value));

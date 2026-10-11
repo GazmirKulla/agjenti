@@ -509,3 +509,44 @@ it("keeps a status simulation deterministic even when the message has an attachm
   expect(mocks.generate).not.toHaveBeenCalled();
   expect(queries).toEqual([]);
 });
+
+it("answers about an unbound catalog product, then starts ordering through the main workflow using recent context", async () => {
+  const { starterVisualGraph, upgradeVisualGraph } = await import("@/lib/workflows/visual/model");
+  const graph = upgradeVisualGraph(starterVisualGraph());
+  graph.name = "Rrjedha e workflow 1";
+  fixtures.products = [{ id: "book", name: "Libri i Shkronjave", sku: "LIB-101", description: "Ushtrime për shkronjat", price_amount: 520, currency: "ALL", product_type_id: "standard", workflow_id: null }];
+  mocks.generate.mockResolvedValue({ reply: "Libri i Shkronjave kushton 520 Lekë.", responseId: null, source: "ai", fallbackReason: null });
+  const preview = { id: "root-v1", businessId: "business-a", graph, createdAt: "2026-10-11" };
+  const question = "Sa kushton Libri i Shkronjave?";
+  const answer = await processAgentTurn({ businessId: "business-a", mode: "test", visualPreview: preview, message: question, hasPhoto: false, informationRequest: true });
+  expect(answer.nextState.product_id).toBeNull();
+  expect(answer.nextState.step_key).toBe("choose_product");
+  expect(mocks.generate.mock.calls.at(-1)?.[0].documentContext).toContain("520 ALL");
+  expect(queries.find(q => q.table === "products")?.filters).toContainEqual(["is_active", true]);
+  answer.nextState.recentMessages = [{ role: "user", content: question }, { role: "assistant", content: answer.reply }];
+  const order = await processAgentTurn({ businessId: "business-a", mode: "test", visualPreview: preview, message: "Dua ta blej", state: answer.nextState, hasPhoto: false, orderRequest: true });
+  expect(order.nextState.product_id).toBe("book");
+  expect(order.nextState.step_key).toBe("collect_customer");
+  expect(order.handoff).not.toBe(true);
+  expect(order.workflowId).toBeNull();
+  const { processLegacyAgentTurn } = await import("./process-agent-turn");
+  const ready = structuredClone(order.nextState);
+  ready.customer = { name: "Ana", phone: "+355691234567", city: "Tiranë", address: "Rruga A" };
+  const { setFact } = await import("@/lib/workflows/context");
+  for (const [key, value] of Object.entries(ready.customer)) setFact(ready, `customer_${key}`, value!, key === "phone" ? "phone" : "text", "test");
+  const review = await processLegacyAgentTurn({ businessId: "business-a", message: "", state: ready, hasPhoto: false, requireConfiguredWorkflow: false });
+  expect(review.nextState.step_key).not.toBe("order_ready");
+  expect(review.nextState.context?.execution.orderConfirmed).not.toBe(true);
+});
+
+it("asks which product to order when recent interest is ambiguous or no longer available", async () => {
+  const { processLegacyAgentTurn } = await import("./process-agent-turn");
+  const first = { id: "a", name: "Libri i Shkronjave", workflow_id: null };
+  const second = { id: "b", name: "Libri i Numrave", workflow_id: null };
+  for (const products of [[first, second], []]) {
+    fixtures.products = products;
+    const state = { ...emptyState(), recentMessages: [{ role: "user" as const, content: "Sa kushtojnë Libri i Shkronjave dhe Libri i Numrave?" }] };
+    const answer = await processLegacyAgentTurn({ businessId: "business-a", message: "Dua ta blej", state, hasPhoto: false, orderRequest: true });
+    expect(answer.nextState.product_id).toBeNull();
+  }
+});

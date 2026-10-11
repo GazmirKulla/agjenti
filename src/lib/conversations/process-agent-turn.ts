@@ -394,8 +394,15 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   }
   if (!selected && text) {
     const skuMatches = products.filter((p) => matchesSku(p.sku, text));
-    const match =
+    let match =
       skuMatches.length === 1 ? skuMatches[0] : pickProduct(products, text);
+    // A clear purchase request may refer to the product in the customer's last
+    // message. Re-resolve against the active tenant catalog; never trust a model ID.
+    if (!match && orderRequest && /^(?:dua (?:ta (?:blej|marr|porosis)|kete)|e dua|i want (?:it|this)|buy (?:it|this))[.!\s]*$/.test(foldText(text))) {
+      const lastQuestion = state.recentMessages?.filter(message => message.role === "user").at(-1)?.content ?? "";
+      const candidates = products.filter(product => matchesSku(product.sku, lastQuestion) || new RegExp(`(?:^|[^a-z0-9])${foldText(product.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`).test(foldText(lastQuestion)));
+      if (candidates.length === 1) match = candidates[0];
+    }
     if (match) {
       selected = match;
       justSelected = true;
@@ -456,6 +463,9 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
         });
     }
   }
+  // The standard path inherited from the main workflow keeps explicit order
+  // confirmation even for businesses still using the older conversation adapter.
+  if (params.requireConfiguredWorkflow === false && !resolvedWorkflowId && !state.context) state = migrateContext(state);
   if (state.context && workflowId && !pinned) {
     const { data: definition, error } = await db.from("linear_workflow_versions").select("id,name,steps")
       .eq("business_id", params.businessId).eq("workflow_id", workflowId).order("created_at", { ascending: false }).limit(1).maybeSingle();

@@ -50,10 +50,11 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     previous = undefined; active = null; delete base.visual;
   }
   if (previous?.binding && !params.informationRequest && !params.orderStatusRequest && !informationalEntity && !selectedEntity) return simple("Produkti ose shërbimi i këtij procesi nuk është më aktiv. Kontakto stafin për të vazhduar.");
-  if (!selectedEntity && entityResolution.mentioned?.kind === "product") return legacy({ ...params, state: base, requireConfiguredWorkflow: true });
+  const generalOrderFlows = () => version.graph.version === 2 ? version.graph.flows.filter(flow => flow.kind === "order" && !flow.productIds?.length && !flow.serviceIds?.length) : [];
+  if (!selectedEntity && entityResolution.mentioned?.kind === "product" && !generalOrderFlows().length) return legacy({ ...params, state: base, requireConfiguredWorkflow: true });
   const boundFlow = selectedEntity && version.graph.version === 2 ? version.graph.flows.find(flow => flow.id === selectedEntity.binding.flowId) : undefined;
   const boundOrder = selectedEntity?.entity.kind === "product" && Boolean(boundFlow && (boundFlow.kind === "order" || boundFlow.nodeIds.some(id => version.graph.nodes.some(node => node.id === id && node.kind === "product")) || boundFlow.kind === "custom" && (params.orderRequest || base.product_id === selectedEntity.entity.id && previous?.binding?.entity.id === selectedEntity.entity.id)));
-  if (!selectedEntity && !base.product_id && !entityResolution.mentioned && (params.orderRequest || detectVisualIntent(params.message) === "order") && entityResolution.available?.some(entity => entity.kind === "product")) return simple(`Cilin produkt dëshironi? ${entityResolution.available.filter(entity => entity.kind === "product").map(entity => entity.name).join(", ")}.`);
+  if (!generalOrderFlows().length && !selectedEntity && !base.product_id && !entityResolution.mentioned && (params.orderRequest || detectVisualIntent(params.message) === "order") && entityResolution.available?.some(entity => entity.kind === "product")) return simple(`Cilin produkt dëshironi? ${entityResolution.available.filter(entity => entity.kind === "product").map(entity => entity.name).join(", ")}.`);
   const enteringEntity = Boolean(boundFlow && (!previous?.binding || previous.binding.entity.id !== selectedEntity!.entity.id || previous.status === "completed"));
   if (enteringEntity && selectedEntity?.entity.kind === "product" && base.product_id && base.product_id !== selectedEntity.entity.id && base.step_key !== "order_ready") {
     if (base.processes) base.processes.pendingChoice = { kind: "replace", process: "order", message: params.message };
@@ -266,9 +267,10 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       // A loop back to a product starts a fresh selection on the NEXT incoming message.
       if (productCalled) { replies.push("Cilin produkt dëshironi?"); finished = true; break; }
       productCalled = true;
-      turn = await legacy({ ...params, message: revisiting && base.product_id ? params.message : execution.inputConsumed && (!extracted || continuing) ? "" : params.message,
+      const startingGeneralOrder = !continuing && generalOrderFlows().some(flow => flow.entryNodeId === action.nodeId) && (params.orderRequest || guidance.action === "order");
+      turn = await legacy({ ...params, message: startingGeneralOrder || revisiting && base.product_id ? params.message : execution.inputConsumed && (!extracted || continuing) ? "" : params.message,
         hasPhoto: !execution.inputConsumed && params.hasPhoto, state: turn.nextState, previousResponseId: continuing ? params.previousResponseId : null,
-        orderRequest: navigating && !revisiting, requireConfiguredWorkflow: true });
+        orderRequest: navigating && !revisiting, requireConfiguredWorkflow: !generalOrderFlows().some(flow => flow.nodeIds.includes(action.nodeId)) });
       currentState=turn.nextState;
       replies.push(turn.reply);
       if (turn.handoff) { execution.state.status = "handoff"; execution.state.advisory = turn.advisoryHandoff === true; execution.state.awaiting = false; finished = true; break; }

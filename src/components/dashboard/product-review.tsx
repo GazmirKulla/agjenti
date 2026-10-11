@@ -195,10 +195,10 @@ export function ProductReview({
           </select>
         </label>
         <label className="form-label">
-          Workflow për këto produkte
+          Workflow kryesor / proces i posaçëm
           <select className="field" value={workflowId} onChange={(event) => setWorkflowId(event.target.value)}>
-            <option value="">Pa workflow</option>
-            {workflows.map((workflow) => (
+            <option value="">{workflows.find(w => !w.id)?.name ?? "Workflow-i kryesor i biznesit"}</option>
+            {workflows.filter(w => w.id).map((workflow) => (
               <option key={workflow.id} value={workflow.id}>
                 {workflow.name}
               </option>
@@ -206,7 +206,7 @@ export function ProductReview({
           </select>
         </label>
       </div>
-      <p className="muted-copy">Lloji zbatohet te produktet që ruan tani. Lidhjet me flow-t vizualë ruhen si draft; publikohen te Workflow.</p>
+      <p className="muted-copy">Produktet importohen si draft. Pas aktivizimit, workflow-i kryesor i përdor sipas kërkesës së klientit. Procesi i posaçëm është opsional.</p>
       <button
         type="button"
         className="btn btn-primary"

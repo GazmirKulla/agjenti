@@ -37,9 +37,9 @@ export const loadProducts = cache(async (slug: string) => {
     products: ((products.data ?? []) as ProductRow[]).map(product => {
       const binding = bindings.enabled && bindings.versionId ? bindings.products.find(item => item.id === product.id) : undefined;
       const draft = choices.flows.find(f => f.productIds.includes(product.id));
-      return { ...product, visual_draft: draft ? { id: draft.id, name: draft.name, status: draft.status } : null, visual_workflow: binding && bindings.versionId ? { versionId: bindings.versionId, flowId: binding.flowId, name: binding.flowLabel } : null };
+      return { ...product, business_workflow: choices.workflow ?? null, visual_draft: draft ? { id: draft.id, name: draft.name, status: draft.status } : null, visual_workflow: binding && bindings.versionId ? { versionId: bindings.versionId, flowId: binding.flowId, name: binding.flowLabel } : null };
     }),
     types: (types.data ?? []) as Option[],
-    workflows: [...choices.flows.filter(f => f.inDraft).map(f => ({ id: `visual:${choices.revision}:${f.id}`, name: `${f.name} · Vizual · ${f.status}`, description: "Lidhja ruhet si draft." })), ...(workflows.data ?? []).map(w => ({ ...w, name: `${w.name} · Linear` }))] as Option[],
+    workflows: [...(choices.workflow ? [{ id: "", name: choices.workflow.name, businessWorkflow: choices.workflow }] : []), ...(workflows.data ?? []).map(w => ({ ...w, name: `${w.name} · Proces i posaçëm` }))] as Option[],
   };
 });

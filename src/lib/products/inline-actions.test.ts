@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductRow } from "./catalog";
+const businessWorkflow = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/workflows/visual/business-workflow", () => ({ publishedBusinessWorkflow: businessWorkflow }));
 const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), from: vi.fn(), update: vi.fn(), bindings: vi.fn() }));
 vi.mock("./workflow-binding", () => ({ publishedProductBindings: m.bindings }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access }));
@@ -15,7 +17,8 @@ let product: ProductRow & { business_id: string };
 let queries: { table: string; eq: Record<string, unknown>; changes?: Record<string, unknown> }[];
 let workflowAvailable: boolean, typeAvailable: boolean, staleDuringWrite: boolean, writeFails: boolean;
 beforeEach(() => {
-  vi.clearAllMocks(); queries = [];
+  vi.clearAllMocks();
+  businessWorkflow.mockResolvedValue(null); queries = [];
   m.bindings.mockResolvedValue(new Map());
   workflowAvailable = typeAvailable = true; staleDuringWrite = writeFails = false;
   product = { id, business_id: "business", name: "Puzzle", description: null, sku: null, image_url: null, source: "manual", external_id: null, price_amount: 25, currency: "EUR", product_type_id: type, workflow_id: workflow, is_active: false, updated_at: stamp };
@@ -59,6 +62,16 @@ it("does not activate when the published assignment cannot be verified", async (
   expect(m.update).not.toHaveBeenCalled();
 });
 const activate = () => updateCatalogField("test", { id, field: "is_active", value: true, updatedAt: stamp });
+
+it("inherits the main workflow for activation and after removing a special linear process", async () => {
+  const main = { name: "Rrjedha e workflow 1", active: true, status: "Aktiv" };
+  businessWorkflow.mockResolvedValue(main);
+  product.workflow_id = null;
+  expect((await activate()).product).toMatchObject({ is_active: true, workflow_id: null, business_workflow: main });
+  product.workflow_id = workflow;
+  const result = await updateCatalogField("test", { id, field: "workflow_id", value: null, updatedAt: product.updated_at! });
+  expect(result.product?.is_active).toBe(true);
+});
 
 describe("inline product configuration", () => {
   it("rejects unauthenticated users and products outside the authorized business", async () => {

@@ -2,13 +2,14 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { normalizeVisualDraft } from "./model";
 import { loadVisualVersion } from "./store";
 import type { VisualGraph } from "./types";
+import type { BusinessWorkflow } from "./business-workflow";
 
 export type VisualFlowChoice = {
   id: string; name: string; status: string;
   inDraft: boolean; steps: { key: string; label: string }[];
   productIds: string[]; publishedProductIds: string[];
 };
-export type VisualFlowChoices = { revision: number; flows: VisualFlowChoice[] };
+export type VisualFlowChoices = { revision: number; flows: VisualFlowChoice[]; workflow?: BusinessWorkflow };
 /** Shared by memory and product pickers. Never turn generated starter graphs into saved flows. */
 export function flowChoices(draft: VisualGraph | null, published: VisualGraph | null, enabled: boolean): VisualFlowChoice[] {
   const drafts = draft?.version === 2 ? draft.flows : [];
@@ -30,5 +31,7 @@ export async function loadVisualFlowChoices(businessId: string): Promise<VisualF
   const draft = normalizeVisualDraft(data.draft);
   if (!draft) throw new Error("Drafti i rrjedhës nuk është i vlefshëm.");
   const published = data.published_version_id ? await loadVisualVersion(businessId, data.published_version_id) : null;
-  return { revision: data.revision, flows: flowChoices(draft, published?.graph ?? null, Boolean(data.enabled)) };
+  const active = Boolean(data.enabled && published);
+  return { revision: data.revision, flows: flowChoices(draft, published?.graph ?? null, Boolean(data.enabled)),
+    workflow: { name: (active ? published!.graph : draft).name, active, status: active ? "Aktiv" : published ? "Publikuar · joaktiv" : "Draft" } };
 }

@@ -1,5 +1,6 @@
 "use client";
-import { EntityFlowLink } from "@/components/workflows/entity-flow-link";
+import { ProductBusinessWorkflow } from "@/components/products/business-workflow";
+import type { Option } from "@/lib/products/catalog";
 
 type ProductFieldValues = {
   id?: string;
@@ -26,7 +27,7 @@ export function ProductFields({
   slug: string;
   product?: ProductFieldValues;
   types: { id: string; name: string }[];
-  workflows: { id: string; name: string }[];
+  workflows: Option[];
   requireType?: boolean;
 }) {
   return (
@@ -111,9 +112,8 @@ export function ProductFields({
       </fieldset>
 
       <fieldset id="product-process" className="grid gap-3">
-        <legend className="font-semibold">Procesi i porosisë</legend>
-        {product?.id && <EntityFlowLink slug={slug} kind="product" id={product.id} binding={product.visual_workflow} draft={product.visual_draft} />}
-        <p className="muted-copy">Lidhjet vizuale ruhen si draft. Publikoji te Workflow përpara aktivizimit.</p>
+        <legend className="font-semibold">Workflow dhe produkti</legend>
+        <ProductBusinessWorkflow slug={slug} workflow={workflows.find(w => w.businessWorkflow)?.businessWorkflow} product={product?.id ? { ...product, id: product.id } : undefined} />
         <label className="form-label">
           Lloji i produktit
           <select
@@ -132,22 +132,25 @@ export function ProductFields({
             ))}
           </select>
         </label>
-        {<label className="form-label">
-          Workflow për produktin
+        <details open={Boolean(product?.workflow_id)}>
+          <summary>Proces i posaçëm i porosisë (opsional)</summary>
+        <label className="form-label">
+          Procesi pas zgjedhjes së produktit
           <select
             name="workflow_id"
             key={workflows.map(workflow => workflow.id).join("|")}
             className="field"
             defaultValue={product?.workflow_id ?? ""}
           >
-            <option value="">{product?.visual_workflow || product?.visual_draft ? "Ruaj lidhjen vizuale ekzistuese" : "Pa workflow"}</option>
-            {workflows.map((workflow) => (
+            <option value="">{product?.visual_workflow || product?.visual_draft ? "Ruaj procesin vizual ekzistues" : "Përdor workflow-in kryesor"}</option>
+            {workflows.filter(w => w.id).map((workflow) => (
               <option key={workflow.id} value={workflow.id}>
                 {workflow.name}
               </option>
             ))}
           </select>
-        </label>}
+        </label>
+        </details>
       </fieldset>
 
       <label className="toggle-label">
