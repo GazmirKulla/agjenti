@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { WhatsAppConnect } from "@/components/whatsapp/connect";
@@ -54,8 +53,11 @@ export function IntegrationCard({ channel, businessId, slug, status, identity, l
   }
 
   return <article className={styles.row} aria-label={name} aria-busy={busy}>
+    {connected && !loadError && <button type="button" className={styles.rowTrigger}
+      aria-label={`Shiko të gjitha detajet e ${name}`} aria-haspopup="dialog"
+      onClick={() => router.push(`/b/${slug}/integrations?detail=${channel}`, { scroll: false })} />}
     <div className={styles.heading}>
-      <span className={`${styles.icon} ${channel === "instagram" ? styles.instagramIcon : styles.whatsappIcon}`}><Icon name={channel} size={28} /></span>
+      <span className={`${styles.icon} ${connected && !loadError ? channel === "instagram" ? styles.instagramIcon : styles.whatsappIcon : styles.inactiveIcon}`}><Icon name={channel} size={28} /></span>
       <div className={styles.title}>
         <h2>{name}</h2>
         <p className={styles.identity}>{loadError ? "Provo përsëri për të parë gjendjen e lidhjes." : connected || reconnect ? identity || `Llogaria ${name}` : "Lidh llogarinë e biznesit"}</p>
@@ -67,14 +69,12 @@ export function IntegrationCard({ channel, businessId, slug, status, identity, l
     </div>
     <div className={styles.actions}>
       {connected && !loadError && <>
-        <Link className={styles.details} href={`/b/${slug}/${channel}`}>Shiko më shumë <span aria-hidden="true">›</span></Link>
-        <button type="button" role="switch" aria-checked={true}
-          aria-label={`Lidhja ${name}`} aria-describedby={`${channel}-disconnect-help`}
-          title={`Shkëput ${name}. Rilidhja kërkon autorizim.`} className={styles.toggle} disabled={busy} onClick={disconnect}><span /></button>
-        <span id={`${channel}-disconnect-help`} className="sr-only">Fikja e shkëput llogarinë. Rilidhja kërkon autorizim.</span>
+        <button type="button" className={styles.disconnect} disabled={busy} onClick={disconnect}
+          aria-label={`Shkëput ${name}`} aria-describedby={`${channel}-disconnect-help`}>{busy ? "Duke shkëputur…" : "Shkëput"}</button>
+        <span id={`${channel}-disconnect-help`} className="sr-only">Shkëputja e llogarisë kërkon autorizim për ta rilidhur.</span>
       </>}
       {loadError ? <button type="button" className="btn btn-ghost" onClick={() => router.refresh()}>Provo përsëri</button> : !connected && (
-        channel === "instagram" ? <a className="btn btn-primary" href={`/api/instagram/oauth/start?businessId=${businessId}`} target="_blank" rel="noopener noreferrer">{reconnect ? "Rilidh" : "Lidh"} Instagram</a>
+        channel === "instagram" ? <a className="btn btn-primary" href={`/api/instagram/oauth/start?businessId=${businessId}`} target="_blank" rel="noopener noreferrer"><Icon name="plus" size={18} />{reconnect ? "Rilidh" : "Lidh"} Instagram</a>
           : whatsapp && <WhatsAppConnect businessId={businessId} {...whatsapp} connected={false} compact />
       )}
     </div>

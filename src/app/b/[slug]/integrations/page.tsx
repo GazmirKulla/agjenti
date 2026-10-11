@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import InstagramAccountDetails from "@/components/instagram/account-details";
+import WhatsAppAccountDetails from "@/components/whatsapp/account-details";
+import { IntegrationDetailsDialog } from "@/components/dashboard/integration-details-dialog";
 import { redirect } from "next/navigation";
 import { PageHeading } from "@/components/dashboard/ui";
 import { IntegrationCard } from "@/components/dashboard/integration-card";
@@ -6,8 +10,9 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { whatsappGraphVersion } from "@/lib/whatsapp/api";
 import styles from "@/components/dashboard/integration-card.module.css";
 
-export default async function IntegrationsPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function IntegrationsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ detail?: string }> }) {
   const { slug } = await params;
+  const { detail } = await searchParams;
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
@@ -36,6 +41,10 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ s
         loadError={Boolean(whatsapp.error)} needsAttention={Boolean(wa?.last_error)}
         whatsapp={{ appId: process.env.META_APP_ID ?? "", configId: process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID ?? "", version: whatsappGraphVersion() }} />
     </div>
-    <p className={styles.footer}>Ti kontrollon lidhjet e tua.</p>
+    {(detail === "instagram" || detail === "whatsapp") && <IntegrationDetailsDialog slug={slug} name={detail === "instagram" ? "Instagram" : "WhatsApp"}>
+      <Suspense fallback={<p role="status">Duke ngarkuar detajet…</p>}>
+        {detail === "instagram" ? <InstagramAccountDetails params={params} searchParams={Promise.resolve({})} /> : <WhatsAppAccountDetails params={params} />}
+      </Suspense>
+    </IntegrationDetailsDialog>}
   </div>;
 }

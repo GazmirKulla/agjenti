@@ -1,5 +1,6 @@
 "use client";
 import Script from "next/script";
+import { Icon } from "@/components/dashboard/icon";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 type FacebookSDK = {
@@ -46,13 +47,13 @@ export function WhatsAppConnect({ businessId, appId, configId, version, connecte
   }
   return <div className={compact ? "space-y-4" : "mt-6 flex flex-wrap items-center gap-5"}>
     {appId && configId && <Script src="https://connect.facebook.net/en_US/sdk.js" strategy="afterInteractive" onReady={() => { window.FB?.init({ appId, version, xfbml: false }); setReady(Boolean(window.FB)); }} onError={() => setNotice("Nuk u ngarkua Meta. Provo përsëri ose kontrollo bllokuesin e reklamave.")} />}
-    {!appId || !configId ? <>{compact && <button className="btn btn-primary" disabled>Lidh WhatsApp</button>}<p className="muted-copy">{compact ? "Lidhja nuk është ende e disponueshme." : "Lidhja me Meta po përgatitet. Administratori duhet të aktivizojë WhatsApp për këtë aplikacion."}</p></> : <button className="btn btn-primary" disabled={!ready || busy} onClick={() => {
+    {!appId || !configId ? <>{compact && <button className="btn btn-primary" disabled><Icon name="plus" size={18} />Lidh WhatsApp</button>}<p className="muted-copy">{compact ? "Lidhja nuk është ende e disponueshme." : "Lidhja me Meta po përgatitet. Administratori duhet të aktivizojë WhatsApp për këtë aplikacion."}</p></> : <button className="btn btn-primary" disabled={!ready || busy} onClick={() => {
       setCode(""); setAssets(null); setNotice(""); setActive(true);
       window.FB?.login(response => {
         if (response.authResponse?.code) setCode(response.authResponse.code);
         else { setActive(false); setNotice("Autorizimi nuk u përfundua."); }
       }, { config_id: configId, response_type: "code", override_default_response_type: true, extras: { setup: {}, sessionInfoVersion: "3" } });
-    }}>{connected ? "Rilidh WhatsApp" : "Lidh WhatsApp"}</button>}
+    }}><Icon name="plus" size={18} />{connected ? "Rilidh WhatsApp" : "Lidh WhatsApp"}</button>}
     {code && assets && <div className="w-full space-y-3">
       <label className="block">PIN-i i verifikimit me dy hapa (6 shifra)
         <input className="field-input" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))} />
