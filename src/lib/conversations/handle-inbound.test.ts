@@ -3,6 +3,7 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   process: vi.fn(),
   send: vi.fn(),
+  whatsappSend: vi.fn(),
 }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({ from: mocks.from }),
@@ -11,6 +12,7 @@ vi.mock("./process-conversation-message", () => ({ processConversationMessage: m
 vi.mock("@/lib/crypto/tokens", () => ({
   decryptSecret: () => "fake-meta-token",
 }));
+vi.mock("@/lib/whatsapp/api", () => ({ sendWhatsAppText: mocks.whatsappSend }));
 vi.mock("@/lib/instagram/send", () => ({ sendInstagramText: mocks.send }));
 vi.mock("@/lib/instagram/user-profile", () => ({
   fetchInstagramUserProfile: async () => ({
@@ -63,11 +65,12 @@ beforeEach(() => {
           ? op === "select"
             ? null
             : { id: "event-a" }
-          : table === "instagram_connections"
+          : (table === "instagram_connections" || table === "whatsapp_connections")
             ? {
                 id: "connection-a",
                 business_id: "business-a",
                 ig_user_id: "ig-a",
+                phone_number_id: "123456",
                 access_token_ciphertext: "sealed",
                 status: "connected",
               }
@@ -163,13 +166,14 @@ describe("real inbound integration with shared processor", () => {
             data: op === "select" ? null : { id: "event-a" },
           };
         }
-        if (table === "instagram_connections") {
+        if ((table === "instagram_connections" || table === "whatsapp_connections")) {
           return {
             error: null,
             data: {
               id: "connection-a",
               business_id: "business-a",
               ig_user_id: "ig-a",
+                phone_number_id: "123456",
               access_token_ciphertext: "sealed",
               status: "connected",
             },
@@ -319,3 +323,12 @@ it("preserves the advisory cursor on the next live inbound turn",async()=>{
  await handleInboundMessage(message);
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({state:expect.objectContaining({visual:savedState.visual})}));
 });
+
+ it("keeps WhatsApp persistence and replies separate from Instagram", async () => {
+  mocks.whatsappSend.mockResolvedValue({ ok: true, messageId: "wamid.reply" });
+  await handleInboundMessage({ ...message, channel: "whatsapp", externalParticipantId: "355691234567", senderDisplayName: "Ana", contextMetadata: { whatsappPhoneNumberId: "123456" } });
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(mocks.whatsappSend).toHaveBeenCalledWith(expect.objectContaining({ accountId: "123456", to: "355691234567" }));
+  expect(writes).toContainEqual(expect.objectContaining({ table: "messages", data: expect.objectContaining({ whatsapp_connection_id: "connection-a", direction: "inbound" }) }));
+  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ source: "whatsapp", customerIdentity: expect.objectContaining({ channel: "whatsapp" }) }));
+ });

@@ -55,3 +55,19 @@ it.each([true,false])("pauses only actual staff ownership, advisory=%s",async ad
  await prepareWorkflowReply(queued,"conversation",0,{nextState:{},reply:"Reply",handoff:true,advisoryHandoff} as AgentTurnResult);
  expect(m.rpc).toHaveBeenCalledWith("prepare_workflow_reply",expect.objectContaining({p_handoff:!advisoryHandoff}));
 });
+
+it("queues WhatsApp durably even outside the Instagram pilot", async () => {
+ vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+ const message = { channel: "whatsapp", externalMessageId: "wamid.1", externalParticipantId: "355691234567", contextMetadata: { whatsappPhoneNumberId: "123456" }, timestamp: new Date(), rawPayload: {}, attachments: [] } as unknown as NormalizedIncomingMessage;
+ expect(await enqueueWorkflowMessage(message)).toBe(true);
+ expect(m.from).toHaveBeenCalledWith("whatsapp_connections");
+ expect(m.filters).toContainEqual(["phone_number_id", "123456"]);
+ expect(m.writes).toContainEqual([expect.objectContaining({ channel: "whatsapp", connection_id: "connection" }), expect.objectContaining({ ignoreDuplicates: true })]);
+});
+it("does not send a WhatsApp reply after the customer service window expires", async () => {
+ const expired = { ...structuredClone(job), payload: { channel: "whatsapp", timestamp: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString() } };
+ m.rpc.mockResolvedValueOnce({ data: [expired], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: [], error: null });
+ await runWorkflowQueue();
+ expect(m.send).not.toHaveBeenCalled();
+ expect(m.rpc).toHaveBeenCalledWith("finish_workflow_send", expect.objectContaining({ p_ok: false, p_error: "Dritarja 24-orëshe ka mbaruar." }));
+});

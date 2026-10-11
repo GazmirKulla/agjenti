@@ -80,6 +80,7 @@ export default async function InstagramPage({
         </div>
         <StatusBadge status={conn?.status || "disconnected"} />
       </div>
+      <p className="mb-5 muted-copy">Përdor edhe WhatsApp Business? <a className="soft-link" href={`/b/${slug}/whatsapp`}>Lidh WhatsApp →</a></p>
       <div className="configuration-layout">
         <section className="panel section-pad">
           <div className="section-title">

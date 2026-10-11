@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { decryptSecret } from "@/lib/crypto/tokens";
-import { sendInstagramText } from "@/lib/instagram/send";
+import { channelAdapter } from "@/lib/conversations/channel";
 import { instagramWindowClosedError, isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -38,18 +38,20 @@ export async function POST(
 	const { data: conversation } = await service
 		.from("conversations")
 		.select(
-			"id,business_id,customer_id,instagram_participant_id,instagram_connection_id,last_inbound_at,status",
+			"id,business_id,channel,customer_id,instagram_participant_id,instagram_connection_id,whatsapp_participant_id,whatsapp_connection_id,last_inbound_at,status",
 		)
 		.eq("id", conversationId)
 		.eq("business_id", businessId)
 		.maybeSingle();
 	if (!conversation) return NextResponse.json({ error: "Biseda nuk u gjet." }, { status: 404 });
 	if (!isInstagramMessagingWindowOpen(conversation.last_inbound_at)) {
-		return NextResponse.json(instagramWindowClosedError(), { status: 409 });
+		return NextResponse.json(conversation.channel === "whatsapp" ? { error: "Dritarja 24-orëshe ka mbaruar. Klienti duhet të shkruajë përsëri.", code: "whatsapp_window_closed" } : instagramWindowClosedError(), { status: 409 });
 	}
 
-	let recipientId = conversation.instagram_participant_id as string | null;
-	if (!recipientId && conversation.customer_id) {
+	const adapter = channelAdapter(conversation.channel);
+    const connectionId = conversation[adapter.connection];
+    let recipientId = conversation[adapter.participant] as string | null;
+	if (!recipientId && conversation.channel !== "whatsapp" && conversation.customer_id) {
 		const { data: customer } = await service
 			.from("customers")
 			.select("instagram_user_id")
@@ -58,12 +60,13 @@ export async function POST(
 		recipientId = customer?.instagram_user_id ?? null;
 	}
 	const { data: conn } = await service
-		.from("instagram_connections")
-		.select("ig_user_id,access_token_ciphertext,status")
-		.eq("id", conversation.instagram_connection_id)
+		.from(adapter.table)
+		.select(conversation.channel === "whatsapp" ? "phone_number_id,access_token_ciphertext,status" : "ig_user_id,access_token_ciphertext,status")
+		.eq("id", connectionId)
+        .eq("business_id", businessId)
 		.maybeSingle();
 	if (!recipientId || !conn || conn.status !== "connected") {
-		return NextResponse.json({ error: "Instagram nuk është i lidhur." }, { status: 400 });
+		return NextResponse.json({ error: "Kanali i mesazheve nuk është i lidhur." }, { status: 400 });
 	}
 
 	let token: string;
@@ -73,8 +76,8 @@ export async function POST(
 		return NextResponse.json({ error: "Token i pavlefshëm." }, { status: 500 });
 	}
 
-	const send = await sendInstagramText({
-		accountId: conn.ig_user_id,
+	const send = await adapter.send({
+		accountId: String("phone_number_id" in conn ? conn.phone_number_id : conn.ig_user_id),
 		token,
 		to: recipientId,
 		body: text,
@@ -86,7 +89,7 @@ export async function POST(
 	await service.from("messages").insert({
 		business_id: businessId,
 		conversation_id: conversationId,
-		instagram_connection_id: conversation.instagram_connection_id,
+		[adapter.connection]: connectionId,
 		direction: "outbound",
 		source: "staff",
 		body: text,

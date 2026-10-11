@@ -1,11 +1,11 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { migrateContext, profileKeys, setFact, type Fact } from "@/lib/workflows/context";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
-export async function hydrateProfile(businessId: string, participantId: string, input: ConversationStatePayload) {
+export async function hydrateProfile(businessId: string, participantId: string, input: ConversationStatePayload, channel: "instagram" | "whatsapp" = "instagram") {
     const state = migrateContext(input);
     if (input.schemaVersion === 2 || input.schemaVersion === 3)
         return state;
-    const { data, error } = await createServiceSupabase().from("conversation_profiles").select("profile").eq("business_id", businessId).eq("participant_id", participantId).maybeSingle();
+    const { data, error } = await createServiceSupabase().from("conversation_profiles").select("profile").eq("business_id", businessId).eq("participant_id", participantId).eq("channel", channel).maybeSingle();
     if (error)
         throw new Error("Nuk u lexua kujtesa e klientit.");
     let reused = false;

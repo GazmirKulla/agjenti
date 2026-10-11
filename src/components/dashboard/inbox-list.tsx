@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "./icon";
 export type InboxRow = {
+  channel?: string;
   id: string;
   status: string;
   name: string;
@@ -70,6 +71,7 @@ export function InboxList({
             </span>
             <span className="inbox-row-copy">
               <strong>{r.name}</strong>
+              <small>{r.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</small>
               <small>{r.preview || "Pa mesazh"}</small>
             </span>
             {r.unread > 0 && <span className="unread-badge">{r.unread}</span>}

@@ -126,6 +126,7 @@ export const moduleRegistry: Record<ModuleId, ModuleDefinition> = {
     core: true,
     description: "Lidhja me Instagram",
   },
+  whatsapp: { id: "whatsapp", path: "whatsapp", label: "WhatsApp", icon: "inbox", core: true, description: "Lidhja me WhatsApp Business" },
   settings: {
     id: "settings",
     path: "settings",
@@ -154,6 +155,7 @@ export const navigationOrder: ModuleId[] = [
   "workflows",
   "sources",
   "instagram",
+  "whatsapp",
   "settings",
 ];
 
@@ -174,6 +176,7 @@ export const moduleDependencies: Record<ModuleId, ModuleDependencyRule> = {
   workflows: { independent: true },
   sources: { independent: true },
   instagram: { independent: true },
+  whatsapp: { independent: true },
   settings: { independent: true },
 };
 

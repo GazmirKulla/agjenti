@@ -121,7 +121,7 @@ export type AgentTurnParams = {
   entityVersion?: import("@/lib/workflows/visual/types").VisualVersion | null;
   onTrace?: TraceObserver;
   mode?: "production" | "test";
-  source?: "instagram" | "admin_chat_lab";
+  source?: "instagram" | "whatsapp" | "admin_chat_lab";
   businessId: string;
   message: string;
   hasPhoto: boolean;

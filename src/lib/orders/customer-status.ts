@@ -1,8 +1,10 @@
+import { channelAdapter } from "@/lib/conversations/channel";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
 
 /** The inbound adapter supplies these values from the verified webhook, never customer text. */
 export type OrderCustomerIdentity = {
+  channel?: "instagram" | "whatsapp";
   conversationId: string;
   instagramParticipantId: string;
   instagramConnectionId: string;
@@ -69,16 +71,17 @@ function describe(order: OrderSummary, reference: string) {
 /** Read only: the query never accepts a customer ID or order ID as an authorization boundary. */
 async function ownOrders(businessId: string, identity: OrderCustomerIdentity): Promise<OrderSummary[] | null> {
   const db = createServiceSupabase();
+  const adapter = channelAdapter(identity.channel);
   const { data: conversation, error: identityError } = await db.from("conversations").select("id,customer_id")
     .eq("business_id", businessId).eq("id", identity.conversationId)
-    .eq("instagram_participant_id", identity.instagramParticipantId).eq("instagram_connection_id", identity.instagramConnectionId).maybeSingle();
+    .eq(adapter.participant, identity.instagramParticipantId).eq(adapter.connection, identity.instagramConnectionId).maybeSingle();
   if (identityError) throw new Error("order_status_unavailable");
   if (!conversation) return null;
   const [{ data: conversations, error: conversationsError }, { data: customer, error: customerError }] = await Promise.all([
     db.from("conversations").select("id").eq("business_id", businessId)
-      .eq("instagram_participant_id", identity.instagramParticipantId).eq("instagram_connection_id", identity.instagramConnectionId)
+      .eq(adapter.participant, identity.instagramParticipantId).eq(adapter.connection, identity.instagramConnectionId)
       .order("created_at", { ascending: false }).limit(100),
-    db.from("customers").select("id").eq("business_id", businessId).eq("instagram_user_id", identity.instagramParticipantId).maybeSingle(),
+    db.from("customers").select("id").eq("business_id", businessId).eq(identity.channel === "whatsapp" ? "whatsapp_user_id" : "instagram_user_id", identity.instagramParticipantId).maybeSingle(),
   ]);
   if (conversationsError || customerError) throw new Error("order_status_unavailable");
   const ids = [...new Set([conversation.id, ...(conversations ?? []).map(item => item.id)])];
@@ -109,7 +112,7 @@ export async function customerOrderStatus(params: { businessId: string; message:
   try {
     const orders = await ownOrders(params.businessId, params.identity);
     if (!orders) { setOrderStatusLookup(nextState); return reply("Nuk mund ta verifikoj llogarinë për kontrollin e porosisë. Kontakto stafin."); }
-    if (!orders.length) { setOrderStatusLookup(nextState); return reply("Nuk gjeta porosi të regjistruara të lidhura me këtë llogari Instagram. Stafi mund ta kontrollojë kërkesën tënde."); }
+    if (!orders.length) { setOrderStatusLookup(nextState); return reply("Nuk gjeta porosi të regjistruara të lidhura me këtë llogari. Stafi mund ta kontrollojë kërkesën tënde."); }
     const explicitReference = params.message.match(/#([a-f0-9-]{8,36})\b|\b([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\b/i);
     const requestedReference = explicitReference?.[1] ?? explicitReference?.[2];
     const selectedId = requestedReference ? selectReference(requestedReference, { references: references(orders), createdAt: Date.now() }) : selectReference(params.message, lookup);

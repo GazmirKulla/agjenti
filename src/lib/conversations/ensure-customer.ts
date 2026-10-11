@@ -23,7 +23,7 @@ export async function ensureCustomerForConversation(
 	const { data: conversation, error: conversationError } = await supabase
 		.from("conversations")
 		.select(
-			"id,customer_id,instagram_participant_id,participant_username,participant_display_name",
+			"id,customer_id,instagram_participant_id,whatsapp_participant_id,participant_username,participant_display_name",
 		)
 		.eq("id", input.conversationId)
 		.eq("business_id", input.businessId)
@@ -45,6 +45,7 @@ export async function ensureCustomerForConversation(
 		input.instagramUserId?.trim() ||
 		(conversation.instagram_participant_id as string | null) ||
 		null;
+	const whatsappUserId = conversation.whatsapp_participant_id as string | null;
 	const username =
 		input.username?.trim() ||
 		(conversation.participant_username as string | null) ||
@@ -55,12 +56,12 @@ export async function ensureCustomerForConversation(
 		username ||
 		null;
 
-	if (instagramUserId) {
+	if (instagramUserId || whatsappUserId) {
 		const { data: existing } = await supabase
 			.from("customers")
 			.select("id")
 			.eq("business_id", input.businessId)
-			.eq("instagram_user_id", instagramUserId)
+			.eq(whatsappUserId ? "whatsapp_user_id" : "instagram_user_id", whatsappUserId || instagramUserId)
 			.maybeSingle();
 		if (existing?.id) {
 			await supabase
@@ -87,10 +88,11 @@ export async function ensureCustomerForConversation(
 		.from("customers")
 		.insert({
 			business_id: input.businessId,
-			instagram_user_id: instagramUserId,
+			instagram_user_id: whatsappUserId ? null : instagramUserId,
+            whatsapp_user_id: whatsappUserId,
 			username,
 			display_name: displayName,
-			phone: input.phone?.trim() || null,
+			phone: input.phone?.trim() || conversation.whatsapp_participant_id || null,
 		})
 		.select("id")
 		.single();
@@ -132,6 +134,6 @@ export function conversationDisplayName(row: {
 		customer?.username ||
 		row.participant_display_name ||
 		row.participant_username ||
-		"Bisedë Instagram"
+		"Bisedë me klientin"
 	);
 }

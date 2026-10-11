@@ -2,7 +2,7 @@ import { hydrateProfile } from "./profile";
 import { prepareWorkflowReply, type WorkflowJob } from "./workflow-queue";
 import { processConversationMessage } from "./process-conversation-message";
 import { decryptSecret } from "@/lib/crypto/tokens";
-import { sendInstagramText } from "@/lib/instagram/send";
+import { channelAdapter } from "./channel";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import { fetchInstagramUserProfile } from "@/lib/instagram/user-profile";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
@@ -16,7 +16,8 @@ import {
 type ConnectionRow = {
   id: string;
   business_id: string;
-  ig_user_id: string;
+  ig_user_id?: string;
+  phone_number_id?: string;
   access_token_ciphertext: string;
   status: string;
 };
@@ -35,10 +36,8 @@ export async function handleInboundMessage(
   message: NormalizedIncomingMessage,
   job?: WorkflowJob,
 ): Promise<void> {
-  const accountId =
-    typeof message.contextMetadata?.instagramAccountId === "string"
-      ? message.contextMetadata.instagramAccountId
-      : null;
+  const adapter = channelAdapter(message.channel);
+  const accountId = message.contextMetadata?.[adapter.metadata];
 
   if (isMetaDashboardTestMessage(message)) {
     if (await alreadyHandled(message.externalMessageId)) {
@@ -100,10 +99,10 @@ export async function handleInboundMessage(
   });
 
   const { data: connection, error: connectionError } = await supabase
-    .from("instagram_connections")
-    .select("id,business_id,ig_user_id,access_token_ciphertext,status")
-    .eq("ig_user_id", accountId)
-    .neq("status", "disconnected")
+    .from(adapter.table)
+    .select(message.channel === "whatsapp" ? "id,business_id,phone_number_id,access_token_ciphertext,status" : "id,business_id,ig_user_id,access_token_ciphertext,status")
+    .eq(adapter.account, accountId)
+    .eq("status", "connected")
     .maybeSingle();
   console.log("[inbound] connection lookup", {
     lookupIgUserId: accountId,
@@ -144,7 +143,7 @@ export async function handleInboundMessage(
     if(job) throw new Error("Queued token unavailable");
     console.error("[inbound] token decrypt failed", error);
     await supabase
-      .from("instagram_connections")
+      .from(adapter.table)
       .update({ status: "revoked", last_error: "decrypt_failed" })
       .eq("id", conn.id);
     return;
@@ -152,7 +151,7 @@ export async function handleInboundMessage(
 
   let username = message.senderUsername;
   let displayName = message.senderDisplayName;
-  if (!username && !displayName) {
+  if (message.channel === "instagram" && !username && !displayName) {
     const profile = await fetchInstagramUserProfile(
       message.externalParticipantId,
       accessToken,
@@ -165,7 +164,8 @@ export async function handleInboundMessage(
     .from("conversations")
     .select("id,status,auto_reply,openai_previous_response_id")
     .eq("business_id", businessId)
-    .eq("instagram_participant_id", message.externalParticipantId)
+    .eq(adapter.participant, message.externalParticipantId)
+    .eq(adapter.connection, conn.id)
     .in("status", ["active", "paused"])
     .order("created_at", { ascending: false })
     .limit(1)
@@ -178,7 +178,8 @@ export async function handleInboundMessage(
       .from("conversations")
       .select("id")
       .eq("business_id", businessId)
-      .eq("instagram_participant_id", message.externalParticipantId)
+      .eq(adapter.participant, message.externalParticipantId)
+    .eq(adapter.connection, conn.id)
       .eq("status", "completed")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -189,10 +190,11 @@ export async function handleInboundMessage(
       .insert({
         business_id: businessId,
         customer_id: null,
-        instagram_participant_id: message.externalParticipantId,
+        [adapter.participant]: message.externalParticipantId,
+        channel: message.channel,
         participant_username: username,
         participant_display_name: displayName,
-        instagram_connection_id: conn.id,
+        [adapter.connection]: conn.id,
         status: "active",
         previous_conversation_id: previousId,
         last_inbound_at: message.timestamp.toISOString(),
@@ -252,7 +254,7 @@ export async function handleInboundMessage(
     .insert({
       business_id: businessId,
       conversation_id: conversationId,
-      instagram_connection_id: conn.id,
+      [adapter.connection]: conn.id,
       direction: "inbound",
       source: "customer",
       body: message.text,
@@ -296,10 +298,14 @@ export async function handleInboundMessage(
   // A paused handoff returns above. Reaching this point with its saved state means
   // staff explicitly resumed the conversation; start a new run without erasing data.
   let inboundState = structuredClone((stateRow?.collected as ConversationStatePayload | null) ?? emptyState());
-  if(job) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState);
+  if(job) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState,message.channel);
   if (inboundState.visual?.status === "handoff" && !inboundState.visual.advisory) {
     inboundState.completedVisual = structuredClone(inboundState.visual);
     inboundState.visual.status = "completed";
+  }
+  if (message.channel === "whatsapp") {
+    inboundState.fields.channel = message.channel;
+    if (inboundState.visual) inboundState.visual.values.channel = message.channel;
   }
   const started = Date.now();
   const canAct = async () => {
@@ -311,7 +317,8 @@ export async function handleInboundMessage(
   };
   const turn = await processConversationMessage({
     conversationKey: conversationId,
-    customerIdentity: { conversationId, instagramParticipantId: message.externalParticipantId, instagramConnectionId: conn.id },
+    customerIdentity: { conversationId, instagramParticipantId: message.externalParticipantId, instagramConnectionId: conn.id, channel: message.channel },
+    source: message.channel,
     bookingGuard: job ? { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: stateRow?.revision ?? 0 } : undefined,
     canAct,
     businessId,
@@ -346,8 +353,8 @@ export async function handleInboundMessage(
       .eq("id", conversationId).eq("business_id", businessId).throwOnError();
   }
   if (!(turn.handoff && !turn.advisoryHandoff) && !await canAct()) return;
-  const send = await sendInstagramText({
-    accountId: conn.ig_user_id,
+  const send = await adapter.send({
+    accountId: String(accountId),
     token: accessToken,
     to: message.externalParticipantId,
     body: generated.reply || promptForStep(state.step_key),
@@ -365,7 +372,7 @@ export async function handleInboundMessage(
     await supabase.from("messages").insert({
       business_id: businessId,
       conversation_id: conversationId,
-      instagram_connection_id: conn.id,
+      [adapter.connection]: conn.id,
       direction: "outbound",
       source: "agent",
       body: generated.reply,
@@ -382,7 +389,7 @@ export async function handleInboundMessage(
       .eq("id", conversationId);
   } else if (send.code === "token_revoked") {
     await supabase
-      .from("instagram_connections")
+      .from(adapter.table)
       .update({ status: "revoked", last_error: send.error })
       .eq("id", conn.id);
   }

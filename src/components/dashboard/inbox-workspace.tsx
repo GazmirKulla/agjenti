@@ -29,7 +29,7 @@ export async function InboxWorkspace({
   const { data: rows, error } = await db
     .from("conversations")
     .select(
-      "id,status,last_message_preview,unread_count,participant_display_name,participant_username,customers(display_name,username)",
+      "id,channel,status,last_message_preview,unread_count,participant_display_name,participant_username,customers(display_name,username)",
     )
     .eq("business_id", businessId)
     .order("last_message_at", { ascending: false })
@@ -39,7 +39,7 @@ export async function InboxWorkspace({
   const heading = (
     <PageHeading
       title="Inbox"
-      description="Menaxho bisedat nga Instagram dhe ndiq porositë e klientëve."
+      description="Menaxho bisedat nga Instagram dhe WhatsApp dhe ndiq porositë e klientëve."
     />
   );
   if (!selected)
@@ -49,7 +49,7 @@ export async function InboxWorkspace({
         <section className="panel">
           <EmptyState
             title="Inbox-i yt është gati"
-            description="Lidh Instagram-in për të marrë mesazhet e para të klientëve."
+            description="Lidh Instagram-in ose WhatsApp-in për të marrë mesazhet e para të klientëve."
           />
           <Link
             className="soft-link mx-auto mb-6 w-fit"
@@ -63,7 +63,7 @@ export async function InboxWorkspace({
   const { data: conversation, error: conversationError } = await db
     .from("conversations")
     .select(
-      "id,status,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(display_name,username,phone,created_at)",
+      "id,channel,status,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(display_name,username,phone,created_at)",
     )
     .eq("business_id", businessId)
     .eq("id", selected)
@@ -120,7 +120,7 @@ export async function InboxWorkspace({
   const handle =
     customer?.username || conversation.participant_username
       ? `@${customer?.username || conversation.participant_username}`
-      : "Instagram";
+      : conversation.channel === "whatsapp" ? "WhatsApp" : "Instagram";
   const linkedCustomer = Boolean(conversation.customer_id);
 
   return (
@@ -139,6 +139,7 @@ export async function InboxWorkspace({
             } | null;
             return {
               id: r.id,
+                channel: r.channel,
               status: r.status,
               name: conversationDisplayName({
                 participant_display_name: r.participant_display_name,

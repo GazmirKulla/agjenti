@@ -15,6 +15,7 @@ export const MODULE_IDS = [
   "workflows",
   "sources",
   "instagram",
+  "whatsapp",
   "settings",
 ] as const;
 

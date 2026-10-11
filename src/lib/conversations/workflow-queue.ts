@@ -3,7 +3,8 @@ import { decryptSecret } from "@/lib/crypto/tokens";
 import { sharedWorkflowEnabled } from "@/lib/workflows/context";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
-import { sendInstagramText } from "@/lib/instagram/send";
+import { channelAdapter } from "./channel";
+import { isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
 import type { AgentTurnResult } from "./process-agent-turn";
 export type WorkflowJob = {
     id: number;
@@ -16,15 +17,16 @@ export type WorkflowJob = {
     reply: string | null;
 };
 export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage) {
-    if (!process.env.SHARED_WORKFLOW_BUSINESS_IDS?.trim() || isMetaDashboardTestMessage(message))
+    if ((message.channel !== "whatsapp" && !process.env.SHARED_WORKFLOW_BUSINESS_IDS?.trim()) || isMetaDashboardTestMessage(message))
         return false;
     const db = createServiceSupabase();
-    const { data: connection, error } = await db.from("instagram_connections").select("id,business_id").eq("ig_user_id", message.contextMetadata?.instagramAccountId).neq("status", "disconnected").maybeSingle();
+    const adapter = channelAdapter(message.channel);
+    const { data: connection, error } = await db.from(adapter.table).select("id,business_id").eq(adapter.account, message.contextMetadata?.[adapter.metadata]).eq("status", "connected").maybeSingle();
     if (error)
         throw new Error("Queue connection lookup failed");
-    if (!connection || !sharedWorkflowEnabled(connection.business_id))
+    if (!connection || (message.channel !== "whatsapp" && !sharedWorkflowEnabled(connection.business_id)))
         return false;
-    const { error: insertError } = await db.from("workflow_inbound_queue").upsert({ business_id: connection.business_id, connection_id: connection.id, participant_id: message.externalParticipantId, external_id: message.externalMessageId, payload: message }, { onConflict: "connection_id,external_id", ignoreDuplicates: true });
+    const { error: insertError } = await db.from("workflow_inbound_queue").upsert({ business_id: connection.business_id, channel: message.channel, connection_id: connection.id, participant_id: message.externalParticipantId, external_id: message.externalMessageId, payload: message }, { onConflict: "connection_id,external_id", ignoreDuplicates: true });
     if (insertError)
         throw new Error("Queue persistence failed");
     return true;
@@ -38,7 +40,8 @@ export async function prepareWorkflowReply(job: WorkflowJob, conversationId: str
 }
 async function sendPrepared(job: WorkflowJob) {
     const db = createServiceSupabase();
-    const { data: connection, error } = await db.from("instagram_connections").select("ig_user_id,access_token_ciphertext,status").eq("id", job.connection_id).eq("business_id", job.business_id).maybeSingle();
+    const adapter = channelAdapter(job.payload.channel);
+    const { data: connection, error } = await db.from(adapter.table).select(job.payload.channel === "whatsapp" ? "phone_number_id,access_token_ciphertext,status" : "ig_user_id,access_token_ciphertext,status").eq("id", job.connection_id).eq("business_id", job.business_id).maybeSingle();
     if (error || !connection || connection.status !== "connected")
         throw new Error("Connection unavailable");
     const token = decryptSecret(connection.access_token_ciphertext);
@@ -47,15 +50,15 @@ async function sendPrepared(job: WorkflowJob) {
         throw new Error("Send lease lost");
     if (!claimed) return; // A staff takeover can discard prepared output atomically.
     job.status = "sending";
-    const sent = await sendInstagramText({ accountId: connection.ig_user_id, token, to: job.participant_id, body: job.reply ?? "" });
+    const sent = job.payload.channel !== "whatsapp" || isInstagramMessagingWindowOpen(new Date(job.payload.timestamp).toISOString())
+      ? await adapter.send({ accountId: String("phone_number_id" in connection ? connection.phone_number_id : connection.ig_user_id), token: String(token), to: job.participant_id, body: job.reply ?? "" })
+      : { ok: false as const, error: "Dritarja 24-orëshe ka mbaruar." };
     const { error: finishError } = await db.rpc("finish_workflow_send", { p_id: job.id, p_token: job.lease_token, p_ok: sent.ok, p_external: sent.ok ? sent.messageId ?? null : null, p_error: sent.ok ? null : sent.error });
     if (finishError)
         throw new Error("Send receipt unavailable");
 }
 export async function runWorkflowQueue(maxJobs = 10) {
     const businesses = (process.env.SHARED_WORKFLOW_BUSINESS_IDS ?? "").split(",").map(s => s.trim()).filter(s => /^[0-9a-f-]{36}$/i.test(s));
-    if (!businesses.length)
-        return 0;
     const db = createServiceSupabase();
     let processed = 0;
     const started = Date.now();

@@ -18,7 +18,7 @@ export interface NormalizedAttachment {
 }
 
 export interface NormalizedIncomingMessage {
-	channel: "instagram";
+	channel: "instagram" | "whatsapp";
 	externalMessageId: string;
 	externalParticipantId: string;
 	phone: string | null;

@@ -19,9 +19,9 @@ export function setupSteps(s: SetupStatus) {
   return [
     {
       key: "instagram",
-      title: "Lidh Instagram-in",
+      title: "Lidh Instagram-in ose WhatsApp-in",
       description:
-        "Lidh llogarinë profesionale për të marrë mesazhe. Ky hap është i detyrueshëm për përdorimin real.",
+        "Lidh Instagram-in ose WhatsApp Business për të marrë mesazhe. Ky hap është i detyrueshëm për përdorimin real.",
       action: "Lidh Instagram-in",
       path: "instagram",
       done: s.connected,
@@ -87,7 +87,7 @@ export function setupGateMessage(s: SetupStatus): string | null {
   if (!next) return "Përfundo konfigurimin nga Dashboard përpara aktivizimit.";
   const tips: Record<string, string> = {
     instagram:
-      "Lidh Instagram-in nga Dashboard → Instagram përpara aktivizimit të përgjigjeve automatike.",
+      "Lidh Instagram-in ose WhatsApp-in nga Dashboard përpara aktivizimit të përgjigjeve automatike.",
     products:
       "Përgatit njohuritë e biznesit, një produkt, një katalog ose një shërbim përpara aktivizimit.",
     agents: "Aktivizo një agjent me udhëzime te Agjentët përpara aktivizimit.",
