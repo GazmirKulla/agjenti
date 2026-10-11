@@ -45,6 +45,7 @@ let savedState = emptyState();
 let writes: { table: string; operation: string; data: unknown }[] = [];
 let inboundResult: { data: { id: string } | null; error: { code: string; message: string } | null };
 let inboundException: Error | null;
+let failInboundId: string | null;
 let duplicateResult: { data: { id: string } | null; error: { code: string; message: string } | null };
 let webhookEvents: Set<string>;
 let duplicateFilters: Record<string, unknown>;
@@ -57,6 +58,7 @@ beforeEach(() => {
   writes = [];
   inboundResult = { data: { id: "inbound-a" }, error: null };
   inboundException = null;
+  failInboundId = null;
   duplicateResult = { data: { id: "inbound-a" }, error: null };
   webhookEvents = new Set();
   duplicateFilters = {};
@@ -75,6 +77,7 @@ beforeEach(() => {
     const filters: Record<string, unknown> = {};
     const result = () => {
       if (table === "messages" && op === "insert" && inserted.direction === "inbound") {
+        if (inserted.external_message_id === failInboundId) return { data: null, error: { code: "57014", message: "timeout" } };
         if (inboundException) throw inboundException;
         return inboundResult;
       }
@@ -154,6 +157,31 @@ beforeEach(() => {
 });
 
 const queuedJob = () => ({ id: 17, business_id: "business-a", connection_id: "connection-a", participant_id: message.externalParticipantId, payload: message, status: "processing", lease_token: "lease-a", reply: null });
+it("persists the four original messages and generates one combined turn", async () => {
+ const texts = ["Ckemi", "Si jeni", "Dua te porosis montesori", "E keni ne gjendje?"];
+ const originals = texts.map((text, i) => ({ ...message, externalMessageId: i ? `msg-${i}` : message.externalMessageId, text }));
+ const job = { ...queuedJob(), batch_payloads: originals };
+ await handleInboundMessage(message, job);
+ expect(writes.filter(w => w.table === "messages").map(w => w.data)).toEqual(originals.map(original => expect.objectContaining({ external_message_id: original.externalMessageId, body: original.text })));
+ expect(mocks.process).toHaveBeenCalledOnce();
+ expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ message: texts.join("\n") }));
+ expect(mocks.rpc).toHaveBeenCalledOnce();
+ expect(job.status).toBe("prepared");
+ expect(mocks.send).not.toHaveBeenCalled();
+});
+it("does not process a partly saved batch and resumes it without changing membership", async () => {
+ const originals = [message, { ...message, externalMessageId: "second", text: "Montessori" }];
+ const job = { ...queuedJob(), batch_payloads: originals };
+ failInboundId = "second";
+ await expect(handleInboundMessage(message, job)).rejects.toThrow("message_insert");
+ expect(mocks.process).not.toHaveBeenCalled();
+ expect(mocks.rpc).not.toHaveBeenCalled();
+ failInboundId = null;
+ inboundResult = { data: null, error: { code: "23505", message: "already saved" } };
+ await handleInboundMessage(message, job);
+ expect(mocks.process).toHaveBeenCalledOnce();
+ expect(job.batch_payloads).toEqual(originals);
+});
 describe("inbound persistence boundary", () => {
   it.each([false, true])("stops before processing on database error, queued=%s", async queued => {
     inboundResult = { data: null, error: { code: "XX000", message: "Private database details" } };

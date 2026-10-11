@@ -15,6 +15,7 @@ export type WorkflowJob = {
     status: string;
     lease_token: string;
     reply: string | null;
+    batch_payloads?: NormalizedIncomingMessage[] | null;
 };
 export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage) {
     if (isMetaDashboardTestMessage(message))
@@ -61,14 +62,23 @@ export async function runWorkflowQueue(maxJobs = 10) {
     const db = createServiceSupabase();
     let processed = 0;
     const started = Date.now();
-    for (let i = 0; i < maxJobs && Date.now() - started < 45000; i++) {
+    let attempts = 0;
+    while (attempts < maxJobs && Date.now() - started < 45000) {
         // Transport safety applies to every tenant, independently of workflow rollout.
-        const { data, error } = await db.rpc("claim_workflow_inbound", { p_businesses: null });
+        const { data, error } = await db.rpc("claim_workflow_inbound_batch", { p_businesses: null });
         if (error)
             throw new Error("Queue claim failed");
         const job = data?.[0] as WorkflowJob | undefined;
-        if (!job)
-            break;
+        if (!job) {
+            const { data: delay, error: waitError } = await db.rpc("workflow_inbound_batch_wait_ms");
+            if (waitError) throw new Error("Queue wakeup lookup failed");
+            if (typeof delay !== "number" || delay <= 0) break;
+            const wait = Math.min(delay, 3000);
+            if (Date.now() - started + wait >= 45000) break;
+            await new Promise(resolve => setTimeout(resolve, wait));
+            continue;
+        }
+        attempts++;
         try {
             if (job.status !== "prepared") {
                 const { handleInboundMessage } = await import("./handle-inbound");

@@ -44,7 +44,7 @@ try:
  for p in sorted((root/'supabase/migrations').glob('*.sql')):
   run(cmd+(['-1'] if 'begin;' not in p.read_text().lower() else [])+['-f',str(p)])
  print('PASS all migrations from scratch',flush=True)
- for name in ['shared_workflow_context.sql', 'workflow_message_runtime.sql']:
+ for name in ['shared_workflow_context.sql', 'workflow_message_runtime.sql', 'instagram_message_batches.sql']:
   run(cmd+['-f',str(root/'supabase/tests'/name)])
   print('PASS '+name,flush=True)
  # Dedicated committed fixtures let independent sessions contend on actual row locks.
@@ -167,6 +167,20 @@ try:
  end $$;
  """)
  print('PASS concurrent duplicate delivery, replay during lease/after send, single state advancement and reply',flush=True)
+ # Competing batch-aware workers must claim different participants, never the
+ # individual members of another worker's still-uncommitted batch.
+ sql("""
+ insert into workflow_inbound_queue(business_id,connection_id,participant_id,external_id,payload,channel,created_at)
+ select '00000000-0000-4000-8000-000000009001','00000000-0000-4000-8000-000000009002',person,person||'-'||n,'{}','instagram',clock_timestamp()-interval '4 seconds'
+ from unnest(array['batch-a','batch-b']) person cross join generate_series(1,2)n order by person,n;
+ """)
+ first_batch=start_worker("begin; select participant_id||':'||jsonb_array_length(batch_payloads) from claim_workflow_inbound_batch(null);")
+ assert read_worker(first_batch)=='batch-a:2', 'First batch membership incorrect'
+ assert scalar("select participant_id||':'||jsonb_array_length(batch_payloads) from claim_workflow_inbound_batch(null);")=='batch-b:2', 'Independent batch blocked or first batch split'
+ assert scalar('select count(*) from claim_workflow_inbound_batch(null);')=='0', 'Concurrent batch member was reclaimed'
+ commit_worker(first_batch)
+ assert scalar("select count(*) from workflow_inbound_queue where status='batched'")=='2', 'Concurrent batch membership lost'
+ print('PASS competing batch workers preserve membership and participant isolation',flush=True)
 finally:
  for worker in workers:
   if worker.poll() is None:

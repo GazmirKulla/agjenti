@@ -1,5 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { foldText } from "../engine";
+import { matchingCatalogNames } from "@/lib/products/match-name";
 import type { VisualGraph, VisualRunState } from "./types";
 
 export type VisualEntity = { kind: "product" | "service"; id: string; name: string; productTypeId?: string | null; bookingEnabled?: boolean };
@@ -50,11 +51,11 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
   ];
   const available = entities.filter(entity => graph.flows.some(flow => (entity.kind === "product" ? flow.productIds : flow.serviceIds)?.includes(entity.id)));
   const text = foldText(message);
-  const mentioned = entities.filter(entity => {
-    const name = foldText(entity.name);
+  const skuMatches = entities.filter(entity => {
     const sku = entity.sku ? foldText(entity.sku) : "";
-    return text === name || Boolean(sku && (text === sku || text === `sku ${sku}`)) || name.length >= 3 && new RegExp(`(?:^|[^a-z0-9])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`).test(text);
+    return Boolean(sku && (text === sku || text === `sku ${sku}`));
   });
+  const mentioned = skuMatches.length ? skuMatches : matchingCatalogNames(entities, message);
   const candidates = mentioned.length ? mentioned : saved ? entities.filter(entity => entity.kind === saved.entity.kind && entity.id === saved.entity.id) : [];
   if (candidates.length > 1) return { choices: candidates, available };
   const entity = candidates[0];

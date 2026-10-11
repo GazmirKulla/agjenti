@@ -389,6 +389,18 @@ function boundGraph(...nodes: VisualNode[]): VisualGraph {
 function mockBoundProduct() {
   mocks.entity.mockResolvedValue({ selected: { entity: { kind: "product", id: boundProductId, name: "Puzzle", productTypeId: "puzzle" }, binding: { flowId: "bound", entity: { kind: "product", id: boundProductId } } } });
 }
+it("resolves a purchase inside a burst even when its last line is an availability question", async () => {
+  mockBoundProduct();
+  const graph = boundGraph(node("product", "product"), node("email", "collect", { fieldKey: "customer_email", prompt: "Email-i?", fieldType: "email" }));
+  const legacy = vi.fn(async (p: LegacyParams) => response(p, "Produkti gjendet në katalog; stoku nuk është verifikuar."));
+  const message = "Ckemi\nSi jeni\nDua te porosis montesori\nE keni ne gjendje?";
+  const result = await executeVisualTurn({ ...params(graph), message }, legacy);
+  expect(mocks.entity).toHaveBeenCalledWith("business-a", graph, message, undefined, true);
+  expect(result.nextState.product_id).toBe(boundProductId);
+  expect(result.reply).not.toContain("Cilin produkt");
+  expect(legacy).toHaveBeenCalledOnce();
+  expect(result.reply).toContain("stoku nuk është verifikuar");
+});
 it("runs bound visual collection and final review without any separate linear workflow", async () => {
   mockBoundProduct();
   const graph = boundGraph(node("product", "product"), node("size", "collect", { fieldKey: "size", prompt: "Madhësia?" }));

@@ -1,3 +1,4 @@
+import { matchingCatalogNames } from "@/lib/products/match-name";
 import { rememberTurn, chooseGuidance, clarification, invalidateConfirmation } from "@/lib/workflows/guidance";
 import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
@@ -66,32 +67,8 @@ function pickProduct<T extends { id: string; name: string }>(
   products: T[],
   message: string,
 ): T | null {
-  const normalized = foldText(message);
-  if (!normalized) return null;
-  const exact = products.filter((p) => foldText(p.name) === normalized);
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) return null;
-
-  const scored = products
-    .map((p) => {
-      const name = foldText(p.name);
-      if (!name || name.length < 2) return { p, score: 0 };
-      if (normalized.includes(name)) return { p, score: name.length + 100 };
-      if (name.includes(normalized) && normalized.length >= 3)
-        return { p, score: normalized.length };
-      // Token overlap: "dua bluze te zeze" vs "Bluzë"
-      const tokens = normalized
-        .split(/[^a-z0-9]+/)
-        .filter((t) => t.length >= 3);
-      const hit = tokens.some((t) => name.includes(t) || t.includes(name));
-      return { p, score: hit ? name.length : 0 };
-    })
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score);
-
-  if (!scored.length) return null;
-  if (scored.length > 1 && scored[0].score === scored[1].score) return null;
-  return scored[0].p;
+  const candidates = matchingCatalogNames(products, message);
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 /** Shared business reply pipeline. Reads business context and calls AI only.

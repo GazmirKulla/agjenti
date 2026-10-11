@@ -1,3 +1,4 @@
+import { inboundBatch } from "./message-batch";
 import { randomUUID } from "node:crypto";
 import { InboundPersistenceError } from "./inbound-persistence-error";
 import { hydrateProfile } from "./profile";
@@ -39,6 +40,8 @@ export async function handleInboundMessage(
   message: NormalizedIncomingMessage,
   job?: WorkflowJob,
 ): Promise<void> {
+  const batch = inboundBatch(message, job);
+  message = batch.message;
   const adapter = channelAdapter(message.channel);
   const accountId = message.contextMetadata?.[adapter.metadata];
 
@@ -238,34 +241,37 @@ export async function handleInboundMessage(
   const correlationId = job ? `workflow-job:${job.id}` : randomUUID();
   let persistenceStage: InboundPersistenceError["stage"] = "message_insert";
   try {
-    const { data: insertedMessage, error: messageInsertError } = await supabase
-      .from("messages")
-      .insert({
-        business_id: businessId,
-        conversation_id: conversationId,
-        [adapter.connection]: conn.id,
-        direction: "inbound",
-        source: "customer",
-        body: message.text,
-        external_message_id: message.externalMessageId,
-        media: message.attachments,
-        delivery_status: "delivered",
-      })
-      .select("id")
-      .maybeSingle();
-    if (messageInsertError?.code === "23505") {
-      // A queue retry may have persisted inbound before losing its worker. Verify
-      // the exact inbound record; an unrelated unique violation is not success.
-      persistenceStage = "duplicate_lookup";
-      const { data: existing, error } = await supabase.from("messages").select("id")
-        .eq("business_id", businessId).eq("conversation_id", conversationId)
-        .eq(adapter.connection, conn.id).eq("external_message_id", message.externalMessageId)
-        .eq("direction", "inbound").eq("source", "customer").maybeSingle();
-      if (error) throw error;
-      if (!existing?.id) throw new Error("Inbound duplicate not verified");
-    } else {
-      if (messageInsertError) throw messageInsertError;
-      if (!insertedMessage?.id) throw new Error("Inbound insert not confirmed");
+    for (const original of batch.originals) {
+      persistenceStage = "message_insert";
+      const { data: insertedMessage, error: messageInsertError } = await supabase
+        .from("messages")
+        .insert({
+          business_id: businessId,
+          conversation_id: conversationId,
+          [adapter.connection]: conn.id,
+          direction: "inbound",
+          source: "customer",
+          body: original.text,
+          external_message_id: original.externalMessageId,
+          media: original.attachments,
+          delivery_status: "delivered",
+        })
+        .select("id")
+        .maybeSingle();
+      if (messageInsertError?.code === "23505") {
+        // A queue retry may have persisted inbound before losing its worker. Verify
+        // the exact inbound record; an unrelated unique violation is not success.
+        persistenceStage = "duplicate_lookup";
+        const { data: existing, error } = await supabase.from("messages").select("id")
+          .eq("business_id", businessId).eq("conversation_id", conversationId)
+          .eq(adapter.connection, conn.id).eq("external_message_id", original.externalMessageId)
+          .eq("direction", "inbound").eq("source", "customer").maybeSingle();
+        if (error) throw error;
+        if (!existing?.id) throw new Error("Inbound duplicate not verified");
+      } else {
+        if (messageInsertError) throw messageInsertError;
+        if (!insertedMessage?.id) throw new Error("Inbound insert not confirmed");
+      }
     }
     if (!job) {
       // Claim the legacy receipt only AFTER persistence. Failure above must not

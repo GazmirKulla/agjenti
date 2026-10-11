@@ -17,6 +17,15 @@ vi.mock("@/lib/catalogs/retrieval", () => ({
 import { processAgentTurn } from "./process-agent-turn";
 import { emptyState } from "@/lib/workflows/engine";
 const fixtures: Record<string, unknown> = {};
+it("keeps the Montessori product from a combined greeting, purchase and availability request", async () => {
+ fixtures.products = [{ id: "montessori", name: "Aktivitetet Montessori", description: "Material PDF", product_type_id: "type-a", workflow_id: "workflow-a", price_amount: 690, currency: "ALL" }];
+ const text = "Ckemi\nSi jeni\nDua te porosis montesori\nE keni ne gjendje?";
+ const result = await processAgentTurn({ businessId: "business-a", message: text, hasPhoto: false, state: emptyState() });
+ expect(result.nextState.product_id).toBe("montessori");
+ expect(mocks.generate).toHaveBeenCalledOnce();
+ expect(mocks.generate).toHaveBeenCalledWith(expect.objectContaining({ customerMessage: text, catalogSummary: expect.stringContaining("690") }));
+ expect(result.nextState.recentMessages?.filter(m => m.role === "user").at(-1)?.content).toBe(text);
+});
 let queries: { table: string; filters: unknown[][] }[] = [];
 let failedTable = "";
 beforeEach(() => {

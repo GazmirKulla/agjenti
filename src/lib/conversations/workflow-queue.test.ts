@@ -19,6 +19,8 @@ beforeEach(() => {
     m.from.mockReturnValue(chain);
     m.send.mockResolvedValue({ ok: true, messageId: "sent" });
     m.handle.mockReset();
+    m.rpc.mockReset();
+    m.rpc.mockResolvedValue({ data: 0, error: null });
 });
 it("sends persisted replies after recovery without regenerating or advancing state", async () => {
     m.rpc.mockResolvedValueOnce({ data: [structuredClone(job)], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: [], error: null });
@@ -55,7 +57,7 @@ it("claims every tenant independently of the shared workflow pilot", async () =>
     vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
     m.rpc.mockResolvedValue({ data: [], error: null });
     await runWorkflowQueue();
-    expect(m.rpc).toHaveBeenCalledWith("claim_workflow_inbound", { p_businesses: null });
+    expect(m.rpc).toHaveBeenCalledWith("claim_workflow_inbound_batch", { p_businesses: null });
 });
 
 it.each([true,false])("pauses only actual staff ownership, advisory=%s",async advisoryHandoff=>{
@@ -114,4 +116,24 @@ it("does not persist arbitrary exception details in queue diagnostics", async ()
  expect(m.writes).toContainEqual(expect.objectContaining({ error: "Workflow processing failed" }));
  expect(JSON.stringify(m.writes)).not.toContain("private credential");
  expect(m.send).not.toHaveBeenCalled();
+});
+
+it("wakes after the quiet interval without consuming the job budget or replying early", async () => {
+ vi.useFakeTimers();
+ try {
+  m.rpc.mockResolvedValueOnce({ data: [], error: null })
+   .mockResolvedValueOnce({ data: 3000, error: null })
+   .mockResolvedValueOnce({ data: [{ ...job, status: "processing" }], error: null })
+   .mockResolvedValueOnce({ data: true, error: null })
+   .mockResolvedValueOnce({ data: null, error: null });
+  m.handle.mockImplementationOnce(async (_message, claimed) => { claimed.status = "prepared"; });
+  const running = runWorkflowQueue(1);
+  await vi.advanceTimersByTimeAsync(2999);
+  expect(m.handle).not.toHaveBeenCalled();
+  expect(m.send).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(await running).toBe(1);
+  expect(m.handle).toHaveBeenCalledOnce();
+  expect(m.send).toHaveBeenCalledOnce();
+ } finally { vi.useRealTimers(); }
 });

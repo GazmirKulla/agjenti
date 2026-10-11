@@ -17,6 +17,14 @@ beforeEach(() => {
   } }));
 });
 function graph() { const graph = upgradeVisualGraph(starterVisualGraph()); graph.flows.find(flow => flow.kind === "order")!.productIds = [p]; graph.flows.find(flow => flow.kind === "information")!.serviceIds = [s]; return graph; }
+it("resolves the rapid-message Montessori request against the active catalog", async () => {
+ m.rows.products = [{ id: p, name: "Aktivitetet Montessori" }];
+ expect((await resolveVisualEntity("business", graph(), "Ckemi\nSi jeni\nDua te porosis montesori\nE keni ne gjendje?")).selected?.entity.id).toBe(p);
+ m.rows.products.push({ id: "variant", name: "Montessori 5+" });
+ const ambiguous = await resolveVisualEntity("business", graph(), "Dua montesori");
+ expect(ambiguous.selected).toBeUndefined();
+ expect(ambiguous.choices).toHaveLength(2);
+});
 it("resolves active scoped entities by name or SKU and preserves a saved entity on short answers", async () => {
   const first = await resolveVisualEntity("business", graph(), "Dua Puzzle");
   expect(first.selected?.entity.id).toBe(p);
