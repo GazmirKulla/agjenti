@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { InboundPersistenceError } from "./inbound-persistence-error";
 import { hydrateProfile } from "./profile";
 import { sharedWorkflowEnabled } from "@/lib/workflows/context";
 import { prepareWorkflowReply, type WorkflowJob } from "./workflow-queue";
@@ -82,23 +84,6 @@ export async function handleInboundMessage(
   }
 
   const supabase = createServiceSupabase();
-  const { data: webhookEvent, error: webhookEventError } = job ? { data: {id:job.id},error:null } : await supabase
-    .from("webhook_events")
-    .insert({
-      external_event_id: message.externalMessageId,
-      status: "received",
-    })
-    .select("id")
-    .maybeSingle();
-  if (webhookEventError?.code === "23505") return;
-  if (webhookEventError) throw new Error("Nuk u ruajt mesazhi hyrës.");
-  console.log("[inbound] webhook_events insert", {
-    ok: !webhookEventError,
-    id: webhookEvent?.id ?? null,
-    error: null,
-    externalMessageId: message.externalMessageId,
-  });
-
   const { data: connection, error: connectionError } = await supabase
     .from(adapter.table)
     .select(message.channel === "whatsapp" ? "id,business_id,phone_number_id,access_token_ciphertext,status" : "id,business_id,ig_user_id,access_token_ciphertext,status")
@@ -250,29 +235,59 @@ export async function handleInboundMessage(
     return;
   }
 
-  const { data: insertedMessage, error: messageInsertError } = await supabase
-    .from("messages")
-    .insert({
-      business_id: businessId,
-      conversation_id: conversationId,
-      [adapter.connection]: conn.id,
-      direction: "inbound",
-      source: "customer",
-      body: message.text,
-      external_message_id: message.externalMessageId,
-      media: message.attachments,
-      delivery_status: "delivered",
-    })
-    .select("id")
-    .maybeSingle();
-  console.log("[inbound] messages insert", {
-    ok: !messageInsertError,
-    messageId: insertedMessage?.id ?? null,
-    conversationId,
-    error: messageInsertError?.message ?? null,
-  });
-
-  if(job&&messageInsertError&&messageInsertError.code!=="23505") throw new Error("Inbound persistence failed");
+  const correlationId = job ? `workflow-job:${job.id}` : randomUUID();
+  let persistenceStage: InboundPersistenceError["stage"] = "message_insert";
+  try {
+    const { data: insertedMessage, error: messageInsertError } = await supabase
+      .from("messages")
+      .insert({
+        business_id: businessId,
+        conversation_id: conversationId,
+        [adapter.connection]: conn.id,
+        direction: "inbound",
+        source: "customer",
+        body: message.text,
+        external_message_id: message.externalMessageId,
+        media: message.attachments,
+        delivery_status: "delivered",
+      })
+      .select("id")
+      .maybeSingle();
+    if (messageInsertError?.code === "23505") {
+      // A queue retry may have persisted inbound before losing its worker. Verify
+      // the exact inbound record; an unrelated unique violation is not success.
+      persistenceStage = "duplicate_lookup";
+      const { data: existing, error } = await supabase.from("messages").select("id")
+        .eq("business_id", businessId).eq("conversation_id", conversationId)
+        .eq(adapter.connection, conn.id).eq("external_message_id", message.externalMessageId)
+        .eq("direction", "inbound").eq("source", "customer").maybeSingle();
+      if (error) throw error;
+      if (!existing?.id) throw new Error("Inbound duplicate not verified");
+    } else {
+      if (messageInsertError) throw messageInsertError;
+      if (!insertedMessage?.id) throw new Error("Inbound insert not confirmed");
+    }
+    if (!job) {
+      // Claim the legacy receipt only AFTER persistence. Failure above must not
+      // cause alreadyHandled() to suppress the next delivery. A stored inbound
+      // with no receipt can safely resume here; the unique receipt elects one caller.
+      persistenceStage = "event_receipt";
+      const { data: receipt, error } = await supabase.from("webhook_events")
+        .insert({ external_event_id: message.externalMessageId, status: "received" })
+        .select("id").maybeSingle();
+      if (error?.code === "23505") return;
+      if (error) throw error;
+      if (!receipt?.id) throw new Error("Inbound receipt not confirmed");
+    }
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+    const failure = new InboundPersistenceError(correlationId, persistenceStage, /^[A-Z0-9]{5}$/.test(code) ? code : null);
+    console.error("[inbound] persistence failed", {
+      correlationId, stage: failure.stage, databaseCode: failure.databaseCode,
+      channel: message.channel, jobId: job?.id ?? null, businessId, conversationId,
+    });
+    throw failure;
+  }
   const { data: business } = await supabase
     .from("businesses")
     .select("auto_reply")

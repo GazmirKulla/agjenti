@@ -5,6 +5,7 @@ import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import { channelAdapter } from "./channel";
 import { isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
 import type { AgentTurnResult } from "./process-agent-turn";
+import { InboundPersistenceError } from "./inbound-persistence-error";
 export type WorkflowJob = {
     id: number;
     business_id: string;
@@ -79,9 +80,10 @@ export async function runWorkflowQueue(maxJobs = 10) {
                 await db.from("workflow_inbound_queue").update({ status: "ignored", leased_until: null }).eq("id", job.id).eq("lease_token", job.lease_token).eq("status", "processing").throwOnError();
             processed++;
         }
-        catch {
+        catch (error) {
             // Retain prepared output after a pre-send failure. A send with an unknown result is never replayed.
-            await db.from("workflow_inbound_queue").update({ leased_until: new Date(Date.now() + 30000).toISOString(), error: "Workflow processing failed" }).eq("id", job.id).eq("lease_token", job.lease_token).throwOnError();
+            const detail = error instanceof InboundPersistenceError ? error.message : "Workflow processing failed";
+            await db.from("workflow_inbound_queue").update({ leased_until: new Date(Date.now() + 30000).toISOString(), error: detail }).eq("id", job.id).eq("lease_token", job.lease_token).throwOnError();
         }
     }
     return processed;

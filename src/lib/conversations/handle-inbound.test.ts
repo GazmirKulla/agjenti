@@ -43,6 +43,11 @@ let auto = true;
 let webhookInsertCode: string | null = null;
 let savedState = emptyState();
 let writes: { table: string; operation: string; data: unknown }[] = [];
+let inboundResult: { data: { id: string } | null; error: { code: string; message: string } | null };
+let inboundException: Error | null;
+let duplicateResult: { data: { id: string } | null; error: { code: string; message: string } | null };
+let webhookEvents: Set<string>;
+let duplicateFilters: Record<string, unknown>;
 beforeEach(() => {
   vi.clearAllMocks();
   paused = false;
@@ -50,6 +55,12 @@ beforeEach(() => {
   webhookInsertCode = null;
   savedState = emptyState();
   writes = [];
+  inboundResult = { data: { id: "inbound-a" }, error: null };
+  inboundException = null;
+  duplicateResult = { data: { id: "inbound-a" }, error: null };
+  webhookEvents = new Set();
+  duplicateFilters = {};
+  mocks.rpc.mockResolvedValue({ error: null });
   mocks.process.mockResolvedValue({
     reply: "Përgjigje nga pipeline",
     nextState: { ...emptyState(), step_key: "collect_size" },
@@ -57,9 +68,29 @@ beforeEach(() => {
     workflowId: "workflow-a",
   });
   mocks.send.mockResolvedValue({ ok: true, messageId: "meta-reply" });
+  mocks.whatsappSend.mockResolvedValue({ ok: true, messageId: "wa-reply" });
   mocks.from.mockImplementation((table: string) => {
     let op = "select";
-    const result = () => ({
+    let inserted: Record<string, unknown> = {};
+    const filters: Record<string, unknown> = {};
+    const result = () => {
+      if (table === "messages" && op === "insert" && inserted.direction === "inbound") {
+        if (inboundException) throw inboundException;
+        return inboundResult;
+      }
+      if (table === "messages" && op === "select") {
+        duplicateFilters = filters;
+        return duplicateResult;
+      }
+      if (table === "webhook_events") {
+        if (op === "select") return { data: webhookEvents.has(String(filters.external_event_id)) ? { id: "event-a" } : null, error: null };
+        if (op === "insert") {
+          const code = webhookInsertCode ?? (webhookEvents.has(String(inserted.external_event_id)) ? "23505" : null);
+          if (code) return { data: null, error: { code, message: "Insert failed" } };
+          webhookEvents.add(String(inserted.external_event_id));
+        }
+      }
+      return ({
       error: table === "webhook_events" && op === "insert" && webhookInsertCode ? { code: webhookInsertCode, message: "Insert failed" } : null,
       data:
         table === "webhook_events"
@@ -88,9 +119,10 @@ beforeEach(() => {
                     ? { collected: savedState, workflow_id: null }
                     : { id: "row-a" },
     });
+    };
     const chain = {
       select: vi.fn(() => chain),
-      eq: vi.fn(() => chain),
+      eq: vi.fn((key: string, value: unknown) => { filters[key] = value; return chain; }),
       neq: vi.fn(() => chain),
       in: vi.fn(() => chain),
       order: vi.fn(() => chain),
@@ -102,6 +134,7 @@ beforeEach(() => {
         Promise.resolve(result()).then(resolve),
       insert: (data: unknown) => {
         op = "insert";
+        inserted = data as Record<string, unknown>;
         writes.push({ table, operation: op, data });
         return chain;
       },
@@ -117,6 +150,80 @@ beforeEach(() => {
       },
     };
     return chain;
+  });
+});
+
+const queuedJob = () => ({ id: 17, business_id: "business-a", connection_id: "connection-a", participant_id: message.externalParticipantId, payload: message, status: "processing", lease_token: "lease-a", reply: null });
+describe("inbound persistence boundary", () => {
+  it.each([false, true])("stops before processing on database error, queued=%s", async queued => {
+    inboundResult = { data: null, error: { code: "XX000", message: "Private database details" } };
+    await expect(handleInboundMessage(message, queued ? queuedJob() : undefined)).rejects.toThrow();
+    expect(mocks.process).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(writes.filter(w => w.table === "conversation_states")).toEqual([]);
+    expect(webhookEvents.size).toBe(0);
+  });
+  it.each([false, true])("retries after a failed save without poisoning the event receipt, queued=%s", async queued => {
+    inboundResult = { data: null, error: { code: "57014", message: "timeout" } };
+    await expect(handleInboundMessage(message, queued ? queuedJob() : undefined)).rejects.toThrow();
+    inboundResult = { data: { id: "inbound-a" }, error: null };
+    await handleInboundMessage(message, queued ? queuedJob() : undefined);
+    expect(mocks.process).toHaveBeenCalledOnce();
+    if (!queued) {
+      await handleInboundMessage(message);
+      expect(mocks.process).toHaveBeenCalledOnce();
+      expect(mocks.send).toHaveBeenCalledOnce();
+    }
+  });
+  it.each([false, true])("rejects an unconfirmed insert with no ID, queued=%s", async queued => {
+    inboundResult = { data: null, error: null };
+    await expect(handleInboundMessage(message, queued ? queuedJob() : undefined)).rejects.toThrow();
+    expect(mocks.process).not.toHaveBeenCalled();
+  });
+  it.each([false, true])("recovers a stored inbound after a transport timeout, queued=%s", async queued => {
+    inboundException = new TypeError("fetch failed: private details");
+    await expect(handleInboundMessage(message, queued ? queuedJob() : undefined)).rejects.toThrow();
+    expect(mocks.process).not.toHaveBeenCalled();
+    inboundException = null;
+    inboundResult = { data: null, error: { code: "23505", message: "duplicate" } };
+    await handleInboundMessage(message, queued ? queuedJob() : undefined);
+    expect(mocks.process).toHaveBeenCalledOnce();
+    expect(duplicateFilters).toEqual({ business_id: "business-a", conversation_id: "conversation-a", instagram_connection_id: "connection-a", external_message_id: "msg-a", direction: "inbound", source: "customer" });
+  });
+  it.each([null, { code: "57014", message: "lookup timeout" }])("rejects an unverified unique violation (%j)", async error => {
+    inboundResult = { data: null, error: { code: "23505", message: "duplicate" } };
+    duplicateResult = { data: null, error };
+    await expect(handleInboundMessage(message, queuedJob())).rejects.toThrow();
+    expect(mocks.process).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("records a safe correlation identifier and database code without database details", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      inboundResult = { data: null, error: { code: "57014", message: "private token and customer data" } };
+      await expect(handleInboundMessage(message, queuedJob())).rejects.toThrow("workflow-job:17");
+      expect(log).toHaveBeenCalledWith("[inbound] persistence failed", expect.objectContaining({ correlationId: "workflow-job:17", stage: "message_insert", databaseCode: "57014", conversationId: "conversation-a" }));
+      expect(JSON.stringify(log.mock.calls)).not.toContain("private token");
+    } finally { log.mockRestore(); }
+  });
+  it("resumes a saved inbound when its legacy event receipt failed", async () => {
+    webhookInsertCode = "XX000";
+    await expect(handleInboundMessage(message)).rejects.toThrow("event_receipt");
+    expect(mocks.process).not.toHaveBeenCalled();
+    expect(webhookEvents.size).toBe(0);
+    webhookInsertCode = null;
+    inboundResult = { data: null, error: { code: "23505", message: "already stored" } };
+    await handleInboundMessage(message);
+    await handleInboundMessage(message);
+    expect(mocks.process).toHaveBeenCalledOnce();
+    expect(mocks.send).toHaveBeenCalledOnce();
+  });
+  it("verifies WhatsApp duplicates against the WhatsApp connection", async () => {
+    inboundResult = { data: null, error: { code: "23505", message: "duplicate" } };
+    await handleInboundMessage({ ...message, channel: "whatsapp", contextMetadata: { whatsappPhoneNumberId: "123456" } });
+    expect(duplicateFilters).toMatchObject({ whatsapp_connection_id: "connection-a" });
+    expect(duplicateFilters).not.toHaveProperty("instagram_connection_id");
   });
 });
 describe("real inbound integration with shared processor", () => {

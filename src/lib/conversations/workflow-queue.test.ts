@@ -7,6 +7,7 @@ vi.mock("@/lib/crypto/tokens", () => ({ decryptSecret: () => "test-token" }));
 import { runWorkflowQueue, prepareWorkflowReply, enqueueWorkflowMessage } from "./workflow-queue";
 import type { AgentTurnResult } from "./process-agent-turn";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
+import { InboundPersistenceError } from "./inbound-persistence-error";
 const business = "00000000-0000-4000-8000-000000004101";
 const job = { id: 1, business_id: business, connection_id: "connection", participant_id: "person", lease_token: "lease", reply: "Saved answer", status: "prepared", payload: { timestamp: "2026-10-10T10:00:00Z" } };
 beforeEach(() => {
@@ -17,6 +18,7 @@ beforeEach(() => {
     const chain = { select: () => chain, eq: (...v: unknown[]) => { m.filters.push(v); return chain; }, neq: () => chain, maybeSingle: async () => ({ data: { id: "connection", business_id: business, ig_user_id: "account", access_token_ciphertext: "sealed", status: "connected" }, error: null }), upsert: (...v: unknown[]) => { m.writes.push(v); return chain; }, update: (v: unknown) => { m.writes.push(v); return chain; }, throwOnError: async () => ({ error: null }), then: (f: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(f) };
     m.from.mockReturnValue(chain);
     m.send.mockResolvedValue({ ok: true, messageId: "sent" });
+    m.handle.mockReset();
 });
 it("sends persisted replies after recovery without regenerating or advancing state", async () => {
     m.rpc.mockResolvedValueOnce({ data: [structuredClone(job)], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: [], error: null });
@@ -77,4 +79,39 @@ it("does not send a WhatsApp reply after the customer service window expires", a
  await runWorkflowQueue();
  expect(m.send).not.toHaveBeenCalled();
  expect(m.rpc).toHaveBeenCalledWith("finish_workflow_send", expect.objectContaining({ p_ok: false, p_error: "Dritarja 24-orëshe ka mbaruar." }));
+});
+
+it("retains a failed inbound for retry, then sends only after recovery prepares it", async () => {
+ const processing = { ...structuredClone(job), status: "processing", reply: null };
+ const failure = new InboundPersistenceError("workflow-job:1", "message_insert", "57014");
+ m.handle.mockRejectedValueOnce(failure);
+ m.rpc.mockResolvedValueOnce({ data: [processing], error: null }).mockResolvedValueOnce({ data: [], error: null });
+ const before = Date.now();
+ expect(await runWorkflowQueue()).toBe(0);
+ expect(m.send).not.toHaveBeenCalled();
+ expect(m.rpc).not.toHaveBeenCalledWith("begin_workflow_send", expect.anything());
+ expect(m.writes).toEqual([expect.objectContaining({ error: failure.message, leased_until: expect.any(String) })]);
+ expect(Date.parse((m.writes[0] as { leased_until: string }).leased_until)).toBeGreaterThanOrEqual(before + 30000);
+ expect(processing.status).toBe("processing");
+
+ // The database reclaims the same persisted job with a new lease after backoff.
+ const recovered = { ...processing, lease_token: "new-lease" };
+ m.handle.mockImplementationOnce(async (_message, claimed) => { claimed.status = "prepared"; claimed.reply = "Saved after retry"; });
+ m.rpc.mockResolvedValueOnce({ data: [recovered], error: null })
+   .mockResolvedValueOnce({ data: true, error: null })
+   .mockResolvedValueOnce({ data: null, error: null })
+   .mockResolvedValueOnce({ data: [], error: null });
+ expect(await runWorkflowQueue()).toBe(1);
+ expect(m.send).toHaveBeenCalledOnce();
+ expect(m.send).toHaveBeenCalledWith(expect.objectContaining({ body: "Saved after retry" }));
+ expect(m.rpc).toHaveBeenCalledWith("finish_workflow_send", expect.objectContaining({ p_token: "new-lease", p_ok: true }));
+});
+
+it("does not persist arbitrary exception details in queue diagnostics", async () => {
+ m.handle.mockRejectedValueOnce(new Error("private credential"));
+ m.rpc.mockResolvedValueOnce({ data: [{ ...job, status: "processing" }], error: null }).mockResolvedValueOnce({ data: [], error: null });
+ await runWorkflowQueue();
+ expect(m.writes).toContainEqual(expect.objectContaining({ error: "Workflow processing failed" }));
+ expect(JSON.stringify(m.writes)).not.toContain("private credential");
+ expect(m.send).not.toHaveBeenCalled();
 });
