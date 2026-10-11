@@ -1,3 +1,4 @@
+import { InboxRefresh } from "./inbox-refresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { conversationDisplayName } from "@/lib/conversations/ensure-customer";
@@ -26,6 +27,19 @@ export async function InboxWorkspace({
   view?: "customer";
 }) {
   const db = createServiceSupabase();
+  const [instagram, whatsapp] = await Promise.all([
+    db.from("instagram_connections").select("status,expires_at").eq("business_id", businessId).neq("status", "disconnected").maybeSingle(),
+    db.from("whatsapp_connections").select("status").eq("business_id", businessId).maybeSingle(),
+  ]);
+  const channels = (["instagram", "whatsapp"] as const).map(channel => {
+    const result = channel === "instagram" ? instagram : whatsapp;
+    const expired = channel === "instagram" && instagram.data?.expires_at && Date.parse(instagram.data.expires_at) <= Date.now();
+    return {
+      channel,
+      connected: !result.error && result.data?.status === "connected" && !expired,
+      status: result.error ? "Statusi nuk u ngarkua" : expired ? "Kërkon rilidhje" : result.data?.status === "connected" ? "I lidhur" : "I palidhur",
+    };
+  });
   const { data: rows, error } = await db
     .from("conversations")
     .select(
@@ -46,16 +60,18 @@ export async function InboxWorkspace({
     return (
       <>
         {heading}
+        <InboxRefresh />
         <section className="panel">
+          <InboxList rows={[]} slug={slug} channels={channels} />
           <EmptyState
             title="Inbox-i yt është gati"
             description="Lidh Instagram-in ose WhatsApp-in për të marrë mesazhet e para të klientëve."
           />
           <Link
             className="soft-link mx-auto mb-6 w-fit"
-            href={`/b/${slug}/instagram`}
+            href={`/b/${slug}/integrations`}
           >
-            Menaxho Instagram →
+            Menaxho integrimet →
           </Link>
         </section>
       </>
@@ -126,10 +142,12 @@ export async function InboxWorkspace({
   return (
     <>
       {heading}
+        <InboxRefresh />
       <div
         className={`inbox-workspace ${conversationId ? "has-selection" : "inbox-list-home"} ${view === "customer" ? "is-mobile-customer" : ""}`}
       >
         <InboxList
+          channels={channels}
           slug={slug}
           selected={selected}
           rows={(rows ?? []).map((r) => {

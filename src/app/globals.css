@@ -1530,6 +1530,51 @@ html[data-resolved="dark"] .brand-logo-dark {
 .inbox-list {
   overflow: hidden;
 }
+.inbox-channels {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.inbox-channel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  height: 42px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.inbox-channel.instagram {
+  color: #e1306c;
+}
+.inbox-channel.whatsapp {
+  color: #128c4a;
+}
+.inbox-channel[aria-pressed="true"] {
+  border-bottom-color: currentColor;
+  background: var(--surface);
+}
+.inbox-channel.inactive {
+  background: var(--surface);
+  color: var(--ink-muted);
+}
+.inbox-channel:focus-visible {
+  outline: 2px solid var(--ink-muted);
+  outline-offset: 3px;
+}
+.inbox-row-copy .inbox-row-channel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 .inbox-filters {
   padding: 14px 12px;
   display: flex;

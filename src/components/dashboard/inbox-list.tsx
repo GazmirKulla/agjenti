@@ -14,14 +14,18 @@ export function InboxList({
   rows,
   slug,
   selected,
+  channels,
 }: {
   rows: InboxRow[];
   slug: string;
   selected?: string;
+  channels: { channel: "instagram" | "whatsapp"; connected: boolean; status: string }[];
 }) {
+  const [channel, setChannel] = useState<"instagram" | "whatsapp" | null>(null);
+  const channelRows = channel === null ? rows : rows.filter(row => (row.channel ?? "instagram") === channel);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const filtered = rows.filter(
+  const filtered = channelRows.filter(
     (r) =>
       (filter === "all" ||
         (filter === "unread" ? r.unread > 0 : r.status === filter)) &&
@@ -31,6 +35,18 @@ export function InboxList({
   );
   return (
     <aside className="panel inbox-list">
+      <nav className="inbox-channels" aria-label="Filtro bisedat sipas kanalit">
+        {channels.map(item => {
+          const name = item.channel === "instagram" ? "Instagram" : "WhatsApp";
+          const label = `${name}: ${item.status}`;
+          const content = <><Icon name={item.channel} size={16} /><span>{name}</span></>;
+          return item.connected ? <button key={item.channel} type="button"
+            className={`inbox-channel ${item.channel}`} aria-label={`${label}. ${channel === item.channel ? "Shfaq të gjitha kanalet" : `Filtro ${name}`}`} title={channel === item.channel ? "Kliko përsëri për të gjitha bisedat" : label}
+            aria-pressed={channel === item.channel} onClick={() => setChannel(current => current === item.channel ? null : item.channel)}>{content}</button>
+            : <Link key={item.channel} href={`/b/${slug}/integrations`}
+              className="inbox-channel inactive" aria-label={`${label}. Hap integrimet`} title={`${label}. Hap integrimet`}>{content}</Link>;
+        })}
+      </nav>
       <div className="inbox-filters">
         {[
           ["all", "Të gjitha"],
@@ -71,7 +87,7 @@ export function InboxList({
             </span>
             <span className="inbox-row-copy">
               <strong>{r.name}</strong>
-              <small>{r.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</small>
+              <small className="inbox-row-channel"><Icon name={r.channel === "whatsapp" ? "whatsapp" : "instagram"} size={14} />{r.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</small>
               <small>{r.preview || "Pa mesazh"}</small>
             </span>
             {r.unread > 0 && <span className="unread-badge">{r.unread}</span>}
@@ -81,7 +97,7 @@ export function InboxList({
           <p className="muted-copy p-5">Nuk ka biseda për këtë filtër.</p>
         )}
       </div>
-      <p className="inbox-list-foot">{rows.length} biseda të fundit</p>
+      <p className="inbox-list-foot">{channelRows.length} biseda të fundit</p>
     </aside>
   );
 }
