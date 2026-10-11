@@ -4,6 +4,7 @@ import { useWorkflowAssistantContext, useAssistantWorkspace } from "@/components
 import { Icon } from "@/components/dashboard/icon";
 import { saveWorkflowFromEditor } from "@/lib/workflows/visual/save-client";
 import { unconfirmedSaveMessage } from "@/lib/workflows/visual/save-result";
+import { removeVisualFlow } from "@/lib/workflows/visual/remove-flow";
 import { clearSavedWorkflowDraft, clearWorkflowDraft, persistWorkflowDraft, readWorkflowDraftRecovery, type WorkflowDraftRecovery } from "@/lib/workflows/visual/local-draft";
 import { simulateVisualWorkflow } from "@/lib/workflows/visual/test-actions";
 import { nodeLabels, outputPorts, validateVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
@@ -40,6 +41,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   const [adding, setAdding] = useState(false);
   const [pending, startTransition] = useTransition();
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [removedFlow, setRemovedFlow] = useState<{ graph: VisualGraph; id: string } | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [trace, setTrace] = useState<VisualTrace | undefined>();
   const [session, setSession] = useState<string | null>(null);
@@ -102,6 +104,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   function resetTest() { setTurn(undefined); setTrace(undefined); setSession(null); setMessages([]); }
   function edit(next: VisualGraph) {
     if (locked) return;
+    setRemovedFlow(null);
     setGraph(next); setNotice(null); setProblems([]); resetTest();
   }
   function selectNode(id?: string) {
@@ -156,6 +159,29 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
     if (!flows.some(flow => flow.id === view)) setView("hub");
     setSelectedId(undefined);
   }
+  function removeFlow() {
+    if (!activeFlow || locked) return;
+    const result = removeVisualFlow(graph, activeFlow.id);
+    if (!result.graph) { setNotice({ error: true, text: result.error }); return; }
+    const bindings = result.productCount || result.serviceCount
+      ? `\nDo të hiqen lidhjet e kësaj rrjedhe me ${result.productCount} produkte dhe ${result.serviceCount} shërbime. Produktet dhe shërbimet nuk fshihen.` : "";
+    if (!window.confirm(`Të fshihet rrjedha “${activeFlow.label}” me ${result.removedNodeCount} hapa?${bindings}\nNdryshimi bëhet vetëm në draft. Versioni aktiv ndryshon pasi ta publikosh.`)) return;
+    const previous = { graph, id: activeFlow.id };
+    edit(result.graph);
+    setRemovedFlow(previous);
+    setView("hub"); setSelectedId(undefined); setAdding(false); setTab("edit");
+    setNotice({ text: `“${activeFlow.label}” u hoq nga drafti. Ruaj draftin ose publiko ndryshimin kur të jesh gati.` });
+  }
+  function undoFlowRemoval() {
+    if (!removedFlow || locked) return;
+    const previous = removedFlow;
+    edit(previous.graph);
+    // Undo must replace the recovery copy too, even when it returns to a clean draft.
+    persistWorkflowDraft(slug, workspace.revision, previous.graph);
+    clearSavedWorkflowDraft(slug, workspace);
+    setView(previous.id); setSelectedId(undefined); setAdding(false); setTab("edit");
+    setNotice({ text: "Fshirja u anulua." });
+  }
   function validate() {
     const result = validateVisualGraph(graph);
     setProblems(result.errors);
@@ -170,6 +196,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
         if (result.error) { setNotice({ text: result.error, error: true }); setProblems(result.errors ?? []); return; }
         if (result.savedRevision !== undefined && result.savedGraph) clearSavedWorkflowDraft(slug, { revision: result.savedRevision, graph: result.savedGraph });
         if (result.workspace) { setWorkspace(result.workspace); setGraph(result.workspace.graph); }
+        if (result.savedRevision !== undefined) setRemovedFlow(null);
         setRefreshRequired(Boolean(result.refreshRequired));
         setNotice({ text: result.warning ?? (publish ? "Rrjedha u aktivizua për bisedat e reja." : "Drafti u ruajt.") });
       } catch { setNotice({ text: unconfirmedSaveMessage, error: true }); }
@@ -216,6 +243,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
     <div className="vf-workbench">
       <div className="vf-diagram-area">
         <div className="vf-toolbar"><div className="vf-add-wrap">{view === "hub" && <select className="vf-button" aria-label="Shto rrjedhë" value="" disabled={locked || graph.nodes.length > 30 || definition.flows.length >= 16} onChange={event => openProcess(event.target.value as FlowTemplate, true)}><option value="" disabled>+ Shto rrjedhë</option>{(["information", "order", "order_status", "booking", "support", "custom"] as const).filter(kind => kind !== "booking" || bookingEnabled).map(kind => <option key={kind} value={kind}>{flowTemplateLabels[kind]}</option>)}</select>}{view !== "hub" && <button type="button" className={`vf-button vf-add ${adding ? "is-open" : ""}`} aria-expanded={adding} disabled={locked || graph.nodes.length >= 32} onClick={() => setAdding(!adding)}><span>+</span> Shto hap</button>}{adding && <><button className="vf-menu-dismiss" aria-label="Mbyll menunë" onClick={() => setAdding(false)} /><div className="vf-palette" role="menu" aria-label="Llojet e hapave">{addKinds.filter(kind => kind !== "booking" || bookingEnabled).map(kind => <button role="menuitem" type="button" key={kind} onClick={() => add(kind)}><span className={`vf-palette-icon vf-kind-${kind}`}><FlowIcon kind={kind} size={17} /></span>{nodeLabels[kind]}<span className="vf-palette-plus">+</span></button>)}</div></>}</div>
+          {activeFlow && <button type="button" className="vf-button vf-delete-flow" disabled={locked} onClick={removeFlow}>Fshi rrjedhën</button>}
           <button type="button" className={`vf-button ${tab === "test" ? "is-open" : ""}`} onClick={() => { if (validate()) { setTab("test"); setAdding(false); } }}><span aria-hidden="true">▷</span> Provo rrjedhën</button>
         </div>
         {view === "hub" ? <WorkflowHub graph={graph} trace={trace} state={turn?.nextState} routing={turn?.conversationRouting} message={messages.filter(item => item.role === "user").at(-1)?.text} bookingEnabled={bookingEnabled} onOpen={openProcess} onOpenFlow={openFlow} onContext={() => setTab("context")} /> : <VisualGraphView key={view} graph={displayGraph} selectedNodeId={selectedId} onSelect={selectNode} onMove={(id, position) => edit({ ...graph, nodes: graph.nodes.map(n => n.id === id ? { ...n, position } : n) })} invalidNodeIds={problems.flatMap(p => p.nodeId ? [p.nodeId] : [])} currentNodeId={trace?.state.nodeId} visitedNodeIds={trace?.state.visited} traversedNodeIds={trace?.traversedNodeIds} />}
@@ -248,7 +276,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
       </aside>
     </div>
     <footer className="vf-footer"><span>{graph.nodes.length} hapa <i />{graph.edges.length} lidhje</span><div>{workspace.publishedVersionId && <button type="button" disabled={locked || dirty} title={dirty ? "Ruaj ndryshimet përpara këtij veprimi." : undefined} onClick={toggle}>{workspace.enabled ? "Çaktivizo" : "Aktivizo versionin e publikuar"}</button>}<span>Ndryshimet hyjnë në fuqi pas publikimit.</span></div></footer>
-    {notice && <div className={`vf-notice ${notice.error ? "is-error" : ""}`} role={notice.error ? "alert" : "status"}>{notice.error ? "!" : "✓"}<span>{notice.text}{notice.error && dirty && <small>{backupAvailable ? " Kopja lokale ruhet edhe pas rifreskimit në këtë dritare." : " Mbaje këtë faqe hapur që të mos humbasësh ndryshimet."}</small>}</span>{(refreshRequired || (notice.error && (!dirty || backupAvailable))) && <button type="button" className="vf-button" onClick={() => window.location.reload()}>Rifresko faqen</button>}{!refreshRequired && <button type="button" aria-label="Mbyll njoftimin" onClick={() => setNotice(null)}>×</button>}</div>}
+    {notice && <div className={`vf-notice ${notice.error ? "is-error" : ""}`} role={notice.error ? "alert" : "status"}>{notice.error ? "!" : "✓"}<span>{notice.text}{notice.error && dirty && <small>{backupAvailable ? " Kopja lokale ruhet edhe pas rifreskimit në këtë dritare." : " Mbaje këtë faqe hapur që të mos humbasësh ndryshimet."}</small>}</span>{removedFlow && <button type="button" className="vf-button" disabled={locked} onClick={undoFlowRemoval}>Zhbëj fshirjen</button>}{(refreshRequired || (notice.error && (!dirty || backupAvailable))) && <button type="button" className="vf-button" onClick={() => window.location.reload()}>Rifresko faqen</button>}{!refreshRequired && <button type="button" aria-label="Mbyll njoftimin" onClick={() => setNotice(null)}>×</button>}</div>}
     {problems.length > 0 && <div className="vf-problems" role="alert"><strong>{problems.length} {problems.length === 1 ? "detaj për të plotësuar" : "detaje për të plotësuar"}</strong>{problems.map((problem, i) => <button key={i} type="button" onClick={() => { selectNode(problem.nodeId); }}>{problem.nodeId ? `${graph.nodes.find(n => n.id === problem.nodeId)?.label}: ` : ""}{problem.message}<span>↗</span></button>)}</div>}
   </section>;
 }

@@ -22,6 +22,7 @@
 .vf-toolbar { position: absolute; top: 19px; left: 20px; right: 20px; z-index: 4; display: flex; align-items: center; justify-content: space-between; pointer-events: none; gap: 12px; }
 .vf-toolbar > * { pointer-events: auto; }
 .vf-toolbar .vf-button { box-shadow: 0 3px 12px -9px #20163566; backdrop-filter: blur(16px); }
+.vf-toolbar .vf-delete-flow { color: var(--danger); margin-left: auto; }
 .vf-add > span { font-size: 20px; font-weight: 300; line-height: 14px; }
 .vf-add-wrap { position: relative; }
 .vf-menu-dismiss { position: fixed; inset: 0; cursor: default; z-index: 3; }
