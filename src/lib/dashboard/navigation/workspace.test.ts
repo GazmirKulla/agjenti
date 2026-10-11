@@ -27,7 +27,9 @@ it("groups workflow and its deep links under the agent while keeping the origina
 it("keeps operational details, channel settings, onboarding and accounts reachable", () => {
   expect(workspaceSection("/b/shop/products/record", "/b/shop", navigation)).toBe("products");
   expect(workspaceSection("/b/shop/inbox/record/customer", "/b/shop", navigation)).toBe("conversations");
-  for (const path of ["staff", "setup", "account"]) expect(workspaceSection(`/b/shop/${path}`, "/b/shop", navigation)).toBe("settings");
+  for (const path of ["staff", "setup"]) expect(workspaceSection(`/b/shop/${path}`, "/b/shop", navigation)).toBe("settings");
+  expect(navigation.settings.some(item => item.path === "account")).toBe(false);
+  expect(workspaceSection("/b/shop/account", "/b/shop", navigation)).toBeUndefined();
   expect(workspaceSection("/b/shop/activity", "/b/shop", navigation)).toBe("activity");
   expect(workspaceSection("/b/other/workflows", "/b/shop", navigation)).toBeUndefined();
   expect(workspaceSection("/b/shop/workflows-other", "/b/shop", navigation)).toBeUndefined();
