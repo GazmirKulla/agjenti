@@ -22,7 +22,7 @@ export type ConversationMessageParams = AgentTurnParams & {
   /** Production adapter rechecks manual ownership immediately before booking effects. */
   canAct?: () => Promise<boolean>;
 };
-type Route = Pick<ConversationRouting, "process" | "source">;
+type Route = Pick<ConversationRouting, "process" | "source"> & { clarification?: string };
 const namedConfirmation = (message: string): ProcessKind | null => { const match = foldText(message).match(/^(?:po )?(?:e )?konfirmoj (porosine|rezervimin)[.!\s]*$/); return match ? match[1] === "porosine" ? "order" : "booking" : null; };
 const contactChannel = (message: string) => /^(?:whatsapp|telefon|phone|instagram)[.!\s]*$/.test(foldText(message));
 const contactFollowUp = (message: string, state: ConversationStatePayload) => state.visual?.status === "handoff"
@@ -43,6 +43,8 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   const order = intent === "order" || resumeOrder(text) || /^(porosia|porosine|order)[.!\s]*$/.test(text);
   if (informationalQuestion(text) && !order && !/\b(dua|kerkoj|rezervo|book|want|vazhdo|rifillo)\b/.test(text)) return { process: "information", source: "rules" };
   const booking = bookingRequest(text) && !/\b(nuk dua|s dua|do not want)\b/.test(text);
+  const bookingAction = booking && /\b(dua|kerkoj|rezervo\w*|book|want|vazhdo\w*|rifillo\w*)\b/.test(text);
+  if (isQuestion(message) && !order && !bookingAction && intent !== "support" && !/\b(ndrysho\w*|korrigjo\w*)\b/.test(text)) return { process: "information", source: "rules" };
   if (order && booking) return { process: "clarify", source: "rules" };
   if (order) return { process: "order", source: "rules" };
   if (booking) return { process: "booking", source: "rules" };
@@ -52,9 +54,11 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   const active = state.processes!.active;
   const auxiliary = state.processes!.auxiliary;
   const lastReply = state.recentMessages?.filter(message => message.role === "assistant").at(-1)?.content;
+  const pendingStep = active === "order" ? state.context?.execution.linear?.steps.find(step => step.key === state.step_key) : undefined;
   const guidance = await chooseGuidance({ message, state, targets: [],
     current: auxiliary ? { id: auxiliary.visual.nodeId, label: "Vazhdimi i bisedës", prompt: lastReply, kind: auxiliary.process }
-      : active ? { id: active, label: active === "booking" ? "Plotësimi i rezervimit" : "Plotësimi i porosisë", kind: active }
+      : active ? { id: active, label: pendingStep?.label ?? (active === "booking" ? "Plotësimi i rezervimit" : "Plotësimi i porosisë"), kind: active,
+          fieldKey: pendingStep?.fieldKey ?? pendingStep?.key, prompt: lastReply ?? pendingStep?.prompt }
         : lastReply ? { id: "conversation", label: "Vazhdimi i bisedës", prompt: lastReply, kind: "information" } : undefined,
     routes: [{ id: "order", label: "Nis ose rifillo porosinë e produktit", kind: "product" }, { id: "booking", label: "Nis ose rifillo rezervimin e shërbimit", kind: "booking" }],
     allowOrder: true, allowSupport: false,
@@ -64,6 +68,7 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   if (guidance.action === "answer") return { process: "information", source: guidance.source };
   // Detailed corrections/backtracking are handled by the selected process's existing guidance engine.
   if (guidance.action === "clarify" && !active && state.visual?.status === "handoff") return { process: "information", source: guidance.source };
+  if (guidance.action === "clarify") return { process: "clarify", source: guidance.source, clarification: "Çfarë dëshiron të ndryshosh ose të vazhdosh?" };
   // A conversational answer is not an implicit purchase. Only a selected order
   // intent or an existing active task may enter the product collection engine.
   return { process: auxiliary?.process ?? active ?? "information", source: guidance.source };
@@ -282,6 +287,10 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     processes.promptOwner = null;
     return finish(plainResult(state, reply));
   };
+  // Answer interruptions without forcing a choice. Replacement approval expires;
+  // a mixed request retains its details until the customer names a process.
+  const choiceInterrupted = route.process === "information" || route.process === "support";
+  if (choiceInterrupted && (processes.pendingChoice?.kind === "replace" || route.process === "support")) delete processes.pendingChoice;
   if (processes.pendingChoice?.kind === "replace") {
     const pending = processes.pendingChoice;
     replacementResolved = true;
@@ -297,13 +306,14 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       message = pending.process === "order" ? "Vazhdo porosinë" : "Vazhdo rezervimin";
       delete processes.pendingChoice;
     } else return clarify("Të fillojmë kërkesën e re duke zëvendësuar të papërfunduarën, apo të vazhdojmë atë ekzistuese?");
-  } else if (processes.pendingChoice?.kind === "process") {
+  } else if (processes.pendingChoice?.kind === "process" && !choiceInterrupted) {
     if (route.process !== "order" && route.process !== "booking") return clarify("Cilën të trajtojmë fillimisht: porosinë apo rezervimin?");
     message = `${processes.pendingChoice.message}\nTani vazhdo vetëm ${route.process === "order" ? "porosinë" : "rezervimin"}.`;
     delete processes.pendingChoice;
   }
   decision.process = route.process; decision.source = route.source;
   if (route.process === "clarify") {
+    if (route.clarification) return clarify(route.clarification);
     processes.pendingChoice = { kind: "process", message };
     return clarify("Cilën të trajtojmë fillimisht: porosinë apo rezervimin? Të dhënat që dhe ruhen.");
   }

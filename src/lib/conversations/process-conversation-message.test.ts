@@ -112,6 +112,61 @@ it("keeps ordinary field answers in an active order", async () => {
   expect(next.conversationRouting?.process).toBe("order");
   expect(mocks.agent).toHaveBeenCalled();
 });
+it("gives the router the actual pending field and last question", async () => {
+  const state = order();
+  state.context!.execution.linear!.steps = [{ key: "size", kind: "choice", label: "Madhësia", fieldKey: "size", prompt: "Çfarë madhësie dëshironi?" }];
+  state.recentMessages = [{ role: "assistant", content: "Çfarë madhësie dëshironi?" }];
+  await turn("Medium", state);
+  expect(mocks.guidance).toHaveBeenCalledWith(expect.objectContaining({ current: expect.objectContaining({ id: "order", fieldKey: "size", prompt: "Çfarë madhësie dëshironi?" }) }));
+});
+it("clarifies uncertain navigation without consuming the pending field or inventing a process choice", async () => {
+  const state = order(), before = structuredClone(state);
+  mocks.guidance.mockResolvedValue({ action: "clarify", target: null, source: "ai" });
+  const next = await turn("Dua të ndryshoj diçka", state);
+  expect(next.conversationRouting).toMatchObject({ process: "clarify", action: "clarify", source: "ai" });
+  expect(next.nextState.processes?.pendingChoice).toBeUndefined();
+  expect(next.reply).not.toContain("porosinë apo rezervimin");
+  expect(next.nextState.fields).toEqual(before.fields);
+  expect(next.nextState.step_key).toBe(before.step_key);
+  expect(mocks.agent).not.toHaveBeenCalled();
+});
+it.each(["Pse duhet rezervimi?", "Çfarë shërbimesh keni", "Pse ju duhet adresa"])("answers the interruption without executing a task: %s", async message => {
+  const next = await turn(message, order());
+  expect(next.conversationRouting?.process).toBe("information");
+  expect(next.nextState.step_key).toBe("size");
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(mocks.booking).not.toHaveBeenCalled();
+});
+it("answers a question during replacement confirmation and requires a fresh decision", async () => {
+  const proposal = await turn("Dua porosi të re", order());
+  const info = await turn("Sa kushton?", proposal.nextState);
+  expect(info.conversationRouting?.process).toBe("information");
+  expect(info.nextState.product_id).toBe("product");
+  expect(info.nextState.processes?.pendingChoice).toBeUndefined();
+  expect((await turn("Po", info.nextState)).conversationRouting?.action).toBe("answer");
+  expect(mocks.agent).not.toHaveBeenCalled();
+  const resume = await turn("Vazhdo porosinë", info.nextState);
+  expect(resume.nextState.product_id).toBe("product");
+});
+it("preserves details of a mixed request while answering a question before process selection", async () => {
+  const first = await turn("Dua të porosis dhe dua rezervim më 2026-10-15 në 09:00", order());
+  const info = await turn("Çfarë shërbimesh keni?", first.nextState);
+  expect(info.conversationRouting?.process).toBe("information");
+  expect(mocks.booking).not.toHaveBeenCalled();
+  await turn("Rezervim", info.nextState);
+  expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("2026-10-15 në 09:00") }));
+});
+it.each(["A mund të rezervoj nesër?", "Dua edhe një rezervim"])("switches to an explicitly requested booking and resumes the pinned order: %s", async message => {
+  const next = await turn(message, order());
+  expect(next.conversationRouting).toMatchObject({ process: "booking", suspended: "order" });
+  const info = await turn("Çfarë shërbimesh keni", next.nextState);
+  expect(info.conversationRouting?.process).toBe("information");
+  expect(info.nextState.processes?.booking?.draft).toEqual(next.nextState.processes?.booking?.draft);
+  const resume = await turn("Vazhdo porosinë", info.nextState);
+  expect(resume.conversationRouting).toMatchObject({ process: "order", action: "resume", suspended: "booking" });
+  expect(resume.nextState.context?.execution.linear?.versionId).toBe("v1");
+  expect(resume.nextState.fields.size).toBe("L");
+});
 it("returns from WhatsApp referral to ordering without losing customer context", async () => {
   const state = order(); state.visual = { versionId: "visual-v1", nodeId: "whatsapp", status: "handoff", awaiting: false, visited: ["whatsapp"], values: {}, advisory: true };
   const next = await turn("Fola me stafin në WhatsApp, tani dua të porosis", state);

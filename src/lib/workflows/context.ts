@@ -125,7 +125,7 @@ export function resetOrder(state: ConversationStatePayload): ConversationStatePa
     return next;
 }
 export function isQuestion(message: string) {
-    return /\?/.test(message) || /^(sa kushton|sa eshte|a mund|si |ku |kur |what |where |how )/.test(foldText(message));
+    return /\?/.test(message) || /^(sa kushton|sa eshte|a mund|si |ku |kur |pse\b|cfare\b|cili\b|cilen\b|cilat\b|what |where |how |why\b|which\b)/.test(foldText(message).trim());
 }
 export function affirmative(message: string) {
     return /^(po|yes|ok|okay|dakord|konfirmoj|e konfirmoj|ne rregull|po ju lutem)[\s.!]*$/.test(foldText(message));

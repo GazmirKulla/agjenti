@@ -18,7 +18,22 @@ import { processAgentTurn } from "./process-agent-turn";
 import { emptyState } from "@/lib/workflows/engine";
 import { migrateContext } from "@/lib/workflows/context";
 import { starterVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
+import { processConversationMessage } from "./process-conversation-message";
 const fixtures: Record<string, unknown> = {};
+it.each(["Pse ju duhet adresa", "Çfarë adrese kërkoni", "Why do you need my address", "Dua të ndryshoj diçka"])("does not store an interruption as a customer field without AI: %s", async message => {
+  vi.stubEnv("OPENAI_API_KEY", "");
+  try {
+    const state = migrateContext({ ...emptyState(), product_id: "product-a", step_key: "collect_customer", customer: { name: "Ana", phone: "+355691234567", city: null, address: null } });
+    state.context!.execution.linear = { id: "workflow-a", versionId: "linear-a", name: "Porosia", steps: [{ key: "collect_customer", kind: "customer" }] };
+    const next = await processConversationMessage({ businessId: "business-a", mode: "test", state, message, hasPhoto: false });
+    expect(next.nextState.customer).toEqual(state.customer);
+    expect(next.nextState.step_key).toBe("collect_customer");
+    expect(next.conversationRouting?.process).toBe(message.startsWith("Dua") ? "clarify" : "information");
+    const answer = await processConversationMessage({ businessId: "business-a", mode: "test", state: next.nextState, message: "Tiranë", hasPhoto: false });
+    expect(answer.nextState.customer.city).toBe("Tiranë");
+    expect(answer.nextState.customer.address).toBeNull();
+  } finally { vi.unstubAllEnvs(); }
+});
 it.each([null, "Ana"])("resumes a visual product order without consuming the command as customer data (name: %s)", async (name) => {
   const state = migrateContext({ ...emptyState(), product_id: "product-a", product_type_id: "type-a", step_key: "collect_customer", customer: { name, phone: null, city: null, address: null } });
   state.context!.execution.linear = { id: "workflow-a", versionId: "linear-a", name: "Porosia", steps: [{ key: "collect_customer", kind: "customer" }] };
