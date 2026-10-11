@@ -13,7 +13,7 @@ export function useMaterialDraft() {
     const valid = files.filter(file => file.size > 0 && file.size <= 3 * 1024 * 1024 && /\.(jpe?g|png|webp|pdf|txt|md|csv|json)$/i.test(file.name));
     setMaterialError(valid.length !== files.length ? "Përdor foto, PDF, TXT, MD, CSV ose JSON deri në 3 MB." : "");
     if (materials.length + valid.length > 3) { setMaterialError("Mund të shtosh deri në 3 materiale."); return; }
-    const added = valid.map(file => { const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined; if (preview) urls.current.add(preview); return { id: crypto.randomUUID(), name: file.name, file, preview }; });
+    const added = valid.map(file => { const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined; if (preview) urls.current.add(preview); return { id: crypto.randomUUID(), name: file.name, size: file.size, file, preview }; });
     setMaterials(current => [...current, ...added]);
   }
   function addLink(url: string) {

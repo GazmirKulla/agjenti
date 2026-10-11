@@ -1,0 +1,11 @@
+.attachment-card { display: flex; align-items: center; gap: 12px; min-width: 0; width: 300px; max-width: 100%; flex: 0 0 auto; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); text-align: left; color: var(--ink); }
+.attachment-icon,.attachment-thumbnail { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 11px; object-fit: cover; }
+.attachment-icon { background: color-mix(in srgb,var(--accent) 14%,transparent); color: var(--accent); }
+.attachment-icon.is-sheet { background: color-mix(in srgb,#28a880 15%,transparent); color: #279d7b; }
+.attachment-copy { flex: 1; min-width: 0; }
+.attachment-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: inherit; }
+.attachment-copy small { display: block; margin-top: 3px; color: var(--ink-muted); font-size: 11px; line-height: 1.4; }
+.attachment-copy .attachment-status { color: var(--accent); }
+.attachment-card .attachment-remove { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink-muted); cursor: pointer; }
+.attachment-card .attachment-remove:hover { background: var(--paper); color: var(--ink); }
+.attachment-card :is(button,a):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

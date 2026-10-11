@@ -364,7 +364,7 @@ export async function planRequest(
           if (!Array.isArray(selected) || !selected.length || selected.some(f => !importFields.includes(f))) throw Error("Fusha importi të pavlefshme.");
           source.fields = [...new Set(selected)] as ImportField[];
         }
-        return { message: "Kontrollo kolonat dhe krahaso të gjithë rreshtat me katalogun. Grupi ruhet vetëm pasi ta miratosh.", productImport: source }; }
+        return { message: "Skedari është gati për vlerësim. Para ruajtjes do të shohësh ndryshimet për miratim.", productImport: source }; }
       catch (e) { throw new AssistantError((e as Error).message); }
     }
     if (proposal.action.startsWith("orderflow_")) {

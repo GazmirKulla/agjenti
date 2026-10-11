@@ -12,7 +12,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
+import { FileCard, type FileCardItem } from "./file-card";
 import { AudioRecorder } from "@/components/onboarding/audio-recorder";
 import { AssistantComposer } from "./composer";
 import { Icon } from "@/components/dashboard/icon";
@@ -25,7 +25,7 @@ import type { WorkflowCard as WorkflowCardData } from "@/lib/business-assistant/
 
 import { pinnedWorkflowContext, continuesWorkflowRequest, workflowRequestHistory, type WorkflowRequestPin } from "./request-context";
 
-type Message = { role: "user" | "assistant"; content: string; materials?: { name: string; preview?: string; url?: string }[] };
+type Message = { role: "user" | "assistant"; content: string; materials?: FileCardItem[] };
 function MessageCopy({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -260,7 +260,7 @@ export function BusinessAssistant({
       lastContext.current = contextKey;
       setHistory((prev) => [
         ...prev.slice(-78),
-        { role: "user", content: input, materials: [...materials.map(({name, preview, url}) => ({name, preview, url})), ...pastedLinks.filter(url => !materials.some(item => item.url === url)).map(url => ({name: url, url}))] },
+        { role: "user", content: input, materials: [...materials.map(({name, preview, url, size}) => ({name, preview, url, size})), ...pastedLinks.filter(url => !materials.some(item => item.url === url)).map(url => ({name: url, url}))] },
         { role: "assistant", content: data.message || "Kontrollo propozimin." },
       ]);
       setResult(data);
@@ -469,7 +469,7 @@ export function BusinessAssistant({
                 className={`assistant-message assistant-message-${message.role}`}
               >
                 <p>{message.content}</p>
-                {message.materials?.length ? <div className="unified-attachments">{message.materials.map((item, index) => <div className="unified-attachment" key={index}>{item.preview && <Image unoptimized width={40} height={40} src={item.preview} alt={item.name}/>}<span>{item.url ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.name}</a> : item.name}</span></div>)}</div> : null}
+                {message.materials?.length ? <div className="unified-attachments">{message.materials.map((item, index) => <FileCard key={index} item={item}/>)}</div> : null}
                 {message.role === "assistant" && (
                   <div className="assistant-message-actions">
                     <MessageCopy text={message.content} />

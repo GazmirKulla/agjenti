@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { productCsvConfiguration, confirmProductCsv, evaluateProductCsv, reviewProductCsv, uploadProductCsv } from "@/lib/products/csv-import-actions";
 import { configurationLabels, importFields, importLabels, type ImportOptions, type ImportPreview, type ImportSource } from "@/lib/products/import-model";
+import { FileCard } from "@/components/business-assistant/file-card";
+import { Icon } from "./icon";
 import "./product-csv-import.css";
 
 export function ProductCsvImport({ slug, initialSource }: { slug: string; initialSource?: ImportSource }) {
@@ -15,6 +17,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const lock = useRef(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [configuration, setConfiguration] = useState<{ types: {id:string;name:string}[]; workflows: {id:string;name:string}[] }>({ types: [], workflows: [] });
   useEffect(() => {
     let cancelled = false;
@@ -48,8 +51,9 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
   const selected = options.lines ?? allLines;
   const changes = preview?.rows.filter(r => r.status === "create" || r.status === "update").length ?? 0;
   return <section className="csv-import" aria-label="Vlerësimi i importit CSV" aria-busy={busy}>
-    <label><input type="checkbox" disabled={busy} checked={withoutHeaders} onChange={e => { setWithoutHeaders(e.target.checked); setPreview(undefined); setSource(undefined); }}/> CSV pa tituj kolonash (emër, çmim, monedhë, përshkrim, SKU, foto)</label>
-    <label className="btn btn-ghost">{source ? "Zëvendëso CSV-në" : "Zgjidh CSV"}<input disabled={busy} className="sr-only" type="file" accept=".csv,text/csv" onChange={e => {
+    <header className="csv-file-header">
+      {source ? <FileCard item={{ name: source.name }} detail={`CSV · ${source.count} rreshta · ${source.headers.length} kolona`} action={<button type="button" className="attachment-remove" disabled={busy} aria-label="Zëvendëso CSV-në" title="Zëvendëso CSV-në" onClick={() => fileInput.current?.click()}><Icon name="refresh" size={18}/></button>}/> : <button type="button" className="csv-upload" disabled={busy} onClick={() => fileInput.current?.click()}><span className="attachment-icon is-sheet"><Icon name="file" size={24}/></span><span><strong>Ngarko skedarin CSV</strong><small>Zgjidh një skedar · Deri në 500 KB</small></span><Icon name="plus" size={20}/></button>}
+      <input ref={fileInput} hidden disabled={busy} type="file" accept=".csv,text/csv" onChange={e => {
       const file = e.target.files?.[0]; e.target.value = "";
       if (!file) return;
       // Invalidate approval immediately, including when the replacement file is invalid.
@@ -61,7 +65,35 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
         if (result.error) { setNotice(result.error); return; }
         setSource(result.source); setOptions({ mapping: result.source!.mapping, fields: [...importFields] });
       });
-    }}/></label>
+    }}/>
+    </header>
+    {source && !preview && <div className="csv-ready">
+      <p>Gati për vlerësim</p>
+      <small>Agjenti kontrollon skedarin dhe e krahason me produktet ekzistuese.</small>
+      <button type="button" className="btn btn-primary csv-main-action" disabled={busy || !selected.length} onClick={() => void review(true)}><Icon name="spark" size={16}/> Vlerëso me Agjentin</button>
+      <small>Përmbajtja analizohet nga AI. Ndryshimet ruhen vetëm me miratimin tënd.</small>
+    </div>}
+    {busy && <p className="csv-progress" role="status"><span className="csv-spinner"/> Duke përpunuar…</p>}
+    {preview && <section className="csv-preview" aria-label="Ndryshimet e propozuara">
+      <div className="csv-review-heading"><Icon name={preview.rows.some(r => r.status === "conflict") ? "file" : "check"} size={20}/><strong>{preview.rows.some(r => r.status === "conflict") ? "Disa rreshta kërkojnë korrigjim" : changes ? `${changes} ndryshime për miratim` : "Nuk ka ndryshime për të ruajtur"}</strong></div>
+      <div className="csv-summary" aria-label="Përmbledhja e ndryshimeve"><span>{preview.rows.filter(r => r.status === "create").length} të reja</span><span>{preview.rows.filter(r => r.status === "update").length} përditësime</span><span>{preview.rows.filter(r => r.status === "unchanged").length} pa ndryshim</span><span data-conflict={preview.rows.some(r => r.status === "conflict")}>{preview.rows.filter(r => r.status === "conflict").length} konflikte</span></div>
+      <details className="csv-change-details" open={preview.rows.some(r => r.status === "conflict")}><summary>Shiko ndryshimet ({preview.rows.length})</summary>
+      <div className="csv-results" tabIndex={0} role="region" aria-label="Detajet e ndryshimeve">{preview.rows.map(row => <details key={row.line} open={row.status === "conflict"}>
+        <summary><span className="csv-row-number">{row.line}</span><span className="csv-row-name">{row.name}</span><span className={`csv-row-status is-${row.status}`}>{{ create: "Shtim", update: "Përditësim", unchanged: "Pa ndryshim", conflict: "Konflikt" }[row.status]}</span></summary>
+        {row.errors.map(s => <p role="alert" key={s}>{s}</p>)}{row.warnings.map(s => <p key={s}>{s}</p>)}
+        <dl>{Object.entries(row.patch).map(([field, value]) => <div key={field}><dt>{({ ...importLabels, ...configurationLabels })[field as keyof typeof importLabels]}</dt><dd><span>{display(field, row.before?.[field as keyof typeof row.before])}</span> → <strong>{display(field, value)}</strong></dd></div>)}</dl>
+      </details>)}</div></details>
+      {preview.advice && <details className="csv-ai-review"><summary><Icon name="spark" size={16}/> Vlerësimi i Agjentit</summary><p className="csv-advice">{preview.advice}</p></details>}
+      {preview.rows.some(r => r.status === "conflict") && <p role="alert">Korrigjo CSV-në ose hiq rreshtat me konflikt dhe vlerëso përsëri. Ende nuk është ruajtur asgjë.</p>}
+      <footer className="csv-approval"><small>Asnjë ndryshim nuk është ruajtur ende.</small><button type="button" className="btn btn-primary" disabled={busy || !preview.token} onClick={() => void run(async () => {
+        const result = await confirmProductCsv(slug, preview.token!);
+        setNotice("error" in result ? result.error : result.success);
+        if ("success" in result) { setPreview(undefined); setSource(undefined); router.refresh(); }
+      })}>{busy ? "Duke punuar…" : `Mirato dhe ruaj (${changes})`}</button></footer>
+    </section>}
+    <details className="csv-advanced"><summary>{source ? "Përshtat kolonat dhe importin" : "Opsione dhe tekst CSV"}</summary>
+    <div className="csv-source-options">
+      <label><input type="checkbox" disabled={busy} checked={withoutHeaders} onChange={e => { setWithoutHeaders(e.target.checked); setPreview(undefined); setSource(undefined); }}/> CSV pa tituj kolonash (emër, çmim, monedhë, përshkrim, SKU, foto)</label>
     <details><summary>Ngjit ose korrigjo tekstin CSV</summary>
       <label>Teksti CSV<textarea className="field" rows={6} value={csvText} disabled={busy} onChange={e => { setCsvText(e.target.value); setPreview(undefined); setSource(undefined); }} placeholder="emri,sku,cmimi,monedha" /></label>
       <button type="button" className="btn btn-ghost" disabled={busy || !csvText.trim()} onClick={() => void run(async () => {
@@ -71,8 +103,9 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
         setSource(result.source); setOptions({ mapping: result.source!.mapping, fields: [...importFields] });
       })}>Lexo CSV-në</button>
     </details>
-    {source && <>
-      <p><strong>{source.name}</strong> · {source.count} rreshta</p>
+    </div>
+      {source && <>
+      <div className="csv-customize-body">
       {source.headers.some((_, i) => !options.fields.some(f => options.mapping[f] === i)) && <p className="muted-copy">Kolona jashtë ndryshimeve: {source.headers.filter((_, i) => !options.fields.some(f => options.mapping[f] === i)).join(", ")}.</p>}
       <p className="muted-copy">Lidh kolonat dhe zgjidh fushat. Kolonat që mungojnë dhe qelizat bosh ruajnë vlerat ekzistuese. Produktet e reja krijohen draft.</p>
       <fieldset disabled={busy} className="csv-mapping"><legend>Kolonat dhe fushat për import</legend>{importFields.map(f => <div key={f}>
@@ -92,25 +125,12 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
         <label><input type="checkbox" checked={selected.length === allLines.length} onChange={e => change({ ...options, lines: e.target.checked ? allLines : [] })}/> Të gjithë</label>
         {allLines.map(n => <label key={n}><input type="checkbox" checked={selected.includes(n)} onChange={e => change({ ...options, lines: e.target.checked ? [...selected, n] : selected.filter(l => l !== n) })}/> Rreshti {n}</label>)}
       </fieldset></details>
-      <div className="csv-buttons"><button type="button" className="btn btn-ghost" disabled={busy || !selected.length} onClick={() => void review(false)}>Krahaso me katalogun</button>
-      <button type="button" className="btn btn-primary" disabled={busy || !selected.length} onClick={() => void review(true)}>Vlerëso me Agjentin</button></div>
-      <small className="muted-copy">Vlerësimi me Agjentin dërgon përmbajtjen e CSV-së te AI për analizë. Ruajtja bëhet vetëm pas miratimit.</small>
-    </>}
-    {preview && <section aria-label="Ndryshimet e propozuara">
-      {preview.advice && <p className="csv-advice">{preview.advice}</p>}
-      <h3>{changes} ndryshime · {preview.rows.filter(r => r.status === "unchanged").length} pa ndryshim · {preview.rows.filter(r => r.status === "conflict").length} konflikte</h3>
-      <div className="csv-results">{preview.rows.map(row => <details key={row.line} open={row.status === "conflict"}>
-        <summary>Rreshti {row.line} · {row.name} · {{ create: "Shtim", update: "Përditësim", unchanged: "Pa ndryshim", conflict: "Konflikt" }[row.status]}</summary>
-        {row.errors.map(s => <p role="alert" key={s}>{s}</p>)}{row.warnings.map(s => <p key={s}>{s}</p>)}
-        <dl>{Object.entries(row.patch).map(([field, value]) => <div key={field}><dt>{({ ...importLabels, ...configurationLabels })[field as keyof typeof importLabels]}</dt><dd><span>{display(field, row.before?.[field as keyof typeof row.before])}</span> → <strong>{display(field, value)}</strong></dd></div>)}</dl>
-      </details>)}</div>
-      {preview.rows.some(r => r.status === "conflict") && <p role="alert">Korrigjo CSV-në ose hiq rreshtat me konflikt dhe vlerëso përsëri. Ende nuk është ruajtur asgjë.</p>}
-      <button type="button" className="btn btn-primary" disabled={busy || !preview.token} onClick={() => void run(async () => {
-        const result = await confirmProductCsv(slug, preview.token!);
-        setNotice("error" in result ? result.error : result.success);
-        if ("success" in result) { setPreview(undefined); setSource(undefined); router.refresh(); }
-      })}>{busy ? "Duke punuar…" : `Mirato ${changes} ndryshimet`}</button>
-    </section>}
+      </div>
+        <div className="csv-buttons"><button type="button" className="btn btn-ghost" disabled={busy || !selected.length} onClick={() => void review(false)}>Krahaso pa AI</button>
+          {preview && <button type="button" className="btn btn-ghost" disabled={busy || !selected.length} onClick={() => void review(true)}>Rivlerëso me Agjentin</button>}
+        </div>
+      </>}
+    </details>
     {notice && <p role="status">{notice}</p>}
   </section>;
 }

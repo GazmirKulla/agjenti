@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import Image from "next/image";
+import { FileCard, type FileCardItem } from "./file-card";
 import { Icon } from "@/components/dashboard/icon";
 import "./composer.css";
-export type ComposerItem = { id: string; name: string; preview?: string; status?: string };
+export type ComposerItem = FileCardItem & { id: string };
 export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOpen, placeholder = "Pyet ose kërko një ndryshim…", busy = false, items = [], onFiles, onRemove, onLink, maxLength = 12000, canSubmit, onStop, children }: {
   id: string; value: string; onChange: (value: string) => void; onSubmit: () => void; onVoice: () => void; onOpen?: () => void;
   placeholder?: string; busy?: boolean; multiline?: boolean; items?: ComposerItem[]; onFiles?: (files: File[]) => void;
@@ -43,11 +43,6 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
     } catch { setLinkError("Vendos një link të plotë http ose https."); }
   }
   return <div className="unified-composer" onDragOver={e => { if (onFiles) e.preventDefault(); }} onDrop={e => { if (onFiles) { e.preventDefault(); if (!busy) onFiles(Array.from(e.dataTransfer.files)); } }}>
-    {visibleItems.length > 0 && <div className="unified-attachments">{visibleItems.map((item: ComposerItem) => <div className="unified-attachment" key={item.id}>
-      {item.preview ? <Image unoptimized width={40} height={40} src={item.preview} alt={item.name} /> : <Icon name="file" size={20} />}
-      <span>{item.name}{item.status && <small role="status">{item.status}</small>}</span>
-      <button type="button" disabled={busy} aria-label={`Hiq ${item.name}`} onClick={() => item.id.startsWith("url:") ? onChange(value.replaceAll(item.name, "").trim()) : onRemove?.(item.id)}>×</button>
-    </div>)}</div>}
     {menu && <div id={`${id}-menu`} className="unified-menu" onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMenu(false); menuButton.current?.focus(); } }} aria-label="Bashkëngjit materiale">
       {onFiles && <><button type="button" onClick={() => { photo.current?.click(); setMenu(false); }}>Shto foto</button><button type="button" onClick={() => { file.current?.click(); setMenu(false); }}>Shto skedar</button></>}
       <button type="button" onClick={() => { setLink(""); setMenu(false); }}>Shto link</button>
@@ -56,7 +51,11 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
     {link !== null && <div className="unified-link"><label htmlFor={`${id}-link`}>Linku i faqes</label><input id={`${id}-link`} type="url" value={link} maxLength={2048} placeholder="https://…" onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }} /><button type="button" disabled={busy} onClick={addLink}>Shto</button><button type="button" onClick={() => setLink(null)}>Anulo</button>{linkError && <small role="alert">{linkError}</small>}</div>}
     <input hidden ref={file} type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md,.csv,.json" onChange={e => { onFiles?.(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
     <input hidden ref={photo} type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={e => { onFiles?.(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
-    <div className="assistant-prompt is-multiline" aria-busy={busy}>
+    <div className={`assistant-prompt is-multiline${visibleItems.length ? " has-attachments" : ""}`} aria-busy={busy}>
+    {visibleItems.length > 0 && <div className="unified-attachments" aria-label="Skedarët e bashkëngjitur">{visibleItems.map((item: ComposerItem) => <FileCard key={item.id} item={item} action={
+      <button className="attachment-remove" type="button" disabled={busy} aria-label={`Hiq ${item.name}`} onClick={() => item.id.startsWith("url:") ? onChange(value.replaceAll(item.name, "").trim()) : onRemove?.(item.id)}><Icon name="close" size={16}/></button>
+    }/>)}</div>}
+
       <button ref={menuButton} type="button" disabled={busy} aria-label="Shto foto, skedar ose link" aria-controls={`${id}-menu`} aria-expanded={menu} onClick={() => setMenu(v => !v)}><Icon name="plus" size={22} /></button>
       <label className="sr-only" htmlFor={id}>Shkruaji Agjentit</label>
       <textarea ref={textarea} id={id} autoComplete="off" inputMode="text" name="assistant-message" value={value} onChange={e => onChange(e.target.value)} rows={1} enterKeyHint="enter" maxLength={maxLength} placeholder={placeholder} disabled={busy}

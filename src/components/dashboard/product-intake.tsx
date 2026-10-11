@@ -217,6 +217,8 @@ export function ProductIntake({
         hidden={method !== "csv"}
         className="product-method-panel"
       >
+        <ProductCsvImport slug={slug} />
+        <details className="csv-format-help"><summary>Si ta përgatis skedarin?</summary>
         <p className="muted-copy">
           Kolonat: emri, cmimi, monedha, pershkrimi, sku, foto. Ndarësi mund të
           jetë presje ose pikëpresje, si në Excel. Zgjidh rreshtat dhe ruaji.
@@ -230,7 +232,7 @@ export function ProductIntake({
             Shkarko një shembull
           </button>
         </div>
-        <ProductCsvImport slug={slug} />
+        </details>
       </div>
 
       <div
