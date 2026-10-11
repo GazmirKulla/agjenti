@@ -1,0 +1,17 @@
+.content { display: grid; gap: 24px; padding-top: 24px; }
+.content > :not(:first-child) { border-top: 1px solid var(--line); padding-top: 24px; }
+.content h2 { font-size: 16px; font-weight: 600; }
+.content summary { color: var(--ink-muted); cursor: pointer; font-size: 13px; }
+.content summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.form :global(.action-form-fields) { display: grid; gap: 18px; }
+.content :global(.integration-api-key),
+.content :global(.integration-probe) { border: 0; background: transparent; padding: 0; }
+.content :global(.integration-api-key-head h3) { font-size: 14px; }
+.content :global(.integration-api-key-preview) { display: none; }
+.content :global(.section-title) { flex-wrap: wrap; gap: 12px; }
+.content pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .content :global(.integration-api-key-actions) { flex-wrap: wrap; }
+  .content :global(.integration-api-key-input-row) { min-width: 0; }
+  .content :global(.integration-api-key-input-row input) { min-width: 0; }
+}

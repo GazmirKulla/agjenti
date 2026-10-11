@@ -6,9 +6,11 @@ import type { CatalogProbeResult } from "@/lib/integrations/zana";
 export function IntegrationProbe({
   businessId,
   formSelector = "form",
+  compact = false,
 }: {
   businessId: string;
   formSelector?: string;
+  compact?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<CatalogProbeResult | null>(null);
@@ -57,13 +59,13 @@ export function IntegrationProbe({
   return (
     <div className="integration-probe">
       <div className="integration-probe-head">
-        <div>
+        {!compact && <div>
           <h3>Testo lidhjen</h3>
           <p className="muted-copy">
             Kontrollon nëse katalogu merret nga URL-të e mësipërme (edhe para
             ruajtjes).
           </p>
-        </div>
+        </div>}
         <button
           className="btn btn-ghost"
           type="button"
@@ -84,6 +86,8 @@ export function IntegrationProbe({
               ? `OK — ${result.productCount} produkte`
               : result.error || "Testi dështoi"}
           </p>
+          <details open={compact ? undefined : true}>
+            <summary>Detajet e testit</summary>
           <dl className="detail-fields">
             <div>
               <dt>URL e katalogut</dt>
@@ -140,6 +144,7 @@ export function IntegrationProbe({
               )}
             </div>
           )}
+          </details>
         </div>
       )}
     </div>

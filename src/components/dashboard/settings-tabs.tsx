@@ -12,7 +12,6 @@ const TABS = [
   { id: "profile", label: "Profili", icon: "businesses" },
   { id: "data", label: "Të dhënat", icon: null },
   { id: "modules", label: "Modulet", icon: null },
-  { id: "catalog", label: "Katalogu", icon: null },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];

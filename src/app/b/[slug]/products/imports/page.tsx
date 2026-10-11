@@ -45,7 +45,7 @@ export default async function ImportedProductsPage({
       />
       {error && (
         <p role="alert" className="catalog-notice">
-          {error} <Link href={`/b/${slug}/settings`}>Cilësimet →</Link>
+          {error} <Link href={`/b/${slug}/integrations?detail=website`}>Integrimet →</Link>
         </p>
       )}
       {remote.length > 0 && (

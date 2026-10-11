@@ -82,13 +82,13 @@ export async function fetchLinkedCatalog(
   if (!configuredUrl) return [];
   if (!parseAbsoluteUrl(configuredUrl)) {
     throw new Error(
-      "URL-ja e katalogut nuk është e vlefshme. Vendos një adresë të plotë te Cilësimet.",
+      "URL-ja e katalogut nuk është e vlefshme. Vendos një adresë të plotë te Integrimet.",
     );
   }
   const url = parseAbsoluteUrl(configuredUrl);
   if (!url) {
     throw new Error(
-      "URL-ja e katalogut nuk është e vlefshme. Vendos një adresë të plotë te Cilësimet.",
+      "URL-ja e katalogut nuk është e vlefshme. Vendos një adresë të plotë te Integrimet.",
     );
   }
   const secret = resolveBearerSecret({
@@ -107,7 +107,7 @@ export async function fetchLinkedCatalog(
   }
   if (!response.ok)
     throw new Error(
-      `Katalogu i jashtëm ktheu gabimin ${response.status}. Kontrollo lidhjen te Cilësimet.`,
+      `Katalogu i jashtëm ktheu gabimin ${response.status}. Kontrollo lidhjen te Integrimet.`,
     );
   const json = (await response.json().catch(() => null)) as {
     products?: ExternalCatalogProduct[];
@@ -176,7 +176,7 @@ export async function probeLinkedCatalog(params: {
       ...empty,
       ordersUrl: configuredOrders,
       error:
-        "Katalogu i jashtëm nuk është konfiguruar. Vendos URL-në e plotë te Cilësimet.",
+        "Katalogu i jashtëm nuk është konfiguruar. Vendos URL-në e plotë te Integrimet.",
     };
   }
   const url = parseAbsoluteUrl(configuredCatalog);
@@ -185,7 +185,7 @@ export async function probeLinkedCatalog(params: {
       ...empty,
       ordersUrl: configuredOrders,
       error:
-        "URL-ja e katalogut nuk është e vlefshme. Vendos një adresë të plotë te Cilësimet.",
+        "URL-ja e katalogut nuk është e vlefshme. Vendos një adresë të plotë te Integrimet.",
     };
   }
   const secret = resolveBearerSecret({
@@ -200,7 +200,7 @@ export async function probeLinkedCatalog(params: {
       ordersUrl: configuredOrders,
       authSent: false,
       error:
-        "Mungon API key. Gjenero një kod te Cilësimet dhe vendose si AGJENTI_APP_SECRET te sajti i biznesit.",
+        "Mungon API key. Gjenero një kod te Integrimet dhe vendose si AGJENTI_APP_SECRET te sajti i biznesit.",
     };
   }
   let response: Response;
