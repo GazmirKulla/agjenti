@@ -62,7 +62,7 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
         onPaste={e => { if (onFiles && e.clipboardData.files.length) { e.preventDefault(); onFiles(Array.from(e.clipboardData.files)); } }}
         onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !window.matchMedia("(max-width: 760px)").matches) { e.preventDefault(); if (canSend) onSubmit(); } if (e.key === "Escape") { setMenu(false); setLink(null); } }} />
       <div className="assistant-prompt-actions"><button type="button" onClick={onVoice} disabled={busy} aria-label="Dikto me mikrofon"><Icon name="microphone" size={21} /></button>
-        {onStop && busy ? <button type="button" className="assistant-prompt-send" onClick={onStop} aria-label="Ndalo pritjen"><Icon name="stop" size={20}/></button> : <button type="button" className="assistant-prompt-send" onClick={onSubmit} disabled={!canSend} aria-label={busy ? "Duke përgatitur përgjigjen" : "Dërgo mesazhin"}>{busy ? <span className="assistant-prompt-spinner"/> : <Icon name="up" size={21}/>}</button>}
+        {onStop && busy ? <button type="button" className="assistant-prompt-send is-ready" onClick={onStop} aria-label="Ndalo pritjen"><Icon name="stop" size={20}/></button> : <button type="button" className={`assistant-prompt-send${canSend ? " is-ready" : ""}`} onClick={onSubmit} disabled={!canSend} aria-label={busy ? "Duke përgatitur përgjigjen" : "Dërgo mesazhin"}>{busy ? <span className="assistant-prompt-spinner"/> : <Icon name="up" size={21}/>}</button>}
       </div>
     </div>{children}
   </div>;

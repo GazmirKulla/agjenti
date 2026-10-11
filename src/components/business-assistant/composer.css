@@ -30,10 +30,19 @@
 :is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt :is(input,textarea) { display: block; flex: 1; width: 100%; min-width: 0; min-height: 24px; max-height: 144px; margin: 0; padding: 9px 0; background: transparent; color: var(--ink); border: 0; border-radius: 0; outline: none; box-shadow: none; font: inherit; font-size: 15px; line-height: 24px; resize: none; }
 .assistant-prompt :is(input,textarea)::placeholder { color: var(--ink-muted); opacity: .8; }
 .assistant-prompt .assistant-prompt-actions { display: flex; flex: none; align-items: center; gap: 7px; align-self: flex-end; }
-:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt button { display: grid; place-items: center; width: 44px; height: 44px; min-height: 44px; flex: none; padding: 0; border: 0; border-radius: 50%; color: var(--ink); background: color-mix(in srgb, var(--ink-muted) 10%, transparent); cursor: pointer; transition: background .2s ease, transform .2s ease, opacity .2s ease; }
-:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt .assistant-prompt-send { color: var(--paper); background: var(--accent); }
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt button { display: grid; place-items: center; width: 44px; height: 44px; min-height: 44px; flex: none; padding: 0; border: 0; border-radius: 50%; color: var(--ink); background: color-mix(in srgb, var(--ink-muted) 10%, transparent); cursor: pointer; transition: background .2s ease, color .2s ease, transform .2s ease, opacity .2s ease; }
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt .assistant-prompt-send {
+  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--ink-muted) 12%, transparent);
+}
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt .assistant-prompt-send:not(:disabled),
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt .assistant-prompt-send.is-ready {
+  color: var(--paper);
+  background: var(--accent);
+}
 .assistant-prompt button:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.08); }
-:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt button:disabled { opacity: .35; cursor: default; }
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt button:disabled { opacity: .55; cursor: default; }
+:is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt .assistant-prompt-send:disabled { opacity: 1; cursor: default; filter: none; }
 .assistant-prompt button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .assistant-prompt-spinner { width: 17px; height: 17px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: assistant-prompt-spin .8s linear infinite; }
 @keyframes assistant-prompt-spin { to { transform: rotate(360deg); } }
@@ -138,9 +147,14 @@
     color: var(--ink-muted);
   }
   .unified-composer .assistant-prompt .assistant-prompt-actions > .assistant-prompt-send {
+    background: color-mix(in srgb, var(--ink-muted) 12%, transparent);
+    color: var(--ink-muted);
+    border-radius: 50%;
+  }
+  .unified-composer .assistant-prompt .assistant-prompt-actions > .assistant-prompt-send:not(:disabled),
+  .unified-composer .assistant-prompt .assistant-prompt-actions > .assistant-prompt-send.is-ready {
     background: var(--accent);
     color: var(--paper);
-    border-radius: 50%;
   }
   .unified-composer .assistant-prompt > button > svg,
   .unified-composer .assistant-prompt .assistant-prompt-actions > button > svg {
