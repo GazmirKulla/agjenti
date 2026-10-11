@@ -350,7 +350,9 @@ export async function handleInboundMessage(
   inboundState.recentMessages = history.messages;
   const staffReplied = history.staffReplied || lastOutbound?.source === "staff" && lastOutbound.delivery_status === "sent";
   const resumedHandoff = inboundState.staffHandoff || inboundState.visual?.status === "handoff" && !inboundState.visual.advisory;
-  if (resumedHandoff || staffReplied) {
+  // Fresh threads and explicit AI resume start clean. Only a live staff takeover
+  // (or an unfinished handoff still marked in state) should arm the clarify guard.
+  if (!createdFresh && (resumedHandoff || staffReplied) && inboundState.conversationPaused !== false) {
     delete inboundState.staffHandoff;
     inboundState.conversationPaused = true;
     if (inboundState.processes) {
@@ -360,14 +362,12 @@ export async function handleInboundMessage(
       delete processes.pendingChoice; delete processes.auxiliary;
       if (processes.service) processes.service.promptCurrent = false;
     }
+  } else if (resumedHandoff) {
+    delete inboundState.staffHandoff;
   }
   if (inboundState.visual?.status === "handoff" && !inboundState.visual.advisory) {
     inboundState.completedVisual = structuredClone(inboundState.visual);
     inboundState.visual.status = "completed";
-  }
-  if (message.channel === "whatsapp") {
-    inboundState.fields.channel = message.channel;
-    if (inboundState.visual) inboundState.visual.values.channel = message.channel;
   }
   const started = Date.now();
   const canAct = async () => {
@@ -385,10 +385,10 @@ export async function handleInboundMessage(
       .eq("connection_id", job.connection_id).eq("participant_id", job.participant_id)
       .lt("id", job.id).not("reply", "is", null).order("id", { ascending: false }).limit(1).maybeSingle();
     if (attemptError) throw new Error("Latest prompt attempt unavailable");
-    // Check every turn, including free-text field answers after a staff resume.
-    // An older identical sent reply is not evidence for this pending transition.
-    unconfirmedPrompt = Boolean(attempted && attempted.status !== "sent");
-    if (!attempted || unconfirmedPrompt || attempted.reply !== deliveredReply) deliveredReply = null;
+    // Only in-flight deliveries block field answers. Ignored/failed jobs are settled
+    // (staff resume, delete, or abandoned) and must not force the clarify prompt.
+    unconfirmedPrompt = Boolean(attempted && ["prepared", "sending", "uncertain"].includes(attempted.status));
+    if (unconfirmedPrompt || (attempted && attempted.reply !== deliveredReply)) deliveredReply = null;
     if (unconfirmedPrompt) {
       inboundState.conversationPaused = true;
       if (inboundState.processes) {

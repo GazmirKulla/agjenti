@@ -131,11 +131,19 @@ export async function POST(
     if (collected?.collected && typeof collected.collected === "object") {
       const next = { ...(collected.collected as Record<string, unknown>) };
       delete next.staffHandoff;
-      delete next.conversationPaused;
+      // Explicit false: inbound must not re-arm the "previous request?" clarify prompt.
+      next.conversationPaused = false;
       const visual = next.visual as { status?: string; advisory?: boolean } | undefined;
       if (visual?.status === "handoff" && !visual.advisory) {
         next.completedVisual = visual;
         next.visual = { ...visual, status: "completed" };
+      }
+      if (next.processes && typeof next.processes === "object") {
+        const processes = next.processes as Record<string, unknown>;
+        processes.active = null;
+        processes.promptOwner = null;
+        delete processes.pendingChoice;
+        delete processes.auxiliary;
       }
       await service
         .from("conversation_states")
@@ -149,6 +157,7 @@ export async function POST(
         status: "ignored",
         leased_until: null,
         error: "Staff resumed the agent",
+        reply: null,
       })
       .eq("business_id", businessId)
       .eq("conversation_id", conversationId)

@@ -569,9 +569,20 @@ it("recognizes staff ownership even when its reply is outside the bounded recent
   expect(params.state).toMatchObject({ conversationPaused:true, processes:{active:null,promptOwner:null,order:{status:"suspended",snapshot:{product_id:"product",fields:{size:"L"}}}} });
 });
 
-it.each(["uncertain", "failed", "ignored"])("does not consume a field after an unconfirmed prompt (%s)", async status => {
+it.each(["uncertain", "prepared", "sending"])("does not consume a field after an unconfirmed prompt (%s)", async status => {
  savedState = { ...emptyState(), product_id:"product", step_key:"collect_customer", fields:{ size:"L" } };
  deliveryAttempt = { status, reply:"Në cilin qytet?" };
  await handleInboundMessage({ ...message, text:"Tiranë" }, queuedJob());
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ previousResponseId:null, state:expect.objectContaining({ conversationPaused:true, fields:{size:"L"} }) }));
+});
+it.each(["ignored", "failed", "sent"])("does not re-arm clarify after a settled queue attempt (%s)", async status => {
+ savedState = { ...emptyState(), product_id:"product", step_key:"collect_customer", fields:{ size:"L" }, conversationPaused: false };
+ deliveryAttempt = { status, reply:"Në cilin qytet?" };
+ await handleInboundMessage({ ...message, text:"Tiranë" }, queuedJob());
+ expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state:expect.objectContaining({ conversationPaused: false, fields:{size:"L"} }) }));
+});
+it("does not treat the WhatsApp transport as a workflow channel field", async () => {
+  const incoming = { ...message, channel: "whatsapp" as const, externalParticipantId: "355691234567", contextMetadata: { whatsappPhoneNumberId: "123456" } };
+  await handleInboundMessage(incoming, { ...queuedJob(), participant_id: incoming.externalParticipantId, payload: incoming });
+  expect(mocks.process.mock.calls[0][0].state.fields.channel).toBeUndefined();
 });
