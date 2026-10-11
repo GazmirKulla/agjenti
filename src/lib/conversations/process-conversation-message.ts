@@ -1,11 +1,12 @@
 import { conversationControl, resumeConversation } from "./conversation-control";
+import { usesSharedCoordinator } from "./coordinator-policy";
 import { randomUUID } from "node:crypto";
 import { processBookingTurn, type BookingDraft } from "@/lib/calendar/agent";
 import type { BookingEffectGuard } from "@/lib/calendar/service";
 import { agentModel } from "@/lib/agents/generate";
 import { processAgentTurn, processLegacyAgentTurn, type AgentTurnParams, type AgentTurnResult } from "./process-agent-turn";
 import { emptyState, foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
-import { affirmative, extractExplicitFacts, isQuestion, migrateContext, resetOrder, setFact, sharedWorkflowEnabled } from "@/lib/workflows/context";
+import { affirmative, extractExplicitFacts, isQuestion, migrateContext, resetOrder, setFact } from "@/lib/workflows/context";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
 import { chooseGuidance, explicitIntent, rememberTurn } from "@/lib/workflows/guidance";
 import { bookingAdapterState, migrateConversationProcesses, restoreOrder, snapshotOrder, type ConversationRouting, type ProcessKind } from "@/lib/workflows/conversation-processes";
@@ -82,6 +83,22 @@ function explicitProfile(state: ConversationStatePayload, message: string, profi
 
 /** One message coordinator for Instagram, isolated chat and graph previews. Adapters own persistence/send. */
 export async function processConversationMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
+  const started = Date.now();
+  const result = await processMessage(params);
+  // Operational metadata only: never copy messages, profile values or lease tokens.
+  params.onTrace?.({ stage: "workflow", label: "Conversation coordinator completed", data: {
+    coordinator: params.linearPreview ? "linear_preview" : usesSharedCoordinator(params) ? "shared_v3" : "legacy",
+    channel: params.source ?? (params.mode === "test" ? "admin_chat_lab" : "instagram"),
+    revision: params.bookingGuard?.revision ?? null,
+    workflowVersion: result.nextState.visual?.versionId ?? result.nextState.context?.execution.linear?.versionId ?? null,
+    process: result.conversationRouting?.process ?? null,
+    action: result.conversationRouting?.action ?? null,
+    elapsedMs: Date.now() - started,
+  } });
+  return result;
+}
+
+async function processMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
   if (params.canAct && !(await params.canAct())) throw new Error("conversation_manually_paused");
   const controlled = conversationControl(params);
   if (controlled) return controlled;
@@ -142,10 +159,8 @@ export async function processConversationMessage(params: ConversationMessagePara
     setOrderStatusLookup(params.state!);
   }
   if (params.linearPreview) return processAgentTurn(params);
-  const legacyInstagram = params.source === "instagram" && !sharedWorkflowEnabled(params.businessId);
-  if (params.mode !== "test" && (!params.bookingGuard || legacyInstagram) && params.state?.schemaVersion !== 3 && !params.visualPreview) {
-    if (sharedWorkflowEnabled(params.businessId) && !params.bookingGuard) throw new Error("workflow_queue_required");
-    // Queue ownership does not opt legacy Instagram conversations into a new router.
+  if (!usesSharedCoordinator(params)) {
+    // Keep non-pilot conversations on legacy until explicitly enrolled.
     const booking = await processBookingTurn(params);
     if (booking) {
       rememberTurn(params.state, booking.nextState, params.message, booking.reply);

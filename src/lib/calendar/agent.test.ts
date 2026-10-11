@@ -297,3 +297,9 @@ it("does not silently replace an existing booking with another bound service", a
   expect(mocks.slots).not.toHaveBeenCalled();
   expect(mocks.persist).not.toHaveBeenCalled();
 });
+
+it("cannot persist a coordinator booking in production without queue ownership", async () => {
+  const result = await processBookingTurn({ businessId: "business", message: "Konfirmoj", state: confirmState(), conversationKey: "conversation", routed: true });
+  expect(result?.reply).toContain("nuk mund të ruhet");
+  expect(mocks.persist).not.toHaveBeenCalled();
+});

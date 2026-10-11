@@ -3,7 +3,7 @@ import { inboundBatch } from "./message-batch";
 import { randomUUID } from "node:crypto";
 import { InboundPersistenceError } from "./inbound-persistence-error";
 import { hydrateProfile } from "./profile";
-import { sharedWorkflowEnabled } from "@/lib/workflows/context";
+import { usesSharedCoordinator } from "./coordinator-policy";
 import { prepareWorkflowReply, type WorkflowJob } from "./workflow-queue";
 import { processConversationMessage } from "./process-conversation-message";
 import { decryptSecret } from "@/lib/crypto/tokens";
@@ -321,7 +321,11 @@ export async function handleInboundMessage(
   // A paused handoff returns above. Reaching this point with its saved state means
   // staff explicitly resumed the conversation; start a new run without erasing data.
   let inboundState = structuredClone((stateRow?.collected as ConversationStatePayload | null) ?? emptyState());
-  if(job && (message.channel === "whatsapp" || sharedWorkflowEnabled(businessId) || inboundState.context)) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState,message.channel);
+  const shared = usesSharedCoordinator({ businessId, source: message.channel, state: inboundState });
+  // Direct processor calls can test production routing, but live state commits
+  // and sends for shared conversations must always pass through the durable queue.
+  if (shared && !job) throw new Error("workflow_queue_required");
+  if(job && (shared || inboundState.context)) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState,message.channel);
   if (inboundState.visual?.status === "handoff" && !inboundState.visual.advisory) {
     inboundState.completedVisual = structuredClone(inboundState.visual);
     inboundState.visual.status = "completed";
@@ -356,6 +360,11 @@ export async function handleInboundMessage(
     }
   }
   const turn = await processConversationMessage({
+    onTrace: event => {
+      if (event.label === "Conversation coordinator completed") console.info("[inbound] coordinator", {
+        ...event.data, correlationId, businessId, conversationId, jobId: job?.id ?? null,
+      });
+    },
     deliveredReply,
     conversationKey: conversationId,
     customerIdentity: { conversationId, instagramParticipantId: message.externalParticipantId, instagramConnectionId: conn.id, channel: message.channel },

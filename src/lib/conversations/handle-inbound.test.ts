@@ -53,6 +53,7 @@ let webhookEvents: Set<string>;
 let duplicateFilters: Record<string, unknown>;
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
   paused = false;
   outboundResult = {data:null,error:null};
   deliveryAttempt = null;
@@ -257,7 +258,8 @@ describe("inbound persistence boundary", () => {
   });
   it("verifies WhatsApp duplicates against the WhatsApp connection", async () => {
     inboundResult = { data: null, error: { code: "23505", message: "duplicate" } };
-    await handleInboundMessage({ ...message, channel: "whatsapp", contextMetadata: { whatsappPhoneNumberId: "123456" } });
+    const incoming = { ...message, channel: "whatsapp" as const, contextMetadata: { whatsappPhoneNumberId: "123456" } };
+    await handleInboundMessage(incoming, { ...queuedJob(), payload: incoming });
     expect(duplicateFilters).toMatchObject({ whatsapp_connection_id: "connection-a" });
     expect(duplicateFilters).not.toHaveProperty("instagram_connection_id");
   });
@@ -472,11 +474,13 @@ it("preserves the advisory cursor on the next live inbound turn",async()=>{
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({state:expect.objectContaining({visual:savedState.visual})}));
 });
 
- it("keeps WhatsApp persistence and replies separate from Instagram", async () => {
+ it("prepares WhatsApp persistence separately from Instagram for queue delivery", async () => {
   mocks.whatsappSend.mockResolvedValue({ ok: true, messageId: "wamid.reply" });
-  await handleInboundMessage({ ...message, channel: "whatsapp", externalParticipantId: "355691234567", senderDisplayName: "Ana", contextMetadata: { whatsappPhoneNumberId: "123456" } });
+  const incoming = { ...message, channel: "whatsapp" as const, externalParticipantId: "355691234567", senderDisplayName: "Ana", contextMetadata: { whatsappPhoneNumberId: "123456" } };
+  await handleInboundMessage(incoming, { ...queuedJob(), participant_id: incoming.externalParticipantId, payload: incoming });
   expect(mocks.send).not.toHaveBeenCalled();
-  expect(mocks.whatsappSend).toHaveBeenCalledWith(expect.objectContaining({ accountId: "123456", to: "355691234567" }));
+  expect(mocks.whatsappSend).not.toHaveBeenCalled();
+  expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_conversation: "conversation-a" }));
   expect(writes).toContainEqual(expect.objectContaining({ table: "messages", data: expect.objectContaining({ whatsapp_connection_id: "connection-a", direction: "inbound" }) }));
   expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ source: "whatsapp", customerIdentity: expect.objectContaining({ channel: "whatsapp" }) }));
  });
@@ -516,4 +520,23 @@ it.each(["sent", "uncertain", "prepared"])("checks the latest queue attempt even
  deliveryAttempt={status,reply:body};
  await handleInboundMessage({...message,text:"Po"},queuedJob());
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({deliveredReply:status==="sent"?body:null}));
+});
+
+it.each(["pilot", "migrated"])("requires the queue for live %s Instagram state even when routing can be tested without it", async kind => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", kind === "pilot" ? "business-a" : "");
+  if (kind === "migrated") savedState.schemaVersion = 3;
+  await expect(handleInboundMessage(message)).rejects.toThrow("workflow_queue_required");
+  expect(mocks.process).not.toHaveBeenCalled();
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(writes.filter(w => w.table === "conversation_states")).toEqual([]);
+});
+it.each(["instagram", "whatsapp"] as const)("hydrates queued %s pilot state before passing it to the coordinator", async channel => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business-a");
+  const incoming = { ...message, channel, contextMetadata: channel === "whatsapp" ? { whatsappPhoneNumberId: "123456" } : message.contextMetadata };
+  await handleInboundMessage(incoming, { ...queuedJob(), payload: incoming });
+  expect(mocks.from).toHaveBeenCalledWith("conversation_profiles");
+  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ source: channel, state: expect.objectContaining({ context: expect.objectContaining({ profile: {} }) }) }));
+  expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_revision: 0 }));
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(mocks.whatsappSend).not.toHaveBeenCalled();
 });

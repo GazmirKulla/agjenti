@@ -14,15 +14,31 @@ Ky skedar mban progresin dhe korrigjimet ndaj auditimit fillestar; nuk shënon n
 | 1.2 — Konkurrenca Instagram | Verifikimi përfunduar lokalisht | Korrigjimi i queue është publikuar më herët. Provat e zgjeruara kalojnë për FIFO, revision, cursor, participantë të ndryshëm dhe duplicate webhook; pa ndryshim të motorit. |
 | 1.3 — Dështimi i ruajtjes inbound | Push `5c7f0ff` | Ruajtja konfirmohet përpara processor-it; duplicate verifikohet në bisedën përkatëse. 15 teste të reja; deployment-i nuk është verifikuar. |
 | Shtesë — Mesazhe të njëpasnjëshme | Migrimi aplikuar në production; push `b5bcc25`, deployment Vercel i konfirmuar | Grupim Instagram 3s/10s/20 mesazhe, ruajtje e origjinaleve dhe njohje më e mirë e emrave. Shih kufijtë e provës më poshtë. |
-| 2 — Një coordinator | Në pritje | Siguria e queue nuk nënkupton kalim global në schema-v3. |
+| 2 — Një coordinator | Unifikimi i përzgjedhjes dhe provat përfunduar lokalisht | Politika e përbashkët ndahet nga autorizimi i efekteve; 1,201 teste kaluan. Piloti dhe bisedat v3 përdorin coordinator-in; rollout-i real mbetet i paekzekutuar. |
 | 3 — Konteksti/handoff | Në pritje | Ka suspend/resume dhe retention, por edhe early returns pa finalizim. |
-| 3.2A — Përgjigje të shkurtra dhe qëllimi i klientit | Kontrolli i avancimit implementuar lokalisht; verifikimi live dhe fushat sipas përmbushjes mbeten | “OK” pas informacionit nuk nis/rifillon porosi dhe nuk kërkon të dhëna. Specifikimi dhe provat më poshtë; zgjerim i Fazës 3.2 të planit burim. |
+| 3.2A — Përgjigje të shkurtra dhe qëllimi i klientit | Push `d73053a`; verifikimi live dhe fushat sipas përmbushjes mbeten | “OK” pas informacionit nuk nis/rifillon porosi dhe nuk kërkon të dhëna. Specifikimi dhe provat më poshtë; zgjerim i Fazës 3.2 të planit burim. |
 | 4 — Delivery/queue | Pjesërisht ekziston | Ka prepared/sending/sent/uncertain; mungojnë pjesë të politikës së gabimeve dhe kontrollit të dërgimit. |
 | 5 — Pariteti test/production | Në pritje | Adapterët dhe previews kanë dallime të dokumentuara. |
 | 6 — Aftësitë e biznesit | Në pritje | Verifiko dhe ripërdor kontrollet ekzistuese të moduleve/shërbimeve para zgjerimit. |
 | 7 — Roadmap | Jashtë implementimit aktual | Kërkon kërkesë dhe miratim të veçantë. |
 
 Ritmi: një fazë ose nënfazë e kufizuar → test që riprodhon problemin → ndryshim minimal → verifikim → përditësim i këtij statusi. Publikimi i korrigjimit të mëparshëm nuk autorizon automatikisht rollout global të coordinator-it.
+
+## Faza 2 — Unifikimi i coordinator-it: rezultat lokal
+
+**Baseline:** Meta tashmë normalizon Instagram dhe WhatsApp në `NormalizedIncomingMessage` dhe i fut në të njëjtën queue. Nuk u shtua një model tjetër eventi ose një motor tjetër. Dallimi ishte në `processConversationMessage`: prania e `bookingGuard` ndikonte në përzgjedhjen e routing-ut. Testi production pa guard dështonte me `workflow_queue_required` për biznesin pilot, kurse testi i laboratorit kalonte.
+
+**Ndryshimi:** `coordinator-policy.ts` përcakton një politikë të vetme për coordinator-in dhe hydration në adapter. WhatsApp, testet, previews vizuale, bizneset në `SHARED_WORKFLOW_BUSINESS_IDS` dhe bisedat tashmë v3 përdorin coordinator-in e përbashkët. Instagram jashtë pilotit mbetet legacy. Routing-u mund të provohet në production-mode pa guard; kjo nuk autorizon efekte. Adapteri real kërkon queue për bisedat e përbashkëta, kurse rezervimi i drejtuar nga coordinator-i refuzon shkrimin pa guard. Linear preview mbetet provë e izoluar e produktit, jo simulim i gjithë bisedës.
+
+**Ruajtja:** ripërdoren migrimi v2→v3, profili sipas biznesit/participantit/kanalit, snapshots e proceseve dhe versionet e fiksuara. Testet provojnë që një rezervim i vjetër rifillon me graph-in e vet pas ndërprerjes nga porosia, edhe kur ekziston publikim tjetër. Mesazhet e njëpasnjëshme vazhdojnë përmes grupimit dhe commit-it me lease/revision ekzistues.
+
+**Gjurmimi:** çdo rezultat i coordinator-it, përfshirë përgjigjet e shkurtra, jep metadata të kufizuara: rruga legacy/shared/preview, kanal, revision hyrës, version workflow, process/action dhe kohë. Adapteri i lidh me correlation ID, biznesin, bisedën dhe job-in. Ky event nuk përmban tekst mesazhi, vlera profili ose lease token. Ky ndryshim nuk është pastrim i të gjithë logging-ut ekzistues.
+
+**Verifikimi:** `vitest run` — **1,201 teste / 150 skedarë** kaluan; `tsc --noEmit` dhe ESLint i skedarëve të ndryshuar kaluan. Testet krahasuese përdorin production-mode Instagram/WhatsApp me dhe pa guard dhe laboratorin: porosi → rezervim → informacion → OK → rifillim → staf. Mbulohen drafti, profili, versioni i fiksuar, heqja e pilotit dhe bllokimi i shkrimit të rezervimit pa guard. Shërbimet/modeli/transporti simulohen në testet automatike; kjo nuk është provë end-to-end me provider real dhe nuk garanton formulim identik të përgjigjeve AI.
+
+**Publikimi dhe kthimi pas:** nuk u bë push, migrim SQL, ndryshim environment apo rollout për këtë fazë. Nuk nevojitet skemë e re. Në publikimin e ardhshëm, bizneset që janë tashmë në pilot ruajnë politikën e tyre. Aktivizimi i bizneseve të tjera bëhet veçmas: internal → pilot → zgjerim gradual. Heqja nga allowlist ndalon migrimet e reja, por ruan coordinator-in për bisedat ekzistuese v3; nuk është downgrade i state. Në problem me bisedat v3, ndalo auto-reply për biznesin përkatës dhe rikthe një version kodi që lexon v3, pa fshirë snapshots apo rindërtuar verbërisht cursor-in legacy. Kthimi te kodi përpara mbështetjes v3 kërkon plan migrimi më vete.
+
+**Të mbetura për pranimin real:** prova e kontrolluar në kanal real, verifikimi i deployment-it, sjellja me AI reale dhe miratimi i zgjerimit të pilotit. Unifikimi i përzgjedhjes nuk shpall të përfunduara fazat pasuese për finalizimin e historikut, handoff-in apo delivery recovery. Dokumenti i ri Agentic Orchestration Phase 2 mbetet plan pasues.
 
 ## Faza 3.2A — Përgjigje të shkurtra dhe qëllimi i klientit
 
@@ -60,7 +76,7 @@ Ritmi: një fazë ose nënfazë e kufizuar → test që riprodhon problemin → 
 - Provo edhe grupin “ok” + “jo tani” dhe webhook-un e përsëritur: vlerëso gjithë mesazhin e grupuar dhe mos dyfisho avancimin/efektet.
 - Testet me AI të simuluar dhe fallback kalojnë; prova e kontrolluar në aplikacion verifikon formulimin. Raporto veçmas kodin lokal, publikimin dhe provën reale; nuk premtohet interpretim pa gabime për çdo përgjigje njerëzore.
 
-**Kufiri:** kjo fazë përmirëson interpretimin dhe kalimet e proceseve ekzistuese. Nuk ridizenjon editorin dhe nuk shton mënyra të reja porosie, pagesash apo rezervimesh. Implementimi lokal u autorizua më pas; nuk është bërë push/deploy për këtë fazë.
+**Kufiri:** kjo fazë përmirëson interpretimin dhe kalimet e proceseve ekzistuese. Nuk ridizenjon editorin dhe nuk shton mënyra të reja porosie, pagesash apo rezervimesh. Implementimi u publikua në Git me commit `d73053a`; deployment-i dhe sjellja live e këtij korrigjimi nuk janë verifikuar këtu.
 
 ### Rezultati lokal i Fazës 3.2A
 
@@ -69,7 +85,7 @@ Ritmi: një fazë ose nënfazë e kufizuar → test që riprodhon problemin → 
 - Një përgjigje e shkurtër vazhdon vetëm kundrejt një propozimi/pyetjeje të njohur ende aktuale. Për production, inbound lexon përgjigjen e fundit outbound dhe tentativën e fundit të queue në të njëjtën bisedë/biznes/lidhje. Ato duhet të jenë `sent` dhe të përputhen me historikun. Gabimi i leximit ndalon përpunimin; një tentativë `prepared/uncertain` nuk justifikohet nga një përgjigje identike e dërguar më herët. Laboratori përdor historikun e vet të shfaqur. Dega legacy e rezervimeve tani regjistron edhe historikun e përgjigjes që prodhon.
 - Nuk shtohet thirrje AI për këtë kontroll. Rregullat janë konservative për format e mbuluara shqip/anglisht; nuk garantojnë interpretimin e çdo formulimi ose gjuhe. Një propozim i panjohur mund të kërkojë riformulim të qartë. Njoftimi/trace shënon arsyen pa shtuar të dhëna klientësh.
 - Verifikim: **1,182 teste / 150 skedarë** kaluan, si edhe typecheck dhe ESLint i skedarëve të ndryshuar. Më pas u shtuan tre raste pasigurie dhe kaluan të **27 testet** e kontrollit, typecheck dhe lint i modulit të ri. Mbulohen të dyja hyrjet, ruajtja/rifillimi i draftit, konfirmimi i vlefshëm, ndërprerjet informative, emoji, grupi “ok + jo tani”, dërgimi i pasigurt, mesazhi i stafit dhe dështimi i leximit të dëshmisë. Deduplikimi mbetet në queue-n e testuar ekzistuese.
-- **Të mbetura:** prova në aplikacion/Instagram dhe publikimi. Nuk u ndryshuan rregullat ekzistuese të fushave `customer` ose konfigurimi i biznesit: pas një kërkese eksplicite për porosi, workflow-t që kërkojnë adresë fizike ende e kërkojnë. Dallimi sistematik PDF/website/dërgesë fizike kërkon kontratë të qartë të përmbushjes; nuk u hamendësua nga emri ose përshkrimi i produktit. Prandaj kjo pjesë e pranimit mbetet e hapur dhe faza e plotë nuk shënohet e përfunduar.
+- **Të mbetura:** prova në aplikacion/Instagram dhe verifikimi i deployment-it të `d73053a`. Nuk u ndryshuan rregullat ekzistuese të fushave `customer` ose konfigurimi i biznesit: pas një kërkese eksplicite për porosi, workflow-t që kërkojnë adresë fizike ende e kërkojnë. Dallimi sistematik PDF/website/dërgesë fizike kërkon kontratë të qartë të përmbushjes; nuk u hamendësua nga emri ose përshkrimi i produktit. Prandaj kjo pjesë e pranimit mbetet e hapur dhe faza e plotë nuk shënohet e përfunduar.
 - Nuk nevojitet migrim SQL për kontrollin e ri. Ndryshimet e landing-ut mbeten jashtë kësaj pune. Nuk u dërguan mesazhe klientëve dhe nuk u ndryshuan të dhëna production.
 
 ## Rruga reale e mesazhit

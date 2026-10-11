@@ -23,6 +23,7 @@ function order() {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
   mocks.guidance.mockResolvedValue({ action: "continue", target: null, source: "rules" });
   mocks.version.mockResolvedValue(null);
   mocks.entity.mockResolvedValue({});
@@ -559,4 +560,86 @@ it("retains the draft across deferral and resumes only on a clear order request"
  const resumed=await turn("Vazhdo porosinë",thanks.nextState);
  expect(mocks.agent).toHaveBeenCalledOnce();
  expect(resumed.nextState.conversationPaused).toBeUndefined();
+});
+
+const channelCases = [
+  { source: "instagram" as const, mode: "production" as const, guarded: false },
+  { source: "instagram" as const, mode: "production" as const, guarded: true },
+  { source: "whatsapp" as const, mode: "production" as const, guarded: false },
+  { source: "whatsapp" as const, mode: "production" as const, guarded: true },
+  { source: "admin_chat_lab" as const, mode: "test" as const, guarded: false },
+];
+it.each(channelCases)("shares routing and task resumption in $source / guard=$guarded", async ({ source, mode, guarded }) => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business");
+  const bookingGuard = guarded ? { jobId: 1, leaseToken: "lease", conversationId: "conversation", revision: 4 } : undefined;
+  const run = (message: string, state: ConversationStatePayload) => processConversationMessage({ businessId: "business", source, mode, bookingGuard, message, state, hasPhoto: false });
+  const original = order();
+  const before = structuredClone(original);
+  const booking = await run("Dua rezervim më 2026-10-15", original);
+  expect(original).toEqual(before);
+  expect(booking.conversationRouting).toMatchObject({ process: "booking", action: "start", suspended: "order" });
+  expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ routed: true, bookingGuard, mode }));
+  const info = await run("Sa kushton?", booking.nextState);
+  expect(info.conversationRouting?.process).toBe("information");
+  expect(info.nextState.processes?.booking?.draft?.date).toBe("2026-10-15");
+  const ack = await run("Ok", info.nextState);
+  expect(ack.conversationRouting?.action).toBe("answer");
+  expect(ack.nextState.conversationPaused).toBe(true);
+  const resumed = await run("Vazhdo porosinë", ack.nextState);
+  expect(resumed.conversationRouting).toMatchObject({ process: "order", action: "resume" });
+  expect(resumed.nextState.processes?.booking?.status).toBe("suspended");
+  expect(resumed.nextState.product_id).toBe("product");
+  expect(resumed.nextState.fields.size).toBe("L");
+  expect(resumed.nextState.customer.name).toBe("Ana");
+  expect(resumed.nextState.context?.execution.linear?.versionId).toBe("v1");
+  const support = await run("Dua të flas me stafin", resumed.nextState);
+  expect(support.conversationRouting?.process).toBe("support");
+  expect(support.nextState.processes?.order?.snapshot.product_id).toBe("product");
+  expect(support.nextState.processes?.order?.status).toBe("suspended");
+});
+it("stops enrolling new Instagram threads when the pilot is removed but preserves migrated work", async () => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business");
+  const migrated = await processConversationMessage({ businessId: "business", source: "instagram", message: "M", state: order(), hasPhoto: false });
+  expect(migrated.nextState.schemaVersion).toBe(3);
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  const continued = await processConversationMessage({ businessId: "business", source: "instagram", message: "L", state: migrated.nextState, hasPhoto: false });
+  expect(continued.conversationRouting?.process).toBe("order");
+  expect(continued.nextState.processes?.order?.snapshot.execution.linear?.versionId).toBe("v1");
+  mocks.booking.mockClear();
+  await processConversationMessage({ businessId: "business", source: "instagram", message: "Dua rezervim", state: emptyState(), hasPhoto: false });
+  expect(mocks.booking).toHaveBeenCalledWith(expect.not.objectContaining({ routed: true }));
+});
+
+it.each(["instagram", "whatsapp"] as const)("preserves a migrated booking's pinned graph through an order detour in %s production", async source => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business");
+  const state = emptyState(); state.schemaVersion = 2;
+  state.visual = { versionId: "old-booking", nodeId: "booking", status: "waiting", awaiting: true, visited: ["booking"], values: { note: "Keep" } };
+  state.step_key = "booking_request";
+  state.fields.booking = { nonce: "legacy-booking", phase: "collect", date: "2026-10-15", expires: 1900000000000 };
+  mocks.version.mockImplementation(async (_business, id) => entityVersion(id ?? "new-publication"));
+  mocks.agent.mockImplementation(async params => {
+    const next = structuredClone(params.state);
+    if (!params.bookingRequest) {
+      next.product_id = "puzzle"; next.step_key = "size"; delete next.fields.booking;
+      next.visual = { versionId: "new-publication", nodeId: "product", status: "waiting", awaiting: true, visited: ["product"], values: {} };
+    }
+    return result(next);
+  });
+  const run = (message: string, state: ConversationStatePayload) => processConversationMessage({ businessId: "business", source, message, state, hasPhoto: false });
+  const first = await run("Dua të porosis", state);
+  const resumed = await run("Vazhdo rezervimin", first.nextState);
+  expect(resumed.conversationRouting?.action).toBe("resume");
+  expect(resumed.nextState.processes?.booking).toMatchObject({ id: "legacy-booking", versionId: "old-booking", visual: state.visual, draft: state.fields.booking });
+  expect(resumed.nextState.processes?.order?.status).toBe("suspended");
+  expect(mocks.agent.mock.lastCall![0].state.visual).toEqual(state.visual);
+});
+it("emits bounded coordinator metadata for an early acknowledgement without customer text", async () => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business");
+  const onTrace = vi.fn();
+  const state = order(); state.recentMessages = [{ role: "assistant", content: "Informacion privat" }];
+  await processConversationMessage({ businessId: "business", source: "instagram", message: "Ok", state, hasPhoto: false, onTrace,
+    bookingGuard: { jobId: 1, leaseToken: "secret-lease", conversationId: "conversation", revision: 4 } });
+  const event = onTrace.mock.calls.map(([e]) => e).find(e => e.label === "Conversation coordinator completed");
+  expect(event.data).toEqual({ coordinator: "shared_v3", channel: "instagram", revision: 4, workflowVersion: "v1", process: "information", action: "answer", elapsedMs: expect.any(Number) });
+  expect(JSON.stringify(event)).not.toMatch(/secret-lease|Informacion privat|Ana/);
 });
