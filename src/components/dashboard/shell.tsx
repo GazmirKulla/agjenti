@@ -36,6 +36,7 @@ export function DashboardShell({
   const pathname = usePathname();
   const agentName = `Agjenti “${name}”`;
   const [open, setOpen] = useState(false);
+  const [backdrop, setBackdrop] = useState(false);
   const assistant = useAssistantWorkspace();
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -83,26 +84,45 @@ export function DashboardShell({
     if (searchOpen && mobile) searchInput.current?.focus();
   }, [searchOpen, mobile]);
   useEffect(() => {
+    if (!open || !mobile) {
+      setBackdrop(false);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setBackdrop(true));
+    return () => cancelAnimationFrame(frame);
+  }, [open, mobile]);
+  useEffect(() => {
     if (!open || !mobile) return;
     const trigger = menuButton.current;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const root = document.documentElement;
+    const scrollY = window.scrollY;
+    root.classList.add("drawer-scroll-lock");
+    root.style.setProperty("--drawer-scroll-y", `-${scrollY}px`);
     const focusable = () =>
       Array.from(
         sidebar.current?.querySelectorAll<HTMLElement>(
           "a[href],button,summary,input",
         ) ?? [],
       ).filter(
-        (el) => el.getClientRects().length > 0 && !el.hasAttribute("disabled"),
+        (el) =>
+          !el.classList.contains("mobile-drawer-close") &&
+          el.getClientRects().length > 0 &&
+          !el.hasAttribute("disabled"),
       );
-    focusable()[0]?.focus();
+    const closeButton = sidebar.current?.querySelector<HTMLElement>(
+      ".mobile-drawer-close",
+    );
+    (closeButton ?? focusable()[0])?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         setOpen(false);
       }
       if (event.key === "Tab") {
-        const list = focusable();
+        const list = [
+          ...(closeButton ? [closeButton] : []),
+          ...focusable(),
+        ];
         const first = list[0];
         const last = list.at(-1);
         if (event.shiftKey && document.activeElement === first) {
@@ -116,7 +136,9 @@ export function DashboardShell({
     };
     document.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      root.classList.remove("drawer-scroll-lock");
+      root.style.removeProperty("--drawer-scroll-y");
+      window.scrollTo(0, scrollY);
       document.removeEventListener("keydown", onKey);
       trigger?.focus();
     };
@@ -141,6 +163,8 @@ export function DashboardShell({
         role={mobile && open ? "dialog" : undefined}
         aria-modal={mobile && open ? true : undefined}
         aria-label={mobile && open ? "Menuja kryesore" : undefined}
+        aria-hidden={mobile && !open ? true : undefined}
+        inert={mobile && !open ? true : undefined}
       >
         <div className="mobile-drawer-header">
           <Link
@@ -225,7 +249,7 @@ export function DashboardShell({
           </Link>
         </footer>
       </aside>
-      {open && (
+      {backdrop && (
         <button
           type="button"
           className="sidebar-backdrop"
