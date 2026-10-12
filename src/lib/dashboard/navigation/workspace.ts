@@ -17,6 +17,7 @@ export function organizeWorkspace(items: NavItem[]) {
   const settings: WorkspaceLink[] = items.filter(item => settingsIds.has(item.id)).sort((a, b) => Number(b.id === "settings") - Number(a.id === "settings")).map(item => ({ ...item, label: item.id === "settings" ? "Biznesi dhe modulet" : item.label }));
   settings.push(
     { id: "setup", path: "setup", label: "Onboarding", icon: "spark" },
+    { id: "billing", path: "billing", label: "Paketa dhe përdorimi", icon: "billing" },
   );
   const integrations: WorkspaceLink[] = items.filter(item => integrationIds.has(item.id));
   const business = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !["dashboard", "inbox", ...standaloneIds].includes(item.id));

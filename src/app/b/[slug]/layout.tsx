@@ -12,6 +12,8 @@ import { DashboardShell } from "@/components/dashboard/shell";
 import { getAppSettings } from "@/lib/platform/settings";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { loadBillingUsage } from "@/lib/billing/service";
+import { BillingUsageNotice } from "@/components/dashboard/billing-usage-notice";
 export default async function BusinessLayout({
   children,
   params,
@@ -26,9 +28,10 @@ export default async function BusinessLayout({
   const access = await listMemberships(user.id);
   const business = (await requireBusinessAccess(user.id, slug))?.business;
   if (!business) redirect("/auth/continue");
-  const [settings, dashboardProfile] = await Promise.all([
+  const [settings, dashboardProfile, billingUsage] = await Promise.all([
     getAppSettings(),
     loadDashboardProfile(business.id),
+    loadBillingUsage(business.id),
   ]);
   const navigationItems = buildNavigationItems(dashboardProfile, "desktop");
   const mobileNavigationItems = buildNavigationItems(
@@ -62,6 +65,7 @@ export default async function BusinessLayout({
           {settings.announcement}
         </div>
       )}
+      <BillingUsageNotice slug={business.slug} usage={billingUsage} />
       <BusinessIntelligencePanel slug={business.slug} />
       {children}
     </DashboardShell>
