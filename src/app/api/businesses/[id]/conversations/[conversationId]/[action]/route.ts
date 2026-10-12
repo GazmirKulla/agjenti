@@ -32,6 +32,23 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const service = createServiceSupabase();
+  if (action === "clear-messages") {
+    const { data, error } = await service.rpc("clear_conversation_messages", {
+      p_business_id: businessId,
+      p_conversation_id: conversationId,
+    });
+    if (error)
+      return NextResponse.json(
+        { error: "Mesazhet nuk u pastruan. Provo përsëri." },
+        { status: 500 },
+      );
+    if (!data)
+      return NextResponse.json(
+        { error: "Biseda nuk u gjet në këtë biznes." },
+        { status: 404 },
+      );
+    return NextResponse.json({ ok: true });
+  }
   if (action === "resume") {
     const setup = await loadSetupStatus(businessId);
     if (!setup.connected || (!setup.launched && !isReady(setup)))

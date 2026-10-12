@@ -80,6 +80,12 @@ export function ThreadClient(props: {
     }
     void request("delete");
   }
+  function confirmClearMessages() {
+    if (!window.confirm(
+      "Pastro të gjitha mesazhet e dërguara dhe të marra në këtë bisedë nga Agjenti.app? Biseda, klienti dhe porositë ruhen. Mesazhet në Instagram/WhatsApp nuk fshihen. Ky veprim nuk kthehet mbrapsht.",
+    )) return;
+    void request("clear-messages");
+  }
   return (
     <section className="panel chat-panel">
       <div className="chat-header">
@@ -138,6 +144,13 @@ export function ThreadClient(props: {
           onClick={() => request("orders")}
         >
           Konfirmo porosinë
+        </button>
+        <button
+          type="button"
+          disabled={pending || !props.messages.length}
+          onClick={confirmClearMessages}
+        >
+          Pastro mesazhet
         </button>
         <button
           type="button"

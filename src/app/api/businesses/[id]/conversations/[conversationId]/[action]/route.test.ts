@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   admin: vi.fn(),
   from: vi.fn(),
+  rpc: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
   eq: vi.fn(),
@@ -14,7 +15,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createServerSupabase: async () => ({ auth: { getUser: mocks.getUser } }),
 }));
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceSupabase: () => ({ from: mocks.from }),
+  createServiceSupabase: () => ({ from: mocks.from, rpc: mocks.rpc }),
 }));
 vi.mock("@/lib/tenant/access", () => ({ isPlatformAdmin: mocks.admin }));
 vi.mock("@/lib/setup/status", () => ({ loadSetupStatus: mocks.setup }));
@@ -51,6 +52,35 @@ beforeEach(() => {
   });
 });
 describe("conversation status actions", () => {
+  it("clears messages through the atomic operation without deleting the conversation", async () => {
+    mocks.rpc.mockResolvedValue({ data: true, error: null });
+    expect((await request("clear-messages")).status).toBe(200);
+    expect(mocks.rpc).toHaveBeenCalledWith("clear_conversation_messages", {
+      p_business_id: "business-a",
+      p_conversation_id: "conversation-a",
+    });
+    expect(mocks.delete).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("reports a failed clear without claiming success", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "unavailable" } });
+    expect((await request("clear-messages")).status).toBe(500);
+  });
+  it("cannot clear a missing or other-tenant conversation", async () => {
+    mocks.rpc.mockResolvedValue({ data: false, error: null });
+    expect((await request("clear-messages")).status).toBe(404);
+  });
+  it("requires business access before clearing messages", async () => {
+    mocks.admin.mockResolvedValue(false);
+    mocks.maybeSingle.mockResolvedValue({ data: null, error: null });
+    expect((await request("clear-messages")).status).toBe(403);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("requires authentication before clearing messages", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    expect((await request("clear-messages")).status).toBe(403);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
   it("does not claim success when the database rejects the update", async () => {
     mocks.maybeSingle.mockResolvedValue({
       data: null,
