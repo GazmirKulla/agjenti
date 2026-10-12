@@ -1,3 +1,5 @@
+"use client";
+import { useDashboardTranslator } from "@/components/dashboard/language";
 import Image from "next/image";
 import type { InstagramBusinessProfile } from "@/lib/instagram/business-profile";
 
@@ -6,6 +8,7 @@ export function InstagramAccountProfile({ profile, username, businessName }: {
   username: string | null;
   businessName: string;
 }) {
+  const t = useDashboardTranslator();
   const name = profile?.name || businessName;
   const handle = username || profile?.username;
   return (
@@ -13,11 +16,11 @@ export function InstagramAccountProfile({ profile, username, businessName }: {
       <div className="flex items-center gap-4">
         <span className="profile-avatar instagram-account-avatar">
           {profile?.profile_picture_url ? (
-            <Image src={profile.profile_picture_url} alt={`Foto e profilit ${name}`} width={72} height={72} unoptimized />
+            <Image src={profile.profile_picture_url} alt={`${t("Foto e profilit")} ${name}`} width={72} height={72} unoptimized />
           ) : name.slice(0, 2).toUpperCase()}
         </span>
         <div className="min-w-0">
-          <h3 className="text-xl wrap-anywhere">{username ? name : "Asnjë llogari e lidhur"}</h3>
+          <h3 className="text-xl wrap-anywhere">{username ? name : t("Asnjë llogari e lidhur")}</h3>
           {handle && <a className="instagram-profile-handle" href={`https://www.instagram.com/${encodeURIComponent(handle)}/`} target="_blank" rel="noopener noreferrer">@{handle}</a>}
           {!handle && <p className="muted-copy">{businessName}</p>}
         </div>

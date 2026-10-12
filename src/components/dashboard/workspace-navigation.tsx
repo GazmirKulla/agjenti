@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardTranslator } from "./language";
 
 import Link from "next/link";
 import { Icon } from "./icon";
@@ -8,10 +9,11 @@ import s from "./workspace-navigation.module.css";
 type Props = { navigation: ReturnType<typeof organizeWorkspace>; section?: WorkspaceSection; base: string; pathname: string; onNavigate: () => void };
 
 export function WorkspaceNavigation({ navigation, section, base, pathname, onNavigate }: Props) {
+  const t = useDashboardTranslator();
   const activeBusiness = activeWorkspaceLink(pathname, base, navigation.business);
   const first = new Set(["home", "conversations", "integrations"]);
   const business = new Set(["products", "orders", "customers"]);
-  const renderLink = (item: typeof navigation.primary[number]) => <Link key={item.id} href={`${base}${item.path ? `/${item.path}` : ""}`} className={`dashboard-nav ${section === item.section ? "active" : ""}`} aria-current={section === item.section ? "page" : undefined} onClick={onNavigate}><Icon name={item.icon} />{item.label}</Link>;
+  const renderLink = (item: typeof navigation.primary[number]) => <Link key={item.id} href={`${base}${item.path ? `/${item.path}` : ""}`} className={`dashboard-nav ${section === item.section ? "active" : ""}`} aria-current={section === item.section ? "page" : undefined} onClick={onNavigate}><Icon name={item.icon} />{t(item.label)}</Link>;
   const hasBusiness = navigation.primary.some(item => business.has(item.id)) || navigation.groups.length > 0;
   return <>
     {navigation.primary.filter(item => first.has(item.id)).map(renderLink)}
@@ -19,7 +21,7 @@ export function WorkspaceNavigation({ navigation, section, base, pathname, onNav
     {navigation.primary.filter(item => business.has(item.id)).map(renderLink)}
     {navigation.groups.length > 0 && (
     <details key={pathname} className={s.business} open={section === "business"}>
-      <summary className={`dashboard-nav ${section === "business" ? "active" : ""}`}><Icon name="briefcase" />Biznesi<span className={s.chevron} aria-hidden>⌄</span></summary>
+      <summary className={`dashboard-nav ${section === "business" ? "active" : ""}`}><Icon name="briefcase" />{t("Biznesi")}<span className={s.chevron} aria-hidden>⌄</span></summary>
       <div className={s.businessLinks}>{navigation.groups.length ? navigation.groups.map(group => <div key={group.label}><p className={s.groupLabel}>{group.label}</p>{group.items.map(item => <Link key={item.id} href={`${base}/${item.path}`} aria-current={activeBusiness === item.path ? "page" : undefined} onClick={onNavigate}><Icon name={item.icon} size={17} />{item.label}</Link>)}</div>) : <Link href={`${base}/settings`} onClick={onNavigate}>Menaxho modulet →</Link>}</div>
     </details>
     )}
@@ -29,7 +31,8 @@ export function WorkspaceNavigation({ navigation, section, base, pathname, onNav
 }
 
 export function WorkspaceSectionNavigation({ navigation, section, base, pathname }: Omit<Props, "onNavigate">) {
-  if (section === "integrations") return pathname === `${base}/integrations` ? null : <div className={s.context}><Link className="soft-link" href={`${base}/integrations`}>← Integrimet</Link></div>;
+  const t = useDashboardTranslator();
+  if (section === "integrations") return pathname === `${base}/integrations` ? null : <div className={s.context}><Link className="soft-link" href={`${base}/integrations`}>{t("← Integrimet")}</Link></div>;
   const links = section === "agent" ? navigation.agent : section === "settings" ? navigation.settings : section === "business" ? navigation.business : [];
   if (!links.length) return null;
   const title = section === "agent" ? "Agjenti im" : section === "settings" ? "Cilësimet" : "Biznesi";

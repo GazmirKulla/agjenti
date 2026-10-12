@@ -1,3 +1,6 @@
+import { developerPromptEn } from "./website-prompt-en";
+import { getDashboardLanguage } from "@/lib/dashboard/language/server";
+import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { IntegrationApiKeyField } from "@/components/dashboard/integration-api-key";
 import { IntegrationProbe } from "@/components/dashboard/integration-probe";
@@ -24,6 +27,8 @@ function parseOptionalUrl(value: string): string | null | { error: string } {
 }
 
 export async function WebsiteIntegration({ slug }: { slug: string }) {
+  const t = await getDashboardTranslator();
+  const language = await getDashboardLanguage();
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
@@ -119,7 +124,7 @@ export async function WebsiteIntegration({ slug }: { slug: string }) {
       .eq("business_id", access.business.id)
       .eq("kind", "http")
       .maybeSingle();
-  if (integrationError) throw new Error("Nuk u ngarkua integrimi i biznesit.");
+  if (integrationError) throw new Error(t("Nuk u ngarkua integrimi i biznesit."));
 
   const linked = Boolean(integration?.catalog_url?.trim());
   let storedSecret: string | null = null;
@@ -131,29 +136,27 @@ export async function WebsiteIntegration({ slug }: { slug: string }) {
     }
   }
   return <div className={styles.content}>
-    <WebsiteDeveloperPrompt prompt={developerPrompt} />
-    <ActionForm action={saveExternalCatalog} className={`website-integration-form ${styles.form}`}>
+    <WebsiteDeveloperPrompt prompt={language === "en" ? developerPromptEn : developerPrompt} />
+    <ActionForm localized action={saveExternalCatalog} className={`website-integration-form ${styles.form}`}>
       <div className="section-title">
-        <h2>2. Lidh webin</h2>
-        <span className="muted-copy">{linked ? "E konfiguruar" : "E pakonfiguruar"}</span>
+        <h2>{t("2. Lidh webin")}</h2>
+        <span className="muted-copy">{linked ? t("E konfiguruar") : t("E pakonfiguruar")}</span>
       </div>
       <label className="form-label">
-        URL e katalogut
-        <input type="url" name="catalog_url" defaultValue={integration?.catalog_url ?? ""}
+        {t("URL e katalogut")}<input type="url" name="catalog_url" defaultValue={integration?.catalog_url ?? ""}
           placeholder="https://webi-juaj.al/…/catalog" className="field" />
       </label>
       <label className="form-label">
-        URL e porosive (opsionale)
-        <input type="url" name="orders_url" defaultValue={integration?.orders_url ?? ""}
+        {t("URL e porosive (opsionale)")}<input type="url" name="orders_url" defaultValue={integration?.orders_url ?? ""}
           placeholder="https://webi-juaj.al/…/orders" className="field" />
       </label>
       <IntegrationApiKeyField hasStoredSecret={Boolean(integration?.secret_ciphertext)} storedSecret={storedSecret} />
       <IntegrationProbe businessId={access.business.id} formSelector="form.website-integration-form" compact />
-      <button className="btn btn-primary w-fit" type="submit">Ruaj lidhjen</button>
+      <button className="btn btn-primary w-fit" type="submit">{t("Ruaj lidhjen")}</button>
     </ActionForm>
-    <WebsiteSpecifications />
-    {linked && <ActionForm action={disconnectExternalCatalog}>
-      <button className="btn btn-ghost text-danger" type="submit">Shkëput webin</button>
+    <WebsiteSpecifications language={language} />
+    {linked && <ActionForm localized action={disconnectExternalCatalog}>
+      <button className="btn btn-ghost text-danger" type="submit">{t("Shkëput webin")}</button>
     </ActionForm>}
   </div>;
 }

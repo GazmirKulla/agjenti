@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardTranslator } from "@/components/dashboard/language";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -6,6 +7,7 @@ import { Icon } from "./icon";
 import styles from "./integration-card.module.css";
 
 export function IntegrationDetailsDialog({ slug, name, children }: { slug: string; name: string; children: ReactNode }) {
+  const t = useDashboardTranslator();
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const router = useRouter();
@@ -28,8 +30,8 @@ export function IntegrationDetailsDialog({ slug, name, children }: { slug: strin
       const rect = event.currentTarget.getBoundingClientRect();
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();
     } }}>
-    <header className={styles.dialogHeader}><h2 id={titleId}>{name} · Detajet</h2>
-      <button type="button" className={styles.dialogClose} aria-label="Mbyll detajet" onClick={close}><Icon name="close" size={20} /></button>
+    <header className={styles.dialogHeader}><h2 id={titleId}>{name} {t("· Detajet")}</h2>
+      <button type="button" className={styles.dialogClose} aria-label={t("Mbyll detajet")} onClick={close}><Icon name="close" size={20} /></button>
     </header>
     <div className={styles.dialogContent}>{children}</div>
   </dialog>;

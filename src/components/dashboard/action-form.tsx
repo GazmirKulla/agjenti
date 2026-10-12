@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardTranslator } from "./language";
 import {
   startTransition,
   useActionState,
@@ -15,13 +16,17 @@ export function ActionForm({
   className,
   successMessage = "U ruajt me sukses.",
   onSuccess,
+  localized = false,
 }: {
   action: (data: FormData) => Promise<ActionResult | void>;
   children: ReactNode;
   className?: string;
   successMessage?: string;
   onSuccess?: () => void;
+  localized?: boolean;
 }) {
+  const translate = useDashboardTranslator();
+  const t = localized ? translate : (text: string) => text;
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
   const [result, submit, pending] = useActionState(
@@ -64,15 +69,15 @@ export function ActionForm({
       </fieldset>
       {pending ? (
         <p role="status" className="form-feedback">
-          Duke ruajtur…
+          {t("Duke ruajtur…")}
         </p>
       ) : result?.error ? (
         <p role="alert" className="form-feedback form-feedback-error">
-          {result.error}
+          {t(result.error)}
         </p>
       ) : result?.success ? (
         <p role="status" className="form-feedback form-feedback-success">
-          {result.success}
+          {t(result.success)}
         </p>
       ) : null}
     </form>

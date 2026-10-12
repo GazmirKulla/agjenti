@@ -3951,3 +3951,9 @@ html[data-resolved="dark"] .business-assistant .onboarding-next { color: #21123d
 .assistant-attention a { color: var(--accent); }
 .assistant-overview-details > summary { color: var(--ink-muted); cursor: pointer; padding: 12px 0; border-top: 1px solid var(--line); font-size: 13px; }
 .assistant-first-home .agent-illustration { display: none; }
+
+.dashboard-language-switch { display: flex; gap: 4px; padding: 8px 12px; }
+.dashboard-language-switch button { flex: 1; min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; color: var(--ink); background: transparent; cursor: pointer; }
+.dashboard-language-switch button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+.dashboard-language-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dashboard-language-switch button:disabled { cursor: wait; opacity: .65; }

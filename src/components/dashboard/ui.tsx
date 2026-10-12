@@ -86,7 +86,7 @@ export function SectionTitle({
     </div>
   );
 }
-const labels: Record<string, string> = {
+export const statusLabels: Record<string, string> = {
   active: "Në proces",
   paused: "E pauzuar",
   completed: "E përfunduar",
@@ -103,16 +103,16 @@ const labels: Record<string, string> = {
   owner: "Pronar",
   staff: "Staf",
 };
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
   return (
     <span className={`status-badge status-${status}`}>
-      {labels[status] ?? status}
+      {label ?? statusLabels[status] ?? status}
     </span>
   );
 }
-export function formatDate(value: string | null) {
+export function formatDate(value: string | null, locale = "sq-AL") {
   return value
-    ? new Intl.DateTimeFormat("sq-AL", {
+    ? new Intl.DateTimeFormat(locale, {
         day: "numeric",
         month: "short",
         year: "numeric",

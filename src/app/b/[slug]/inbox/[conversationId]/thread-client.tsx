@@ -1,9 +1,10 @@
 "use client";
+import { LocalizedStatusBadge } from "@/components/dashboard/language";
+import { useDashboardTranslator } from "@/components/dashboard/language";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import type { NormalizedAttachment } from "@/lib/instagram/types";
-import { StatusBadge } from "@/components/dashboard/ui";
 import { Icon } from "@/components/dashboard/icon";
 import Link from "next/link";
 import { IntegrationActivity, type IntegrationActivityLog } from "@/components/dashboard/integration-activity";
@@ -22,10 +23,12 @@ export function ThreadClient(props: {
   conversationId: string;
   slug: string;
   status: string;
+  channel?: string;
   customerName: string;
   messages: Message[];
   logs: IntegrationActivityLog[];
 }) {
+  const t = useDashboardTranslator();
   const router = useRouter();
   const messageList = useRef<HTMLDivElement>(null);
   const lastMessageId = props.messages.at(-1)?.id;
@@ -92,21 +95,21 @@ export function ThreadClient(props: {
         <Link
           href={`/b/${props.slug}/inbox`}
           className="chat-mobile-back"
-          aria-label="Kthehu te bisedat"
+          aria-label={t("Kthehu te bisedat")}
         >
           ‹
         </Link>
         <Link
           href={`/b/${props.slug}/inbox/${props.conversationId}/customer`}
           className="chat-contact-link"
-          aria-label="Hap detajet e klientit"
+          aria-label={t("Hap detajet e klientit")}
         >
           <span className="profile-avatar">
             {props.customerName.slice(0, 2).toUpperCase()}
           </span>
           <div>
             <h2>{props.customerName}</h2>
-            <StatusBadge status={props.status} />
+            <LocalizedStatusBadge status={props.status} />
           </div>
         </Link>
         <button
@@ -114,7 +117,7 @@ export function ThreadClient(props: {
           className="btn btn-ghost"
           disabled={pending}
           onClick={() => router.refresh()}
-          aria-label="Rifresko bisedën"
+          aria-label={t("Rifresko bisedën")}
         >
           ↻
         </button>
@@ -128,42 +131,38 @@ export function ThreadClient(props: {
           }
         >
           {props.status === "active"
-            ? "Pauzo Agjentin AI"
-            : "Rifillo Agjentin AI"}
+            ? t("Pauzo Agjentin AI")
+            : t("Rifillo Agjentin AI")}
         </button>
         <button
           type="button"
           disabled={pending || props.status === "completed"}
           onClick={() => request("complete")}
         >
-          Shëno si të mbyllur
-        </button>
+          {t("Shëno si të mbyllur")}</button>
         <button
           type="button"
           disabled={pending}
           onClick={() => request("orders")}
         >
-          Konfirmo porosinë
-        </button>
+          {t("Konfirmo porosinë")}</button>
         <button
           type="button"
           disabled={pending || !props.messages.length}
           onClick={confirmClearMessages}
         >
-          Pastro mesazhet
-        </button>
+          {t("Pastro mesazhet")}</button>
         <button
           type="button"
           className="chat-action-danger"
           disabled={pending}
           onClick={confirmDelete}
         >
-          Fshi bisedën
-        </button>
+          {t("Fshi bisedën")}</button>
       </div>
       <div className="chat-messages" ref={messageList}>
         {props.messages.length === 200 && (
-          <p className="muted-copy text-center">200 mesazhet më të fundit</p>
+          <p className="muted-copy text-center">{t("200 mesazhet më të fundit")}</p>
         )}
         {props.messages.length ? (
           props.messages.map((m) => (
@@ -192,26 +191,26 @@ export function ThreadClient(props: {
                           width={360}
                           height={260}
                           unoptimized
-                          alt={attachment.caption || "Foto nga biseda"}
+                          alt={attachment.caption || t("Foto nga biseda")}
                           className="rounded-lg object-contain"
                           referrerPolicy="no-referrer"
                         />
                       ) : (
                         <span>
-                          Hap {attachment.filename || "bashkëngjitjen"} ↗
+                          {t("Hap")}{attachment.filename || t("bashkëngjitjen")} ↗
                         </span>
                       )}
                     </a>
                   );
                 },
               )}
-              {!m.body && !m.media?.length && <p>Mesazh pa tekst</p>}
+              {!m.body && !m.media?.length && <p>{t("Mesazh pa tekst")}</p>}
               <small>
                 {m.source === "agent"
-                  ? "Agjenti AI"
+                  ? t("Agjenti AI")
                   : m.source === "staff"
-                    ? "Ekipi"
-                    : "Klienti"}{" "}
+                    ? t("Ekipi")
+                    : t("Klienti")}{" "}
                 ·{" "}
                 {new Date(m.created_at).toLocaleTimeString("en-GB", {
                   hour12: false,
@@ -219,15 +218,15 @@ export function ThreadClient(props: {
                   minute: "2-digit",
                   timeZone: "Europe/Tirane",
                 })}
-                {m.delivery_status ? ` · ${m.delivery_status}` : ""}
+                {m.delivery_status ? ` · ${t(m.delivery_status)}` : ""}
               </small>
               {m.delivery_error && (
-                <p className="text-danger text-xs mt-1">{m.delivery_error}</p>
+                <p className="text-danger text-xs mt-1">{t(m.delivery_error)}</p>
               )}
             </div>
           ))
         ) : (
-          <p className="muted-copy text-center">Biseda ende nuk ka mesazhe.</p>
+          <p className="muted-copy text-center">{t("Biseda ende nuk ka mesazhe.")}</p>
         )}
       </div>
       <form
@@ -239,38 +238,36 @@ export function ThreadClient(props: {
       >
         <div className="composer-label">
           <Icon name="inbox" size={16} />
-          Përgjigje manuale
-        </div>
+          {t("Përgjigje manuale")}</div>
         <label className="sr-only" htmlFor="reply">
-          Shkruaj një mesazh
-        </label>
+          {t("Shkruaj një mesazh")}</label>
         <textarea
           id="reply"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Shkruaj një mesazh…"
+          placeholder={t("Shkruaj një mesazh…")}
           rows={3}
           disabled={pending}
         />
         <div className="composer-footer">
-          <span>Mesazhi dërgohet në Instagram</span>
+          <span>{t("Mesazhi dërgohet në")} {props.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</span>
           <button
             className="btn btn-primary"
             type="submit"
             disabled={pending || !text.trim()}
           >
-            {pending ? "Duke dërguar…" : "Dërgo"}
+            {pending ? t("Duke dërguar…") : t("Dërgo")}
             <Icon name="arrow" size={16} />
           </button>
         </div>
         {error && (
           <p role="alert" className="text-sm text-danger mt-3">
-            {error}
+            {t(error)}
           </p>
         )}
       </form>
       <details className="chat-logs">
-        <summary>Aktiviteti i integrimit të biznesit</summary>
+        <summary>{t("Aktiviteti i integrimit të biznesit")}</summary>
         <IntegrationActivity logs={props.logs} />
       </details>
     </section>

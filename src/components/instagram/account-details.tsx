@@ -1,5 +1,6 @@
+import { LocalizedStatusBadge } from "@/components/dashboard/language";
+import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import {
-  StatusBadge,
   formatDate,
 } from "@/components/dashboard/ui";
 import { IntegrationAccountPanel } from "@/components/dashboard/integration-account-panel";
@@ -18,6 +19,7 @@ export default async function InstagramAccountDetails({
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ disconnected?: string }>;
 }) {
+  const t = await getDashboardTranslator();
   const { slug } = await params;
   const query = await searchParams;
   const user = await getSessionUser();
@@ -33,7 +35,7 @@ export default async function InstagramAccountDetails({
     .eq("business_id", access.business.id)
     .neq("status", "disconnected")
     .maybeSingle();
-  if (loadError) throw new Error("Nuk u ngarkua lidhja Instagram.");
+  if (loadError) throw new Error(t("Nuk u ngarkua lidhja Instagram."));
 
   const [discovery, captures] = conn ? await Promise.all([
     supabase.from("business_discovery").select("source_profile")
@@ -62,8 +64,7 @@ export default async function InstagramAccountDetails({
     <>
       {query.disconnected === "1" && (
         <p className="mb-5 rounded-lg bg-danger-soft p-4 text-sm text-danger">
-          Llogaria Instagram u shkëput.
-        </p>
+          {t("Llogaria Instagram u shkëput.")}</p>
       )}
       <IntegrationAccountPanel name="Instagram" status={conn?.status || "disconnected"}>
           <InstagramAccountProfile profile={profile} username={conn ? conn.username || conn.ig_user_id : null} businessName={access.business.name} />
@@ -71,27 +72,26 @@ export default async function InstagramAccountDetails({
             <div className="detail-block">
               <dl className="detail-fields">
                 <div>
-                  <dt>Statusi i lidhjes</dt>
+                  <dt>{t("Statusi i lidhjes")}</dt>
                   <dd>
-                    <StatusBadge status={conn.status} />
+                    <LocalizedStatusBadge status={conn.status} />
                   </dd>
                 </div>
                 <div>
-                  <dt>Rifreskimi i fundit i token-it</dt>
-                  <dd>{formatDate(conn.refreshed_at)}</dd>
+                  <dt>{t("Rifreskimi i fundit i token-it")}</dt>
+                  <dd>{formatDate(conn.refreshed_at, t("sq-AL"))}</dd>
                 </div>
                 <div>
-                  <dt>Skadimi i token-it</dt>
-                  <dd>{formatDate(conn.expires_at)}</dd>
+                  <dt>{t("Skadimi i token-it")}</dt>
+                  <dd>{formatDate(conn.expires_at, t("sq-AL"))}</dd>
                 </div>
               </dl>
               {access.admin && accessToken && (
-                <SecretReveal value={accessToken} label="Access token (vetëm admin)" />
+                <SecretReveal localized value={accessToken} label={t("Access token (vetëm admin)")} />
               )}
               {access.admin && conn.access_token_ciphertext && !accessToken && (
                 <p className="mt-4 text-sm text-danger">
-                  Token-i nuk u deshifrua. Kontrollo TOKEN_ENCRYPTION_KEY.
-                </p>
+                  {t("Token-i nuk u deshifrua. Kontrollo TOKEN_ENCRYPTION_KEY.")}</p>
               )}
             </div>
           )}
@@ -108,7 +108,7 @@ export default async function InstagramAccountDetails({
               rel="noopener noreferrer"
               aria-describedby="instagram-browser-help"
             >
-              {conn ? "Rilidh llogarinë" : "Lidh Instagram"}
+              {conn ? t("Rilidh llogarinë") : t("Lidh Instagram")}
             </a>
             {conn && (
               <form
@@ -116,16 +116,12 @@ export default async function InstagramAccountDetails({
                 method="post"
               >
                 <button className="btn btn-ghost text-danger" type="submit">
-                  Shkëput llogarinë
-                </button>
+                  {t("Shkëput llogarinë")}</button>
               </form>
             )}
           </div>
           <p id="instagram-browser-help" className="muted-copy mt-3">
-            Autorizimi hapet në Instagram web (Safari/Chrome), jo në app-in Instagram.
-            Nëse je brenda Instagram-it ose Facebook-ut, hape Agjenti.app në Safari
-            dhe lidhu aty. Pas lidhjes, rifresko këtë faqe për të parë statusin.
-          </p>
+            {t("Autorizimi hapet në Instagram web (Safari/Chrome), jo në app-in Instagram. Nëse je brenda Instagram-it ose Facebook-ut, hape Agjenti.app në Safari dhe lidhu aty. Pas lidhjes, rifresko këtë faqe për të parë statusin.")}</p>
       </IntegrationAccountPanel>
     </>
   );

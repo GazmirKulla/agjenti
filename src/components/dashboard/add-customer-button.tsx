@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardTranslator } from "@/components/dashboard/language";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -7,6 +8,7 @@ export function AddCustomerButton(props: {
 	businessId: string;
 	conversationId: string;
 }) {
+  const t = useDashboardTranslator();
 	const router = useRouter();
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -38,9 +40,9 @@ export function AddCustomerButton(props: {
 				disabled={pending}
 				onClick={() => void addCustomer()}
 			>
-				{pending ? "Duke shtuar…" : "Shto si klient"}
+				{pending ? t("Duke shtuar…") : t("Shto si klient")}
 			</button>
-			{error ? <p className="muted-copy mt-2 text-red-600">{error}</p> : null}
+			{error ? <p className="muted-copy mt-2 text-red-600">{t(error)}</p> : null}
 		</div>
 	);
 }

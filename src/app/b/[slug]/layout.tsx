@@ -1,3 +1,5 @@
+import { DashboardLanguageProvider } from "@/components/dashboard/language";
+import { getDashboardLanguage } from "@/lib/dashboard/language/server";
 import { AssistantWorkspaceProvider } from "@/components/business-assistant/workspace";
 import { BusinessIntelligencePanel } from "@/components/business-intelligence/panel";
 import { redirect } from "next/navigation";
@@ -18,6 +20,7 @@ export default async function BusinessLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const language = await getDashboardLanguage();
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await listMemberships(user.id);
@@ -33,6 +36,7 @@ export default async function BusinessLayout({
     "mobile",
   );
   return (
+    <DashboardLanguageProvider language={language}>
     <AssistantWorkspaceProvider key={business.slug} slug={business.slug} name={business.name} modules={dashboardProfile.enabledModules} external={business.catalog_source === "external"}>
     <DashboardShell
       name={business.name}
@@ -62,5 +66,6 @@ export default async function BusinessLayout({
       {children}
     </DashboardShell>
     </AssistantWorkspaceProvider>
+    </DashboardLanguageProvider>
   );
 }

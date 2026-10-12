@@ -1,3 +1,4 @@
+import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import Link from "next/link";
 import { Icon } from "@/components/dashboard/icon";
 import { WebsiteIntegration } from "@/components/dashboard/website-integration";
@@ -14,6 +15,7 @@ import { whatsappGraphVersion } from "@/lib/whatsapp/api";
 import styles from "@/components/dashboard/integration-card.module.css";
 
 export default async function IntegrationsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ detail?: string }> }) {
+  const t = await getDashboardTranslator();
   const { slug } = await params;
   const { detail } = await searchParams;
   const user = await getSessionUser();
@@ -33,8 +35,8 @@ export default async function IntegrationsPage({ params, searchParams }: { param
   const igStatus = ig?.status === "connected" && ig.expires_at && Date.parse(ig.expires_at) <= Date.now() ? "expired" : ig?.status ?? "disconnected";
   const connectedCount = Number(!instagram.error && igStatus === "connected") + Number(!whatsapp.error && wa?.status === "connected");
   return <div className={styles.overview}>
-    <PageHeading title="Integrimet" description="Lidh kanalet e komunikimit dhe webin e klientit.">
-      {!instagram.error && !whatsapp.error && <span className={styles.count}>{connectedCount} nga 2 kanale të lidhura</span>}
+    <PageHeading title={t("Integrimet")} description={t("Lidh kanalet e komunikimit dhe webin e klientit.")}>
+      {!instagram.error && !whatsapp.error && <span className={styles.count}>{connectedCount} {t("nga 2 kanale të lidhura")}</span>}
     </PageHeading>
     <div className={styles.grid}>
       <IntegrationCard key={`instagram:${ig?.updated_at ?? "empty"}`} channel="instagram" businessId={access.business.id} slug={slug}
@@ -44,23 +46,23 @@ export default async function IntegrationsPage({ params, searchParams }: { param
         status={wa?.status ?? "disconnected"} identity={wa?.display_phone_number || wa?.verified_name}
         loadError={Boolean(whatsapp.error)} needsAttention={Boolean(wa?.last_error)}
         whatsapp={{ appId: process.env.META_APP_ID ?? "", configId: process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID ?? "", version: whatsappGraphVersion() }} />
-      <article className={styles.row} aria-label="Webi i klientit">
+      <article className={styles.row} aria-label={t("Webi i klientit")}>
         <div className={styles.heading}>
           <span className={`${styles.icon} ${styles.inactiveIcon}`}><Icon name="display" size={28} /></span>
           <div className={styles.title}>
-            <h2>Webi i klientit</h2>
-            <p className={styles.identity}>{website.error ? "Nuk u ngarkua konfigurimi i webit." : website.data?.catalog_url || "Lidh katalogun dhe porositë e webit përmes API-së"}</p>
-            <p className={styles.status}>{website.error ? "Statusi nuk u ngarkua" : website.data?.catalog_url ? "E konfiguruar · testo lidhjen te detajet" : "E pakonfiguruar"}</p>
+            <h2>{t("Webi i klientit")}</h2>
+            <p className={styles.identity}>{website.error ? t("Nuk u ngarkua konfigurimi i webit.") : website.data?.catalog_url || t("Lidh katalogun dhe porositë e webit përmes API-së")}</p>
+            <p className={styles.status}>{website.error ? t("Statusi nuk u ngarkua") : website.data?.catalog_url ? t("E konfiguruar · testo lidhjen te detajet") : t("E pakonfiguruar")}</p>
           </div>
         </div>
-        <div className={styles.actions}><Link className="btn btn-ghost" href={`/b/${slug}/integrations?detail=website`} scroll={false}>Konfigurimi dhe specifikimet</Link></div>
+        <div className={styles.actions}><Link className="btn btn-ghost" href={`/b/${slug}/integrations?detail=website`} scroll={false}>{t("Konfigurimi dhe specifikimet")}</Link></div>
       </article>
     </div>
-    {detail === "website" && <IntegrationDetailsDialog slug={slug} name="Webi i klientit">
-      <Suspense fallback={<p role="status">Duke ngarkuar konfigurimin…</p>}><WebsiteIntegration slug={slug} /></Suspense>
+    {detail === "website" && <IntegrationDetailsDialog slug={slug} name={t("Webi i klientit")}>
+      <Suspense fallback={<p role="status">{t("Duke ngarkuar konfigurimin…")}</p>}><WebsiteIntegration slug={slug} /></Suspense>
     </IntegrationDetailsDialog>}
     {(detail === "instagram" || detail === "whatsapp") && <IntegrationDetailsDialog slug={slug} name={detail === "instagram" ? "Instagram" : "WhatsApp"}>
-      <Suspense fallback={<p role="status">Duke ngarkuar detajet…</p>}>
+      <Suspense fallback={<p role="status">{t("Duke ngarkuar detajet…")}</p>}>
         {detail === "instagram" ? <InstagramAccountDetails params={params} searchParams={Promise.resolve({})} /> : <WhatsAppAccountDetails params={params} />}
       </Suspense>
     </IntegrationDetailsDialog>}

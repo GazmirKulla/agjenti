@@ -1,4 +1,5 @@
 "use client";
+import { DashboardLanguageSwitch, useDashboardTranslator } from "./language";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -33,6 +34,7 @@ export function DashboardShell({
   navigationItems: NavItem[];
   mobileNavigationItems: NavItem[];
 }) {
+  const t = useDashboardTranslator();
   const pathname = usePathname();
   const agentName = `Agjenti “${name}”`;
   const [open, setOpen] = useState(false);
@@ -162,7 +164,7 @@ export function DashboardShell({
         className={`dashboard-sidebar ${open ? "is-open" : ""}`}
         role={mobile && open ? "dialog" : undefined}
         aria-modal={mobile && open ? true : undefined}
-        aria-label={mobile && open ? "Menuja kryesore" : undefined}
+        aria-label={mobile && open ? t("Menuja kryesore") : undefined}
         aria-hidden={mobile && !open ? true : undefined}
         inert={mobile && !open ? true : undefined}
       >
@@ -178,7 +180,7 @@ export function DashboardShell({
             type="button"
             className="mobile-drawer-close"
             onClick={() => setOpen(false)}
-            aria-label="Mbyll menunë"
+            aria-label={t("Mbyll menunë")}
           >
             ×
           </button>
@@ -216,7 +218,7 @@ export function DashboardShell({
           </div>
         </details>
         <nav
-          aria-label={admin ? "Menuja e administratorit" : "Menuja e biznesit"}
+          aria-label={admin ? "Menuja e administratorit" : t("Menuja e biznesit")}
         >
           {admin ? items.map((item) => {
             const href = `${base}${item.path ? `/${item.path}` : ""}`;
@@ -230,12 +232,13 @@ export function DashboardShell({
                 className={`dashboard-nav ${active ? "active" : ""} ${admin && mobilePaths.has(item.path) ? "mobile-primary-item" : ""}`}
               >
                 <Icon name={item.icon} />
-                {item.label}
+                {admin ? item.label : t(item.label)}
               </Link>
             );
           }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} onNavigate={() => setOpen(false)} />}
         </nav>
         <footer className="dashboard-sidebar-footer">
+          {!admin && <DashboardLanguageSwitch />}
           <Link
             href={`${base}/account`}
             className={`dashboard-nav sidebar-account-link ${isDashboardRoute(pathname, base, "account") ? "active" : ""}`}
@@ -245,7 +248,7 @@ export function DashboardShell({
             <span className="profile-avatar" aria-hidden="true">
               {(userName || email || name).slice(0, 2).toUpperCase()}
             </span>
-            Llogaria
+            {t("Llogaria")}
           </Link>
         </footer>
       </aside>
@@ -253,7 +256,7 @@ export function DashboardShell({
         <button
           type="button"
           className="sidebar-backdrop"
-          aria-label="Mbyll menunë"
+          aria-label={t("Mbyll menunë")}
           tabIndex={-1}
           onClick={() => setOpen(false)}
         />
@@ -267,7 +270,7 @@ export function DashboardShell({
             ref={menuButton}
             aria-controls="dashboard-navigation"
             className="mobile-menu btn btn-ghost"
-            aria-label="Hap ose mbyll menunë"
+            aria-label={t("Hap ose mbyll menunë")}
             aria-expanded={open}
             onClick={() => setOpen(!open)}
           >
@@ -280,7 +283,7 @@ export function DashboardShell({
           <button
             className="mobile-search-toggle btn btn-ghost"
             type="button"
-            aria-label={searchOpen ? "Mbyll kërkimin" : "Hap kërkimin"}
+            aria-label={searchOpen ? t("Mbyll kërkimin") : t("Hap kërkimin")}
             aria-expanded={searchOpen}
             aria-controls="dashboard-page-search"
             onClick={() => {
@@ -300,22 +303,22 @@ export function DashboardShell({
                   setSearch("");
                 }
               }}
-              aria-label="Kërko faqe"
+              aria-label={t("Kërko faqe")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Kërko në panel…"
+              placeholder={t("Kërko në panel…")}
             />
             {search && (
               <div className="search-results">
                 {searchItems
                   .filter((item) =>
-                    item.label
+                    t(item.label)
                       .toLocaleLowerCase()
                       .includes(search.toLocaleLowerCase()),
                   )
                   .map((item) => (
                     <Link
-                      key={`${item.id}-${item.label}`}
+                      key={`${item.id}-${admin ? item.label : t(item.label)}`}
                       onClick={() => {
                         setSearch("");
                         setSearchOpen(false);
@@ -323,15 +326,15 @@ export function DashboardShell({
                       }}
                       href={`${base}${item.path ? `/${item.path}` : ""}`}
                     >
-                      {item.label}
+                      {admin ? item.label : t(item.label)}
                       <Icon name="arrow" size={15} />
                     </Link>
                   ))}
                 {!searchItems.some((item) =>
-                  item.label
+                  t(item.label)
                     .toLocaleLowerCase()
                     .includes(search.toLocaleLowerCase()),
-                ) && <p>Nuk u gjet asnjë faqe.</p>}
+                ) && <p>{t("Nuk u gjet asnjë faqe.")}</p>}
               </div>
             )}
           </div>
@@ -360,7 +363,7 @@ export function DashboardShell({
             }}
           >
             <Icon name={item.icon} size={22} />
-            <span>{item.label}</span>
+            <span>{admin ? item.label : t(item.label)}</span>
           </Link>
         ))}
       </nav>}

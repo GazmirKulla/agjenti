@@ -1,14 +1,19 @@
 "use client";
+import { useDashboardTranslator } from "./language";
 
 import { useState } from "react";
 
 export function SecretReveal({
   value,
+  localized = false,
   label = "Access token",
 }: {
   value: string;
+  localized?: boolean;
   label?: string;
 }) {
+  const translate = useDashboardTranslator();
+  const t = localized ? translate : (text: string) => text;
   const [visible, setVisible] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -37,10 +42,10 @@ export function SecretReveal({
           type="button"
           onClick={() => setVisible((v) => !v)}
         >
-          {visible ? "Fshih" : "Shfaq"}
+          {visible ? t("Fshih") : t("Shfaq")}
         </button>
         <button className="btn btn-ghost" type="button" onClick={copy}>
-          {copied ? "Kopjuar" : "Kopjo"}
+          {copied ? t("Kopjuar") : t("Kopjo")}
         </button>
       </div>
     </div>

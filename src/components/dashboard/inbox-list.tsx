@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardTranslator } from "@/components/dashboard/language";
 import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "./icon";
@@ -21,6 +22,7 @@ export function InboxList({
   selected?: string;
   channels: { channel: "instagram" | "whatsapp"; connected: boolean; status: string }[];
 }) {
+  const t = useDashboardTranslator();
   const [channel, setChannel] = useState<"instagram" | "whatsapp" | null>(null);
   const channelRows = channel === null ? rows : rows.filter(row => (row.channel ?? "instagram") === channel);
   const [query, setQuery] = useState("");
@@ -35,24 +37,24 @@ export function InboxList({
   );
   return (
     <aside className="panel inbox-list">
-      <nav className="inbox-channels" aria-label="Filtro bisedat sipas kanalit">
+      <nav className="inbox-channels" aria-label={t("Filtro bisedat sipas kanalit")}>
         {channels.map(item => {
           const name = item.channel === "instagram" ? "Instagram" : "WhatsApp";
           const label = `${name}: ${item.status}`;
           const content = <><Icon name={item.channel} size={16} /><span>{name}</span></>;
           return item.connected ? <button key={item.channel} type="button"
-            className={`inbox-channel ${item.channel}`} aria-label={`${label}. ${channel === item.channel ? "Shfaq të gjitha kanalet" : `Filtro ${name}`}`} title={channel === item.channel ? "Kliko përsëri për të gjitha bisedat" : label}
+            className={`inbox-channel ${item.channel}`} aria-label={`${label}. ${channel === item.channel ? t("Shfaq të gjitha kanalet") : `${t("Filtro")} ${name}`}`} title={channel === item.channel ? t("Kliko përsëri për të gjitha bisedat") : label}
             aria-pressed={channel === item.channel} onClick={() => setChannel(current => current === item.channel ? null : item.channel)}>{content}</button>
             : <Link key={item.channel} href={`/b/${slug}/integrations`}
-              className="inbox-channel inactive" aria-label={`${label}. Hap integrimet`} title={`${label}. Hap integrimet`}>{content}</Link>;
+              className="inbox-channel inactive" aria-label={`${label}. ${t("Hap integrimet")}`} title={`${label}. ${t("Hap integrimet")}`}>{content}</Link>;
         })}
       </nav>
       <div className="inbox-filters">
         {[
-          ["all", "Të gjitha"],
-          ["unread", "Të palexuara"],
-          ["active", "Në proces"],
-          ["completed", "Të mbyllura"],
+          ["all", t("Të gjitha")],
+          ["unread", t("Të palexuara")],
+          ["active", t("Në proces")],
+          ["completed", t("Të mbyllura")],
         ].map(([id, label]) => (
           <button
             type="button"
@@ -67,8 +69,8 @@ export function InboxList({
       <div className="record-search">
         <Icon name="search" size={17} />
         <input
-          aria-label="Kërko në biseda"
-          placeholder="Kërko në biseda…"
+          aria-label={t("Kërko në biseda")}
+          placeholder={t("Kërko në biseda…")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -88,16 +90,16 @@ export function InboxList({
             <span className="inbox-row-copy">
               <strong>{r.name}</strong>
               <small className="inbox-row-channel"><Icon name={r.channel === "whatsapp" ? "whatsapp" : "instagram"} size={14} />{r.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</small>
-              <small>{r.preview || "Pa mesazh"}</small>
+              <small>{r.preview || t("Pa mesazh")}</small>
             </span>
             {r.unread > 0 && <span className="unread-badge">{r.unread}</span>}
           </Link>
         ))}
         {!filtered.length && (
-          <p className="muted-copy p-5">Nuk ka biseda për këtë filtër.</p>
+          <p className="muted-copy p-5">{t("Nuk ka biseda për këtë filtër.")}</p>
         )}
       </div>
-      <p className="inbox-list-foot">{channelRows.length} biseda të fundit</p>
+      <p className="inbox-list-foot">{channelRows.length} {t("biseda të fundit")}</p>
     </aside>
   );
 }

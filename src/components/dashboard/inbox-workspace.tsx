@@ -1,3 +1,5 @@
+import { LocalizedStatusBadge } from "@/components/dashboard/language";
+import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { InboxRefresh } from "./inbox-refresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -6,7 +8,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { ThreadClient } from "@/app/b/[slug]/inbox/[conversationId]/thread-client";
 import { AddCustomerButton } from "./add-customer-button";
 import { InboxList } from "./inbox-list";
-import { EmptyState, PageHeading, StatusBadge, formatDate, money } from "./ui";
+import { EmptyState, PageHeading, formatDate, money } from "./ui";
 
 type CustomerJoin = {
   display_name: string | null;
@@ -26,6 +28,7 @@ export async function InboxWorkspace({
   conversationId?: string;
   view?: "customer";
 }) {
+  const t = await getDashboardTranslator();
   const db = createServiceSupabase();
   const [instagram, whatsapp] = await Promise.all([
     db.from("instagram_connections").select("status,expires_at").eq("business_id", businessId).neq("status", "disconnected").maybeSingle(),
@@ -37,7 +40,7 @@ export async function InboxWorkspace({
     return {
       channel,
       connected: !result.error && result.data?.status === "connected" && !expired,
-      status: result.error ? "Statusi nuk u ngarkua" : expired ? "Kërkon rilidhje" : result.data?.status === "connected" ? "I lidhur" : "I palidhur",
+      status: result.error ? t("Statusi nuk u ngarkua") : expired ? t("Kërkon rilidhje") : result.data?.status === "connected" ? t("I lidhur") : t("I palidhur"),
     };
   });
   const { data: rows, error } = await db
@@ -48,12 +51,12 @@ export async function InboxWorkspace({
     .eq("business_id", businessId)
     .order("last_message_at", { ascending: false })
     .limit(100);
-  if (error) throw new Error("Nuk u ngarkuan bisedat.");
+  if (error) throw new Error(t("Nuk u ngarkuan bisedat."));
   const selected = conversationId || rows?.[0]?.id;
   const heading = (
     <PageHeading
       title="Inbox"
-      description="Menaxho bisedat nga Instagram dhe WhatsApp dhe ndiq porositë e klientëve."
+      description={t("Menaxho bisedat nga Instagram dhe WhatsApp dhe ndiq porositë e klientëve.")}
     />
   );
   if (!selected)
@@ -64,15 +67,14 @@ export async function InboxWorkspace({
         <section className="panel">
           <InboxList rows={[]} slug={slug} channels={channels} />
           <EmptyState
-            title="Inbox-i yt është gati"
-            description="Lidh Instagram-in ose WhatsApp-in për të marrë mesazhet e para të klientëve."
+            title={t("Inbox-i yt është gati")}
+            description={t("Lidh Instagram-in ose WhatsApp-in për të marrë mesazhet e para të klientëve.")}
           />
           <Link
             className="soft-link mx-auto mb-6 w-fit"
             href={`/b/${slug}/integrations`}
           >
-            Menaxho integrimet →
-          </Link>
+            {t("Menaxho integrimet →")}</Link>
         </section>
       </>
     );
@@ -84,7 +86,7 @@ export async function InboxWorkspace({
     .eq("business_id", businessId)
     .eq("id", selected)
     .maybeSingle();
-  if (conversationError) throw new Error("Nuk u ngarkua biseda.");
+  if (conversationError) throw new Error(t("Nuk u ngarkua biseda."));
   if (!conversation) notFound();
 
   const orderQuery = conversation.customer_id
@@ -125,7 +127,7 @@ export async function InboxWorkspace({
       .limit(8),
   ]);
   if (messageResult.error || orderResult.error || logResult.error)
-    throw new Error("Nuk u ngarkuan detajet e bisedës.");
+    throw new Error(t("Nuk u ngarkuan detajet e bisedës."));
 
   const customer = conversation.customers as unknown as CustomerJoin;
   const name = conversationDisplayName({
@@ -175,6 +177,7 @@ export async function InboxWorkspace({
           conversationId={selected}
           slug={slug}
           status={conversation.status}
+          channel={conversation.channel}
           customerName={name}
           messages={(messageResult.data ?? []).reverse()}
           logs={logResult.data ?? []}
@@ -183,18 +186,18 @@ export async function InboxWorkspace({
           <div className="inbox-customer-mobile-header">
             <Link
               href={`/b/${slug}/inbox/${selected}`}
-              aria-label="Kthehu te biseda"
+              aria-label={t("Kthehu te biseda")}
             >
               ‹
             </Link>
-            <strong>Pjesëmarrësi i bisedës</strong>
+            <strong>{t("Pjesëmarrësi i bisedës")}</strong>
             <span aria-hidden="true">⋮</span>
           </div>
           <section className="panel section-pad">
             <h2 className="text-base mb-5">
               {linkedCustomer
-                ? "Informacioni i klientit"
-                : "Pjesëmarrësi i bisedës"}
+                ? t("Informacioni i klientit")
+                : t("Pjesëmarrësi i bisedës")}
             </h2>
             <div className="flex items-center gap-3 mb-6">
               <span className="profile-avatar">
@@ -207,7 +210,7 @@ export async function InboxWorkspace({
             </div>
             <dl className="detail-fields">
               <div>
-                <dt>Emri</dt>
+                <dt>{t("Emri")}</dt>
                 <dd>
                   {customer?.display_name ||
                     conversation.participant_display_name ||
@@ -215,15 +218,15 @@ export async function InboxWorkspace({
                 </dd>
               </div>
               <div>
-                <dt>Telefoni</dt>
+                <dt>{t("Telefoni")}</dt>
                 <dd>{customer?.phone || "—"}</dd>
               </div>
               <div>
-                <dt>Klient që nga</dt>
+                <dt>{t("Klient që nga")}</dt>
                 <dd>
                   {linkedCustomer
-                    ? formatDate(customer?.created_at ?? null)
-                    : "Ende jo klient CRM"}
+                    ? formatDate(customer?.created_at ?? null, t("sq-AL"))
+                    : t("Ende jo klient CRM")}
                 </dd>
               </div>
             </dl>
@@ -235,7 +238,7 @@ export async function InboxWorkspace({
             ) : null}
           </section>
           <section className="panel section-pad">
-            <h2 className="text-base mb-4">Porositë e klientit</h2>
+            <h2 className="text-base mb-4">{t("Porositë e klientit")}</h2>
             {orderResult.data?.length ? (
               orderResult.data.map((o) => (
                 <Link
@@ -245,10 +248,10 @@ export async function InboxWorkspace({
                 >
                   <div>
                     <strong>#{o.id.slice(0, 8)}</strong>
-                    <StatusBadge status={o.status} />
+                    <LocalizedStatusBadge status={o.status} />
                   </div>
                   <p>
-                    {formatDate(o.created_at)}
+                    {formatDate(o.created_at, t("sq-AL"))}
                     <strong>{money(o.total_amount, o.currency)}</strong>
                   </p>
                 </Link>
@@ -256,8 +259,8 @@ export async function InboxWorkspace({
             ) : (
               <p className="muted-copy">
                 {linkedCustomer
-                  ? "Ky klient ende nuk ka porosi."
-                  : "Porositë shfaqen pasi biseda lidhet me një klient."}
+                  ? t("Ky klient ende nuk ka porosi.")
+                  : t("Porositë shfaqen pasi biseda lidhet me një klient.")}
               </p>
             )}
           </section>

@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardTranslator } from "@/components/dashboard/language";
 
 import { useState } from "react";
 import type { CatalogProbeResult } from "@/lib/integrations/zana";
@@ -12,6 +13,7 @@ export function IntegrationProbe({
   formSelector?: string;
   compact?: boolean;
 }) {
+  const t = useDashboardTranslator();
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<CatalogProbeResult | null>(null);
 
@@ -60,11 +62,9 @@ export function IntegrationProbe({
     <div className="integration-probe">
       <div className="integration-probe-head">
         {!compact && <div>
-          <h3>Testo lidhjen</h3>
+          <h3>{t("Testo lidhjen")}</h3>
           <p className="muted-copy">
-            Kontrollon nëse katalogu merret nga URL-të e mësipërme (edhe para
-            ruajtjes).
-          </p>
+            {t("Kontrollon nëse katalogu merret nga URL-të e mësipërme (edhe para ruajtjes).")}</p>
         </div>}
         <button
           className="btn btn-ghost"
@@ -72,7 +72,7 @@ export function IntegrationProbe({
           onClick={runProbe}
           disabled={pending}
         >
-          {pending ? "Duke testuar…" : "Testo katalogun"}
+          {pending ? t("Duke testuar…") : t("Testo katalogun")}
         </button>
       </div>
 
@@ -83,18 +83,18 @@ export function IntegrationProbe({
         >
           <p className="integration-probe-status">
             {result.ok
-              ? `OK — ${result.productCount} produkte`
-              : result.error || "Testi dështoi"}
+              ? `OK — ${result.productCount} ${t("produkte")}`
+              : (result.error ? t(result.error) : "") || t("Testi dështoi")}
           </p>
           <details open={compact ? undefined : true}>
-            <summary>Detajet e testit</summary>
+            <summary>{t("Detajet e testit")}</summary>
           <dl className="detail-fields">
             <div>
-              <dt>URL e katalogut</dt>
+              <dt>{t("URL e katalogut")}</dt>
               <dd>{result.url || "—"}</dd>
             </div>
             <div>
-              <dt>URL e porosive</dt>
+              <dt>{t("URL e porosive")}</dt>
               <dd>{result.ordersUrl || "—"}</dd>
             </div>
             <div>
@@ -103,7 +103,7 @@ export function IntegrationProbe({
             </div>
             <div>
               <dt>Auth Bearer</dt>
-              <dd>{result.authSent ? "Po" : "Jo"}</dd>
+              <dd>{result.authSent ? t("Po") : t("Jo")}</dd>
             </div>
             {result.productTypeCount != null && (
               <div>
@@ -121,26 +121,25 @@ export function IntegrationProbe({
 
           {result.products.length > 0 && (
             <div className="integration-probe-products">
-              <h4>Çfarë u mor (mostra)</h4>
+              <h4>{t("Çfarë u mor (mostra)")}</h4>
               <ul>
                 {result.products.map((product) => (
                   <li key={product.id}>
                     <strong>{product.name}</strong>
                     <span>
-                      {product.productType || "pa tip"}
+                      {product.productType || t("pa tip")}
                       {product.price != null
                         ? ` · ${product.price}${product.currency ? ` ${product.currency}` : ""}`
                         : ""}
-                      {` · ${product.formatCount} formate`}
-                      {` · ${product.colorCount} ngjyra`}
+                      {` · ${product.formatCount} ${t("formate")}`}
+                      {` · ${product.colorCount} ${t("ngjyra")}`}
                     </span>
                   </li>
                 ))}
               </ul>
               {result.productCount > result.products.length && (
                 <p className="muted-copy">
-                  +{result.productCount - result.products.length} të tjera…
-                </p>
+                  +{result.productCount - result.products.length} {t("të tjera…")}</p>
               )}
             </div>
           )}

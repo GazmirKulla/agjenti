@@ -45,7 +45,8 @@ Dorëzo URL-në e plotë HTTPS të katalogut dhe URL-në e porosive nëse ësht�
 Udhëzo pronarin t'i vendosë URL-të dhe sekretin te Agjenti → Integrimet → Webi i klientit, të përdorë Testo lidhjen, të ruajë konfigurimin dhe të lidhë produktet nga Produktet. Testi i Agjenti kontrollon vetëm katalogun, nuk ruan konfigurimin dhe nuk verifikon/dërgon porosi.
 `;
 
-export function WebsiteSpecifications() {
+export function WebsiteSpecifications({ language = "sq" }: { language?: "sq" | "en" }) {
+  if (language === "en") return <EnglishWebsiteSpecifications />;
   return <details>
     <summary>Specifikimet teknike</summary>
     <div className="grid gap-4 mt-4">
@@ -71,4 +72,30 @@ export function WebsiteSpecifications() {
       <p className="muted-copy">Për sukses kthe HTTP 2xx dhe <code>{'{"ok": true, "orderId": "porosi-1", "orderNumber": 123}'}</code>. <code>orderId</code> është tekst dhe <code>orderNumber</code> numër; të dy janë opsionalë. Për dështim kthe status gabimi dhe <code>{'{"ok": false, "error": "Arsyeja"}'}</code>. Pa URL porosish, ky integrim nuk dërgon porosi në web. Testi i katalogut nuk verifikon API-në e porosive.</p>
     </details>
   </div></details>;
+}
+
+function EnglishWebsiteSpecifications() {
+  return <details>
+    <summary>Technical specifications</summary>
+    <div className="grid gap-4 mt-4">
+      <p className="muted-copy">Your website developer must prepare the API endpoints below. Enter the complete API URL, not the website homepage. Examples are illustrative.</p>
+      <ol className="list-decimal pl-5 space-y-2">
+        <li>Prepare the catalog API and, if needed, the orders API on the business website.</li>
+        <li>Set the same API key on the website server and in this form (at least 16 characters). The existing integration uses <code>AGJENTI_APP_SECRET</code>.</li>
+        <li>Test the catalog, save the connection, then link products from Products. The test does not save configuration or submit orders.</li>
+      </ol>
+      <details><summary>Authorization and responses</summary>
+        <p className="muted-copy">Agjenti’s server sends requests with <code>Authorization: Bearer API_KEY</code>. The website must verify the key on the server and return JSON. Use HTTPS. Requests time out after 20 seconds; return HTTP 401 for an invalid key.</p>
+      </details>
+      <details><summary>Catalog · GET · required</summary>
+        <p className="muted-copy">Example URL: <code>https://your-website.com/api/integrations/agjenti/catalog</code>. The response must contain <code>products[]</code>; each product has string <code>id</code> and <code>name</code> fields. Keep IDs stable. <code>productType</code> and <code>price</code> may be null; <code>currency</code>, <code>formats</code> and <code>colors</code> are optional. Prices are numbers. Return an empty catalog as <code>{'{"products": []}'}</code>.</p>
+        <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(catalogExample, null, 2)}</code></pre>
+      </details>
+      <details><summary>Orders · POST · optional</summary>
+        <p className="muted-copy">Example URL: <code>https://your-website.com/api/integrations/agjenti/orders</code>. Agjenti sends <code>Content-Type: application/json</code>. The existing order flow from Instagram conversations uses this structure; variant values depend on the collected data:</p>
+        <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(orderExample, null, 2)}</code></pre>
+        <p className="muted-copy">On success return HTTP 2xx and <code>{'{"ok": true, "orderId": "order-1", "orderNumber": 123}'}</code>. <code>orderId</code> is a string and <code>orderNumber</code> a number; both are optional. On failure return an error status and <code>{'{"ok": false, "error": "Reason"}'}</code>. Without an orders URL, this integration does not submit orders to the website. The catalog test does not verify the orders API.</p>
+      </details>
+    </div>
+  </details>;
 }

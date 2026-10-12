@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardTranslator } from "@/components/dashboard/language";
 
 import { useEffect, useId, useState } from "react";
 
@@ -20,6 +21,7 @@ export function IntegrationApiKeyField({
   hasStoredSecret: boolean;
   storedSecret?: string | null;
 }) {
+  const t = useDashboardTranslator();
   const titleId = useId();
   const [editing, setEditing] = useState(!hasStoredSecret);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -86,12 +88,12 @@ export function IntegrationApiKeyField({
         <div>
           <h3 id={titleId}>API key (Bearer secret)</h3>
           <p className="muted-copy">
-            I njëjti kod duhet te Agjenti dhe te env i sajtit si{" "}
+            {t("I njëjti kod duhet te Agjenti dhe te env i sajtit si")}{" "}
             <code>AGJENTI_APP_SECRET</code>.
           </p>
         </div>
         {hasStoredSecret && !editing && (
-          <span className="integration-api-key-badge">I konfiguruar</span>
+          <span className="integration-api-key-badge">{t("I konfiguruar")}</span>
         )}
       </div>
 
@@ -105,9 +107,7 @@ export function IntegrationApiKeyField({
               : "••••••••••••••••••••••••••••"}
           </code>
           <p className="muted-copy">
-            Key-i aktual është i fshehur. Rigjenerimi e ndërpret lidhjen derisa
-            ta përditësosh edhe te sajti i biznesit.
-          </p>
+            {t("Key-i aktual është i fshehur. Rigjenerimi e ndërpret lidhjen derisa ta përditësosh edhe te sajti i biznesit.")}</p>
           <div className="integration-api-key-actions">
             <button
               className="btn btn-ghost"
@@ -115,7 +115,7 @@ export function IntegrationApiKeyField({
               onClick={() => setStoredVisible((v) => !v)}
               disabled={!storedSecret}
             >
-              {storedVisible ? "Fshih" : "Shfaq"}
+              {storedVisible ? t("Fshih") : t("Shfaq")}
             </button>
             <button
               className="btn btn-ghost"
@@ -123,15 +123,14 @@ export function IntegrationApiKeyField({
               onClick={() => storedSecret && copyText(storedSecret, "stored")}
               disabled={!storedSecret}
             >
-              {copied === "stored" ? "Kopjuar" : "Kopjo"}
+              {copied === "stored" ? t("Kopjuar") : t("Kopjo")}
             </button>
             <button
               className="btn btn-ghost text-danger"
               type="button"
               onClick={requestEdit}
             >
-              Ndrysho / rigjenero
-            </button>
+              {t("Ndrysho / rigjenero")}</button>
           </div>
         </div>
       )}
@@ -144,12 +143,9 @@ export function IntegrationApiKeyField({
           aria-labelledby={titleId}
         >
           <p className="integration-api-key-warn-title">
-            Kujdes: lidhja mund të ndërpritet
-          </p>
+            {t("Kujdes: lidhja mund të ndërpritet")}</p>
           <p className="muted-copy">
-            Nëse ndryshon API key këtu dhe nuk e përditëson menjëherë te env i
-            sajtit (<code>AGJENTI_APP_SECRET</code>), katalogu dhe porositë do
-            të kthejnë <strong>401 Unauthorized</strong>.
+            {t("Nëse ndryshon API key këtu dhe nuk e përditëson menjëherë te env i sajtit (")}<code>AGJENTI_APP_SECRET</code>{t("), katalogu dhe porositë do të kthejnë")} <strong>401 Unauthorized</strong>.
           </p>
           <label className="integration-api-key-check">
             <input
@@ -158,9 +154,7 @@ export function IntegrationApiKeyField({
               onChange={(event) => setAcknowledged(event.target.checked)}
             />
             <span>
-              E kuptoj — do ta kopjoj key-in e ri dhe do ta vendos te sajti para
-              se të mbështetem te lidhja.
-            </span>
+              {t("E kuptoj — do ta kopjoj key-in e ri dhe do ta vendos te sajti para se të mbështetem te lidhja.")}</span>
           </label>
           <div className="integration-api-key-actions">
             <button
@@ -168,16 +162,14 @@ export function IntegrationApiKeyField({
               type="button"
               onClick={cancelEdit}
             >
-              Anulo
-            </button>
+              {t("Anulo")}</button>
             <button
               className="btn btn-primary"
               type="button"
               onClick={confirmEdit}
               disabled={!acknowledged}
             >
-              Vazhdo me ndryshimin
-            </button>
+              {t("Vazhdo me ndryshimin")}</button>
           </div>
         </div>
       )}
@@ -186,13 +178,11 @@ export function IntegrationApiKeyField({
         <div className="integration-api-key-editor">
           {hasStoredSecret && (
             <p className="integration-api-key-banner" role="status">
-              Po ndryshon key-in ekzistues. Pas “Ruaj ndryshimet”, përditëso
-              menjëherë env te sajti i biznesit.
-            </p>
+              {t("Po ndryshon key-in ekzistues. Pas “Ruaj ndryshimet”, përditëso menjëherë env te sajti i biznesit.")}</p>
           )}
 
           <label className="form-label">
-            {hasStoredSecret ? "API key i ri" : "API key"}
+            {hasStoredSecret ? t("API key i ri") : "API key"}
             <div className="integration-api-key-input-row">
               <input
                 type={visible ? "text" : "password"}
@@ -201,8 +191,8 @@ export function IntegrationApiKeyField({
                 onChange={(event) => setValue(event.target.value)}
                 placeholder={
                   hasStoredSecret
-                    ? "Gjenero ose ngjit key-in e ri"
-                    : "Gjenero ose vendos secret-in e biznesit"
+                    ? t("Gjenero ose ngjit key-in e ri")
+                    : t("Gjenero ose vendos secret-in e biznesit")
                 }
                 className="field"
                 autoComplete="off"
@@ -214,39 +204,35 @@ export function IntegrationApiKeyField({
                 onClick={() => setVisible((v) => !v)}
                 disabled={!value}
               >
-                {visible ? "Fshih" : "Shfaq"}
+                {visible ? t("Fshih") : t("Shfaq")}
               </button>
             </div>
           </label>
 
           {value ? (
             <p className="muted-copy integration-api-key-preview">
-              Pamje: <code>{visible ? value : maskSecret(value)}</code>
+              {t("Pamje:")} <code>{visible ? value : maskSecret(value)}</code>
             </p>
           ) : hasStoredSecret ? (
             <p className="muted-copy">
-              Nëse e lë bosh dhe ruan, key-i aktual mbetet i pandryshuar.
-            </p>
+              {t("Nëse e lë bosh dhe ruan, key-i aktual mbetet i pandryshuar.")}</p>
           ) : null}
 
           {replacingExisting && (
             <p className="integration-api-key-banner is-danger" role="alert">
-              Ky key i ri do të zëvendësojë të vjetrin sapo të ruash. Lidhja
-              mbetet e thyer derisa sajti të ketë të njëjtin kod.
-            </p>
+              {t("Ky key i ri do të zëvendësojë të vjetrin sapo të ruash. Lidhja mbetet e thyer derisa sajti të ketë të njëjtin kod.")}</p>
           )}
 
           <div className="integration-api-key-actions">
             <button className="btn btn-ghost" type="button" onClick={generate}>
-              Gjenero kod
-            </button>
+              {t("Gjenero kod")}</button>
             <button
               className="btn btn-ghost"
               type="button"
               onClick={() => copyText(value, "edit")}
               disabled={!value}
             >
-              {copied === "edit" ? "Kopjuar" : "Kopjo"}
+              {copied === "edit" ? t("Kopjuar") : t("Kopjo")}
             </button>
             {hasStoredSecret && (
               <button
@@ -254,8 +240,7 @@ export function IntegrationApiKeyField({
                 type="button"
                 onClick={cancelEdit}
               >
-                Anulo
-              </button>
+                {t("Anulo")}</button>
             )}
           </div>
         </div>
