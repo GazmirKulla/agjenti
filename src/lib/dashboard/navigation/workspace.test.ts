@@ -13,7 +13,7 @@ it("retains a reachable destination and search result for every existing module"
     expect(destinations.some(destination => destination.path === item.path), item.id).toBe(true);
     expect(navigation.search.some(destination => destination.path === item.path && destination.label === item.label), item.id).toBe(true);
   }
-  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Produkte", "Porosi", "Klientë", "Agjenti im", "Aktiviteti", "Integrimet", "Cilësimet"]);
+  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Produkte", "Shërbime", "Porosi", "Leads", "Klientë", "Agjenti im", "Aktiviteti", "Integrimet", "Cilësimet"]);
 });
 
 it("groups workflow and its deep links under the agent while keeping the original URL", () => {
@@ -37,13 +37,14 @@ it("keeps operational details, channel settings, onboarding and accounts reachab
 
 it("does not expose optional modules omitted by the business profile", () => {
   const limited = organizeWorkspace(buildNavigationItems({ ...legacyDashboardProfile, navigationItems: ["dashboard", "inbox", "agents", "services", "settings"] }));
-  expect(limited.business.map(item => item.id)).toEqual(["services"]);
+  expect(limited.primary.map(item => item.id)).toContain("services");
+  expect(limited.business.map(item => item.id)).toEqual([]);
   expect(limited.search.some(item => item.path === "products" || item.path === "workflows")).toBe(false);
   expect(limited.agent.map(item => item.path)).toEqual(["agents", "agents/memory", "agents/test"]);
 });
 
 it("leaves administrator navigation independent of the business grouping", () => {
-  expect(buildAdminNavigation("mobile").map(item => item.path)).toEqual(["", "businesses", "conversations", "app"]);
+  expect(buildAdminNavigation("mobile").map(item => item.path)).toEqual(["", "businesses", "conversations", "pricing", "app"]);
 });
 
 
@@ -62,7 +63,7 @@ it("groups channels under Integrimet using available existing destinations", () 
 });
 
 it("keeps standalone business modules out of nested navigation and selects their detail routes", () => {
-  for (const id of ["products", "orders", "customers"]) {
+  for (const id of ["products", "services", "orders", "leads", "customers"]) {
     expect(navigation.business.some(item => item.id === id)).toBe(false);
     expect(navigation.groups.flatMap(group => group.items).some(item => item.id === id)).toBe(false);
     expect(workspaceSection(`/b/shop/${id}/record`, "/b/shop", navigation)).toBe(id);

@@ -1,8 +1,8 @@
 import type { NavItem } from "./builder";
 
 export type WorkspaceLink = { id: string; path: string; label: string; icon: string };
-export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "settings" | "integrations" | "business" | "products" | "orders" | "customers";
-const standaloneIds = ["products", "orders", "customers"] as const;
+export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "settings" | "integrations" | "business" | "products" | "services" | "orders" | "leads" | "customers";
+const standaloneIds = ["products", "services", "orders", "leads", "customers"] as const;
 const agentIds = new Set(["agents", "knowledge", "workflows", "sources"]);
 const settingsIds = new Set(["settings", "staff"]);
 const integrationIds = new Set(["instagram", "whatsapp"]);

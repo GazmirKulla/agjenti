@@ -12,7 +12,7 @@ export function WorkspaceNavigation({ navigation, section, base, pathname, onNav
   const t = useDashboardTranslator();
   const activeBusiness = activeWorkspaceLink(pathname, base, navigation.business);
   const first = new Set(["home", "conversations", "integrations"]);
-  const business = new Set(["products", "orders", "customers"]);
+  const business = new Set(["products", "services", "orders", "leads", "customers"]);
   const renderLink = (item: typeof navigation.primary[number]) => <Link key={item.id} href={`${base}${item.path ? `/${item.path}` : ""}`} className={`dashboard-nav ${section === item.section ? "active" : ""}`} aria-current={section === item.section ? "page" : undefined} onClick={onNavigate}><Icon name={item.icon} />{t(item.label)}</Link>;
   const hasBusiness = navigation.primary.some(item => business.has(item.id)) || navigation.groups.length > 0;
   return <>
