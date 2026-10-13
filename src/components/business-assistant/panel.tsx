@@ -21,6 +21,7 @@ import type { Preview } from "@/lib/business-assistant/model";
 import { OrderFlowCard } from "./orderflow-card";
 import type { OrderFlowContext } from "@/lib/business-assistant/orderflow-service";
 import { WorkflowCard } from "./workflow-card";
+import { WorkflowChangeReview } from "@/components/workflows/workflow-change-review";
 import type { WorkflowCard as WorkflowCardData } from "@/lib/business-assistant/workflow";
 
 import { pinnedWorkflowContext, continuesWorkflowRequest, workflowRequestHistory, type WorkflowRequestPin } from "./request-context";
@@ -578,7 +579,7 @@ export function BusinessAssistant({
                   <p className="assistant-subject">{result.preview.subject}</p>
                 )}
               </div>
-              <dl>
+              {result.workflow?.semanticSummary && result.workflow.proposed ? <WorkflowChangeReview before={result.workflow.workspace.graph} after={result.workflow.proposed} summary={result.workflow.semanticSummary} /> : <dl>
                 {result.preview.fields.map((field, i) => (
                   <div key={i}>
                     <dt>{field.label}</dt>
@@ -590,7 +591,7 @@ export function BusinessAssistant({
                     </dd>
                   </div>
                 ))}
-              </dl>
+              </dl>}
               {result.preview.notice && (
                 <p className="assistant-notice">{result.preview.notice}</p>
               )}

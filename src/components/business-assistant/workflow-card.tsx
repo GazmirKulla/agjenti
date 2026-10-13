@@ -7,6 +7,7 @@ import {
   workflowProblems,
 } from "@/lib/business-assistant/workflow";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
+import { WorkflowChangeReview } from "@/components/workflows/workflow-change-review";
 import "./workflow-card.css";
 
 function FlowSteps({ graph }: { graph: VisualGraph }) {
@@ -211,7 +212,7 @@ export function WorkflowCard({
           konfigurimin nga administratori.
         </p>
       )}
-      <FlowSteps graph={graph} />
+      {data.semanticSummary && tab === "draft" ? proposed ? <p>{data.semanticSummary.changes.length} ndryshime të propozuara. Hap “Shiko ndryshimin” për shpjegimin Para/Pas dhe diagramin. Baza: revisioni {data.semanticSummary.baseRevision}.</p> : <WorkflowChangeReview before={workspace.graph} after={workspace.graph} summary={data.semanticSummary} /> : <FlowSteps graph={graph} />}
       {problems.length > 0 ? (
         <details>
           <summary>Duhet plotësuar para publikimit ({problems.length})</summary>
@@ -222,7 +223,7 @@ export function WorkflowCard({
           </ul>
         </details>
       ) : (
-        <WorkflowTrial key={JSON.stringify(graph)} graph={graph} slug={slug} />
+        !data.semanticSummary?.blocked && <WorkflowTrial key={JSON.stringify(graph)} graph={graph} slug={slug} />
       )}
       {Boolean(data.versions?.length) && (
         <details>
@@ -261,7 +262,7 @@ export function WorkflowCard({
                 "Publiko dhe aktivizo draftin aktual të rrjedhës së biznesit.",
               )
             }
-            disabled={!workspace.available || problems.length > 0}
+            disabled={!workspace.available || problems.length > 0 || data.semanticSummary?.blocked}
           >
             Publiko draftin…
           </button>

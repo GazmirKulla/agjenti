@@ -13,14 +13,16 @@ import type {
 } from "@/lib/workflows/visual/types";
 import { AssistantError, type Preview } from "./model";
 import type { VisualBindingCatalog } from "@/lib/workflows/visual/bindings";
+import type { SemanticChangeSummary } from "./semantic-summary";
 
 export type WorkflowCard = {
+  semanticSummary?: SemanticChangeSummary;
   workspace: VisualWorkspace;
   published: VisualGraph | null;
   proposed?: VisualGraph;
   versions?: { id: string; created_at: string }[];
 };
-type Operation =
+export type Operation =
   | { op: "upgrade" }
   | { op: "put_flow"; flow: VisualFlow }
   | { op: "remove_flow"; id: string }
@@ -53,6 +55,15 @@ export function applyWorkflowOperations(
   for (const operation of operations) {
     if (!operation || typeof operation !== "object")
       throw new AssistantError("Veprim i pavlefshëm në rrjedhë.");
+    const allowed: Record<string, string[]> = { upgrade: ["op"], rename: ["op", "name"], put_node: ["op", "node"], put_edge: ["op", "edge"], put_flow: ["op", "flow"], remove_node: ["op", "id"], remove_edge: ["op", "id"], remove_flow: ["op", "id"] };
+    if (!Object.hasOwn(allowed, operation.op) || Object.keys(operation).some(key => !allowed[operation.op].includes(key)))
+      throw new AssistantError("Ky veprim nuk mbështetet për rrjedhën.");
+    if (operation.op === "put_node" && operation.node && (Object.keys(operation.node).some(key => !["id", "kind", "label", "position", "config"].includes(key)) || Object.keys(operation.node.config ?? {}).some(key => !["prompt", "fieldKey", "fieldType", "condition", "value"].includes(key))))
+      throw new AssistantError("Konfigurimi përmban një veprim që nuk mbështetet.");
+    if (operation.op === "put_edge" && operation.edge && Object.keys(operation.edge).some(key => !["id", "source", "target", "port"].includes(key)))
+      throw new AssistantError("Lidhja përmban konfigurim që nuk mbështetet.");
+    if (operation.op === "put_flow" && operation.flow && Object.keys(operation.flow).some(key => !["id", "label", "kind", "entryNodeId", "nodeIds", "productIds", "serviceIds"].includes(key)))
+      throw new AssistantError("Procesi përmban konfigurim që nuk mbështetet.");
     switch (operation.op) {
       case "upgrade":
         graph = upgradeVisualGraph(graph);

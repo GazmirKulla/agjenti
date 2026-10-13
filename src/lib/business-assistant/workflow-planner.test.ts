@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ response: vi.fn(), load: vi.fn(), prepare: vi.fn(), orderLoad: vi.fn(), orderPrepare: vi.fn() }));
+const m = vi.hoisted(() => ({ response: vi.fn(), load: vi.fn(), prepare: vi.fn(), orderLoad: vi.fn(), orderPrepare: vi.fn(), assess: vi.fn() }));
+vi.mock("@/lib/capabilities/assessment", () => ({ assessBusinessCapabilities: m.assess, summarizeCapabilityAssessments: (v: unknown) => v }));
 vi.mock("./orderflow-service", () => ({ loadOrderFlows:m.orderLoad, prepareOrderFlow:m.orderPrepare, executeOrderFlow:vi.fn(), refineOrderFlowProposal:vi.fn(), orderFlowInstructions:"orderflow instructions" }));
 vi.mock("openai", () => ({ default: class { responses = { create: m.response }; } }));
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test" }));
@@ -9,9 +10,10 @@ import { planRequest, type Access } from "./service";
 import { starterVisualGraph, upgradeVisualGraph, validateVisualGraph } from "@/lib/workflows/visual/model";
 import { applyWorkflowOperations } from "./workflow";
 const access: Access = { userId: "user", businessId: "business", modules: ["workflows"], catalogSource: "internal" };
-const respond = (action: string, changes: {field:string;value:string}[] = []) => ({ output_text: JSON.stringify({action,id:null,message:"Kontrollo",changes}) });
+const respond = (action: string, changes: {field:string;value:string}[] = []) => ({ output_text: JSON.stringify({action,id:null,message:"Kontrollo",changes, automation: action === "workflow_draft" ? { requestedBehaviors: [{ description: "Ndrysho rrjedhën", capabilityKeys: [] }], assumptions: [], clarificationQuestions: [] } : null}) });
 beforeEach(() => {
   vi.resetAllMocks();
+  m.assess.mockResolvedValue([]);
   process.env.OPENAI_API_KEY = "test-only";
   m.load.mockResolvedValue({ workspace: { graph: starterVisualGraph(), revision: 7 }, published: null });
   m.orderLoad.mockResolvedValue({flows:[],products:[],partial:false});
@@ -112,4 +114,22 @@ it("allows inheritance inspection with a dirty selected branch, without treating
   m.response.mockResolvedValueOnce(respond("workflow_catalog"));
   await planRequest(access, "Lidhi me workflow kryesor, jo kete dege", [], { page: "workflows", entryPoint: "contextual", workflowSelection: { flowId: graph.flows[0].id, revision: 7, dirty: true } });
   expect(m.prepare).toHaveBeenCalledWith(access, expect.objectContaining({ action: "workflow_catalog" }), 7, undefined);
+});
+
+it("requires structured intent from the live planner before preparing draft mutations", async () => {
+  m.response.mockResolvedValue({ output_text: JSON.stringify({ action: "workflow_draft", id: null, message: "Test", changes: [{ field: "operations", value: '[{"op":"rename","name":"Test"}]' }], automation: null }) });
+  await expect(planRequest(access, "Ndrysho", [], { page: "workflows", entryPoint: "contextual" })).rejects.toThrow("strukturuar");
+  expect(m.prepare).not.toHaveBeenCalled();
+});
+
+it("returns a structured partial explanation from clarify and does not issue a token", async () => {
+  m.assess.mockResolvedValue(["product.search", "product.recommend"].map(capabilityKey => ({ capabilityKey, status: "ready", missingRequirements: [], reasonCode: "configured" })));
+  m.response.mockResolvedValue({ output_text: JSON.stringify({ action: "clarify", id: null, message: "Done", changes: [],
+    automation: { requestedBehaviors: [{ description: "Katalogu", capabilityKeys: ["product.search", "product.recommend", "inventory.check", "back_in_stock.notify"] }], assumptions: [], clarificationQuestions: [] } }) });
+  const result = await planRequest(access, "Check inventory and notify when back in stock", [], { page: "workflows", entryPoint: "contextual" });
+  expect(result.automation?.unsupportedActions).toEqual(["inventory.check", "back_in_stock.notify"]);
+  expect(result.workflow?.semanticSummary).toMatchObject({ blocked: true, changes: [] });
+  expect(result.message).not.toContain("Done"); expect(result.token).toBeUndefined();
+  expect(m.prepare).not.toHaveBeenCalled();
+  expect(m.response.mock.calls[0][0].text.format.schema.required).toContain("automation");
 });

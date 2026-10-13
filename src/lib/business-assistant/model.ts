@@ -1,4 +1,5 @@
 import { parseService } from "@/lib/services/model";
+import { readAutomationIntent, type AutomationIntent } from "./automation-intent";
 import { localInstant, validDate, validTime, uuid } from "@/lib/calendar/model";
 
 export const actions = [
@@ -33,6 +34,9 @@ export const actions = [
 ] as const;
 export type Action = (typeof actions)[number];
 export type Proposal = {
+  automation?: AutomationIntent;
+  /** Set by the server from the current owner request, never parsed from model output. */
+  requestedText?: string;
   choices?: string[];
   action: Action;
   id: string | null;
@@ -146,7 +150,7 @@ export function readProposal(input: unknown): Proposal {
     const keys=p.changes.map(c=>c.field);
     if((["linear_load","linear_read","linear_publish"].includes(p.action)&&keys.length) || (p.action==="linear_draft"&&(!keys.includes("definition")||keys.some(k=>!["definition","scope"].includes(k)))) || (p.action==="linear_link"&&(keys.length!==1||keys[0]!=="workflow_id"||!uuid(p.changes[0].value)))) throw new AssistantError("Propozim produkti i pavlefshëm.");
   }
-  return p;
+  return { ...p, automation: readAutomationIntent((input as Proposal).automation), requestedText: undefined };
 }
 function text(value: unknown, min: number, max: number, label: string) {
   if (

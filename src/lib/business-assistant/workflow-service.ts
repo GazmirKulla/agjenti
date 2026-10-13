@@ -15,12 +15,15 @@ import {
 import { encryptSecret } from "@/lib/crypto/tokens";
 import { loadVisualBindingCatalog } from "@/lib/workflows/visual/bindings";
 import { AssistantError, type Proposal, type Preview } from "./model";
+import { buildAutomationProposal, automationMessage, recheckAutomation, type AutomationProposal } from "./automation-proposal";
+import { summarizeWorkflowChanges } from "./semantic-summary";
 import type { Access, PlanResult, Ticket } from "./service";
 import {
   applyWorkflowOperations,
   workflowPreview,
   workflowProblems,
   type WorkflowCard,
+  type Operation,
 } from "./workflow";
 
 export async function loadAssistantWorkflow(
@@ -96,6 +99,16 @@ export async function prepareWorkflow(
           p.changes.find((c) => c.field === "operations")?.value ?? "",
         )
       : w.graph);
+  let automation: AutomationProposal | undefined;
+  if (operation === "draft") {
+    automation = await buildAutomationProposal({
+      businessId: access.businessId, userId: access.userId, revision: w.revision,
+      publishedVersionId: w.publishedVersionId, request: p.requestedText ?? p.message,
+      intent: p.automation, before: w.graph, after: graph,
+      operations: p.action === "workflow_restore" ? [] : JSON.parse(p.changes.find(c => c.field === "operations")?.value ?? "[]") as Operation[],
+    });
+    if (!automation.canSaveDraft) return { message: automationMessage(automation), automation, clarifying: true, workflow: { ...card, semanticSummary: summarizeWorkflowChanges(w.graph, w.graph, w.revision, w.publishedVersionId, automation) } };
+  }
   const bindingCatalog = ["draft", "publish"].includes(operation)
     ? await loadVisualBindingCatalog(access.businessId, [w.graph, graph, ...(card.published ? [card.published] : [])])
     : { products: [], services: [] };
@@ -158,6 +171,7 @@ export async function prepareWorkflow(
       "Bisedat vizuale në proces vazhdojnë me versionin e tyre. Workflow-t e porosive të produkteve nuk ndryshohen.";
   }
   const ticket: Ticket = {
+    ...(automation ? { automation } : {}),
     purpose: "business-assistant-v1",
     userId: access.userId,
     businessId: access.businessId,
@@ -171,11 +185,12 @@ export async function prepareWorkflow(
     },
   };
   return {
-    message: p.message,
+    message: automation ? automationMessage(automation) : p.message,
+    ...(automation ? { automation } : {}),
     preview,
     workflow: {
       ...card,
-      ...(operation === "draft" ? { proposed: graph } : {}),
+      ...(operation === "draft" ? { proposed: graph, semanticSummary: summarizeWorkflowChanges(w.graph, graph, w.revision, w.publishedVersionId, automation) } : {}),
     },
     token: encryptSecret(JSON.stringify(ticket)),
   };
@@ -240,6 +255,7 @@ export async function executeWorkflow(access: Access, ticket: Ticket) {
   const operation = ticket.values.operation as WorkflowOperation;
   if (`workflow_${operation}` !== ticket.action)
     throw new AssistantError("Konfirmim i pavlefshëm.");
+  if (operation === "draft") await recheckAutomation(access.businessId, access.userId, ticket.automation);
   const result = await writeVisualWorkflow(
     access.businessId,
     access.userId,

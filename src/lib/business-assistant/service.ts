@@ -4,7 +4,11 @@ import type { AssistantMaterial } from "./materials";
 import { loadOrderFlows, prepareOrderFlow, executeOrderFlow, orderFlowInstructions, type OrderFlowContext, refineOrderFlowProposal } from "./orderflow-service";
 import { sharedWorkflowEnabled } from "@/lib/workflows/context";
 import { loadLinearContext, prepareLinear, executeLinear, linearInstructions, type LinearCard } from "./linear-service";
-import { loadAssistantWorkflow, prepareWorkflow, executeWorkflow, workflowInstructions } from "./workflow-service";
+import { loadAssistantWorkflow, prepareWorkflow, executeWorkflow, workflowInstructions as baseWorkflowInstructions } from "./workflow-service";
+import { automationIntentSchema } from "./automation-intent";
+import { automationInstructions, buildAutomationProposal, automationMessage, type AutomationProposal } from "./automation-proposal";
+import { summarizeWorkflowChanges } from "./semantic-summary";
+const workflowInstructions = `${automationInstructions} ${baseWorkflowInstructions}`;
 import type { WorkflowCard } from "./workflow";
 import { parseUIContext, type AssistantUIContext } from "./context";
 import OpenAI from "openai";
@@ -12,6 +16,8 @@ import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/tokens";
 import { agentModel } from "@/lib/agents/generate";
+import { assessBusinessCapabilities, summarizeCapabilityAssessments } from "@/lib/capabilities/assessment";
+import { capabilityRegistry } from "@/lib/capabilities/registry";
 import {
   availableSlots,
   persistBooking,
@@ -49,7 +55,7 @@ const columns: Record<string, string> = {
   profile: "id,name,updated_at",
   booking: bookingColumns,
 };
-export type PlanResult = { productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[] };
+export type PlanResult = { automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[] };
 export type Access = {
   userId: string;
   businessId: string;
@@ -57,6 +63,7 @@ export type Access = {
   catalogSource: string;
 };
 export type Ticket = {
+  automation?: AutomationProposal;
   purpose: "business-assistant-v1";
   userId: string;
   businessId: string;
@@ -201,6 +208,19 @@ export async function planRequest(
     })) : [];
   const selected = await loadSelectedContext(access, validatedContext);
   const context: Record<string, unknown> = {};
+  try {
+    const capabilityAssessments = await assessBusinessCapabilities(access.businessId, { userId: access.userId });
+    context.capabilities = summarizeCapabilityAssessments(capabilityAssessments);
+  } catch {
+    // Capability metadata is advisory planner context. Existing action-specific
+    // authorization and validation remain authoritative if readiness is unavailable.
+    context.capabilities = Object.keys(capabilityRegistry).map((capabilityKey) => ({
+      capabilityKey,
+      status: "needs_clarification" as const,
+      reasonCode: "assessment_unavailable",
+      missingRequirements: ["capability_assessment"],
+    }));
+  }
   let pendingWorkflow: Ticket | undefined;
   let pendingOrderFlow: Ticket | undefined;
   let pendingLinear: Ticket | undefined;
@@ -319,8 +339,9 @@ export async function planRequest(
             schema: {
               type: "object",
               additionalProperties: false,
-              required: ["action", "id", "message", "changes", "choices"],
+              required: ["action", "id", "message", "changes", "choices", "automation"],
               properties: {
+                automation: automationIntentSchema,
                 choices: {type:"array",items:{type:"string"}},
                 action: { type: "string", enum: actions.filter(action =>
                   !(action.startsWith("linear_") && !sharedWorkflowEnabled(access.businessId)) &&
@@ -347,11 +368,19 @@ export async function planRequest(
         },
       });
       proposal = readProposal(JSON.parse(response.output_text));
+      proposal.requestedText = text;
     } catch (e) {
       if (e instanceof AssistantError) throw e;
       throw new AssistantError(
         "Kërkesa nuk u analizua. Provo përsëri ose jep më shumë hollësi.",
       );
+    }
+    if (proposal.action === "clarify" && proposal.automation && access.modules.includes("workflows")) {
+      const card = (context.workflow as WorkflowCard | undefined) ?? await loadAssistantWorkflow(access);
+      const automation = await buildAutomationProposal({ businessId: access.businessId, userId: access.userId,
+        revision: card.workspace.revision, publishedVersionId: card.workspace.publishedVersionId,
+        request: text, intent: proposal.automation, before: card.workspace.graph, after: card.workspace.graph, operations: [] });
+      return { message: automationMessage(automation), automation, clarifying: true, workflow: { ...card, semanticSummary: summarizeWorkflowChanges(card.workspace.graph, card.workspace.graph, card.workspace.revision, card.workspace.publishedVersionId, automation) } };
     }
     if (proposal.action === "product_import") {
       assertEnabled(access, proposal.action);
@@ -396,6 +425,8 @@ export async function planRequest(
     if (proposal.action.startsWith("workflow_")) {
       assertEnabled(access, proposal.action);
       if (!["workflow_load", "workflow_read", "workflow_catalog"].includes(proposal.action) && validatedContext?.workflowSelection?.dirty) throw new AssistantError("Ke ndryshime të paruajtura në editor. Ruaji para se Agjenti të ndryshojë rrjedhën.");
+      if (proposal.action === "workflow_draft" && !proposal.automation)
+        throw new AssistantError("Mungon shpjegimi i strukturuar i ndryshimit. Përgatite kërkesën përsëri.");
       if (proposal.action === "workflow_load" || (!context.workflow && !["workflow_read", "workflow_catalog"].includes(proposal.action))) {
         context.workflow = await loadAssistantWorkflow(access);
         continue;

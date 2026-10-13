@@ -314,3 +314,11 @@
  .vf-hub-flow-column { display: contents; }
  .vf-hub-flow-column .vf-hub-process { height: auto; min-height: 144px; }
 }
+.vf-node.vf-diff-added { border:2px solid #16715d; }
+.vf-node.vf-diff-updated { border:2px solid #9b6a12; }
+.vf-node.vf-diff-removed { border:2px dashed #ae4545; }
+.vf-diff-node-label { position:absolute; right:8px; bottom:4px; font-size:11px; font-weight:700; }
+.vf-edge.vf-diff-added > path { stroke:#16715d; stroke-width:3; }
+.vf-edge.vf-diff-updated > path { stroke:#9b6a12; stroke-width:3; }
+.vf-edge.vf-diff-removed > path { stroke:#ae4545; stroke-width:3; stroke-dasharray:7 4; }
+.vf-edge .vf-diff-edge-label { font-size:12px; font-weight:700; fill:var(--ink,#243141); paint-order:stroke; stroke:var(--surface,#fff); stroke-width:4px; }

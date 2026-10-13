@@ -1,0 +1,21 @@
+.workflow-change-review { display:grid; gap:14px; min-width:0; font-size:13px; line-height:1.55; }
+.workflow-change-review h3,.workflow-change-review h4 { margin:0 0 8px; }
+.workflow-change-review p { margin:4px 0; overflow-wrap:anywhere; }
+.workflow-change { border:1px solid var(--line,#dce0e6); border-left:3px solid #8c651c; padding:12px; margin:8px 0; border-radius:10px; }
+.workflow-change.is-added { border-left-color:#16715d; }
+.workflow-change.is-removed { border-left-color:#ae4545; }
+.workflow-change button { background:none; border:0; padding:0; text-align:left; color:inherit; font:inherit; font-weight:650; cursor:pointer; }
+.workflow-change button:disabled { opacity:1; cursor:default; }
+.workflow-change dl { margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.workflow-change dt { font-weight:650; color:var(--ink-muted,#5f6875); }
+.workflow-change dd { margin:4px 0; }
+.workflow-change small { display:block; margin-top:6px; color:var(--ink-muted,#5f6875); }
+.workflow-diff-tabs { display:flex; flex-wrap:wrap; gap:6px; }
+.workflow-diff-tabs button { border:1px solid var(--line,#dce0e6); background:var(--surface,#fff); color:inherit; padding:8px 12px; border-radius:8px; cursor:pointer; }
+.workflow-diff-tabs button[aria-pressed=true] { border-color:var(--accent,#2464b4); background:var(--accent-soft,#ecf3fb); }
+.workflow-change-review button:focus-visible,.workflow-change-review summary:focus-visible { outline:2px solid var(--accent,#2464b4); outline-offset:3px; }
+.workflow-change-review > .vf-canvas { height:340px; min-height:280px; border:1px solid var(--line,#dce0e6); border-radius:12px; }
+.workflow-change-review details { overflow-wrap:anywhere; }
+.vf-local-review { padding:14px 24px; border-bottom:1px solid var(--line,#dce0e6); }
+.vf-local-review > summary { cursor:pointer; font-size:13px; padding:6px 0; }
+@media(max-width:520px) { .workflow-change dl { grid-template-columns:1fr; } }

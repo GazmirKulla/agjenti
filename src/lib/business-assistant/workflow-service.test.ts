@@ -4,7 +4,9 @@ const m = vi.hoisted(() => ({
   version: vi.fn(),
   rpc: vi.fn(),
   from: vi.fn(),
+  assess: vi.fn(),
 }));
+vi.mock("@/lib/capabilities/assessment", () => ({ assessBusinessCapabilities: m.assess, summarizeCapabilityAssessments: (v: unknown) => v }));
 vi.mock("@/lib/workflows/visual/store", () => ({
   loadVisualWorkspace: m.workspace,
   loadVisualVersion: m.version,
@@ -28,6 +30,7 @@ const proposal = (
 ): Proposal => ({ action, id: null, message: "Kontrollo rrjedhën.", changes });
 beforeEach(() => {
   vi.clearAllMocks();
+  m.assess.mockResolvedValue(["knowledge.answer", "product.search", "product.recommend", "booking.create", "order.status.read", "staff.handoff"].map(capabilityKey => ({ capabilityKey, status: "ready", reasonCode: "configured", missingRequirements: [] })));
   m.from.mockImplementation(() => {
     const query = {
       select: () => query,
@@ -57,6 +60,50 @@ it("reads both draft and published without issuing a ticket or writing", async (
   expect(m.version).toHaveBeenCalledWith("business-a", "version-a");
   expect(m.rpc).not.toHaveBeenCalled();
 });
+
+it("returns unsupported behavior without a draft ticket or fabricated graph", async () => {
+  const p = proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Stock"}]' }]);
+  p.requestedText = "Check inventory and notify the customer when back in stock";
+  const result = await prepareWorkflow(access, p, 3);
+  expect(result.token).toBeUndefined(); expect(result.workflow?.proposed).toBeUndefined();
+  expect(result.automation?.unsupportedActions).toContain("back_in_stock.notify");
+  expect(result.workflow?.semanticSummary).toMatchObject({ blocked: true, changes: [], unsupportedCapabilities: expect.arrayContaining(["inventory.check", "back_in_stock.notify"]) });
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+
+it("rechecks authorization before even a metadata-only draft save", async () => {
+  const result = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Test"}]' }]), 3);
+  m.assess.mockRejectedValueOnce(new Error("membership revoked"));
+  await expect(executeTicket(access, result.token!)).rejects.toThrow("qasja");
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+
+it("binds structured draft confirmations to both tenant and actor", async () => {
+  const result = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Test"}]' }]), 3);
+  expect(openTicket(result.token!, access).automation?.status).toBe("proposed");
+  await expect(executeTicket({ ...access, businessId: "business-b" }, result.token!)).rejects.toThrow();
+  await expect(executeTicket({ ...access, userId: "user-b" }, result.token!)).rejects.toThrow();
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+
+it("preserves the same idempotency identity and payload when a draft confirmation is retried", async () => {
+  const result = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Test"}]' }]), 3);
+  await executeTicket(access, result.token!);
+  await executeTicket(access, result.token!);
+  // The existing atomic SQL function deduplicates this identical p_request/payload.
+  expect(m.rpc.mock.calls[1]).toEqual(m.rpc.mock.calls[0]);
+  expect(m.rpc.mock.calls[0][1].p_request).toBe(openTicket(result.token!, access).id);
+});
+
+it("blocks saving after readiness changes and preserves the published version", async () => {
+  const p = proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Test"}]' }]);
+  p.automation = { requestedBehaviors: [{ description: "Katalogu", capabilityKeys: ["product.search"] }], assumptions: [], clarificationQuestions: [] };
+  const result = await prepareWorkflow(access, p, 3);
+  m.assess.mockResolvedValueOnce([{ capabilityKey: "product.search", status: "needs_setup", missingRequirements: ["active_products"] }]);
+  await expect(executeTicket(access, result.token!)).rejects.toThrow("ndryshuan");
+  expect(m.rpc).not.toHaveBeenCalled();
+  expect(result.workflow?.published).toEqual(starterVisualGraph());
+});
 it("confirms the exact draft through the existing atomic writer, without publishing", async () => {
   const result = await prepareWorkflow(
     access,
@@ -69,6 +116,8 @@ it("confirms the exact draft through the existing atomic writer, without publish
     3,
   );
   expect(m.rpc).not.toHaveBeenCalled();
+  expect(result.workflow?.semanticSummary).toMatchObject({ baseRevision: 3, publishedVersionId: "version-a", simulationRequired: false });
+  expect(result.workflow?.semanticSummary?.changes[0]).toMatchObject({ subject: "workflow", kind: "updated" });
   expect(openTicket(result.token!, access)).toMatchObject({
     before: { revision: 3 },
     values: { operation: "draft", graph: { name: "Kontaktet" } },
@@ -84,6 +133,14 @@ it("confirms the exact draft through the existing atomic writer, without publish
       p_graph: expect.objectContaining({ name: "Kontaktet" }),
     }),
   );
+});
+it("refuses stale semantic proposals at preparation and confirmation", async () => {
+  const p = proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Test"}]' }]);
+  await expect(prepareWorkflow(access, p, 2)).rejects.toThrow("gjatë analizës");
+  const result = await prepareWorkflow(access, p, 3);
+  expect(result.workflow?.semanticSummary?.baseRevision).toBe(3);
+  m.rpc.mockResolvedValueOnce({ error: { message: "stale_workflow" } });
+  await expect(executeTicket(access, result.token!)).rejects.toThrow("dritare tjetër");
 });
 it("rejects disabled modules and missing migrations without manufacturing an active workflow", async () => {
   await expect(

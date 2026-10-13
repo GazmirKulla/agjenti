@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useRef, useState, type PointerEvent } fr
 import { Icon } from "@/components/dashboard/icon";
 import { nodeLabels, outputPorts } from "@/lib/workflows/visual/model";
 import type { VisualGraph, VisualNode, VisualNodeKind } from "@/lib/workflows/visual/types";
+import type { ChangeKind } from "@/lib/workflows/visual/diff";
 import "./visual-workflow.css";
 
 export const nodeIcons: Record<VisualNodeKind, string> = {
@@ -19,8 +20,10 @@ type Props = {
   selectedNodeId?: string; onSelect?: (id: string) => void;
   onMove?: (id: string, position: { x: number; y: number }) => void;
   invalidNodeIds?: string[]; compact?: boolean;
+  changes?: { nodes: Record<string, ChangeKind>; edges: Record<string, ChangeKind> };
+  focusRequest?: { nodeId: string; sequence: number }; preserveViewport?: boolean;
 };
-export function VisualGraphView({ graph, currentNodeId, visitedNodeIds = [], traversedNodeIds = [], selectedNodeId, onSelect, onMove, invalidNodeIds = [], compact = false }: Props) {
+export function VisualGraphView({ graph, currentNodeId, visitedNodeIds = [], traversedNodeIds = [], selectedNodeId, onSelect, onMove, invalidNodeIds = [], compact = false, changes, focusRequest, preserveViewport = false }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const markerId = useId().replace(/:/g, "");
   const [view, setView] = useState({ x: 30, y: 30, scale: .7 });
@@ -37,12 +40,22 @@ export function VisualGraphView({ graph, currentNodeId, visitedNodeIds = [], tra
   }, [graph.nodes, compact]);
   const fitRef = useRef(fit);
   fitRef.current = fit;
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
   useEffect(() => {
-    const resize = new ResizeObserver(() => fitRef.current());
+    let initialized = false;
+    const resize = new ResizeObserver(() => { if (!initialized || !preserveViewport) fitRef.current(); initialized = true; });
     if (container.current) resize.observe(container.current);
     return () => resize.disconnect();
-  }, []);
-  useEffect(() => { fitRef.current(); }, [graph.nodes.length]);
+  }, [preserveViewport]);
+  useEffect(() => { if (!preserveViewport) fitRef.current(); }, [graph.nodes.length, preserveViewport]);
+  useEffect(() => {
+    const node = graphRef.current.nodes.find(n => n.id === focusRequest?.nodeId), el = container.current;
+    if (!node || !el) return;
+    setView(v => ({ ...v, x: el.clientWidth / 2 - (node.position.x + W / 2) * v.scale, y: el.clientHeight / 2 - (node.position.y + H / 2) * v.scale }));
+    el.querySelector<HTMLButtonElement>(`[data-node-id="${node.id}"]`)?.focus({ preventScroll: true });
+    el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focusRequest]);
   const position = (node: VisualNode) => moving?.id === node.id ? moving : node.position;
   const isVertical = (source: VisualNode, target: VisualNode) => position(target).y > position(source).y + H + 30 && Math.abs(position(target).x - position(source).x) < W / 2;
   function begin(event: PointerEvent<HTMLElement>, node?: VisualNode) {
@@ -89,13 +102,15 @@ export function VisualGraphView({ graph, currentNodeId, visitedNodeIds = [], tra
           const bend = Math.max(35, Math.abs(vertical ? ty - sy : tx - sx) * .5);
           const path = vertical ? `M${sx},${sy} C${sx},${sy + bend} ${tx},${ty - bend} ${tx},${ty}` : `M${sx},${sy} C${sx + bend},${sy} ${tx - bend},${ty} ${tx},${ty}`;
           const active = traversedNodeIds.some((id, index) => id === edge.source && traversedNodeIds[index + 1] === edge.target);
-          return <g key={edge.id} className={`vf-edge ${active ? "is-traversed" : ""}`}><path d={path} markerEnd={`url(#${markerId})`} />{active && <path d={path} className="vf-edge-motion" />}{edge.port !== "next" && <g transform={`translate(${sx + (vertical ? 0 : 32)},${sy + (vertical ? 28 : 0)})`}><rect x="-17" y="-11" width="34" height="22" rx="11" /><text textAnchor="middle" dominantBaseline="central">{edge.port === "yes" ? "Po" : "Jo"}</text></g>}</g>;
+          const change = changes?.edges[edge.id];
+          return <g key={edge.id} data-edge-id={edge.id} data-change={change} className={`vf-edge ${active ? "is-traversed" : ""} ${change ? `vf-diff-${change}` : ""}`}><path d={path} markerEnd={`url(#${markerId})`} />{active && <path d={path} className="vf-edge-motion" />}{change && <text className="vf-diff-edge-label" x={(sx + tx) / 2} y={(sy + ty) / 2 - 10}>{change === "added" ? "+ Shtuar" : change === "removed" ? "− Hequr" : "~ Ndryshuar"}</text>}{edge.port !== "next" && <g transform={`translate(${sx + (vertical ? 0 : 32)},${sy + (vertical ? 28 : 0)})`}><rect x="-17" y="-11" width="34" height="22" rx="11" /><text textAnchor="middle" dominantBaseline="central">{edge.port === "yes" ? "Po" : "Jo"}</text></g>}</g>;
         })}
       </svg>
       {graph.nodes.map(node => {
         const p = position(node), current = currentNodeId === node.id, selected = selectedNodeId === node.id;
-        return <button type="button" key={node.id} className={`vf-node vf-kind-${node.kind} ${selected ? "is-selected" : ""} ${current ? "is-current" : ""} ${visitedNodeIds.includes(node.id) ? "is-visited" : ""} ${invalidNodeIds.includes(node.id) ? "is-invalid" : ""}`}
-          style={{ left: p.x, top: p.y, width: W, height: H }} aria-label={`${node.label} · ${nodeLabels[node.kind]}`} aria-pressed={selected}
+        const change = changes?.nodes[node.id], changeLabel = change === "added" ? "+ Shtuar" : change === "removed" ? "− Hequr" : change === "updated" ? "~ Ndryshuar" : "";
+        return <button type="button" key={node.id} data-node-id={node.id} data-change={change} className={`vf-node vf-kind-${node.kind} ${selected ? "is-selected" : ""} ${current ? "is-current" : ""} ${visitedNodeIds.includes(node.id) ? "is-visited" : ""} ${invalidNodeIds.includes(node.id) ? "is-invalid" : ""} ${change ? `vf-diff-${change}` : ""}`}
+          style={{ left: p.x, top: p.y, width: W, height: H }} aria-label={`${node.label} · ${nodeLabels[node.kind]}${changeLabel ? ` · ${changeLabel}` : ""}`} aria-pressed={selected}
           onPointerDown={e => begin(e, node)} onClick={() => onSelect?.(node.id)} onKeyDown={e => {
             if (onMove && e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
               e.preventDefault(); onMove(node.id, { x: p.x + (e.key === "ArrowRight" ? 20 : e.key === "ArrowLeft" ? -20 : 0), y: p.y + (e.key === "ArrowDown" ? 20 : e.key === "ArrowUp" ? -20 : 0) });
@@ -107,6 +122,7 @@ export function VisualGraphView({ graph, currentNodeId, visitedNodeIds = [], tra
           </>}
           <span className="vf-node-top"><span className="vf-node-icon"><FlowIcon kind={node.kind} size={18} /></span><span>{nodeLabels[node.kind]}</span>{current && <span className="vf-node-pulse" />}</span>
           <strong>{node.label}</strong>
+          {change && <span className="vf-diff-node-label">{changeLabel}</span>}
           {outputPorts(node.kind).map(port => {
             const target = graph.nodes.find(n => n.id === graph.edges.find(e => e.source === node.id && e.port === port)?.target);
             return <i key={port} className={`vf-port vf-port-${port} ${target && isVertical(node, target) ? "vf-port-bottom" : ""}`} />;
