@@ -12,17 +12,17 @@
 }
 .assistant-home-identity { color: var(--ink-muted); font-size: 12px; letter-spacing: .01em; }
 .assistant-home-workspace h1 { margin: 23px 0 28px; text-align: center; font-size: clamp(25px, 2.6vw, 34px); font-weight: 600; letter-spacing: -.045em; line-height: 1.2; }
-.assistant-presence { position: relative; isolation: isolate; width: 92px; height: 92px; margin-top: 26px; overflow: hidden; border-radius: 50%; background: radial-gradient(circle at 28% 20%, #f1eaff 0%, #b09af8 30%, #7353dc 63%, #44346e 100%); box-shadow: inset 1px 2px 7px #ffffff75, inset -8px -12px 20px #2b185c45, 0 12px 36px #8c65dd20; }
-.assistant-presence::after { content: ""; position: absolute; inset: 0; border: 1px solid #ffffff35; border-radius: inherit; background: radial-gradient(circle at 30% 17%, #ffffff70, transparent 30%); }
-.assistant-presence span { position: absolute; width: 140%; height: 75%; left: -20%; bottom: -12%; border-radius: 44%; filter: blur(6px); background: linear-gradient(120deg, #fbf6ff, #d5befe80 50%, #a2baff); transform: rotate(-22deg); animation: assistant-presence-drift 9s ease-in-out infinite alternate; }
-.assistant-presence span:nth-child(2) { bottom: -35%; left: 4%; background: #ede8ffa0; animation-delay: -4s; }
-.assistant-presence span:nth-child(3) { width: 75%; height: 100%; left: 56%; bottom: -38%; background: #7461d0b0; animation-delay: -7s; }
+.assistant-presence { position: relative; isolation: isolate; width: 92px; height: 92px; margin-top: 26px; overflow: hidden; border-radius: 50%; background: var(--primary); box-shadow: inset 1px 2px 7px color-mix(in srgb, var(--brand-secondary) 45.9%, transparent), inset -8px -12px 20px color-mix(in srgb, var(--brand-secondary) 27.1%, transparent), 0 12px 36px color-mix(in srgb, var(--brand-secondary) 12.5%, transparent); }
+.assistant-presence::after { content: ""; position: absolute; inset: 0; border: 1px solid color-mix(in srgb, var(--line) 20.8%, transparent); border-radius: inherit; background: radial-gradient(circle at 30% 17%, color-mix(in srgb, var(--surface) 43.9%, transparent), transparent 30%); }
+.assistant-presence span { position: absolute; width: 140%; height: 75%; left: -20%; bottom: -12%; border-radius: 44%; filter: blur(6px); background: linear-gradient(120deg, var(--surface), color-mix(in srgb, var(--accent-soft) 50.2%, transparent) 50%, var(--brand-primary)); transform: rotate(-22deg); animation: assistant-presence-drift 9s ease-in-out infinite alternate; }
+.assistant-presence span:nth-child(2) { bottom: -35%; left: 4%; background: color-mix(in srgb, var(--accent-soft) 62.7%, transparent); animation-delay: -4s; }
+.assistant-presence span:nth-child(3) { width: 75%; height: 100%; left: 56%; bottom: -38%; background: var(--primary); animation-delay: -7s; }
 @keyframes assistant-presence-drift { to { transform: translate(-6%, -9%) rotate(28deg); } }
 
 :is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt {
   display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 9px 10px 9px 24px; margin: 0;
   border: 1px solid color-mix(in srgb, var(--ink-muted) 23%, transparent); border-radius: 32px;
-  background: color-mix(in srgb, var(--paper) 75%, var(--surface)); box-shadow: 0 6px 24px #00000008, inset 0 1px 0 #ffffff06;
+  background: color-mix(in srgb, var(--paper) 75%, var(--surface)); box-shadow: 0 6px 24px color-mix(in srgb, var(--brand-secondary) 3.1%, transparent), inset 0 1px 0 color-mix(in srgb, var(--brand-secondary) 2.4%, transparent);
   transition: border-color .2s ease, box-shadow .2s ease;
 }
 .assistant-home-workspace .assistant-prompt { max-width: 900px; }
@@ -37,8 +37,8 @@
 }
 :is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt .assistant-prompt-send:not(:disabled),
 :is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt .assistant-prompt-send.is-ready {
-  color: var(--paper);
-  background: var(--accent);
+  color: var(--on-primary);
+  background: var(--primary);
 }
 .assistant-prompt button:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.08); }
 :is(.assistant-home-workspace,.assistant-context-entry,.assistant-composer,.assistant-mobile-dock,.unified-composer) .assistant-prompt button:disabled { opacity: .55; cursor: default; }
@@ -91,7 +91,7 @@
 .unified-composer .assistant-prompt { padding-left: 8px; }
 .unified-composer .assistant-prompt > button { background: transparent; }
 .unified-attachments { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0; }
-.unified-menu { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 20; display: grid; min-width: 210px; padding: 8px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 8px 30px #0003; }
+.unified-menu { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 20; display: grid; min-width: 210px; padding: 8px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 8px 30px color-mix(in srgb, var(--brand-secondary) 20%, transparent); }
 .unified-menu button { padding: 12px; min-height: 44px; text-align: left; background: transparent; color: var(--ink); border: 0; border-radius: 10px; cursor: pointer; }
 .unified-menu button:hover { background: var(--paper); }
 .unified-link { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; margin-bottom: 8px; }
@@ -153,8 +153,8 @@
   }
   .unified-composer .assistant-prompt .assistant-prompt-actions > .assistant-prompt-send:not(:disabled),
   .unified-composer .assistant-prompt .assistant-prompt-actions > .assistant-prompt-send.is-ready {
-    background: var(--accent);
-    color: var(--paper);
+    background: var(--primary);
+    color: var(--on-primary);
   }
   .unified-composer .assistant-prompt > button > svg,
   .unified-composer .assistant-prompt .assistant-prompt-actions > button > svg {

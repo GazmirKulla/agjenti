@@ -328,12 +328,12 @@ export default function HomePage() {
             >
               <defs>
                 <linearGradient id="lp-chart-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#a77bff" stopOpacity=".3" />
-                  <stop offset="100%" stopColor="#a77bff" stopOpacity="0" />
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity=".3" />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
                 </linearGradient>
               </defs>
               {[30, 70, 110, 150].map((y) => (
-                <line key={y} x1="25" x2="530" y1={y} y2={y} stroke="#ebeaf5" />
+                <line key={y} x1="25" x2="530" y1={y} y2={y} stroke="var(--line)" />
               ))}
               <path
                 d="M25 140 C60 132 65 145 95 120 S145 114 170 100 S210 124 240 87 S290 96 320 71 S365 80 395 54 S440 68 470 34 S510 41 530 25 L530 150 L25 150Z"
@@ -341,7 +341,7 @@ export default function HomePage() {
               />
               <path
                 d="M25 140 C60 132 65 145 95 120 S145 114 170 100 S210 124 240 87 S290 96 320 71 S365 80 395 54 S440 68 470 34 S510 41 530 25"
-                stroke="#8746ff"
+                stroke="var(--accent)"
                 strokeWidth="3"
                 fill="none"
               />
@@ -365,7 +365,7 @@ export default function HomePage() {
                   x={x}
                   y="174"
                   textAnchor="middle"
-                  fill="#9793ad"
+                  fill="var(--ink-muted)"
                   fontSize="11"
                 >
                   {label}

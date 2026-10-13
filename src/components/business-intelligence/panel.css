@@ -14,7 +14,7 @@
   margin: auto;
 }
 .bi-dialog::backdrop {
-  background: #09081899;
+  background: color-mix(in srgb, var(--brand-secondary) 60%, transparent);
 }
 .bi-dialog header {
   display: flex;

@@ -65,9 +65,9 @@
 .csv-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
 .csv-import .csv-text-button { padding: 4px 0; border: 0; background: transparent; color: var(--ink-muted); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .csv-import .csv-text-button:hover { color: var(--ink); text-decoration: underline; }
-.csv-dialog { width: min(700px,calc(100vw - 32px)); max-height: min(820px,calc(100dvh - 48px)); margin: auto; padding: 0; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 90px #0004; overflow: hidden; }
+.csv-dialog { width: min(700px,calc(100vw - 32px)); max-height: min(820px,calc(100dvh - 48px)); margin: auto; padding: 0; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 90px color-mix(in srgb, var(--brand-secondary) 26.7%, transparent); overflow: hidden; }
 .csv-dialog[open] { display: flex; flex-direction: column; }
-.csv-dialog::backdrop { background: #09081280; backdrop-filter: blur(4px); }
+.csv-dialog::backdrop { background: color-mix(in srgb, var(--brand-secondary) 50.2%, transparent); backdrop-filter: blur(4px); }
 .csv-dialog > header { display: flex; flex: none; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--line); gap: 16px; }
 .csv-dialog > header h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .csv-import .csv-icon-button { display: grid; place-items: center; width: 36px; height: 36px; border: 0; background: transparent; color: var(--ink-muted); border-radius: 50%; cursor: pointer; }

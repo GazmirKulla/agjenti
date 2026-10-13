@@ -27,7 +27,7 @@ export function StatCard({
   value,
   hint,
   icon,
-  tone = "purple",
+  tone = "accent",
 }: {
   label: string;
   value: string | number;

@@ -31,8 +31,8 @@ export function TrendChart({
       >
         <defs>
           <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#8247ff" stopOpacity=".2" />
-            <stop offset="100%" stopColor="#8247ff" stopOpacity=".01" />
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity=".2" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity=".01" />
           </linearGradient>
         </defs>
         {[0, 1, 2, 3, 4].map((i) => (
@@ -42,10 +42,10 @@ export function TrendChart({
               x2="585"
               y1={190 - i * 38.75}
               y2={190 - i * 38.75}
-              stroke="#ededf7"
+              stroke="var(--line)"
               strokeDasharray="3 3"
             />
-            <text x="5" y={194 - i * 38.75} fontSize="11" fill="#8489a8">
+            <text x="5" y={194 - i * 38.75} fontSize="11" fill="var(--ink-muted)">
               {Math.round((max * i) / 4)}
             </text>
           </g>
@@ -57,13 +57,13 @@ export function TrendChart({
         <polyline
           points={line("conversations")}
           fill="none"
-          stroke="#7938ff"
+          stroke="var(--accent)"
           strokeWidth="2.5"
         />
         <polyline
           points={line("orders")}
           fill="none"
-          stroke="#b393ff"
+          stroke="var(--ink-muted)"
           strokeWidth="2.5"
         />
         {data.map((d, i) => (
@@ -72,14 +72,14 @@ export function TrendChart({
               cx={45 + i * 90}
               cy={190 - (d.conversations / max) * 155}
               r="4"
-              fill="#7938ff"
+              fill="var(--accent)"
             />
             <text
               x={45 + i * 90}
               y="217"
               textAnchor="middle"
               fontSize="10"
-              fill="#8489a8"
+              fill="var(--ink-muted)"
             >
               {`${new Date(d.date).getUTCDate()} ${["jan", "shk", "mar", "pri", "maj", "qer", "kor", "gsh", "sht", "tet", "nën", "dhj"][new Date(d.date).getUTCMonth()]}`}
             </text>

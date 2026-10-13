@@ -44,8 +44,8 @@
 .rowTrigger:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
 .rowTrigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .actions > :not(:global(.sr-only)) { position: relative; z-index: 2; }
-.dialog { width: min(900px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 90px #0005; }
-.dialog::backdrop { background: #0008; }
+.dialog { width: min(900px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 90px color-mix(in srgb, var(--brand-secondary) 33.3%, transparent); }
+.dialog::backdrop { background: color-mix(in srgb, var(--brand-secondary) 53.3%, transparent); }
 .dialogHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--line); }
 .dialogHeader h2 { font-size: 16px; font-weight: 600; }
 .dialogClose { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink-muted); cursor: pointer; }

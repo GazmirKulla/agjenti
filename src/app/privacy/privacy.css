@@ -1,6 +1,6 @@
 .privacy-page {
-  background: #fbfaff;
-  color: #211934;
+  background: var(--paper);
+  color: var(--ink);
   min-height: 100vh;
   font-family: var(--font-figtree), sans-serif;
 }
@@ -23,21 +23,21 @@
 }
 .privacy-login {
   font-size: 14px;
-  background: #eee7ff;
-  color: #6030d5;
+  background: var(--accent-soft);
+  color: var(--accent);
   padding: 12px 18px;
   border-radius: 10px;
 }
 .privacy-hero {
   padding: 70px 24px 64px;
   text-align: center;
-  background: radial-gradient(ellipse at top, #ede5ff, transparent 70%);
+  background: radial-gradient(ellipse at top, var(--accent-soft), transparent 70%);
 }
 .privacy-kicker {
   font-size: 11px;
   letter-spacing: 2px;
   font-weight: 750;
-  color: #7445df;
+  color: var(--accent);
 }
 .privacy-hero h1 {
   font-size: clamp(34px, 5vw, 56px);
@@ -49,16 +49,16 @@
 .privacy-hero p {
   max-width: 650px;
   margin: 0 auto 24px;
-  color: #6e647f;
+  color: var(--ink-muted);
   font-size: 17px;
   line-height: 1.7;
 }
 .privacy-date {
   font-size: 12px;
-  color: #78698e;
+  color: var(--ink-muted);
   padding: 8px 14px;
-  background: white;
-  border: 1px solid #eae3f5;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 20px;
 }
 .privacy-layout {
@@ -84,24 +84,24 @@
   font-size: 13px;
   padding: 10px 12px;
   border-radius: 8px;
-  color: #6e647f;
+  color: var(--ink-muted);
   display: flex;
   gap: 12px;
 }
 .privacy-layout nav a:hover {
-  background: #eee7ff;
-  color: #6030d5;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .privacy-layout nav a span {
-  color: #a08dbb;
+  color: var(--ink-muted);
   font-size: 11px;
 }
 .privacy-article {
-  background: white;
-  border: 1px solid #ece6f4;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 20px;
   padding: 12px 40px 35px;
-  box-shadow: 0 10px 45px #3c226004;
+  box-shadow: 0 10px 45px color-mix(in srgb, var(--brand-secondary) 1.6%, transparent);
 }
 .privacy-article section {
   padding-top: 30px;
@@ -109,7 +109,7 @@
 }
 .privacy-article section + section {
   margin-top: 30px;
-  border-top: 1px solid #efeaf6;
+  border-top: 1px solid var(--line);
 }
 .privacy-article h2 {
   font-size: 22px;
@@ -121,7 +121,7 @@
 .privacy-article li {
   font-size: 15px;
   line-height: 1.8;
-  color: #685f76;
+  color: var(--ink-muted);
 }
 .privacy-article p + p {
   margin-top: 14px;
@@ -138,13 +138,13 @@
   margin-top: 10px;
 }
 .privacy-article a {
-  color: #6938df;
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .privacy-callout {
-  background: #f7f3ff;
-  border: 1px solid #e9defb;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 14px;
   padding: 22px;
   margin-top: 20px;
@@ -158,12 +158,12 @@
   margin-top: 14px;
 }
 .privacy-footer {
-  border-top: 1px solid #eae4f2;
+  border-top: 1px solid var(--line);
   font-size: 13px;
-  color: #7b6b90;
+  color: var(--ink-muted);
 }
 .privacy-page a:focus-visible {
-  outline: 3px solid #bda4ff;
+  outline: 3px solid var(--accent);
   outline-offset: 4px;
 }
 @media (max-width: 800px) {

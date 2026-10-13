@@ -1,10 +1,10 @@
 .landing-page {
-  --lp-purple: #6539e6;
-  --lp-ink: #1b1826;
-  --lp-muted: #696576;
-  --lp-border: #e9e6ef;
+  --lp-accent: var(--accent);
+  --lp-ink: var(--ink);
+  --lp-muted: var(--ink-muted);
+  --lp-border: var(--line);
   color: var(--lp-ink);
-  background: #fff;
+  background: var(--paper);
   font-family: var(--font-figtree), sans-serif;
   overflow-x: clip;
   -webkit-font-smoothing: antialiased;
@@ -26,7 +26,7 @@
   cursor: pointer;
 }
 .landing-page :focus-visible {
-  outline: 3px solid #b19aff;
+  outline: 3px solid var(--accent);
   outline-offset: 5px;
 }
 .landing-page section[id],
@@ -58,7 +58,7 @@
   font-weight: 800;
   letter-spacing: -1px;
   white-space: nowrap;
-  color: #100d1b;
+  color: var(--ink);
 }
 .lp-logo .brand-logo-text {
   font-size: inherit;
@@ -69,10 +69,10 @@
   display: flex;
   gap: 30px;
   font-size: 13px;
-  color: #625c70;
+  color: var(--ink-muted);
 }
 .lp-navigation a:hover {
-  color: var(--lp-purple);
+  color: var(--lp-accent);
 }
 .lp-navigation-signin {
   display: none;
@@ -93,22 +93,22 @@
   align-items: center;
   justify-content: center;
   gap: 13px;
-  background: var(--lp-purple);
-  color: white;
+  background: var(--primary);
+  color: var(--on-primary);
   border: 1px solid transparent;
   border-radius: 9px;
   min-height: 50px;
   padding: 13px 24px;
   font-size: 14px;
   font-weight: 650;
-  box-shadow: 0 2px 4px #39227012;
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--brand-secondary) 7.1%, transparent);
   transition:
     background-color 0.2s,
     box-shadow 0.2s;
 }
 .lp-button:hover {
-  background-color: #5630cc;
-  box-shadow: 0 4px 10px #39227018;
+  background-color: var(--primary);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--brand-secondary) 9.4%, transparent);
 }
 .lp-button.small {
   min-height: 42px;
@@ -116,19 +116,19 @@
   font-size: 13px;
 }
 .lp-button.secondary {
-  background: #fff;
-  border-color: #ded8ec;
-  color: #4e3b78;
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink-muted);
   box-shadow: none;
 }
 .lp-button.white {
-  background: white;
-  color: var(--lp-purple);
+  background: var(--surface);
+  color: var(--lp-accent);
   min-width: 220px;
 }
 .lp-button.secondary:hover,
 .lp-button.white:hover {
-  background-color: #f7f4ff;
+  background-color: var(--surface);
   box-shadow: none;
 }
 .lp-menu {
@@ -136,8 +136,8 @@
 }
 .lp-hero-background {
   background:
-    radial-gradient(ellipse at 83% 34%, #f0ebfc 0, transparent 53%),
-    linear-gradient(180deg, #fdfcfe, #faf9fd);
+    radial-gradient(ellipse at 83% 34%, var(--accent-soft) 0, transparent 53%),
+    var(--surface);
   position: relative;
   padding-bottom: 1px;
 }
@@ -153,14 +153,14 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #6847ad;
+  color: var(--ink-muted);
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.055em;
   text-transform: uppercase;
   padding: 5px 9px;
   border-radius: 6px;
-  background: #f3effb;
+  background: var(--paper);
   margin-bottom: 18px;
 }
 .lp-hero .lp-eyebrow {
@@ -180,7 +180,7 @@
   color: inherit;
 }
 .lp-hero h1 > span:last-child {
-  color: var(--lp-purple);
+  color: var(--lp-accent);
 }
 .lp-hero-copy > p {
   font-size: 17px;
@@ -202,13 +202,13 @@
   gap: 13px;
   align-items: center;
   margin-top: 28px;
-  color: #6d657b;
+  color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.7;
 }
 .lp-trust strong {
   font-weight: 500;
-  color: #514a6e;
+  color: var(--ink-muted);
 }
 .lp-trust-icons {
   display: flex;
@@ -217,12 +217,12 @@
 .lp-trust-icons > span {
   width: 33px;
   height: 33px;
-  background: #eee7ff;
-  border: 3px solid #faf8ff;
+  background: var(--accent-soft);
+  border: 3px solid var(--line);
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: #7948e9;
+  color: var(--accent);
   margin-left: -7px;
 }
 .lp-trust-icons > span:first-child {
@@ -247,10 +247,10 @@
   height: 415px;
   left: 0;
   top: 20px;
-  border: 1px solid #e3dfeb;
+  border: 1px solid var(--line);
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 16px 40px #3023470c;
+  background: var(--surface);
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--brand-secondary) 4.7%, transparent);
   overflow: hidden;
 }
 .lp-preview-sidebar {
@@ -258,7 +258,7 @@
   flex-shrink: 0;
   border-right: 1px solid var(--lp-border);
   padding: 18px 10px;
-  background: #fcfbfe;
+  background: var(--surface);
 }
 .lp-logo.mini {
   font-size: 12px;
@@ -271,7 +271,7 @@
   gap: 6px;
   font-size: 9px;
   padding: 8px 4px;
-  border: 1px solid #ece7f7;
+  border: 1px solid var(--line);
   border-radius: 6px;
   margin: 20px 0 10px;
 }
@@ -287,16 +287,17 @@
   gap: 9px;
   font-size: 10px;
   padding: 11px 7px;
-  color: #67627a;
+  color: var(--ink-muted);
   border-radius: 6px;
 }
 .lp-preview-nav.active {
-  background: #f0eaff;
-  color: #6e31f7;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .lp-preview-nav b {
   font-size: 8px;
-  background: #ff4770;
+  background: var(--danger);
+  color: var(--surface);
   color: white;
   padding: 1px 4px;
   border-radius: 10px;
@@ -312,8 +313,8 @@
   gap: 7px;
   align-items: center;
   font-size: 9px;
-  color: #81798f;
-  background: #f7f6f9;
+  color: var(--ink-muted);
+  background: var(--surface);
   padding: 10px;
   border-radius: 7px;
   margin-bottom: 18px;
@@ -328,13 +329,13 @@
   top: 4px;
   width: 254px;
   height: 464px;
-  border: 6px solid #1b1a20;
+  border: 6px solid var(--line);
   border-radius: 39px;
-  background: #fff;
+  background: var(--surface);
   box-shadow:
-    inset 0 0 0 2px #b7b5bf,
-    3px 3px 0 -1px #28272f,
-    0 20px 32px #281b551f;
+    inset 0 0 0 2px var(--brand-secondary),
+    3px 3px 0 -1px var(--brand-secondary),
+    0 20px 32px color-mix(in srgb, var(--brand-secondary) 12.2%, transparent);
   overflow: hidden;
   z-index: 2;
   padding: 0 8px;
@@ -346,7 +347,7 @@
   transform: translateX(-50%);
   height: 17px;
   width: 110px;
-  background: #1b1a20;
+  background: var(--brand-secondary);
   border-radius: 0 0 14px 14px;
 }
 .lp-phone-status {
@@ -354,13 +355,13 @@
   display: flex;
   justify-content: space-between;
   padding: 9px 13px 8px;
-  color: #5b5865;
+  color: var(--ink-muted);
 }
 .lp-phone-contact {
   display: flex;
   gap: 7px;
   align-items: center;
-  border-bottom: 1px solid #f1edf8;
+  border-bottom: 1px solid var(--line);
   padding: 10px 0;
 }
 .lp-phone-contact > span:first-child {
@@ -375,7 +376,7 @@
 }
 .lp-phone-contact small {
   font-size: 8px;
-  color: #8a829c;
+  color: var(--ink-muted);
   display: block;
 }
 .lp-avatar {
@@ -400,7 +401,7 @@
   background: linear-gradient(135deg, #edcdb4, #fff0e5);
 }
 .lp-avatar.mint {
-  color: #38867b;
+  color: var(--brand-primary-dark);
   background: linear-gradient(135deg, #b9e7dd, #e4f8f0);
 }
 .lp-phone-contact .lp-avatar {
@@ -413,14 +414,14 @@
 }
 .lp-chat-time {
   font-size: 8px;
-  color: #81798e;
+  color: var(--ink-muted);
   display: block;
   text-align: center;
   margin-bottom: 10px;
 }
 .lp-bubble {
   padding: 10px 11px;
-  background: #f4f4f9;
+  background: var(--paper);
   border-radius: 11px 11px 11px 3px;
   font-size: 10px;
   line-height: 1.55;
@@ -429,8 +430,8 @@
   width: fit-content;
 }
 .lp-bubble.ai {
-  background: var(--lp-purple);
-  color: white;
+  background: var(--primary);
+  color: var(--on-primary);
   margin-left: auto;
   border-radius: 11px 11px 3px 11px;
 }
@@ -439,10 +440,10 @@
   gap: 9px;
   align-items: center;
   padding: 8px;
-  background: #fff;
-  border: 1px solid #ede9f5;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  box-shadow: 0 3px 12px #50398508;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--brand-secondary) 3.1%, transparent);
   margin: 0 0 12px auto;
   max-width: 90%;
 }
@@ -453,7 +454,7 @@
 }
 .lp-chat-product small {
   font-size: 9px;
-  color: #82758f;
+  color: var(--ink-muted);
   margin-top: 4px;
 }
 .lp-puzzle-art {
@@ -461,14 +462,14 @@
   place-items: center;
   font-family: serif;
   font-size: 36px;
-  color: #fff8;
+  color: color-mix(in srgb, var(--surface) 53.3%, transparent);
   width: 51px;
   height: 50px;
   flex-shrink: 0;
   border-radius: 7px;
   background:
-    linear-gradient(45deg, #0000 46%, #fff5 49%, #0000 52%),
-    linear-gradient(-45deg, #0000 46%, #fff4 49%, #0000 52%),
+    linear-gradient(45deg, color-mix(in srgb, var(--brand-secondary) 0%, transparent) 46%, color-mix(in srgb, var(--surface) 33.3%, transparent) 49%, color-mix(in srgb, var(--brand-secondary) 0%, transparent) 52%),
+    linear-gradient(-45deg, color-mix(in srgb, var(--brand-secondary) 0%, transparent) 46%, color-mix(in srgb, var(--surface) 26.7%, transparent) 49%, color-mix(in srgb, var(--brand-secondary) 0%, transparent) 52%),
     linear-gradient(120deg, #daa574, #9f6247);
   background-size:
     20px 20px,
@@ -486,28 +487,28 @@
   bottom: 22px;
   left: 11px;
   right: 11px;
-  border: 1px solid #f1edf8;
+  border: 1px solid var(--line);
   border-radius: 20px;
   padding: 7px 6px;
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 8px;
-  color: #a39bb3;
-  background: white;
+  color: var(--ink-muted);
+  background: var(--surface);
 }
 .lp-phone-compose > span {
   display: grid;
   place-items: center;
-  background: #793efa;
+  background: var(--primary);
   border-radius: 50%;
   width: 22px;
   height: 22px;
-  color: white;
+  color: var(--on-primary);
 }
 .lp-phone-compose b {
   font-size: 19px;
-  color: #4a4262;
+  color: var(--ink-muted);
   margin-left: auto;
 }
 .lp-phone-home {
@@ -516,7 +517,7 @@
   left: 33%;
   width: 34%;
   height: 4px;
-  background: #211a30;
+  background: var(--brand-secondary);
   border-radius: 10px;
 }
 .lp-instagram-float {
@@ -551,12 +552,12 @@
   bottom: -16px;
   left: 20px;
   font-size: 11px;
-  color: #7d748b;
+  color: var(--ink-muted);
 }
 .lp-steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--lp-border);
   border-radius: 16px;
   position: relative;
@@ -580,17 +581,17 @@
   border-radius: 50%;
   font-size: 18px;
   font-weight: 700;
-  color: #7257a8;
-  background: #f2edf9;
+  color: var(--ink-muted);
+  background: var(--paper);
 }
 .lp-step-number.blue {
-  background: #f2edf9;
+  background: var(--paper);
 }
 .lp-step-number.green {
-  background: #f2edf9;
+  background: var(--paper);
 }
 .lp-step-icon {
-  color: #6933ff;
+  color: var(--accent);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -618,7 +619,7 @@
 }
 .lp-steps > div > svg {
   margin-left: auto;
-  color: #d2c7e4;
+  color: var(--ink-muted);
   flex-shrink: 0;
 }
 .lp-feature-section {
@@ -658,7 +659,7 @@
   align-items: center;
   gap: 10px;
   font-size: 12px;
-  color: #635b71;
+  color: var(--ink-muted);
   line-height: 1.55;
 }
 .lp-feature-list > div > span {
@@ -667,14 +668,14 @@
   width: 31px;
   height: 31px;
   flex-shrink: 0;
-  color: #7856b3;
-  background: #f5f2fa;
+  color: var(--ink-muted);
+  background: var(--paper);
   border-radius: 8px;
 }
 .lp-product-demo {
   min-height: 330px;
   position: relative;
-  background: #f8f6fc;
+  background: var(--surface);
   border: 1px solid var(--lp-border);
   border-radius: 18px;
   display: flex;
@@ -687,10 +688,10 @@
   z-index: 1;
   width: 60%;
   padding: 16px;
-  background: #fff;
-  border: 1px solid #eee6f1;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 13px;
-  box-shadow: 0 8px 16px #885da60d;
+  box-shadow: 0 8px 16px color-mix(in srgb, var(--brand-secondary) 5.1%, transparent);
 }
 .lp-product-head {
   display: flex;
@@ -705,7 +706,7 @@
 }
 .lp-product-head small {
   font-size: 11px;
-  color: #81768e;
+  color: var(--ink-muted);
   display: block;
   margin-top: 7px;
 }
@@ -721,15 +722,15 @@
 }
 .lp-size-select button {
   padding: 4px 8px;
-  border: 1px solid #ede7f7;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  color: #8a7c9b;
+  color: var(--ink-muted);
   font-size: 10px;
 }
 .lp-size-select button[aria-pressed="true"] {
-  border-color: #8655ff;
-  color: #7941f9;
-  background: #f5efff;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .lp-product-field {
   display: flex;
@@ -743,21 +744,21 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid #eee7ff;
+  border: 1px solid var(--line);
   border-radius: 5px;
-  color: #7c41f4;
+  color: var(--accent);
   padding: 7px 5px;
 }
 .lp-fake-input {
   padding: 9px 8px;
-  color: #a99bb6;
-  border: 1px solid #eee7f5;
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
   border-radius: 5px;
 }
 .lp-checklist {
-  background: #fff;
-  box-shadow: 0 3px 10px #30234706;
-  border: 1px solid #efe7f5;
+  background: var(--surface);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--brand-secondary) 2.4%, transparent);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 20px 14px;
   flex: 1;
@@ -773,7 +774,7 @@
   align-items: center;
   gap: 7px;
   font-size: 11px;
-  color: #726382;
+  color: var(--ink-muted);
   margin: 12px 0;
 }
 .lp-checklist p:last-child {
@@ -782,8 +783,8 @@
 .lp-checklist p > span {
   display: grid;
   place-items: center;
-  background: #45c499;
-  color: white;
+  background: var(--success);
+  color: var(--on-success);
   width: 15px;
   height: 15px;
   border-radius: 50%;
@@ -798,16 +799,16 @@
   align-items: center;
   gap: 5px;
   padding: 7px;
-  background: #fff9;
-  border: 1px solid #eee1ff;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px solid var(--line);
   border-radius: 15px;
   font-size: 12px;
-  color: #8048ff;
+  color: var(--accent);
 }
 .lp-example-note {
   text-align: center;
   font-size: 10px;
-  color: #807389;
+  color: var(--ink-muted);
   margin-top: 10px;
 }
 .lp-inbox-section {
@@ -824,8 +825,8 @@
   border: 1px solid var(--lp-border);
   border-radius: 16px;
   padding: 16px;
-  background: #fff;
-  box-shadow: 0 12px 32px #30234708;
+  background: var(--surface);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--brand-secondary) 3.1%, transparent);
   min-width: 0;
 }
 .lp-demo-top {
@@ -839,9 +840,9 @@
 }
 .lp-demo-label {
   font-size: 10px;
-  color: #7a7088;
+  color: var(--ink-muted);
   padding: 4px 6px;
-  background: #f7f5fc;
+  background: var(--surface);
   border-radius: 4px;
   white-space: nowrap;
 }
@@ -861,14 +862,14 @@
 .lp-demo-tabs button {
   font-size: 9px;
   white-space: nowrap;
-  color: #776b87;
+  color: var(--ink-muted);
   padding: 6px;
-  background: #faf9fd;
+  background: var(--surface);
   border-radius: 6px;
 }
 .lp-demo-tabs button[aria-pressed="true"] {
-  background: #eee7ff;
-  color: #723cfa;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .lp-person {
   display: flex;
@@ -876,12 +877,12 @@
   align-items: center;
   width: 100%;
   padding: 14px 5px;
-  border-bottom: 1px solid #f2edf7;
+  border-bottom: 1px solid var(--line);
   text-align: left;
   position: relative;
 }
 .lp-person.selected {
-  background: #f3effa;
+  background: var(--paper);
   border-radius: 7px;
 }
 .lp-person > span:nth-child(2) {
@@ -899,14 +900,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 120px;
-  color: #80738f;
+  color: var(--ink-muted);
   margin-top: 5px;
 }
 .lp-mini-status {
   display: none;
   font-size: 8px;
-  background: #eee7ff;
-  color: #7947e4;
+  background: var(--accent-soft);
+  color: var(--accent);
   padding: 5px;
   border-radius: 6px;
   white-space: nowrap;
@@ -916,7 +917,7 @@
   color: #279b78;
 }
 .lp-demo-thread {
-  border: 1px solid #f1edf8;
+  border: 1px solid var(--line);
   border-radius: 9px;
   overflow: hidden;
 }
@@ -925,7 +926,7 @@
   align-items: center;
   gap: 7px;
   padding: 9px;
-  border-bottom: 1px solid #f0ebf8;
+  border-bottom: 1px solid var(--line);
 }
 .lp-contact > span:nth-child(2) {
   flex: 1;
@@ -937,7 +938,7 @@
 .lp-contact small {
   display: block;
   font-size: 8px;
-  color: #a49bad;
+  color: var(--ink-muted);
 }
 .lp-contact .lp-avatar {
   width: 25px;
@@ -946,18 +947,18 @@
 }
 .lp-demo-chat {
   padding: 12px 10px 0;
-  background: #fff;
+  background: var(--surface);
 }
 .lp-demo-chat .lp-bubble {
   font-size: 9px;
   padding: 8px;
 }
 .lp-demo-compose {
-  border-top: 1px solid #f1edf8;
+  border-top: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  color: #b9afc8;
+  color: var(--ink-muted);
   font-size: 9px;
   padding: 9px;
 }
@@ -993,11 +994,11 @@
   margin-top: 28px;
 }
 .lp-category {
-  border: 1px solid #ece8f2;
+  border: 1px solid var(--line);
   border-radius: 11px;
   overflow: hidden;
   text-align: center;
-  background: #fff;
+  background: var(--surface);
 }
 .lp-category-art {
   height: 105px;
@@ -1014,7 +1015,7 @@
   transform: translateY(-2px);
 }
 .lp-category-art.gray {
-  background-color: #eaeaf0;
+  background-color: var(--paper);
 }
 .lp-category-art.pink {
   background-color: #f6e6ef;
@@ -1048,8 +1049,8 @@
   padding: 24px;
   border: 1px solid var(--lp-border);
   border-radius: 16px;
-  box-shadow: 0 8px 35px #7c65ac08;
-  background: #fff;
+  box-shadow: 0 8px 35px color-mix(in srgb, var(--brand-secondary) 3.1%, transparent);
+  background: var(--surface);
 }
 .lp-analytics-heading {
   display: flex;
@@ -1072,14 +1073,14 @@
   display: grid;
   grid-template-columns: 30px 1fr;
   gap: 4px 8px;
-  background: #fff;
-  border: 1px solid #f0eaf8;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 11px;
   padding: 13px;
 }
 .lp-demo-stats > div > span {
-  color: #8c42ff;
-  background: #f4ebff;
+  color: var(--accent);
+  background: var(--accent-soft);
   border-radius: 8px;
   width: 29px;
   height: 31px;
@@ -1101,18 +1102,18 @@
 }
 .lp-demo-stats small {
   font-size: 9px;
-  color: #91869f;
+  color: var(--ink-muted);
 }
 .lp-analytics-legend {
   display: flex;
   gap: 18px;
   justify-content: flex-end;
   font-size: 10px;
-  color: #8246ed;
+  color: var(--accent);
   margin-top: 20px;
 }
 .lp-analytics-legend > span:last-child {
-  color: #41a7f8;
+  color: var(--info);
 }
 .lp-chart {
   width: 100%;
@@ -1124,11 +1125,11 @@
   grid-template-columns: 1fr 1fr;
   gap: 13px;
   margin: 22px 0;
-  color: #786b8c;
+  color: var(--ink-muted);
   font-size: 12px;
 }
 .lp-check-features span::first-letter {
-  color: #7840ff;
+  color: var(--accent);
 }
 .lp-faq-section {
   display: grid;
@@ -1138,7 +1139,7 @@
   border-top: 1px solid var(--lp-border);
 }
 .lp-faq-list details {
-  border-bottom: 1px solid #eee8f7;
+  border-bottom: 1px solid var(--line);
   padding: 18px 0;
 }
 .lp-faq-list details:first-child {
@@ -1160,7 +1161,7 @@
 .lp-faq-list summary > span {
   font-size: 24px;
   font-weight: 400;
-  color: #8554e5;
+  color: var(--accent);
   transition: transform 0.2s;
 }
 .lp-faq-list details[open] summary > span {
@@ -1176,16 +1177,16 @@
   text-align: center;
   border-radius: 20px;
   padding: 52px 28px;
-  background: #6035db;
-  color: white;
+  background: var(--primary);
+  color: var(--on-primary);
   position: relative;
   overflow: hidden;
 }
 .lp-cta-icon {
   display: inline-grid;
   place-items: center;
-  background: #ffffff24;
-  border: 1px solid #ffffff30;
+  background: color-mix(in srgb, var(--surface) 14.1%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 18.8%, transparent);
   border-radius: 50%;
   width: 45px;
   height: 45px;
@@ -1199,14 +1200,14 @@
 .lp-final-cta p {
   font-size: 14px;
   line-height: 1.6;
-  color: #eee5ff;
+  color: var(--on-primary);
   margin: 16px 0 22px;
 }
 .lp-final-cta small {
   display: block;
   margin-top: 15px;
   font-size: 11px;
-  color: #e2d5ff;
+  color: var(--on-primary);
 }
 .lp-footer {
   display: flex;
@@ -1220,20 +1221,20 @@
 }
 .lp-footer > p {
   font-size: 11px;
-  color: #786e87;
+  color: var(--ink-muted);
 }
 .lp-footer > div {
   display: flex;
   gap: 20px;
   font-size: 11px;
-  color: #837491;
+  color: var(--ink-muted);
 }
 .lp-skip {
   position: absolute;
   top: -60px;
   left: 20px;
-  background: white;
-  border: 2px solid #7545f5;
+  background: var(--surface);
+  border: 2px solid var(--accent);
   padding: 10px;
   z-index: 50;
 }
@@ -1421,9 +1422,9 @@
     top: calc(100% - 5px);
     left: 20px;
     right: 20px;
-    background: white;
-    box-shadow: 0 15px 35px #50317d20;
-    border: 1px solid #ece5ff;
+    background: var(--surface);
+    box-shadow: 0 15px 35px color-mix(in srgb, var(--brand-secondary) 12.5%, transparent);
+    border: 1px solid var(--line);
     border-radius: 15px;
     padding: 12px;
     z-index: 30;
@@ -1449,7 +1450,7 @@
     display: grid;
     place-items: center;
     background: transparent;
-    color: #7641f4;
+    color: var(--accent);
     border: 0;
     width: 44px;
     height: 44px;
@@ -1532,7 +1533,7 @@
   }
   .lp-steps > div {
     padding: 18px 0;
-    border-bottom: 1px solid #f3edf9;
+    border-bottom: 1px solid var(--line);
     gap: 20px;
   }
   .lp-steps > div:last-child {
@@ -1688,8 +1689,8 @@
   }
   .lp-hero-background {
     background:
-      radial-gradient(ellipse at 95% 35%, #f1ecfc, transparent 60%),
-      linear-gradient(145deg, #fcfbff, #fff);
+      radial-gradient(ellipse at 95% 35%, var(--accent-soft), transparent 60%),
+      var(--surface);
   }
   .lp-hero {
     grid-template-columns: 1fr;
@@ -1742,8 +1743,8 @@
     left: 4px;
     border: 1px solid var(--lp-border);
     border-radius: 16px;
-    background: white;
-    box-shadow: 0 10px 25px #3f31540d;
+    background: var(--surface);
+    box-shadow: 0 10px 25px color-mix(in srgb, var(--brand-secondary) 5.1%, transparent);
   }
   .lp-preview-sidebar {
     width: 124px;
@@ -1803,7 +1804,7 @@
     padding: 5px 16px;
     border-radius: 16px;
     gap: 0;
-    box-shadow: 0 8px 30px #734eba05;
+    box-shadow: 0 8px 30px color-mix(in srgb, var(--brand-secondary) 2%, transparent);
   }
   .lp-steps > div {
     gap: 14px;
@@ -1959,7 +1960,7 @@
   .lp-inbox-demo:not(.compact) {
     padding: 13px;
     border-radius: 17px;
-    box-shadow: 0 10px 30px #7052aa0b;
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--brand-secondary) 4.3%, transparent);
   }
   .lp-inbox-demo:not(.compact) .lp-demo-columns {
     grid-template-columns: 1fr;

@@ -7,11 +7,11 @@
 .workflow-change button { background:none; border:0; padding:0; text-align:left; color:inherit; font:inherit; font-weight:650; cursor:pointer; }
 .workflow-change button:disabled { opacity:1; cursor:default; }
 .workflow-change dl { margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.workflow-change dt { font-weight:650; color:var(--ink-muted,#5f6875); }
+.workflow-change dt { font-weight:650; color:var(--ink-muted); }
 .workflow-change dd { margin:4px 0; }
-.workflow-change small { display:block; margin-top:6px; color:var(--ink-muted,#5f6875); }
+.workflow-change small { display:block; margin-top:6px; color:var(--ink-muted); }
 .workflow-diff-tabs { display:flex; flex-wrap:wrap; gap:6px; }
-.workflow-diff-tabs button { border:1px solid var(--line,#dce0e6); background:var(--surface,#fff); color:inherit; padding:8px 12px; border-radius:8px; cursor:pointer; }
+.workflow-diff-tabs button { border:1px solid var(--line,#dce0e6); background:var(--surface); color:inherit; padding:8px 12px; border-radius:8px; cursor:pointer; }
 .workflow-diff-tabs button[aria-pressed=true] { border-color:var(--accent,#2464b4); background:var(--accent-soft,#ecf3fb); }
 .workflow-change-review button:focus-visible,.workflow-change-review summary:focus-visible { outline:2px solid var(--accent,#2464b4); outline-offset:3px; }
 .workflow-change-review > .vf-canvas { height:340px; min-height:280px; border:1px solid var(--line,#dce0e6); border-radius:12px; }

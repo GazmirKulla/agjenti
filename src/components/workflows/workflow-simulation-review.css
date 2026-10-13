@@ -1,8 +1,8 @@
 .workflow-simulation { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border, #d7dce5); border-radius: 12px; overflow-wrap: anywhere; }
 .workflow-simulation h3 { margin-top: 0; }
-.workflow-simulation small { color: var(--muted, #586174); }
+.workflow-simulation small { color: var(--muted, var(--ink-muted)); }
 .simulation-scenarios { display: grid; gap: .5rem; margin: 1rem 0; max-height: 28rem; overflow: auto; }
-.simulation-scenarios details { padding: .75rem; border: 1px solid #d7dce5; border-left: 4px solid #798393; border-radius: 6px; }
+.simulation-scenarios details { padding: .75rem; border: 1px solid #d7dce5; border-left: 4px solid var(--line); border-radius: 6px; }
 .simulation-scenarios details[data-result="PASS"] { border-left-color: #278467; }
 .simulation-scenarios details[data-result="FAIL"], .simulation-scenarios details[data-result="BLOCKED"] { border-left-color: #b03d3d; }
 .workflow-simulation summary { cursor: pointer; font-weight: 600; }
