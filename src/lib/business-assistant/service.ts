@@ -4,12 +4,13 @@ import type { AssistantMaterial } from "./materials";
 import { loadOrderFlows, prepareOrderFlow, executeOrderFlow, orderFlowInstructions, type OrderFlowContext, refineOrderFlowProposal } from "./orderflow-service";
 import { sharedWorkflowEnabled } from "@/lib/workflows/context";
 import { loadLinearContext, prepareLinear, executeLinear, linearInstructions, type LinearCard } from "./linear-service";
-import { loadAssistantWorkflow, prepareWorkflow, executeWorkflow, workflowInstructions as baseWorkflowInstructions } from "./workflow-service";
+import { loadAssistantWorkflow, prepareWorkflow, executeWorkflow, simulateAutomation, workflowInstructions as baseWorkflowInstructions } from "./workflow-service";
 import { automationIntentSchema } from "./automation-intent";
 import { automationInstructions, buildAutomationProposal, automationMessage, type AutomationProposal } from "./automation-proposal";
 import { summarizeWorkflowChanges } from "./semantic-summary";
 const workflowInstructions = `${automationInstructions} ${baseWorkflowInstructions}`;
 import type { WorkflowCard } from "./workflow";
+import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
 import { parseUIContext, type AssistantUIContext } from "./context";
 import OpenAI from "openai";
 import { randomUUID } from "node:crypto";
@@ -63,6 +64,7 @@ export type Access = {
   catalogSource: string;
 };
 export type Ticket = {
+  simulation?: SimulationBinding;
   automation?: AutomationProposal;
   purpose: "business-assistant-v1";
   userId: string;
@@ -380,7 +382,7 @@ export async function planRequest(
       const automation = await buildAutomationProposal({ businessId: access.businessId, userId: access.userId,
         revision: card.workspace.revision, publishedVersionId: card.workspace.publishedVersionId,
         request: text, intent: proposal.automation, before: card.workspace.graph, after: card.workspace.graph, operations: [] });
-      return { message: automationMessage(automation), automation, clarifying: true, workflow: { ...card, semanticSummary: summarizeWorkflowChanges(card.workspace.graph, card.workspace.graph, card.workspace.revision, card.workspace.publishedVersionId, automation) } };
+      return { message: automationMessage(automation), automation, clarifying: true, workflow: { ...card, simulation: simulateAutomation(card.workspace.graph, card.workspace.graph, automation), semanticSummary: summarizeWorkflowChanges(card.workspace.graph, card.workspace.graph, card.workspace.revision, card.workspace.publishedVersionId, automation) } };
     }
     if (proposal.action === "product_import") {
       assertEnabled(access, proposal.action);

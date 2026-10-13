@@ -4,6 +4,8 @@ import type { VisualGraph } from "@/lib/workflows/visual/types";
 import { diffHighlights, diffWorkflowGraphs } from "@/lib/workflows/visual/diff";
 import { semanticChangeFocus, type SemanticChangeSummary } from "@/lib/business-assistant/semantic-summary";
 import { VisualGraphView } from "./visual-graph";
+import { WorkflowSimulationReview } from "./workflow-simulation-review";
+import type { SimulationReport } from "@/lib/workflows/visual/simulation-types";
 import "./workflow-change-review.css";
 
 const configurationLabels: Record<string, string> = {
@@ -16,7 +18,7 @@ const configurationLabels: Record<string, string> = {
 };
 const unsupportedLabels: Record<string, string> = { "inventory.check": "Kontrolli i inventarit", "back_in_stock.notify": "Njoftimi kur produkti rikthehet në stok", "schedule.trigger": "Ekzekutimi automatik në një kohë të planifikuar" };
 
-export function WorkflowChangeReview({ before, after, summary }: { before: VisualGraph; after: VisualGraph; summary: SemanticChangeSummary }) {
+export function WorkflowChangeReview({ before, after, summary, simulation }: { before: VisualGraph; after: VisualGraph; summary: SemanticChangeSummary; simulation?: SimulationReport }) {
   const [side, setSide] = useState<"before" | "after">("after");
   const [focus, setFocus] = useState<{ nodeId: string; sequence: number }>();
   const diff = useMemo(() => diffWorkflowGraphs(before, after), [before, after]);
@@ -46,7 +48,10 @@ export function WorkflowChangeReview({ before, after, summary }: { before: Visua
     {summary.affectedFlows.length > 0 && <p>Preken: {summary.affectedFlows.map(flowName).join(", ")}.</p>}
     {summary.unchangedFlows.length > 0 && <p>Pa ndryshime: {summary.unchangedFlows.map(flowName).join(", ")}.</p>}
     {summary.inferredBehavior.length > 0 && <section><h4>Ndikim i mundshëm — i inferuar</h4>{summary.inferredBehavior.map(text => <p key={text}>{text}</p>)}</section>}
-    <section><h4>E paverifikuar</h4>{summary.unverifiedBehavior.map(text => <p key={text}>{text}</p>)}</section>
+    <section><h4>E paverifikuar</h4>{summary.unverifiedBehavior.map(text => <p key={text}>{simulation ? text.replace(" Nuk është kryer simulim nga kjo përmbledhje.", " Rezultatet e provës së izoluar shfaqen më poshtë.") : text}</p>)}</section>
+    {simulation && <WorkflowSimulationReview report={simulation} onFocus={nodeId => {
+      setSide("after"); setFocus(previous => ({ nodeId, sequence: (previous?.sequence ?? 0) + 1 }));
+    }} />}
     {summary.unsupportedCapabilities.length > 0 && <section role="alert"><h4>Nuk mbështeten</h4><ul>{summary.unsupportedCapabilities.map((key, i) => <li key={i}>{Object.hasOwn(unsupportedLabels, key) ? unsupportedLabels[key] : "Një aftësi jashtë funksioneve të verifikuara."}</li>)}</ul><p>Nuk paraqiten si veprime të ekzekutueshme.</p></section>}
     {summary.requiredConfiguration.length > 0 && <section role="status"><h4>Kërkon konfigurim</h4><ul>{summary.requiredConfiguration.map((key, i) => <li key={i}>{Object.hasOwn(configurationLabels, key) ? configurationLabels[key] : "Plotëso konfigurimin e aftësisë së kërkuar."}</li>)}</ul><p>Drafti nuk nënkupton gatishmëri për aktivizim.</p></section>}
     <div className="workflow-diff-tabs" role="group" aria-label="Krahasimi i diagramit">

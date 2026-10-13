@@ -8,6 +8,7 @@ import {
 } from "@/lib/business-assistant/workflow";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
 import { WorkflowChangeReview } from "@/components/workflows/workflow-change-review";
+import { WorkflowSimulationReview } from "@/components/workflows/workflow-simulation-review";
 import "./workflow-card.css";
 
 function FlowSteps({ graph }: { graph: VisualGraph }) {
@@ -213,6 +214,7 @@ export function WorkflowCard({
         </p>
       )}
       {data.semanticSummary && tab === "draft" ? proposed ? <p>{data.semanticSummary.changes.length} ndryshime të propozuara. Hap “Shiko ndryshimin” për shpjegimin Para/Pas dhe diagramin. Baza: revisioni {data.semanticSummary.baseRevision}.</p> : <WorkflowChangeReview before={workspace.graph} after={workspace.graph} summary={data.semanticSummary} /> : <FlowSteps graph={graph} />}
+      {data.simulation && !proposed && tab === "draft" && <WorkflowSimulationReview report={data.simulation} />}
       {problems.length > 0 ? (
         <details>
           <summary>Duhet plotësuar para publikimit ({problems.length})</summary>
@@ -262,7 +264,7 @@ export function WorkflowCard({
                 "Publiko dhe aktivizo draftin aktual të rrjedhës së biznesit.",
               )
             }
-            disabled={!workspace.available || problems.length > 0 || data.semanticSummary?.blocked}
+            disabled={!workspace.available || problems.length > 0 || data.semanticSummary?.blocked || (data.simulation && !data.simulation.canPublish)}
           >
             Publiko draftin…
           </button>

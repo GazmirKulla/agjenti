@@ -7,7 +7,9 @@ import type { Operation } from "./workflow";
 import { AssistantError } from "./model";
 
 import type { AutomationIntent } from "./automation-intent";
+import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
 export type AutomationProposal = {
+  simulation?: SimulationBinding;
   version: 1;
   proposalId: string;
   status: "proposed";

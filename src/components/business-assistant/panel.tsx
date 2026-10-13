@@ -579,7 +579,7 @@ export function BusinessAssistant({
                   <p className="assistant-subject">{result.preview.subject}</p>
                 )}
               </div>
-              {result.workflow?.semanticSummary && result.workflow.proposed ? <WorkflowChangeReview before={result.workflow.workspace.graph} after={result.workflow.proposed} summary={result.workflow.semanticSummary} /> : <dl>
+              {result.workflow?.semanticSummary && result.workflow.proposed ? <WorkflowChangeReview before={result.workflow.workspace.graph} after={result.workflow.proposed} summary={result.workflow.semanticSummary} simulation={result.workflow.simulation} /> : <dl>
                 {result.preview.fields.map((field, i) => (
                   <div key={i}>
                     <dt>{field.label}</dt>

@@ -1,6 +1,6 @@
 "use server";
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
-import { createHash } from "node:crypto";
+import { visualGraphHash } from "./graph-hash";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { readTestSession, sealTestSession } from "@/lib/agents/test-chat/session";
 import { type AgentTurnResult } from "@/lib/conversations/process-agent-turn";
@@ -16,7 +16,7 @@ export async function simulateVisualWorkflow(slug: string, raw: unknown, message
     if (!graph) return { error: errors[0]?.message || "Plotëso rrjedhën për ta provuar." };
     if (!process.env.TOKEN_ENCRYPTION_KEY?.trim()) return { error: "Konfiguro çelësin e sesioneve të provës." };
     const session = readTestSession(token ?? null, user.id, access.business.id);
-    const id = `preview:${createHash("sha256").update(JSON.stringify(graph)).digest("hex")}`;
+    const id = `preview:${visualGraphHash(graph)}`;
     if (session.state.visual && session.state.visual.versionId !== id) return { error: "Rrjedha ndryshoi. Rifillo provën." };
     const turn = await processConversationMessage({ businessId: access.business.id, mode: "test", message: message.trim(), hasPhoto,
       state: session.state, previousResponseId: session.previousResponseId,

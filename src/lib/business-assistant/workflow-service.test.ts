@@ -18,6 +18,19 @@ import { prepareWorkflow, loadAssistantWorkflow } from "./workflow-service";
 import { executeTicket, openTicket, type Access } from "./service";
 import { starterVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
 import type { Proposal } from "./model";
+import { encryptSecret } from "@/lib/crypto/tokens";
+import type { VisualGraph } from "@/lib/workflows/visual/types";
+import * as visualRuntime from "@/lib/workflows/visual/runtime";
+function localGraph(): VisualGraph {
+  return { version: 1, name: "Local only", nodes: [
+    { id: "start", kind: "start", label: "Start", position: { x: 0, y: 0 }, config: {} },
+    { id: "end", kind: "end", label: "End", position: { x: 0, y: 100 }, config: {} },
+  ], edges: [{ id: "next", source: "start", target: "end", port: "next" }] };
+}
+function useLocalGraph() {
+  m.workspace.mockResolvedValue({ graph: localGraph(), revision: 3, publishedVersionId: "version-a", enabled: true, available: true, generated: false });
+  m.version.mockResolvedValue({ graph: localGraph() });
+}
 const access: Access = {
   businessId: "business-a",
   userId: "user-a",
@@ -159,6 +172,8 @@ it("rejects disabled modules and missing migrations without manufacturing an act
   expect(m.rpc).not.toHaveBeenCalled();
 });
 it("blocks stale analysis, stale confirmations and repeated publish writes", async () => {
+  // This test exercises the atomic revision guard, so use an entirely local, simulatable graph.
+  useLocalGraph();
   await expect(
     prepareWorkflow(access, proposal("workflow_publish"), 2),
   ).rejects.toThrow("gjatë analizës");
@@ -174,6 +189,85 @@ it("blocks stale analysis, stale confirmations and repeated publish writes", asy
     executeTicket({ ...access, modules: [] }, result.token!),
   ).rejects.toThrow();
   expect(m.rpc).toHaveBeenCalledTimes(1);
+});
+
+it("runs simulation before draft confirmation, ties evidence to the candidate, and never writes during planning", async () => {
+  useLocalGraph();
+  const result = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"New draft"}]' }]), 3);
+  expect(result.workflow?.simulation).toMatchObject({ result: "PASS", canPublish: true, baseRevision: 3, proposalId: result.automation?.proposalId });
+  expect(openTicket(result.token!, access).simulation?.candidateGraphHash).toBe(result.workflow?.simulation?.candidateGraphHash);
+  expect(m.rpc).not.toHaveBeenCalled();
+  await executeTicket(access, result.token!);
+  expect(m.rpc).toHaveBeenCalledWith("apply_assistant_visual_workflow", expect.objectContaining({ p_operation: "draft", p_business: "business-a", p_revision: 3 }));
+});
+it("shows unverified scenarios and allows draft save, but offers no publish approval", async () => {
+  const draft = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"New draft"}]' }]), 3);
+  expect(draft.workflow?.simulation?.result).toBe("UNVERIFIED"); expect(draft.token).toBeTruthy();
+  expect(draft.preview?.notice).toContain("nuk do të thotë");
+  const publish = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  expect(publish.token).toBeUndefined(); expect(publish.workflow?.simulation?.canPublish).toBe(false);
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it("shows blocked unsupported and unavailable assessments without claiming execution", async () => {
+  const unsupported = proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Draft"}]' }]);
+  unsupported.requestedText = "Check inventory";
+  const blocked = await prepareWorkflow(access, unsupported, 3);
+  expect(blocked.workflow?.simulation?.result).toBe("BLOCKED"); expect(blocked.token).toBeUndefined();
+  m.assess.mockRejectedValue(new Error("private-access-diagnostic"));
+  const failed = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  expect(failed.workflow?.simulation?.result).toBe("BLOCKED"); expect(failed.token).toBeUndefined();
+  expect(JSON.stringify(failed)).not.toContain("private-access-diagnostic"); expect(m.rpc).not.toHaveBeenCalled();
+});
+it.each(["hash", "revision", "proposal"])("rejects a mismatched simulation %s at confirmation without writing", async mismatch => {
+  useLocalGraph();
+  const result = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Draft"}]' }]), 3);
+  const ticket = openTicket(result.token!, access);
+  if (mismatch === "hash") (ticket.values.graph as VisualGraph).nodes[1].config.prompt = "Different";
+  if (mismatch === "revision") ticket.simulation!.baseRevision++;
+  if (mismatch === "proposal") ticket.simulation!.proposalId = "another-proposal";
+  await expect(executeTicket(access, encryptSecret(JSON.stringify(ticket)))).rejects.toThrow("Simulimi nuk i përket");
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it("rechecks current revision and tenant authorization before simulation-backed writes", async () => {
+  useLocalGraph();
+  const result = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  expect(result.workflow?.simulation?.canPublish).toBe(true);
+  m.workspace.mockResolvedValue({ graph: localGraph(), revision: 4 });
+  await expect(executeTicket(access, result.token!)).rejects.toThrow("dritare tjetër");
+  await expect(executeTicket({ ...access, businessId: "business-b" }, result.token!)).rejects.toThrow();
+  m.assess.mockRejectedValue(new Error("access revoked"));
+  await expect(executeTicket(access, result.token!)).rejects.toThrow("qasja");
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it("reruns simulation for legacy publish tickets and cannot bypass it by omitting evidence", async () => {
+  useLocalGraph();
+  const result = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  const ticket = openTicket(result.token!, access);
+  delete ticket.simulation; delete ticket.automation;
+  ticket.values.graph = starterVisualGraph();
+  await expect(executeTicket(access, encryptSecret(JSON.stringify(ticket)))).rejects.toThrow("simulimi");
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it("refuses approval and confirmation when actual runtime scenarios fail", async () => {
+  useLocalGraph();
+  const prepared = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  const faulty = vi.spyOn(visualRuntime, "advanceVisualWorkflow").mockImplementation(() => { throw new Error("runtime failure"); });
+  try {
+    const blocked = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+    expect(blocked.workflow?.simulation?.result).toBe("FAIL"); expect(blocked.token).toBeUndefined();
+    await expect(executeTicket(access, prepared.token!)).rejects.toThrow("simulimi");
+    expect(m.rpc).not.toHaveBeenCalled();
+  } finally { faulty.mockRestore(); }
+});
+it("permits explicit publication of a locally verified graph through the existing atomic RPC only", async () => {
+  useLocalGraph();
+  const result = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  expect(result.workflow?.simulation?.result).toBe("PASS");
+  expect(result.message).not.toContain("Propozim për draft");
+  expect(m.rpc).not.toHaveBeenCalled();
+  await executeTicket(access, result.token!);
+  expect(m.rpc).toHaveBeenCalledTimes(1);
+  expect(m.rpc).toHaveBeenCalledWith("apply_assistant_visual_workflow", expect.objectContaining({ p_operation: "publish", p_revision: 3, p_business: "business-a", p_user: "user-a" }));
 });
 it("allows incomplete drafts but refuses to publish a graph with broken paths", async () => {
   m.workspace.mockResolvedValue({

@@ -1,0 +1,15 @@
+.workflow-simulation { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border, #d7dce5); border-radius: 12px; overflow-wrap: anywhere; }
+.workflow-simulation h3 { margin-top: 0; }
+.workflow-simulation small { color: var(--muted, #586174); }
+.simulation-scenarios { display: grid; gap: .5rem; margin: 1rem 0; max-height: 28rem; overflow: auto; }
+.simulation-scenarios details { padding: .75rem; border: 1px solid #d7dce5; border-left: 4px solid #798393; border-radius: 6px; }
+.simulation-scenarios details[data-result="PASS"] { border-left-color: #278467; }
+.simulation-scenarios details[data-result="FAIL"], .simulation-scenarios details[data-result="BLOCKED"] { border-left-color: #b03d3d; }
+.workflow-simulation summary { cursor: pointer; font-weight: 600; }
+.workflow-simulation dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.workflow-simulation dt { font-weight: 600; }
+.workflow-simulation dd { margin: .4rem 0; }
+.simulation-trace { display: flex; flex-wrap: wrap; gap: .4rem; }
+.workflow-simulation button { cursor: pointer; border: 1px solid #aeb8c7; border-radius: 5px; padding: .3rem .5rem; background: transparent; color: inherit; }
+.simulation-warning { padding: .5rem; background: #fff4dc; color: #67450c; border-radius: 6px; }
+@media (max-width: 600px) { .workflow-simulation dl { grid-template-columns: 1fr; } .workflow-simulation { padding: .75rem; } }

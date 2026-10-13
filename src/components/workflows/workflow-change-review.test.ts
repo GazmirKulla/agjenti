@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 vi.mock("./visual-workflow.css", () => ({}));
 vi.mock("./workflow-change-review.css", () => ({}));
+vi.mock("./workflow-simulation-review.css", () => ({}));
 import { WorkflowChangeReview } from "./workflow-change-review";
 import { VisualGraphView } from "./visual-graph";
 import { starterVisualGraph } from "@/lib/workflows/visual/model";
