@@ -1,6 +1,7 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { upgradeVisualGraph, starterVisualGraph } from "./model";
-const m = vi.hoisted(() => ({ rows: {} as Record<string, unknown[]>, filters: [] as unknown[], create: vi.fn() }));
+const m = vi.hoisted(() => ({ rows: {} as Record<string, unknown[]>, filters: [] as unknown[], create: vi.fn(), profile: vi.fn() }));
+vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: m.create }));
 import { resolveVisualEntity } from "./entity-routing";
 const p = "aaaaaaaa-0000-4000-8000-000000000001", s = "bbbbbbbb-0000-4000-8000-000000000002";
@@ -17,6 +18,20 @@ beforeEach(() => {
   } }));
 });
 function graph() { const graph = upgradeVisualGraph(starterVisualGraph()); graph.flows.find(flow => flow.kind === "order")!.productIds = [p]; graph.flows.find(flow => flow.kind === "information")!.serviceIds = [s]; return graph; }
+afterEach(() => vi.unstubAllEnvs());
+it("does not permit an inactive entity preview to bypass enrolled tenant restrictions", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  m.profile.mockResolvedValue({ enabledModules: ["products", "services", "workflows", "orders"] });
+  m.rows.products = [{ id: p, name: "Puzzle", is_active: false }];
+  expect((await resolveVisualEntity("business", graph(), "Puzzle", undefined, true)).selected).toBeUndefined();
+  expect(m.filters).not.toContainEqual(["products", "is_active", false]);
+});
+it("rechecks a pinned binding's current module rather than accepting the old selection", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  m.profile.mockResolvedValue({ enabledModules: ["services", "workflows"] });
+  await expect(resolveVisualEntity("business", graph(), "M", { flowId: "order", entity: { kind: "product", id: p } })).rejects.toMatchObject({ code: "module_disabled" });
+  expect(m.create).not.toHaveBeenCalled();
+});
 it("resolves the rapid-message Montessori request against the active catalog", async () => {
  m.rows.products = [{ id: p, name: "Aktivitetet Montessori" }];
  expect((await resolveVisualEntity("business", graph(), "Ckemi\nSi jeni\nDua te porosis montesori\nE keni ne gjendje?")).selected?.entity.id).toBe(p);

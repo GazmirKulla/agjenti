@@ -2,6 +2,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { foldText } from "../engine";
 import { matchingCatalogNames } from "@/lib/products/match-name";
 import type { VisualGraph, VisualRunState } from "./types";
+import { runtimeModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 
 export type VisualEntity = { kind: "product" | "service"; id: string; name: string; productTypeId?: string | null; bookingEnabled?: boolean };
 export type VisualEntitySelection = { entity: VisualEntity; binding: NonNullable<VisualRunState["binding"]> };
@@ -13,6 +14,8 @@ export function isEntityInformationRequest(message: string) {
 /** Production resolves active entries; isolated preview also permits inactive entries explicitly bound in the graph. */
 export async function resolveVisualEntity(businessId: string, graph: VisualGraph, message: string, saved?: VisualRunState["binding"], preview = false): Promise<{ selected?: VisualEntitySelection; mentioned?: VisualEntity; choices?: VisualEntity[]; available?: VisualEntity[] }> {
   if (graph.version !== 2 || !graph.flows.some(flow => flow.productIds?.length || flow.serviceIds?.length)) return {};
+  const modules = await runtimeModules(businessId);
+  if (saved) await requireRuntimeModules(businessId, [saved.entity.kind === "product" ? "products" : "services"]);
   const db = createServiceSupabase();
   const all = async <T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>) => {
     const rows: T[] = [];
@@ -24,10 +27,10 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
     }
   };
   const [products, services] = await Promise.all([
-    all((from, to) => db.from("products").select("id,name,sku,product_type_id").eq("business_id", businessId).eq("is_active", true).order("id").range(from, to)),
-    all((from, to) => db.from("booking_services").select("id,name,booking_enabled").eq("business_id", businessId).eq("is_active", true).order("id").range(from, to)),
+    all((from, to) => modules && !modules.includes("products") ? Promise.resolve({ data: [], error: null }) : db.from("products").select("id,name,sku,product_type_id").eq("business_id", businessId).eq("is_active", true).order("id").range(from, to)),
+    all((from, to) => modules && !modules.includes("services") ? Promise.resolve({ data: [], error: null }) : db.from("booking_services").select("id,name,booking_enabled").eq("business_id", businessId).eq("is_active", true).order("id").range(from, to)),
   ]);
-  if (preview) {
+  if (preview && !modules) {
     const boundProducts = [...new Set(graph.flows.flatMap(flow => flow.productIds ?? []))];
     const boundServices = [...new Set(graph.flows.flatMap(flow => flow.serviceIds ?? []))];
     const inactive = async <T>(ids: string[], query: (ids: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>) => {

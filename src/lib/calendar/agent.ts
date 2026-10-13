@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import type { AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { agentModel } from "@/lib/agents/generate";
 import {
@@ -62,6 +63,7 @@ export async function processBookingTurn(params: {
   )
     return null;
   const profile = await loadDashboardProfile(params.businessId);
+  await requireRuntimeModules(params.businessId, ["bookings", "services"]);
   if (!profile.enabledModules.includes("bookings")) return null;
   // Finish reservations already in progress, but let new runs follow the published graph.
   if (!params.routed && !raw && await loadVisualVersion(params.businessId)) return null;

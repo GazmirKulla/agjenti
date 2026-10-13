@@ -25,7 +25,9 @@ const mocks = vi.hoisted(() => ({
   },
   writes: [] as Record<string, unknown>[],
   rpc: vi.fn(),
+  profile: vi.fn(),
 }));
+vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: mocks.profile }));
 vi.mock("@/lib/crypto/tokens", () => ({
   decryptSecret: (s: string) => s,
   encryptSecret: (s: string) => `encrypted-${s}`,
@@ -59,7 +61,14 @@ beforeEach(() => {
   mocks.connection.connected = true;
   mocks.booking.status = "confirmed";
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+it("blocks direct synchronization before acquiring a lease or sending an external request when bookings are disabled", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  mocks.profile.mockResolvedValue({ enabledModules: ["services"] });
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  await expect(syncBooking("business", mocks.booking.id)).rejects.toMatchObject({ code: "module_disabled" });
+  expect(mocks.rpc).not.toHaveBeenCalled(); expect(mocks.writes).toEqual([]); expect(fetch).not.toHaveBeenCalled();
+});
 it("treats Google availability errors as unknown, never free", async () => {
   vi.stubGlobal(
     "fetch",

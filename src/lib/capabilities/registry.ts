@@ -2,6 +2,7 @@ export type CapabilityCategory = "knowledge" | "catalog" | "orders" | "booking" 
 export type CapabilityRisk = "read" | "write" | "external_effect";
 export type CapabilityApprovalPolicy = "none" | "confirmation";
 export type CapabilityReadiness = "ready" | "needs_setup" | "unsupported" | "needs_clarification";
+export type CapabilityAvailability = "unsupported" | "module_disabled" | "missing_configuration" | "integration_unavailable" | "ready" | "unverified";
 
 export type CapabilityDefinition = {
   key: string;
@@ -18,6 +19,7 @@ export type CapabilityDefinition = {
 export type CapabilityAssessment = {
   capabilityKey: string;
   status: CapabilityReadiness;
+  availability?: CapabilityAvailability;
   reasonCode: string;
   missingRequirements: string[];
   evidence?: string[];
@@ -59,6 +61,17 @@ export const capabilityRegistry: Record<string, CapabilityDefinition> = {
     approvalPolicy: "none",
     executorId: "catalog.product_recommend",
   },
+  "order.prepare": {
+    key: "order.prepare",
+    description: "Përgatit dhe konfirmon të dhënat e porosisë për stafin; nuk krijon ose dërgon porosi.",
+    category: "orders",
+    inputSchema: { productId: "uuid", conversationId: "string" },
+    requiredModules: ["products", "orders", "workflows"],
+    requiredIntegrations: [],
+    risk: "write",
+    approvalPolicy: "confirmation",
+    executorId: "conversation.order_preparation",
+  },
   "order.status.read": {
     key: "order.status.read",
     description: "Lexon vetëm statusin e porosive të klientit të bisedës.",
@@ -75,7 +88,7 @@ export const capabilityRegistry: Record<string, CapabilityDefinition> = {
     description: "Kontrollon oraret e lira për një shërbim aktiv.",
     category: "booking",
     inputSchema: { serviceId: "uuid", date: "date" },
-    requiredModules: ["bookings"],
+    requiredModules: ["bookings", "services"],
     requiredIntegrations: [],
     risk: "read",
     approvalPolicy: "none",
@@ -86,7 +99,7 @@ export const capabilityRegistry: Record<string, CapabilityDefinition> = {
     description: "Krijon një rezervim pasi serveri verifikon shërbimin dhe orarin.",
     category: "booking",
     inputSchema: { serviceId: "uuid", customer: "object", startsAt: "datetime" },
-    requiredModules: ["bookings"],
+    requiredModules: ["bookings", "services"],
     requiredIntegrations: [],
     risk: "external_effect",
     approvalPolicy: "confirmation",

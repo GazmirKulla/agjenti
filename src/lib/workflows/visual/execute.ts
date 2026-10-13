@@ -10,6 +10,8 @@ import { loadVisualVersion } from "./store";
 import { validateVisualGraph } from "./model";
 import { isEntityInformationRequest, resolveVisualEntity } from "./entity-routing";
 import { advanceVisualOrderReview, missingVisualOrderNode } from "./product-order";
+import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
+import { nodeCapabilityKeys, flowCapabilityKeys } from "@/lib/capabilities/graph";
 
 type Legacy = (params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }) => Promise<AgentTurnResult>;
 
@@ -33,6 +35,13 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     return legacyReply({ ...p, trainingVisualScope: flow && nodeId ? { flowId: flow.id, nodeId } : undefined });
   };
   if (version.businessId !== params.businessId || !validateVisualGraph(version.graph).graph) throw new Error("invalid_visual_workflow");
+  await requireRuntimeModules(params.businessId, ["workflows"]);
+  const guardNodes = async (ids: string[]) => {
+    const flows = version.graph.version === 2 ? version.graph.flows.filter(flow => flow.nodeIds.some(id => ids.includes(id))) : [];
+    await requireRuntimeModules(params.businessId, ["workflows", ...capabilityModules([
+      ...version.graph.nodes.filter(node => ids.includes(node.id)).flatMap(nodeCapabilityKeys), ...flows.flatMap(flowCapabilityKeys),
+    ]), ...(flows.some(flow => flow.serviceIds?.length) ? ["services"] : [])]);
+  };
   const started = Date.now();
   // Completion does not erase order/customer data. Only entering a new product flow resets it.
   let base = structuredClone(params.state ?? emptyState());
@@ -63,6 +72,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     return simple(`Ke një porosi të papërfunduar. Ta zëvendësojmë me ${selectedEntity.entity.name}? Shkruaj “Po” ose “Jo”.`);
   }
   if (selectedEntity && boundFlow) {
+    await guardNodes([boundFlow.entryNodeId]);
     base = migrateContext(base);
     if (boundOrder) {
       base.product_id = selectedEntity.entity.id; base.product_type_id = selectedEntity.entity.productTypeId ?? null;
@@ -215,6 +225,9 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: 0 },
   };
   for (let count = 0; count < 32; count++) {
+    // The pure runtime only changes a cloned cursor. Authorize the actual path
+    // before persisting its fields or calling any read/write adapter.
+    await guardNodes([...execution.traversedNodeIds, execution.state.nodeId]);
     const action = execution.action;
     // An information reply cannot implicitly start/resume an order or booking
     // merely because a configured edge crosses into that process.

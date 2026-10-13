@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { graphRequirements, nodeCapabilityKeys, flowCapabilityKeys, unsupportedRequestKeys } from "@/lib/capabilities/graph";
+import { CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
+import { enforceWorkflowCapabilities } from "@/lib/capabilities/workflow";
 import { assessBusinessCapabilities } from "@/lib/capabilities/assessment";
 import { getCapability, type CapabilityAssessment, type CapabilityReadiness } from "@/lib/capabilities/registry";
 import { validateVisualGraph } from "@/lib/workflows/visual/model";
@@ -28,16 +31,7 @@ export type AutomationProposal = {
   canSaveDraft: boolean;
 };
 
-/** A bounded backstop for known unsupported requests; not a general language parser. */
-export function unsupportedRequestKeys(text: string): string[] {
-  const value = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const keys: string[] = [];
-  if (/\binventory\b|\bstok\w*|\b(?:check|track|monitor)\s+(?:the\s+)?stock\b|back.in.stock/.test(value)) keys.push("inventory.check");
-  if (/back.in.stock|(?:notify|njoft)\w*[\s\S]*(?:stock|stok|rikthe|gjendje)/.test(value)) keys.push("back_in_stock.notify");
-  // Scheduling a booking is supported; a future/recurrent automation trigger is not.
-  if (/\bcron\b|\b(?:every (?:day|week|month|hour)|cdo (?:dite|jave|muaj|ore))\b|\b(?:schedule[ds]?|planifik\w*)\s+(?:(?:a|an|the|nje)\s+)?(?:automation|workflow|notification|message|email|job|task|action|automatizim\w*|njoft\w*|mesazh\w*|detyr\w*|veprim\w*)\b/.test(value)) keys.push("schedule.trigger");
-  return keys;
-}
+export { unsupportedRequestKeys } from "@/lib/capabilities/graph";
 
 function graphCapabilities(before: VisualGraph, after: VisualGraph): string[] {
   const keys: string[] = [];
@@ -52,13 +46,13 @@ function graphCapabilities(before: VisualGraph, after: VisualGraph): string[] {
     const old = before.version === 2 ? before.flows.find(f => f.id === flow.id) : undefined;
     if (JSON.stringify(old) !== JSON.stringify(flow)) {
       flow.nodeIds.forEach(id => affected.add(id));
+      keys.push(...flowCapabilityKeys(flow));
       keys.push(...unsupportedRequestKeys(flow.label));
     }
   }
   for (const node of after.nodes) {
     if (!affected.has(node.id) && JSON.stringify(before.nodes.find(n => n.id === node.id)) === JSON.stringify(node)) continue;
-    const key = { knowledge: "knowledge.answer", product: "product.search", booking: "booking.create", order_status: "order.status.read", handoff: "staff.handoff" }[node.kind as string];
-    if (key) keys.push(key);
+    keys.push(...nodeCapabilityKeys(node));
     keys.push(...unsupportedRequestKeys(`${node.label} ${node.config.prompt ?? ""} ${node.config.fieldKey ?? ""} ${node.config.value ?? ""}`));
   }
   return keys;
@@ -69,28 +63,37 @@ export async function buildAutomationProposal(input: {
   request: string; intent?: AutomationIntent; before: VisualGraph; after: VisualGraph; operations: Operation[];
 }): Promise<AutomationProposal> {
   const behaviors = [...(input.intent?.requestedBehaviors ?? [{ description: input.request.slice(0, 500), capabilityKeys: [] }])];
-  const inferred = [...new Set([...unsupportedRequestKeys(input.request), ...graphCapabilities(input.before, input.after)])];
+  const enforced = moduleEnforcementEnabled(input.businessId);
+  const inferred = [...new Set([...unsupportedRequestKeys(input.request), ...graphCapabilities(input.before, input.after), ...(enforced ? graphRequirements(input.after).capabilityKeys : [])])];
   for (const key of inferred) if (!behaviors.some(b => b.capabilityKeys.includes(key))) behaviors.push({ description: getCapability(key)?.description ?? `Aftësi e kërkuar: ${key}`, capabilityKeys: [key] });
   let assessments: CapabilityAssessment[] = [];
   let unavailable = false;
-  try { assessments = await assessBusinessCapabilities(input.businessId, { userId: input.userId }); }
-  catch { unavailable = true; }
   const keys = [...new Set(behaviors.flatMap(b => b.capabilityKeys))];
+  try { assessments = await assessBusinessCapabilities(input.businessId, { userId: input.userId }, { keys, ...(enforced ? { candidate: input.after } : {}) }); }
+  catch { unavailable = true; }
+  let enforcementFailure: CapabilityEnforcementError | undefined;
+  if (enforced && !unavailable) {
+    try { await enforceWorkflowCapabilities(input.businessId, input.userId, input.after, "draft"); }
+    catch (error) { enforcementFailure = error instanceof CapabilityEnforcementError ? error : new CapabilityEnforcementError("unverified", "Nuk u verifikuan aftësitë e rrjedhës."); }
+  }
   const capabilities = keys.map((key): CapabilityAssessment => {
-    if (!getCapability(key)) return { capabilityKey: key, status: "unsupported", reasonCode: "unknown_capability", missingRequirements: [] };
+    if (!getCapability(key)) return { capabilityKey: key, status: "unsupported", availability: "unsupported", reasonCode: "unknown_capability", missingRequirements: [] };
     return assessments.find(a => a.capabilityKey === key) ?? { capabilityKey: key, status: "needs_clarification", reasonCode: "assessment_unavailable", missingRequirements: ["capability_assessment"] };
   });
   const unsupportedActions = capabilities.filter(c => c.status === "unsupported").map(c => c.capabilityKey);
+  if (enforced && capabilities.some(c => c.missingRequirements.some(key => key.startsWith("module:"))))
+    enforcementFailure ??= new CapabilityEnforcementError("module_disabled", "Një modul i kërkuar nga propozimi është i çaktivizuar.");
   const clarificationQuestions = [...(input.intent?.clarificationQuestions ?? [])];
   if (unsupportedActions.length) clarificationQuestions.push("Automatizimi i plotë nuk mbështetet. Dëshiron të kërkosh një draft vetëm për pjesën e mbështetur?");
   if (unavailable) clarificationQuestions.push("Nuk u verifikuan aftësitë e biznesit. Provo përsëri para ruajtjes.");
   else if (capabilities.some(c => c.status === "needs_clarification")) clarificationQuestions.push("Duhen sqaruar aftësitë e paverifikuara para ruajtjes.");
   const rank: CapabilityReadiness[] = ["ready", "needs_setup", "needs_clarification", "unsupported"];
   const readiness = capabilities.reduce<CapabilityReadiness>((status, c) => rank.indexOf(c.status) > rank.indexOf(status) ? c.status : status,
-    clarificationQuestions.length ? "needs_clarification" : "ready");
+    clarificationQuestions.length || enforcementFailure?.code === "unverified" ? "needs_clarification" : enforcementFailure ? "needs_setup" : "ready");
   const validationFindings: AutomationProposal["validationFindings"] = validateVisualGraph(input.after).errors.map(e => ({ code: "invalid_graph", message: e.message, severity: "warning" }));
   if (unsupportedActions.length) validationFindings.push({ code: "unsupported_actions", message: "Këto veprime nuk kanë ekzekutim të mbështetur.", severity: "error" });
   if (unavailable) validationFindings.push({ code: "assessment_unavailable", message: "Gatishmëria nuk u verifikua.", severity: "error" });
+  if (enforcementFailure) validationFindings.push({ code: enforcementFailure.code, message: enforcementFailure.message, severity: "error" });
   const missingRequirements = [...new Set(capabilities.flatMap(c => c.missingRequirements))];
   if (missingRequirements.length) validationFindings.push({ code: "needs_setup", message: "Nevojitet konfigurim para aktivizimit.", severity: "warning" });
   return {
@@ -99,9 +102,9 @@ export async function buildAutomationProposal(input: {
       const next = capabilities.find(c => c.capabilityKey === key)!.status; return rank.indexOf(next) > rank.indexOf(s) ? next : s;
     }, "ready") })),
     // Blocked requests never return executable operations masquerading as a partial success.
-    operations: unsupportedActions.length || clarificationQuestions.length ? [] : input.operations,
+    operations: unsupportedActions.length || clarificationQuestions.length || enforcementFailure ? [] : input.operations,
     requiredCapabilities: capabilities, missingRequirements, unsupportedActions, assumptions: input.intent?.assumptions ?? [], clarificationQuestions, validationFindings,
-    canSaveDraft: !unavailable && !clarificationQuestions.length && !capabilities.some(c => ["unsupported", "needs_clarification"].includes(c.status)),
+    canSaveDraft: !unavailable && !enforcementFailure && !clarificationQuestions.length && !capabilities.some(c => ["unsupported", "needs_clarification"].includes(c.status)),
   };
 }
 
@@ -111,13 +114,14 @@ export function automationMessage(proposal: AutomationProposal): string {
     ...proposal.requestedBehaviors.map(b => `${b.description}: ${labels[b.readiness]}.`),
     ...(proposal.unsupportedActions.length ? proposal.requiredCapabilities.filter(c => c.status === "ready" || c.status === "needs_setup").map(c => `Mund të propozohet veçmas (${labels[c.status]}): ${getCapability(c.capabilityKey)!.description}`) : []),
     ...proposal.clarificationQuestions,
+    ...proposal.validationFindings.filter(f => f.severity === "error").map(f => f.message),
     ...(proposal.missingRequirements.length ? [`Konfigurime që mungojnë: ${proposal.missingRequirements.join(", ")}.`] : []),
   ].join("\n");
 }
 
-export async function recheckAutomation(businessId: string, userId: string, proposal?: AutomationProposal) {
+export async function recheckAutomation(businessId: string, userId: string, proposal?: AutomationProposal, candidate?: VisualGraph) {
   let current: CapabilityAssessment[];
-  try { current = await assessBusinessCapabilities(businessId, { userId }); }
+  try { current = await assessBusinessCapabilities(businessId, { userId }, proposal ? { keys: proposal.requiredCapabilities.map(c => c.capabilityKey), ...(moduleEnforcementEnabled(businessId) ? { candidate } : {}) } : undefined); }
   catch { throw new AssistantError("Nuk u verifikuan aftësitë dhe qasja në biznes. Përgatite propozimin përsëri."); }
   if (!proposal) return; // Legacy tickets still recheck authorization; their graph uses the existing validator.
   if (!proposal.canSaveDraft) throw new AssistantError("Propozimi kërkon sqarim para ruajtjes.");

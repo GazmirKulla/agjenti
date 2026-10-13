@@ -1,4 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import {
   googleBusy,
   googleConnection,
@@ -116,6 +117,7 @@ export async function availableSlots(
   date: string,
   excludeBookingId?: string,
 ) {
+  await requireRuntimeModules(businessId, ["bookings", "services"]);
   const db = createServiceSupabase();
   let excludeGoogleEvent: string | undefined;
   if (excludeBookingId) {
@@ -212,6 +214,7 @@ export type BookingEffectGuard = {
   revision: number;
 };
 export async function persistBooking(businessId: string, input: BookingInput, guard?: BookingEffectGuard) {
+  await requireRuntimeModules(businessId, ["bookings", "services"]);
   if (
     !uuid(input.serviceId) ||
     (input.id && !uuid(input.id)) ||

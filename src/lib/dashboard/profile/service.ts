@@ -90,6 +90,7 @@ export function parseDashboardProfile(value: unknown): DashboardProfile | null {
 
 export async function loadDashboardProfile(
   businessId: string,
+  options?: { requireExplicit?: boolean },
 ): Promise<DashboardProfile> {
   const db = createServiceSupabase();
   const { data, error } = await db
@@ -99,12 +100,14 @@ export async function loadDashboardProfile(
     .maybeSingle();
   if (error) {
     // Column may not exist yet during rollout — fall back silently.
-    if (error.code === "42703" || error.code === "PGRST204") {
+    if (!options?.requireExplicit && (error.code === "42703" || error.code === "PGRST204")) {
       return legacyDashboardProfile;
     }
     throw new Error("Nuk u ngarkua profili i panelit.");
   }
-  return parseDashboardProfile(data?.dashboard_profile) ?? legacyDashboardProfile;
+  const profile = parseDashboardProfile(data?.dashboard_profile);
+  if (options?.requireExplicit && (!profile || profile.source === "legacy")) throw new Error("Konfirmo modulet e biznesit para aktivizimit të kontrolleve.");
+  return profile ?? legacyDashboardProfile;
 }
 
 export async function saveDashboardProfile(

@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { emptyState } from "../engine";
 import { migrateContext, setFact } from "../context";
 import type { VisualGraph, VisualNode, VisualRunState, VisualVersion } from "./types";
 
-const mocks = vi.hoisted(() => ({ load: vi.fn(), entity: vi.fn(), extract: vi.fn() }));
+const mocks = vi.hoisted(() => ({ load: vi.fn(), entity: vi.fn(), extract: vi.fn(), profile: vi.fn() }));
+vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: mocks.profile }));
 vi.mock("../extract-facts", async original => ({ ...await original<object>(), extractMessageFacts: mocks.extract }));
 vi.mock("./entity-routing", async original => ({ ...await original<object>(), resolveVisualEntity: mocks.entity }));
 vi.mock("./store", () => ({ loadVisualVersion: mocks.load }));
@@ -37,6 +38,36 @@ function waiting(nodeId: string, versionId = "version-1"): VisualRunState {
   return { versionId, nodeId, status: "waiting", values: {}, visited: ["start", nodeId], awaiting: true };
 }
 beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(null); mocks.entity.mockResolvedValue({}); mocks.extract.mockResolvedValue(0); });
+afterEach(() => vi.unstubAllEnvs());
+
+it("blocks an older pinned product action after module deactivation without mutating its snapshot", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "products"] });
+  const graph = linear(node("product", "product"));
+  mocks.load.mockResolvedValue(version(graph, "old-version"));
+  const state = { ...emptyState(), visual: waiting("product", "old-version") };
+  const snapshot = structuredClone(state); const originalGraph = structuredClone(graph);
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  await expect(executeVisualTurn({ ...params(graph), mode: "production", visualPreview: undefined, state, orderRequest: true }, legacy)).rejects.toMatchObject({ code: "module_disabled" });
+  expect(mocks.load).toHaveBeenCalledWith("business-a", "old-version");
+  expect(legacy).not.toHaveBeenCalled(); expect(state).toEqual(snapshot); expect(graph).toEqual(originalGraph);
+});
+it("blocks a general order flow with only collect nodes before accepting data", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "products"] });
+  const graph: VisualGraph = { ...linear(node("name", "collect", { fieldKey: "name", prompt: "Emri?" })), version: 2,
+    flows: [{ id: "order", kind: "order", label: "Porosi", entryNodeId: "name", nodeIds: ["name"] }] };
+  const state = { ...emptyState(), visual: waiting("name") }; const snapshot = structuredClone(state);
+  await expect(executeVisualTurn({ ...params(graph), state, message: "Ana", orderRequest: true }, async p => response(p))).rejects.toMatchObject({ code: "module_disabled" });
+  expect(state).toEqual(snapshot);
+});
+it("checks the executed branch rather than requiring disabled modules in unrelated branches", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "knowledge"] });
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const result = await executeVisualTurn({ ...params(), message: "Sa kushton?" }, legacy);
+  expect(result.reply).toContain("Përgjigje nga njohuritë"); expect(legacy).toHaveBeenCalledOnce();
+});
 
 describe("visual execution integration", () => {
   it("retains legacy behavior for a business without an enabled graph", async () => {

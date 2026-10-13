@@ -1,5 +1,6 @@
 import { conversationControl, resumeConversation } from "./conversation-control";
 import { matchingCatalogNames } from "@/lib/products/match-name";
+import { capabilityModules, requireRuntimeModules, runtimeModules, CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
 import { rememberTurn, chooseGuidance, clarification, invalidateConfirmation } from "@/lib/workflows/guidance";
 import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
@@ -138,12 +139,15 @@ async function processTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
   return executeVisualTurn(params, processLegacyAgentTurn);
 }
 export async function processLegacyAgentTurn(params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }): Promise<AgentTurnResult> {
+  const modules = await runtimeModules(params.businessId);
+  if (params.informational === undefined && (params.state?.product_id || params.orderRequest || detectVisualIntent(params.message) === "order"))
+    await requireRuntimeModules(params.businessId, capabilityModules(["order.prepare"]));
   const db = createServiceSupabase();
   const started = Date.now();
   const trace = params.onTrace;
   trace?.({ stage: "overview", label: "Message received", data: { input: params.message, mode: params.mode ?? "production", source: params.source ?? "instagram" } });
   const [productResult, agentResult, knowledgeResult, trainingMemories, operating] = await Promise.all([
-    db
+    modules && !modules.includes("products") ? { data: [], error: null } : db
       .from("products")
       .select(
         "id,name,sku,description,product_type_id,workflow_id,price_amount,currency",
@@ -156,7 +160,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       .eq("business_id", params.businessId)
       .eq("is_active", true)
       .maybeSingle(),
-    db
+    modules && !modules.includes("knowledge") ? { data: [], error: null } : db
       .from("knowledge_entries")
       .select("title,body,intent_key")
       .eq("business_id", params.businessId)
@@ -182,6 +186,8 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     durationMs: Date.now() - started, readOnly: true,
   } });
   const products = productResult.data ?? [];
+  if (modules && params.state?.product_id && params.informational === undefined && !products.some(p => p.id === params.state!.product_id))
+    throw new CapabilityEnforcementError("binding_unavailable", "Produkti i këtij procesi nuk është më aktiv në këtë biznes. Progresi yt është ruajtur.");
   const agent = agentResult.data;
   function trainingFor(workflowId: string | null, stepKey: string | null | undefined) {
     const context = selectTrainingContext(trainingMemories, workflowId, stepKey, params.message, params.trainingVisualScope);
@@ -202,7 +208,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   let state = structuredClone(params.state ?? emptyState());
   const text = params.message.trim();
   if(state.context && state.step_key==="order_ready" && detectVisualIntent(text)==="order" && params.informational===undefined) state=resetOrder(state);
-  if (state.product_id && !products.some((p) => p.id === state.product_id))
+  if (!modules && state.product_id && !products.some((p) => p.id === state.product_id))
     state = state.context ? resetOrder(state) : emptyState();
   const exactProduct = products.some(
     (p) => foldText(p.name) === foldText(text) || matchesSku(p.sku, text),
@@ -394,6 +400,8 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     }
   }
   // Type and workflow come from this tenant's product, never from client state.
+  // Legacy fallback collection also prepares an order, even without a product node.
+  await requireRuntimeModules(params.businessId, capabilityModules(["order.prepare"]));
   state.product_type_id = selected?.product_type_id ?? null;
   let workflowId: string | null = null;
   let workflowName: string | null = selected ? "Default customer collection" : null;

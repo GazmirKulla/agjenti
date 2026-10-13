@@ -43,7 +43,7 @@ const proposal = (
 ): Proposal => ({ action, id: null, message: "Kontrollo rrjedhën.", changes });
 beforeEach(() => {
   vi.clearAllMocks();
-  m.assess.mockResolvedValue(["knowledge.answer", "product.search", "product.recommend", "booking.create", "order.status.read", "staff.handoff"].map(capabilityKey => ({ capabilityKey, status: "ready", reasonCode: "configured", missingRequirements: [] })));
+  m.assess.mockResolvedValue(["knowledge.answer", "product.search", "product.recommend", "order.prepare", "booking.create", "booking.availability.read", "order.status.read", "staff.handoff"].map(capabilityKey => ({ capabilityKey, status: "ready", reasonCode: "configured", missingRequirements: [] })));
   m.from.mockImplementation(() => {
     const query = {
       select: () => query,

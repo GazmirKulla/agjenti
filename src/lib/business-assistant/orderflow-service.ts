@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { enforceOrderWorkflow } from "@/lib/capabilities/workflow";
 import { encryptSecret } from "@/lib/crypto/tokens";
 import { parseOrderSteps } from "@/lib/workflows/order-definition";
 import { uuid } from "@/lib/calendar/model";
@@ -163,6 +164,7 @@ export async function prepareOrderFlow(
   if (p.action === "orderflow_assign" && (input.name || input.steps))
     throw new AssistantError("Lidhja nuk mund të ndryshojë hapat.");
   const stepNames = {text:"Tekst",choice:"Zgjedhje",photo:"Foto",confirm:"Konfirmim",customer:"Të dhënat e klientit"};
+  await enforceOrderWorkflow(access.businessId, access.userId, products.map(product => product!.id));
   const stepText = (flow?: OrderFlow) =>
     flow?.steps.map((s, i) => `${i + 1}. ${s.label} (${stepNames[s.kind]})`).join("\n") ??
     "—";
@@ -225,6 +227,7 @@ export async function prepareOrderFlow(
 }
 export async function executeOrderFlow(access: Access, ticket: Ticket) {
   authorize(access, true);
+  await enforceOrderWorkflow(access.businessId, access.userId, Array.isArray(ticket.values.products) ? ticket.values.products.map(p => (p as { id: string }).id) : []);
   const { error } = await createServiceSupabase().rpc(
     "apply_assistant_orderflow",
     {

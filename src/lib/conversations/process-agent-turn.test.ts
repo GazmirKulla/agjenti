@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   generate: vi.fn(),
   retrieve: vi.fn(),
+  profile: vi.fn(),
 }));
+vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: mocks.profile }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({ from: mocks.from }),
 }));
@@ -14,12 +16,32 @@ vi.mock("@/lib/agents/generate", () => ({
 vi.mock("@/lib/catalogs/retrieval", () => ({
   retrieveBusinessSources: mocks.retrieve,
 }));
-import { processAgentTurn } from "./process-agent-turn";
+import { processAgentTurn, processLegacyAgentTurn } from "./process-agent-turn";
 import { emptyState } from "@/lib/workflows/engine";
 import { migrateContext } from "@/lib/workflows/context";
 import { starterVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
 import { processConversationMessage } from "./process-conversation-message";
 const fixtures: Record<string, unknown> = {};
+afterEach(() => vi.unstubAllEnvs());
+it("blocks the legacy linear order adapter after module deactivation without reading or writing business records", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  mocks.profile.mockResolvedValue({ enabledModules: ["products", "workflows"] });
+  const state = { ...emptyState(), product_id: "product-a", step_key: "collect_customer" };
+  const snapshot = structuredClone(state);
+  await expect(processLegacyAgentTurn({ businessId: "business-a", message: "Ana", hasPhoto: false, state })).rejects.toMatchObject({ code: "module_disabled" });
+  expect(state).toEqual(snapshot); expect(mocks.from).not.toHaveBeenCalled(); expect(mocks.generate).not.toHaveBeenCalled();
+});
+it("does not erase a pinned order or retrieve a disabled catalog during an informational interruption", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  mocks.profile.mockResolvedValue({ enabledModules: ["knowledge"] });
+  const state = migrateContext({ ...emptyState(), product_id: "product-a", step_key: "collect_size", fields: { size: "M" } });
+  state.context!.execution.linear = { id: "workflow-a", versionId: "pinned", name: "Order", steps: [{ key: "collect_size", kind: "text" }] };
+  const snapshot = structuredClone(state);
+  const result = await processLegacyAgentTurn({ businessId: "business-a", message: "Orari?", hasPhoto: false, state, informational: "Answer only" });
+  expect(result.nextState.context).toEqual(snapshot.context); expect(result.nextState.product_id).toBe("product-a");
+  expect(mocks.from.mock.calls.map(c => c[0])).not.toContain("products");
+  expect(mocks.generate.mock.calls[0][0].catalogSummary).toBe("");
+});
 it.each(["Pse ju duhet adresa", "Çfarë adrese kërkoni", "Why do you need my address", "Dua të ndryshoj diçka"])("does not store an interruption as a customer field without AI: %s", async message => {
   vi.stubEnv("OPENAI_API_KEY", "");
   try {

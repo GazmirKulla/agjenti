@@ -1,5 +1,6 @@
-import { beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ from: vi.fn(), ensure: vi.fn(), submit: vi.fn() }));
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+const m = vi.hoisted(() => ({ from: vi.fn(), ensure: vi.fn(), submit: vi.fn(), profile: vi.fn() }));
+vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabase: async () => ({ auth: { getUser: async () => ({ data: { user: { id: "user" } } }) } }) }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from }) }));
 vi.mock("@/lib/tenant/access", () => ({ isPlatformAdmin: async () => true }));
@@ -21,6 +22,15 @@ beforeEach(() => {
   });
 });
 const send = () => POST(new Request("https://app.test/api/orders", { method: "POST" }), { params: Promise.resolve({ id: "business", conversationId: "conversation" }) });
+afterEach(() => vi.unstubAllEnvs());
+it("blocks direct order execution after module deactivation before CRM or external writes", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  m.profile.mockResolvedValue({ enabledModules: ["products", "workflows"] });
+  const response = await send();
+  expect(response.status).toBe(403); expect(await response.json()).toMatchObject({ code: "module_disabled" });
+  expect(m.ensure).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
+  expect(m.from.mock.calls.map(c => c[0])).not.toContain("orders");
+});
 it.each([2,3])("requires final confirmation for schema %s before staff order creation", async schemaVersion => {
   state.schemaVersion = schemaVersion; state.context = { execution: { orderConfirmed: false } };
   expect((await send()).status).toBe(400);

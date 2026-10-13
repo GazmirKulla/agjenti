@@ -1,4 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { enforceWorkflowCapabilities } from "@/lib/capabilities/workflow";
+import { CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
 import { normalizeVisualDraft, validateVisualGraph } from "./model";
 import { loadWorkflowReadiness } from "../readiness";
 import { loadVisualVersion, loadVisualWorkspace } from "./store";
@@ -33,6 +35,22 @@ export async function writeVisualWorkflow(
     };
   let activationGraph = graph;
   let publication: PublicationReadiness | undefined;
+  if (operation === "enable") {
+    const workspace = await loadVisualWorkspace(businessId);
+    activationGraph = workspace.publishedVersionId
+      ? (await loadVisualVersion(businessId, workspace.publishedVersionId))?.graph ?? null
+      : null;
+  }
+  let capabilities;
+  if (operation === "enable" && !activationGraph && moduleEnforcementEnabled(businessId))
+    return { error: "Nuk u verifikua versioni i publikuar. Riaktivizimi nuk u krye." };
+  if (operation !== "disable" && activationGraph) {
+    try { capabilities = await enforceWorkflowCapabilities(businessId, userId, activationGraph, operation); }
+    catch (error) {
+      const failure = error instanceof CapabilityEnforcementError ? error : new CapabilityEnforcementError("unverified", "Nuk u verifikuan aftësitë e biznesit.");
+      return { error: failure.message, publication: { mode: requestId ? "assistant_strict" : "manual_legacy", result: failure.code === "unverified" ? "UNVERIFIED" : "BLOCKED", status: ["unverified", "unsupported"].includes(failure.code) ? "blocked" : "needs_setup", canPublish: false, canRequestApproval: false, baseRevision: revision, candidateGraphHash: null, findings: [{ code: failure.code, message: failure.message }] } };
+    }
+  }
   if (operation === "publish" && graph && requestId) {
     const reviewed = await reviewWorkflowPublication({ businessId, userId, revision, graph,
       proposalId: approval?.proposalId ?? requestId, requestId, approval, confirming: true,
@@ -40,16 +58,10 @@ export async function writeVisualWorkflow(
     publication = reviewed.publication;
     if (!publication.canPublish) return { error: publication.findings.map(f => f.message).join(" "), publication };
   }
-  if (operation === "enable") {
-    const workspace = await loadVisualWorkspace(businessId);
-    activationGraph = workspace.publishedVersionId
-      ? (await loadVisualVersion(businessId, workspace.publishedVersionId))?.graph ?? null
-      : null;
-  }
   if (operation === "publish" && graph && !requestId) {
     const readiness = graph.version === 2 ? await loadWorkflowReadiness(businessId) : { ready: true, blockers: [] };
     publication = evaluatePublicationPolicy({ mode: "manual_legacy", businessId, userId, authorized: true,
-      revision, candidate: graph, runtimeBlockers: readiness.blockers });
+      revision, candidate: graph, runtimeBlockers: readiness.blockers, capabilities });
     if (!publication.canPublish) return { error: publication.findings.map(f => f.message).join(" "), publication };
   } else if (operation === "enable" && activationGraph?.version === 2) {
     const readiness = await loadWorkflowReadiness(businessId);

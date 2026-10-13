@@ -7,6 +7,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { productCatalogColumns, type ProductRow } from "./catalog";
 import { publishedProductBindings } from "./workflow-binding";
 import { publishedBusinessWorkflow, type BusinessWorkflow } from "@/lib/workflows/visual/business-workflow";
+import { enforceOrderWorkflow } from "@/lib/capabilities/workflow";
 
 export type CatalogField = "workflow_id" | "product_type_id" | "is_active";
 type Change = { id: string; field: CatalogField; value: string | boolean | null; updatedAt: string };
@@ -58,6 +59,8 @@ export async function updateCatalogField(slug: string, change: Change): Promise<
     if (type.error || !type.data) return { error: "Lloji nuk është aktiv. Zgjidh një lloj tjetër." };
   }
   if (next.workflow_id && (change.field === "workflow_id" || next.is_active)) {
+    try { await enforceOrderWorkflow(businessId, user.id, change.field === "workflow_id" ? [row.id] : []); }
+    catch { return { error: "Kontrollo modulet e porosive dhe produktin aktiv para lidhjes së workflow-t." }; }
     const workflow = await db.from("workflows").select("id").eq("business_id", businessId).eq("id", next.workflow_id).maybeSingle();
     if (workflow.error || !workflow.data) return { error: "Workflow-i nuk u gjet në këtë biznes. Zgjidh një tjetër." };
   }

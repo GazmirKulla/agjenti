@@ -20,7 +20,7 @@ export async function reviewWorkflowPublication(p: {
     publishedVersionId: workspace.publishedVersionId, request: "Kontrollo draftin për publikim.",
     before: { version: 1, name: "", nodes: [], edges: [] }, after: p.graph, operations: [] });
   automation.proposalId = p.proposalId;
-  const unavailable = automation.validationFindings.some(f => f.code === "assessment_unavailable");
+  const unavailable = automation.validationFindings.some(f => f.severity === "error");
   const simulation = simulateWorkflowProposal({ proposalId: p.proposalId, baseRevision: p.revision, before: published, candidate: p.graph,
     capabilities: automation.requiredCapabilities, assessmentUnavailable: unavailable, clarificationRequired: automation.clarificationQuestions.length > 0 });
   const runtime = p.graph.version === 2 ? await loadWorkflowReadiness(p.businessId) : { ready: true, blockers: [] };

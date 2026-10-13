@@ -13,6 +13,7 @@ vi.mock("@/lib/workflows/extract-facts", () => ({ extractMessageFacts: mocks.ext
 vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: mocks.version }));
 vi.mock("@/lib/workflows/guidance", async original => ({ ...await original<object>(), chooseGuidance: mocks.guidance }));
 import { processConversationMessage } from "./process-conversation-message";
+import { CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
 function result(state: ConversationStatePayload, reply = "Vazhdo") {
   return { reply, nextState: structuredClone(state), previousResponseId: null, workflowId: "linear-version-1", productName: "Produkt", workflowProgress: [], debug: { model: "test", source: "fallback", fallbackReason: null, agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: 0 } };
 }
@@ -22,6 +23,17 @@ function order() {
   setFact(state, "customer_name", "Ana", "text", "message");
   return state;
 }
+it("preserves pinned execution and collected values when the runtime denies a disabled module", async () => {
+  const state = order(); const snapshot = structuredClone(state);
+  mocks.agent.mockRejectedValue(new CapabilityEnforcementError("module_disabled", "Moduli është çaktivizuar; progresi është ruajtur."));
+  const blocked = await processConversationMessage({ businessId: "business", message: "L", hasPhoto: false, state, mode: "production", source: "instagram" });
+  expect(blocked.reply).toContain("çaktivizuar");
+  expect(blocked.nextState.context).toEqual(snapshot.context);
+  expect(blocked.nextState.fields).toEqual(snapshot.fields);
+  expect(blocked.nextState.step_key).toBe(snapshot.step_key);
+  expect(blocked.nextState.product_id).toBe(snapshot.product_id);
+  expect(state).toEqual(snapshot);
+});
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionUser, isPlatformAdmin, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { normalizeExternalKey } from "./keys";
+import { enforceOrderWorkflow } from "@/lib/capabilities/workflow";
 
 type StepInput = {
   key: string;
@@ -196,6 +197,8 @@ export async function applyTypeSuggestion(slug: string, form: FormData) {
   const typeId = String(form.get("product_type_id") ?? "");
   if (!productId || !typeId)
     return { error: "Zgjidh produktin dhe llojin." };
+  try { await enforceOrderWorkflow(access.business.id, user.id, [productId]); }
+  catch { return { error: "Kontrollo modulet e porosive dhe produktin aktiv para lidhjes së workflow-t." }; }
 
   const db = createServiceSupabase();
   const [{ data: product }, { data: type }, { data: templateSteps }] =

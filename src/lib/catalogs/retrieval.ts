@@ -1,4 +1,5 @@
 import type { TraceObserver } from "@/lib/conversations/trace";
+import { runtimeModules } from "@/lib/capabilities/enforcement";
 import OpenAI from "openai";
 import { agentModel } from "@/lib/agents/generate";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -19,6 +20,8 @@ export async function retrieveBusinessSources(
   rawContext: unknown,
   onTrace?: TraceObserver,
 ) {
+  const modules = await runtimeModules(businessId);
+  if (modules && !modules.includes("catalogs")) return null;
   const db = createServiceSupabase();
   const catalogStarted = Date.now();
   const result = await db

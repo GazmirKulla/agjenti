@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { overlaps, type Booking } from "./model";
+import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
@@ -230,6 +231,7 @@ export function googleEventId(bookingId: string) {
   return `agjenti${bookingId.replaceAll("-", "")}`;
 }
 export async function syncBooking(businessId: string, bookingId: string) {
+  await requireRuntimeModules(businessId, ["bookings", "services"]);
   const db = createServiceSupabase(),
     lease = randomUUID();
   const claimed = await db.rpc("claim_booking_sync", {

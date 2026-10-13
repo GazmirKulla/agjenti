@@ -1,4 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
+import { enforceWorkflowCapabilities, requireActiveBindings } from "@/lib/capabilities/workflow";
+import { loadVisualWorkspace } from "@/lib/workflows/visual/store";
 
 export function visualSelection(value: unknown): { flowId: string; revision: number } | null {
   if (typeof value !== "string" || !value.startsWith("visual:")) return null;
@@ -8,6 +11,22 @@ export function visualSelection(value: unknown): { flowId: string; revision: num
 }
 /** Product writes and draft binding commit together; publication is never implicit. */
 export async function saveProductsWithVisualFlow(businessId: string, userId: string, selection: { flowId: string; revision: number }, mode: "create" | "update" | "import" | "bind", products: Record<string, unknown>[]) {
+  if (moduleEnforcementEnabled(businessId)) {
+    // New/inactive products can still be saved without a binding. Bind after
+    // activation; never smuggle an inactive entity through the combined RPC.
+    if (products.some(p => typeof p.id !== "string" || p.is_active === false)) return { error: "Ruaj dhe aktivizo produktet para lidhjes me rrjedhën." };
+    try {
+      const workspace = await loadVisualWorkspace(businessId);
+      if (workspace.revision !== selection.revision || workspace.graph.version !== 2) return { error: "Rrjedha ndryshoi. Rifresko faqen." };
+      const graph = structuredClone(workspace.graph);
+      const flow = graph.flows.find(f => f.id === selection.flowId);
+      if (!flow) return { error: "Rrjedha nuk u gjet në këtë biznes." };
+      const ids = products.map(p => p.id as string);
+      await requireActiveBindings(businessId, ids, []);
+      flow.productIds = [...new Set([...(flow.productIds ?? []), ...ids])];
+      await enforceWorkflowCapabilities(businessId, userId, graph, "draft");
+    } catch { return { error: "Lidhja kërkon module aktive dhe produkte aktive të këtij biznesi." }; }
+  }
   const { data, error } = await createServiceSupabase().rpc("save_products_with_visual_flow", {
     p_business: businessId, p_user: userId, p_revision: selection.revision, p_flow: selection.flowId, p_mode: mode, p_products: products,
   });

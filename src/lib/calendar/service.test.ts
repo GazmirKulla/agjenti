@@ -1,12 +1,21 @@
-import { beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), busy: vi.fn(), sync: vi.fn() }));
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), busy: vi.fn(), sync: vi.fn(), profile: vi.fn() }));
+vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }) }));
 vi.mock("./google", () => ({ googleBusy: m.busy, syncBooking: m.sync, googleConnection: vi.fn(), writableCalendars: vi.fn() }));
-import { persistBooking } from "./service";
+import { availableSlots, persistBooking } from "./service";
 
 const input = { serviceId: "00000000-0000-4000-8000-000000000001", name: "Demo", contact: "0690000000", start: "2026-11-01T10:00:00Z", status: "pending" as const, notes: "", requestKey: "ig:conversation:stable-task" };
 const guard = { jobId: 7, leaseToken: "lease", conversationId: "conversation", revision: 4 };
 const booking = { id: "booking", status: "pending", sync_status: "local" };
+afterEach(() => vi.unstubAllEnvs());
+it.each(["bookings", "services"])("refuses availability and new booking effects when %s is disabled", async disabled => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  m.profile.mockResolvedValue({ enabledModules: ["bookings", "services"].filter(module => module !== disabled) });
+  await expect(availableSlots("business", input.serviceId, "2026-11-01")).rejects.toMatchObject({ code: "module_disabled" });
+  await expect(persistBooking("business", input, guard)).rejects.toMatchObject({ code: "module_disabled" });
+  expect(m.from).not.toHaveBeenCalled(); expect(m.rpc).not.toHaveBeenCalled(); expect(m.busy).not.toHaveBeenCalled(); expect(m.sync).not.toHaveBeenCalled();
+});
 let previous: unknown = null;
 beforeEach(() => {
   vi.clearAllMocks(); previous = null;

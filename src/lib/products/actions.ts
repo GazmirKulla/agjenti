@@ -8,6 +8,7 @@ import { batchSummary, optionalUuid, parseProductBatch } from "./batch";
 import { parseProductForm } from "./parse";
 import { publishedProductBindings } from "./workflow-binding";
 import { publishedBusinessWorkflow } from "@/lib/workflows/visual/business-workflow";
+import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 
 async function assertTypeAndWorkflow(
   businessId: string,
@@ -25,6 +26,8 @@ async function assertTypeAndWorkflow(
     if (!type) return { error: "Lloji global nuk u gjet." };
   }
   if (workflowId) {
+    try { await requireRuntimeModules(businessId, capabilityModules(["order.prepare"])); }
+    catch { return { error: "Modulet e porosive duhet të jenë aktive para lidhjes së workflow-t." }; }
     const { data: wf } = await db
       .from("workflows")
       .select("id")
@@ -422,6 +425,10 @@ export async function bulkConfigureProducts(
       error: "Disa produkte nuk u gjetën në këtë biznes. Rifresko listën.",
     };
   let visualIds: string[] = [];
+  if (payload.mode === "activate" && rows.some(p => p.workflow_id)) {
+    try { await requireRuntimeModules(access.business.id, capabilityModules(["order.prepare"])); }
+    catch { return { error: "Aktivizo modulet e porosive para riaktivizimit të produkteve me proces porosie." }; }
+  }
   let hasBusinessWorkflow = false;
   if (payload.mode === "activate" && !payload.workflowId && rows.some(p => !p.workflow_id)) {
     try {

@@ -1,4 +1,5 @@
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "./handoff";
+import { CapabilityEnforcementError, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { conversationControl, resumeConversation } from "./conversation-control";
 import { usesSharedCoordinator } from "./coordinator-policy";
 import { randomUUID } from "node:crypto";
@@ -98,7 +99,16 @@ function explicitProfile(state: ConversationStatePayload, message: string, profi
 export async function processConversationMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
   const started = Date.now();
   const before = { ...emptyState(), recentMessages: recentConversation(params.state) };
-  const result = await processMessage(params);
+  let result: AgentTurnResult;
+  try {
+    result = await processMessage(params);
+    if (result.handoff) await requireRuntimeModules(params.businessId, ["staff"]);
+  } catch (error) {
+    if (!(error instanceof CapabilityEnforcementError)) throw error;
+    // Retain the original pinned version, collected fields and process cursors.
+    result = plainResult(structuredClone(params.state ?? emptyState()), error.message);
+    result.workflowId = params.persistedWorkflowId ?? params.state?.context?.execution.linear?.id ?? params.state?.linearSnapshot?.id ?? null;
+  }
   if (result.handoff && !result.advisoryHandoff) {
     result.nextState.staffHandoff = true;
   }

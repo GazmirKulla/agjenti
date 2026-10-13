@@ -1,4 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { enforceOrderWorkflow } from "@/lib/capabilities/workflow";
 import { encryptSecret } from "@/lib/crypto/tokens";
 import { sharedWorkflowEnabled } from "@/lib/workflows/context";
 import { parseLinearDefinition, type LinearDefinition } from "@/lib/workflows/linear";
@@ -122,6 +123,7 @@ export async function prepareLinear(access: Access, p: Proposal, expected?: Line
     const { data: allAffected, error } = scope === "shared" && product.workflow_id ? await createServiceSupabase().from("products").select("id,name").eq("business_id", access.businessId).eq("workflow_id", product.workflow_id) : { data: affected, error: null };
     if (error)
         throw new AssistantError("Nuk u lexuan produktet e prekura.");
+    await enforceOrderWorkflow(access.businessId, access.userId, (allAffected ?? []).map(v => v.id));
     const preview: Preview = { title: p.action === "linear_publish" ? "Publiko workflow-n e produktit" : "Ruaj draftin e produktit", subject: product.name, fields: [
             { label: "Hapat", before: describeDefinition(p.action === "linear_publish" ? active : card.draft?.definition ?? active), after: describeDefinition(definition) },
             { label: "Produktet e prekura", before: "", after: (allAffected ?? []).map(v => v.name).join(", ") },
@@ -131,6 +133,7 @@ export async function prepareLinear(access: Access, p: Proposal, expected?: Line
 }
 export async function executeLinear(access: Access, t: Ticket) {
     allow(access);
+    await enforceOrderWorkflow(access.businessId, access.userId, [t.id, ...(Array.isArray(t.before?.affected) ? t.before.affected as string[] : [])]);
     const card = await loadLinearContext(access, t.id), product = card.products.find(v => v.id === t.id)!;
     const active = card.versions.find(v => v.workflow_id === product.workflow_id);
     if ((card.draft?.revision ?? 0) !== t.before?.revision || product.workflow_id !== t.before?.workflowId || (active?.id ?? null) !== t.before?.versionId)

@@ -289,9 +289,9 @@ export async function executeWorkflow(access: Access, ticket: Ticket) {
   if (`workflow_${operation}` !== ticket.action)
     throw new AssistantError("Konfirmim i pavlefshëm.");
   if (operation === "draft") {
-    await recheckAutomation(access.businessId, access.userId, ticket.automation);
     const graph = normalizeVisualDraft(ticket.values.graph);
     if (!graph) throw new AssistantError("Grafi i konfirmuar nuk është i vlefshëm.");
+    await recheckAutomation(access.businessId, access.userId, ticket.automation, graph);
     const revision = Number(ticket.before?.revision);
     if (ticket.simulation && !matchesSimulationBinding(ticket.simulation, ticket.automation?.proposalId ?? ticket.id, revision, graph))
       throw new AssistantError("Simulimi nuk i përket këtij grafi ose revisioni. Përgatite propozimin përsëri.");

@@ -6,6 +6,8 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import { restoreOrder } from "@/lib/workflows/conversation-processes";
+import { CapabilityEnforcementError, moduleEnforcementEnabled, requireRuntimeModules } from "@/lib/capabilities/enforcement";
+import { requireActiveBindings } from "@/lib/capabilities/workflow";
 
 async function canAccess(userId: string, businessId: string) {
 	if (await isPlatformAdmin(userId)) return true;
@@ -50,6 +52,13 @@ export async function POST(
 	// Another process can own the current cursor while the confirmed order waits for staff.
 	const state = storedState.schemaVersion === 3 && storedState.context && storedState.processes?.order
 		? restoreOrder(storedState) : storedState;
+	try {
+		await requireRuntimeModules(businessId, ["orders", "products"]);
+		if (moduleEnforcementEnabled(businessId) && state.product_id) await requireActiveBindings(businessId, [state.product_id], []);
+	} catch (error) {
+		if (!(error instanceof CapabilityEnforcementError)) throw error;
+		return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
+	}
 	if((state.schemaVersion===2 || state.schemaVersion===3) && (state.step_key!=="order_ready" || !state.context?.execution.orderConfirmed || !state.product_id)) return NextResponse.json({error:"Porosia pret plotësimin dhe konfirmimin e klientit."},{status:400});
 	const customer = state.customer ?? { name: null, phone: null, city: null, address: null };
 	if (!customer.name || !customer.phone || !customer.address) {

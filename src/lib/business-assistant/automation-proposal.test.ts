@@ -6,7 +6,7 @@ import { readAutomationIntent, type AutomationIntent } from "./automation-intent
 import { starterVisualGraph } from "@/lib/workflows/visual/model";
 import { applyWorkflowOperations, type Operation } from "./workflow";
 import { getCapability } from "@/lib/capabilities/registry";
-const ready = ["knowledge.answer", "product.search", "product.recommend", "booking.create", "order.status.read", "staff.handoff"].map(capabilityKey => ({ capabilityKey, status: "ready", reasonCode: "configured", missingRequirements: [] }));
+const ready = ["knowledge.answer", "product.search", "product.recommend", "booking.create", "booking.availability.read", "order.prepare", "order.status.read", "staff.handoff"].map(capabilityKey => ({ capabilityKey, status: "ready", reasonCode: "configured", missingRequirements: [] }));
 const operations: Operation[] = [{ op: "rename", name: "Shitjet" }];
 function input(keys = ["product.search"]) {
   const before = starterVisualGraph();
@@ -21,7 +21,7 @@ it("creates a supported proposal with server-owned revision/readiness without ch
   expect(result).toMatchObject({ version: 1, status: "proposed", readiness: "ready", baseRevision: 3, workflowVersionId: "v1", canSaveDraft: true, operations });
   expect(result.requestedBehaviors[0].readiness).toBe("ready");
   expect(data.before).toEqual(old);
-  expect(assess).toHaveBeenCalledWith("a", { userId: "owner" });
+  expect(assess).toHaveBeenCalledWith("a", { userId: "owner" }, { keys: ["product.search"] });
 });
 it("reports a mixed stock request even when the model omits its unsupported behaviors", async () => {
   const result = await buildAutomationProposal({ ...input(["product.search", "product.recommend"]), request: "Check inventory. If unavailable recommend an alternative and notify when back in stock." });

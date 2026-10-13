@@ -1,4 +1,5 @@
 import { channelAdapter } from "@/lib/conversations/channel";
+import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
 
@@ -97,6 +98,7 @@ async function ownOrders(businessId: string, identity: OrderCustomerIdentity): P
 }
 
 export async function customerOrderStatus(params: { businessId: string; message: string; state: ConversationStatePayload; identity?: OrderCustomerIdentity; isolated?: boolean }) {
+  await requireRuntimeModules(params.businessId, ["orders", "workflows"]);
   const nextState = structuredClone(params.state);
   const lookup = readOrderStatusLookup(params.state);
   const expiredLookup = !lookup && Boolean(readOrderStatusLookup(params.state, true));

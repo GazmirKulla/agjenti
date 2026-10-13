@@ -27,6 +27,11 @@ export function evaluatePublicationPolicy(p: {
     return block("stale_proposal", "stale_revision", "Rrjedha ndryshoi në një dritare tjetër. Rifresko dhe përgatite propozimin përsëri.");
   if (!graph || !validateVisualGraph(p.candidate).graph) return block("blocked", "invalid_graph", "Plotëso hapat dhe lidhjet e shënuara para publikimit.", "FAIL");
   if (p.runtimeBlockers?.length) return block("needs_setup", "runtime_not_ready", `Ruaje si draft dhe provoje. Para aktivizimit: ${p.runtimeBlockers.join(" ")}`);
+  // Manual compatibility concerns simulation only, never explicitly supplied capability restrictions.
+  if (p.capabilities?.some(c => !getCapability(c.capabilityKey) || c.status === "unsupported"))
+    return block("blocked", "unsupported_capability", "Rrjedha përmban një aftësi që nuk mbështetet.");
+  if (p.capabilities?.some(c => c.status !== "ready"))
+    return block("needs_setup", "capability_not_ready", "Modulet ose konfigurimi i kërkuar nuk janë gati.");
   if (p.mode === "manual_legacy") {
     // Deliberate compatibility exception: never relabel absent simulation as PASS.
     result.result = "UNVERIFIED"; result.status = "unverified_external_action"; result.canPublish = true;
@@ -37,9 +42,6 @@ export function evaluatePublicationPolicy(p: {
       p.expectedPublishedVersionId !== undefined && p.expectedPublishedVersionId !== (p.publishedVersionId ?? null))
     return block("stale_proposal", "snapshot_changed", "Grafi ose versioni i publikuar ndryshoi. Përgatite propozimin përsëri.");
   if (p.assessmentUnavailable || !p.capabilities) return block("blocked", "assessment_unavailable", "Nuk u verifikuan aftësitë dhe qasja në biznes. Provo përsëri.");
-  if (p.capabilities.some(c => !getCapability(c.capabilityKey) || c.status === "unsupported"))
-    return block("blocked", "unsupported_capability", "Propozimi përmban veprime që nuk mbështeten. Nuk mund të publikohen si automatizim.");
-  if (p.capabilities.some(c => c.status !== "ready")) return block("needs_setup", "capability_not_ready", "Aftësitë ose konfigurimi nuk janë gati. Plotëso konfigurimin dhe kontrollo propozimin përsëri.");
   const simulation = p.simulation;
   if (!simulation || !p.proposalId || !matchesSimulationBinding(simulation, p.proposalId, p.revision, graph))
     return block("stale_proposal", "simulation_mismatch", "Simulimi nuk i përket këtij grafi ose revisioni. Përgatite propozimin përsëri.");
