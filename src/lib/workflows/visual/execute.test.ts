@@ -467,7 +467,7 @@ it("resolves a purchase inside a burst even when its last line is an availabilit
   const legacy = vi.fn(async (p: LegacyParams) => response(p, "Produkti gjendet në katalog; stoku nuk është verifikuar."));
   const message = "Ckemi\nSi jeni\nDua te porosis montesori\nE keni ne gjendje?";
   const result = await executeVisualTurn({ ...params(graph), message }, legacy);
-  expect(mocks.entity).toHaveBeenCalledWith("business-a", graph, message, undefined, true);
+  expect(mocks.entity).toHaveBeenCalledWith("business-a", graph, message, undefined, true, expect.objectContaining({ state: expect.any(Object) }));
   expect(result.nextState.product_id).toBe(boundProductId);
   expect(result.reply).not.toContain("Cilin produkt");
   expect(legacy).toHaveBeenCalledOnce();
@@ -582,7 +582,7 @@ it.each(["test", "production"] as const)("only enables inactive binding previews
   mockBoundProduct();
   const graph = boundGraph(node("product", "product")); mocks.load.mockResolvedValue(version(graph));
   await executeVisualTurn({ ...params(graph), mode, visualPreview: undefined, message: "Puzzle" }, async p => response(p));
-  expect(mocks.entity).toHaveBeenCalledWith("business-a", graph, "Puzzle", undefined, mode === "test");
+  expect(mocks.entity).toHaveBeenCalledWith("business-a", graph, "Puzzle", undefined, mode === "test", expect.objectContaining({ state: expect.any(Object) }));
 });
 
 it.each(["product", "booking"] as const)("does not append a %s question when an information flow crosses into another process", async kind => {

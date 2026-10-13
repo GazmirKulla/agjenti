@@ -39,6 +39,7 @@ export type WorkflowStepDef = {
 };
 
 export type ConversationStatePayload = {
+  entityPresentation?: import("@/lib/products/entity-bridge").EntityPresentation;
   /** Staff ownership requested by the engine; transport commits the pause before acknowledgement. */
   staffHandoff?: boolean;
   /** Customer acknowledged information or deferred; explicit intent is needed to resume. */

@@ -125,6 +125,7 @@ beforeEach(() => {
         return chain;
       }),
       order: vi.fn(() => chain),
+      range: vi.fn(() => chain),
       limit: vi.fn(() => chain),
       maybeSingle: vi.fn(async () => result()),
       then: (resolve: (v: unknown) => unknown) =>
@@ -137,6 +138,131 @@ beforeEach(() => {
     responseId: "resp_1",
     source: "ai",
     fallbackReason: null,
+  });
+});
+
+describe("W3 presentation-to-order journeys", () => {
+  const catalog = [
+    { id: "p1", name: "Puzzle", price_amount: 20, currency: "EUR", product_type_id: "type-a", workflow_id: null },
+    { id: "p2", name: "Libri", price_amount: 10, currency: "EUR", product_type_id: "type-a", workflow_id: null },
+  ];
+  const turn = (message: string, state?: import("@/lib/workflows/engine").ConversationStatePayload) => processConversationMessage({ businessId: "business-a", mode: "test", message, state, hasPhoto: false });
+  async function presentation(state?: import("@/lib/workflows/engine").ConversationStatePayload) {
+    fixtures.products = catalog;
+    mocks.generate.mockResolvedValue({ reply: "Puzzle — 20 EUR\nLibri — 10 EUR", presentedProducts: catalog, responseId: null, source: "ai", fallbackReason: null });
+    return turn("Çfarë produktesh keni?", state);
+  }
+  it.each(["i dyti", "the second one", "më i liri", "the cheapest"])("carries a verified selection into an unbound order workflow: %s", async message => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const info = await presentation();
+    expect(info.nextState.product_id).toBeNull();
+    expect(info.nextState.entityPresentation?.entities.map(e => e.id)).toEqual(["p1", "p2"]);
+    const chosen = await turn(message, info.nextState);
+    expect(chosen.nextState.product_id).toBe("p2");
+    expect(chosen.nextState.processes?.order?.snapshot.product_id).toBe("p2");
+    expect(chosen.nextState.step_key).toBe("collect_customer");
+    expect(chosen.reply).not.toContain("Cilin produkt");
+    expect(chosen.nextState.customer.name).toBeNull();
+  });
+  it("preserves the replacement approval boundary and invalidates old confirmations after explicit correction", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const { sharedPrompt, setFact } = await import("@/lib/workflows/context");
+    const { snapshotOrder } = await import("@/lib/workflows/conversation-processes");
+    const info = await presentation();
+    const first = await turn("Puzzle", info.nextState);
+    setFact(first.nextState, "customer_phone", "0692222222", "phone", "message");
+    first.nextState.step_key = "order_confirm";
+    sharedPrompt(first.nextState, []);
+    first.nextState.context!.execution.orderReview!.confirmed = true;
+    first.nextState.context!.execution.orderConfirmed = true;
+    first.nextState.processes!.order!.snapshot = snapshotOrder(first.nextState);
+    first.nextState.processes!.booking = { id: "booking", status: "suspended" };
+    const corrected = await turn("not Puzzle, I want Libri", first.nextState);
+    expect(corrected.nextState.product_id).toBe("p1");
+    expect(corrected.nextState.processes!.pendingChoice).toMatchObject({ kind: "replace", productId: "p2" });
+    const accepted = await turn("Po", corrected.nextState);
+    expect(accepted.nextState.product_id).toBe("p2");
+    expect(accepted.nextState.customer.phone).toBe("0692222222");
+    expect(accepted.nextState.context!.execution.orderConfirmed).not.toBe(true);
+    expect(accepted.nextState.context!.execution.orderReview).toBeUndefined();
+    expect(accepted.nextState.processes!.booking).toMatchObject({ id: "booking", status: "suspended" });
+    expect(first.nextState.product_id).toBe("p1");
+  });
+  it("revalidates the proposed replacement on yes; an unavailable product cannot be bound", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const info = await presentation();
+    const first = await turn("Puzzle", info.nextState);
+    const correction = await turn("Jo Puzzle, Libri", first.nextState);
+    fixtures.products = [catalog[0]];
+    const answer = await turn("Po", correction.nextState);
+    expect(answer.nextState.product_id).toBe("p1");
+    expect(answer.nextState.processes!.pendingChoice).toBeUndefined();
+    expect(answer.reply).toContain("nuk është më aktiv");
+  });
+  it("preserves facts and pinned versions through information and resume, but rejects old relative references", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const { setFact } = await import("@/lib/workflows/context");
+    const info = await presentation();
+    const selected = await turn("i dyti", info.nextState);
+    setFact(selected.nextState, "customer_phone", "0692222222", "phone", "message");
+    selected.nextState.context!.execution.linear = { id: "wf", versionId: "pinned-v1", name: "Order", steps: [{ key: "collect_customer", kind: "customer" }] };
+    mocks.generate.mockResolvedValue({ reply: "Jemi në Tiranë.", responseId: null, source: "ai", fallbackReason: null });
+    const information = await turn("Ku jeni?", selected.nextState);
+    const stale = await turn("i dyti", information.nextState);
+    expect(stale.reply).toContain("referencë e sigurt");
+    expect(stale.nextState.product_id).toBe("p2");
+    const resumed = await turn("Vazhdo porosinë", stale.nextState);
+    expect(resumed.nextState.product_id).toBe("p2");
+    expect(resumed.nextState.customer.phone).toBe("0692222222");
+    expect(resumed.nextState.context!.execution.linear!.versionId).toBe("pinned-v1");
+  });
+  it("does not consume a duplicate relative selection as a field answer or approval", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const info = await presentation();
+    const selected = await turn("i dyti", info.nextState);
+    const duplicate = await turn("i dyti", selected.nextState);
+    expect(duplicate.nextState.product_id).toBe("p2");
+    expect(duplicate.nextState.customer.name).toBeNull();
+    expect(duplicate.nextState.context!.execution.orderConfirmed).not.toBe(true);
+    expect(duplicate.reply).toContain("referencë e sigurt");
+  });
+  it("binds the selected product to the real visual runtime without consuming the selection as a field", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+    mocks.profile.mockResolvedValue({ enabledModules: ["products", "orders", "workflows"] });
+    const ids = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000002"];
+    const list = catalog.map((p, i) => ({ ...p, id: ids[i] })); fixtures.products = list;
+    mocks.generate.mockResolvedValue({ reply: "Puzzle — 20 EUR\nLibri — 10 EUR", presentedProducts: list, responseId: null, source: "ai", fallbackReason: null });
+    const visualPreview: import("@/lib/workflows/visual/types").VisualVersion = { id: "pinned-visual", businessId: "business-a", createdAt: "2026-10-13", graph: {
+      version: 2, name: "Products", nodes: [
+        { id: "start", kind: "start", label: "Start", position: { x: 0, y: 0 }, config: {} },
+        { id: "size", kind: "collect", label: "Madhësia", position: { x: 0, y: 100 }, config: { fieldKey: "size", fieldType: "text", prompt: "Madhësia?" } },
+        { id: "end", kind: "end", label: "End", position: { x: 0, y: 200 }, config: {} },
+      ], edges: [{ id: "a", source: "start", target: "size", port: "next" }, { id: "b", source: "size", target: "end", port: "next" }],
+      flows: [{ id: "order", kind: "order", label: "Porosia", nodeIds: ["size"], entryNodeId: "size", productIds: ids }],
+    } };
+    const base = { businessId: "business-a", mode: "test" as const, visualPreview, hasPhoto: false };
+    const info = await processConversationMessage({ ...base, message: "Çfarë produktesh keni?" });
+    const choice = await processConversationMessage({ ...base, message: "i dyti", state: info.nextState });
+    expect(choice.nextState.product_id).toBe(ids[1]);
+    expect(choice.nextState.visual?.binding?.entity.id).toBe(ids[1]);
+    expect(choice.nextState.visual?.versionId).toBe("pinned-visual");
+    expect(choice.nextState.context?.order.size).toBeUndefined();
+    expect(choice.reply).toBe("Madhësia?");
+    const next = await processConversationMessage({ ...base, message: "M", state: choice.nextState });
+    expect(next.nextState.product_id).toBe(ids[1]);
+    expect(next.nextState.context?.order.size.value).toBe("M");
+    expect(next.nextState.visual?.versionId).toBe("pinned-visual");
+  });
+  it("keeps W1 pause and staff ownership ahead of entity selection", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const info = await presentation();
+    const staff = await turn("i dyti", { ...info.nextState, staffHandoff: true });
+    expect(staff.nextState.product_id).toBeNull(); expect(staff.nextState.staffHandoff).toBe(true);
+    expect(staff.reply).toContain("pritje të stafit");
+    const paused = await turn("i dyti", { ...info.nextState, conversationPaused: true });
+    expect(paused.nextState.product_id).toBeNull();
+    expect(paused.conversationRouting?.reason).toBe("resume_requires_intent");
   });
 });
 

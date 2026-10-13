@@ -4,6 +4,10 @@ const m = vi.hoisted(() => ({ rows: {} as Record<string, unknown[]>, filters: []
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: m.create }));
 import { resolveVisualEntity } from "./entity-routing";
+import { emptyState } from "../engine";
+import { migrateContext } from "../context";
+import { recordEntityPresentation } from "@/lib/products/entity-bridge";
+import { rememberTurn } from "../guidance";
 const p = "aaaaaaaa-0000-4000-8000-000000000001", s = "bbbbbbbb-0000-4000-8000-000000000002";
 beforeEach(() => {
   m.filters = []; vi.clearAllMocks();
@@ -18,6 +22,39 @@ beforeEach(() => {
   } }));
 });
 function graph() { const graph = upgradeVisualGraph(starterVisualGraph()); graph.flows.find(flow => flow.kind === "order")!.productIds = [p]; graph.flows.find(flow => flow.kind === "information")!.serviceIds = [s]; return graph; }
+it("W3 resolves a verified second product instead of silently reusing a pinned binding", async () => {
+  const other = "aaaaaaaa-0000-4000-8000-000000000003";
+  const products = [{ id: p, name: "Puzzle", price_amount: 20, currency: "EUR" }, { id: other, name: "Libri", price_amount: 10, currency: "EUR" }];
+  m.rows.products = products;
+  const g = graph(); g.flows.find(f => f.kind === "order")!.productIds!.push(other);
+  const state = emptyState();
+  recordEntityPresentation(state, "business", "Puzzle, Libri", products);
+  rememberTurn(null, state, "Produktet?", "Puzzle, Libri");
+  const old = { flowId: "order", entity: { kind: "product" as const, id: p } };
+  expect((await resolveVisualEntity("business", g, "i dyti", old, true, { state })).selected?.entity.id).toBe(other);
+  expect((await resolveVisualEntity("business", g, "not Puzzle, Libri", old, true, { state })).selected?.entity.id).toBe(other);
+  state.entityPresentation!.expiresAt = 0;
+  const stale = await resolveVisualEntity("business", g, "i dyti", old, true, { state });
+  expect(stale.selected).toBeUndefined(); expect(stale.clarification).toContain("referencë e sigurt");
+});
+it("W3 historical visual bindings cannot replace a newer canonical order selection", async () => {
+  const other = "aaaaaaaa-0000-4000-8000-000000000003";
+  m.rows.products.push({ id: other, name: "Libri" });
+  const g = graph(); g.flows.find(f => f.kind === "order")!.productIds!.push(other);
+  const state = migrateContext(); state.context!.execution.factOwner = "order"; state.product_id = other;
+  const result = await resolveVisualEntity("business", g, "M", { flowId: "order", entity: { kind: "product", id: p } }, true, { state });
+  expect(result.selected?.entity.id).toBe(other);
+});
+it("W3 a verified hint cannot use the inactive preview exception", async () => {
+  m.rows.products = [{ id: p, name: "Puzzle", is_active: false }];
+  const result = await resolveVisualEntity("business", graph(), "i pari", undefined, true, { selectedProductId: p });
+  expect(result.selected).toBeUndefined(); expect(result.clarification).toContain("nuk është më aktiv");
+});
+it("W3 a product hint does not hide a service with the same explicitly mentioned name", async () => {
+  m.rows.booking_services = [{ id: s, name: "Puzzle", booking_enabled: false }];
+  const result = await resolveVisualEntity("business", graph(), "Puzzle", undefined, true, { selectedProductId: p });
+  expect(result.selected).toBeUndefined(); expect(result.choices).toHaveLength(2);
+});
 afterEach(() => vi.unstubAllEnvs());
 it("does not permit an inactive entity preview to bypass enrolled tenant restrictions", async () => {
   vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");

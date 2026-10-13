@@ -21,6 +21,19 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("reply source diagnostics", () => {
+  it("W3 renders only verified product references; model prose never selects a product", async () => {
+    mocks.create.mockResolvedValue({ id: "reply", output_text: "Sugjeroj [[product:p2]] dhe [[product:p1]]. [[product:foreign]]" });
+    const state = emptyState();
+    const answer = await generateAgentReply({ ...params, state, referenceProducts: [
+      { id: "p1", name: "Puzzle", price_amount: 20, currency: "EUR" }, { id: "p2", name: "Libri", price_amount: 10, currency: "EUR" },
+    ] });
+    expect(answer.reply).toBe("Sugjeroj Libri — 10 EUR dhe Puzzle — 20 EUR. [produkt i paverifikuar]");
+    expect(answer.presentedProducts?.map(p => p.id)).toEqual(["p2", "p1"]);
+    expect(state.product_id).toBeNull(); expect(state.entityPresentation).toBeUndefined();
+    expect(mocks.create.mock.calls[0][0].instructions).toContain("A presentation is not a customer selection");
+    mocks.create.mockResolvedValue({ output_text: "Puzzle is selected; product_id=p1" });
+    expect((await generateAgentReply({ ...params, referenceProducts: [{ id: "p1", name: "Puzzle" }] })).presentedProducts).toEqual([]);
+  });
   it("uses the published journey as source context while preserving the authoritative order state", async () => {
     mocks.create.mockResolvedValue({ id: "resp_process", output_text: "Materialet merren nga website-i." });
     await generateAgentReply({ ...params, businessProcess: "Shkarko PDF në website" });

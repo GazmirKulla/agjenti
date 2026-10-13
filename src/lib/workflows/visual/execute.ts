@@ -14,6 +14,7 @@ import { advanceVisualOrderReview, missingVisualOrderNode } from "./product-orde
 import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { nodeCapabilityKeys, flowCapabilityKeys } from "@/lib/capabilities/graph";
 import { ownedCollectNodes } from "./facts";
+import { combineProductPresentations, type ReferenceProduct } from "@/lib/products/entity-bridge";
 
 type Legacy = (params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }) => Promise<AgentTurnResult>;
 
@@ -30,11 +31,14 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     return legacyReply({ ...params, trainingVisualScope: undefined });
   }
   let version = loadedVersion;
-  const legacy = (p: Parameters<Legacy>[0], executedNodeId?: string) => {
+  const presentations: { reply: string; presentedProducts?: ReferenceProduct[] }[] = [];
+  const legacy = async (p: Parameters<Legacy>[0], executedNodeId?: string) => {
     const nodeId = executedNodeId ?? p.state?.visual?.nodeId;
     const flow = version.graph.version === 2 && p.state?.visual?.versionId === version.id
       ? version.graph.flows.find(f => f.nodeIds.includes(nodeId ?? "")) : undefined;
-    return legacyReply({ ...p, trainingVisualScope: flow && nodeId ? { flowId: flow.id, nodeId } : undefined });
+    const answer = await legacyReply({ ...p, trainingVisualScope: flow && nodeId ? { flowId: flow.id, nodeId } : undefined });
+    presentations.push({ reply: answer.reply, presentedProducts: answer.presentedProducts });
+    return answer;
   };
   if (version.businessId !== params.businessId || !validateVisualGraph(version.graph).graph) throw new Error("invalid_visual_workflow");
   await requireRuntimeModules(params.businessId, ["workflows"]);
@@ -52,12 +56,14 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     debug: { model: agentModel(), source: "fallback", fallbackReason: "visual_entity", agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: Date.now() - started } });
   const explicitOrder = params.orderRequest || detectVisualIntent(params.message) === "order";
   const informationalEntity = !explicitOrder && !params.bookingRequest && (isQuestion(params.message) || isEntityInformationRequest(params.message));
-  const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding, params.mode === "test") : {};
+  const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding, params.mode === "test", { state: base, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
   const selectedEntity = entityResolution.selected;
-  if (entityResolution.choices?.length) return simple(`Cilin produkt ose shërbim dëshironi: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`);
+  if (entityResolution.clarification) return simple(entityResolution.clarification);
+  if (entityResolution.choices?.length) return { ...simple(`Cilin produkt ose shërbim dëshironi: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`),
+    presentedProducts: entityResolution.choices.every(entity => entity.kind === "product") ? entityResolution.choices : undefined };
   if (!selectedEntity && entityResolution.mentioned?.kind === "product" && previous?.binding && entityResolution.mentioned.id !== previous.binding.entity.id) {
     if (base.product_id && base.step_key !== "order_ready") {
-      if (base.processes) base.processes.pendingChoice = { kind: "replace", process: "order", message: params.message };
+      if (base.processes) base.processes.pendingChoice = { kind: "replace", process: "order", message: params.message, productId: entityResolution.mentioned.id };
       return simple(`Ke një porosi të papërfunduar. Ta zëvendësojmë me ${entityResolution.mentioned.name}? Shkruaj “Po” ose “Jo”.`);
     }
     previous = undefined; active = null; delete base.visual;
@@ -67,10 +73,13 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   if (!selectedEntity && entityResolution.mentioned?.kind === "product" && !generalOrderFlows().length) return legacy({ ...params, state: base, requireConfiguredWorkflow: true });
   const boundFlow = selectedEntity && version.graph.version === 2 ? version.graph.flows.find(flow => flow.id === selectedEntity.binding.flowId) : undefined;
   const boundOrder = selectedEntity?.entity.kind === "product" && Boolean(boundFlow && (boundFlow.kind === "order" || boundFlow.nodeIds.some(id => version.graph.nodes.some(node => node.id === id && node.kind === "product")) || boundFlow.kind === "custom" && (params.orderRequest || base.product_id === selectedEntity.entity.id && previous?.binding?.entity.id === selectedEntity.entity.id)));
-  if (!generalOrderFlows().length && !selectedEntity && !base.product_id && !entityResolution.mentioned && (params.orderRequest || detectVisualIntent(params.message) === "order") && entityResolution.available?.some(entity => entity.kind === "product")) return simple(`Cilin produkt dëshironi? ${entityResolution.available.filter(entity => entity.kind === "product").map(entity => entity.name).join(", ")}.`);
+  if (!generalOrderFlows().length && !selectedEntity && !base.product_id && !entityResolution.mentioned && (params.orderRequest || detectVisualIntent(params.message) === "order") && entityResolution.available?.some(entity => entity.kind === "product")) return {
+    ...simple(`Cilin produkt dëshironi? ${entityResolution.available.filter(entity => entity.kind === "product").map(entity => entity.name).join(", ")}.`),
+    presentedProducts: entityResolution.available.filter(entity => entity.kind === "product"),
+  };
   const enteringEntity = Boolean(boundFlow && (!previous?.binding || previous.binding.entity.id !== selectedEntity!.entity.id || previous.status === "completed"));
   if (enteringEntity && selectedEntity?.entity.kind === "product" && base.product_id && base.product_id !== selectedEntity.entity.id && base.step_key !== "order_ready") {
-    if (base.processes) base.processes.pendingChoice = { kind: "replace", process: "order", message: params.message };
+    if (base.processes) base.processes.pendingChoice = { kind: "replace", process: "order", message: params.message, productId: selectedEntity.entity.id };
     return simple(`Ke një porosi të papërfunduar. Ta zëvendësojmë me ${selectedEntity.entity.name}? Shkruaj “Po” ose “Jo”.`);
   }
   if (selectedEntity && boundFlow) {
@@ -144,6 +153,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   params.onTrace?.({stage:"workflow",label:"New message routed",data:{...guidance,from:previous?.nodeId??null,candidates:routes.map(r=>r.id)}});
   let extractedValues: Record<string, string> = {};
   const extractFacts = async () => {
+    if (params.selectedProductId) return 0; // A selection is navigation, not a collected field value.
     const fields = ownedCollectNodes(version.graph, base.visual).map(n => ({ key: n.config.fieldKey!, type: n.config.fieldType || "text" as const, label: n.config.prompt || n.label }));
     if (!fields.length && !base.context) return 0;
     // Older visual conversations store fields on the cursor. Do not enable the
@@ -361,6 +371,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     if (action.kind === "prompt" && !revisiting && isQuestion(params.message) && !replies.length) {
       const answer = await legacy({ ...params, state: turn.nextState, informational: "Përgjigju pyetjes pa ndryshuar të dhënat e porosisë." });
       replies.push(answer.reply);
+      turn.presentedProducts = answer.presentedProducts;
     }
     // Keep required collection pending, but never append it to an unrelated answer.
     if (informationalInterruption) { finished = true; break; }
@@ -384,5 +395,6 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     workflowName: version.graph.name, versionId: version.id, intent, method: "Conversation guidance with validated workflow navigation",
     state: execution.state, traversedNodeIds: traversed, action: execution.action, preview: Boolean(params.visualPreview),
   } });
+  turn.presentedProducts = combineProductPresentations(turn.reply, presentations);
   return turn;
 }

@@ -16,6 +16,8 @@ import { loadVisualVersion } from "@/lib/workflows/visual/store";
 import { customerOrderStatus, isOrderStatusFollowUp, isOrderStatusRequest, readOrderStatusLookup, setOrderStatusLookup, type OrderCustomerIdentity } from "@/lib/orders/customer-status";
 import { isEntityInformationRequest, resolveVisualEntity } from "@/lib/workflows/visual/entity-routing";
 import { ownedCollectNodes } from "@/lib/workflows/visual/facts";
+import { combineProductPresentations, isEntityReference, recordEntityPresentation } from "@/lib/products/entity-bridge";
+import { resolveCurrentProductReference } from "@/lib/products/resolve-reference";
 
 export type ConversationMessageParams = AgentTurnParams & {
   /** Server webhook identity, never accepted from chat text or preview state. */
@@ -116,6 +118,8 @@ export async function processConversationMessage(params: ConversationMessagePara
   }
   // Always rebuild from the inbound history. Nested processors may have recorded
   // an intermediate reply; the coordinator owns the final pair, exactly once.
+  if (result.presentedProducts?.length) result.nextState = structuredClone(result.nextState);
+  recordEntityPresentation(result.nextState, params.businessId, result.reply, result.presentedProducts);
   rememberTurn(before, result.nextState, params.message, result.reply);
   if (result.conversationRouting) {
     if (result.nextState.processes) result.nextState.processes.lastDecision = result.conversationRouting;
@@ -226,6 +230,28 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   const controlled = conversationControl(params);
   if (controlled) return controlled;
   params = resumeConversation(params);
+  if ((params.state?.staffHandoff || params.state?.visual?.status === "handoff" && !params.state.visual.advisory)
+    && (params.state?.entityPresentation || isEntityReference(params.message)))
+    return plainResult(structuredClone(params.state), "Biseda është në pritje të stafit. Zgjedhja nuk rifillon dhe nuk konfirmon kërkesën.");
+  const replacementId = params.state?.processes?.pendingChoice?.kind === "replace" && affirmative(params.message)
+    ? params.state.processes.pendingChoice.productId : undefined;
+  // Resolve the customer's reference before guidance or old visual bindings can
+  // turn it into an answer to a different process field. W1 control has priority.
+  if (!params.state?.staffHandoff && !(params.state?.visual?.status === "handoff" && !params.state.visual.advisory)
+    && (!params.state?.processes?.informationOnly || explicitIntent(params.message) === "order")
+    && (!params.state?.processes?.pendingChoice || replacementId)
+    && !isQuestion(params.message) && !isEntityInformationRequest(params.message)
+    && !bookingRequest(foldText(params.message)) && explicitIntent(params.message) !== "support"
+    && (replacementId || params.state?.entityPresentation || isEntityReference(params.message))) {
+    const reference = await resolveCurrentProductReference({ businessId: params.businessId, message: params.message, state: params.state,
+      deliveredReply: params.deliveredReply, mode: params.mode, verifiedId: replacementId });
+    if (reference.status === "clarify") {
+      const state = await migrateState();
+      if (replacementId) delete state.processes!.pendingChoice;
+      return entityClarification(state, reference.reply);
+    }
+    if (reference.status === "selected") params = { ...params, selectedProductId: reference.product.id, orderRequest: true };
+  }
   const statusRequested = isOrderStatusRequest(params.message) || isOrderStatusFollowUp(params.message, params.state);
   const statusTurn = async (state: ConversationStatePayload) => {
     const result = await customerOrderStatus({ businessId: params.businessId, message: params.message, state,
@@ -421,11 +447,11 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     savedAction.promptCurrent = false;
   const continueService = processes.service?.status === "active" && !ordinaryQuestion && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
   let serviceVersion = continueService ? params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service!.versionId) : graphVersion;
-  let entityResolution = !ordinaryQuestion && serviceVersion ? await resolveVisualEntity(params.businessId, serviceVersion.graph, entityMessage, continueService ? processes.service?.visual.binding : undefined, params.mode === "test") : {};
+  let entityResolution = !ordinaryQuestion && serviceVersion ? await resolveVisualEntity(params.businessId, serviceVersion.graph, entityMessage, continueService ? processes.service?.visual.binding : undefined, params.mode === "test", { state, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
   let resumingService = Boolean(continueService && entityResolution.selected?.entity.id === processes.service?.visual.binding?.entity.id);
   if (!ordinaryQuestion && !continueService && processes.service && processes.service.status !== "completed") {
     const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service.versionId);
-    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, undefined, params.mode === "test") : {};
+    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, undefined, params.mode === "test", { state, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
     if (match.selected && match.selected.entity.id === processes.service.visual.binding?.entity.id && match.selected.entity.kind === processes.service.visual.binding.entity.kind) { entityResolution = match; serviceVersion = pinned; resumingService = true; }
   }
   let resumingOrder = false;
@@ -433,7 +459,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   if (!ordinaryQuestion && orderVisual?.binding && !processes.pendingChoice) {
     const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, orderVisual.versionId);
     const continuing = processes.active === "order" && explicitIntent(entityMessage) !== "support" && !bookingRequest(foldText(entityMessage));
-    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, resumeOrder(foldText(entityMessage)) || continuing ? orderVisual.binding : undefined, params.mode === "test") : {};
+    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, resumeOrder(foldText(entityMessage)) || continuing ? orderVisual.binding : undefined, params.mode === "test", { state, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
     if (match.selected?.entity.kind === "product" && match.selected.entity.id === orderVisual.binding.entity.id) { entityResolution = match; serviceVersion = pinned; resumingOrder = true; resumingService = false; }
   }
   let resumingBooking = false;
@@ -441,18 +467,20 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   if (!ordinaryQuestion && bookingVisual?.binding && !processes.pendingChoice) {
     const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, bookingVisual.versionId);
     const continuing = processes.active === "booking" && !["order", "support"].includes(explicitIntent(entityMessage)) && !resumeOrder(foldText(entityMessage));
-    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, continuing ? bookingVisual.binding : undefined, params.mode === "test") : {};
+    const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, continuing ? bookingVisual.binding : undefined, params.mode === "test", { state, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
     if (match.selected?.entity.kind === "service" && match.selected.entity.id === bookingVisual.binding.entity.id) { entityResolution = match; serviceVersion = pinned; resumingBooking = true; resumingService = false; resumingOrder = false; }
   }
   const freshEntityVersion = !clarificationResume && !ordinaryQuestion && !resumingService && !resumingOrder && !resumingBooking && Boolean(state.visual);
   if (freshEntityVersion && !params.visualPreview) {
     const latest = await loadVisualVersion(params.businessId);
-    entityResolution = latest ? await resolveVisualEntity(params.businessId, latest.graph, entityMessage, undefined, params.mode === "test") : {};
+    entityResolution = latest ? await resolveVisualEntity(params.businessId, latest.graph, entityMessage, undefined, params.mode === "test", { state, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
     serviceVersion = latest;
   }
   const selectedEntity = entityResolution.selected;
+  if (entityResolution.clarification) return entityClarification(state, entityResolution.clarification);
   if (entityResolution.choices?.length) {
-    return entityClarification(state, `Cilin produkt ose shërbim dëshiron: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`);
+    return { ...entityClarification(state, `Cilin produkt ose shërbim dëshiron: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`),
+      presentedProducts: entityResolution.choices.every(entity => entity.kind === "product") ? entityResolution.choices : undefined };
   }
   const entityFlow = selectedEntity && serviceVersion?.graph.version === 2 ? serviceVersion.graph.flows.find(flow => flow.id === selectedEntity.binding.flowId) : undefined;
   const serviceBooking = selectedEntity?.entity.kind === "service" && entityFlow?.nodeIds.some(id => serviceVersion!.graph.nodes.some(node => node.id === id && node.kind === "booking"));
@@ -482,7 +510,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   if (selectedEntity || freshEntityVersion || (!orderVisual && explicitIntent(entityMessage) === "order" && serviceVersion)) params = { ...params, entityVersion: serviceVersion };
   if (!clarificationResume) explicitProfile(state, params.message, processes.informationOnly);
   const steps = state.context?.execution.linear?.steps ?? [];
-  if (!clarificationResume) await extractMessageFacts(state, params.message, [...profileExtractionFields,
+  if (!clarificationResume && !params.selectedProductId) await extractMessageFacts(state, params.message, [...profileExtractionFields,
     ...(ordinaryQuestion || processes.active !== "order" ? [] : steps.filter(step => !["confirm", "customer", "photo"].includes(step.kind)).map(step => ({ key: step.fieldKey ?? step.key, type: step.fieldType ?? "text" as const, label: step.label, options: step.options }))),
     ...(ordinaryQuestion || processes.active !== "order" || !graphVersion ? [] : ownedCollectNodes(graphVersion.graph, state.visual).filter(node => node.config.fieldKey).map(node => ({ key: node.config.fieldKey!, type: node.config.fieldType ?? "text" as const, label: node.label })))]);
   if (params.hasPhoto && processes.active === "order") {
@@ -505,7 +533,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   let message = params.message;
   let replacementResolved = false;
   let replacementDeclined = false;
-  let route = await routeMessage(message, state);
+  let route = params.selectedProductId ? { process: "order" as const, source: "rules" as const } : await routeMessage(message, state);
   if (serviceBooking) route = { process: "booking", source: "rules" };
   else if (productOrder) route = { process: "order", source: "rules" };
   const decision: ConversationRouting = { ...route, action: "continue", reason: "Mesazhi vazhdon procesin aktual.", reusedFields: [], missingFields: [] };
@@ -668,7 +696,9 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     decision.missingFields = draft ? ["serviceId", "date", "time", "name"].filter(key => !draft[key as keyof BookingDraft]).map(key => `booking.${key}`) : [];
     if (informationalQuestion(foldText(message))) {
       const answer = await processLegacyAgentTurn({ ...params, state: result.nextState, informational: "Answer only the informational question using verified business information; no actions or confirmation. The separate booking response will follow." });
-      result.reply = `${answer.reply}\n\n${result.reply}`;
+      const reply = `${answer.reply}\n\n${result.reply}`;
+      result.presentedProducts = combineProductPresentations(reply, [answer, result]);
+      result.reply = reply;
     }
     return finish(result);
   }
@@ -678,7 +708,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   let usedBookingNode = false;
   if (replacementDeclined) params = { ...params, entityVersion: undefined };
   // Resume is navigation, not a value for the pending field (including product_query).
-  const result = await processAgentTurn({ ...params, message: clarificationResume === "order" ? "" : message, state, orderRequest: decision.action === "resume" || resumeOrder(foldText(message)) || explicitIntent(message) === "order",
+  const result = await processAgentTurn({ ...params, message: clarificationResume === "order" ? "" : message, state, orderRequest: Boolean(params.selectedProductId) || decision.action === "resume" || resumeOrder(foldText(message)) || explicitIntent(message) === "order",
     bookingTurn: async bookingState => {
       const adapter = bookingAdapterState(bookingState);
       const booking = await processBookingTurn({ businessId: params.businessId, message, state: adapter, mode: params.mode,
@@ -703,7 +733,9 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   }
   if (informationalQuestion(foldText(message))) {
     const answer = await processLegacyAgentTurn({ ...params, state: result.nextState, informational: "Answer only the informational question using verified business information; no actions or confirmation. The separate order response will follow." });
-    result.reply = `${answer.reply}\n\n${result.reply}`;
+    const reply = `${answer.reply}\n\n${result.reply}`;
+    result.presentedProducts = combineProductPresentations(reply, [answer, result]);
+    result.reply = reply;
   }
   const completed = result.nextState.step_key === "order_ready";
   processes.order = { id: processes.order?.id ?? randomUUID(), status: completed ? "completed" : "active", snapshot: snapshotOrder(result.nextState) };
