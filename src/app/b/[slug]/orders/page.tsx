@@ -45,6 +45,7 @@ export default async function OrdersPage({
           ["confirmed", "Të konfirmuara"],
           ["submitted", "Të përcjella"],
           ["failed", "Të dështuara"],
+          ["pending_reconciliation", "Për verifikim nga stafi"],
         ].map(([status, label]) => (
           <StatCard
             key={status}
@@ -122,6 +123,7 @@ export default async function OrdersPage({
                 <p className="muted-copy">
                   Statusi pasqyron krijimin dhe përcjelljen e porosisë. Pagesat
                   dhe transporti menaxhohen jashtë këtij paneli.
+                  {o.status === "pending_reconciliation" && " Kontrollo në sistemin e jashtëm nëse porosia është pranuar. Mos e ridërgo: një timeout nuk provon dështim."}
                 </p>
               </>
             ),

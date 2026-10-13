@@ -65,6 +65,7 @@ function describe(order: OrderSummary, reference: string) {
     confirmed: "është konfirmuar në sistem.",
     submitted: "është dërguar te sistemi i porosive. Ky status nuk konfirmon nisjen apo dorëzimin e pakos.",
     failed: "ka një problem me dërgimin te sistemi i porosive. Stafi duhet ta kontrollojë; kjo nuk do të thotë që porosia është anuluar.",
+    pending_reconciliation: "është ruajtur, por dërgimi te sistemi i jashtëm ende nuk është verifikuar. Stafi duhet ta kontrollojë; mos e përsërit porosinë.",
   };
   return `Porosia #${reference} ${status[order.status] ?? "ka një status që nuk mund ta shpjegoj me siguri; kontakto stafin."} Nuk kam informacion të verifikuar për vendndodhjen e pakos ose datën e dorëzimit.`;
 }

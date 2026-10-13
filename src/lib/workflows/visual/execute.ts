@@ -2,7 +2,7 @@ import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workfl
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
 import { chooseGuidance, clarification, invalidateConfirmation } from "../guidance";
 import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
-import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext, sharedPrompt } from "../context";
+import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext, sharedPrompt, setOrderTerms } from "../context";
 import { agentModel } from "@/lib/agents/generate";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { emptyState } from "../engine";
@@ -88,6 +88,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     base.context!.execution.factOwner = boundOrder ? "order" : params.bookingRequest ? "booking" : "service";
     if (boundOrder) {
       base.product_id = selectedEntity.entity.id; base.product_type_id = selectedEntity.entity.productTypeId ?? null;
+      setOrderTerms(base, selectedEntity.entity);
       delete base.context!.execution.linear; delete base.linearSnapshot; delete base.orderWorkflowSnapshot;
     }
     if (enteringEntity) active = { versionId: version.id, nodeId: boundFlow.entryNodeId, status: "running", awaiting: false, visited: [], values: {}, binding: selectedEntity.binding };

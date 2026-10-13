@@ -1,7 +1,38 @@
 import { describe, expect, it } from "vitest";
 import { emptyState, type WorkflowStepDef } from "./engine";
-import { advanceSharedOrder, extractExplicitFacts, getFact, migrateContext, resetOrder, setFact, sharedPrompt } from "./context";
+import { advanceSharedOrder, extractExplicitFacts, freshOrderReview, getFact, migrateContext, resetOrder, setFact, setOrderTerms, sharedPrompt } from "./context";
 const steps: WorkflowStepDef[] = [{ key: "size", kind: "choice", label: "Madhësia", options: ["M", "L"] }, { key: "customer", kind: "customer" }];
+describe("W4 commercial confirmation evidence", () => {
+    function review() {
+        const s = profile(); setOrderTerms(s, { id: "product", price_amount: 25, currency: "EUR" });
+        return advanceSharedOrder(s, "M", false, steps);
+    }
+    it("shows quantity, amount and currency and retains the same ID through confirmation", () => {
+        const s = review(), id = s.context!.execution.orderReview!.id;
+        expect(id).toMatch(/^[\da-f-]{36}$/);
+        expect(sharedPrompt(s, steps)).toContain("Sasia: 1 · Totali: 25 EUR");
+        const confirmed = advanceSharedOrder(s, "Po", false, steps);
+        expect(confirmed.context!.execution.orderReview!.id).toBe(id);
+        expect(freshOrderReview(confirmed, true)).toBe(true);
+        setOrderTerms(confirmed, { id: "product", price_amount: 25, currency: "EUR" });
+        expect(freshOrderReview(confirmed, true)).toBe(true);
+    });
+    it.each(["price", "currency", "product", "unknown_price"])("invalidates %s changes but preserves profile and workflow pin", cause => {
+        const s = advanceSharedOrder(review(), "Po", false, steps);
+        s.context!.execution.linear = { id: "flow", versionId: "pinned", name: "Flow", steps };
+        const customer = structuredClone(s.customer);
+        setOrderTerms(s, { id: cause === "product" ? "other" : "product", price_amount: cause === "unknown_price" ? null : cause === "price" ? 30 : 25, currency: cause === "currency" ? "USD" : "EUR" });
+        expect(s.context!.execution.orderReview).toBeUndefined();
+        expect(s.context!.execution.orderConfirmed).toBe(false);
+        expect(s.customer).toEqual(customer); expect(s.context!.execution.linear.versionId).toBe("pinned");
+    });
+    it("issues a different intent after correction and renewed review, not from message IDs", () => {
+        const s = review(), id = s.context!.execution.orderReview!.id;
+        setFact(s, "customer_phone", "+355699999999", "phone", "correction");
+        sharedPrompt(s, steps);
+        expect(s.context!.execution.orderReview!.id).not.toBe(id);
+    });
+});
 function order() { const s = migrateContext(emptyState()); s.product_id = "product"; s.step_key = "size"; return s; }
 function profile() { const s = order(); extractExplicitFacts(s, "Emri: Ana; Telefon: +355691234567; Qyteti: Tiranë; Adresa: Rruga A"); return s; }
 describe("shared conversation context", () => {

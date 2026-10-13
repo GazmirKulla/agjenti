@@ -1,169 +1,32 @@
 import { NextResponse } from "next/server";
-import { ensureCustomerForConversation } from "@/lib/conversations/ensure-customer";
-import { submitExternalOrder } from "@/lib/integrations/zana";
+import { reconcileOrder, submissionError, submissionResponse, submitConfirmedOrder } from "@/lib/orders/submission";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
-import type { ConversationStatePayload } from "@/lib/workflows/engine";
-import { restoreOrder } from "@/lib/workflows/conversation-processes";
-import { freshOrderReview, migrateContext } from "@/lib/workflows/context";
-import { CapabilityEnforcementError, moduleEnforcementEnabled, requireRuntimeModules } from "@/lib/capabilities/enforcement";
-import { requireActiveBindings } from "@/lib/capabilities/workflow";
 
-async function canAccess(userId: string, businessId: string) {
-	if (await isPlatformAdmin(userId)) return true;
-	const service = createServiceSupabase();
-	const { data } = await service
-		.from("business_users")
-		.select("user_id")
-		.eq("user_id", userId)
-		.eq("business_id", businessId)
-		.maybeSingle();
-	return Boolean(data);
+type RouteContext = { params: Promise<{ id: string; conversationId: string }> };
+async function actor(businessId: string) {
+  const { data: { user } } = await (await createServerSupabase()).auth.getUser();
+  if (!user) return null;
+  if (await isPlatformAdmin(user.id)) return user.id;
+  const { data, error } = await createServiceSupabase().from("business_users").select("user_id")
+    .eq("user_id", user.id).eq("business_id", businessId).maybeSingle();
+  return !error && data ? user.id : null;
 }
-
-export async function POST(
-	_request: Request,
-	context: { params: Promise<{ id: string; conversationId: string }> },
-) {
-	const { id: businessId, conversationId } = await context.params;
-	const supabase = await createServerSupabase();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-	if (!user || !(await canAccess(user.id, businessId))) {
-		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-	}
-	const service = createServiceSupabase();
-	const { data: conversation } = await service
-		.from("conversations")
-		.select("id,customer_id,instagram_participant_id,participant_username")
-		.eq("id", conversationId)
-		.eq("business_id", businessId)
-		.maybeSingle();
-	if (!conversation) {
-		return NextResponse.json({ error: "Biseda nuk u gjet." }, { status: 404 });
-	}
-	const { data: stateRow } = await service
-		.from("conversation_states")
-		.select("collected")
-		.eq("conversation_id", conversationId)
-		.maybeSingle();
-	const storedState = migrateContext((stateRow?.collected ?? {}) as ConversationStatePayload);
-	// Another process can own the current cursor while the confirmed order waits for staff.
-	const state = storedState.schemaVersion === 3 && storedState.context && storedState.processes?.order
-		? restoreOrder(storedState) : storedState;
-	try {
-		await requireRuntimeModules(businessId, ["orders", "products"]);
-		if (moduleEnforcementEnabled(businessId) && state.product_id) await requireActiveBindings(businessId, [state.product_id], []);
-	} catch (error) {
-		if (!(error instanceof CapabilityEnforcementError)) throw error;
-		return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
-	}
-	if((state.schemaVersion===2 || state.schemaVersion===3) && (state.step_key!=="order_ready" || !state.context?.execution.orderConfirmed || !freshOrderReview(state, true) || !state.product_id)) return NextResponse.json({error:"Porosia pret plotësimin dhe konfirmimin e klientit."},{status:400});
-	// Only reviewed order facts may become order options; legacy/other-process fields are not authority.
-	state.fields = Object.fromEntries((state.context!.execution.orderReview?.fieldKeys ?? []).flatMap(key => {
-		const fact = state.context!.order[key];
-		return fact ? [[key, fact.type === "photo" ? true : fact.value]] : [];
-	}));
-	const customer = state.customer ?? { name: null, phone: null, city: null, address: null };
-	if (!customer.name || !customer.phone || !customer.address) {
-		return NextResponse.json({ error: "Mungojnë të dhënat e klientit." }, { status: 400 });
-	}
-
-	const { data: product } = state.product_id
-		? await service
-				.from("products")
-				.select("id,name,external_id,product_type_id,price_amount")
-				.eq("id", state.product_id)
-				.eq("business_id", businessId)
-				.maybeSingle()
-		: { data: null };
-	if (state.product_id && !product) return NextResponse.json({ error: "Produkti nuk u gjet në këtë biznes." }, { status: 400 });
-	const { data: productType } = product?.product_type_id
-		? await service
-				.from("product_types")
-				.select("external_key")
-				.eq("id", product.product_type_id)
-				.maybeSingle()
-		: { data: null };
-	const productTypeKey =
-		productType?.external_key ?? product?.product_type_id ?? null;
-	const ensured = await ensureCustomerForConversation({
-		businessId,
-		conversationId,
-		displayName: customer.name,
-		phone: customer.phone,
-		username: conversation.participant_username,
-		instagramUserId: conversation.instagram_participant_id,
-	});
-	if (!ensured.ok) {
-		return NextResponse.json({ error: ensured.error }, { status: ensured.status });
-	}
-
-	const { data: order } = await service
-		.from("orders")
-		.insert({
-			business_id: businessId,
-			conversation_id: conversationId,
-			customer_id: ensured.customerId,
-			status: "confirmed",
-			currency: "ALL",
-			total_amount: product?.price_amount ?? null,
-			payload: state,
-		})
-		.select("id")
-		.single();
-	if (!order) return NextResponse.json({ error: "Porosia nuk u krijua." }, { status: 500 });
-
-	await service.from("order_items").insert({
-		order_id: order.id,
-		product_id: product?.id ?? null,
-		product_type_key: productTypeKey,
-		external_format_id: typeof state.fields.collect_size === "string" ? state.fields.collect_size : null,
-		quantity: 1,
-		options: state.fields,
-		unit_amount: product?.price_amount ?? null,
-	});
-
-	const submitted = await submitExternalOrder({
-		businessId,
-		payload: {
-			channel: "instagram",
-			customer,
-			items: [
-				{
-					productId: product?.external_id ?? product?.id,
-					productType: productTypeKey,
-					formatId: state.fields.collect_size ?? null,
-					colorId: state.fields.collect_color ?? null,
-					quantity: 1,
-					character: state.fields.collect_theme ?? null,
-				},
-			],
-		},
-	});
-	if (!submitted.ok) {
-		await service.from("orders").update({ status: "failed" }).eq("id", order.id);
-		return NextResponse.json({ error: submitted.error }, { status: 502 });
-	}
-	if (!submitted.skipped) {
-		await service
-			.from("orders")
-			.update({
-				status: "submitted",
-				external_system: "external",
-				external_order_id: submitted.orderId ?? null,
-			})
-			.eq("id", order.id);
-	}
-	await service
-		.from("conversation_states")
-		.update({ status: "submitted" })
-		.eq("conversation_id", conversationId);
-	return NextResponse.json({
-		ok: true,
-		orderId: order.id,
-		externalOrderId: submitted.orderId,
-	});
+async function handle(request: Request, context: RouteContext, reconcile: boolean) {
+  try {
+    const { id: businessId, conversationId } = await context.params;
+    const userId = await actor(businessId);
+    if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const receipt = reconcile
+      ? await reconcileOrder({ businessId, conversationId, userId, body: await request.json().catch(() => null) })
+      : await submitConfirmedOrder({ businessId, conversationId, userId });
+    const response = submissionResponse(receipt);
+    return NextResponse.json(response.body, { status: response.status });
+  } catch (error) {
+    const response = submissionError(error);
+    return NextResponse.json(response.body, { status: response.status });
+  }
 }
+export async function POST(request: Request, context: RouteContext) { return handle(request, context, false); }
+export async function PATCH(request: Request, context: RouteContext) { return handle(request, context, true); }

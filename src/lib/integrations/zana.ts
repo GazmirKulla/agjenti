@@ -283,65 +283,54 @@ export async function probeLinkedCatalog(params: {
   };
 }
 
-export async function submitExternalOrder(params: {
-  businessId: string;
-  payload: Record<string, unknown>;
-}): Promise<{
+export type ExternalOrderResult = {
+  status: "local_only" | "accepted" | "rejected" | "pending_reconciliation";
   ok: boolean;
   skipped?: boolean;
   orderId?: string;
-  orderNumber?: number;
   error?: string;
-}> {
-  const supabase = createServiceSupabase();
-  const integration = await loadIntegrationRow(params.businessId).catch(
-    () => null,
-  );
-  const url = integration?.orders_url?.trim() || null;
-  if (!url || !parseAbsoluteUrl(url)) {
-    return { ok: true, skipped: true };
-  }
+};
 
-  const secret = resolveBearerSecret({
-    secretCiphertext: integration?.secret_ciphertext,
-  });
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
-    },
-    body: JSON.stringify(params.payload),
-    signal: AbortSignal.timeout(20_000),
-  });
-  const json = (await response.json().catch(() => null)) as {
-    ok?: boolean;
-    orderId?: string;
-    orderNumber?: number;
-    error?: string;
-    reason?: string;
-  } | null;
-  if (!response.ok || !json?.ok) {
-    await supabase.from("integration_logs").insert({
-      business_id: params.businessId,
-      direction: "outbound",
-      target: "orders",
-      status: "failed",
-      error: json?.error || json?.reason || `HTTP ${response.status}`,
+export async function submitExternalOrder(params: {
+  businessId: string;
+  /** Correlation only. The current HTTP contract does NOT guarantee idempotent delivery. */
+  attemptId: string;
+  payload: Record<string, unknown>;
+}): Promise<ExternalOrderResult> {
+  const supabase = createServiceSupabase();
+  let result: ExternalOrderResult;
+  const unknown = (): ExternalOrderResult => ({ status: "pending_reconciliation", ok: false,
+    error: "Dërgimi nuk u verifikua. Stafi duhet ta kontrollojë te sistemi i jashtëm; mos e ridërgo." });
+  try {
+    const integration = await loadIntegrationRow(params.businessId);
+    const url = integration?.orders_url?.trim();
+    // A failed configuration read is NOT evidence that there is no integration.
+    if (!url) return { status: "local_only", ok: true, skipped: true };
+    if (!parseAbsoluteUrl(url)) return unknown();
+    const secret = resolveBearerSecret({ secretCiphertext: integration?.secret_ciphertext });
+    if (integration?.secret_ciphertext && !secret) return unknown();
+    const response = await fetch(url, {
+      method: "POST", redirect: "manual",
+      headers: { "Content-Type": "application/json", "X-Agjenti-Submission-Id": params.attemptId,
+        ...(secret ? { Authorization: `Bearer ${secret}` } : {}) },
+      body: JSON.stringify(params.payload), signal: AbortSignal.timeout(20_000),
     });
-    return {
-      ok: false,
-      error: json?.error || json?.reason || "Porosia e jashtme dështoi.",
-    };
+    const json = await response.json().catch(() => null) as { ok?: unknown; orderId?: unknown } | null;
+    if (response.ok && json?.ok === true) {
+      result = { status: "accepted", ok: true, orderId: typeof json.orderId === "string" ? json.orderId.slice(0, 200) : undefined };
+    } else if (json?.ok === false && (response.ok || response.status >= 400 && response.status < 500 && ![408, 409, 429].includes(response.status))) {
+      result = { status: "rejected", ok: false, error: "Sistemi i jashtëm e refuzoi porosinë. Kërkohet shqyrtim nga stafi." };
+    } else result = unknown();
+  } catch {
+    // Timeouts/network errors can occur AFTER the provider committed the order.
+    result = unknown();
   }
-  await supabase.from("integration_logs").insert({
-    business_id: params.businessId,
-    direction: "outbound",
-    target: "orders",
-    status: "ok",
-    error: null,
-  });
-  return { ok: true, orderId: json.orderId, orderNumber: json.orderNumber };
+  // Logging must not erase a verified provider response; the submission ledger is authoritative.
+  try {
+    await supabase.from("integration_logs").insert({ business_id: params.businessId,
+      direction: "outbound", target: "orders", status: result.ok ? "ok" : "failed", error: result.error ?? null });
+  } catch { /* Ledger persistence is checked by the caller. Never retry delivery for a log failure. */ }
+  return result;
 }
 
 export async function loadBusinessApiSecret(

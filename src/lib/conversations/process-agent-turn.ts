@@ -5,7 +5,7 @@ import { rememberTurn, chooseGuidance, clarification, invalidateConfirmation } f
 import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
 import { detectVisualIntent } from "@/lib/workflows/visual/runtime";
-import { sharedWorkflowEnabled, migrateContext, extractExplicitFacts, advanceSharedOrder, sharedPrompt, isQuestion, resetOrder, recordPrompt } from "@/lib/workflows/context";
+import { sharedWorkflowEnabled, migrateContext, extractExplicitFacts, advanceSharedOrder, sharedPrompt, isQuestion, resetOrder, recordPrompt, setOrderTerms } from "@/lib/workflows/context";
 import type { TraceObserver } from "./trace";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
@@ -470,6 +470,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       workflowId: null, productName: selected.name, workflowProgress: [], handoff: true, advisoryHandoff: true,
       debug: { model: agentModel(), source: "fallback", fallbackReason: "workflow_not_configured", agentConfigured: Boolean(agent?.instructions), knowledgeCount: knowledge.length, productCount: products.length, workflowSteps: [], elapsedMs: Date.now() - started } };
   }
+  if (selected && state.context) setOrderTerms(state, selected);
   let navigationReply: string | undefined;
   let informationalTurn = false;
   let revisiting = Boolean(orderRequest);

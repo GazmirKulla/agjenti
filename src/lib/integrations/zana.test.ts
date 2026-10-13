@@ -20,6 +20,7 @@ import {
   fetchLinkedCatalog,
   knowledgeUrlFromCatalog,
   probeLinkedCatalog,
+  submitExternalOrder,
 } from "./zana";
 beforeEach(() => {
   vi.resetAllMocks();
@@ -150,5 +151,49 @@ describe("knowledgeUrlFromCatalog", () => {
         "https://zana-store.com/api/integrations/agjenti/catalog",
       ),
     ).toBe("https://zana-store.com/api/integrations/agjenti/knowledge");
+  });
+});
+
+describe("W4 external order delivery evidence", () => {
+  const send = () => submitExternalOrder({ businessId: "business", attemptId: "stable-attempt", payload: { channel: "whatsapp", currency: "EUR" } });
+  beforeEach(() => {
+    mocks.maybeSingle.mockResolvedValue({ data: { orders_url: "https://provider.example.test/orders", secret_ciphertext: "cipher:business-secret" }, error: null });
+  });
+  it("reports accepted only from an explicit provider response and sends correlation, not a false idempotency promise", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ ok: true, orderId: "provider-id" }));
+    expect(await send()).toMatchObject({ ok: true, status: "accepted", orderId: "provider-id" });
+    expect(mocks.fetch).toHaveBeenCalledWith("https://provider.example.test/orders", expect.objectContaining({ method: "POST", redirect: "manual",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer business-secret", "X-Agjenti-Submission-Id": "stable-attempt" } }));
+  });
+  it("does not retry if the provider accepted then the connection timed out", async () => {
+    let accepted = 0;
+    mocks.fetch.mockImplementation(async () => { accepted++; throw new Error("timeout after commit"); });
+    expect(await send()).toMatchObject({ ok: false, status: "pending_reconciliation" });
+    expect(accepted).toBe(1); expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("treats a definitive 422 rejection separately and does not expose provider details", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ ok: false, error: "private endpoint secret" }, { status: 422 }));
+    const result = await send();
+    expect(result).toMatchObject({ ok: false, status: "rejected" }); expect(result.error).not.toContain("private");
+  });
+  it.each([408,409,429,500,503])("does not treat HTTP %s as proof of non-delivery", async status => {
+    mocks.fetch.mockResolvedValue(Response.json({ ok: false }, { status }));
+    expect(await send()).toMatchObject({ ok: false, status: "pending_reconciliation" });
+  });
+  it.each([null, {}, { ok: "true" }])("does not accept malformed success evidence %j", async json => {
+    mocks.fetch.mockResolvedValue(Response.json(json));
+    expect(await send()).toMatchObject({ ok: false, status: "pending_reconciliation" });
+  });
+  it("distinguishes absent integration from an unreadable integration", async () => {
+    mocks.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    expect(await send()).toMatchObject({ ok: true, status: "local_only" });
+    mocks.maybeSingle.mockResolvedValueOnce({ data: null, error: { message: "database down" } });
+    expect(await send()).toMatchObject({ ok: false, status: "pending_reconciliation" });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it.each(["url", "secret"])("blocks invalid %s configuration without reporting local-only success", async cause => {
+    mocks.maybeSingle.mockResolvedValue({ data: { orders_url: cause === "url" ? "/relative" : "https://provider.example.test/orders", secret_ciphertext: cause === "secret" ? "unreadable" : null } });
+    expect(await send()).toMatchObject({ ok: false, status: "pending_reconciliation" });
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });

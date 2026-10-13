@@ -8,13 +8,16 @@ export type Fact = {
     source: string;
     validated: true;
 };
+/** Commercial scope currently supported by final submission: one catalog item, quantity one. */
+export type OrderTerms = { productId: string; unitAmount: number; currency: string; quantity: 1 };
 export type SharedContext = {
     profile: Partial<Record<ProfileKey, Fact>>;
     order: Record<string, Fact>;
     execution: {
         /** context.order is the current adapter's facts; other tasks live in processes. */
         factOwner?: "order" | "booking" | "service" | "auxiliary";
-        orderReview?: { factsKey: string; fieldKeys: string[]; expiresAt: number; confirmed: boolean };
+        orderTerms?: OrderTerms;
+        orderReview?: { id?: string; factsKey: string; fieldKeys: string[]; expiresAt: number; confirmed: boolean };
         profileConfirmation?: "pending" | "confirmed";
         orderConfirmed?: boolean;
         awaitingOrderConfirmation?: boolean;
@@ -89,6 +92,15 @@ export function invalidateOrderReview(execution: SharedContext["execution"]) {
     execution.awaitingOrderConfirmation = false;
     delete execution.orderReview;
 }
+/** Only adapters reading the tenant's catalog supply terms, never customer/LLM text. */
+export function setOrderTerms(state: ConversationStatePayload, product: { id: string; price_amount?: number | null; currency?: string | null }) {
+    if (!state.context) return;
+    const terms: OrderTerms | undefined = typeof product.price_amount === "number" && Number.isFinite(product.price_amount)
+        && product.price_amount >= 0 && typeof product.currency === "string" && /^[A-Z]{3}$/.test(product.currency)
+        ? { productId: product.id, unitAmount: product.price_amount, currency: product.currency, quantity: 1 } : undefined;
+    if (JSON.stringify(state.context.execution.orderTerms) !== JSON.stringify(terms)) invalidateOrderReview(state.context.execution);
+    state.context.execution.orderTerms = terms;
+}
 /** Equality key, not an authorization token. Sources/object insertion order are irrelevant. */
 function orderFactsKey(state: ConversationStatePayload, keys: string[]) {
     return JSON.stringify([state.product_id ?? null, state.product_type_id ?? null,
@@ -96,7 +108,9 @@ function orderFactsKey(state: ConversationStatePayload, keys: string[]) {
         [state.visual?.binding?.flowId ?? null, state.visual?.binding?.entity.kind ?? null, state.visual?.binding?.entity.id ?? null],
         Object.entries(state.visual?.branchPorts ?? {}).sort(([a], [b]) => a.localeCompare(b)),
         profileKeys.map(key => [key, state.context?.profile[key]?.value ?? null]),
-        [...new Set(keys)].sort().map(key => [key, getFact(state, key)?.value ?? null])]);
+        [...new Set(keys)].sort().map(key => [key, getFact(state, key)?.value ?? null]),
+        // Keep old v1/v2/v3 receipts readable. Submission requires new commercial evidence.
+        ...(state.context?.execution.orderTerms ? [state.context.execution.orderTerms] : [])]);
 }
 function orderFieldKeys(steps: WorkflowStepDef[]) {
     return [...new Set(steps.filter(step => !["customer", "confirm"].includes(step.kind)).map(step => step.fieldKey ?? step.key).filter(key => !profileKey(key)))].sort();
@@ -111,7 +125,7 @@ export function freshOrderReview(state: ConversationStatePayload, confirmed = fa
 }
 function requestOrderReview(state: ConversationStatePayload, steps: WorkflowStepDef[]) {
     const fieldKeys = orderFieldKeys(steps);
-    state.context!.execution.orderReview = { factsKey: orderFactsKey(state, fieldKeys), fieldKeys, expiresAt: Date.now() + 30 * 60000, confirmed: false };
+    state.context!.execution.orderReview = { id: crypto.randomUUID(), factsKey: orderFactsKey(state, fieldKeys), fieldKeys, expiresAt: Date.now() + 30 * 60000, confirmed: false };
     state.context!.execution.awaitingOrderConfirmation = true;
     state.context!.execution.orderConfirmed = false;
 }
@@ -247,7 +261,8 @@ export function sharedPrompt(state: ConversationStatePayload, steps: WorkflowSte
     if (state.step_key === "order_confirm") {
         // Navigation may re-display review without advancing the adapter.
         if (!freshOrderReview(state, false, steps)) requestOrderReview(state, steps);
-        return `Konfirmoni porosinë${productName ? ` për ${productName}` : ""} me këto të dhëna? ${profileSummary(state)}${steps.filter(step => !["customer", "confirm"].includes(step.kind)).flatMap(step => { const key = step.fieldKey ?? step.key, fact = getFact(state, key); return fact && !profileKey(key) ? [` · ${step.label ?? key}: ${fact.value}`] : []; }).join("")}. Përgjigju me Po ose shkruaj korrigjimin.`;
+        const terms = state.context?.execution.orderTerms;
+        return `Konfirmoni porosinë${productName ? ` për ${productName}` : ""} me këto të dhëna? ${profileSummary(state)}${steps.filter(step => !["customer", "confirm"].includes(step.kind)).flatMap(step => { const key = step.fieldKey ?? step.key, fact = getFact(state, key); return fact && !profileKey(key) ? [` · ${step.label ?? key}: ${fact.value}`] : []; }).join("")}${terms ? ` · Sasia: 1 · Totali: ${terms.unitAmount} ${terms.currency}` : ""}. Përgjigju me Po ose shkruaj korrigjimin.`;
     }
     if (state.step_key === "order_ready")
         return "Porosia është gati për stafin. Ekipi do ta shqyrtojë dhe dërgojë.";

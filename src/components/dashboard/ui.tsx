@@ -94,6 +94,7 @@ export const statusLabels: Record<string, string> = {
   confirmed: "E konfirmuar",
   submitted: "E përcjellë",
   failed: "Dështoi",
+  pending_reconciliation: "Dërgim i paverifikuar — kërkon kontroll",
   connected: "I lidhur",
   expired: "Ka skaduar",
   revoked: "Qasja u hoq",

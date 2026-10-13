@@ -49,7 +49,7 @@ it("scopes every read to the tenant and never uses names, phone or unchecked cus
   expect(JSON.stringify(m.calls)).not.toContain("0699999999");
   expect(JSON.stringify(m.calls)).not.toContain("untrusted-linked-customer");
 });
-it.each([["draft", "ende nuk është konfirmuar"], ["confirmed", "konfirmuar në sistem"], ["submitted", "nuk konfirmon nisjen"], ["failed", "nuk do të thotë që porosia është anuluar"]])("reports only the actual local status %s", async (status, text) => {
+it.each([["draft", "ende nuk është konfirmuar"], ["confirmed", "konfirmuar në sistem"], ["submitted", "nuk konfirmon nisjen"], ["failed", "nuk do të thotë që porosia është anuluar"], ["pending_reconciliation", "dërgimi te sistemi i jashtëm ende nuk është verifikuar"]])("reports only the actual local status %s", async (status, text) => {
   const original = m.run.getMockImplementation()!;
   m.run.mockImplementation((table, filters) => table === "orders" ? { data: [row(orderA, status)], error: null } : original(table, filters));
   const result = await run("Ku është porosia?");

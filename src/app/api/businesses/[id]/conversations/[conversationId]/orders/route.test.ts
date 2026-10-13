@@ -1,20 +1,21 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ from: vi.fn(), ensure: vi.fn(), submit: vi.fn(), profile: vi.fn() }));
+const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), ensure: vi.fn(), submit: vi.fn(), profile: vi.fn(), admin: vi.fn() }));
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabase: async () => ({ auth: { getUser: async () => ({ data: { user: { id: "user" } } }) } }) }));
-vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from }) }));
-vi.mock("@/lib/tenant/access", () => ({ isPlatformAdmin: async () => true }));
+vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }) }));
+vi.mock("@/lib/tenant/access", () => ({ isPlatformAdmin: m.admin }));
 vi.mock("@/lib/conversations/ensure-customer", () => ({ ensureCustomerForConversation: m.ensure }));
 vi.mock("@/lib/integrations/zana", () => ({ submitExternalOrder: m.submit }));
-import { POST } from "./route";
+import { PATCH, POST } from "./route";
 import { emptyState } from "@/lib/workflows/engine";
-import { advanceSharedOrder, migrateContext, setFact } from "@/lib/workflows/context";
+import { advanceSharedOrder, migrateContext, setFact, setOrderTerms } from "@/lib/workflows/context";
 import { bookingAdapterState, snapshotOrder } from "@/lib/workflows/conversation-processes";
 let state: Record<string, unknown>;
 let filters: [string, string, unknown][];
 function confirmedOrder() {
   let next = migrateContext(emptyState());
   next.product_id = "product"; next.step_key = "collect_customer";
+  setOrderTerms(next, { id: "product", price_amount: 1200, currency: "ALL" });
   for (const [key, value] of Object.entries({ name: "Test", phone: "0690000000", city: "Test", address: "Test address" }))
     setFact(next, `customer_${key}`, value, "text", "test");
   setFact(next, "size", "M", "text", "test");
@@ -24,10 +25,11 @@ function confirmedOrder() {
 }
 beforeEach(() => {
   vi.clearAllMocks(); filters = [];
+  m.admin.mockResolvedValue(true);
   state = confirmedOrder() as unknown as Record<string, unknown>;
   m.from.mockImplementation((table: string) => {
     const q = { select: () => q, eq: (key: string, value: unknown) => { filters.push([table,key,value]); return q; },
-      maybeSingle: async () => ({ data: table === "conversations" ? { id: "conversation", customer_id: null } : table === "conversation_states" ? { collected: state } : null }) };
+      maybeSingle: async () => ({ data: table === "conversations" ? { id: "conversation", customer_id: null } : table === "conversation_states" ? { collected: state, revision: 4, cart: [] } : null }) };
     return q;
   });
 });
@@ -79,11 +81,15 @@ it("submits the confirmed order snapshot while a booking owns the current cursor
     const q = { select: () => q, eq: () => q, update: () => q,
       insert: (row: Record<string, unknown>) => { if (table === "orders") inserted.push(row); return q; },
       single: async () => ({ data: { id: "new-order" } }),
-      maybeSingle: async () => ({ data: table === "conversations" ? { id: "conversation" } : table === "conversation_states" ? { collected: state } : table === "products" ? { id: "product", name: "Puzzle", price_amount: 1200 } : null }),
+      maybeSingle: async () => ({ data: table === "conversations" ? { id: "conversation" } : table === "conversation_states" ? { collected: state, revision: 4, cart: [] } : table === "products" ? { id: "product", name: "Puzzle", price_amount: 1200, currency: "ALL" } : null }),
     }; return q;
   });
   m.ensure.mockResolvedValue({ ok: true, customerId: "customer" });
-  m.submit.mockResolvedValue({ ok: true, skipped: true });
+  m.rpc.mockImplementation(async (name: string, args: Record<string, unknown>) => {
+    if (name === "submit_confirmed_order") inserted.push({ payload: args.p_order });
+    return { data: { orderId: "new-order", attemptId: "attempt", status: name === "submit_confirmed_order" ? "pending_reconciliation" : "local_only", dispatch: name === "submit_confirmed_order", payload: {} } };
+  });
+  m.submit.mockResolvedValue({ ok: true, skipped: true, status: "local_only" });
   expect((await send()).status).toBe(200);
   expect(inserted[0].payload).toMatchObject({ product_id: "product", step_key: "order_ready", fields: { size: "M" } });
   expect((state as { product_id?: string }).product_id).toBeNull();
@@ -96,4 +102,16 @@ it("does not submit an order snapshot whose confirmation was invalidated", async
   state = bookingAdapterState(confirmed) as unknown as Record<string, unknown>;
   expect((await send()).status).toBe(400);
   expect(m.ensure).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
+});
+it.each([POST, PATCH])("W4 revoked membership / cross-tenant access cannot submit or reconcile", async method => {
+  m.admin.mockResolvedValue(false);
+  expect((await method(new Request("https://app.test/orders", { method: method === POST ? "POST" : "PATCH", body: JSON.stringify({ orderId: "foreign" }) }), { params: Promise.resolve({ id: "business", conversationId: "conversation" }) })).status).toBe(403);
+  expect(filters).toContainEqual(["business_users", "business_id", "business"]);
+  expect(filters).toContainEqual(["business_users", "user_id", "user"]);
+  expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
+});
+it("W4 ignores client confirmation, product, price and intent overrides", async () => {
+  state = { ...confirmedOrder(), step_key: "collect_customer" };
+  const response = await POST(new Request("https://app.test/orders", { method: "POST", body: JSON.stringify({ orderConfirmed: true, productId: "foreign", price: 0, intentId: "client-key" }) }), { params: Promise.resolve({ id: "business", conversationId: "conversation" }) });
+  expect(response.status).toBe(400); expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
 });
