@@ -89,6 +89,7 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
   --info: #1D4ED8;
   --info-soft: #EFF6FF;
   --on-success: #FFFFFF;
+  --on-danger: #FFFFFF;
 }
 
 @theme inline {
@@ -361,16 +362,6 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: hue-rotate(-105deg) saturate(0.7);
-}
-.brand-logo-dark {
-  display: none;
-}
-html[data-resolved="dark"] .brand-logo-light {
-  display: none;
-}
-html[data-resolved="dark"] .brand-logo-dark {
-  display: block;
 }
 .brand-logo-text {
   font-weight: inherit;
@@ -525,6 +516,9 @@ html[data-resolved="dark"] .brand-logo-dark {
   background: var(--primary);
   box-shadow: 0 3px 8px color-mix(in srgb, var(--brand-secondary) 8.2%, transparent);
 }
+.dashboard-shell .btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
 .dashboard-content .field:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-secondary) 8.2%, transparent);
 }
@@ -554,7 +548,7 @@ html[data-resolved="dark"] .brand-logo-dark {
 .billing-total strong { display: block; font-size: 30px; line-height: 1; }
 .billing-total span, .billing-availability { color: var(--ink-muted); font-size: 13px; }
 .billing-meter { grid-column: 1 / -1; height: 10px; overflow: hidden; border-radius: 999px; background: var(--paper); }
-.billing-meter span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--primary); }
+.billing-meter span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--accent); }
 .billing-availability { grid-column: 1 / -1; margin: 0; }
 .billing-plans { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 22px; }
 .billing-plan { padding: 20px; display: flex; min-height: 288px; flex-direction: column; }
@@ -841,7 +835,7 @@ html[data-resolved="dark"] .brand-logo-dark {
 .status-disconnected,
 .status-manual {
   background: var(--hover);
-  color: var(--ink-muted);
+  color: var(--ink);
 }
 .recent-row {
   display: flex;
@@ -936,7 +930,7 @@ html[data-resolved="dark"] .brand-logo-dark {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--primary);
+  background: var(--accent);
 }
 .chart-legend span:last-child i {
   background: var(--accent-soft);
@@ -1473,6 +1467,7 @@ html[data-resolved="dark"] .brand-logo-dark {
 }
 .switch-input:checked:before {
   transform: translateX(18px);
+  background: var(--on-primary);
 }
 .switch-input:focus-visible {
   outline: 3px solid var(--accent);
@@ -2308,7 +2303,7 @@ html[data-resolved="dark"] .brand-logo-dark {
   margin: 0;
   padding: 28px;
   text-align: center;
-  color: var(--surface);
+  color: #F8FAFC;
   font-size: 16px;
   line-height: 1.45;
 }
@@ -2634,6 +2629,7 @@ html[data-resolved="dark"] {
   --info: #93C5FD;
   --info-soft: #172E50;
   --on-success: #111827;
+  --on-danger: #111827;
 }
 html[data-resolved="dark"] body {
   background: var(--paper);
@@ -2665,12 +2661,12 @@ html[data-resolved="dark"] .dashboard-nav {
   color: var(--ink-muted);
 }
 html[data-resolved="dark"] .dashboard-nav.active {
-  background: var(--hover);
-  color: var(--ink);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 html[data-resolved="dark"] .dashboard-nav:hover,
 html[data-resolved="dark"] .dashboard-content .list-row:hover {
-  background: var(--surface);
+  background: var(--hover);
 }
 html[data-resolved="dark"] .import-link {
   background: var(--surface);
@@ -2734,22 +2730,28 @@ html[data-resolved="dark"] .chat-message {
   color: var(--ink);
 }
 html[data-resolved="dark"] .chat-message.outbound {
-  background: var(--hover);
+  background: var(--accent-soft);
   border-color: var(--line);
 }
 html[data-resolved="dark"] .chat-actions button {
-  background: var(--hover);
-  color: var(--ink);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 html[data-resolved="dark"] .chat-actions button.chat-action-danger {
-  background: #3d1c24;
-  color: #ff9aa8;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 html[data-resolved="dark"] .switch-input {
   background: var(--hover);
 }
 html[data-resolved="dark"] .switch-input:before {
   background: var(--ink);
+}
+html[data-resolved="dark"] .switch-input:checked {
+  background: var(--primary);
+}
+html[data-resolved="dark"] .switch-input:checked:before {
+  background: var(--on-primary);
 }
 html[data-resolved="dark"] .integration-api-key,
 html[data-resolved="dark"] .secret-reveal {
@@ -3200,7 +3202,7 @@ html[data-resolved="dark"] .chat-message {
   color: var(--ink);
 }
 html[data-resolved="dark"] .chat-message.outbound {
-  background: var(--hover);
+  background: var(--accent-soft);
   border-color: var(--line);
 }
 html[data-resolved="dark"] .chat-message small {

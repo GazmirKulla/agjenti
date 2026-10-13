@@ -142,13 +142,13 @@
   border-radius: 5px;
   overflow: hidden;
   background: var(--paper);
-  accent-color: #7541ff;
+  accent-color: var(--accent);
 }
 .onboarding-progress progress::-webkit-progress-bar {
   background: var(--paper);
 }
 .onboarding-progress progress::-webkit-progress-value {
-  background: var(--primary);
+  background: var(--accent);
   border-radius: 5px;
 }
 .onboarding-body form {
@@ -288,12 +288,12 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--surface);
+  background: var(--on-primary);
 }
 .onboarding-option:has(input[type="checkbox"]:checked) .onboarding-choice::after {
   width: 6px;
   height: 10px;
-  border: solid var(--line);
+  border: solid var(--on-primary);
   border-width: 0 2px 2px 0;
   transform: translateY(-1px) rotate(45deg);
 }
@@ -301,7 +301,7 @@
   width: 10px;
   height: 2px;
   border-radius: 2px;
-  background: var(--surface);
+  background: var(--on-primary);
 }
 .onboarding-option:has(input:disabled),
 .onboarding-boolean-choice:has(input:disabled),
@@ -1238,13 +1238,13 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--surface);
+  background: var(--on-primary);
 }
 .onboarding-review-confirm input[type="checkbox"]:checked::after {
   content: "";
   width: 6px;
   height: 10px;
-  border: solid var(--line);
+  border: solid var(--on-primary);
   border-width: 0 2px 2px 0;
   transform: translateY(-1px) rotate(45deg);
 }
@@ -1276,7 +1276,7 @@
 }
 .onboarding-review-confirm input {
   margin-top: 5px;
-  accent-color: #7541ff;
+  accent-color: var(--accent);
 }
 .onboarding-transcripts {
   border-top: 1px solid var(--line);

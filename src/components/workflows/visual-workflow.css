@@ -49,7 +49,7 @@
 .vf-kind-knowledge { --node-tint: #6c8fd1; }
 .vf-kind-order_status { --node-tint: #6c8fd1; }
 .vf-kind-collect,.vf-kind-confirm { --node-tint: var(--ink-muted); }
-.vf-kind-product { --node-tint: #5ca3a0; }
+.vf-kind-product { --node-tint: var(--accent); }
 .vf-kind-handoff { --node-tint: var(--vf-amber); }
 .vf-node { position: absolute; display: flex; flex-direction: column; align-items: flex-start; gap: 13px; padding: 17px 19px; background: linear-gradient(135deg, color-mix(in srgb, var(--node-tint) 5%, var(--surface)), var(--surface)); border: 1px solid color-mix(in srgb, var(--node-tint) 25%, var(--line)); border-radius: 16px; color: var(--ink); text-align: left; cursor: grab; user-select: none; touch-action: none; box-shadow: 0 3px 7px -5px color-mix(in srgb, var(--brand-secondary) 40%, transparent), 0 8px 18px -15px color-mix(in srgb, var(--brand-secondary) 33.3%, transparent); transition: border-color 180ms, box-shadow 180ms, background 180ms; }
 .vf-node-top { display: flex; align-items: center; gap: 8px; color: var(--ink-muted); width: 100%; font-size: 10px; line-height: 1.2; }
@@ -77,8 +77,8 @@
 .vf-inspector-tabs { display: flex; gap: 24px; align-items: center; height: 61px; padding: 0 24px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .vf-inspector-tabs button { position: relative; height: 100%; font-size: 12px; color: var(--ink-muted); cursor: pointer; }
 .vf-inspector-tabs button[aria-pressed=true] { color: var(--ink); }
-.vf-inspector-tabs button[aria-pressed=true]:after { content: ''; position: absolute; height: 2px; background: var(--primary); bottom: -1px; left: 0; right: 0; border-radius: 2px; }
-.vf-inspector-tabs i { display: inline-block; width: 4px; height: 4px; background: var(--primary); border-radius: 100%; vertical-align: middle; margin-left: 7px; }
+.vf-inspector-tabs button[aria-pressed=true]:after { content: ''; position: absolute; height: 2px; background: var(--accent); bottom: -1px; left: 0; right: 0; border-radius: 2px; }
+.vf-inspector-tabs i { display: inline-block; width: 4px; height: 4px; background: var(--accent); border-radius: 100%; vertical-align: middle; margin-left: 7px; }
 .vf-inspector-content { padding: 25px 23px; max-height: 680px; overflow-y: auto; animation: vf-appear 180ms ease-out; }
 .vf-detail-icon { display: grid; place-items: center; width: 45px; height: 45px; border: 1px solid color-mix(in srgb, var(--node-tint, var(--accent)) 22%, transparent); border-radius: 14px; color: var(--node-tint, var(--accent)); background: color-mix(in srgb, var(--node-tint, var(--accent)) 7%, transparent); margin-bottom: 18px; }
 .vf-inspector h2 { font-size: 17px; font-weight: 550; letter-spacing: -.03em; margin-bottom: 7px; }
@@ -106,7 +106,7 @@
 .vf-legend { display: grid; gap: 13px; margin-top: 36px; font-size: 11px; color: var(--ink-muted); }
 .vf-legend span { display: flex; align-items: center; gap: 8px; }
 .vf-legend i { width: 10px; height: 10px; border: 1px solid var(--accent); border-radius: 3px; }
-.vf-legend span + span i { height: 2px; width: 13px; background: var(--primary); }
+.vf-legend span + span i { height: 2px; width: 13px; background: var(--accent); }
 .vf-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding: 14px 23px; font-size: 10px; color: var(--ink-muted); }
 .vf-footer > span,.vf-footer > div { display: flex; align-items: center; gap: 12px; }
 .vf-footer i { width: 3px; height: 3px; border-radius: 50%; background: var(--line-strong); }
@@ -150,7 +150,7 @@
 .vf-send { width: 29px; height: 29px; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); border-radius: 8px; cursor: pointer; }
 .vf-test-disclaimer { font-size: 9px; color: var(--ink-muted); text-align: center; padding: 11px 5px 15px; }
 .vf-typing { display: flex; gap: 4px; padding: 10px; }
-.vf-typing i { width: 4px; height: 4px; background: var(--primary); border-radius: 50%; animation: vf-dot 1s ease-in-out infinite alternate; }
+.vf-typing i { width: 4px; height: 4px; background: var(--accent); border-radius: 50%; animation: vf-dot 1s ease-in-out infinite alternate; }
 .vf-typing i:nth-child(2) { animation-delay: .15s; }.vf-typing i:nth-child(3) { animation-delay: .3s; }
 .vf-compact { min-height: 300px; height: 330px; border: 1px solid var(--line); border-radius: 14px; }
 .vf-compact .vf-canvas-label { top: 17px; left: 18px; }

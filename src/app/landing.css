@@ -107,7 +107,7 @@
     box-shadow 0.2s;
 }
 .lp-button:hover {
-  background-color: var(--primary);
+  background-color: var(--primary-hover);
   box-shadow: 0 4px 10px color-mix(in srgb, var(--brand-secondary) 9.4%, transparent);
 }
 .lp-button.small {
@@ -297,8 +297,7 @@
 .lp-preview-nav b {
   font-size: 8px;
   background: var(--danger);
-  color: var(--surface);
-  color: white;
+  color: var(--on-danger);
   padding: 1px 4px;
   border-radius: 10px;
   margin-left: auto;

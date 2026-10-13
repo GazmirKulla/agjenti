@@ -7,7 +7,7 @@ type BrandLogoProps = {
   priority?: boolean;
 };
 
-/** Brand mark — light (`logo-mark`) and dark (`logo`) swap with the selected theme. */
+/** Transparent mint mark with a wordmark that inherits the current theme. */
 export function BrandLogo({
   size = 34,
   withWordmark = true,
@@ -19,16 +19,7 @@ export function BrandLogo({
     <span className={`brand-logo ${className}`.trim()}>
       <span className="brand-logo-mark" style={{ width: size, height: size }}>
         <Image
-          className="brand-logo-light"
-          src="/brand/logo-mark.webp"
-          alt={alt}
-          width={size}
-          height={size}
-          priority={priority}
-        />
-        <Image
-          className="brand-logo-dark"
-          src="/brand/logo.webp"
+          src="/brand/mint-mark.webp"
           alt={alt}
           width={size}
           height={size}
@@ -36,7 +27,7 @@ export function BrandLogo({
         />
       </span>
       {withWordmark ? (
-        <span className="brand-logo-text">Agjenti.app</span>
+        <span className="brand-logo-text">agjenti.app</span>
       ) : null}
     </span>
   );
