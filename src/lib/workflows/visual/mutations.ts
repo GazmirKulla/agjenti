@@ -1,3 +1,4 @@
+import { requireActionAccess } from "@/lib/actions/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { enforceWorkflowCapabilities } from "@/lib/capabilities/workflow";
 import { CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
@@ -66,6 +67,12 @@ export async function writeVisualWorkflow(
   } else if (operation === "enable" && activationGraph?.version === 2) {
     const readiness = await loadWorkflowReadiness(businessId);
     if (!readiness.ready) return { error: `Ruaje si draft dhe provoje. Para aktivizimit: ${readiness.blockers.join(" ")}` };
+  }
+  if (["publish","enable"].includes(operation) && activationGraph?.nodes.some(n=>n.kind==="action")) {
+    try {
+      await requireActionAccess(businessId,userId,"business.provision");
+      await requireActionAccess(businessId,null,"business.provision",true);
+    } catch(e) {return {error:e instanceof Error?e.message:"Veprimi nuk lejohet."};}
   }
   const { data, error } = await createServiceSupabase().rpc(
     requestId ? "apply_assistant_visual_workflow" : "save_visual_workflow",

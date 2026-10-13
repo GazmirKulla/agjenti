@@ -646,3 +646,18 @@ it("preserves an informational answer before handoff without repeating an unsupp
   expect(next.reply).toBe("Dorëzimi zgjat 2 ditë.\n\nNë këtë provë, biseda do t’i kalohej stafit dhe përgjigjet automatike do të ndaleshin.");
   expect(next.advisoryHandoff).toBe(false);
 });
+
+it("completes the registration process in simulation with a labelled link and no legacy write",async()=>{
+ const {addFlowTemplate}=await import("@/components/workflows/flow-templates");
+ const graph=addFlowTemplate(starterVisualGraph(),"business_provision","signup").graph;
+ const legacy=vi.fn(async(p:LegacyParams)=>response(p));
+ const state=emptyState();state.visual={versionId:"version-1",nodeId:"signup_name",status:"running",awaiting:false,visited:[],values:{}};
+ let output=await executeVisualTurn({...params(graph),actionFlowRequest:true,state,message:"Regjistrim biznesi"},legacy);
+ expect(output.reply).toContain("Si quhet");
+ output=await executeVisualTurn({...params(graph),actionFlowRequest:true,state:output.nextState,message:"Studio Ana"},legacy);
+ expect(output.reply).toContain("email");
+ output=await executeVisualTurn({...params(graph),actionFlowRequest:true,state:output.nextState,message:"ana@example.com"},legacy);
+ expect(output.reply).toContain("Ta përgatis");
+ output=await executeVisualTurn({...params(graph),actionFlowRequest:true,state:output.nextState,message:"po"},legacy);
+ expect(output.reply).toContain("SIMULIM");expect(output.reply).not.toContain("{{actions");expect(output.nextState.visual?.status).toBe("completed");expect(legacy).not.toHaveBeenCalled();
+});

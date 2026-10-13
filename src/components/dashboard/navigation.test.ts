@@ -24,11 +24,13 @@ it("keeps four principal tabs for legacy mobile nav", () => {
   ]);
 });
 
-it("keeps four principal tabs for admin mobile nav", () => {
+it("keeps admin actions and pricing reachable on mobile", () => {
   expect(buildAdminNavigation("mobile").map((item) => item.path)).toEqual([
     "",
     "businesses",
     "conversations",
+    "pricing",
+    "actions",
     "app",
   ]);
 });
@@ -39,6 +41,8 @@ it("includes onboarding map in admin desktop nav", () => {
     "businesses",
     "product-types",
     "conversations",
+    "pricing",
+    "actions",
     "chat-lab",
     "onboarding",
     "app",

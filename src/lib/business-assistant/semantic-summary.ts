@@ -22,6 +22,7 @@ export type SemanticChangeSummary = {
 // Never copy arbitrary prompts, condition values, integration settings or model prose
 // into explanations. The summary describes configured structure, not execution success.
 const behaviors: Record<VisualNode["kind"], string> = {
+  action: "Ekzekutimi i veprimit të autorizuar me të dhënat e bisedës",
   start: "Fillimi i kërkesës së klientit", condition: "Zgjedhja e rrugës sipas një rregulli",
   knowledge: "Përgjigje nga informacioni i biznesit", collect: "Kërkimi i një të dhëne nga klienti",
   confirm: "Kërkimi i konfirmimit të klientit", product: "Vazhdimi i procesit të produktit",

@@ -1,4 +1,4 @@
-export type VisualNodeKind = "start" | "condition" | "knowledge" | "order_status" | "collect" | "confirm" | "product" | "booking" | "handoff" | "end";
+export type VisualNodeKind = "action" | "start" | "condition" | "knowledge" | "order_status" | "collect" | "confirm" | "product" | "booking" | "handoff" | "end";
 export type VisualPort = "next" | "yes" | "no";
 export type VisualIntent = "order" | "booking" | "support" | "question" | "unknown";
 export type VisualNode = {
@@ -7,6 +7,7 @@ export type VisualNode = {
   label: string;
   position: { x: number; y: number };
   config: {
+    action?: import("@/lib/actions/catalog").ActionBinding;
     prompt?: string;
     fieldKey?: string;
     fieldType?: "text" | "email" | "phone" | "number" | "photo";
@@ -28,13 +29,14 @@ export type VisualRunState = {
   status: "running" | "waiting" | "completed" | "handoff";
   visited: string[];
   values: Record<string, string>;
+  actionResults?: Record<string, Record<string, string>>;
   awaiting: boolean;
   forceCollect?: string;
   advisory?: boolean;
 };
 export type VisualExecution = {
   state: VisualRunState;
-  action: { kind: "knowledge" | "order_status" | "product" | "booking" | "prompt" | "handoff" | "end"; nodeId: string; message?: string };
+  action: { kind: "action" | "knowledge" | "order_status" | "product" | "booking" | "prompt" | "handoff" | "end"; nodeId: string; message?: string };
   traversedNodeIds: string[];
   inputConsumed: boolean;
   error?: string;

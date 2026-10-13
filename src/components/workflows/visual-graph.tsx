@@ -7,7 +7,7 @@ import type { ChangeKind } from "@/lib/workflows/visual/diff";
 import "./visual-workflow.css";
 
 export const nodeIcons: Record<VisualNodeKind, string> = {
-  start: "inbox", condition: "workflows", knowledge: "knowledge", order_status: "search", collect: "orders",
+  action: "spark", start: "inbox", condition: "workflows", knowledge: "knowledge", order_status: "search", collect: "orders",
   confirm: "check", product: "products", booking: "calendar", handoff: "customers", end: "finish",
 };
 export function FlowIcon({ kind, size = 20 }: { kind: VisualNodeKind; size?: number }) {

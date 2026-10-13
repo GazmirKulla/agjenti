@@ -1,4 +1,5 @@
 "use server";
+import { requireActionAccess } from "@/lib/actions/access";
 import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
@@ -15,6 +16,7 @@ export async function saveBusinessService(slug: string, form: FormData) {
       throw new Error("Aktivizo Shërbimet te Cilësimet → Modulet.");
     const id = String(form.get("id") ?? ""),
       updatedAt = String(form.get("updatedAt") ?? "");
+    if (!id) await requireActionAccess(access.business.id,user!.id,"service.create");
     if (id && (!uuid(id) || !updatedAt))
       throw new Error("Rifresko shërbimin para ruajtjes.");
     const values = parseService(form),

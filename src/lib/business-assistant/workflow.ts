@@ -62,7 +62,7 @@ export function applyWorkflowOperations(
     const allowed: Record<string, string[]> = { upgrade: ["op"], rename: ["op", "name"], put_node: ["op", "node"], put_edge: ["op", "edge"], put_flow: ["op", "flow"], remove_node: ["op", "id"], remove_edge: ["op", "id"], remove_flow: ["op", "id"] };
     if (!Object.hasOwn(allowed, operation.op) || Object.keys(operation).some(key => !allowed[operation.op].includes(key)))
       throw new AssistantError("Ky veprim nuk mbështetet për rrjedhën.");
-    if (operation.op === "put_node" && operation.node && (Object.keys(operation.node).some(key => !["id", "kind", "label", "position", "config"].includes(key)) || Object.keys(operation.node.config ?? {}).some(key => !["prompt", "fieldKey", "fieldType", "condition", "value"].includes(key))))
+    if (operation.op === "put_node" && operation.node && (Object.keys(operation.node).some(key => !["id", "kind", "label", "position", "config"].includes(key)) || Object.keys(operation.node.config ?? {}).some(key => !["action", "prompt", "fieldKey", "fieldType", "condition", "value"].includes(key))))
       throw new AssistantError("Konfigurimi përmban një veprim që nuk mbështetet.");
     if (operation.op === "put_edge" && operation.edge && Object.keys(operation.edge).some(key => !["id", "source", "target", "port"].includes(key)))
       throw new AssistantError("Lidhja përmban konfigurim që nuk mbështetet.");

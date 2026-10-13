@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ profile: vi.fn(), from: vi.fn() }));
+const mocks = vi.hoisted(() => ({ profile: vi.fn(), from: vi.fn(), rpc:vi.fn() }));
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: mocks.profile }));
-vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: mocks.from }) }));
+vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: mocks.from, rpc:mocks.rpc }) }));
 
 function chain(data: unknown, count?: number) {
   const value = { data, error: null, count };
@@ -15,6 +15,7 @@ function chain(data: unknown, count?: number) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.rpc.mockResolvedValue({data:false,error:null});
   mocks.profile.mockResolvedValue({ enabledModules: ["knowledge", "products", "orders", "workflows", "bookings", "staff"] });
 });
 

@@ -1,3 +1,5 @@
+const actionAccess = vi.hoisted(()=>vi.fn());
+vi.mock("@/lib/actions/access",()=>({requireActionAccess:actionAccess}));
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   from: vi.fn(),
@@ -33,6 +35,7 @@ const access: Access = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  actionAccess.mockResolvedValue(undefined);
   m.queries.length = 0;
   m.responses.length = 0;
   process.env.TOKEN_ENCRYPTION_KEY = "assistant-test-only-key";

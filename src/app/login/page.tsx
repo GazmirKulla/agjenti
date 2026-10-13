@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { authNext } from "@/lib/auth/next";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
@@ -8,6 +9,7 @@ import { ThemeSwitch } from "@/components/theme/theme-switch";
 import "./auth.css";
 function LoginForm() {
   const params = useSearchParams();
+  const next = authNext(params.get("next"));
   const [mode, setMode] = useState<"signin" | "signup" | "reset">(
     params.get("mode") === "signup" ? "signup" : "signin",
   );
@@ -35,7 +37,7 @@ function LoginForm() {
     setError("");
     setMessage("");
     // Server route sets the PKCE verifier cookie on the redirect.
-    window.location.assign(`/auth/${provider}`);
+    window.location.assign(`/auth/${provider}?next=${encodeURIComponent(next)}`);
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,7 +71,7 @@ function LoginForm() {
           email: email.trim(),
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
           },
         });
         if (error) throw error;
@@ -80,7 +82,7 @@ function LoginForm() {
           return;
         }
       }
-      window.location.assign("/auth/continue");
+      window.location.assign(next);
     } catch (error) {
       const code = (error as { code?: string }).code;
       setError(

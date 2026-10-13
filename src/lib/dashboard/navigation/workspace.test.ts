@@ -44,7 +44,7 @@ it("does not expose optional modules omitted by the business profile", () => {
 });
 
 it("leaves administrator navigation independent of the business grouping", () => {
-  expect(buildAdminNavigation("mobile").map(item => item.path)).toEqual(["", "businesses", "conversations", "pricing", "app"]);
+  expect(buildAdminNavigation("mobile").map(item => item.path)).toEqual(["", "businesses", "conversations", "pricing", "actions", "app"]);
 });
 
 

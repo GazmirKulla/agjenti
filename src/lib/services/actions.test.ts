@@ -1,4 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
+const actionAccess=vi.hoisted(()=>vi.fn());
+vi.mock("@/lib/actions/access",()=>({requireActionAccess:actionAccess}));
 const m = vi.hoisted(() => ({
   user: vi.fn(),
   access: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { saveBusinessService } from "./actions";
 beforeEach(() => {
   vi.clearAllMocks();
+  actionAccess.mockResolvedValue(undefined);
   m.user.mockResolvedValue({ id: "user" });
   m.access.mockResolvedValue({ business: { id: "business" } });
   m.profile.mockResolvedValue({ enabledModules: ["services"] });
@@ -76,3 +79,5 @@ it("scopes edits to the business and rejects stale changes", async () => {
   expect(m.eq).toHaveBeenCalledWith("business_id", "business");
   expect(m.eq).toHaveBeenCalledWith("updated_at", "2026-10-10T00:00:00Z");
 });
+
+it("denies service creation before writing when action access is removed",async()=>{actionAccess.mockRejectedValue(new Error("denied"));expect(await saveBusinessService("demo",form())).toEqual({error:"denied"});expect(m.insert).not.toHaveBeenCalled();});

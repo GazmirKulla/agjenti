@@ -2,7 +2,7 @@ import { isQuestion, validValue, profileKey } from "../context";
 import { foldText } from "../engine";
 import type { VisualExecution, VisualGraph, VisualIntent, VisualRunState } from "./types";
 export { explicitIntent as detectVisualIntent } from "../guidance";
-export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;productComplete?:boolean;bookingComplete?:boolean;orderStatusComplete?:boolean;inputAvailable?:boolean; sharedValues?:Record<string,string>}):VisualExecution {
+export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;actionOutcome?: "yes" | "no";productComplete?:boolean;bookingComplete?:boolean;orderStatusComplete?:boolean;inputAvailable?:boolean; sharedValues?:Record<string,string>}):VisualExecution {
   const state:VisualRunState=p.state?structuredClone(p.state):{versionId:p.versionId,nodeId:p.graph.nodes.find(n=>n.kind==='start')!.id,status:'running',visited:[],values:{},awaiting:false};
   if(p.sharedValues) {
     const forced=p.graph.nodes.find(n=>n.id===state.forceCollect);
@@ -34,6 +34,10 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     if(n.kind==='knowledge'){
       advance('next');
       return result('knowledge',n.id,n.config.prompt);
+    }
+    if(n.kind==='action'){
+      if(state.awaiting&&p.actionOutcome){state.branchPorts={...state.branchPorts,[n.id]:p.actionOutcome};advance(p.actionOutcome);p={...p,actionOutcome:undefined};continue;}
+      state.awaiting=true;state.status='waiting';return result('action',n.id);
     }
     if(n.kind==='booking'){
       if(state.awaiting&&p.bookingComplete){consumed=true;advance('next');continue;}

@@ -1,4 +1,5 @@
 "use server";
+import { requireActionAccess } from "@/lib/actions/access";
 
 import { visualSelection, saveProductsWithVisualFlow } from "./visual-selection";
 import { revalidatePath } from "next/cache";
@@ -68,6 +69,7 @@ export async function createProduct(
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+  try { await requireActionAccess(access.business.id,user.id,"product.create"); } catch(e) { return {error:e instanceof Error?e.message:"Veprimi nuk lejohet."}; }
 
   const parsed = parseProductForm(form);
   if ("error" in parsed) return parsed;
@@ -212,6 +214,7 @@ export async function linkExternalProduct(slug: string, form: FormData) {
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+  try { await requireActionAccess(access.business.id,user.id,"product.create"); } catch(e) { return {error:e instanceof Error?e.message:"Veprimi nuk lejohet."}; }
 
   const externalId = String(form.get("external_id") ?? "").trim();
   const name = String(form.get("name") ?? "").trim();
@@ -275,6 +278,7 @@ export async function importProductBatch(
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+  try { await requireActionAccess(access.business.id,user.id,"product.create"); } catch(e) { return {error:e instanceof Error?e.message:"Veprimi nuk lejohet."}; }
 
   const parsed = parseProductBatch(payload?.items);
   if ("error" in parsed) return parsed;

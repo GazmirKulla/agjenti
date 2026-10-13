@@ -87,6 +87,15 @@ it("blocks inventory claims disguised as a knowledge prompt", async () => {
   const result = await buildAutomationProposal({ ...data, after });
   expect(result.canSaveDraft).toBe(false); expect(result.unsupportedActions).toContain("back_in_stock.notify");
 });
+it("assesses a new action node even when the model omits its permission requirement", async () => {
+  const data = input([]);
+  data.after.nodes.push({ id: "provision", kind: "action", label: "Regjistrim", position: { x: 0, y: 0 },
+    config: { action: { actionKey: "business.provision", actionVersion: 1, inputs: { name: "business_name", email: "business_email" } } } });
+  assess.mockResolvedValue([{ capabilityKey: "business.provision", status: "needs_setup", missingRequirements: ["business_provision_automation_permission"] }]);
+  const proposal = await buildAutomationProposal(data);
+  expect(assess).toHaveBeenCalledWith("a", { userId: "owner" }, { keys: ["business.provision"] });
+  expect(proposal).toMatchObject({ readiness: "needs_setup", missingRequirements: ["business_provision_automation_permission"] });
+});
 it("assesses existing nodes when a changed edge starts using them", async () => {
   const data = input([]);
   data.after.edges[0].target = "product";

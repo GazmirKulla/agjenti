@@ -1,3 +1,4 @@
+import { requireActionAccess } from "@/lib/actions/access";
 import { sealImportSource } from "@/lib/products/import-service";
 import { importFields, type ImportField, type ImportSource } from "@/lib/products/import-model";
 import type { AssistantMaterial } from "./materials";
@@ -593,6 +594,7 @@ export async function prepareProposal(
 }
 export async function executeTicket(access: Access, token: string) {
   const t = openTicket(token, access);
+  if(t.action === "product_create" || t.action === "service_create") await requireActionAccess(access.businessId,access.userId,t.action === "product_create" ? "product.create" : "service.create");
   if (t.action.startsWith("orderflow_")) return executeOrderFlow(access, t);
   if (t.action.startsWith("workflow_")) return executeWorkflow(access, t);
   if(t.action.startsWith("linear_")) return executeLinear(access,t);

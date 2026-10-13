@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 	const type = searchParams.get("type") as EmailOtpType | null;
 	const next = safeNext(searchParams.get("next"), type);
 	const origin = appOrigin(request);
-	const loginError = `${origin}/login?error=oauth_callback`;
+	const loginError = `${origin}/login?error=oauth_callback${next.startsWith("/join?") ? `&next=${encodeURIComponent(next)}` : ""}`;
 
 	const cookieStore = await cookies();
 	const pending: CookieToSet[] = [];

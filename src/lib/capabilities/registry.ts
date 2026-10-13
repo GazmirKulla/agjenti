@@ -1,4 +1,5 @@
-export type CapabilityCategory = "knowledge" | "catalog" | "orders" | "booking" | "staff";
+import { actionCatalog } from "@/lib/actions/catalog";
+export type CapabilityCategory = "knowledge" | "catalog" | "orders" | "booking" | "staff" | "business";
 export type CapabilityRisk = "read" | "write" | "external_effect";
 export type CapabilityApprovalPolicy = "none" | "confirmation";
 export type CapabilityReadiness = "ready" | "needs_setup" | "unsupported" | "needs_clarification";
@@ -28,6 +29,8 @@ export type CapabilityAssessment = {
 
 /** Platform capabilities with verified handlers in the current runtime. */
 export const capabilityRegistry: Record<string, CapabilityDefinition> = {
+  "business.provision": {key:"business.provision",description:actionCatalog["business.provision"].description,category:"business",inputSchema:{name:"string",email:"email",description:"string?"},requiredModules:[],requiredIntegrations:[],risk:"write",approvalPolicy:"confirmation",executorId:"business.provision"},
+
   "knowledge.answer": {
     key: "knowledge.answer",
     description: "Përgjigjet nga njohuritë aktive të biznesit.",

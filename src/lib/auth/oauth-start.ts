@@ -1,3 +1,4 @@
+import { authNext } from "./next";
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -45,7 +46,7 @@ export async function startOAuth(request: Request, provider: OAuthProvider) {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
-      redirectTo: `${origin}/auth/callback?next=/auth/continue`,
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(authNext(new URL(request.url).searchParams.get("next")))}`,
       ...(provider === "google"
         ? { queryParams: { prompt: "select_account" } }
         : {}),
@@ -55,7 +56,7 @@ export async function startOAuth(request: Request, provider: OAuthProvider) {
 
   if (error || !data.url) {
     console.error(`[auth/${provider}] signInWithOAuth failed`, error?.message);
-    return NextResponse.redirect(`${origin}/login?error=oauth_callback`);
+    return NextResponse.redirect(`${origin}/login?error=oauth_callback&next=${encodeURIComponent(authNext(new URL(request.url).searchParams.get("next")))}`);
   }
 
   const response = NextResponse.redirect(data.url);

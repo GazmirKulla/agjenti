@@ -12,6 +12,7 @@ export function unsupportedRequestKeys(text: string): string[] {
 }
 
 export function nodeCapabilityKeys(node: VisualNode): string[] {
+  if (node.kind === "action" && node.config.action) return [node.config.action.actionKey];
   return ({ knowledge: ["knowledge.answer"], product: ["product.search", "order.prepare"],
     booking: ["booking.availability.read", "booking.create"], order_status: ["order.status.read"], handoff: ["staff.handoff"] } as Record<string, string[]>)[node.kind] ?? [];
 }

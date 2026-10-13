@@ -47,7 +47,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublic =
+  const isPublic = path === "/join" ||
     path === "/" ||
     path.startsWith("/login") ||
     path.startsWith("/auth") ||

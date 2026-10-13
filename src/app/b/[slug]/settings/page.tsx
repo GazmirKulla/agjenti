@@ -74,6 +74,10 @@ export default async function SettingsPage({
     .eq("business_id", access.business.id)
     .maybeSingle();
 
+  const prepared = !onboarding?.answers ? await createServiceSupabase()
+    .from("business_invitations").select("details").eq("target_business_id",access.business.id).eq("status","accepted").maybeSingle() : null;
+  const profileAnswers = onboarding?.answers ?? (prepared?.data ? { name:prepared.data.details?.name, details:{businessDescription:prepared.data.details?.description} } : undefined);
+
   return (
     <>
       <PageHeading
@@ -85,9 +89,9 @@ export default async function SettingsPage({
         panels={{
           profile: (
             <BusinessProfile
-              answers={onboarding?.answers}
+              answers={profileAnswers}
               slug={slug}
-              failed={!!onboardingError}
+              failed={!!onboardingError || !!prepared?.error}
             />
           ),
           data: (

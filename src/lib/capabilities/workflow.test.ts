@@ -70,6 +70,21 @@ it.each(["draft", "publish", "enable"] as const)("blocks disabled orders at %s, 
   expect(m.rpc).not.toHaveBeenCalled(); expect(saved).toEqual(graph());
   if (operation === "enable") expect(m.version).toHaveBeenCalledWith("tenant-a", "old-version");
 });
+it("checks action permissions alongside module permissions before publishing", async () => {
+  const candidate = graph();
+  candidate.flows[0].kind = "custom";
+  delete candidate.flows[0].productIds;
+  candidate.nodes[1] = { ...candidate.nodes[1], kind: "action", config: {
+    action: { actionKey: "business.provision", actionVersion: 1, inputs: { name: "business_name", email: "business_email" } },
+  } };
+  m.rpc.mockResolvedValue({ data: false, error: null });
+  await expect(enforceWorkflowCapabilities("tenant-a", "actor", candidate, "publish")).rejects.toMatchObject({ code: "missing_configuration" });
+  expect(m.rpc).toHaveBeenCalledWith("can_execute_business_action", { p_business: "tenant-a", p_user: null, p_action: "business.provision", p_automated: true });
+  m.rpc.mockResolvedValue({ data: true, error: null });
+  await expect(enforceWorkflowCapabilities("tenant-a", "actor", candidate, "publish")).resolves.toEqual([
+    expect.objectContaining({ capabilityKey: "business.provision", status: "ready" }),
+  ]);
+});
 it("AI and manual publishing enforce identical capability restrictions before any commit", async () => {
   m.profile.mockResolvedValue({ enabledModules: ["products", "workflows"] });
   const manual = await writeVisualWorkflow("tenant-a", "actor", 2, graph(), "publish");

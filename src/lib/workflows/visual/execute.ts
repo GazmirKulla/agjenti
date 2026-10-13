@@ -1,3 +1,4 @@
+import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workflow";
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
 import { chooseGuidance, clarification, invalidateConfirmation } from "../guidance";
 import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
@@ -128,7 +129,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   const informationFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "information" && flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
   const continuingInformation = params.informationRequest && !params.orderStatusRequest && previous?.status === "waiting" && Boolean(informationFlow) && !statusFlow;
   const correctionRequest = /\b(ndrysho\w*|korrigjo\w*|ktheh\w*|pas|mbrapa|change|correct|instead|back)\b/.test(params.message.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase());
-  const guidance = enteringEntity ? { action: "route" as const, target: boundFlow!.entryNodeId, source: "rules" as const }
+  const guidance = params.actionFlowRequest && !correctionRequest ? {action:"continue" as const,target:null,source:"rules" as const} : enteringEntity ? { action: "route" as const, target: boundFlow!.entryNodeId, source: "rules" as const }
     : params.informationRequest && !params.orderStatusRequest && !informationEntries.length ? { action: "answer" as const, target: null, source: "rules" as const }
     : continuingStatus ? { action: "continue" as const, target: null, source: "rules" as const }
     : params.orderStatusRequest && statusEntries.length ? { action: "route" as const, target: statusEntries[0].id, source: "rules" as const }
@@ -245,6 +246,23 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       const value=execution.state.values[node.config.fieldKey!];
       if(value) setFact(turn.nextState,node.config.fieldKey!,value,node.config.fieldType||"text",`visual:${node.id}`);
     }
+    if (action.kind === "action") {
+      const node=version.graph.nodes.find(n=>n.id===action.nodeId)!;
+      let outcome:"yes"|"no"="yes";
+      try {
+        if(params.informationRequest) throw new Error("Veprimi kërkon vazhdimin e procesit.");
+        if(!node.config.action)throw new Error("Veprimi nuk është konfiguruar.");
+        const output=await executeWorkflowAction({businessId:params.businessId,versionId:version.id,nodeId:node.id,binding:node.config.action,values:execution.state.values,mode:params.mode,guard:params.actionGuard});
+        execution.state.actionResults={...execution.state.actionResults,[node.id]:output};
+      } catch {
+        outcome="no";
+        execution.state.actionResults={...execution.state.actionResults,[node.id]:{error:"Veprimi nuk u konfirmua. Kontrollo të dhënat, lejet ose kërko ndihmën e stafit."}};
+      }
+      execution=advance({graph:version.graph,versionId:version.id,state:execution.state,message:"",hasPhoto:false,intent,inputAvailable:false,actionOutcome:outcome});
+      traversed.push(...execution.traversedNodeIds);
+      continue;
+    }
+    if (action.message) action.message=renderActionMessage(action.message,execution.state.actionResults);
     if (action.kind === "knowledge") {
       turn = await legacy({ ...params, state: turn.nextState, informational: action.message ?? "" }, action.nodeId);
       currentState=turn.nextState;

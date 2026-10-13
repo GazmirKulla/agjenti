@@ -839,3 +839,27 @@ it("supports a real handoff for a non-pilot business with no visual graph", asyn
   expect(mocks.info).not.toHaveBeenCalled();
   expect(mocks.booking).not.toHaveBeenCalled();
 });
+
+it("routes an explicitly named action flow and preserves an unfinished order",async()=>{
+ const {addFlowTemplate}=await import("@/components/workflows/flow-templates");
+ const {starterVisualGraph}=await import("@/lib/workflows/visual/model");
+ const graph=addFlowTemplate(starterVisualGraph(),"business_provision","signup").graph;
+ mocks.version.mockResolvedValue({id:"v-actions",businessId:"business",graph});
+ mocks.agent.mockImplementation(async ({state})=>{const next=structuredClone(state);next.visual.status="waiting";next.visual.awaiting=true;return result(next,"Emri?");});
+ const before=order();
+ const guard={jobId:1,leaseToken:"lease",conversationId:"conversation",revision:2};
+ const output=await processConversationMessage({businessId:"business",message:"Regjistrim biznesi",state:before,hasPhoto:false,mode:"test",bookingGuard:guard});
+ expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({actionFlowRequest:true,actionGuard:guard}));
+ expect(output.nextState.product_id).toBe(before.product_id);expect(output.nextState.fields.size).toBe("L");
+ expect(output.nextState.processes?.actionFlow?.visual.nodeId).toBe("signup_name");
+});
+it("suspends a pending action confirmation after a question instead of consuming a later bare yes",async()=>{
+ const {addFlowTemplate}=await import("@/components/workflows/flow-templates");const {starterVisualGraph}=await import("@/lib/workflows/visual/model");
+ const graph=addFlowTemplate(starterVisualGraph(),"business_provision","signup").graph;
+ mocks.version.mockResolvedValue({id:"v-actions",businessId:"business",graph});
+ const state=migrateConversationProcesses(order(),()=>"task");
+ state.processes!.actionFlow={versionId:"v-actions",promptCurrent:true,visual:{versionId:"v-actions",nodeId:"signup_confirm",status:"waiting",awaiting:true,visited:[],values:{}}};
+ const answer=await turn("Sa kushton?",state);
+ expect(answer.nextState.processes?.actionFlow?.promptCurrent).toBe(false);
+ expect(mocks.agent.mock.calls.some(([p])=>p.actionFlowRequest)).toBe(false);
+});

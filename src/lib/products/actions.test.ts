@@ -1,4 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
+const actionAccess = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/actions/access",()=>({requireActionAccess:actionAccess}));
 const businessWorkflow = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/workflows/visual/business-workflow", () => ({ publishedBusinessWorkflow: businessWorkflow }));
 const m = vi.hoisted(() => ({
@@ -25,6 +27,7 @@ let rows: Record<string, unknown>[];
 const id = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => {
   vi.clearAllMocks();
+  actionAccess.mockResolvedValue(undefined);
   businessWorkflow.mockResolvedValue(null);
   m.rpc.mockResolvedValue({ data: 1, error: null });
   m.bindings.mockResolvedValue(new Map());
@@ -178,3 +181,5 @@ describe("catalog writes", () => {
     expect((await updateProduct("test", form)).success).toBeTruthy();
   });
 });
+
+it("rejects product creation when the package or role denies it",async()=>{actionAccess.mockRejectedValue(new Error("denied"));const f=new FormData();f.set("name","Test");expect(await createProduct("test",f)).toEqual({error:"denied"});expect(m.insert).not.toHaveBeenCalled();expect(m.rpc).not.toHaveBeenCalled();});

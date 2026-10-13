@@ -51,6 +51,11 @@ async function countActive(db: ReturnType<typeof createServiceSupabase>, table: 
 async function assessKnownCapability(definition: CapabilityDefinition, businessId: string, modules: string[], candidate?: VisualGraph): Promise<CapabilityAssessment> {
   if (definition.requiredModules.some(module => !modules.includes(module))) return statusFor(definition, modules, [], []);
   const db = createServiceSupabase();
+  if (definition.key === "business.provision") {
+    const r=await db.rpc("can_execute_business_action",{p_business:businessId,p_user:null,p_action:definition.key,p_automated:true});
+    if(r.error) return statusFor(definition,modules,[],[],["action_catalog_unavailable"]);
+    return statusFor(definition,modules,[],["business.provision: transactional invitation handler"],r.data===true?[]:["business_provision_automation_permission"]);
+  }
   if (definition.key === "knowledge.answer") {
     const result = await countActive(db, "knowledge_entries", businessId, { is_active: true });
     if (result.error) throw new Error("Nuk u verifikua konfigurimi i njohurive.");

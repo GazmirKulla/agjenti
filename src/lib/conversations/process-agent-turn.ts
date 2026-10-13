@@ -103,6 +103,8 @@ export type AgentTurnParams = {
   /** Immutable version selected by the server entity router; never accepted from client payloads. */
   entityVersion?: import("@/lib/workflows/visual/types").VisualVersion | null;
   onTrace?: TraceObserver;
+  actionFlowRequest?: boolean;
+  actionGuard?: import("@/lib/calendar/service").BookingEffectGuard;
   mode?: "production" | "test";
   source?: "instagram" | "whatsapp" | "admin_chat_lab";
   businessId: string;

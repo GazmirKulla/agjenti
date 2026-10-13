@@ -101,7 +101,7 @@ export async function processConversationMessage(params: ConversationMessagePara
   const before = { ...emptyState(), recentMessages: recentConversation(params.state) };
   let result: AgentTurnResult;
   try {
-    result = await processMessage(params);
+    result = await processMessage({ ...params, actionGuard: params.bookingGuard });
     if (result.handoff) await requireRuntimeModules(params.businessId, ["staff"]);
   } catch (error) {
     if (!(error instanceof CapabilityEnforcementError)) throw error;
@@ -214,6 +214,105 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   const graphVersion = params.visualPreview ?? await loadVisualVersion(params.businessId, processes.active === "booking" ? processes.booking?.versionId : state.visual?.versionId);
   const entityMessage = processes.pendingChoice?.kind === "replace" && affirmative(params.message) ? processes.pendingChoice.message : params.message;
   const ordinaryQuestion = isEntityInformationRequest(entityMessage) || isQuestion(entityMessage) && !/\b(dua|kerkoj|rezervo|book|want|vazhdo|rifillo)\b/.test(foldText(entityMessage));
+  // Unbound custom action processes share the existing visual executor and keep
+  // order/booking snapshots intact. A question cannot authorize a write.
+  const savedAction = processes.actionFlow;
+  const actionVersion = savedAction
+    ? (params.visualPreview ??
+      (await loadVisualVersion(params.businessId, savedAction.versionId)))
+    : graphVersion;
+  const actionFlows =
+    actionVersion?.graph.version === 2
+      ? actionVersion.graph.flows.filter(
+          (f) =>
+            f.kind === "custom" &&
+            !f.productIds?.length &&
+            !f.serviceIds?.length &&
+            f.nodeIds.some((id) =>
+              actionVersion.graph.nodes.some(
+                (n) => n.id === id && n.kind === "action",
+              ),
+            ),
+        )
+      : [];
+  const continuingAction =
+    savedAction?.promptCurrent &&
+    !ordinaryQuestion &&
+    !["order", "support"].includes(explicitIntent(params.message)) &&
+    !bookingRequest(foldText(params.message));
+  let namedAction = !ordinaryQuestion
+    ? actionFlows.find((f) =>
+        foldText(params.message).includes(foldText(f.label)),
+      )
+    : undefined;
+  if (
+    !namedAction &&
+    !continuingAction &&
+    !ordinaryQuestion &&
+    actionFlows.length &&
+    !processes.active &&
+    !["order", "support"].includes(explicitIntent(params.message)) &&
+    !bookingRequest(foldText(params.message))
+  ) {
+    const selected = await chooseGuidance({
+      message: params.message,
+      state,
+      targets: [],
+      routes: actionFlows.map((f) => ({
+        id: f.id,
+        label: f.label,
+        kind: "custom",
+      })),
+      allowOrder: false,
+      allowSupport: false,
+    });
+    if (selected.action === "route")
+      namedAction = actionFlows.find((f) => f.id === selected.target);
+  }
+  if (actionVersion && (continuingAction || namedAction)) {
+    const adapter = structuredClone(state);
+    const resumeNamed =
+      savedAction && namedAction?.nodeIds.includes(savedAction.visual.nodeId);
+    adapter.visual = resumeNamed
+      ? { ...savedAction.visual, awaiting: false }
+      : continuingAction
+        ? savedAction!.visual
+        : {
+            versionId: actionVersion.id,
+            nodeId: namedAction!.entryNodeId,
+            status: "running",
+            awaiting: false,
+            visited: [],
+            values: {},
+          };
+    const answer = await processAgentTurn({
+      ...params,
+      state: adapter,
+      entityVersion: actionVersion,
+      actionFlowRequest: true,
+    });
+    const cursor = answer.nextState.visual;
+    if (cursor?.status === "waiting")
+      processes.actionFlow = {
+        versionId: actionVersion.id,
+        visual: cursor,
+        promptCurrent: true,
+      };
+    else delete processes.actionFlow;
+    answer.nextState.processes = processes;
+    answer.nextState.visual = state.visual;
+    answer.nextState.completedVisual = state.completedVisual;
+    processes.promptOwner = null;
+    return answer;
+  }
+  if (
+    savedAction &&
+    (ordinaryQuestion ||
+      explicitIntent(params.message) === "order" ||
+      explicitIntent(params.message) === "support" ||
+      bookingRequest(foldText(params.message)))
+  )
+    savedAction.promptCurrent = false;
   const continueService = processes.service?.status === "active" && !ordinaryQuestion && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
   let serviceVersion = continueService ? params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service!.versionId) : graphVersion;
   let entityResolution = !ordinaryQuestion && serviceVersion ? await resolveVisualEntity(params.businessId, serviceVersion.graph, entityMessage, continueService ? processes.service?.visual.binding : undefined, params.mode === "test") : {};

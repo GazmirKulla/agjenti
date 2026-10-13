@@ -1,4 +1,5 @@
 "use server";
+import { requireActionAccess } from "@/lib/actions/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import OpenAI from "openai";
 import { agentModel } from "@/lib/agents/generate";
@@ -16,6 +17,7 @@ async function accessFor(slug: string) {
   const profile = await loadDashboardProfile(member.business.id);
   const access = { userId: user.id, businessId: member.business.id, catalogSource: member.business.catalog_source, modules: profile.enabledModules };
   assertImportAccess(access);
+  await requireActionAccess(access.businessId,user.id,"product.create");
   return access;
 }
 export async function uploadProductCsv(slug: string, raw: string, name: string, withoutHeaders = false) {

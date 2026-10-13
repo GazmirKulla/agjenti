@@ -6,7 +6,7 @@ import type { VisualExecution, VisualGraph, VisualRunState } from "./types";
 import type { SimulationBinding, SimulationReport, ScenarioResult, SimulationStatus } from "./simulation-types";
 import { getCapability, type CapabilityAssessment } from "@/lib/capabilities/registry";
 
-const externalActions = new Set(["knowledge", "product", "booking", "order_status", "handoff"]);
+const externalActions = new Set(["action", "knowledge", "product", "booking", "order_status", "handoff"]);
 const limits = { scenarios: 192, turns: 40, durationMs: 2000 };
 const redacted = "[vlerë sintetike / konfigurimi e fshehur]";
 const expectedLabels = {

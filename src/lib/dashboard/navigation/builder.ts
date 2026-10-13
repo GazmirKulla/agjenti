@@ -2,7 +2,7 @@ import { moduleRegistry } from "../modules/registry";
 import type { DashboardProfile, ModuleId } from "../modules/types";
 
 export type NavItem = {
-  id: ModuleId | "chat-lab" | "pricing";
+  id: ModuleId | "chat-lab" | "pricing" | "actions";
   path: string;
   label: string;
   icon: string;
@@ -34,6 +34,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
       { id: "customers", path: "businesses", label: "Bizneset", icon: "businesses" },
       { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
       { id: "pricing", path: "pricing", label: "Çmimet", icon: "billing" },
+    { id: "actions", path: "actions", label: "Veprimet", icon: "spark" },
       { id: "settings", path: "app", label: "App", icon: "settings" },
     ];
   }
@@ -43,6 +44,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
     { id: "products", path: "product-types", label: "Llojet", icon: "products" },
     { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
     { id: "pricing", path: "pricing", label: "Çmimet", icon: "billing" },
+    { id: "actions", path: "actions", label: "Veprimet", icon: "spark" },
     { id: "chat-lab", path: "chat-lab", label: "Chat Lab", icon: "spark" },
     { id: "agents", path: "onboarding", label: "Onboarding", icon: "spark" },
     { id: "settings", path: "app", label: "App", icon: "settings" },
