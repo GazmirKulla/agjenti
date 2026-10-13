@@ -40,6 +40,21 @@ function waiting(nodeId: string, versionId = "version-1"): VisualRunState {
 beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(null); mocks.entity.mockResolvedValue({}); mocks.extract.mockResolvedValue(0); });
 afterEach(() => vi.unstubAllEnvs());
 
+it("W2 blocks an old visual confirmation after an invalid profile correction", async () => {
+  const graph = linear(node("confirm", "confirm", { prompt: "Konfirmon?" }));
+  graph.edges = graph.edges.filter(edge => edge.source !== "confirm");
+  graph.edges.push({ id: "yes", source: "confirm", target: "end", port: "yes" }, { id: "no", source: "confirm", target: "end", port: "no" });
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const first = await executeVisualTurn({ ...params(graph), state: migrateContext() }, legacy);
+  setFact(first.nextState, "customer_phone", "invalid", "phone", "correction");
+  const next = await executeVisualTurn({ ...params(graph), state: first.nextState, message: "Po" }, legacy);
+  expect(next.reply).toContain("Kontrollo telefonin");
+  expect(next.nextState.visual?.status).toBe("waiting");
+  expect(next.nextState.visual?.values.confirm).toBeUndefined();
+  expect(next.nextState.visual?.pendingConfirmation).toBeUndefined();
+  expect(legacy).not.toHaveBeenCalled();
+});
+
 it("blocks an older pinned product action after module deactivation without mutating its snapshot", async () => {
   vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
   mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "products"] });
@@ -432,6 +447,20 @@ function boundGraph(...nodes: VisualNode[]): VisualGraph {
 function mockBoundProduct() {
   mocks.entity.mockResolvedValue({ selected: { entity: { kind: "product", id: boundProductId, name: "Puzzle", productTypeId: "puzzle" }, binding: { flowId: "bound", entity: { kind: "product", id: boundProductId } } } });
 }
+it("W2 extracts only fields owned by the selected flow, not a service's fields", async () => {
+  mockBoundProduct();
+  const graph = boundGraph(node("size", "collect", { fieldKey: "size", prompt: "Madhësia?" }));
+  if (graph.version !== 2) throw new Error("Expected named flows");
+  graph.nodes.push(node("service-interest", "collect", { fieldKey: "service_interest", prompt: "Shërbimi?" }));
+  graph.edges.push({ id: "service-end", source: "service-interest", target: "end", port: "next" });
+  graph.flows.push({ id: "service", kind: "custom", label: "Shërbim", entryNodeId: "service-interest", nodeIds: ["service-interest"] });
+  await executeVisualTurn({ ...params(graph), state: migrateContext(), message: "Dua Puzzle", orderRequest: true }, async p => response(p));
+  expect(mocks.extract).toHaveBeenCalled();
+  for (const call of mocks.extract.mock.calls) {
+    expect(call[2]).toEqual(expect.arrayContaining([expect.objectContaining({ key: "size" })]));
+    expect(call[2]).not.toEqual(expect.arrayContaining([expect.objectContaining({ key: "service_interest" })]));
+  }
+});
 it("resolves a purchase inside a burst even when its last line is an availability question", async () => {
   mockBoundProduct();
   const graph = boundGraph(node("product", "product"), node("email", "collect", { fieldKey: "customer_email", prompt: "Email-i?", fieldType: "email" }));

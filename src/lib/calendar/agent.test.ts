@@ -49,6 +49,7 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 import {
   explicitBookingConfirmation,
+  bookingReviewKey,
   processBookingTurn,
   type BookingDraft,
 } from "./agent";
@@ -83,20 +84,15 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.useRealTimers());
-const confirmState = () => ({
+const confirmState = () => {
+  const draft: BookingDraft = { serviceId: "service", date: "2026-10-15", time: "09:00", name: "Klienti", phase: "confirm", nonce: "request-1", expires: Date.now() + 600000 };
+  draft.review = { factsKey: bookingReviewKey("business", draft) };
+  return ({
   ...emptyState(),
   fields: {
-    booking: {
-      serviceId: "service",
-      date: "2026-10-15",
-      time: "09:00",
-      name: "Klienti",
-      phase: "confirm",
-      nonce: "request-1",
-      expires: Date.now() + 600000,
-    } satisfies BookingDraft,
+    booking: draft,
   },
-});
+}); };
 it.each(["running", "waiting", "handoff"] as const)("does not interrupt a %s visual workflow", async (status) => {
   const state = { ...emptyState(), visual: { versionId: "version", nodeId: "collect", status, visited: ["collect"], values: {}, awaiting: true } };
   expect(await processBookingTurn({ businessId: "business", message: "dua rezervim", state })).toBeNull();
@@ -124,6 +120,17 @@ it("requires exact customer confirmation, not instructions from an AI parse", as
   });
   expect(turn?.reply).toContain("Konfirmon");
   expect(mocks.persist).not.toHaveBeenCalled();
+});
+it("W1 resume navigation rechecks and presents a booking review without persisting", async () => {
+  const state = confirmState(), before = structuredClone(state);
+  const turn = await processBookingTurn({ businessId: "business", message: "Vazhdo rezervimin", state,
+    mode: "production", routed: true, resume: true, conversationKey: "conversation",
+    bookingGuard: { jobId: 1, leaseToken: "test-lease", conversationId: "conversation", revision: 1 } });
+  expect(turn?.reply).toContain("Konfirmon");
+  expect(mocks.slots).toHaveBeenCalled();
+  expect(mocks.persist).not.toHaveBeenCalled();
+  expect(turn?.nextState.fields.booking).toMatchObject({ nonce: before.fields.booking.nonce, phase: "confirm" });
+  expect(state).toEqual(before);
 });
 it("creates a pending request when business approval is required", async () => {
   const turn = await processBookingTurn({
@@ -210,6 +217,7 @@ it("preserves an explicit booking recipient and contact instead of overwriting t
   setFact(state,"customer_phone","+355691234567","phone","prior_order");
   const draft=state.fields.booking as BookingDraft;
   draft.name="Bora"; draft.contact="+355699876543";
+  draft.review = { factsKey: bookingReviewKey("business", draft) };
   const turn=await processBookingTurn({businessId:"business",message:"Konfirmoj",state,conversationKey:"conversation"});
   expect(mocks.persist).toHaveBeenCalledWith("business",expect.objectContaining({name:"Bora",contact:"+355699876543"}),undefined);
   expect(turn?.nextState.context?.profile.name?.value).toBe("Ana");
@@ -229,6 +237,7 @@ it("seeds missing booking contact from shared profile without promoting another 
 it("reports the persisted booking when a replay returns details different from a later draft", async () => {
   const state=confirmState();
   state.fields.booking.time="11:00"; state.fields.booking.name="Bora";
+  state.fields.booking.review = { factsKey: bookingReviewKey("business", state.fields.booking) };
   const turn=await processBookingTurn({businessId:"business",message:"Konfirmoj",state,conversationKey:"conversation"});
   expect(turn?.reply).toContain("09:00");
   expect(turn?.reply).toContain("Klienti");
@@ -301,5 +310,28 @@ it("does not silently replace an existing booking with another bound service", a
 it("cannot persist a coordinator booking in production without queue ownership", async () => {
   const result = await processBookingTurn({ businessId: "business", message: "Konfirmoj", state: confirmState(), conversationKey: "conversation", routed: true });
   expect(result?.reply).toContain("nuk mund të ruhet");
+  expect(mocks.persist).not.toHaveBeenCalled();
+});
+
+it.each(["legacy", "phone", "service", "version", "tenant", "expiry"])("W2 refuses a %s-stale booking confirmation before writes", async change => {
+  const state = confirmState();
+  if (change === "legacy") delete state.fields.booking.review;
+  if (change === "phone") state.fields.booking.contact = "0692222222";
+  if (change === "service") state.fields.booking.serviceId = "changed-service";
+  if (change === "expiry") state.fields.booking.expires = Date.now() - 1;
+  const input = change === "version" ? { ...state, visual: { versionId: "changed-version", nodeId: "booking", status: "waiting" as const, visited: [], values: {}, awaiting: true } } : state;
+  const turn = await processBookingTurn({ businessId: change === "tenant" ? "other-business" : "business", message: "Po", state: input, routed: true, conversationKey: "conversation", mode: "production", bookingGuard: { jobId: 1, leaseToken: "lease", conversationId: "conversation", revision: 2 } });
+  expect(mocks.persist).not.toHaveBeenCalled();
+  expect(turn?.reply ?? "").not.toContain("është gati");
+  expect(turn?.reply ?? "").not.toContain("Kërkesa u ruajt");
+});
+it("W2 refreshes profile-seeded contact on resume without changing an explicit booking recipient", async () => {
+  const state = migrateContext(emptyState());
+  setFact(state, "customer_phone", "0691111111", "phone", "message");
+  const first = await processBookingTurn({ businessId: "business", message: "Dua rezervim", state, mode: "test" });
+  const pending = first!.nextState;
+  setFact(pending, "customer_phone", "0692222222", "phone", "correction");
+  const review = await processBookingTurn({ businessId: "business", message: "Po", state: pending, resume: true, mode: "test" });
+  expect(review?.nextState.fields.booking).toMatchObject({ name: "Klienti", contact: "0692222222", phase: "confirm" });
   expect(mocks.persist).not.toHaveBeenCalled();
 });

@@ -34,7 +34,6 @@ export function missingVisualOrderNode(graph: VisualGraph, visual: VisualRunStat
 export function advanceVisualOrderReview(state: ConversationStatePayload, message: string, hasPhoto: boolean, arrived: boolean, graph: VisualGraph, productName: string) {
   const steps: WorkflowStepDef[] = [{ key: "collect_customer", kind: "customer", label: "Të dhënat e klientit" }];
   if (arrived) { state.step_key = "collect_customer"; state.context!.execution.awaitingOrderConfirmation = false; }
-  const nextState = advanceSharedOrder(state, arrived ? "" : message, arrived ? false : hasPhoto, steps, arrived);
   const path = new Set<string>();
   let id = graph.version === 2 ? graph.flows.find(flow => flow.id === state.visual?.binding?.flowId)?.entryNodeId : undefined;
   while (id && !path.has(id)) {
@@ -44,6 +43,8 @@ export function advanceVisualOrderReview(state: ConversationStatePayload, messag
     id = graph.edges.find(edge => edge.source === node.id && edge.port === port)?.target;
   }
   const labels: WorkflowStepDef[] = graph.nodes.filter(node => path.has(node.id) && node.kind === "collect").map(node => ({ key: node.config.fieldKey ?? node.id, kind: "text", label: node.label, fieldKey: node.config.fieldKey }));
+  // The receipt covers exactly the fields displayed on the selected path.
+  const nextState = advanceSharedOrder(state, arrived ? "" : message, arrived ? false : hasPhoto, [...labels, ...steps], arrived);
   const fields = new Set(labels.map(step => step.key));
   const summary = { ...nextState, context: { ...nextState.context!, order: Object.fromEntries(Object.entries(nextState.context!.order).filter(([key]) => fields.has(key))) } };
   return { nextState, reply: sharedPrompt(summary, [...steps, ...labels], productName), complete: nextState.step_key === "order_ready" };

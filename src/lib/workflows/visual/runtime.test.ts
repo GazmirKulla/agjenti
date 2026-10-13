@@ -20,6 +20,27 @@ function run(graph: VisualGraph, message = "", state?: VisualRunState, hasPhoto 
   return advanceVisualWorkflow({ graph, versionId: "v1", state, message, hasPhoto, intent: detectVisualIntent(message) });
 }
 
+describe("W2 visual confirmation freshness", () => {
+  it.each(["facts", "expired", "legacy", "entity"])("re-reviews a %s-stale prompt instead of accepting yes", change => {
+    const graph = confirmation();
+    const prompt = run(graph, "ana@example.com", run(graph).state).state;
+    expect(prompt.nodeId).toBe("confirm");
+    if (change === "facts") prompt.values.email = "corrected@example.com";
+    if (change === "expired") prompt.pendingConfirmation!.expiresAt = Date.now() - 1;
+    if (change === "legacy") delete prompt.pendingConfirmation;
+    if (change === "entity") prompt.binding = { flowId: "different", entity: { kind: "service", id: "another-service" } };
+    const reviewed = run(graph, "Po", prompt);
+    expect(reviewed.action.kind).toBe("prompt"); expect(reviewed.state.values.confirm).toBeUndefined();
+    expect(run(graph, "Po", reviewed.state).action.kind).toBe("end");
+  });
+  it("checks authoritative shared corrections before accepting the old confirmation", () => {
+    const graph = confirmation(); const prompt = run(graph, "ana@example.com", run(graph).state).state;
+    const next = advanceVisualWorkflow({ graph, versionId: "v1", state: prompt, message: "Po", hasPhoto: false, intent: "unknown", sharedValues: { email: "new@example.com" } });
+    expect(next.state.values.email).toBe("new@example.com"); expect(next.action.kind).toBe("prompt");
+    expect(prompt.values.email).toBe("ana@example.com");
+  });
+});
+
 describe("visual graph publication", () => {
   it("generates a deterministic connected starter without inventing customer fields", () => {
     const graph = starterVisualGraph();

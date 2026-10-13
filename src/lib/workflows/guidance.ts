@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { agentModel } from "@/lib/agents/generate";
-import { affirmative, isQuestion } from "./context";
+import { affirmative, invalidateOrderReview, isQuestion } from "./context";
 import { foldText, type ConversationStatePayload } from "./engine";
 
 export type ConversationMessage = { role: "user" | "assistant"; content: string };
@@ -34,8 +34,7 @@ export function explicitIntent(message: string): "order" | "support" | "question
 }
 export function invalidateConfirmation(state: ConversationStatePayload) {
   if (state.context) {
-    state.context.execution.orderConfirmed = false;
-    state.context.execution.awaitingOrderConfirmation = false;
+    invalidateOrderReview(state.context.execution);
   }
 }
 /** Chooses conversational navigation only. It cannot provide values, confirm an order or run tools. */

@@ -31,6 +31,8 @@ export type VisualRunState = {
   values: Record<string, string>;
   actionResults?: Record<string, Record<string, string>>;
   awaiting: boolean;
+  pendingConfirmation?: { nodeId: string; factsKey: string; expiresAt: number };
+  confirmedConfirmation?: { nodeId: string; factsKey: string; expiresAt: number; answer: "po" | "jo" };
   forceCollect?: string;
   advisory?: boolean;
 };

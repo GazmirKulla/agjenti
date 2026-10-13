@@ -6,6 +6,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import { restoreOrder } from "@/lib/workflows/conversation-processes";
+import { freshOrderReview, migrateContext } from "@/lib/workflows/context";
 import { CapabilityEnforcementError, moduleEnforcementEnabled, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { requireActiveBindings } from "@/lib/capabilities/workflow";
 
@@ -48,7 +49,7 @@ export async function POST(
 		.select("collected")
 		.eq("conversation_id", conversationId)
 		.maybeSingle();
-	const storedState = (stateRow?.collected ?? {}) as ConversationStatePayload;
+	const storedState = migrateContext((stateRow?.collected ?? {}) as ConversationStatePayload);
 	// Another process can own the current cursor while the confirmed order waits for staff.
 	const state = storedState.schemaVersion === 3 && storedState.context && storedState.processes?.order
 		? restoreOrder(storedState) : storedState;
@@ -59,7 +60,12 @@ export async function POST(
 		if (!(error instanceof CapabilityEnforcementError)) throw error;
 		return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
 	}
-	if((state.schemaVersion===2 || state.schemaVersion===3) && (state.step_key!=="order_ready" || !state.context?.execution.orderConfirmed || !state.product_id)) return NextResponse.json({error:"Porosia pret plotësimin dhe konfirmimin e klientit."},{status:400});
+	if((state.schemaVersion===2 || state.schemaVersion===3) && (state.step_key!=="order_ready" || !state.context?.execution.orderConfirmed || !freshOrderReview(state, true) || !state.product_id)) return NextResponse.json({error:"Porosia pret plotësimin dhe konfirmimin e klientit."},{status:400});
+	// Only reviewed order facts may become order options; legacy/other-process fields are not authority.
+	state.fields = Object.fromEntries((state.context!.execution.orderReview?.fieldKeys ?? []).flatMap(key => {
+		const fact = state.context!.order[key];
+		return fact ? [[key, fact.type === "photo" ? true : fact.value]] : [];
+	}));
 	const customer = state.customer ?? { name: null, phone: null, city: null, address: null };
 	if (!customer.name || !customer.phone || !customer.address) {
 		return NextResponse.json({ error: "Mungojnë të dhënat e klientit." }, { status: 400 });

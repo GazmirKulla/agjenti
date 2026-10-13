@@ -1,8 +1,39 @@
 import { agentModel } from "@/lib/agents/generate";
 import { affirmative, isQuestion } from "@/lib/workflows/context";
-import { emptyState, foldText } from "@/lib/workflows/engine";
+import { emptyState, foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
+import type { PendingClarification, ProcessKind } from "@/lib/workflows/conversation-processes";
 import { explicitIntent, rememberTurn } from "@/lib/workflows/guidance";
 import type { AgentTurnParams, AgentTurnResult } from "./process-agent-turn";
+export const resumeClarificationPrompt = "Dëshiron të vazhdojmë kërkesën e mëparshme, apo po kërkon vetëm informacion?";
+export function clarificationChoice(message: string): "information" | "resume" | "cancel" | null {
+    const text = foldText(message).trim().replace(/[.!]+$/, "").trim();
+    if (/^(?:vetem )?informacion$/.test(text)) return "information";
+    if (/^(?:vazhdo )?kerkesen e meparshme$/.test(text)) return "resume";
+    if (text === "leje fare") return "cancel";
+    return null;
+}
+/** Bind navigation to a task identity and cursor, not mutable labels or AI prose. */
+export function clarificationTarget(state: ConversationStatePayload, process: ProcessKind): PendingClarification["target"] {
+    const task = state.processes?.[process];
+    if (!task || !["active", "suspended"].includes(task.status)) return null;
+    if (process === "order") {
+        const snapshot = state.processes!.order!.snapshot;
+        if (snapshot.step_key === "order_ready" || snapshot.visual?.status === "completed") return null;
+        return { process, id: task.id, versionId: snapshot.visual?.versionId ?? snapshot.execution.linear?.versionId ?? snapshot.linearSnapshot?.versionId ?? null,
+            cursor: JSON.stringify([snapshot.visual?.nodeId ?? null, snapshot.step_key ?? null, snapshot.product_id ?? null]) };
+    }
+    const booking = state.processes!.booking!;
+    if ((!booking.draft && !booking.visual) || booking.visual?.status === "completed") return null;
+    return { process, id: task.id, versionId: booking.versionId ?? booking.visual?.versionId ?? null,
+        cursor: JSON.stringify([booking.visual?.nodeId ?? null, booking.draft?.nonce ?? null, booking.draft?.phase ?? null]) };
+}
+export function offerResumeClarification(state: ConversationStatePayload) {
+    const processes = state.processes;
+    if (!processes || processes.pendingClarification) return;
+    const candidates = (["order", "booking"] as const).map(process => clarificationTarget(state, process)).filter(target => target !== null);
+    const target = candidates.find(target => target.process === processes.active) ?? (candidates.length === 1 ? candidates[0] : null);
+    processes.pendingClarification = { kind: "resume_process", target, expiresAt: Date.now() + 15 * 60 * 1000 };
+}
 export function shortReply(message: string): boolean {
     const text = foldText(message).trim();
     return affirmative(text) || /^(?:(?:po|yes|ok|okay|jo|no|ne rregull|dakord|faleminderit|flm|rrofsh|thanks|thank you|👍|🙏|😊|❤)[.! ,\s]*)+$/u.test(text);
@@ -46,12 +77,13 @@ function currentProposal(params: AgentTurnParams): boolean {
 export function conversationControl(params: AgentTurnParams): AgentTurnResult | null {
     const pause = deferral(params.message);
     const short = shortReply(params.message) && !params.hasPhoto && !params.hasAttachments;
+    if (params.state?.processes?.informationOnly && !pause && !short) return null;
     if (!pause && !short && !(params.state?.conversationPaused && !isQuestion(params.message) && !explicitContinuation(params.message)))
         return null;
     if (!pause && short && currentProposal(params) && (affirmative(params.message) || /^(jo|no)[.!\s]*$/.test(foldText(params.message))))
         return null;
     const state = structuredClone(params.state ?? emptyState());
-    const unclear = Boolean(state.conversationPaused && !short && !pause);
+    const unclear = !pause && Boolean(state.processes?.pendingClarification || state.conversationPaused && !short);
     state.conversationPaused = true;
     if (state.processes) {
         state.processes.promptOwner = null;
@@ -59,8 +91,10 @@ export function conversationControl(params: AgentTurnParams): AgentTurnResult | 
         if (state.processes.service)
             state.processes.service.promptCurrent = false;
     }
+    if (unclear) offerResumeClarification(state);
+    else if (state.processes) delete state.processes.pendingClarification;
     const reply = pause ? "Në rregull, e lëmë këtu për momentin."
-        : unclear ? "Dëshiron të vazhdojmë kërkesën e mëparshme, apo po kërkon vetëm informacion?"
+        : unclear ? resumeClarificationPrompt
             : "Në rregull 😊";
     const reason = pause ? "customer_deferred" : unclear ? "resume_requires_intent" : "acknowledgement_without_current_proposal";
     const decision = { process: "information" as const, action: unclear ? "clarify" as const : "answer" as const, source: "rules" as const, reason, reusedFields: [], missingFields: [] };
@@ -76,5 +110,9 @@ export function resumeConversation(params: AgentTurnParams): AgentTurnParams {
         return params;
     const state = structuredClone(params.state);
     delete state.conversationPaused;
+    if (state.processes) {
+        delete state.processes.pendingClarification;
+        delete state.processes.informationOnly;
+    }
     return { ...params, state };
 }

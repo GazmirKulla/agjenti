@@ -479,6 +479,15 @@ it("commits a non-pilot Instagram turn with a revision and lease before the queu
   expect(job.status).toBe("prepared");
   expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: { ...migrateContext(emptyState()), recentMessages: [] }, bookingGuard: expect.objectContaining({ revision: 0, leaseToken: "lease-a" }) }));
 });
+it.each(["stale_state", "lease_lost"])("W2 refuses to overwrite corrected state when a concurrent turn returns %s", async error => {
+  mocks.rpc.mockResolvedValue({ error: { message: error } });
+  const before = structuredClone(savedState);
+  const job = queuedJob();
+  await expect(handleInboundMessage({ ...message, text: "Po" }, job)).rejects.toThrow("State commit failed");
+  expect(savedState).toEqual(before);
+  expect(writes.filter(w => w.table === "conversation_states" && w.operation === "upsert")).toEqual([]);
+  expect(mocks.send).not.toHaveBeenCalled(); expect(job.status).not.toBe("prepared");
+});
 
 
 it.each(["sent", "failed", "pending"])("passes only confirmed prompt delivery to the processor (%s)",async delivery_status=>{
@@ -490,6 +499,15 @@ it("does not use a staff reply as approval of an older agent prompt",async()=>{
  outboundResult={data:{body:"Po",source:"staff",delivery_status:"sent"},error:null};
  await handleInboundMessage({...message,text:"Ok"},queuedJob());
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({deliveredReply:null}));
+});
+it.each(["staff", "uncertain"])("W1 invalidates a pending clarification after %s ownership/delivery evidence", async reason => {
+  savedState = { ...emptyState(), schemaVersion: 3, conversationPaused: true,
+    processes: { active: null, pendingClarification: { kind: "resume_process", target: null, expiresAt: Date.now() + 60000 } } };
+  if (reason === "staff") outboundResult = { data: { body: "Stafi po ndihmon", source: "staff", delivery_status: "sent" }, error: null };
+  else deliveryAttempt = { status: "uncertain", reply: "Sqarim" };
+  await handleInboundMessage({ ...message, text: "kerkesen e meparshme" }, queuedJob());
+  expect(mocks.process.mock.calls[0][0].state.processes.pendingClarification).toBeUndefined();
+  expect(mocks.process.mock.calls[0][0].state.conversationPaused).toBe(true);
 });
 it("stops before the processor if delivery evidence cannot be read",async()=>{
  outboundResult={data:null,error:{message:"unavailable"}};

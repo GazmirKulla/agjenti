@@ -1,9 +1,15 @@
 import type { BookingDraft } from "@/lib/calendar/agent";
 import { emptyState, type ConversationStatePayload } from "./engine";
-import { migrateContext, type SharedContext } from "./context";
+import { freshOrderReview, invalidateOrderReview, migrateContext, projectProfile, type SharedContext } from "./context";
 import type { VisualVersion } from "./visual/types";
 
 export type ProcessKind = "order" | "booking";
+/** A navigation choice, never approval of an order, booking or external action. */
+export type PendingClarification = {
+  kind: "resume_process";
+  expiresAt: number;
+  target: { process: ProcessKind; id: string; versionId: string | null; cursor: string } | null;
+};
 export type ConversationRouting = {
   process: ProcessKind | "information" | "support" | "clarify";
   action: "continue" | "start" | "resume" | "answer" | "clarify" | "correct";
@@ -25,11 +31,14 @@ export type ConversationProcesses = {
   /** Bare confirmations belong to the most recent process prompt, never an older prompt. */
   promptOwner?: ProcessKind | null;
   order?: { id: string; status: "active" | "suspended" | "completed"; snapshot: OrderTaskSnapshot };
-  booking?: { id: string; status: "active" | "suspended" | "completed"; draft?: BookingDraft; versionId?: string; visual?: ConversationStatePayload["visual"] };
+  booking?: { id: string; status: "active" | "suspended" | "completed"; draft?: BookingDraft; versionId?: string; visual?: ConversationStatePayload["visual"]; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
   service?: { id: string; status: "active" | "suspended" | "completed"; promptCurrent?: boolean; versionId: string; visual: NonNullable<ConversationStatePayload["visual"]>; fields: ConversationStatePayload["fields"]; order: SharedContext["order"] };
-  actionFlow?: { versionId: string; visual: NonNullable<ConversationStatePayload["visual"]>; promptCurrent: boolean };
-  auxiliary?: { process: "information" | "support"; visual: NonNullable<ConversationStatePayload["visual"]> };
+  actionFlow?: { versionId: string; visual: NonNullable<ConversationStatePayload["visual"]>; promptCurrent: boolean; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
+  auxiliary?: { process: "information" | "support"; visual: NonNullable<ConversationStatePayload["visual"]>; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
   pendingChoice?: { kind: "process" | "replace"; process?: ProcessKind; message: string };
+  pendingClarification?: PendingClarification;
+  /** Explicit information-only choice; a follow-up must not infer a purchase/reservation. */
+  informationOnly?: boolean;
   lastDecision?: ConversationRouting;
 };
 
@@ -40,15 +49,45 @@ export function snapshotOrder(state: ConversationStatePayload): OrderTaskSnapsho
     product_id: state.product_id, product_type_id: state.product_type_id, step_key: state.step_key,
     fields, visual: state.visual, completedVisual: state.completedVisual, revisitStep: state.revisitStep,
     unorderedWorkflow: state.unorderedWorkflow, orderWorkflowSnapshot: state.orderWorkflowSnapshot,
-    linearSnapshot: state.linearSnapshot, order: state.context?.order ?? {}, execution: state.context?.execution ?? {},
+    linearSnapshot: state.linearSnapshot, order: state.context?.order ?? {}, execution: { ...state.context?.execution, factOwner: "order" },
   });
 }
 
-export function restoreOrder(state: ConversationStatePayload): ConversationStatePayload {
+export function restoreOrder(state: ConversationStatePayload, options: { resume?: boolean } = {}): ConversationStatePayload {
   const snapshot = state.processes?.order?.snapshot;
   if (!snapshot) return state;
   const { order, execution, ...legacy } = structuredClone(snapshot);
-  return { ...state, ...legacy, context: { profile: structuredClone(state.context!.profile), order, execution } };
+  delete legacy.completedVisual;
+  // A saved cursor is not permission to replace live order facts or selection.
+  // While another adapter owns context.order, its task snapshot owns the order.
+  const live = state.context?.execution.factOwner === "order";
+  const next = { ...state, ...legacy, customer: structuredClone(state.customer), context: { profile: structuredClone(state.context!.profile),
+    order: structuredClone(live ? state.context!.order : order),
+    execution: structuredClone(live ? state.context!.execution : execution) } };
+  if (live) {
+    next.product_id = state.product_id; next.product_type_id = state.product_type_id;
+    next.orderWorkflowSnapshot = state.orderWorkflowSnapshot;
+    next.linearSnapshot = structuredClone(state.linearSnapshot);
+  }
+  if (live && state.processes?.active === "order" && !state.processes.auxiliary) {
+    next.step_key = state.step_key;
+    next.visual = structuredClone(state.visual);
+    next.revisitStep = state.revisitStep;
+  }
+  next.context.execution.factOwner = "order";
+  for (const [key, fact] of Object.entries(next.context.order)) next.fields[key] = fact.type === "photo" ? true : fact.value;
+  projectProfile(next);
+  // Profile values on a historical cursor cannot overwrite the current profile.
+  if (next.visual) {
+    for (const [key, fact] of Object.entries(next.context.profile)) if (fact) next.visual.values[`customer_${key}`] = fact.value;
+    for (const [key, fact] of Object.entries(next.context.order)) next.visual.values[key] = fact.value;
+    if (options.resume) { delete next.visual.pendingConfirmation; delete next.visual.confirmedConfirmation; }
+  }
+  if (options.resume || !freshOrderReview(next, Boolean(next.context.execution.orderConfirmed))) {
+    invalidateOrderReview(next.context.execution);
+    if (next.step_key === "order_ready") next.step_key = "order_confirm";
+  }
+  return next;
 }
 
 type CursorOwner = ProcessKind | "information" | "support" | "service";
@@ -145,6 +184,8 @@ export function migrateConversationProcesses(input: ConversationStatePayload | n
     state.processes.promptOwner = state.processes.active;
   }
   state.schemaVersion = 3;
+  state.context!.execution.factOwner ??= state.processes.active === "booking" ? "booking"
+    : state.processes.order ? "order" : state.processes.service ? "service" : "auxiliary";
   return state;
 }
 
@@ -152,8 +193,13 @@ export function bookingAdapterState(state: ConversationStatePayload) {
   const next = migrateContext(emptyState());
   next.schemaVersion = 3;
   next.context!.profile = structuredClone(state.context!.profile);
+  next.context!.execution.factOwner = "booking";
+  next.context!.order = structuredClone(state.processes?.booking?.order ?? {});
+  next.fields = structuredClone(state.processes?.booking?.fields ?? {});
   next.customer = structuredClone(state.customer);
+  projectProfile(next);
   next.recentMessages = state.recentMessages;
+  next.completedVisual = structuredClone(state.completedVisual);
   next.processes = state.processes;
   next.visual = structuredClone(state.processes?.booking?.visual);
   if (state.processes?.booking?.draft) next.fields.booking = structuredClone(state.processes.booking.draft);

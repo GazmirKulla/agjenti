@@ -12,6 +12,9 @@ export type SharedContext = {
     profile: Partial<Record<ProfileKey, Fact>>;
     order: Record<string, Fact>;
     execution: {
+        /** context.order is the current adapter's facts; other tasks live in processes. */
+        factOwner?: "order" | "booking" | "service" | "auxiliary";
+        orderReview?: { factsKey: string; fieldKeys: string[]; expiresAt: number; confirmed: boolean };
         profileConfirmation?: "pending" | "confirmed";
         orderConfirmed?: boolean;
         awaitingOrderConfirmation?: boolean;
@@ -66,10 +69,51 @@ export function migrateContext(input?: ConversationStatePayload | null): Convers
                 setFact(state, key, value, "text", "legacy_order");
         }
     }
+    state.context.profile ??= {};
+    state.context.order ??= {};
+    state.context.execution ??= {};
     if (state.linearSnapshot && !state.orderWorkflowSnapshot && !state.context.execution.linear)
         state.context.execution.linear = state.linearSnapshot;
+    projectProfile(state);
     state.schemaVersion = state.schemaVersion === 3 ? 3 : 2;
     return state;
+}
+/** Legacy customer fields are projections once a shared context exists. */
+export function projectProfile(state: ConversationStatePayload) {
+    if (!state.context) return;
+    for (const key of ["name", "phone", "city", "address"] as const)
+        state.customer[key] = state.context.profile[key]?.value ?? null;
+}
+export function invalidateOrderReview(execution: SharedContext["execution"]) {
+    execution.orderConfirmed = false;
+    execution.awaitingOrderConfirmation = false;
+    delete execution.orderReview;
+}
+/** Equality key, not an authorization token. Sources/object insertion order are irrelevant. */
+function orderFactsKey(state: ConversationStatePayload, keys: string[]) {
+    return JSON.stringify([state.product_id ?? null, state.product_type_id ?? null,
+        [state.visual?.versionId ?? null, state.context?.execution.linear?.versionId ?? state.linearSnapshot?.versionId ?? null, state.orderWorkflowSnapshot ?? null],
+        [state.visual?.binding?.flowId ?? null, state.visual?.binding?.entity.kind ?? null, state.visual?.binding?.entity.id ?? null],
+        Object.entries(state.visual?.branchPorts ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+        profileKeys.map(key => [key, state.context?.profile[key]?.value ?? null]),
+        [...new Set(keys)].sort().map(key => [key, getFact(state, key)?.value ?? null])]);
+}
+function orderFieldKeys(steps: WorkflowStepDef[]) {
+    return [...new Set(steps.filter(step => !["customer", "confirm"].includes(step.kind)).map(step => step.fieldKey ?? step.key).filter(key => !profileKey(key)))].sort();
+}
+export function freshOrderReview(state: ConversationStatePayload, confirmed = false, steps?: WorkflowStepDef[]) {
+    const review = state.context?.execution.orderReview;
+    return Boolean(review && Array.isArray(review.fieldKeys) && review.fieldKeys.every(key => typeof key === "string" && safeFieldKey(key))
+        && (!steps || JSON.stringify([...review.fieldKeys].sort()) === JSON.stringify(orderFieldKeys(steps)))
+        && Number.isFinite(review.expiresAt) && review.expiresAt > Date.now()
+        && review.confirmed === confirmed && review.factsKey === orderFactsKey(state, review.fieldKeys)
+        && !state.context?.execution.invalidFields?.length);
+}
+function requestOrderReview(state: ConversationStatePayload, steps: WorkflowStepDef[]) {
+    const fieldKeys = orderFieldKeys(steps);
+    state.context!.execution.orderReview = { factsKey: orderFactsKey(state, fieldKeys), fieldKeys, expiresAt: Date.now() + 30 * 60000, confirmed: false };
+    state.context!.execution.awaitingOrderConfirmation = true;
+    state.context!.execution.orderConfirmed = false;
 }
 export function getFact(state: ConversationStatePayload, key: string): Fact | undefined {
     const profile = profileKey(key);
@@ -84,11 +128,19 @@ export function setFact(state: ConversationStatePayload, key: string, value: str
     if (!validValue(value, actualType)) {
         state.context.execution.validationFailures = (state.context.execution.validationFailures ?? 0) + 1;
         state.context.execution.invalidFields = [...new Set([...(state.context.execution.invalidFields ?? []), key])];
-        state.context.execution.orderConfirmed = false;
-        state.context.execution.awaitingOrderConfirmation = false;
+        invalidateOrderReview(state.context.execution);
+        if (profile && state.processes?.order) {
+            const execution = state.processes.order.snapshot.execution;
+            invalidateOrderReview(execution);
+            execution.invalidFields = [...new Set([...(execution.invalidFields ?? []), key])];
+        }
         return false;
     }
     state.context.execution.invalidFields = state.context.execution.invalidFields?.filter(k => k !== key);
+    if (profile && state.processes?.order) {
+        const execution = state.processes.order.snapshot.execution;
+        execution.invalidFields = execution.invalidFields?.filter(k => k !== key);
+    }
     const revisited = state.context.execution.linear?.steps.find(s=>s.key===state.revisitStep);
     if (revisited && (revisited.fieldKey ?? revisited.key) === key) delete state.revisitStep;
     const prior = getFact(state, key);
@@ -103,13 +155,14 @@ export function setFact(state: ConversationStatePayload, key: string, value: str
         state.fields[key] = type === "photo" ? true : value;
     }
     if (prior?.value !== value) {
-        state.context.execution.orderConfirmed = false;
-        state.context.execution.awaitingOrderConfirmation = false;
+        invalidateOrderReview(state.context.execution);
+        if (profile && state.processes?.order) invalidateOrderReview(state.processes.order.snapshot.execution);
     }
     return true;
 }
 export function resetOrder(state: ConversationStatePayload): ConversationStatePayload {
     const next = migrateContext(emptyState());
+    next.context!.execution.factOwner = "order";
     next.context!.profile = structuredClone(state.context?.profile ?? {});
     for (const [key, fact] of Object.entries(next.context!.profile)) {
         if (fact)
@@ -190,8 +243,11 @@ export function sharedPrompt(state: ConversationStatePayload, steps: WorkflowSte
         const labels: Record<string, string> = { customer_phone: "telefonin", customer_email: "emailin", customer_name: "emrin", customer_city: "qytetin", customer_address: "adresën" };
         return `Kontrollo ${state.context.execution.invalidFields.map(k => labels[k] ?? steps.find(s => (s.fieldKey ?? s.key) === k)?.label ?? k).join(", ")}. Shkruaj një vlerë të vlefshme.`;
     }
-    if (state.step_key === "order_confirm")
-        return `Konfirmoni porosinë${productName ? ` për ${productName}` : ""} me këto të dhëna? ${profileSummary(state)}${Object.entries(state.context?.order ?? {}).filter(([k]) => k !== "product_query").map(([k, v]) => ` · ${steps.find(s => (s.fieldKey ?? s.key) === k)?.label ?? k}: ${v.value}`).join("")}. Përgjigju me Po ose shkruaj korrigjimin.`;
+    if (state.step_key === "order_confirm") {
+        // Navigation may re-display review without advancing the adapter.
+        if (!freshOrderReview(state, false, steps)) requestOrderReview(state, steps);
+        return `Konfirmoni porosinë${productName ? ` për ${productName}` : ""} me këto të dhëna? ${profileSummary(state)}${steps.filter(step => !["customer", "confirm"].includes(step.kind)).flatMap(step => { const key = step.fieldKey ?? step.key, fact = getFact(state, key); return fact && !profileKey(key) ? [` · ${step.label ?? key}: ${fact.value}`] : []; }).join("")}. Përgjigju me Po ose shkruaj korrigjimin.`;
+    }
     if (state.step_key === "order_ready")
         return "Porosia është gati për stafin. Ekipi do ta shqyrtojë dhe dërgojë.";
     const step = steps.find(s => s.key === state.step_key);
@@ -206,7 +262,12 @@ export function sharedPrompt(state: ConversationStatePayload, steps: WorkflowSte
 export function advanceSharedOrder(input: ConversationStatePayload, message: string, hasPhoto: boolean, steps: WorkflowStepDef[], justSelected = false, extractedByModel = 0) {
     const state = migrateContext(input), ctx = state.context!;
     const beforeKey = state.step_key;
-    const wasConfirming = ctx.execution.awaitingOrderConfirmation;
+    ctx.execution.factOwner = "order";
+    const wasConfirming = ctx.execution.awaitingOrderConfirmation && freshOrderReview(state, false, steps);
+    if (state.step_key === "order_ready" && !freshOrderReview(state, true)) {
+        invalidateOrderReview(ctx.execution);
+        state.step_key = "order_confirm";
+    }
     const pendingInvalid = [...(ctx.execution.invalidFields ?? [])];
     let extracted = extractExplicitFacts(state, message, steps) + extractedByModel;
     if (!extracted && pendingInvalid.length === 1 && message.trim() && !isQuestion(message) && !affirmative(message) && !message.includes(":")) {
@@ -224,13 +285,14 @@ export function advanceSharedOrder(input: ConversationStatePayload, message: str
     if (state.step_key === "order_ready" && extracted)
         state.step_key = "order_confirm";
     if (state.step_key === "order_confirm") {
-        if (wasConfirming && !extracted && affirmative(message)) {
+        if (wasConfirming && freshOrderReview(state) && !extracted && affirmative(message)) {
             ctx.execution.orderConfirmed = true;
+            ctx.execution.orderReview!.confirmed = true;
             ctx.execution.awaitingOrderConfirmation = false;
             state.step_key = "order_ready";
         }
         else
-            ctx.execution.awaitingOrderConfirmation = true;
+            requestOrderReview(state, steps);
         return state;
     }
     const step = steps.find(s => s.key === beforeKey);
@@ -241,7 +303,7 @@ export function advanceSharedOrder(input: ConversationStatePayload, message: str
             state.step_key = steps[steps.indexOf(step) + 1]?.key ?? "order_confirm";
             skipKnownSteps(state, steps);
             if (state.step_key === "order_confirm")
-                ctx.execution.awaitingOrderConfirmation = true;
+                requestOrderReview(state, steps);
             return state;
         }
         if (step.kind === "customer") {
@@ -275,7 +337,7 @@ export function advanceSharedOrder(input: ConversationStatePayload, message: str
     }
     skipKnownSteps(state, steps);
     if (state.step_key === "order_confirm")
-        ctx.execution.awaitingOrderConfirmation = true;
+        requestOrderReview(state, steps);
     return state;
 }
 export function recordPrompt(state: ConversationStatePayload, key: string) {

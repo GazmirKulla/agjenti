@@ -1,7 +1,13 @@
 import { isQuestion, validValue, profileKey } from "../context";
 import { foldText } from "../engine";
 import type { VisualExecution, VisualGraph, VisualIntent, VisualRunState } from "./types";
+import { confirmationFactKeys } from "./facts";
 export { explicitIntent as detectVisualIntent } from "../guidance";
+function confirmationKey(graph: VisualGraph, state: VisualRunState, nodeId = state.nodeId) {
+  const keys = confirmationFactKeys(graph, { ...state, nodeId });
+  return JSON.stringify([state.versionId, nodeId, state.binding?.flowId ?? null,
+    state.binding?.entity.kind ?? null, state.binding?.entity.id ?? null, keys.map(key => [key, state.values[key] ?? null])]);
+}
 export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;state?:VisualRunState|null;message:string;hasPhoto:boolean;intent:VisualIntent;actionOutcome?: "yes" | "no";productComplete?:boolean;bookingComplete?:boolean;orderStatusComplete?:boolean;inputAvailable?:boolean; sharedValues?:Record<string,string>}):VisualExecution {
   const state:VisualRunState=p.state?structuredClone(p.state):{versionId:p.versionId,nodeId:p.graph.nodes.find(n=>n.kind==='start')!.id,status:'running',visited:[],values:{},awaiting:false};
   if(p.sharedValues) {
@@ -37,6 +43,12 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     }
     if(n.kind==='action'){
       if(state.awaiting&&p.actionOutcome){state.branchPorts={...state.branchPorts,[n.id]:p.actionOutcome};advance(p.actionOutcome);p={...p,actionOutcome:undefined};continue;}
+      const reviewNode = [...state.visited].reverse().find(id => p.graph.nodes.some(node => node.id === id && node.kind === 'confirm'));
+      const receipt = state.confirmedConfirmation;
+      if (reviewNode && (!receipt || receipt.nodeId !== reviewNode || state.values[reviewNode] !== receipt.answer || receipt.expiresAt <= Date.now() || !Number.isFinite(receipt.expiresAt) || receipt.factsKey !== confirmationKey(p.graph, state, reviewNode))) {
+        state.nodeId = reviewNode; state.awaiting = false; delete state.pendingConfirmation; delete state.confirmedConfirmation;
+        continue;
+      }
       state.awaiting=true;state.status='waiting';return result('action',n.id);
     }
     if(n.kind==='booking'){
@@ -59,6 +71,15 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     }
     const wasAwaiting=state.awaiting;
     state.awaiting=true;state.status='waiting';
+    if(n.kind==='confirm') {
+      const factsKey = confirmationKey(p.graph, state);
+      const receipt = state.pendingConfirmation;
+      if (!wasAwaiting || !receipt || receipt.nodeId !== n.id || receipt.factsKey !== factsKey || !Number.isFinite(receipt.expiresAt) || receipt.expiresAt <= Date.now()) {
+        state.pendingConfirmation = { nodeId: n.id, factsKey, expiresAt: Date.now() + 30 * 60000 };
+        delete state.confirmedConfirmation;
+        return result('prompt',n.id,n.config.prompt);
+      }
+    }
     if(!wasAwaiting||consumed)return result('prompt',n.id,n.config.prompt);
     const text=p.message.trim();
     if(n.kind==='confirm'){
@@ -66,6 +87,8 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       const yes=/^(po|ok|okay|yes|dakord|konfirmoj|e konfirmoj|ne rregull|sure|po ju lutem)[\s.!]*$/.test(t);
       const no=/^(jo|no|nuk e konfirmoj|ndrysho|korrigjo)[\s.!]*$/.test(t);
       if(!yes&&!no)return result('prompt',n.id,`${n.config.prompt} Përgjigju me Po ose Jo.`);
+      state.confirmedConfirmation = { ...state.pendingConfirmation!, answer: yes ? "po" : "jo" };
+      delete state.pendingConfirmation;
       state.values[n.id]=yes?'po':'jo';state.branchPorts={...state.branchPorts,[n.id]:yes?'yes':'no'};consumed=true;advance(yes?'yes':'no');
       if(!yes && p.sharedValues && p.graph.nodes.find(node=>node.id===state.nodeId)?.kind==='collect') state.forceCollect=state.nodeId;
       continue;

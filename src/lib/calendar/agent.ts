@@ -31,7 +31,14 @@ export type BookingDraft = {
   phase: "collect" | "confirm";
   nonce: string;
   expires: number;
+  review?: { factsKey: string };
+  /** Only profile-seeded values follow later profile corrections; recipients may differ. */
+  profileSeeds?: { name?: string; contact?: string };
 };
+export function bookingReviewKey(businessId: string, draft: BookingDraft, versionId?: string) {
+  return JSON.stringify([businessId, versionId ?? null, draft.nonce, draft.serviceId ?? null,
+    draft.date ?? null, draft.time ?? null, draft.name ?? null, draft.contact ?? null]);
+}
 export function explicitBookingConfirmation(message: string) {
   return /^(po|po konfirmoj|konfirmoj|yes|confirm)[.!]?$/i.test(message.trim());
 }
@@ -142,15 +149,22 @@ export async function processBookingTurn(params: {
       },
     };
   };
-  const expired = Boolean(raw && raw.expires <= Date.now());
-  const needsReview = expired || params.resume;
+  const expired = Boolean(raw && (!Number.isFinite(raw.expires) || raw.expires <= Date.now()));
+  const profileName = existingState.context?.profile.name?.value;
+  const profileContact = existingState.context?.profile.phone?.value ?? existingState.context?.profile.email?.value;
+  for (const [key, value] of [["name", profileName], ["contact", profileContact]] as const) {
+    if (!draft[key] || draft.profileSeeds?.[key] === draft[key]) {
+      draft[key] = value;
+      draft.profileSeeds = { ...draft.profileSeeds, [key]: value };
+    }
+  }
+  const needsReview = expired || params.resume || draft.phase === "confirm" && draft.review?.factsKey !== bookingReviewKey(params.businessId, draft, existingState.visual?.versionId);
   if (needsReview) {
     draft.phase = "collect";
     draft.expires = Date.now() + 30 * 60000;
+    delete draft.review;
   }
   // A booking may be for somebody else. Profile memory only seeds missing data.
-  draft.name ??= existingState.context?.profile.name?.value;
-  draft.contact ??= existingState.context?.profile.phone?.value ?? existingState.context?.profile.email?.value;
   if (
     draft.phase === "confirm" &&
     explicitBookingConfirmation(params.message)
@@ -249,8 +263,8 @@ export async function processBookingTurn(params: {
       );
     draft.time = details.time;
   }
-  if (details.name) draft.name = details.name;
-  if (details.contact) draft.contact = details.contact;
+  if (details.name) { draft.name = details.name; if (draft.profileSeeds) delete draft.profileSeeds.name; }
+  if (details.contact) { draft.contact = details.contact; if (draft.profileSeeds) delete draft.profileSeeds.contact; }
   draft.phase = "collect";
   const service = activeServices.find((s) => s.id === draft.serviceId);
   if (!service)
@@ -289,6 +303,7 @@ export async function processBookingTurn(params: {
   if (!draft.name || draft.name.trim().length < 2)
     return reply("Në emër të kujt ta përgatis kërkesën?");
   draft.phase = "confirm";
+  draft.review = { factsKey: bookingReviewKey(params.businessId, draft, existingState.visual?.versionId) };
   return reply(
     `${expired ? "Konfirmimi i mëparshëm skadoi; orari u kontrollua sërish. " : ""}Konfirmon ${service.name} (${service.duration_minutes} min), më ${draft.date} në ${draft.time}, në emër të ${draft.name}? Shkruaj “Konfirmoj” ose korrigjo të dhënat.${settings.confirmation_mode === "manual" ? " Pas konfirmimit tënd, kërkesa pret miratimin e biznesit." : ""}`,
   );

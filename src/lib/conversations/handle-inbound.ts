@@ -360,6 +360,7 @@ export async function handleInboundMessage(
       if (processes.active && processes[processes.active]) processes[processes.active]!.status = "suspended";
       processes.active = null; processes.promptOwner = null;
       delete processes.pendingChoice; delete processes.auxiliary;
+      delete processes.pendingClarification;
       if (processes.service) processes.service.promptCurrent = false;
     }
   } else if (resumedHandoff) {
@@ -394,6 +395,7 @@ export async function handleInboundMessage(
       if (inboundState.processes) {
         inboundState.processes.promptOwner = null;
         delete inboundState.processes.pendingChoice;
+        delete inboundState.processes.pendingClarification;
         delete inboundState.processes.auxiliary;
         if (inboundState.processes.service) inboundState.processes.service.promptCurrent = false;
       }

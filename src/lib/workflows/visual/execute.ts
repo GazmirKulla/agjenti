@@ -2,7 +2,7 @@ import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workfl
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
 import { chooseGuidance, clarification, invalidateConfirmation } from "../guidance";
 import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
-import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext } from "../context";
+import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext, sharedPrompt } from "../context";
 import { agentModel } from "@/lib/agents/generate";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { emptyState } from "../engine";
@@ -13,6 +13,7 @@ import { isEntityInformationRequest, resolveVisualEntity } from "./entity-routin
 import { advanceVisualOrderReview, missingVisualOrderNode } from "./product-order";
 import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { nodeCapabilityKeys, flowCapabilityKeys } from "@/lib/capabilities/graph";
+import { ownedCollectNodes } from "./facts";
 
 type Legacy = (params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }) => Promise<AgentTurnResult>;
 
@@ -75,6 +76,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   if (selectedEntity && boundFlow) {
     await guardNodes([boundFlow.entryNodeId]);
     base = migrateContext(base);
+    base.context!.execution.factOwner = boundOrder ? "order" : params.bookingRequest ? "booking" : "service";
     if (boundOrder) {
       base.product_id = selectedEntity.entity.id; base.product_type_id = selectedEntity.entity.productTypeId ?? null;
       delete base.context!.execution.linear; delete base.linearSnapshot; delete base.orderWorkflowSnapshot;
@@ -142,7 +144,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   params.onTrace?.({stage:"workflow",label:"New message routed",data:{...guidance,from:previous?.nodeId??null,candidates:routes.map(r=>r.id)}});
   let extractedValues: Record<string, string> = {};
   const extractFacts = async () => {
-    const fields = version.graph.nodes.filter(n => n.kind === "collect").map(n => ({ key: n.config.fieldKey!, type: n.config.fieldType || "text" as const, label: n.config.prompt || n.label }));
+    const fields = ownedCollectNodes(version.graph, base.visual).map(n => ({ key: n.config.fieldKey!, type: n.config.fieldType || "text" as const, label: n.config.prompt || n.label }));
     if (!fields.length && !base.context) return 0;
     // Older visual conversations store fields on the cursor. Do not enable the
     // shared order engine merely to remember a fact for their visual workflow.
@@ -215,6 +217,13 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     result.visualWorkflow = { graph: version.graph, state: base.visual, traversedNodeIds: [], routing: { action: "continue", from: previous!.nodeId, to: previous!.nodeId, source: "rules" } };
     return result;
   }
+  // Collection/final order review can repair a value. A pending approval cannot
+  // consume yes while an earlier invalid correction remains unresolved.
+  if (base.context?.execution.invalidFields?.length && currentNode?.kind !== "collect") {
+    invalidateConfirmation(base);
+    if (base.visual) { delete base.visual.pendingConfirmation; delete base.visual.confirmedConfirmation; }
+    return simple(sharedPrompt(base, []));
+  }
   let execution = advance({ graph: version.graph, versionId: version.id, state: active,
     message: params.message, hasPhoto: params.hasPhoto, intent, ...((extracted || revisiting || guidance.action === "route" || params.bookingNavigation || (params.orderRequest && currentNode?.kind !== "product"))?{inputAvailable:false}:{}) });
   const traversed = [...execution.traversedNodeIds];
@@ -242,7 +251,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       finished = true; break;
     }
     turn.nextState.visual = execution.state;
-    if(turn.nextState.context) for(const node of version.graph.nodes.filter(n=>n.kind==='collect')) {
+    if(turn.nextState.context) for(const node of version.graph.nodes.filter(node => node.kind === "collect" && execution.traversedNodeIds.includes(node.id))) {
       const value=execution.state.values[node.config.fieldKey!];
       if(value) setFact(turn.nextState,node.config.fieldKey!,value,node.config.fieldType||"text",`visual:${node.id}`);
     }
