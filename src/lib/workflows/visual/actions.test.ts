@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), rpc: vi.fn(), load: vi.fn(), version: vi.fn(), readiness: vi.fn(), revalidate: vi.fn() }));
+const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), rpc: vi.fn(), from: vi.fn(), load: vi.fn(), version: vi.fn(), readiness: vi.fn(), revalidate: vi.fn() }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access }));
-vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: m.rpc }) }));
+vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: m.rpc, from: m.from }) }));
 vi.mock("next/cache", () => ({ revalidatePath: m.revalidate }));
 vi.mock("./store", () => ({ loadVisualWorkspace: m.load, loadVisualVersion: m.version }));
 vi.mock("../readiness", () => ({ loadWorkflowReadiness: m.readiness }));
@@ -14,6 +14,7 @@ beforeEach(() => {
   m.user.mockResolvedValue({ id: "user-a" });
   m.access.mockResolvedValue({ business: { id: "business-a" } });
   m.rpc.mockImplementation(async (_name, input) => ({ data: input.p_revision + 1, error: null }));
+  m.from.mockImplementation(() => { throw new Error("receipt unavailable"); });
   m.load.mockResolvedValue({ graph: starterVisualGraph(), revision: 4 });
   m.version.mockResolvedValue({ graph: starterVisualGraph() });
   m.readiness.mockResolvedValue({ready:false,blockers:["Konfiguro rikuperimin."]});
@@ -114,8 +115,28 @@ it("can save a v2 draft before runtime activation is ready", async () => {
 it("publishes ready v2 with the authorized identities and unchanged expected revision", async () => {
   const graph=upgradeVisualGraph(starterVisualGraph());
   m.readiness.mockResolvedValue({ready:true,blockers:[]});
-  expect(await publishVisualWorkflow("studio",7,graph)).toHaveProperty("workspace");
+  expect(await publishVisualWorkflow("studio",7,graph)).toMatchObject({ workspace: expect.anything(), publication: { mode: "manual_legacy", result: "UNVERIFIED", canPublish: true } });
   expect(m.rpc).toHaveBeenCalledExactlyOnceWith("save_visual_workflow",{p_business:"business-a",p_user:"user-a",p_revision:7,p_graph:graph,p_operation:"publish"});
+});
+it("reads the receipt from the exact committed tenant revision, not a later workspace publication", async () => {
+  const filters: [string, unknown][] = [];
+  m.from.mockImplementation(table => {
+    expect(table).toBe("visual_workflow_events");
+    const chain = { select: vi.fn(() => chain), eq: (key: string, value: unknown) => { filters.push([key, value]); return chain; },
+      maybeSingle: async () => ({ data: { published_version_id: "exact-version", created_at: "2026-10-13T12:00:00Z", actor_id: "user-a" }, error: null }) };
+    return chain;
+  });
+  m.load.mockResolvedValueOnce({ graph: starterVisualGraph(), revision: 99, publishedVersionId: "later-version" });
+  const result = await publishVisualWorkflow("studio", 3, starterVisualGraph());
+  expect(result.receipt).toEqual({ revision: 4, publishedVersionId: "exact-version", publishedAt: "2026-10-13T12:00:00Z", actorId: "user-a" });
+  expect(filters).toEqual([["business_id", "business-a"], ["revision", 4]]);
+  expect(result.workspace?.publishedVersionId).toBe("later-version");
+});
+it("keeps acknowledged publication successful when audit receipt lookup fails", async () => {
+  const result = await publishVisualWorkflow("studio", 3, starterVisualGraph());
+  expect(result.savedRevision).toBe(4); expect(result.error).toBeUndefined();
+  expect(result.receipt).toMatchObject({ revision: 4, warning: expect.stringContaining("mos e publiko përsëri") });
+  expect(result.receipt?.publishedVersionId).toBeUndefined();
 });
 
 it("reports a committed save even if loading the workspace fails afterward", async () => {

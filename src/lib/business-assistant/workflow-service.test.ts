@@ -29,7 +29,7 @@ function localGraph(): VisualGraph {
 }
 function useLocalGraph() {
   m.workspace.mockResolvedValue({ graph: localGraph(), revision: 3, publishedVersionId: "version-a", enabled: true, available: true, generated: false });
-  m.version.mockResolvedValue({ graph: localGraph() });
+  m.version.mockResolvedValue({ graph: localGraph(), businessId: "business-a" });
 }
 const access: Access = {
   businessId: "business-a",
@@ -62,7 +62,7 @@ beforeEach(() => {
     available: true,
     generated: false,
   });
-  m.version.mockResolvedValue({ graph: starterVisualGraph() });
+  m.version.mockResolvedValue({ graph: starterVisualGraph(), businessId: "business-a" });
   m.rpc.mockImplementation(async (_name: string, input: { p_revision: number }) => ({ data: input.p_revision + 1, error: null }));
 });
 it("reads both draft and published without issuing a ticket or writing", async () => {
@@ -244,8 +244,10 @@ it("reruns simulation for legacy publish tickets and cannot bypass it by omittin
   const result = await prepareWorkflow(access, proposal("workflow_publish"), 3);
   const ticket = openTicket(result.token!, access);
   delete ticket.simulation; delete ticket.automation;
+  delete ticket.publicationApproval;
   ticket.values.graph = starterVisualGraph();
-  await expect(executeTicket(access, encryptSecret(JSON.stringify(ticket)))).rejects.toThrow("simulimi");
+  m.workspace.mockResolvedValue({ graph: starterVisualGraph(), revision: 3, publishedVersionId: "version-a" });
+  await expect(executeTicket(access, encryptSecret(JSON.stringify(ticket)))).rejects.toMatchObject({ publication: { status: "unverified_external_action" } });
   expect(m.rpc).not.toHaveBeenCalled();
 });
 it("refuses approval and confirmation when actual runtime scenarios fail", async () => {
@@ -255,7 +257,7 @@ it("refuses approval and confirmation when actual runtime scenarios fail", async
   try {
     const blocked = await prepareWorkflow(access, proposal("workflow_publish"), 3);
     expect(blocked.workflow?.simulation?.result).toBe("FAIL"); expect(blocked.token).toBeUndefined();
-    await expect(executeTicket(access, prepared.token!)).rejects.toThrow("simulimi");
+    await expect(executeTicket(access, prepared.token!)).rejects.toMatchObject({ publication: { status: "simulation_failed" } });
     expect(m.rpc).not.toHaveBeenCalled();
   } finally { faulty.mockRestore(); }
 });
@@ -268,6 +270,66 @@ it("permits explicit publication of a locally verified graph through the existin
   await executeTicket(access, result.token!);
   expect(m.rpc).toHaveBeenCalledTimes(1);
   expect(m.rpc).toHaveBeenCalledWith("apply_assistant_visual_workflow", expect.objectContaining({ p_operation: "publish", p_revision: 3, p_business: "business-a", p_user: "user-a" }));
+});
+it("binds publication approval to identity, request, graph and the published version", async () => {
+  useLocalGraph();
+  const result = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  const ticket = openTicket(result.token!, access);
+  expect(ticket.publicationApproval).toMatchObject({ businessId: access.businessId, userId: access.userId, requestId: ticket.id,
+    proposalId: ticket.automation?.proposalId, baseRevision: 3, publishedVersionId: "version-a", candidateGraphHash: ticket.simulation?.candidateGraphHash });
+  m.workspace.mockResolvedValue({ graph: localGraph(), revision: 3, publishedVersionId: "version-new" });
+  await expect(executeTicket(access, result.token!)).rejects.toMatchObject({ publication: { status: "stale_proposal" } });
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it("cannot fall back to manual policy when the sealed request identity is missing", async () => {
+  useLocalGraph();
+  const result = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  const ticket = openTicket(result.token!, access);
+  ticket.id = "";
+  await expect(executeTicket(access, encryptSecret(JSON.stringify(ticket)))).rejects.toThrow("identiteti");
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it("rejects graph changes after review and an expired publication approval", async () => {
+  useLocalGraph();
+  const result = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  const ticket = openTicket(result.token!, access);
+  (ticket.values.graph as VisualGraph).nodes[1].config.prompt = "Changed after approval";
+  await expect(executeTicket(access, encryptSecret(JSON.stringify(ticket)))).rejects.toMatchObject({ publication: { status: "stale_proposal" } });
+  const expired = openTicket(result.token!, access); expired.publicationApproval!.expires = Date.now() - 1;
+  await expect(executeTicket(access, encryptSecret(JSON.stringify(expired)))).rejects.toMatchObject({ publication: { status: "stale_proposal" } });
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it("rejects a replay after the committed publication revision has advanced", async () => {
+  useLocalGraph();
+  const prepared = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  m.rpc.mockImplementationOnce(async () => {
+    m.workspace.mockResolvedValue({ graph: localGraph(), revision: 4, publishedVersionId: "version-new" });
+    return { data: 4, error: null };
+  });
+  await executeTicket(access, prepared.token!);
+  await expect(executeTicket(access, prepared.token!)).rejects.toMatchObject({ publication: { status: "stale_proposal" } });
+  expect(m.rpc).toHaveBeenCalledTimes(1);
+});
+it("refreshes whole-graph capability readiness on every publication review", async () => {
+  const initial = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  expect(initial.workflow?.publication?.status).toBe("unverified_external_action");
+  const assessments = await m.assess();
+  m.assess.mockResolvedValue(assessments.map((c: { capabilityKey: string }) => c.capabilityKey === "knowledge.answer" ? { ...c, status: "needs_setup", missingRequirements: ["active_knowledge"] } : c));
+  const changed = await prepareWorkflow(access, proposal("workflow_publish"), 3);
+  expect(changed.workflow?.publication?.status).toBe("needs_setup"); expect(changed.token).toBeUndefined();
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it("restores an old snapshot only as draft, with authorization and unchanged published history", async () => {
+  const oldGraph = { ...starterVisualGraph(), name: "Historical" }, snapshot = structuredClone(oldGraph);
+  m.version.mockImplementation(async (_business, id) => ({ graph: id === "old-version" ? oldGraph : starterVisualGraph(), businessId: "business-a" }));
+  const result = await prepareWorkflow(access, proposal("workflow_restore", [{ field: "version_id", value: "old-version" }]), 3);
+  await expect(executeTicket({ ...access, businessId: "business-b" }, result.token!)).rejects.toThrow();
+  m.assess.mockRejectedValueOnce(new Error("membership revoked"));
+  await expect(executeTicket(access, result.token!)).rejects.toThrow("qasja");
+  expect(m.rpc).not.toHaveBeenCalled();
+  await executeTicket(access, result.token!);
+  expect(m.rpc).toHaveBeenCalledExactlyOnceWith("apply_assistant_visual_workflow", expect.objectContaining({ p_business: "business-a", p_operation: "draft", p_revision: 3, p_graph: expect.objectContaining({ name: "Historical" }) }));
+  expect(oldGraph).toEqual(snapshot);
 });
 it("allows incomplete drafts but refuses to publish a graph with broken paths", async () => {
   m.workspace.mockResolvedValue({

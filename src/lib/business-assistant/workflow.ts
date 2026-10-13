@@ -15,8 +15,10 @@ import { AssistantError, type Preview } from "./model";
 import type { VisualBindingCatalog } from "@/lib/workflows/visual/bindings";
 import type { SemanticChangeSummary } from "./semantic-summary";
 import type { SimulationReport } from "@/lib/workflows/visual/simulation-types";
+import type { PublicationReadiness } from "@/lib/workflows/visual/publication-types";
 
 export type WorkflowCard = {
+  publication?: PublicationReadiness;
   simulation?: SimulationReport;
   semanticSummary?: SemanticChangeSummary;
   workspace: VisualWorkspace;

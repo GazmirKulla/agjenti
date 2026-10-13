@@ -2,7 +2,10 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { normalizeVisualDraft, validateVisualGraph } from "./model";
 import { loadWorkflowReadiness } from "../readiness";
 import { loadVisualVersion, loadVisualWorkspace } from "./store";
-import { unconfirmedSaveMessage } from "./save-result";
+import { unconfirmedSaveMessage, type VisualSaveResult } from "./save-result";
+import { evaluatePublicationPolicy } from "./publication-policy";
+import { reviewWorkflowPublication } from "./publication-service";
+import type { PublicationApproval, PublicationReadiness, PublicationReceipt } from "./publication-types";
 
 export type WorkflowOperation = "draft" | "publish" | "enable" | "disable";
 /** Caller supplies server-verified identities. The RPC rechecks membership and revision atomically. */
@@ -13,7 +16,8 @@ export async function writeVisualWorkflow(
   raw: unknown,
   operation: WorkflowOperation,
   requestId?: string,
-) {
+  approval?: PublicationApproval,
+): Promise<VisualSaveResult> {
   if (!Number.isInteger(revision) || revision < 0)
     return { error: "Rifresko faqen dhe provo përsëri." };
   const graph =
@@ -28,13 +32,26 @@ export async function writeVisualWorkflow(
       errors: validateVisualGraph(raw).errors,
     };
   let activationGraph = graph;
+  let publication: PublicationReadiness | undefined;
+  if (operation === "publish" && graph && requestId) {
+    const reviewed = await reviewWorkflowPublication({ businessId, userId, revision, graph,
+      proposalId: approval?.proposalId ?? requestId, requestId, approval, confirming: true,
+      expectedPublishedVersionId: approval?.publishedVersionId });
+    publication = reviewed.publication;
+    if (!publication.canPublish) return { error: publication.findings.map(f => f.message).join(" "), publication };
+  }
   if (operation === "enable") {
     const workspace = await loadVisualWorkspace(businessId);
     activationGraph = workspace.publishedVersionId
       ? (await loadVisualVersion(businessId, workspace.publishedVersionId))?.graph ?? null
       : null;
   }
-  if ((operation === "publish" || operation === "enable") && activationGraph?.version === 2) {
+  if (operation === "publish" && graph && !requestId) {
+    const readiness = graph.version === 2 ? await loadWorkflowReadiness(businessId) : { ready: true, blockers: [] };
+    publication = evaluatePublicationPolicy({ mode: "manual_legacy", businessId, userId, authorized: true,
+      revision, candidate: graph, runtimeBlockers: readiness.blockers });
+    if (!publication.canPublish) return { error: publication.findings.map(f => f.message).join(" "), publication };
+  } else if (operation === "enable" && activationGraph?.version === 2) {
     const readiness = await loadWorkflowReadiness(businessId);
     if (!readiness.ready) return { error: `Ruaje si draft dhe provoje. Para aktivizimit: ${readiness.blockers.join(" ")}` };
   }
@@ -51,6 +68,7 @@ export async function writeVisualWorkflow(
   );
   if (error)
     return {
+      ...(publication ? { publication: error.message.includes("stale_workflow") ? { ...publication, result: "BLOCKED" as const, status: "stale_proposal" as const, canPublish: false, findings: [{ code: "stale_revision", message: "Rrjedha ndryshoi gjatë publikimit. Rifresko faqen dhe kërko miratim të ri." }] } : { ...publication, result: "UNVERIFIED" as const, status: "blocked" as const, canPublish: false, findings: [{ code: "write_unconfirmed", message: "Serveri nuk konfirmoi publikimin. Rifresko historikun përpara se të provosh përsëri." }] } } : {}),
       error: error.message.includes("stale_workflow")
         ? "Rrjedha ndryshoi në një dritare tjetër. Rifresko faqen para ruajtjes."
         : error.message.includes("invalid_workflow_targets")
@@ -66,5 +84,19 @@ export async function writeVisualWorkflow(
   // The RPC commits atomically and returns the new revision. Keep that
   // acknowledgement even if refreshing the editor subsequently fails.
   if (!Number.isInteger(data) || data !== revision + 1) return { error: unconfirmedSaveMessage };
-  return { savedRevision: data as number, savedGraph: graph ?? undefined };
+  const receipt = operation === "publish" ? await publicationReceipt(businessId, data as number) : undefined;
+  return { savedRevision: data as number, savedGraph: graph ?? undefined, ...(publication ? { publication } : {}), ...(receipt ? { receipt } : {}) };
+}
+
+/** The revision's audit event is authoritative; a later workspace read might refer to someone else's publish. */
+async function publicationReceipt(businessId: string, revision: number): Promise<PublicationReceipt> {
+  try {
+    const { data, error } = await createServiceSupabase().from("visual_workflow_events")
+      .select("created_at,actor_id,published_version_id:after_data->>published_version_id").eq("business_id", businessId).eq("revision", revision).maybeSingle();
+    const versionId = data?.published_version_id;
+    if (error || !data || typeof versionId !== "string") throw new Error("receipt_unavailable");
+    return { revision, publishedVersionId: versionId, publishedAt: data.created_at, actorId: data.actor_id };
+  } catch {
+    return { revision, warning: "Publikimi u konfirmua, por hollësitë e versionit nuk u lexuan. Rifresko historikun; mos e publiko përsëri." };
+  }
 }

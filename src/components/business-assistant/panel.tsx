@@ -22,6 +22,7 @@ import { OrderFlowCard } from "./orderflow-card";
 import type { OrderFlowContext } from "@/lib/business-assistant/orderflow-service";
 import { WorkflowCard } from "./workflow-card";
 import { WorkflowChangeReview } from "@/components/workflows/workflow-change-review";
+import { PublicationReceiptView } from "@/components/workflows/publication-readiness";
 import type { WorkflowCard as WorkflowCardData } from "@/lib/business-assistant/workflow";
 
 import { pinnedWorkflowContext, continuesWorkflowRequest, workflowRequestHistory, type WorkflowRequestPin } from "./request-context";
@@ -50,6 +51,9 @@ function MessageCopy({ text }: { text: string }) {
   );
 }
 type Result = {
+  publication?: import("@/lib/workflows/visual/publication-types").PublicationReadiness;
+  receipt?: import("@/lib/workflows/visual/publication-types").PublicationReceipt;
+  warning?: string;
   productImport?: ImportSource;
   clarifying?: boolean;
   choices?: string[];
@@ -212,7 +216,11 @@ export function BusinessAssistant({
     );
     const data: Result = await response.json();
     if (abort.current.signal.aborted) throw new Error("Kërkesa u ndërpre.");
-    if (!response.ok) throw new Error(data.error || "Kërkesa nuk përfundoi.");
+    if (!response.ok) {
+      if (data.publication) setResult(previous => previous ? { ...previous, token: undefined, publication: data.publication,
+        workflow: previous.workflow ? { ...previous.workflow, publication: data.publication } : undefined } : { publication: data.publication });
+      throw new Error(data.error || "Kërkesa nuk përfundoi.");
+    }
     return data;
   }
   async function analyze(event?: React.FormEvent) {
@@ -513,6 +521,8 @@ export function BusinessAssistant({
               <Icon name="check" size={22} />
               <div>
                 <strong>{result.message}</strong>
+                {result.receipt && <PublicationReceiptView receipt={result.receipt} />}
+                {result.warning && <p>{result.warning}</p>}
                 {result.path && (
                   <Link href={`/b/${slug}/${result.path}`} onClick={onClose}>
                     Shiko ndryshimin →

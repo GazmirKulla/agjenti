@@ -18,6 +18,8 @@ import type { AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { diffHighlights, diffWorkflowGraphs } from "@/lib/workflows/visual/diff";
 import { summarizeWorkflowChanges } from "@/lib/business-assistant/semantic-summary";
 import { WorkflowChangeReview } from "./workflow-change-review";
+import { PublicationReadinessView, PublicationReceiptView } from "./publication-readiness";
+import type { PublicationReadiness, PublicationReceipt } from "@/lib/workflows/visual/publication-types";
 
 const descriptions: Record<VisualNodeKind, string> = {
   start: "Çdo mesazh i ri rivlerëson kërkesën e klientit.", condition: "Zgjidh rrugën sipas mesazhit ose të dhënave.",
@@ -44,6 +46,8 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   const [adding, setAdding] = useState(false);
   const [pending, startTransition] = useTransition();
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [publication, setPublication] = useState<PublicationReadiness>();
+  const [receipt, setReceipt] = useState<PublicationReceipt>();
   const [removedFlow, setRemovedFlow] = useState<{ graph: VisualGraph; id: string } | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [trace, setTrace] = useState<VisualTrace | undefined>();
@@ -93,6 +97,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
       return;
     }
     setWorkspace(initialWorkspace); setGraph(initialWorkspace.graph); setView("hub"); setSelectedId(undefined);
+    setPublication(undefined); setReceipt(undefined);
     setSession(null); setMessages([]); setTrace(undefined); setTurn(undefined); setProblems([]);
     setNotice({ text: "Editori u përditësua me rrjedhën e ruajtur." });
   }, [initialWorkspace, workspace.revision, dirty]);
@@ -110,6 +115,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
     if (locked) return;
     setRemovedFlow(null);
     setGraph(next); setNotice(null); setProblems([]); resetTest();
+    setPublication(undefined); setReceipt(undefined);
   }
   function selectNode(id?: string) {
     setSelectedId(id); setTab("edit"); setAdding(false);
@@ -197,6 +203,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
     startTransition(async () => {
       try {
         const result = await saveWorkflowFromEditor(slug, workspace.revision, publish ? "publish" : "draft", graph);
+        setPublication(result.publication); setReceipt(result.receipt);
         if (result.error) { setNotice({ text: result.error, error: true }); setProblems(result.errors ?? []); return; }
         if (result.savedRevision !== undefined && result.savedGraph) clearSavedWorkflowDraft(slug, { revision: result.savedRevision, graph: result.savedGraph });
         if (result.workspace) { setWorkspace(result.workspace); setGraph(result.workspace.graph); }
@@ -241,7 +248,10 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
       <div className="vf-header-actions"><span className="vf-save-state">{dirty ? "Pa ruajtur" : workspace.hasUnpublishedChanges ? "Draft i papublikuar" : workspace.generated ? "Pikënisje" : "E ruajtur"}</span><button type="button" className="vf-button" disabled={locked} onClick={() => save()}>Ruaj draft</button><button type="button" className="vf-button vf-primary" disabled={locked} onClick={() => save(true)}>{pending ? "Duke ruajtur…" : workspace.publishedVersionId ? "Publiko" : "Aktivizo"}<Icon name="arrow" size={16} /></button></div>
     </header>
     {recovery && <div className="vf-notice" role="status"><span>{canRestoreRecovery ? "Ka ndryshime të paruajtura nga kjo dritare. Mund t’i rikthesh." : "Ka një kopje lokale, por workflow është ndryshuar ndërkohë. Shkarkoje për ta krahasuar me versionin e ruajtur."}</span>{canRestoreRecovery && <button className="vf-button" type="button" onClick={() => { setGraph(recovery.draft.graph); setRecovery(null); resetTest(); }}>Rikthe ndryshimet</button>}<button className="vf-button" type="button" onClick={() => { const url = URL.createObjectURL(new Blob([JSON.stringify(recovery.draft.graph, null, 2)], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "workflow-kopje.json"; link.click(); URL.revokeObjectURL(url); }}>Shkarko kopjen</button><button className="vf-button" type="button" onClick={() => { if (clearWorkflowDraft(slug)) setRecovery(null); }}>Përdor versionin e ruajtur</button></div>}
-    {readiness && <div className={`vf-readiness ${readiness.ready ? "is-ready" : ""}`}><Icon name={readiness.ready ? "check" : "settings"} size={15} /><span>{readiness.ready ? "Gati për aktivizim" : "Aktivizimi kërkon konfigurim"}</span>{!readiness.ready && <details><summary>Shiko çfarë mungon</summary><ul>{readiness.blockers.map(item => <li key={item}>{item}</li>)}</ul></details>}</div>}
+    {readiness && <div className={`vf-readiness ${readiness.ready ? "is-ready" : ""}`}><Icon name={readiness.ready ? "check" : "settings"} size={15} /><span>{readiness.ready ? "Infrastruktura është gati · jo provë e sjelljes" : "Aktivizimi kërkon konfigurim"}</span>{!readiness.ready && <details><summary>Shiko çfarë mungon</summary><ul>{readiness.blockers.map(item => <li key={item}>{item}</li>)}</ul></details>}</div>}
+    <p className="vf-notice">Publikimi manual ruan kontrollet ekzistuese. Aftësitë dhe veprimet e jashtme nuk kanë validim të plotë automatik. Butoni “Publiko” është miratimi yt i veçantë; ruajtja e draftit nuk publikon.</p>
+    {publication && <PublicationReadinessView publication={publication} />}
+    {receipt && <PublicationReceiptView receipt={receipt} />}
     {focusedItem && <div className="vf-binding-focus"><Icon name={bindingFocus?.kind === "product" ? "products" : "briefcase"} size={16} /><span>Për <strong>{focusedItem.name}</strong>: zgjidh rrjedhën dhe lidhe te “Përdoret për”.</span></div>}
     <nav className="vf-navigation" aria-label="Navigimi i workflow-t"><button type="button" className={view === "hub" ? "is-active" : ""} onClick={() => { setView("hub"); setSelectedId(undefined); setAdding(false); }}><Icon name="inbox" size={15} />Qendra e mesazhit</button><span>/</span>{activeFlow ? <select aria-label="Rrjedha e hapur" value={view} onChange={event => { setView(event.target.value); setSelectedId(undefined); setAdding(false); }}>{definition.flows.map(flow => <option key={flow.id} value={flow.id}>{flow.label}</option>)}</select> : <span>{view === "all" ? "Të gjithë hapat" : "Zgjidh një proces"}</span>}<button className={view === "all" ? "is-active" : ""} type="button" onClick={() => { setView("all"); setSelectedId(undefined); setAdding(false); }}>Të gjithë hapat</button></nav>
     {dirty && <details className="vf-local-review"><summary>Shiko ndryshimet e paruajtura · Para / Pas</summary><WorkflowChangeReview before={workspace.graph} after={graph} summary={summarizeWorkflowChanges(workspace.graph, graph, workspace.revision, workspace.publishedVersionId)} /></details>}

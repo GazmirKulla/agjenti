@@ -1,6 +1,9 @@
 import type { VisualGraph, VisualWorkspace } from "./types";
+import type { PublicationReadiness, PublicationReceipt } from "./publication-types";
 
 export type VisualSaveResult = {
+  publication?: PublicationReadiness;
+  receipt?: PublicationReceipt;
   workspace?: VisualWorkspace;
   savedRevision?: number;
   savedGraph?: VisualGraph;

@@ -19,6 +19,8 @@ import { buildAutomationProposal, automationMessage, recheckAutomation, type Aut
 import { summarizeWorkflowChanges } from "./semantic-summary";
 import { matchesSimulationBinding, simulateWorkflowProposal, simulationBinding } from "@/lib/workflows/visual/simulation";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
+import { reviewWorkflowPublication } from "@/lib/workflows/visual/publication-service";
+import type { PublicationApproval } from "@/lib/workflows/visual/publication-types";
 import type { Access, PlanResult, Ticket } from "./service";
 import {
   applyWorkflowOperations,
@@ -175,14 +177,15 @@ export async function prepareWorkflow(
       "Bisedat vizuale në proces vazhdojnë me versionin e tyre. Workflow-t e porosive të produkteve nuk ndryshohen.";
   }
   // Publication assesses the ENTIRE saved graph, not just the latest patch.
-  if (operation === "publish") automation = await publicationAssessment(access, graph, w.revision, w.publishedVersionId);
   const id = randomUUID();
-  const simulation = ["draft", "publish"].includes(operation)
-    ? simulateAutomation(operation === "publish" ? card.published ?? w.graph : w.graph, graph, automation!) : undefined;
+  const publicationReview = operation === "publish" ? await reviewWorkflowPublication({ ...access, graph, revision: w.revision,
+    proposalId: randomUUID(), prepared: { workspace: w, published: card.published } }) : undefined;
+  if (publicationReview) automation = publicationReview.automation;
+  const simulation = publicationReview?.simulation ?? (operation === "draft" ? simulateAutomation(w.graph, graph, automation!) : undefined);
   if (automation && simulation) automation.simulation = simulationBinding(simulation);
-  if (operation === "publish" && simulation && !simulation.canPublish) return {
-    message: "Publikimi nga asistenti u bllokua: skenarët kritikë nuk janë të gjithë të verifikuar. Drafti dhe versioni aktiv nuk ndryshuan.",
-    automation, workflow: { ...card, simulation },
+  if (publicationReview && !publicationReview.publication.canRequestApproval) return {
+    message: publicationReview.publication.findings.map(f => f.message).join(" "),
+    automation, workflow: { ...card, simulation, publication: publicationReview.publication },
   };
   if (simulation) preview.notice = `${preview.notice ?? ""} Simulimi: ${simulation.result}. ${simulation.canPublish ? "U verifikuan skenarët lokalë, jo një garanci e sjelljes së AI." : "Drafti mund të ruhet; kjo nuk do të thotë se automatizimi është validuar plotësisht."}`;
   const ticket: Ticket = {
@@ -200,12 +203,15 @@ export async function prepareWorkflow(
       ...(operation === "draft" || operation === "publish" ? { graph } : {}),
     },
   };
+  if (publicationReview && simulation) ticket.publicationApproval = { ...simulationBinding(simulation), businessId: access.businessId,
+    userId: access.userId, requestId: id, expires: ticket.expires, publishedVersionId: w.publishedVersionId };
   return {
     message: operation === "draft" && automation ? automationMessage(automation) : p.message,
     ...(automation ? { automation } : {}),
     preview,
     workflow: {
       ...card,
+      ...(publicationReview ? { publication: publicationReview.publication } : {}),
       ...(simulation ? { simulation } : {}),
       ...(operation === "draft" ? { proposed: graph, semanticSummary: summarizeWorkflowChanges(w.graph, graph, w.revision, w.publishedVersionId, automation) } : {}),
     },
@@ -218,11 +224,6 @@ export function simulateAutomation(before: VisualGraph, candidate: VisualGraph, 
     capabilities: automation.requiredCapabilities,
     assessmentUnavailable: automation.validationFindings.some(f => f.code === "assessment_unavailable"),
     clarificationRequired: automation.clarificationQuestions.length > 0,
-  });
-}
-function publicationAssessment(access: Access, graph: VisualGraph, revision: number, publishedVersionId: string | null) {
-  return buildAutomationProposal({ businessId: access.businessId, userId: access.userId, revision, publishedVersionId,
-    request: "Kontrollo draftin për publikim.", before: { version: 1, name: "", nodes: [], edges: [] }, after: graph, operations: [],
   });
 }
 
@@ -282,10 +283,12 @@ async function readWorkflowCatalog(access: Access, card: WorkflowCard) {
 export async function executeWorkflow(access: Access, ticket: Ticket) {
   if (!access.modules.includes("workflows"))
     throw new AssistantError("Workflow-t nuk janë aktivë për këtë biznes.");
+  if (typeof ticket.id !== "string" || !ticket.id.trim())
+    throw new AssistantError("Mungon identiteti i konfirmimit. Përgatite kërkesën përsëri.");
   const operation = ticket.values.operation as WorkflowOperation;
   if (`workflow_${operation}` !== ticket.action)
     throw new AssistantError("Konfirmim i pavlefshëm.");
-  if (operation === "draft" || operation === "publish") {
+  if (operation === "draft") {
     await recheckAutomation(access.businessId, access.userId, ticket.automation);
     const graph = normalizeVisualDraft(ticket.values.graph);
     if (!graph) throw new AssistantError("Grafi i konfirmuar nuk është i vlefshëm.");
@@ -295,14 +298,15 @@ export async function executeWorkflow(access: Access, ticket: Ticket) {
     const workspace = await loadVisualWorkspace(access.businessId);
     if (workspace.revision !== revision) throw new AssistantError("Rrjedha ndryshoi në një dritare tjetër. Përgatite propozimin përsëri.");
     // Rerun even for legacy tickets. Evidence is never trusted from the browser or reused after a graph change.
-    const automation = operation === "publish" ? await publicationAssessment(access, graph, revision, workspace.publishedVersionId) : ticket.automation;
-    const before = operation === "publish" && workspace.publishedVersionId
-      ? (await loadVisualVersion(access.businessId, workspace.publishedVersionId))?.graph ?? workspace.graph : workspace.graph;
-    const simulation = automation ? simulateAutomation(before, graph, automation)
-      : simulateWorkflowProposal({ proposalId: ticket.id, baseRevision: revision, before, candidate: graph });
-    if (operation === "publish" && !simulation.canPublish)
-      throw new AssistantError("Publikimi u bllokua nga simulimi ose gatishmëria. Përgatite dhe kontrollo propozimin përsëri.");
+    const automation = ticket.automation;
+    if (automation) simulateAutomation(workspace.graph, graph, automation);
+    else simulateWorkflowProposal({ proposalId: ticket.id, baseRevision: revision, before: workspace.graph, candidate: graph });
   }
+  // Existing Phase 4 tickets carry the same sealed identity/hash fields. Do not accept an unbound legacy publication.
+  const approval: PublicationApproval | undefined = ticket.publicationApproval ?? (ticket.simulation && ticket.automation ? {
+    ...ticket.simulation, businessId: ticket.businessId, userId: ticket.userId, requestId: ticket.id,
+    expires: ticket.expires, publishedVersionId: ticket.automation.workflowVersionId,
+  } : undefined);
   const result = await writeVisualWorkflow(
     access.businessId,
     access.userId,
@@ -310,8 +314,9 @@ export async function executeWorkflow(access: Access, ticket: Ticket) {
     ticket.values.graph,
     operation,
     ticket.id,
+    approval,
   );
-  if (result.error) throw new AssistantError(result.error);
+  if (result.error) throw new AssistantError(result.error, result.publication);
   return {
     message:
       operation === "draft"
@@ -322,6 +327,8 @@ export async function executeWorkflow(access: Access, ticket: Ticket) {
             ? "Versioni i publikuar u aktivizua."
             : "Rrjedha u çaktivizua për bisedat e reja.",
     path: "workflows",
+    savedRevision: result.savedRevision,
+    ...(result.receipt ? { receipt: result.receipt } : {}),
   };
 }
 

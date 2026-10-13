@@ -9,6 +9,7 @@ import {
 import type { VisualGraph } from "@/lib/workflows/visual/types";
 import { WorkflowChangeReview } from "@/components/workflows/workflow-change-review";
 import { WorkflowSimulationReview } from "@/components/workflows/workflow-simulation-review";
+import { PublicationReadinessView } from "@/components/workflows/publication-readiness";
 import "./workflow-card.css";
 
 function FlowSteps({ graph }: { graph: VisualGraph }) {
@@ -215,6 +216,7 @@ export function WorkflowCard({
       )}
       {data.semanticSummary && tab === "draft" ? proposed ? <p>{data.semanticSummary.changes.length} ndryshime të propozuara. Hap “Shiko ndryshimin” për shpjegimin Para/Pas dhe diagramin. Baza: revisioni {data.semanticSummary.baseRevision}.</p> : <WorkflowChangeReview before={workspace.graph} after={workspace.graph} summary={data.semanticSummary} /> : <FlowSteps graph={graph} />}
       {data.simulation && !proposed && tab === "draft" && <WorkflowSimulationReview report={data.simulation} />}
+      {data.publication && tab === "draft" && <PublicationReadinessView publication={data.publication} />}
       {problems.length > 0 ? (
         <details>
           <summary>Duhet plotësuar para publikimit ({problems.length})</summary>

@@ -128,6 +128,18 @@ describe("visual execution integration", () => {
     expect(result.nextState.visual?.versionId).toBe("pinned-v1");
     expect(legacy).not.toHaveBeenCalled();
   });
+  it("continues the immutable pinned snapshot after publication or rollback changes the current graph", async () => {
+    const old = linear(node("email", "collect", { fieldKey: "email", fieldType: "email", prompt: "Old email?" }));
+    const current = linear(node("phone", "collect", { fieldKey: "phone", fieldType: "phone", prompt: "New phone?" }));
+    const original = structuredClone(old);
+    mocks.load.mockImplementation(async (_business, pinned) => pinned === "old-version" ? version(old, "old-version") : version(current, "new-version"));
+    const legacy = vi.fn(async (p: LegacyParams) => response(p));
+    const result = await executeVisualTurn({ ...params(), visualPreview: undefined, message: "ana@example.com", state: { ...emptyState(), visual: waiting("email", "old-version") } }, legacy);
+    expect(mocks.load).toHaveBeenCalledWith("business-a", "old-version");
+    expect(result.nextState.visual?.versionId).toBe("old-version");
+    expect(result.visualWorkflow?.traversedNodeIds).not.toContain("phone");
+    expect(old).toEqual(original);
+  });
   it("does not silently bypass a missing pinned workflow", async () => {
     const legacy = vi.fn(async (p: LegacyParams) => response(p));
     await expect(executeVisualTurn({ ...params(), visualPreview: undefined, state: { ...emptyState(), visual: waiting("product") } }, legacy)).rejects.toThrow();

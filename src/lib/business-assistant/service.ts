@@ -11,6 +11,7 @@ import { summarizeWorkflowChanges } from "./semantic-summary";
 const workflowInstructions = `${automationInstructions} ${baseWorkflowInstructions}`;
 import type { WorkflowCard } from "./workflow";
 import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
+import type { PublicationApproval } from "@/lib/workflows/visual/publication-types";
 import { parseUIContext, type AssistantUIContext } from "./context";
 import OpenAI from "openai";
 import { randomUUID } from "node:crypto";
@@ -64,6 +65,7 @@ export type Access = {
   catalogSource: string;
 };
 export type Ticket = {
+  publicationApproval?: PublicationApproval;
   simulation?: SimulationBinding;
   automation?: AutomationProposal;
   purpose: "business-assistant-v1";
@@ -101,10 +103,15 @@ export function openTicket(token: string, access: Access): Ticket {
     t.userId !== access.userId ||
     t.businessId !== access.businessId ||
     !Number.isFinite(t.expires) ||
-    t.expires < Date.now()
+    t.expires <= Date.now()
   )
     throw new AssistantError(
       "Konfirmimi ka skaduar ose i përket një hapësire tjetër. Përgatite kërkesën përsëri.",
+      t.action === "workflow_publish" && t.userId === access.userId && t.businessId === access.businessId
+        ? { mode: "assistant_strict", result: "BLOCKED", status: "stale_proposal", canPublish: false, canRequestApproval: false,
+          baseRevision: Number.isInteger(t.before?.revision) ? Number(t.before?.revision) : 0, candidateGraphHash: null,
+          findings: [{ code: "expired_approval", message: "Miratimi ka skaduar. Përgatite dhe kontrollo propozimin përsëri." }] }
+        : undefined,
     );
   assertEnabled(access, t.action);
   return t;

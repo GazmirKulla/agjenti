@@ -50,7 +50,9 @@ export type Preview = {
   fields: { label: string; before: string; after: string }[];
   notice?: string;
 };
-export class AssistantError extends Error {}
+export class AssistantError extends Error {
+  constructor(message: string, public publication?: import("@/lib/workflows/visual/publication-types").PublicationReadiness) { super(message); }
+}
 export const fields: Record<string, string[]> = {
   orderflow: ["name", "steps", "scope", "product_ids"],
   linear: ["definition", "scope", "workflow_id"],

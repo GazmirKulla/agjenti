@@ -74,8 +74,10 @@ export async function POST(request: Request) {
       if (typeof body.token !== "string" || body.token.length > 300000)
         throw new AssistantError("Konfirmim i pavlefshëm.");
       const result = await executeTicket(access, body.token);
-      revalidatePath(`/b/${slug}`, "layout");
-      return json({ ...result, saved: true });
+      let warning: string | undefined;
+      try { revalidatePath(`/b/${slug}`, "layout"); }
+      catch { warning = "Ndryshimi u ruajt. Rifresko faqen për të përditësuar pamjen."; }
+      return json({ ...result, saved: true, ...(warning ? { warning } : {}) });
     }
     if (
       body.mode !== "plan" ||
@@ -108,6 +110,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return json(
       {
+        ...(error instanceof AssistantError && error.publication ? { publication: error.publication } : {}),
         error:
           error instanceof AssistantError
             ? error.message

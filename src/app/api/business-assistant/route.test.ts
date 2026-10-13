@@ -28,6 +28,7 @@ vi.mock("@/lib/business-intelligence/transcription", () => ({
 vi.mock("@/lib/workflows/visual/test-actions", () => ({ simulateVisualWorkflow: m.simulate }));
 vi.mock("next/cache", () => ({ revalidatePath: m.revalidate }));
 import { POST } from "./route";
+import { AssistantError } from "@/lib/business-assistant/model";
 beforeEach(() => {
   vi.clearAllMocks();
   m.user.mockResolvedValue({ id: "user" });
@@ -43,6 +44,19 @@ const req = (body: unknown, origin = "https://example.com") =>
     headers: { origin, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+it("keeps a confirmed publication receipt even when cache refresh fails", async () => {
+  m.execute.mockResolvedValueOnce({ message: "Published", path: "workflows", receipt: { revision: 4, publishedVersionId: "exact-version" } });
+  m.revalidate.mockImplementationOnce(() => { throw new Error("cache unavailable"); });
+  const response = await POST(req({ mode: "confirm", token: "sealed-ticket" }));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ saved: true, receipt: { revision: 4, publishedVersionId: "exact-version" }, warning: expect.any(String) });
+});
+it("returns structured stale-publication blockers, never a successful save", async () => {
+  m.execute.mockRejectedValueOnce(new AssistantError("Rifresko propozimin.", { mode: "assistant_strict", result: "BLOCKED", status: "stale_proposal", canPublish: false, canRequestApproval: false, baseRevision: 3, candidateGraphHash: null, findings: [] }));
+  const response = await POST(req({ mode: "confirm", token: "sealed-ticket" }));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ publication: { status: "stale_proposal", canPublish: false } });
+});
 it("rejects cross-origin requests before authentication and analysis", async () => {
   expect(
     (await POST(req({ mode: "plan", text: "hello" }, "https://evil.test")))
