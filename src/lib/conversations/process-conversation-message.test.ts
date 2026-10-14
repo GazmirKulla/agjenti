@@ -585,7 +585,9 @@ it("does not invoke a booking capability removed from a v2 definition", async ()
 it("keeps pre-pilot production booking behavior behind the single entry point", async () => {
   vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
   await processConversationMessage({ businessId: "business", message: "Dua rezervim", hasPhoto: false, state: emptyState(), mode: "production" });
-  expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ routed: true }));
+  const [bookingParams] = mocks.booking.mock.calls[0] ?? [];
+  expect(bookingParams).toEqual(expect.objectContaining({ businessId: "business", message: "Dua rezervim", mode: "production" }));
+  expect(bookingParams.routed).toBeUndefined();
 });
 it.each(["instagram", "whatsapp"] as const)("routes %s through business conversation handling without a pilot flag", async source => {
   vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");

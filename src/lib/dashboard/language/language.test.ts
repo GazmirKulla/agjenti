@@ -42,7 +42,10 @@ describe("Scoped dashboard language", () => {
     expect(disconnected).toContain("/api/instagram/oauth/start?businessId=b1");
   });
   it("translates primary navigation but preserves business submenus", () => {
-    const navigation = organizeWorkspace([{ id: "services", path: "services", label: "Shërbimet", icon: "products" } as Parameters<typeof organizeWorkspace>[0][number]]);
+    const navigation = organizeWorkspace([
+      { id: "services", path: "services", label: "Shërbimet", icon: "products" },
+      { id: "catalogs", path: "catalogs", label: "Katalogët", icon: "catalogs" },
+    ] as Parameters<typeof organizeWorkspace>[0]);
     const html = render("en", h(WorkspaceNavigation, { navigation, base: "/b/shop", pathname: "/b/shop/inbox", section: "conversations", onNavigate: () => {} }));
     expect(html).toContain("Conversations");
     expect(html).toContain("Business");
