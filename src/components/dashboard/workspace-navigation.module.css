@@ -1,4 +1,8 @@
 .divider{border:0;border-top:1px solid var(--line);margin:12px 10px}
+:global(.dashboard-shell.is-icons) .divider{margin:8px 4px}
+:global(.dashboard-shell.is-icons) .chevron,:global(.dashboard-shell.is-icons) .groupLabel{display:none}
+:global(.dashboard-shell.is-icons) .businessLinks{padding:0}
+:global(.dashboard-shell.is-icons) .businessLinks a{position:relative;justify-content:center;gap:0;padding:10px 0}
 .business{margin:0}
 .business summary{cursor:pointer;list-style:none}.business summary::-webkit-details-marker{display:none}.chevron{margin-left:auto}.business[open] .chevron{transform:rotate(180deg)}
 .businessLinks{padding:0 10px 12px}.groupLabel{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:16px 6px 6px}.businessLinks a{display:flex;align-items:center;gap:10px;padding:10px 8px;border-radius:8px;font-size:13px;color:var(--ink)}

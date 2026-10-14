@@ -24,7 +24,7 @@ export function DashboardLanguageSwitch() {
         if (value === language) return;
         document.cookie = `${LANGUAGE_COOKIE}=${value}; Path=/; Max-Age=31536000; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
         startTransition(() => router.refresh());
-      }}>{value === "sq" ? "Shqip" : "English"}</button>)}
+      }}><span className="lang-full">{value === "sq" ? "Shqip" : "English"}</span><span className="lang-compact" aria-hidden="true">{value.toUpperCase()}</span></button>)}
   </div>;
 }
 export function LocalizedStatusBadge({ status }: { status: string }) {

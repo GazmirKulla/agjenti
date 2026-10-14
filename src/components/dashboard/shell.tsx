@@ -44,6 +44,8 @@ export function DashboardShell({
   const [searchOpen, setSearchOpen] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [mobile, setMobile] = useState(false);
+  const [iconsOnly, setIconsOnly] = useState(false);
+  const [tip, setTip] = useState<{ text: string; top: number } | null>(null);
   const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -57,6 +59,46 @@ export function DashboardShell({
     media.addEventListener("change", sync);
     return () => media.removeEventListener("change", sync);
   }, []);
+  useEffect(() => {
+    try {
+      setIconsOnly(localStorage.getItem("agjenti.sidebar.icons") === "1");
+    } catch {
+      /* Preference stays expanded when storage is unavailable. */
+    }
+  }, []);
+  const iconRail = iconsOnly && !mobile;
+  useEffect(() => {
+    const nav = sidebar.current?.querySelector("nav");
+    if (!nav) return;
+    const hide = () => setTip(null);
+    nav.addEventListener("scroll", hide, { passive: true });
+    return () => nav.removeEventListener("scroll", hide);
+  }, [iconRail]);
+  function toggleIcons() {
+    setTip(null);
+    setIconsOnly((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem("agjenti.sidebar.icons", next ? "1" : "0");
+      } catch {
+        /* The choice still applies for this visit. */
+      }
+      return next;
+    });
+  }
+  function showTip(event: React.SyntheticEvent) {
+    const el = (event.target as HTMLElement | null)?.closest?.<HTMLElement>("[data-tip]");
+    const text = el?.dataset.tip;
+    if (!el || !text || (!iconRail && !el.classList.contains("sidebar-icon-toggle"))) return;
+    const rect = el.getBoundingClientRect();
+    const top = rect.top + rect.height / 2;
+    setTip((current) => current?.text === text && Math.abs(current.top - top) < 1 ? current : { text, top });
+  }
+  function hideTip(event: React.MouseEvent | React.FocusEvent) {
+    const next = (event.relatedTarget as HTMLElement | null)?.closest?.("[data-tip]");
+    if (next && event.currentTarget.contains(next)) return;
+    setTip(null);
+  }
   useEffect(() => {
     const viewport = window.visualViewport;
     let restingHeight = viewport?.height ?? window.innerHeight;
@@ -156,12 +198,16 @@ export function DashboardShell({
   return (
     <div
       style={{"--assistant-panel-width": `${assistant?.panelWidth ?? 440}px`} as React.CSSProperties}
-      className={`dashboard-shell ${!admin && slug ? "has-assistant-dock assistant-first-mobile" : ""} ${!admin && pathname === base ? "mobile-assistant-home" : ""} ${assistant?.open ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
+      className={`dashboard-shell ${iconRail ? "is-icons" : ""} ${!admin && slug ? "has-assistant-dock assistant-first-mobile" : ""} ${!admin && pathname === base ? "mobile-assistant-home" : ""} ${assistant?.open ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
     >
       <aside
         ref={sidebar}
         id="dashboard-navigation"
         className={`dashboard-sidebar ${open ? "is-open" : ""}`}
+        onMouseOver={showTip}
+        onMouseOut={hideTip}
+        onFocus={showTip}
+        onBlur={hideTip}
         role={mobile && open ? "dialog" : undefined}
         aria-modal={mobile && open ? true : undefined}
         aria-label={mobile && open ? t("Menuja kryesore") : undefined}
@@ -169,13 +215,26 @@ export function DashboardShell({
         inert={mobile && !open ? true : undefined}
       >
         <div className="mobile-drawer-header">
-          <Link
-            href={platformAdmin || admin ? "/admin" : base}
-            className="dashboard-brand"
-            onClick={() => setOpen(false)}
-          >
-            <BrandLogo size={36} priority />
-          </Link>
+          <div className="sidebar-head">
+            <Link
+              href={platformAdmin || admin ? "/admin" : base}
+              className="dashboard-brand"
+              data-tip={iconRail ? "agjenti.app" : undefined}
+              onClick={() => setOpen(false)}
+            >
+              <BrandLogo size={36} priority />
+            </Link>
+            <button
+              type="button"
+              className="sidebar-icon-toggle"
+              aria-pressed={iconsOnly}
+              aria-label={t(iconsOnly ? "Shfaq menunë me tekst" : "Shfaq vetëm ikonat")}
+              data-tip={t(iconsOnly ? "Shfaq menunë me tekst" : "Shfaq vetëm ikonat")}
+              onClick={toggleIcons}
+            >
+              <Icon name="sidebar" size={18} />
+            </button>
+          </div>
           <button
             type="button"
             className="mobile-drawer-close"
@@ -186,12 +245,12 @@ export function DashboardShell({
           </button>
         </div>
         <details className="workspace-picker">
-          <summary className="workspace-switch">
+          <summary className="workspace-switch" data-tip={iconRail ? name : undefined}>
             <span className="workspace-avatar">
               {admin ? "A" : name.slice(0, 2).toUpperCase()}
             </span>
-            <span>{name}</span>
-            <span className="ml-auto">⌄</span>
+            <span className="nav-label">{name}</span>
+            <span className="ml-auto" aria-hidden="true">⌄</span>
           </summary>
           <div className="workspace-options">
             {(platformAdmin || admin) && (
@@ -228,16 +287,17 @@ export function DashboardShell({
                 key={item.id}
                 href={href}
                 aria-current={active ? "page" : undefined}
+                data-tip={iconRail ? item.label : undefined}
                 onClick={() => setOpen(false)}
                 className={`dashboard-nav ${active ? "active" : ""} ${admin && mobilePaths.has(item.path) ? "mobile-primary-item" : ""}`}
               >
                 <Icon name={item.icon} />
-                {admin ? item.label : t(item.label)}
+                <span className="nav-label">{admin ? item.label : t(item.label)}</span>
               </Link>
             );
           }) : mobile ? <>
-            {[{ path: "", label: "Asistenti", icon: "spark" }, { path: "inbox", label: "Bisedat", icon: "inbox" }, { path: "business", label: "Biznesi", icon: "briefcase" }].map(item => <Link key={item.path} href={`${base}${item.path ? `/${item.path}` : ""}`} className={`dashboard-nav ${isDashboardRoute(pathname, base, item.path) ? "active" : ""}`} aria-current={isDashboardRoute(pathname, base, item.path) ? "page" : undefined} onClick={() => { setOpen(false); assistant?.setOpen(false); }}><Icon name={item.icon}/>{item.label}</Link>)}
-          </> : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} onNavigate={() => setOpen(false)} />}
+            {[{ path: "", label: "Asistenti", icon: "spark" }, { path: "inbox", label: "Bisedat", icon: "inbox" }, { path: "business", label: "Biznesi", icon: "briefcase" }].map(item => <Link key={item.path} href={`${base}${item.path ? `/${item.path}` : ""}`} className={`dashboard-nav ${isDashboardRoute(pathname, base, item.path) ? "active" : ""}`} aria-current={isDashboardRoute(pathname, base, item.path) ? "page" : undefined} onClick={() => { setOpen(false); assistant?.setOpen(false); }}><Icon name={item.icon}/><span className="nav-label">{item.label}</span></Link>)}
+          </> : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} iconsOnly={iconRail} onNavigate={() => setOpen(false)} />}
         </nav>
         <footer className="dashboard-sidebar-footer">
           {!admin && <DashboardLanguageSwitch />}
@@ -245,15 +305,21 @@ export function DashboardShell({
             href={`${base}/account`}
             className={`dashboard-nav sidebar-account-link ${isDashboardRoute(pathname, base, "account") ? "active" : ""}`}
             aria-current={isDashboardRoute(pathname, base, "account") ? "page" : undefined}
+            data-tip={iconRail ? t("Llogaria") : undefined}
             onClick={() => setOpen(false)}
           >
             <span className="profile-avatar" aria-hidden="true">
               {(userName || email || name).slice(0, 2).toUpperCase()}
             </span>
-            {t("Llogaria")}
+            <span className="nav-label">{t("Llogaria")}</span>
           </Link>
         </footer>
       </aside>
+      {tip && (
+        <div className="sidebar-tip" style={{ top: tip.top }} aria-hidden="true">
+          {tip.text}
+        </div>
+      )}
       {backdrop && (
         <button
           type="button"

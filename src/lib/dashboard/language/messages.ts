@@ -16,6 +16,8 @@ export const english: Record<string, string> = {
   "Mbyll menunë": "Close menu",
   "Menuja e biznesit": "Business menu",
   "Hap ose mbyll menunë": "Toggle menu",
+  "Shfaq vetëm ikonat": "Show icons only",
+  "Shfaq menunë me tekst": "Show menu labels",
   "Kërko faqe": "Search pages",
   "Kërko në panel…": "Search dashboard…",
   "Mbyll kërkimin": "Close search",
