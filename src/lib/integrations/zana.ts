@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 
 export type ExternalCatalogProduct = {
   id: string;
@@ -77,6 +78,7 @@ export async function isExternalCatalogLinked(
 export async function fetchLinkedCatalog(
   businessId: string,
 ): Promise<ExternalCatalogProduct[]> {
+  if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "external_catalog");
   const integration = await loadIntegrationRow(businessId);
   const configuredUrl = integration?.catalog_url?.trim() || null;
   if (!configuredUrl) return [];
@@ -149,6 +151,7 @@ export async function probeLinkedCatalog(params: {
   ordersUrl?: string | null;
   apiSecret?: string | null;
 }): Promise<CatalogProbeResult> {
+  if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "catalog_probe");
   const empty: CatalogProbeResult = {
     ok: false,
     url: null,
@@ -297,6 +300,7 @@ export async function submitExternalOrder(params: {
   attemptId: string;
   payload: Record<string, unknown>;
 }): Promise<ExternalOrderResult> {
+  if (isIsolatedExecution()) refuseIsolatedEffect("order.create", "external_provider");
   const supabase = createServiceSupabase();
   let result: ExternalOrderResult;
   const unknown = (): ExternalOrderResult => ({ status: "pending_reconciliation", ok: false,

@@ -34,6 +34,8 @@ export type AgentTurnResult = {
   orderStatusPending?: boolean;
   conversationRouting?: import("@/lib/workflows/conversation-processes").ConversationRouting;
   visualWorkflow?: import("@/lib/workflows/visual/types").VisualTrace;
+  /** Isolated/Chat Lab only. Live turns omit this; never treat SIMULATED as a real write. */
+  externalActions?: import("@/lib/runtime/execution-context").ExternalAction[];
   handoff?: boolean;
   advisoryHandoff?: boolean;
   reply: string;

@@ -9,6 +9,8 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { readTestSession, sealTestSession, snapshotTestSession } from "@/lib/agents/test-chat/session";
 import type { TimedTraceEvent } from "@/lib/conversations/trace";
 import type { WorkflowStepDef } from "@/lib/workflows/engine";
+import { snapshotExternalActions } from "@/lib/runtime/execution-context";
+import { runIsolated } from "@/lib/runtime/isolated-run";
 import { redactDebug, workflowFields, type LabBusiness, type LabSetup, type LabResult } from "./model";
 
 async function adminId() {
@@ -68,16 +70,15 @@ export async function runLabTurn(input: { businessId: string; message: string; h
     session.testConversationId ??= `test_${randomUUID()}`;
     const replaySession = snapshotTestSession(session);
     start = Date.now();
-    // Deliberately call the read-only production core, never the inbound delivery
-    // handler or onboarding test action. No persistence, order, booking or webhook
-    // capability is supplied to this adapter. New side effects belong outside core.
-    const result = await processConversationMessage({
+    // Isolated production coordinator: live catalog reads, sealed test state, no live effects.
+    const result = await runIsolated(() => processConversationMessage({
       businessId: input.businessId, message: input.message.trim(), hasPhoto: input.hasPhoto === true,
       state: session.state, previousResponseId: session.previousResponseId,
       mode: "test", source: "admin_chat_lab",
       onTrace: (event) => trace.push({ ...structuredClone(event), elapsedMs: Date.now() - start }),
-    });
-    trace.push({ stage: "tools", label: "External actions disabled", status: "skipped", elapsedMs: Date.now() - start, data: { policy: "No customer sends, database mutations, orders, bookings, payments or business webhooks. Appointment requests are simulated in test mode; the shared reply core remains read-only." } });
+    }));
+    const externalActions = result.externalActions ?? snapshotExternalActions();
+    trace.push({ stage: "tools", label: "External actions disabled", status: "skipped", elapsedMs: Date.now() - start, data: { policy: "No customer sends, database mutations, orders, bookings, payments or business webhooks. Isolated adapters report SIMULATED, UNVERIFIED, BLOCKED or UNSUPPORTED — never a real write.", externalActions } });
     trace.push({ stage: "overview", label: "Response finalized", elapsedMs: Date.now() - start, data: { response: result.reply, source: result.debug.source } });
     const workflow = trace.find((event) => event.stage === "workflow");
     const fields = workflowFields(result.nextState, (workflow?.data?.steps ?? []) as WorkflowStepDef[]);

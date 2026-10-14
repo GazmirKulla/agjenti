@@ -6,6 +6,7 @@ import { channelAdapter } from "./channel";
 import { isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
 import type { AgentTurnResult } from "./process-agent-turn";
 import { InboundPersistenceError } from "./inbound-persistence-error";
+import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 export type WorkflowJob = {
     id: number;
     business_id: string;
@@ -18,6 +19,7 @@ export type WorkflowJob = {
     batch_payloads?: NormalizedIncomingMessage[] | null;
 };
 export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage) {
+    if (isIsolatedExecution()) refuseIsolatedEffect("background_job", "workflow_queue");
     if (isMetaDashboardTestMessage(message))
         return false;
     const db = createServiceSupabase();
@@ -33,6 +35,7 @@ export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage)
     return true;
 }
 export async function prepareWorkflowReply(job: WorkflowJob, conversationId: string, revision: number, turn: AgentTurnResult) {
+    if (isIsolatedExecution()) refuseIsolatedEffect("background_job", "prepare_workflow_reply");
     const { error } = await createServiceSupabase().rpc("prepare_workflow_reply", { p_id: job.id, p_token: job.lease_token, p_conversation: conversationId, p_revision: revision, p_state: turn.nextState, p_workflow: turn.workflowId, p_reply: turn.reply, p_response: turn.previousResponseId, p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });
     if (error)
         throw new Error("State commit failed");

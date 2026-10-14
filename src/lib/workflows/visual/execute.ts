@@ -1,5 +1,6 @@
 import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workflow";
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
+import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
 import { chooseGuidance, clarification, invalidateConfirmation } from "../guidance";
 import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
 import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext, sharedPrompt, setOrderTerms } from "../context";
@@ -272,7 +273,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       try {
         if(params.informationRequest) throw new Error("Veprimi kërkon vazhdimin e procesit.");
         if(!node.config.action)throw new Error("Veprimi nuk është konfiguruar.");
-        const output=await executeWorkflowAction({businessId:params.businessId,versionId:version.id,nodeId:node.id,binding:node.config.action,values:execution.state.values,mode:params.mode,guard:params.actionGuard});
+        const output=await executeWorkflowAction({businessId:params.businessId,versionId:version.id,nodeId:node.id,binding:node.config.action,values:execution.state.values,mode:isIsolatedExecution()?"test":params.mode,guard:params.actionGuard});
         execution.state.actionResults={...execution.state.actionResults,[node.id]:output};
       } catch {
         outcome="no";
@@ -296,7 +297,13 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       if (bookingCalled) { replies.push("Për cilin shërbim dëshironi rezervimin?"); finished = true; break; }
       bookingCalled = true;
       const booking = await params.bookingTurn?.(turn.nextState);
-      if (!booking) { replies.push("Për rezervimin, kontakto stafin e biznesit."); finished = true; break; }
+      if (!booking) {
+        if (isIsolatedExecution() && !params.bookingTurn) {
+          recordExternalAction({ kind: "booking.create", disposition: "BLOCKED", detail: "missing_test_adapter" });
+          replies.push("Provë: rezervimi nuk u ekzekutua sepse mungon adapteri i izoluar. Nuk u krijua rezervim real.");
+        } else replies.push("Për rezervimin, kontakto stafin e biznesit.");
+        finished = true; break;
+      }
       turn = booking; currentState = turn.nextState;
       replies.push(turn.reply);
       if (turn.nextState.fields.booking) { finished = true; break; }
@@ -381,7 +388,10 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     if (action.kind === "end" && !replies.length) replies.push("Faleminderit. Të dhënat u plotësuan.");
     if (action.kind === "handoff") {
       turn.handoff = true; turn.advisoryHandoff = false; execution.state.advisory = false;
-      replies.push(staffHandoffReply(params.mode === "test"));
+      if (isIsolatedExecution() || params.mode === "test") {
+        recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "test_state_only" });
+      }
+      replies.push(staffHandoffReply(params.mode === "test" || isIsolatedExecution()));
     }
     finished = true;
     break;

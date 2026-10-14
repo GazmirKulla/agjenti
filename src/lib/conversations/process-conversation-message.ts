@@ -18,6 +18,13 @@ import { isEntityInformationRequest, resolveVisualEntity } from "@/lib/workflows
 import { ownedCollectNodes } from "@/lib/workflows/visual/facts";
 import { combineProductPresentations, isEntityReference, recordEntityPresentation } from "@/lib/products/entity-bridge";
 import { resolveCurrentProductReference } from "@/lib/products/resolve-reference";
+import {
+  IsolationViolation,
+  isIsolatedExecution,
+  recordExternalAction,
+  snapshotExternalActions,
+} from "@/lib/runtime/execution-context";
+import { runIsolated } from "@/lib/runtime/isolated-run";
 
 export type ConversationMessageParams = AgentTurnParams & {
   /** Server webhook identity, never accepted from chat text or preview state. */
@@ -99,8 +106,30 @@ function explicitProfile(state: ConversationStatePayload, message: string, profi
   if (phone) setFact(state, "customer_phone", phone[1].trim(), "phone", "message_phone");
 }
 
+function isolatedTurn(params: ConversationMessageParams) {
+  return params.source === "admin_chat_lab" || params.mode === "test"
+    || Boolean(params.visualPreview) || Boolean(params.linearPreview);
+}
+
+function lockIsolatedParams(params: ConversationMessageParams): ConversationMessageParams {
+  // Isolation is server-owned. Model output and workflow config cannot select live adapters.
+  if (isolatedTurn(params) || isIsolatedExecution()) return { ...params, mode: "test" };
+  return params;
+}
+
+function attachTurnEffects(result: AgentTurnResult): AgentTurnResult {
+  const actions = snapshotExternalActions();
+  if (actions.length) result.externalActions = actions;
+  else delete result.externalActions;
+  return result;
+}
+
 /** One message coordinator for Instagram, isolated chat and graph previews. Adapters own persistence/send. */
 export async function processConversationMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
+  params = lockIsolatedParams(params);
+  if (isolatedTurn(params) && !isIsolatedExecution()) {
+    return runIsolated(() => processConversationMessage(params));
+  }
   const started = Date.now();
   const before = { ...emptyState(), recentMessages: recentConversation(params.state) };
   let result: AgentTurnResult;
@@ -108,6 +137,7 @@ export async function processConversationMessage(params: ConversationMessagePara
     result = await processMessage({ ...params, actionGuard: params.bookingGuard });
     if (result.handoff) await requireRuntimeModules(params.businessId, ["staff"]);
   } catch (error) {
+    if (error instanceof IsolationViolation) throw error;
     if (!(error instanceof CapabilityEnforcementError)) throw error;
     // Retain the original pinned version, collected fields and process cursors.
     result = plainResult(structuredClone(params.state ?? emptyState()), error.message);
@@ -115,6 +145,12 @@ export async function processConversationMessage(params: ConversationMessagePara
   }
   if (result.handoff && !result.advisoryHandoff) {
     result.nextState.staffHandoff = true;
+    if (isIsolatedExecution()) {
+      recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "test_state_only" });
+    }
+  }
+  if (isIsolatedExecution() && result.nextState.step_key === "order_ready" && params.state?.step_key !== "order_ready") {
+    recordExternalAction({ kind: "order.create", disposition: "SIMULATED", detail: "not_submitted" });
   }
   // Always rebuild from the inbound history. Nested processors may have recorded
   // an intermediate reply; the coordinator owns the final pair, exactly once.
@@ -135,7 +171,7 @@ export async function processConversationMessage(params: ConversationMessagePara
     action: result.conversationRouting?.action ?? null,
     elapsedMs: Date.now() - started,
   } });
-  return result;
+  return attachTurnEffects(result);
 }
 
 async function processMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {

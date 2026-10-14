@@ -1,6 +1,11 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import {
+  currentExecution,
+  isIsolatedExecution,
+  refuseIsolatedEffect,
+} from "@/lib/runtime/execution-context";
+import {
   googleBusy,
   googleConnection,
   syncBooking,
@@ -117,6 +122,11 @@ export async function availableSlots(
   date: string,
   excludeBookingId?: string,
 ) {
+  if (isIsolatedExecution()) {
+    const port = currentExecution().adapters.calendar;
+    if (!port) refuseIsolatedEffect("booking.availability", "missing_test_adapter");
+    return port.availableSlots(businessId, serviceId, date, excludeBookingId);
+  }
   await requireRuntimeModules(businessId, ["bookings", "services"]);
   const db = createServiceSupabase();
   let excludeGoogleEvent: string | undefined;
@@ -214,6 +224,7 @@ export type BookingEffectGuard = {
   revision: number;
 };
 export async function persistBooking(businessId: string, input: BookingInput, guard?: BookingEffectGuard) {
+  if (isIsolatedExecution()) refuseIsolatedEffect("booking.create");
   await requireRuntimeModules(businessId, ["bookings", "services"]);
   if (
     !uuid(input.serviceId) ||

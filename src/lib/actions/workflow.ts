@@ -3,6 +3,7 @@ import type { ActionBinding } from "./catalog";
 import { parseProvisionInput } from "./catalog";
 import { provisionBusiness } from "./provision";
 import type { BookingEffectGuard } from "@/lib/calendar/service";
+import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
 export async function executeWorkflowAction(p: {
   businessId: string;
   versionId: string;
@@ -20,12 +21,14 @@ export async function executeWorkflowAction(p: {
       ]),
     ),
   );
-  if (p.mode === "test")
+  if (p.mode === "test" || isIsolatedExecution()) {
+    recordExternalAction({ kind: "action.provision", disposition: "SIMULATED", detail: "not_provisioned" });
     return {
       businessId: "simulation",
       invitationUrl: "[SIMULIM: link regjistrimi — nuk u krijua biznes]",
       expiresAt: "[SIMULIM]",
     };
+  }
   if (!p.guard) throw new Error("Mungon konteksti i verifikuar i bisedës.");
   const requestId = `workflow:${p.guard.conversationId}:${p.versionId}:${p.nodeId}:${createHash("sha256").update(JSON.stringify(input)).digest("hex")}`;
   return provisionBusiness({
