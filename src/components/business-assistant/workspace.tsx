@@ -47,6 +47,11 @@ type Workspace = ReturnType<typeof useMaterialDraft> & {
   name: string;
   launch: (text?: string) => void;
   requestKey: number;
+  userId: string;
+  userName?: string;
+  historyOpen: boolean;
+  setHistoryOpen: Dispatch<SetStateAction<boolean>>;
+  resetRef: React.RefObject<(() => void) | null>;
 };
 const AssistantContext = createContext<Workspace | null>(null);
 export const useAssistantWorkspace = () => useContext(AssistantContext);
@@ -56,16 +61,22 @@ export function AssistantWorkspaceProvider({
   name,
   modules,
   external,
+  userId,
+  userName,
 }: {
   children: ReactNode;
   slug: string;
   name: string;
   modules: string[];
   external: boolean;
+  userId: string;
+  userName?: string;
 }) {
   const materialDraft = useMaterialDraft();
   const pathname = usePathname();
   const sendRef = useRef<(() => void) | null>(null);
+  const resetRef = useRef<(() => void) | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [requestKey, setRequestKey] = useState(0);
   const [panelWidth, setPanelWidth] = useState(440);
@@ -113,6 +124,7 @@ export function AssistantWorkspaceProvider({
         name,
         launch,
         requestKey,
+        userId, userName, historyOpen, setHistoryOpen, resetRef,
       }}
     >
       {children}
@@ -138,6 +150,11 @@ export function AssistantWorkspaceSurface() {
   return (
     <BusinessAssistant
       materialDraft={w}
+      userId={w.userId}
+      userName={w.userName}
+      historyOpen={w.historyOpen}
+      onHistoryClose={() => w.setHistoryOpen(false)}
+      resetRef={w.resetRef}
       external={w.external}
       requestKey={w.requestKey}
       sendRef={w.sendRef}

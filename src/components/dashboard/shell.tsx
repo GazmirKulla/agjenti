@@ -156,7 +156,7 @@ export function DashboardShell({
   return (
     <div
       style={{"--assistant-panel-width": `${assistant?.panelWidth ?? 440}px`} as React.CSSProperties}
-      className={`dashboard-shell ${!admin && slug ? "has-assistant-dock" : ""} ${assistant?.open ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
+      className={`dashboard-shell ${!admin && slug ? "has-assistant-dock assistant-first-mobile" : ""} ${!admin && pathname === base ? "mobile-assistant-home" : ""} ${assistant?.open ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
     >
       <aside
         ref={sidebar}
@@ -235,7 +235,9 @@ export function DashboardShell({
                 {admin ? item.label : t(item.label)}
               </Link>
             );
-          }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} onNavigate={() => setOpen(false)} />}
+          }) : mobile ? <>
+            {[{ path: "", label: "Asistenti", icon: "spark" }, { path: "inbox", label: "Bisedat", icon: "inbox" }, { path: "business", label: "Biznesi", icon: "briefcase" }].map(item => <Link key={item.path} href={`${base}${item.path ? `/${item.path}` : ""}`} className={`dashboard-nav ${isDashboardRoute(pathname, base, item.path) ? "active" : ""}`} aria-current={isDashboardRoute(pathname, base, item.path) ? "page" : undefined} onClick={() => { setOpen(false); assistant?.setOpen(false); }}><Icon name={item.icon}/>{item.label}</Link>)}
+          </> : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} onNavigate={() => setOpen(false)} />}
         </nav>
         <footer className="dashboard-sidebar-footer">
           {!admin && <DashboardLanguageSwitch />}
@@ -276,10 +278,14 @@ export function DashboardShell({
           >
             <Icon name="menu" size={28} />
           </button>
-          <Link className="mobile-workspace-title" href={base}>
+          {!admin && mobile ? <label className="mobile-business-selector"><span className="sr-only">Biznesi aktiv</span><select value={slug} onChange={event => { window.location.assign(`/b/${encodeURIComponent(event.target.value)}`); }} aria-label="Biznesi aktiv">{businesses.map(b => <option key={b.id} value={b.slug}>{b.name}</option>)}</select><small>Agjenti.app</small></label> : <Link className="mobile-workspace-title" href={base}>
             <strong>{name}</strong>
             <small>{admin ? "Administrimi" : "Agjenti.app"}</small>
-          </Link>
+          </Link>}
+          {!admin && <div className="mobile-assistant-tools">
+            <button type="button" aria-label="Historiku i asistentit" onClick={() => assistant?.setHistoryOpen(true)}><Icon name="history" size={21}/></button>
+            <button type="button" aria-label="Bisedë e re me asistentin" disabled={assistant?.sending} onClick={() => { assistant?.resetRef.current?.(); assistant?.setOpen(true); }}><Icon name="edit" size={21}/></button>
+          </div>}
           <button
             className="mobile-search-toggle btn btn-ghost"
             type="button"

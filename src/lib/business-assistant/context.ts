@@ -11,6 +11,7 @@ export type AssistantUIContext = {
 };
 const pages = [
   "home",
+  "business",
   "activity",
   "products",
   "services",
@@ -148,6 +149,7 @@ export function contextLabel(c: AssistantUIContext) {
     (
       {
         home: "Kreu",
+        business: "Biznesi",
         activity: "Aktiviteti",
         products: "Produktet",
         services: "Shërbimet",
