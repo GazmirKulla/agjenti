@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "codex/review-*": false
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/business-discovery",
