@@ -39,3 +39,11 @@ it("lets only the administrator change module policies using the existing policy
   m.rpc.mockClear(); form.set("action_key", "module.unknown");
   expect(await saveActionPolicy(form)).toHaveProperty("error"); expect(m.rpc).not.toHaveBeenCalled();
 });
+it.each([true, false])("saves package checkboxes as explicit permissions: %s", async checked => {
+  const form = new FormData();
+  form.set("scope", "plan"); form.set("target", "starter");
+  form.set("action_key", "module.products"); form.set("checkbox_mode", "true");
+  if (checked) form.set("enabled", "true");
+  expect(await saveActionPolicy(form)).toHaveProperty("success");
+  expect(m.rpc).toHaveBeenCalledWith("save_action_policy", expect.objectContaining({ p_enabled: checked, p_scope: "plan", p_target: "starter" }));
+});

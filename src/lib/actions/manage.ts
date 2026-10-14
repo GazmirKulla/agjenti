@@ -25,7 +25,7 @@ export async function saveActionPolicy(form: FormData) {
       limit = raw === "" ? null : Number(raw);
     if (limit !== null && (!Number.isSafeInteger(limit) || limit < 0))
       throw new Error("Kufiri duhet të jetë numër i plotë pozitiv ose zero.");
-    const mode = text(form, "enabled");
+    const mode = form.get("checkbox_mode") === "true" && form.get("enabled") === null ? "false" : text(form, "enabled");
     if (!["true", "false", "inherit"].includes(mode))
       throw new Error("Zgjedhje e pavlefshme.");
     const enabled = mode === "inherit" ? null : mode === "true";
@@ -56,6 +56,7 @@ export async function saveActionPolicy(form: FormData) {
     if (error)
       throw new Error("Politika nuk u ruajt. Kontrollo migrimin dhe vlerat.");
     revalidatePath("/admin/actions");
+    if (scope === "business") revalidatePath(`/admin/businesses/${target}/permissions`);
     revalidatePath("/b/[slug]", "layout");
     return { success: "Politika u ruajt." };
   } catch (e) {

@@ -295,6 +295,7 @@ export default async function AdminBusinessesPage() {
                 </div>
                 <div className="detail-block">
                   <h3>Cilësimet e klientit</h3>
+                  <Link className="btn btn-ghost" href={`/admin/businesses/${b.id}/permissions`}>Lejet e moduleve dhe aftësive →</Link>
                   <p className="muted-copy">
                     Kontrollo sa konfigurime agjenti mund të mbajë ky biznes. Si
                     parazgjedhje lejohet vetëm një; me këtë opsion deri në dy.

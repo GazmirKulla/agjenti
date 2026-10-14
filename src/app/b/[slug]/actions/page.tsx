@@ -86,7 +86,7 @@ export default async function BusinessActionsPage({
                   ? "I disponueshëm për ty"
                   : "Kjo aftësi nuk është e lejuar për ty në këtë biznes."}
               </p>
-              {!allowed && access.admin && <Link className="soft-link" href={`/admin/actions?business=${id}`}>Konfiguro lejen për këtë biznes →</Link>}
+              {!allowed && access.admin && <Link className="soft-link" href={`/admin/businesses/${id}/permissions`}>Konfiguro lejen për këtë biznes →</Link>}
               {configure && allowed && (
                 <ActionForm
                   action={saveBusinessActionSettings.bind(null, slug)}

@@ -56,3 +56,8 @@
 .module-description > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 4px 0; }
 .module-description > summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 3px; }
 .module-description > p { line-height: 1.6; }
+
+.policy-advanced { margin: 12px 0; font-size: 13px; }
+.policy-advanced > summary { cursor: pointer; color: var(--muted); }
+.action-plan-grid .policy-check { display: flex; align-items: center; gap: 8px; }
+.policy-check input { width: 18px; height: 18px; accent-color: var(--accent, #70dfb5); }

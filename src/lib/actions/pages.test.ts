@@ -15,6 +15,7 @@ vi.mock("@/lib/tenant/access", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/dashboard/modules/entitlements", () => ({ loadAllowedModules: async () => ["products", "services", "workflows"] }));
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: async () => ({ enabledModules: ["products", "workflows"] }) }));
+import PermissionsPage from "@/app/admin/businesses/[id]/permissions/page";
 import AdminPage from "@/app/admin/actions/page";
 import BusinessPage from "@/app/b/[slug]/actions/page";
 import { actionCatalog } from "./catalog";
@@ -62,13 +63,17 @@ function fixture() {
 }
 it("renders package controls and the complete manual invitation entry point", async () => {
   fixture();
-  const admin = renderToStaticMarkup(await AdminPage({})),
+  m.from.mockClear();
+  const admin = renderToStaticMarkup(await AdminPage()),
     business = renderToStaticMarkup(
       await BusinessPage({ params: Promise.resolve({ slug: "agjenti" }) }),
     );
   expect(admin).toContain("Modulet dhe aftësitë");
   expect(admin).toContain('name="target"');
   expect(admin).toContain("enterprise");
+  expect(admin).toContain('type="checkbox"');
+  expect(admin).not.toContain('value="business"');
+  expect(admin).not.toContain("Përjashtim për biznes");
   expect(business).toContain('name="email"');
   expect(business).toContain("Përgatit biznesin");
   expect(business).toContain("Ende nuk ka ftesa");
@@ -92,6 +97,17 @@ it("keeps denied capabilities visible without exposing the invitation form", asy
   expect(business).toContain("Kjo aftësi nuk është e lejuar");
   expect(business).not.toContain('name="email"');
   expect(business).not.toContain('name="automation_allowed"');
-  expect(business).toContain("/admin/actions?business=source");
+  expect(business).toContain("/admin/businesses/source/permissions");
   expect(business).toContain("Modulet e hapësirës");
+});
+
+it("loads global policies independently and scopes exceptions to one business", async () => {
+  fixture(); m.from.mockClear();
+  await AdminPage();
+  expect(m.from.mock.calls.map(([table]) => table)).toEqual(["platform_actions", "plan_actions"]);
+  const html = renderToStaticMarkup(await PermissionsPage({ params: Promise.resolve({ id: "source" }) }));
+  expect(html).toContain("Agjenti");
+  expect(html).toContain('name="target" value="source"');
+  expect(html).toContain("Lejo për këtë biznes");
+  expect(html).toContain("Sipas paketës");
 });
