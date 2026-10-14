@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   process: vi.fn(),
   send: vi.fn(),
   whatsappSend: vi.fn(),
+  profile: vi.fn(),
   rpc: vi.fn(),
 }));
 vi.mock("@/lib/supabase/service", () => ({
@@ -16,13 +17,11 @@ vi.mock("@/lib/crypto/tokens", () => ({
 vi.mock("@/lib/whatsapp/api", () => ({ sendWhatsAppText: mocks.whatsappSend }));
 vi.mock("@/lib/instagram/send", () => ({ sendInstagramText: mocks.send }));
 vi.mock("@/lib/instagram/user-profile", () => ({
-  fetchInstagramUserProfile: async () => ({
-    username: "customer_ig",
-    name: "Klient Test",
-  }),
+  fetchInstagramUserProfile: mocks.profile,
 }));
 
 import { handleInboundMessage } from "./handle-inbound";
+import { runWorkflowQueue, type WorkflowJob } from "./workflow-queue";
 import { emptyState } from "@/lib/workflows/engine";
 import { migrateContext } from "@/lib/workflows/context";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
@@ -44,6 +43,9 @@ let outboundResult: { data: {body:string;source:string;delivery_status:string} |
 let historyResult: {data: unknown[]; error: {message:string} | null} | undefined;
 let paused = false;
 let auto = true;
+let conversationAuto: boolean | null = null;
+let businessPolicyError: { code: string; message: string } | null = null;
+let newConversation = false;
 let webhookInsertCode: string | null = null;
 let savedState = emptyState();
 let writes: { table: string; operation: string; data: unknown }[] = [];
@@ -61,6 +63,9 @@ beforeEach(() => {
   outboundResult = {data:null,error:null};
   deliveryAttempt = null;
   auto = true;
+  conversationAuto = null;
+  businessPolicyError = null;
+  newConversation = false;
   webhookInsertCode = null;
   savedState = emptyState();
   writes = [];
@@ -79,12 +84,15 @@ beforeEach(() => {
   });
   mocks.send.mockResolvedValue({ ok: true, messageId: "meta-reply" });
   mocks.whatsappSend.mockResolvedValue({ ok: true, messageId: "wa-reply" });
+  mocks.profile.mockResolvedValue({ username: "customer_ig", name: "Klient Test" });
   mocks.from.mockImplementation((table: string) => {
     let op = "select";
     let columns = "";
     let inserted: Record<string, unknown> = {};
     const filters: Record<string, unknown> = {};
     const result = () => {
+      if (table === "businesses" && op === "select" && businessPolicyError) return { data: null, error: businessPolicyError };
+      if (table === "conversations" && op === "select" && newConversation) return { data: null, error: null };
       if (table === "messages" && op === "insert" && inserted.direction === "inbound") {
         if (inserted.external_message_id === failInboundId) return { data: null, error: { code: "57014", message: "timeout" } };
         if (inboundException) throw inboundException;
@@ -125,7 +133,7 @@ beforeEach(() => {
                 ? {
                     id: "conversation-a",
                     status: paused ? "paused" : "active",
-                    auto_reply: null,
+                    auto_reply: conversationAuto,
                     openai_previous_response_id: "resp_old",
                   }
                 : table === "businesses"
@@ -172,6 +180,122 @@ beforeEach(() => {
 });
 
 const queuedJob = () => ({ id: 17, business_id: "business-a", connection_id: "connection-a", participant_id: message.externalParticipantId, payload: message, status: "processing", lease_token: "lease-a", reply: null });
+describe.each(["instagram", "whatsapp"] as const)("%s policy reads through the real inbound/queue boundary", channel => {
+  const job = (): WorkflowJob => ({ ...queuedJob(), payload: {
+    ...message, channel, timestamp: new Date(),
+    contextMetadata: channel === "instagram" ? { instagramAccountId: "ig-a" } : { whatsappPhoneNumberId: "123456" },
+  } });
+  const claim = (...jobs: WorkflowJob[]) => {
+    // PostgreSQL owns lease eligibility/retry limits; do not emulate that engine here.
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "claim_workflow_inbound_batch") return { data: jobs.length ? [jobs.shift()] : [], error: null };
+      if (name === "workflow_inbound_batch_wait_ms") return { data: 0, error: null };
+      if (name === "begin_workflow_send") return { data: true, error: null };
+      if (["prepare_workflow_reply", "finish_workflow_send"].includes(name)) return { data: null, error: null };
+      throw new Error(`Unexpected RPC: ${name}`);
+    });
+  };
+  const expectNoExecution = () => {
+    expect(mocks.process).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.whatsappSend).not.toHaveBeenCalled();
+    expect(mocks.rpc.mock.calls.map(([name]) => name)).not.toContain("prepare_workflow_reply");
+    expect(writes.some(write => write.table === "conversation_states")).toBe(false);
+  };
+
+  it("retries an inherited policy read failure without advancing state or releasing the job as ignored", async () => {
+    businessPolicyError = { code: "08006", message: "database policy read failed" };
+    const input = job();
+    const before = Date.now();
+    const stateBefore = structuredClone(savedState);
+    claim(input);
+    expect(await runWorkflowQueue(1)).toBe(0);
+    expectNoExecution();
+    expect(mocks.profile).not.toHaveBeenCalled();
+    expect(writes.filter(write => write.table !== "workflow_inbound_queue")).toEqual([]);
+    expect(savedState).toEqual(stateBefore);
+    expect(input.status).toBe("processing");
+    const updates = writes.filter(write => write.table === "workflow_inbound_queue");
+    expect(updates).toHaveLength(1);
+    expect(updates[0].data).toEqual({ leased_until: expect.any(String), error: "Workflow processing failed" });
+    const retryAt = Date.parse((updates[0].data as { leased_until: string }).leased_until);
+    expect(retryAt).toBeGreaterThanOrEqual(before + 30000);
+    expect(retryAt).toBeLessThanOrEqual(Date.now() + 30000);
+    const queue = mocks.from.mock.results[mocks.from.mock.calls.findLastIndex(([table]) => table === "workflow_inbound_queue")].value;
+    expect(queue.eq.mock.calls).toEqual([["id", input.id], ["lease_token", input.lease_token], ["status", "processing"]]);
+    // No fresh claim means no local replay, including while the lease is still held.
+    expect(await runWorkflowQueue(1)).toBe(0);
+    expectNoExecution();
+    expect(mocks.profile).not.toHaveBeenCalled();
+    expect(writes.filter(write => write.table === "workflow_inbound_queue")).toHaveLength(1);
+  });
+
+  it.each([
+    { override: null, business: false, allowed: false },
+    { override: false, business: true, allowed: false },
+    { override: null, business: true, allowed: true },
+    { override: true, business: false, allowed: true },
+  ])("preserves verified policy precedence: conversation=$override business=$business", async ({ override, business, allowed }) => {
+    conversationAuto = override;
+    auto = business;
+    claim(job());
+    expect(await runWorkflowQueue(1)).toBe(1);
+    if (!allowed) {
+      expectNoExecution();
+      expect(writes).toContainEqual({ table: "workflow_inbound_queue", operation: "update", data: { status: "ignored", leased_until: null } });
+    } else {
+      expect(mocks.process).toHaveBeenCalledOnce();
+      expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ businessId: "business-a", source: channel }));
+      expect(channel === "instagram" ? mocks.send : mocks.whatsappSend).toHaveBeenCalledOnce();
+      expect(mocks.rpc).toHaveBeenCalledWith("finish_workflow_send", expect.objectContaining({ p_ok: true }));
+    }
+  });
+
+  it("recovers the same inbound with a new lease and produces only one state commit and provider send", async () => {
+    businessPolicyError = { code: "08006", message: "temporary failure" };
+    const input = job();
+    claim(input);
+    expect(await runWorkflowQueue(1)).toBe(0);
+    expectNoExecution();
+    businessPolicyError = null;
+    // An inbound saved by an earlier delivery must still be deduplicated on recovery.
+    inboundResult = { data: null, error: { code: "23505", message: "already saved" } };
+    const retry = { ...input, lease_token: "lease-retry" };
+    claim(retry);
+    expect(await runWorkflowQueue(1)).toBe(1);
+    expect(await runWorkflowQueue(1)).toBe(0);
+    expect(duplicateFilters).toMatchObject({ business_id: "business-a", conversation_id: "conversation-a", external_message_id: message.externalMessageId,
+      [channel === "instagram" ? "instagram_connection_id" : "whatsapp_connection_id"]: "connection-a" });
+    expect(mocks.process).toHaveBeenCalledOnce();
+    expect(mocks.rpc.mock.calls.filter(([name]) => name === "prepare_workflow_reply")).toHaveLength(1);
+    expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_id: input.id, p_token: "lease-retry" }));
+    expect(mocks.send.mock.calls.length + mocks.whatsappSend.mock.calls.length).toBe(1);
+    expect(mocks.rpc.mock.calls.filter(([name]) => name === "finish_workflow_send")).toHaveLength(1);
+  });
+
+  it("keeps staff ownership when a previously failing policy read recovers", async () => {
+    businessPolicyError = { code: "08006", message: "temporary failure" };
+    const input = job();
+    claim(input);
+    expect(await runWorkflowQueue(1)).toBe(0);
+    businessPolicyError = null;
+    paused = true;
+    claim({ ...input, lease_token: "lease-retry" });
+    expect(await runWorkflowQueue(1)).toBe(1);
+    expectNoExecution();
+    expect(writes).toContainEqual({ table: "workflow_inbound_queue", operation: "update", data: { status: "ignored", leased_until: null } });
+  });
+
+  it("does not persist policy OFF on a new conversation when the initial policy read fails", async () => {
+    newConversation = true;
+    businessPolicyError = { code: "08006", message: "temporary failure" };
+    claim(job());
+    expect(await runWorkflowQueue(1)).toBe(0);
+    expectNoExecution();
+    expect(mocks.profile).not.toHaveBeenCalled();
+    expect(writes.some(write => write.table === "conversations" && write.operation === "insert")).toBe(false);
+  });
+});
 it("persists the four original messages and generates one combined turn", async () => {
  const texts = ["Ckemi", "Si jeni", "Dua te porosis montesori", "E keni ne gjendje?"];
  const originals = texts.map((text, i) => ({ ...message, externalMessageId: i ? `msg-${i}` : message.externalMessageId, text }));
