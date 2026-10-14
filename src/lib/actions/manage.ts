@@ -63,6 +63,32 @@ export async function saveActionPolicy(form: FormData) {
     return { error: e instanceof Error ? e.message : "Ruajtja dështoi." };
   }
 }
+/** Save the package list through the existing audited policy operation. */
+export async function saveModulePackages(form: FormData) {
+  const user = await getSessionUser();
+  if (!user || !(await isPlatformAdmin(user.id))) return { error: "Kërkohet administratori i platformës." };
+  const key = text(form, "action_key");
+  if (!isPolicyKey(key)) return { error: "Veprim i pavlefshëm." };
+  const packages = ["free", "starter", "professional", "enterprise"];
+  const updates = packages.map(plan => {
+    const data = new FormData();
+    data.set("action_key", key); data.set("scope", "plan"); data.set("target", plan);
+    data.set("enabled", form.get(`plan_${plan}`) === "on" ? "true" : "false");
+    data.set("monthly_limit", text(form, `limit_${plan}`));
+    return data;
+  });
+  // Validate all limits before the first write.
+  if (updates.some(data => {
+    const raw = text(data, "monthly_limit");
+    return raw !== "" && (!Number.isSafeInteger(Number(raw)) || Number(raw) < 0);
+  })) return { error: "Kufijtë duhet të jenë numra të plotë pozitivë ose zero." };
+  for (const data of updates) {
+    const result = await saveActionPolicy(data);
+    if (result.error) return { error: `Ruajtja nuk u përfundua për ${text(data, "target")}. Disa paketa mund të jenë ruajtur. Provo përsëri. ${result.error}` };
+  }
+  return { success: "Paketat u ruajtën." };
+}
+
 export async function saveBusinessActionSettings(slug: string, form: FormData) {
   try {
     const user = await getSessionUser(),

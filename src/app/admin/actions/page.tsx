@@ -6,7 +6,7 @@ import { policyCatalog } from "@/lib/actions/policies";
 import { moduleRegistry, toggleableModules } from "@/lib/dashboard/modules/registry";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { redirect } from "next/navigation";
-import { saveActionPolicy } from "@/lib/actions/manage";
+import { saveActionPolicy, saveModulePackages } from "@/lib/actions/manage";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { PageHeading } from "@/components/dashboard/ui";
@@ -67,40 +67,26 @@ export default async function ActionsPage({ searchParams }: { searchParams?: Pro
               <button className="btn btn-ghost">Ruaj gjendjen</button>
             </ActionForm>
             </details>
-            <div className="action-plan-grid">
-              {plans.data
-                ?.filter((p) => p.action_key === key)
-                .map((p) => (
-                  <ActionForm
-                    key={p.plan}
-                    action={saveActionPolicy}
-                    className="grid gap-2"
-                  >
-                    <strong>{p.plan}</strong>
-                    <input type="hidden" name="scope" value="plan" />
-                    <input type="hidden" name="target" value={p.plan} />
-                    <input type="hidden" name="action_key" value={key} />
-                    <input type="hidden" name="checkbox_mode" value="true" />
+            <ActionForm action={saveModulePackages} className="policy-package-form">
+              <input type="hidden" name="action_key" value={key} />
+              <h3>Paketat</h3>
+              <div className="policy-package-list">
+                {["free", "starter", "professional", "enterprise"].map(plan => {
+                  const policy = plans.data?.find(p => p.action_key === key && p.plan === plan);
+                  return <div className="policy-package-row" key={plan}>
                     <label className="policy-check">
-                      <input type="checkbox" name="enabled" value="true" defaultChecked={p.enabled} />
-                      Përfshi në paketë
+                      <input type="checkbox" name={`plan_${plan}`} defaultChecked={policy?.enabled ?? false} />
+                      <span>{plan}</span>
                     </label>
-                    {definition.automated && (
-                      <label>
-                        Krijime / muaj kalendarik (bosh = pa kufi)
-                        <input
-                          className="field"
-                          name="monthly_limit"
-                          type="number"
-                          min="0"
-                          defaultValue={p.monthly_limit ?? ""}
-                        />
-                      </label>
-                    )}
-                    <button className="btn btn-ghost">Ruaj paketën</button>
-                  </ActionForm>
-                ))}
-            </div>
+                    {definition.automated && <label className="policy-package-limit">
+                      Krijime në muaj (bosh = pa kufi)
+                      <input className="field" name={`limit_${plan}`} type="number" min="0" defaultValue={policy?.monthly_limit ?? ""} />
+                    </label>}
+                  </div>;
+                })}
+              </div>
+              <button className="btn btn-primary" type="submit">Ruaj</button>
+            </ActionForm>
           </article>
         ))}
       </div>

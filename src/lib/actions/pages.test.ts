@@ -69,7 +69,7 @@ it("renders package controls and the complete manual invitation entry point", as
       await BusinessPage({ params: Promise.resolve({ slug: "agjenti" }) }),
     );
   expect(admin).toContain("Modulet dhe aftësitë");
-  expect(admin).toContain('name="target"');
+  expect(admin).toContain('name="plan_free"');
   expect(admin).toContain("enterprise");
   expect(admin).toContain('type="checkbox"');
   expect(admin).not.toContain('value="business"');

@@ -83,3 +83,12 @@
 @media (max-width: 420px) {
   .policy-module-detail .action-plan-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.policy-package-form .action-form-fields { display: grid; gap: 20px; }
+.policy-package-list { display: grid; }
+.policy-package-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.policy-package-row:first-child { padding-top: 0; }
+.policy-package-row .policy-check { display: flex; align-items: center; gap: 12px; text-transform: capitalize; }
+.policy-package-limit { display: grid; gap: 6px; font-size: 12px; max-width: 240px; }
+.policy-package-form button { justify-self: start; min-width: 110px; }
+@media (max-width: 600px) { .policy-package-row { flex-wrap: wrap; gap: 12px; } }
