@@ -84,8 +84,6 @@
   .assistant-inline-home .assistant-primary { background: var(--primary); color: var(--on-primary); }
   .assistant-inline-home .assistant-preview { border-radius: 18px; }
   .assistant-inline-home .assistant-success { border: 1px solid var(--line); background: var(--accent-soft); color: var(--ink); border-radius: 18px; }
-  .assistant-inline-home.is-voice .assistant-body.is-empty { display: none; }
-  .assistant-inline-home.is-voice > .assistant-composer { flex: 1; max-height: none; }
   .assistant-history { padding: 20px; }
   .business-hub-links { grid-template-columns: 1fr; }
   @media (max-height: 650px) { .assistant-inline-home > .assistant-body.is-empty { justify-content: flex-start; } .mobile-assistant-emblem { margin-bottom: 16px; } }

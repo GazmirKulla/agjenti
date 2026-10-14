@@ -2,7 +2,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_AUDIO_BYTES } from "@/lib/onboarding/audio-upload";
 import type { AudioGuideQuestion } from "@/lib/onboarding/audio-guide";
+import { Icon } from "@/components/dashboard/icon";
 import "@/components/business-assistant/voice-recorder.css";
+
+const WAVE_BARS = 46;
+let primedCapture: Promise<MediaStream> | null = null;
+
+export function primeVoiceCapture() {
+  if (primedCapture || typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") return;
+  primedCapture = navigator.mediaDevices.getUserMedia({ audio: true });
+}
 
 export function AudioRecorder({
   busy,
@@ -35,6 +44,16 @@ export function AudioRecorder({
   const stream = useRef<MediaStream | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const mounted = useRef(true);
+  const session = useRef(0);
+  const discarded = useRef(false);
+  const acceptOnStop = useRef(false);
+  const started = useRef(false);
+  const startRef = useRef<() => void>(() => {});
+  const audioContext = useRef<AudioContext | null>(null);
+  const waveFrame = useRef(0);
+  const wave = useRef<HTMLDivElement>(null);
+  const bars = useRef<Array<HTMLElement | null>>([]);
+  const [barCount, setBarCount] = useState(WAVE_BARS);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -42,6 +61,10 @@ export function AudioRecorder({
       if (timer.current) clearInterval(timer.current);
       if (recorder.current?.state === "recording") recorder.current.stop();
       stream.current?.getTracks().forEach((track) => track.stop());
+      cancelAnimationFrame(waveFrame.current);
+      const context = audioContext.current;
+      audioContext.current = null;
+      if (context && context.state !== "closed") void context.close().catch(() => undefined);
     };
   }, []);
   useEffect(() => {
@@ -67,6 +90,42 @@ export function AudioRecorder({
       if (mounted.current) setAnalyzing(false);
     }
   }, []);
+  function releaseWave() {
+    cancelAnimationFrame(waveFrame.current);
+    const context = audioContext.current;
+    audioContext.current = null;
+    if (context && context.state !== "closed") void context.close().catch(() => undefined);
+  }
+  function follow(media: MediaStream) {
+    releaseWave();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || typeof AudioContext === "undefined") return;
+    const context = new AudioContext();
+    audioContext.current = context;
+    const source = context.createMediaStreamSource(media);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    const data = new Uint8Array(analyser.fftSize);
+    const draw = () => {
+      if (audioContext.current !== context) return;
+      analyser.getByteTimeDomainData(data);
+      const count = bars.current.length || WAVE_BARS;
+      const bucket = Math.max(1, Math.floor(data.length / count));
+      for (let i = 0; i < count; i++) {
+        let peak = 0;
+        const offset = Math.min(i * bucket, data.length - bucket);
+        for (let j = 0; j < bucket; j++) peak = Math.max(peak, Math.abs(data[offset + j] - 128));
+        const bar = bars.current[i];
+        if (!bar) continue;
+        bar.style.animation = "none";
+        bar.style.transform = `scaleY(${Math.min(1, 0.14 + peak / 26)})`;
+      }
+      waveFrame.current = requestAnimationFrame(draw);
+    };
+    void context.resume().then(() => {
+      if (audioContext.current === context) waveFrame.current = requestAnimationFrame(draw);
+    });
+  }
   function stop() {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
@@ -74,20 +133,49 @@ export function AudioRecorder({
     stream.current?.getTracks().forEach((track) => track.stop());
     setRecording(false);
   }
+  function cancel() {
+    discarded.current = true;
+    acceptOnStop.current = false;
+    session.current += 1;
+    releaseWave();
+    stop();
+    setFile(null);
+    setError("");
+    onBack?.();
+  }
+  function accept() {
+    if (busy || analyzing) return;
+    if (file && !recording) {
+      void runAnalysis(file);
+      return;
+    }
+    if (recording) {
+      acceptOnStop.current = true;
+      stop();
+      return;
+    }
+    void start();
+  }
   async function start() {
     if (busy || analysisInFlight.current || requesting || recording) return;
+    const id = ++session.current;
+    discarded.current = false;
+    acceptOnStop.current = false;
     setError("");
     setRequesting(true);
     setFile(null);
     setSeconds(0);
     try {
+      const primed = primedCapture;
+      primedCapture = null;
       if (
-        !navigator.mediaDevices?.getUserMedia ||
-        typeof MediaRecorder === "undefined"
+        !primed &&
+        (!navigator.mediaDevices?.getUserMedia ||
+          typeof MediaRecorder === "undefined")
       )
         throw new Error("unsupported");
-      const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!mounted.current) {
+      const media = await (primed ?? navigator.mediaDevices.getUserMedia({ audio: true }));
+      if (!mounted.current || session.current !== id) {
         media.getTracks().forEach((track) => track.stop());
         return;
       }
@@ -125,12 +213,21 @@ export function AudioRecorder({
       };
       rec.onstop = () => {
         media.getTracks().forEach((track) => track.stop());
+        releaseWave();
         if (timer.current) clearInterval(timer.current);
-        if (!mounted.current) return;
+        if (!mounted.current || discarded.current) {
+          discarded.current = false;
+          return;
+        }
         setRecording(false);
-        if (!failed && size > 100)
-          setFile(new File(chunks, "business-audio", { type: rec.mimeType }));
-        else if (!failed) setError("Nuk u regjistrua audio. Provo përsëri.");
+        if (!failed && size > 100) {
+          const audio = new File(chunks, "business-audio", { type: rec.mimeType });
+          setFile(audio);
+          if (acceptOnStop.current) {
+            acceptOnStop.current = false;
+            void runAnalysis(audio);
+          }
+        } else if (!failed) setError("Nuk u regjistrua audio. Provo përsëri.");
       };
       media.getAudioTracks().forEach(
         (track) =>
@@ -138,6 +235,7 @@ export function AudioRecorder({
             if (rec.state === "recording") stop();
           }),
       );
+      follow(media);
       rec.start(1000);
       setRecording(true);
       const began = Date.now();
@@ -158,42 +256,45 @@ export function AudioRecorder({
       if (mounted.current) setRequesting(false);
     }
   }
+  startRef.current = () => { void start(); };
+  useEffect(() => {
+    const element = wave.current;
+    if (!element) return;
+    const measure = () => {
+      const next = Math.max(28, Math.min(120, Math.floor((element.clientWidth + 3) / 5)));
+      setBarCount((current) => current === next ? current : next);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [variant]);
+  useEffect(() => {
+    if (variant !== "assistant" || started.current) return;
+    started.current = true;
+    startRef.current();
+  }, [variant]);
   if (variant === "assistant") {
     const processing = busy || analyzing;
-    const unavailable = processing || requesting;
-    const micLabel = requesting ? "Duke hapur mikrofonin" : file ? "Regjistro përsëri" : "Fillo regjistrimin";
+    const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+    const status = requesting ? "Po hapim mikrofonin…" : recording ? "Po regjistrojmë" : processing ? "Po e kthejmë në tekst…" : file ? "Regjistrimi është gati" : "Fol me Agjentin";
     return (
-      <div className={`assistant-voice ${recording ? "is-recording" : ""} ${processing ? "is-processing" : ""}`}>
-        <div className="assistant-voice-orb" aria-hidden="true"><span /></div>
-        <div className="assistant-voice-status">
-          <p role="status">
-            {requesting ? "Po hapim mikrofonin…" : recording ? "Po regjistrojmë" : processing ? "Po e kthejmë në tekst…" : file ? "Regjistrimi është gati" : "Fol me Agjentin"}
-          </p>
-          <span className="assistant-voice-time">
-            {recording || file ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} / 2:00` : "Deri në 2 minuta"}
-          </span>
-        </div>
-        {url && !recording && <audio controls src={url} aria-label="Dëgjo regjistrimin tënd" />}
-        <div className="assistant-voice-controls">
-          {onBack && <button type="button" className="assistant-voice-button" aria-label="Kthehu te shkrimi" title="Kthehu te shkrimi" disabled={unavailable || recording} onClick={onBack}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
-          </button>}
-          {recording ? (
-            <button type="button" className="assistant-voice-button is-stop" onClick={stop} aria-label="Përfundo regjistrimin" title="Përfundo regjistrimin">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3" /></svg>
-            </button>
-          ) : (
-            <button type="button" className={`assistant-voice-button ${file ? "" : "is-primary"}`} disabled={unavailable} onClick={() => void start()} aria-label={micLabel} title={micLabel}>
-              {requesting ? <span className="assistant-voice-spinner" aria-hidden="true" /> : file ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1.5 7M3 4v6h6" /></svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" /></svg>
-              )}
-            </button>
-          )}
-          {file && !recording && <button type="button" className="assistant-voice-button is-primary" disabled={unavailable} onClick={() => void runAnalysis(file)} aria-label="Ktheje regjistrimin në tekst" title="Ktheje regjistrimin në tekst">
-            {processing ? <span className="assistant-voice-spinner" aria-hidden="true" /> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>}
-          </button>}
+      <div className="assistant-voice-slot">
+        <div className={`assistant-voice ${recording ? "is-recording" : ""} ${processing ? "is-processing" : ""}`} role="group" aria-label="Regjistrimi me zë">
+          <span className="assistant-voice-plus" aria-hidden="true"><Icon name="plus" size={18} /></span>
+          <div className="assistant-voice-wave" ref={wave} aria-hidden="true">
+            {Array.from({ length: barCount }, (_, index) => (
+              <i key={index} ref={(element) => { bars.current[index] = element; }} style={{ animationDelay: `${(index % 8) * 70}ms` }} />
+            ))}
+          </div>
+          <span className="assistant-voice-time">{clock}</span>
+          <button type="button" className="assistant-voice-button" onClick={cancel} disabled={processing} aria-label="Anulo regjistrimin">
+            <Icon name="close" size={18} />
+          </button>
+          <button type="button" className="assistant-voice-button is-confirm" onClick={accept} disabled={processing || requesting} aria-label={processing ? "Po e kthejmë në tekst" : recording || file ? "Përdor regjistrimin" : "Fillo regjistrimin"}>
+            {processing ? <span className="assistant-voice-spinner" aria-hidden="true" /> : <Icon name="check" size={18} />}
+          </button>
+          <p className="assistant-voice-live" role="status">{status}</p>
         </div>
         {error && <p className="assistant-voice-error" role="alert">{error}</p>}
       </div>

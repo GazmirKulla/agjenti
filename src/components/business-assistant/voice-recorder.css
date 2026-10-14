@@ -1,94 +1,90 @@
+.assistant-voice-slot { width: 100%; min-width: 0; }
 .assistant-voice {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  padding: 28px 20px 16px;
-  color: var(--ink);
-}
-
-.assistant-voice-orb {
   position: relative;
-  isolation: isolate;
-  width: 104px;
-  height: 104px;
-  overflow: hidden;
-  border-radius: 50%;
-  background: var(--primary);
-  box-shadow: inset 0 0 17px color-mix(in srgb, var(--brand-secondary) 25.1%, transparent), 0 12px 40px color-mix(in srgb, var(--brand-secondary) 13.7%, transparent);
-  transition: box-shadow .4s, transform .4s;
-}
-
-.assistant-voice-orb::before,
-.assistant-voice-orb::after,
-.assistant-voice-orb > span {
-  content: "";
-  position: absolute;
-  inset: -35%;
-  border-radius: 42%;
-  background: var(--primary);
-  transform: rotate(-35deg);
-  filter: blur(7px);
-}
-
-.assistant-voice-orb::after {
-  inset: -30% -50% -50% -25%;
-  background: var(--primary);
-  transform: rotate(35deg);
-  mix-blend-mode: soft-light;
-}
-
-.assistant-voice-orb > span {
-  inset: 35% -30% -46%;
-  background: color-mix(in srgb, var(--accent-soft) 61.2%, transparent);
-  filter: blur(12px);
-}
-
-.assistant-voice.is-recording .assistant-voice-orb {
-  animation: assistant-voice-breathe 2.4s ease-in-out infinite;
-}
-
-.assistant-voice.is-recording .assistant-voice-orb::before,
-.assistant-voice.is-processing .assistant-voice-orb::before {
-  animation: assistant-voice-swirl 6s linear infinite;
-}
-
-.assistant-voice.is-recording .assistant-voice-orb::after,
-.assistant-voice.is-processing .assistant-voice-orb::after {
-  animation: assistant-voice-swirl 9s linear infinite reverse;
-}
-
-.assistant-voice-status { text-align: center; }
-.assistant-voice-status p { margin: 0; font-size: 15px; font-weight: 500; }
-.assistant-voice-time { display: block; margin-top: 5px; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.assistant-voice audio { width: min(100%, 300px); height: 36px; border-radius: 18px; }
-.assistant-voice-controls { display: flex; align-items: center; justify-content: center; gap: 12px; }
-.assistant-voice-button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--ink-muted) 23%, transparent);
+  border-radius: 32px;
+  background: color-mix(in srgb, var(--paper) 75%, var(--surface));
+  color: var(--ink);
+}
+.assistant-voice-plus,
+.assistant-voice-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--ink-muted) 20%, transparent);
   border-radius: 50%;
   color: var(--ink);
-  background: color-mix(in srgb, var(--ink-muted) 9%, transparent);
-  cursor: pointer;
-  transition: background .2s, transform .2s, box-shadow .2s;
 }
-.assistant-voice-button svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; }
-.assistant-voice-button:hover:not(:disabled) { background: var(--accent-soft); transform: translateY(-1px); }
-.assistant-voice-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-.assistant-voice-button.is-primary { color: var(--on-primary); background: var(--primary); border-color: transparent; }
-.assistant-voice-button.is-primary:hover:not(:disabled) { background: var(--primary-hover); }
-.assistant-voice-button.is-stop { color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
-.assistant-voice-button:disabled { opacity: .5; cursor: wait; }
-.assistant-voice-error { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.6; text-align: center; color: var(--danger, #d94c68); }
-.assistant-voice-spinner { width: 18px; height: 18px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: assistant-voice-swirl .8s linear infinite; }
-
-@keyframes assistant-voice-swirl { to { transform: rotate(325deg); } }
-@keyframes assistant-voice-breathe { 50% { transform: scale(1.04); box-shadow: inset 0 0 17px color-mix(in srgb, var(--brand-secondary) 25.1%, transparent), 0 12px 48px color-mix(in srgb, var(--brand-secondary) 23.9%, transparent); } }
+.assistant-voice-plus {
+  border: 1px solid color-mix(in srgb, var(--ink-muted) 35%, transparent);
+  color: var(--ink-muted);
+}
+.assistant-voice-button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.assistant-voice-button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink-muted) 12%, transparent); }
+.assistant-voice-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.assistant-voice-button:disabled { opacity: .45; cursor: default; }
+.assistant-voice-button.is-confirm { color: var(--ink); }
+.assistant-voice-wave {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  height: 28px;
+  overflow: hidden;
+}
+.assistant-voice-wave i {
+  display: block;
+  width: 2px;
+  height: 22px;
+  flex: none;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 78%, transparent);
+  transform: scaleY(.18);
+  transform-origin: center;
+}
+.assistant-voice.is-recording .assistant-voice-wave i {
+  animation: assistant-voice-bar .9s ease-in-out infinite alternate;
+}
+.assistant-voice-time {
+  flex: none;
+  min-width: 2.5em;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+  text-align: right;
+}
+.assistant-voice-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.assistant-voice-error { margin: 8px 8px 0; font-size: 13px; line-height: 1.5; color: var(--danger, #d94c68); }
+.assistant-voice-spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: assistant-voice-spin .8s linear infinite; }
+@keyframes assistant-voice-bar {
+  from { transform: scaleY(.16); }
+  to { transform: scaleY(.92); }
+}
+@keyframes assistant-voice-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .assistant-voice *, .assistant-voice *::before, .assistant-voice *::after { animation: none !important; transition: none !important; }
+  .assistant-voice-wave i, .assistant-voice-spinner { animation: none !important; }
 }

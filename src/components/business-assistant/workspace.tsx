@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 import { useMaterialDraft } from "./materials";
 import { BusinessAssistant } from "./panel";
 import { AssistantComposer } from "./composer";
+import { primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import {
   assistantSuggestions,
   contextFromPath,
@@ -199,7 +200,7 @@ export function AssistantEntry({ home = false }: { home?: boolean }) {
         items={w.materials} onFiles={w.addFiles} onLink={w.addLink} onRemove={w.removeMaterial} busy={w.sending}
         value={w.text} onChange={w.setText} onSubmit={w.send}
         placeholder={home ? "Pyet ose kërko një ndryshim…" : `Pyet për ${contextLabel(w.context).toLocaleLowerCase()}…`}
-        onVoice={() => { w.setMode("audio"); w.setOpen(true); }} />
+        onVoice={() => { primeVoiceCapture(); w.setMode("audio"); w.setOpen(true); }} />
       {w.materialError && <p className="assistant-error" role="alert">{w.materialError}</p>}
       <div className="assistant-quick-actions">
         {suggestions.map((s) => (

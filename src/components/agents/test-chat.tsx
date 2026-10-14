@@ -7,7 +7,7 @@ import Image from "next/image";
 import { simulateAgentTurn } from "@/lib/agents/test-chat/actions";
 import type { TestAttachment } from "@/lib/agents/test-chat/attachments";
 import { Icon } from "@/components/dashboard/icon";
-import { AudioRecorder } from "@/components/onboarding/audio-recorder";
+import { AudioRecorder, primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import { TrainingSession, type TrainingFeedback, type TrainingRequest } from "./training-session";
 import { ChatMessage, CopyMessage } from "./chat-message";
 import { newConversation, replaySession, forkConversation, readHistory, transcript, type TestConversation, type ChatEntry } from "./chat-history";
@@ -249,7 +249,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
           {editing !== null && <div className="chat-edit-notice"><span>Po ndryshon mesazhin {editing+1}. Origjinali ruhet si bisedë më vete.</span><button type="button" className="chat-icon" aria-label="Anulo ndryshimin" disabled={busy} onClick={()=>clearComposer()}><Icon name="close" size={16}/></button></div>}
           {voice ? <AudioRecorder busy={voiceBusy} variant="assistant" purpose="request" onAnalyze={transcribe} onBack={()=>setVoice(false)}/> : <AssistantComposer
             id="agent-test-message" value={draft} onChange={setDraft} maxLength={2000} placeholder="Shkruaj një mesazh si klient…"
-            busy={busy} onSubmit={()=>void send()} onVoice={()=>setVoice(true)} onFiles={addFiles}
+            busy={busy} onSubmit={()=>void send()} onVoice={()=>{ primeVoiceCapture(); setVoice(true); }} onFiles={addFiles}
             canSubmit={Boolean(draft.trim() || photo || uploads.length || retained.length)} onStop={pending !== null ? stop : undefined}
             items={[...uploads.map(u=>({id:u.id,name:u.file.name,preview:u.preview})), ...retained.map((a,i)=>({id:`retained-${i}`,name:a.name}))]}
             onRemove={id=>{if(id.startsWith("retained-")) setRetained(current=>current.filter((_,i)=>`retained-${i}`!==id)); else setUploads(current=>current.filter(u=>{if(u.id!==id)return true;if(u.preview){URL.revokeObjectURL(u.preview);objectUrls.current.delete(u.preview);}return false;}));}}

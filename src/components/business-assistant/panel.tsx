@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileCard } from "./file-card";
-import { AudioRecorder } from "@/components/onboarding/audio-recorder";
+import { AudioRecorder, primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import { AssistantComposer } from "./composer";
 import { Icon } from "@/components/dashboard/icon";
 import type { Preview } from "@/lib/business-assistant/model";
@@ -401,7 +401,7 @@ export function BusinessAssistant({
           <AssistantComposer {...materialProps} id="assistant-dock-input" value={text} busy={Boolean(busy)} onOpen={onOpen}
             onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
             onSubmit={() => { onOpen(); setMode("text"); void analyze(); }}
-            onVoice={() => { setMode("audio"); onOpen(); }} />
+            onVoice={() => { primeVoiceCapture(); setMode("audio"); onOpen(); }} />
         </section>
       )}
       <dialog
@@ -599,9 +599,9 @@ export function BusinessAssistant({
           {mode === "text" ? (
             <AssistantComposer {...materialProps} id="business-assistant-input" value={text} busy={Boolean(busy)} multiline
               onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
-              onSubmit={() => void analyze()} onVoice={() => setMode("audio")} />
+              onSubmit={() => void analyze()} onVoice={() => { primeVoiceCapture(); setMode("audio"); }} />
           ) : (
-            visible && <AudioRecorder variant="assistant" purpose="request" busy={Boolean(busy)} onAnalyze={transcribe} analyzeLabel="Ktheje në tekst" />
+            visible && <AudioRecorder variant="assistant" purpose="request" busy={Boolean(busy)} onAnalyze={transcribe} onBack={() => setMode("text")} analyzeLabel="Ktheje në tekst" />
           )}
         </div>
         {result?.preview && (
