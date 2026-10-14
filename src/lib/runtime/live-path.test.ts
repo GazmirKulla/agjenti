@@ -6,9 +6,18 @@ import { persistBooking } from "@/lib/calendar/service";
 
 it("live execution is the default and does not wrap service-client writes", () => {
   expect(isIsolatedExecution()).toBe(false);
-  const insert = vi.fn(() => "written");
+  const insert = vi.fn((row: { id: string }) => {
+    void row;
+    return "written";
+  });
   const rpc = vi.fn((fn: string) => fn);
-  const live = guardIsolatedClient({ from: () => ({ insert }), rpc });
+  const live = guardIsolatedClient({
+    from(table: string) {
+      void table;
+      return { insert };
+    },
+    rpc,
+  });
   expect(live.from("bookings").insert({ id: "1" })).toBe("written");
   expect(live.rpc("save_calendar_booking")).toBe("save_calendar_booking");
   expect(insert).toHaveBeenCalledOnce();
