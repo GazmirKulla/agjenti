@@ -88,6 +88,18 @@ it("treats Google availability errors as unknown, never free", async () => {
     googleBusy("business", "2026-10-15T07:00Z", "2026-10-15T08:00Z"),
   ).rejects.toThrow("Nuk u verifikuan");
 });
+it("W6a isolated execution cannot refresh tokens or query Google", async () => {
+  const { runIsolated } = await import("@/lib/runtime/isolated-run");
+  const { IsolationViolation } = await import("@/lib/runtime/execution-context");
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  await runIsolated(async () => {
+    await expect(googleBusy("business", "2026-10-15T07:00Z", "2026-10-15T08:00Z")).rejects.toBeInstanceOf(IsolationViolation);
+    await expect(syncBooking("business", mocks.booking.id)).rejects.toBeInstanceOf(IsolationViolation);
+  });
+  expect(fetch).not.toHaveBeenCalled();
+  expect(mocks.writes).toEqual([]);
+});
 it("does not send Google requests without an active connection", async () => {
   mocks.connection.connected = false;
   const fetch = vi.fn();

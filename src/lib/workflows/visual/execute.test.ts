@@ -38,7 +38,7 @@ function waiting(nodeId: string, versionId = "version-1"): VisualRunState {
   return { versionId, nodeId, status: "waiting", values: {}, visited: ["start", nodeId], awaiting: true };
 }
 beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(null); mocks.entity.mockResolvedValue({}); mocks.extract.mockResolvedValue(0); });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 it("W2 blocks an old visual confirmation after an invalid profile correction", async () => {
   const graph = linear(node("confirm", "confirm", { prompt: "Konfirmon?" }));
@@ -310,6 +310,17 @@ describe("message-centered process entries", () => {
     expect(next.nextState.visual?.nodeId).toBe("booking");
     expect(next.nextState.visual?.values.customer_phone).toBe("0691234567");
     expect(next.reply).toBe("Cila datë?");
+  });
+  it("fails closed when the isolated booking adapter is missing", async () => {
+    const { runIsolated } = await import("@/lib/runtime/isolated-run");
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const base = linear(node("booking", "booking"));
+    const graph: VisualGraph = { ...base, version: 2, flows: [{ id: "reservation", kind: "booking", label: "Rezervim", entryNodeId: "booking", nodeIds: ["booking"] }] };
+    const result = await runIsolated(() => executeVisualTurn({ ...params(graph), message: "Dua rezervim", bookingRequest: true, bookingNavigation: true }, async p => response(p)));
+    expect(result.reply).toContain("mungon adapteri i izoluar");
+    expect(result.reply).not.toMatch(/u konfirmua|u ruajt/);
+    expect(fetch).not.toHaveBeenCalled();
   });
   it("continues beyond booking only after the isolated adapter reports completion", async () => {
     const base = linear(node("booking", "booking"), node("after", "knowledge", { prompt: "Shpjego përgatitjen" }));

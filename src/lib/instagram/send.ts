@@ -1,5 +1,6 @@
 import { splitInstagramText } from "@/lib/instagram/split-text";
 import { graphVersion } from "@/lib/instagram/oauth";
+import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 
 export type SendInstagramResult =
 	| { ok: true; messageId?: string }
@@ -20,6 +21,7 @@ async function postMessage(
 	token: string,
 	payload: Record<string, unknown>,
 ): Promise<SendInstagramResult> {
+	if (isIsolatedExecution()) refuseIsolatedEffect("customer.message", "instagram");
 	const url = `https://graph.instagram.com/${graphVersion()}/${accountId}/messages`;
 	let response: Response;
 	try {
@@ -65,6 +67,7 @@ export async function sendInstagramText(params: {
 	to: string;
 	body: string;
 }): Promise<SendInstagramResult> {
+	if (isIsolatedExecution()) refuseIsolatedEffect("customer.message", "instagram");
 	const text = params.body.trim();
 	if (!text) return { ok: false, error: "Mesazhi është bosh." };
 	const chunks = splitInstagramText(text);

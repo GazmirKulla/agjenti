@@ -1,7 +1,9 @@
 import type { SendInstagramResult } from "@/lib/instagram/send";
+import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 
 export const whatsappGraphVersion = () => process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v26.0";
 export async function whatsappGraph<T>(path: string, token: string, body?: unknown): Promise<T> {
+  if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "whatsapp");
   const response = await fetch(`https://graph.facebook.com/${whatsappGraphVersion()}/${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

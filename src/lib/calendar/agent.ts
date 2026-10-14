@@ -22,6 +22,13 @@ import {
 import { availableSlots, persistBooking, type BookingEffectGuard } from "./service";
 import { extractBookingDetails } from "./agent-parser";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
+import {
+  IsolationViolation,
+  isIsolatedExecution,
+  recordExternalAction,
+  snapshotExternalActions,
+} from "@/lib/runtime/execution-context";
+import { runIsolated } from "@/lib/runtime/isolated-run";
 export type BookingDraft = {
   serviceId?: string;
   date?: string;
@@ -42,7 +49,13 @@ export function bookingReviewKey(businessId: string, draft: BookingDraft, versio
 export function explicitBookingConfirmation(message: string) {
   return /^(po|po konfirmoj|konfirmoj|yes|confirm)[.!]?$/i.test(message.trim());
 }
-/** Separate action adapter. The shared AI/order core remains read-only. Test mode never creates bookings or Google events. */
+function attachBookingEffects<T extends AgentTurnResult>(result: T): T {
+  const actions = snapshotExternalActions();
+  if (actions.length) result.externalActions = actions;
+  return result;
+}
+
+/** Separate action adapter. Isolated execution never creates bookings or Google events. */
 export async function processBookingTurn(params: {
   businessId: string;
   message: string;
@@ -57,6 +70,10 @@ export async function processBookingTurn(params: {
   /** Server-resolved service selected by a published visual binding. */
   selectedServiceId?: string;
 }): Promise<AgentTurnResult | null> {
+  if (params.mode === "test" && !isIsolatedExecution()) {
+    return runIsolated(() => processBookingTurn(params));
+  }
+  const simulate = isIsolatedExecution() || params.mode === "test";
   const existingState = structuredClone(params.state ?? emptyState());
   if (!params.routed && existingState.product_id) return null;
   // Published visual rules own routing; booking cannot bypass a collect/confirm or handoff.
@@ -127,10 +144,10 @@ export async function processBookingTurn(params: {
       data: {
         mode: params.mode ?? "production",
         action: clear ? "request_finished" : "collect_or_review",
-        writesAllowed: params.mode !== "test",
+        writesAllowed: !simulate,
       },
     });
-    return {
+    return attachBookingEffects({
       reply: text,
       nextState: existingState,
       previousResponseId: null,
@@ -147,7 +164,7 @@ export async function processBookingTurn(params: {
         workflowSteps: [],
         elapsedMs: Date.now() - started,
       },
-    };
+    });
   };
   const expired = Boolean(raw && (!Number.isFinite(raw.expires) || raw.expires <= Date.now()));
   const profileName = existingState.context?.profile.name?.value;
@@ -178,20 +195,25 @@ export async function processBookingTurn(params: {
       };
       return reply("Le ta rishikojmë kërkesën. Cilin shërbim dëshiron?");
     }
-    // Simulation rechecks availability without writes. Production persistence first
-    // reconciles the stable request key, then checks availability transactionally.
-    if (params.mode === "test") try {
+    // Isolated rechecks synthetic availability without Google, tokens or writes.
+    // Production persistence first reconciles the stable request key, then checks availability transactionally.
+    if (simulate) try {
       const slots = await availableSlots(params.businessId, service.id, draft.date);
       if (!slots.some(slot => zonedParts(slot.start, settings.timezone).time === draft.time)) {
         draft.phase = "collect"; draft.time = undefined;
         return reply("Ky orar nuk është më i lirë. Zgjidh një orë tjetër.");
       }
-    } catch { return reply("Nuk u verifikua kalendari. Provo përsëri më vonë ose kontakto biznesin."); }
-    if (params.mode === "test")
+    } catch (err) {
+      if (err instanceof IsolationViolation) throw err;
+      return reply("Nuk u verifikua kalendari. Provo përsëri më vonë ose kontakto biznesin.");
+    }
+    if (simulate) {
+      recordExternalAction({ kind: "booking.create", disposition: "SIMULATED", detail: "not_persisted" });
       return reply(
         `Provë: kërkesa për ${service.name}, më ${draft.date} në ${draft.time}, për ${draft.name} është gati. Nuk u krijua rezervim real.`,
         true,
       );
+    }
     if (!params.conversationKey)
       return reply("Për ta përfunduar rezervimin, kontakto biznesin.");
     if (params.routed && !params.bookingGuard)
@@ -221,6 +243,7 @@ export async function processBookingTurn(params: {
       const sync = result.syncError ? " Përditësimi i kalendarit pret verifikimin e stafit." : "";
       return reply(`${status}: ${summary}.${review}${reconciliation}${sync}`, true);
     } catch (err) {
+      if (err instanceof IsolationViolation) throw err;
       const message = err instanceof Error ? err.message : "Rezervimi nuk u ruajt.";
       if (/lease|revision|stale_state|invalid_conversation|paused|ownership|workflow_(?:booking_)?guard|conversation_control/.test(message)) throw err;
       if (/orar.*(?:zënë|rezervua)|slot.*(?:busy|unavailable)/i.test(message)) {
@@ -275,7 +298,8 @@ export async function processBookingTurn(params: {
   let slots;
   try {
     slots = await availableSlots(params.businessId, service.id, draft.date);
-  } catch {
+  } catch (err) {
+    if (err instanceof IsolationViolation) throw err;
     return reply(
       "Nuk u verifikua kalendari. Provo përsëri më vonë ose kontakto biznesin.",
     );

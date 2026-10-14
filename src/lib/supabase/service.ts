@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { guardIsolatedClient } from "@/lib/runtime/isolated-client";
 
 export function createServiceSupabase() {
 	const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -6,7 +7,7 @@ export function createServiceSupabase() {
 	if (!url || !key) {
 		throw new Error("Mungojnë çelësat e Supabase service role.");
 	}
-	return createClient(url, key, {
+	return guardIsolatedClient(createClient(url, key, {
 		auth: { persistSession: false, autoRefreshToken: false },
-	});
+	}));
 }

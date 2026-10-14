@@ -4,6 +4,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { freshOrderReview, migrateContext } from "@/lib/workflows/context";
 import { restoreOrder } from "@/lib/workflows/conversation-processes";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
+import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 
 export type SubmissionReceipt = {
   orderId: string;
@@ -48,6 +49,7 @@ function isReceipt(value: unknown): value is SubmissionReceipt {
 
 /** Server-owned state only: the POST body cannot supply prices, product IDs or intent keys. */
 export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string }): Promise<SubmissionReceipt> {
+  if (isIsolatedExecution()) refuseIsolatedEffect("order.create");
   const db = createServiceSupabase();
   const { businessId, conversationId, userId } = input;
   await requireRuntimeModules(businessId, ["orders", "products"]);

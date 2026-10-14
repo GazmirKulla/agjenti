@@ -12,6 +12,7 @@ import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import { fetchInstagramUserProfile } from "@/lib/instagram/user-profile";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 import {
   emptyState,
   promptForStep,
@@ -41,6 +42,7 @@ export async function handleInboundMessage(
   message: NormalizedIncomingMessage,
   job?: WorkflowJob,
 ): Promise<void> {
+  if (isIsolatedExecution()) refuseIsolatedEffect("webhook", "inbound_delivery");
   const batch = inboundBatch(message, job);
   message = batch.message;
   const adapter = channelAdapter(message.channel);
