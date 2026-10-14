@@ -1,3 +1,4 @@
+import { loadAllowedModules } from "../modules/entitlements";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isModuleId } from "../modules/dependencies";
 import type {
@@ -101,25 +102,27 @@ export async function loadDashboardProfile(
   if (error) {
     // Column may not exist yet during rollout — fall back silently.
     if (!options?.requireExplicit && (error.code === "42703" || error.code === "PGRST204")) {
-      return legacyDashboardProfile;
+      return applyModuleEntitlements(businessId, legacyDashboardProfile);
     }
     throw new Error("Nuk u ngarkua profili i panelit.");
   }
   const profile = parseDashboardProfile(data?.dashboard_profile);
   if (options?.requireExplicit && (!profile || profile.source === "legacy")) throw new Error("Konfirmo modulet e biznesit para aktivizimit të kontrolleve.");
-  return profile ?? legacyDashboardProfile;
+  return applyModuleEntitlements(businessId, profile ?? legacyDashboardProfile);
 }
 
 export async function saveDashboardProfile(
   businessId: string,
   profile: DashboardProfile,
-): Promise<void> {
+): Promise<DashboardProfile> {
   const db = createServiceSupabase();
+  const permittedProfile = await applyModuleEntitlements(businessId, profile);
   await db
     .from("businesses")
-    .update({ dashboard_profile: profile, updated_at: new Date().toISOString() })
+    .update({ dashboard_profile: permittedProfile, updated_at: new Date().toISOString() })
     .eq("id", businessId)
     .throwOnError();
+  return permittedProfile;
 }
 
 export async function persistGeneratedProfile(
@@ -130,6 +133,12 @@ export async function persistGeneratedProfile(
   const profile = signals
     ? generateDashboardProfile(signals, "generated")
     : legacyDashboardProfile;
-  await saveDashboardProfile(businessId, profile);
-  return profile;
+  return saveDashboardProfile(businessId, profile);
+}
+
+async function applyModuleEntitlements(businessId: string, profile: DashboardProfile) {
+  const allowed = new Set(await loadAllowedModules(businessId));
+  const filtered = profile.enabledModules.filter(id => allowed.has(id));
+  if (filtered.length === profile.enabledModules.length) return profile;
+  return { ...rebuildProfileFromModules(filtered, profile.signals), source: profile.source };
 }

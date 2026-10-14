@@ -45,3 +45,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+.capability-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; margin: 20px 0; }
+.capability-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.capability-card h3 { margin: 0 0 8px; }
+.capability-card p { margin: 8px 0; }
+.capability-card .field { width: 100%; }

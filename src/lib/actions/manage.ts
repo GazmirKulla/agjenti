@@ -9,6 +9,7 @@ import {
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { encryptSecret } from "@/lib/crypto/tokens";
 import { isActionKey } from "./catalog";
+import { isPolicyKey } from "./policies";
 import { provisionBusiness, invitationHash } from "./provision";
 const text = (form: FormData, key: string) => String(form.get(key) ?? "");
 export async function saveActionPolicy(form: FormData) {
@@ -19,7 +20,7 @@ export async function saveActionPolicy(form: FormData) {
     const key = text(form, "action_key"),
       scope = text(form, "scope"),
       target = text(form, "target");
-    if (!isActionKey(key)) throw new Error("Veprim i pavlefshëm.");
+    if (!isPolicyKey(key)) throw new Error("Veprim i pavlefshëm.");
     const raw = text(form, "monthly_limit"),
       limit = raw === "" ? null : Number(raw);
     if (limit !== null && (!Number.isSafeInteger(limit) || limit < 0))
@@ -55,6 +56,7 @@ export async function saveActionPolicy(form: FormData) {
     if (error)
       throw new Error("Politika nuk u ruajt. Kontrollo migrimin dhe vlerat.");
     revalidatePath("/admin/actions");
+    revalidatePath("/b/[slug]", "layout");
     return { success: "Politika u ruajt." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Ruajtja dështoi." };
@@ -78,11 +80,14 @@ export async function saveBusinessActionSettings(slug: string, form: FormData) {
       days = Number(form.get("invitation_days") ?? 7);
     if (!isActionKey(key) || !Number.isInteger(days) || days < 1 || days > 30)
       throw new Error("Konfigurim i pavlefshëm.");
+    const existing = await db.from("business_action_settings").select("staff_allowed")
+      .eq("business_id", access.business.id).eq("action_key", key).maybeSingle();
+    if (existing.error) throw new Error("Nuk u ngarkua konfigurimi ekzistues.");
     const { error } = await db.rpc("save_business_action_settings", {
       p_business: access.business.id,
       p_user: user.id,
       p_action: key,
-      p_staff: form.get("staff_allowed") === "on",
+      p_staff: existing.data?.staff_allowed ?? key !== "business.provision",
       p_automation:
         key === "business.provision" && form.get("automation_allowed") === "on",
       p_days: days,

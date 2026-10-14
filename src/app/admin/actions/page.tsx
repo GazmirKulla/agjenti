@@ -1,11 +1,19 @@
 import "@/components/dashboard/actions.css";
 import Link from "next/link";
-import { actionCatalog } from "@/lib/actions/catalog";
+import { policyCatalog } from "@/lib/actions/policies";
+import { toggleableModules } from "@/lib/dashboard/modules/registry";
+import { loadAllowedModules } from "@/lib/dashboard/modules/entitlements";
+import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
+import { redirect } from "next/navigation";
 import { saveActionPolicy } from "@/lib/actions/manage";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { PageHeading } from "@/components/dashboard/ui";
-export default async function ActionsPage() {
+export default async function ActionsPage({ searchParams }: { searchParams?: Promise<{ business?: string }> }) {
+  const user = await getSessionUser();
+  if (!user || !(await isPlatformAdmin(user.id))) redirect("/auth/continue");
+  const selected = (await searchParams)?.business;
   const db = createServiceSupabase();
   const [global, plans, businesses, overrides, events] = await Promise.all([
     db.from("platform_actions").select("*"),
@@ -25,19 +33,60 @@ export default async function ActionsPage() {
         databazën.
       </p>
     );
+  const business = businesses.data?.find(b => b.id === selected) ?? businesses.data?.[0];
+  const [allowed, profile, provision] = business ? await Promise.all([
+    loadAllowedModules(business.id), loadDashboardProfile(business.id),
+    db.rpc("can_execute_business_action", { p_business: business.id, p_user: user.id, p_action: "business.provision", p_automated: false }),
+  ]) : [[], null, null];
+  const allowedModules = new Set(allowed);
   return (
     <>
       <PageHeading
         eyebrow="Platforma"
-        title="Veprimet dhe aftësitë"
-        description="Përcakto çfarë mund të përdorë çdo paketë dhe biznes. Konfigurimet e biznesit nuk tejkalojnë këto leje."
+        title="Modulet dhe aftësitë"
+        description="Përcakto çfarë mund të përdorë pronari në çdo biznes. Aktivizimi në hapësirë nuk tejkalon këto leje."
       />
       <div className="grid gap-6">
-        {Object.entries(actionCatalog).map(([key, definition]) => (
+        <section className="detail-block">
+          <h2>Lejet për biznes</h2>
+          <form action="/admin/actions" className="flex flex-wrap gap-3 items-end">
+            <label>Biznesi<select className="field" name="business" defaultValue={business?.id}>
+              {businesses.data?.map(b => <option value={b.id} key={b.id}>{b.name} · /{b.slug}</option>)}
+            </select></label><button className="btn btn-ghost">Shfaq lejet</button>
+          </form>
+          {business && <>
+            <p>Biznesi: <strong>{business.name}</strong>. “Sipas paketës” përdor lejen e paketës; bllokimi global dhe varësitë e moduleve kanë përparësi.</p>
+            <div className="capability-grid">
+              {["business.provision", ...toggleableModules.map(id => `module.${id}`)].map(key => {
+                const definition = policyCatalog[key];
+                const existing = overrides.data?.find(o => o.business_id === business.id && o.action_key === key);
+                const moduleId = toggleableModules.find(id => key === `module.${id}`);
+                const allowed = moduleId ? allowedModules.has(moduleId) : provision?.data === true;
+                return <article className="capability-card" key={`${business.id}:${key}`}>
+                  <h3>{definition.name}</h3><p>{definition.description}</p>
+                  <p className="muted-copy">{!moduleId && provision?.error ? "Leja nuk u verifikua" : allowed ? "Lejohet" : "Nuk lejohet"}{moduleId && allowed ? profile?.enabledModules.includes(moduleId) ? " · aktiv në hapësirë" : " · joaktiv në hapësirë" : ""}</p>
+                  <ActionForm action={saveActionPolicy} className="grid gap-3">
+                    <input type="hidden" name="scope" value="business" />
+                    <input type="hidden" name="target" value={business.id} />
+                    <input type="hidden" name="action_key" value={key} />
+                    <label>Leja<select className="field" name="enabled" defaultValue={existing?.enabled === true ? "true" : existing?.enabled === false ? "false" : "inherit"}>
+                      <option value="inherit">Sipas paketës</option><option value="true">Lejo për këtë biznes</option><option value="false">Blloko për këtë biznes</option>
+                    </select></label>
+                    {key === "business.provision" && <label>Krijime në muaj (bosh = sipas paketës)<input className="field" name="monthly_limit" type="number" min="0" defaultValue={existing?.monthly_limit ?? ""} /></label>}
+                    <label>Afati i lejes (opsional)<input className="field" name="expires_at" type="date" defaultValue={existing?.expires_at ? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Tirane", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(new Date(existing.expires_at).getTime() - 1)) : ""} /></label>
+                    <button className="btn btn-primary">Ruaj lejen</button>
+                  </ActionForm>
+                </article>;
+              })}
+            </div>
+            <Link className="soft-link" href={`/b/${business.slug}/actions`}>Hap aftësitë e biznesit →</Link>
+          </>}
+        </section>
+        <h2>Rregullat globale dhe paketat</h2>
+        {Object.entries(policyCatalog).map(([key, definition]) => (
           <details
             className="detail-block action-catalog-item"
             key={key}
-            open={key === "business.provision"}
           >
             <summary>
               <h2>{definition.name}</h2>
@@ -46,7 +95,7 @@ export default async function ActionsPage() {
             <p className="muted-copy">
               {definition.automated
                 ? "Manual dhe workflow"
-                : "Formulari ekzistues · automatizimi nuk është aktiv"}{" "}
+                : key.startsWith("module.") ? "Akses në modulin e hapësirës" : "Leje shtesë për krijimin brenda modulit"}{" "}
               · Versioni {definition.version}
             </p>
             <ActionForm action={saveActionPolicy} className="grid gap-3">

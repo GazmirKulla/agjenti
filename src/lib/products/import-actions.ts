@@ -1,4 +1,5 @@
 "use server";
+import { requireModuleAllowed } from "@/lib/dashboard/modules/entitlements";
 
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { fetchInstagramMedia, productsFromPosts, scanFramesFromPosts } from "@/lib/instagram/media";
@@ -11,6 +12,8 @@ export async function previewProductFromUrl(slug: string, form: FormData) {
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+  try { await requireModuleAllowed(access.business.id, "products"); }
+  catch { return { error: "Moduli Produkte nuk lejohet ose lejet nuk u verifikuan." }; }
 
   const result = await importProductFromUrl(String(form.get("source_url") ?? ""));
   if ("error" in result) return { error: result.error };
@@ -22,6 +25,8 @@ export async function scanInstagramProducts(slug: string) {
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+  try { await requireModuleAllowed(access.business.id, "products"); }
+  catch { return { error: "Moduli Produkte nuk lejohet ose lejet nuk u verifikuan." }; }
 
   const { data: conn, error } = await createServiceSupabase()
     .from("instagram_connections")

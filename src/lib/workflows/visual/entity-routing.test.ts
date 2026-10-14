@@ -1,3 +1,8 @@
+// Existing scenarios run with the default platform policy: all modules allowed.
+vi.mock("@/lib/dashboard/modules/entitlements", async () => {
+  const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
+  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+});
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { upgradeVisualGraph, starterVisualGraph } from "./model";
 const m = vi.hoisted(() => ({ rows: {} as Record<string, unknown[]>, filters: [] as unknown[], create: vi.fn(), profile: vi.fn() }));

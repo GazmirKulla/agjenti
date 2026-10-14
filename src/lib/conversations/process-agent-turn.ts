@@ -1,6 +1,6 @@
 import { conversationControl, resumeConversation } from "./conversation-control";
 import { recordEntityPresentation, resolveProductReference, type ReferenceProduct } from "@/lib/products/entity-bridge";
-import { capabilityModules, requireRuntimeModules, runtimeModules, CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
+import { capabilityModules, requireRuntimeModules, runtimeModules, CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
 import { rememberTurn, chooseGuidance, clarification, invalidateConfirmation } from "@/lib/workflows/guidance";
 import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
@@ -187,7 +187,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     durationMs: Date.now() - started, readOnly: true,
   } });
   const products = productResult.data ?? [];
-  if (modules && params.state?.product_id && params.informational === undefined && !products.some(p => p.id === params.state!.product_id))
+  if (moduleEnforcementEnabled(params.businessId) && params.state?.product_id && params.informational === undefined && !products.some(p => p.id === params.state!.product_id))
     throw new CapabilityEnforcementError("binding_unavailable", "Produkti i këtij procesi nuk është më aktiv në këtë biznes. Progresi yt është ruajtur.");
   const agent = agentResult.data;
   function trainingFor(workflowId: string | null, stepKey: string | null | undefined) {
@@ -209,7 +209,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   let state = structuredClone(params.state ?? emptyState());
   const text = params.message.trim();
   if(state.context && state.step_key==="order_ready" && detectVisualIntent(text)==="order" && params.informational===undefined) state=resetOrder(state);
-  if (!modules && state.product_id && !products.some((p) => p.id === state.product_id))
+  if (!moduleEnforcementEnabled(params.businessId) && state.product_id && !products.some((p) => p.id === state.product_id))
     state = state.context ? resetOrder(state) : emptyState();
   const exactProduct = products.some(
     (p) => foldText(p.name) === foldText(text) || matchesSku(p.sku, text),

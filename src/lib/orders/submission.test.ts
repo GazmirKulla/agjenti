@@ -1,3 +1,8 @@
+// Existing scenarios run with the default platform policy: all modules allowed.
+vi.mock("@/lib/dashboard/modules/entitlements", async () => {
+  const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
+  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+});
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), submit: vi.fn(), profile: vi.fn() }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }) }));

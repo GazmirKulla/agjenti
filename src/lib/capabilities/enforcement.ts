@@ -1,3 +1,4 @@
+import { loadAllowedModules } from "@/lib/dashboard/modules/entitlements";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { getCapability, type CapabilityAvailability } from "./registry";
 
@@ -11,8 +12,12 @@ export class CapabilityEnforcementError extends Error {
 }
 
 export async function runtimeModules(businessId: string): Promise<string[] | null> {
-  if (!moduleEnforcementEnabled(businessId)) return null;
-  try { return (await loadDashboardProfile(businessId, { requireExplicit: true })).enabledModules; }
+  try {
+    // Platform revocations always apply. Keep the existing staged rollout of
+    // workspace-selection enforcement for businesses that have not enrolled.
+    if (!moduleEnforcementEnabled(businessId)) return await loadAllowedModules(businessId);
+    return (await loadDashboardProfile(businessId, { requireExplicit: true })).enabledModules;
+  }
   catch { throw new CapabilityEnforcementError("unverified", "Nuk u verifikuan modulet e biznesit. Provo përsëri; progresi yt është ruajtur."); }
 }
 

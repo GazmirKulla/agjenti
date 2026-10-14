@@ -4,7 +4,7 @@ import { matchingCatalogNames } from "@/lib/products/match-name";
 import { isEntityReference, positiveEntityText, resolveProductReference } from "@/lib/products/entity-bridge";
 import type { ConversationStatePayload } from "../engine";
 import type { VisualGraph, VisualRunState } from "./types";
-import { runtimeModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
+import { runtimeModules, requireRuntimeModules, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
 
 export type VisualEntity = { kind: "product" | "service"; id: string; name: string; productTypeId?: string | null; bookingEnabled?: boolean; price_amount?: number | null; currency?: string | null };
 export type VisualEntitySelection = { entity: VisualEntity; binding: NonNullable<VisualRunState["binding"]> };
@@ -33,7 +33,7 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
     all((from, to) => modules && !modules.includes("services") ? Promise.resolve({ data: [], error: null }) : db.from("booking_services").select("id,name,booking_enabled").eq("business_id", businessId).eq("is_active", true).order("id").range(from, to)),
   ]);
   const activeProducts = [...products];
-  if (preview && !modules) {
+  if (preview && !moduleEnforcementEnabled(businessId)) {
     const boundProducts = [...new Set(graph.flows.flatMap(flow => flow.productIds ?? []))];
     const boundServices = [...new Set(graph.flows.flatMap(flow => flow.serviceIds ?? []))];
     const inactive = async <T>(ids: string[], query: (ids: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>) => {
@@ -46,8 +46,8 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
       return rows;
     };
     const [previewProducts, previewServices] = await Promise.all([
-      inactive(boundProducts, ids => db.from("products").select("id,name,sku,product_type_id,price_amount,currency").eq("business_id", businessId).eq("is_active", false).in("id", ids)),
-      inactive(boundServices, ids => db.from("booking_services").select("id,name,booking_enabled").eq("business_id", businessId).eq("is_active", false).in("id", ids)),
+      inactive(modules && !modules.includes("products") ? [] : boundProducts, ids => db.from("products").select("id,name,sku,product_type_id,price_amount,currency").eq("business_id", businessId).eq("is_active", false).in("id", ids)),
+      inactive(modules && !modules.includes("services") ? [] : boundServices, ids => db.from("booking_services").select("id,name,booking_enabled").eq("business_id", businessId).eq("is_active", false).in("id", ids)),
     ]);
     products.push(...previewProducts); services.push(...previewServices);
   }

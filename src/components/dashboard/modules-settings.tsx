@@ -1,3 +1,4 @@
+import { loadAllowedModules } from "@/lib/dashboard/modules/entitlements";
 import { moduleRegistry, toggleableModules } from "@/lib/dashboard/modules/registry";
 import {
   canEnableModule,
@@ -7,14 +8,16 @@ import type { DashboardProfile } from "@/lib/dashboard/modules/types";
 import { saveModules } from "@/lib/dashboard/modules/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
 
-export function ModulesSettingsPanel({
+export async function ModulesSettingsPanel({
   slug,
+  businessId,
   profile,
 }: {
   slug: string;
   businessId: string;
   profile: DashboardProfile;
 }) {
+  const allowed = new Set(await loadAllowedModules(businessId));
   const enabled = new Set(profile.enabledModules);
 
   return (
@@ -23,8 +26,7 @@ export function ModulesSettingsPanel({
         <div>
           <h2>Modulet e hapësirës</h2>
           <p className="muted-copy">
-            Aktivizo vetëm ato që i përdor biznesi. Varësitë kontrollohen
-            automatikisht.
+            Aktivizo modulet e lejuara nga administratori që i përdor biznesi. Lejet dhe varësitë kontrollohen automatikisht.
           </p>
         </div>
         <button className="btn btn-primary" type="submit">
@@ -38,7 +40,7 @@ export function ModulesSettingsPanel({
           const enableCheck = canEnableModule(id, enabled);
           const broken = isOn ? modulesBrokenByDisable(id, enabled) : [];
           const blocked =
-            !isOn && !enableCheck.ok ? enableCheck.reason : undefined;
+            !allowed.has(id) ? "Nuk lejohet nga administratori" : !isOn && !enableCheck.ok ? enableCheck.reason : undefined;
           return (
             <label key={id} className="toggle-label">
               <span>

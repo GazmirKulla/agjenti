@@ -1,4 +1,5 @@
 "use server";
+import { requireModuleAllowed } from "@/lib/dashboard/modules/entitlements";
 
 import { completeText } from "@/lib/ai/complete";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -9,6 +10,8 @@ export async function generateProductDescription(slug: string, form: FormData) {
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+  try { await requireModuleAllowed(access.business.id, "products"); }
+  catch { return { error: "Moduli Produkte nuk lejohet ose lejet nuk u verifikuan." }; }
 
   const name = String(form.get("name") ?? "").trim();
   if (name.length < 2)

@@ -13,6 +13,8 @@ vi.mock("@/lib/tenant/access", () => ({
   isPlatformAdmin: async () => true,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/dashboard/modules/entitlements", () => ({ loadAllowedModules: async () => ["products", "services", "workflows"] }));
+vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: async () => ({ enabledModules: ["products", "workflows"] }) }));
 import AdminPage from "@/app/admin/actions/page";
 import BusinessPage from "@/app/b/[slug]/actions/page";
 import { actionCatalog } from "./catalog";
@@ -60,16 +62,18 @@ function fixture() {
 }
 it("renders package controls and the complete manual invitation entry point", async () => {
   fixture();
-  const admin = renderToStaticMarkup(await AdminPage()),
+  const admin = renderToStaticMarkup(await AdminPage({})),
     business = renderToStaticMarkup(
       await BusinessPage({ params: Promise.resolve({ slug: "agjenti" }) }),
     );
-  expect(admin).toContain("Veprimet dhe aftësitë");
+  expect(admin).toContain("Modulet dhe aftësitë");
   expect(admin).toContain('name="target"');
   expect(admin).toContain("enterprise");
   expect(business).toContain('name="email"');
   expect(business).toContain("Përgatit biznesin");
   expect(business).toContain("Ende nuk ka ftesa");
+  expect(business).not.toContain("Lejo stafin");
+  expect(business).toContain("I lejuar · joaktiv në hapësirë");
   const dir = process.env.ACTION_UI_PREVIEW_DIR;
   if (dir) {
     mkdirSync(dir, { recursive: true });
@@ -79,4 +83,15 @@ it("renders package controls and the complete manual invitation entry point", as
         `<!doctype html><html lang="sq"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="./styles.css"></head><body><main class="dashboard-shell"><div style="max-width:1100px;padding:32px;margin:auto">${html}</div></main></body></html>`,
       );
   }
+});
+
+it("keeps denied capabilities visible without exposing the invitation form", async () => {
+  fixture();
+  m.rpc.mockResolvedValue({ data: false, error: null });
+  const business = renderToStaticMarkup(await BusinessPage({ params: Promise.resolve({ slug: "agjenti" }) }));
+  expect(business).toContain("Kjo aftësi nuk është e lejuar");
+  expect(business).not.toContain('name="email"');
+  expect(business).not.toContain('name="automation_allowed"');
+  expect(business).toContain("/admin/actions?business=source");
+  expect(business).toContain("Modulet e hapësirës");
 });
