@@ -18,14 +18,14 @@ vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: async 
 import PermissionsPage from "@/app/admin/businesses/[id]/permissions/page";
 import AdminPage from "@/app/admin/actions/page";
 import BusinessPage from "@/app/b/[slug]/actions/page";
-import { actionCatalog } from "./catalog";
+import { policyCatalog } from "./policies";
 function fixture() {
   const tables: Record<string, unknown[]> = {
-    platform_actions: Object.keys(actionCatalog).map((key) => ({
+    platform_actions: Object.keys(policyCatalog).map((key) => ({
       key,
       enabled: true,
     })),
-    plan_actions: Object.keys(actionCatalog).flatMap((action_key) =>
+    plan_actions: Object.keys(policyCatalog).flatMap((action_key) =>
       ["free", "starter", "professional", "enterprise"].map((plan) => ({
         plan,
         action_key,
@@ -64,7 +64,7 @@ function fixture() {
 it("renders package controls and the complete manual invitation entry point", async () => {
   fixture();
   m.from.mockClear();
-  const admin = renderToStaticMarkup(await AdminPage()),
+  const admin = renderToStaticMarkup(await AdminPage({})),
     business = renderToStaticMarkup(
       await BusinessPage({ params: Promise.resolve({ slug: "agjenti" }) }),
     );
@@ -103,11 +103,23 @@ it("keeps denied capabilities visible without exposing the invitation form", asy
 
 it("loads global policies independently and scopes exceptions to one business", async () => {
   fixture(); m.from.mockClear();
-  await AdminPage();
+  await AdminPage({});
   expect(m.from.mock.calls.map(([table]) => table)).toEqual(["platform_actions", "plan_actions"]);
   const html = renderToStaticMarkup(await PermissionsPage({ params: Promise.resolve({ id: "source" }) }));
   expect(html).toContain("Agjenti");
   expect(html).toContain('name="target" value="source"');
   expect(html).toContain("Lejo për këtë biznes");
   expect(html).toContain("Sipas paketës");
+});
+
+it("selects one module while keeping every module reachable with an icon", async () => {
+  fixture();
+  const html = renderToStaticMarkup(await AdminPage({ searchParams: Promise.resolve({ module: "business.provision" }) }));
+  expect(html).toContain('aria-current="page"');
+  expect(html).toContain('name="action_key" value="business.provision"');
+  expect(html).not.toContain('name="action_key" value="module.products"');
+  expect(html).toContain('/admin/actions?module=module.products');
+  expect(html.match(/<svg/g)?.length).toBeGreaterThanOrEqual(Object.keys(policyCatalog).length);
+  const fallback = renderToStaticMarkup(await AdminPage({ searchParams: Promise.resolve({ module: "unknown" }) }));
+  expect(fallback).toContain('name="action_key" value="module.products"');
 });

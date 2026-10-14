@@ -1,14 +1,16 @@
+import Link from "next/link";
+import { Icon } from "@/components/dashboard/icon";
 import { ModuleDescription } from "@/components/dashboard/module-description";
 import "@/components/dashboard/actions.css";
 import { policyCatalog } from "@/lib/actions/policies";
-import { toggleableModules } from "@/lib/dashboard/modules/registry";
+import { moduleRegistry, toggleableModules } from "@/lib/dashboard/modules/registry";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { redirect } from "next/navigation";
 import { saveActionPolicy } from "@/lib/actions/manage";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { PageHeading } from "@/components/dashboard/ui";
-export default async function ActionsPage() {
+export default async function ActionsPage({ searchParams }: { searchParams?: Promise<{ module?: string }> }) {
   const user = await getSessionUser();
   if (!user || !(await isPlatformAdmin(user.id))) redirect("/auth/continue");
   const db = createServiceSupabase();
@@ -17,15 +19,33 @@ export default async function ActionsPage() {
     db.from("plan_actions").select("*"),
   ]);
   if (global.error || plans.error) return <p role="alert">Katalogu nuk u ngarkua. Provo përsëri.</p>;
+  const entries = Object.entries(policyCatalog);
+  const requested = (await searchParams)?.module;
+  const selected = entries.some(([key]) => key === requested) ? requested! : entries[0][0];
+  const iconFor = (key: string) => {
+    const moduleId = toggleableModules.find(id => key === `module.${id}`);
+    return moduleId ? moduleRegistry[moduleId].icon : key === "business.provision" ? "businesses" : key === "product.create" ? "products" : "briefcase";
+  };
   return (<>
     <PageHeading eyebrow="Platforma" title="Modulet dhe aftësitë" description="Shiko çfarë bën secili modul dhe zgjidh paketat ku përfshihet." />
-    <div className="grid gap-6">
-        {Object.entries(policyCatalog).map(([key, definition]) => (
+    <div className="policy-browser">
+      <nav className="policy-module-list" aria-label="Modulet dhe aftësitë">
+        <h2>Modulet dhe aftësitë</h2>
+        {entries.map(([key, definition]) => (
+          <Link key={key} href={`/admin/actions?module=${encodeURIComponent(key)}`} scroll={false}
+            className="policy-module-link" aria-current={selected === key ? "page" : undefined}>
+            <Icon name={iconFor(key)} size={20} />
+            <span>{definition.name}</span>
+          </Link>
+        ))}
+      </nav>
+      <div className="policy-module-detail">
+        {entries.filter(([key]) => key === selected).map(([key, definition]) => (
           <article
             className="detail-block action-catalog-item"
             key={key}
           >
-            <h2>{definition.name}</h2>
+            <h2 className="policy-module-heading"><Icon name={iconFor(key)} size={24} />{definition.name}</h2>
             {toggleableModules.find(id => key === `module.${id}`) ? <ModuleDescription moduleId={toggleableModules.find(id => key === `module.${id}`)!} /> : <p>{definition.description}</p>}
             <details className="policy-advanced"><summary>Gjendja globale</summary>
             <ActionForm action={saveActionPolicy} className="grid gap-3">
@@ -84,6 +104,7 @@ export default async function ActionsPage() {
           </article>
         ))}
       </div>
+    </div>
     </>
   );
 }
