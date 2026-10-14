@@ -88,18 +88,20 @@ html[data-resolved="dark"] .dashboard-shell :is(.assistant-home-workspace,.assis
 .unified-composer .assistant-prompt { padding-left: 8px; }
 .unified-composer .assistant-prompt > button { background: transparent; }
 .unified-attachments { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0; }
-.unified-menu { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 20; display: grid; min-width: 210px; padding: 8px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 8px 30px color-mix(in srgb, var(--brand-secondary) 20%, transparent); }
-.unified-menu button { padding: 12px; min-height: 44px; text-align: left; background: transparent; color: var(--ink); border: 0; border-radius: 10px; cursor: pointer; }
-.unified-menu button:hover { background: var(--paper); }
+.unified-menu { position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 20; display: grid; gap: 4px; width: max-content; min-width: 232px; max-width: min(280px, 100%); padding: 8px; border: 1px solid color-mix(in srgb, var(--line) 65%, transparent); border-radius: 14px; background: var(--paper); box-shadow: 0 14px 36px color-mix(in srgb, var(--brand-secondary) 24%, transparent); }
+.unified-menu-label { display: block; padding: 4px 10px 2px; color: var(--ink-muted); font-size: 12px; line-height: 1.2; }
+.unified-menu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; margin: 0; padding: 8px 12px; border: 0; border-radius: 10px; background: color-mix(in srgb, var(--ink) 7%, var(--surface)); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.2; text-align: left; cursor: pointer; }
+.unified-menu button svg { flex: none; color: var(--ink-muted); }
+.unified-menu button:hover, .unified-menu button:focus-visible { background: color-mix(in srgb, var(--ink) 12%, var(--surface)); }
 .unified-link { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; margin-bottom: 8px; }
 .unified-link label { width: 100%; font-size: 12px; }
 .unified-link input { min-width: 100px; flex: 1; }
 .unified-link button { min-height: 44px; }
 .unified-composer button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media(max-width:760px) { .unified-composer .assistant-prompt { gap: 4px; padding: 6px; } .unified-composer .assistant-prompt textarea { font-size: 16px; } .unified-menu { width: 100%; } }
+@media(max-width:760px) { .unified-composer .assistant-prompt { gap: 4px; padding: 6px; } .unified-composer .assistant-prompt textarea { font-size: 16px; } .unified-menu { width: min(100%, 280px); } .unified-menu button { min-height: 44px; } }
 .assistant-composer:has(.unified-menu) { overflow: visible; position: relative; z-index: 2; }
 .unified-menu { max-height: 42dvh; overflow-y: auto; }
-.assistant-mobile-dock .unified-menu button { width: 100%; height: auto; display: block; color: var(--ink); }
+.assistant-mobile-dock .unified-menu button { width: 100%; height: auto; display: flex; color: var(--ink); }
 .assistant-mobile-dock .unified-link button { width: auto; padding-inline: 12px; }
 .assistant-panel-open .assistant-context-entry > .unified-composer { display: none; }
 .assistant-workspace-panel .assistant-composer { max-height: calc(var(--assistant-viewport-height, 100dvh) * .55); }

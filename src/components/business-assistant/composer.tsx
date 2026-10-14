@@ -43,10 +43,11 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
     } catch { setLinkError("Vendos një link të plotë http ose https."); }
   }
   return <div className="unified-composer" onDragOver={e => { if (onFiles) e.preventDefault(); }} onDrop={e => { if (onFiles) { e.preventDefault(); if (!busy) onFiles(Array.from(e.dataTransfer.files)); } }}>
-    {menu && <div id={`${id}-menu`} className="unified-menu" onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMenu(false); menuButton.current?.focus(); } }} aria-label="Bashkëngjit materiale">
-      {onFiles && <><button type="button" onClick={() => { photo.current?.click(); setMenu(false); }}>Shto foto</button><button type="button" onClick={() => { file.current?.click(); setMenu(false); }}>Shto skedar</button></>}
-      <button type="button" onClick={() => { setLink(""); setMenu(false); }}>Shto link</button>
-      {onOpen && <button type="button" onClick={() => { onOpen(); setMenu(false); }}>Hap bisedën</button>}
+    {menu && <div id={`${id}-menu`} className="unified-menu" role="menu" onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMenu(false); menuButton.current?.focus(); } }} aria-label="Bashkëngjit materiale">
+      <span className="unified-menu-label">Shto</span>
+      {onFiles && <><button type="button" role="menuitem" onClick={() => { photo.current?.click(); setMenu(false); }}><Icon name="image" size={16} /><span>Shto foto</span></button><button type="button" role="menuitem" onClick={() => { file.current?.click(); setMenu(false); }}><Icon name="paperclip" size={16} /><span>Shto skedar</span></button></>}
+      <button type="button" role="menuitem" onClick={() => { setLink(""); setMenu(false); }}><Icon name="link" size={16} /><span>Shto link</span></button>
+      {onOpen && <button type="button" role="menuitem" onClick={() => { onOpen(); setMenu(false); }}><Icon name="arrow" size={16} /><span>Hap bisedën</span></button>}
     </div>}
     {link !== null && <div className="unified-link"><label htmlFor={`${id}-link`}>Linku i faqes</label><input id={`${id}-link`} type="url" value={link} maxLength={2048} placeholder="https://…" onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }} /><button type="button" disabled={busy} onClick={addLink}>Shto</button><button type="button" onClick={() => setLink(null)}>Anulo</button>{linkError && <small role="alert">{linkError}</small>}</div>}
     <input hidden ref={file} type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md,.csv,.json" onChange={e => { onFiles?.(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
