@@ -11,7 +11,7 @@ import { emptyState, foldText, type ConversationStatePayload } from "@/lib/workf
 import { affirmative, extractExplicitFacts, invalidateOrderReview, isQuestion, migrateContext, resetOrder, setFact } from "@/lib/workflows/context";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
 import { chooseGuidance, explicitIntent, recentConversation, rememberTurn } from "@/lib/workflows/guidance";
-import { bookingAdapterState, migrateConversationProcesses, restoreOrder, snapshotOrder, type ConversationRouting, type ProcessKind } from "@/lib/workflows/conversation-processes";
+import { bookingAdapterState, currentProcessOwner, migrateConversationProcesses, restoreOrder, snapshotOrder, suspendProcesses, type ConversationRouting, type LocalProcessKind, type ProcessKind } from "@/lib/workflows/conversation-processes";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
 import { customerOrderStatus, isOrderStatusFollowUp, isOrderStatusRequest, readOrderStatusLookup, setOrderStatusLookup, type OrderCustomerIdentity } from "@/lib/orders/customer-status";
 import { isEntityInformationRequest, resolveVisualEntity } from "@/lib/workflows/visual/entity-routing";
@@ -45,6 +45,14 @@ const informationalQuestion = (text: string) => /\b(sa kushton|cmimi|price|ku nd
 const resumeOrder = (text: string) => /\b(vazhdo\w*|ktheh\w*|rifill\w*|resume)\b.*\b(porosi\w*|order)\b/.test(text);
 const newRequest = (text: string, kind: ProcessKind) => kind === "order" ? /\b(porosi (?:te |nje )?re|porosi tjeter|new order|another order)\b/.test(text) : /\b(rezervim (?:te |nje )?ri|rezervim tjeter|takim tjeter|new booking|another booking)\b/.test(text);
 
+// An answer to a pending field may follow an informational detour. This is not
+// prompt ownership: short approvals still pass the delivery/freshness gate first.
+function interruptedProcess(state: ConversationStatePayload): LocalProcessKind | null {
+  const p = state.processes, last = p?.lastDecision;
+  return !state.conversationPaused && !p?.informationOnly && !p?.auxiliary && last?.process === "information" && last.action === "answer"
+    && last.suspended && p?.[last.suspended] ? last.suspended : null;
+}
+
 async function routeMessage(message: string, state: ConversationStatePayload): Promise<Route> {
   const text = foldText(message), intent = explicitIntent(message);
   const confirmation = namedConfirmation(message);
@@ -64,7 +72,8 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   if (state.processes?.informationOnly) return { process: "information", source: "rules" };
   if (isQuestion(message) && !/\b(ndrysho\w*|korrigjo\w*)\b/.test(text)) return { process: "information", source: "rules" };
   if (affirmative(message) || /^(jo|no)[.!\s]*$/.test(text)) return { process: state.processes!.auxiliary?.process ?? state.processes!.active ?? "information", source: "rules" };
-  const active = state.processes!.active;
+  const interrupted = interruptedProcess(state);
+  const active = state.processes!.active ?? (interrupted === "order" || interrupted === "booking" ? interrupted : null);
   const auxiliary = state.processes!.auxiliary;
   const lastReply = state.recentMessages?.filter(message => message.role === "assistant").at(-1)?.content;
   const pendingStep = active === "order" ? state.context?.execution.linear?.steps.find(step => step.key === state.step_key) : undefined;
@@ -95,8 +104,7 @@ function plainResult(state: ConversationStatePayload, reply: string): AgentTurnR
       knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: 0 } };
 }
 function entityClarification(state: ConversationStatePayload, reply: string): AgentTurnResult {
-  state.processes!.promptOwner = null;
-  if (state.processes!.service) state.processes!.service.promptCurrent = false;
+  suspendProcesses(state);
   return { ...plainResult(state, reply), conversationRouting: { process: "clarify", action: "clarify", source: "rules", reason: reply, reusedFields: [], missingFields: [] } };
 }
 function explicitProfile(state: ConversationStatePayload, message: string, profileOnly = false) {
@@ -184,8 +192,16 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       : undefined;
     return migrateConversationProcesses(params.state, randomUUID, pinned);
   };
-  let clarificationResume: ProcessKind | undefined;
+  let clarificationResume: LocalProcessKind | undefined;
   const choice = !params.hasPhoto && !params.hasAttachments ? clarificationChoice(params.message) : null;
+  if (params.state?.staffHandoff || params.state?.visual?.status === "handoff" && !params.state.visual.advisory) {
+    const state = structuredClone(params.state);
+    suspendProcesses(state);
+    if (state.processes) delete state.processes.pendingClarification;
+    return { ...plainResult(state, "Biseda është në pritje të stafit. Kjo përgjigje nuk rifillon dhe nuk konfirmon kërkesën."),
+      conversationRouting: { process: "support", action: "answer", source: "rules", reason: "clarification_staff_owned", reusedFields: [], missingFields: [] } };
+  }
+  if (!params.state?.processes && params.state?.visual && usesSharedCoordinator(params)) params = { ...params, state: await migrateState() };
   if (params.state?.conversationPaused || params.state?.processes?.pendingClarification || choice === "resume" || choice === "cancel"
     || choice && params.state?.processes?.lastDecision?.reason.startsWith("clarification_")) {
     let state = await migrateState();
@@ -193,11 +209,6 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     const pending = processes.pendingClarification;
     const respond = (reply: string, reason: string) => ({ ...plainResult(state, reply),
       conversationRouting: { process: "information" as const, action: "answer" as const, source: "rules" as const, reason, reusedFields: [], missingFields: [] } });
-    const staffOwned = state.staffHandoff || state.visual?.status === "handoff" && !state.visual.advisory;
-    if (choice && staffOwned) {
-      delete processes.pendingClarification;
-      return respond("Biseda është në pritje të stafit. Kjo përgjigje nuk rifillon dhe nuk konfirmon kërkesën.", "clarification_staff_owned");
-    }
     // A repeated navigation reply must not become input to the newly displayed field.
     // Transport event deduplication remains authoritative; this only handles repeated choice text.
     const previousUser = state.recentMessages?.at(-2), previousReply = state.recentMessages?.at(-1);
@@ -206,11 +217,8 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       return respond(previousReply.content, `clarification_${choice}`);
     }
     if (choice === "information") {
-      if (processes.active && processes[processes.active]?.status === "active") processes[processes.active]!.status = "suspended";
-      processes.active = null; processes.promptOwner = null;
+      suspendProcesses(state);
       delete processes.pendingChoice; delete processes.pendingClarification; delete processes.auxiliary;
-      if (processes.service) processes.service.promptCurrent = false;
-      if (processes.actionFlow) processes.actionFlow.promptCurrent = false;
       processes.informationOnly = true;
       state.conversationPaused = true;
       return respond("Në rregull, vetëm informacion. Çfarë dëshiron të dish?", "clarification_information");
@@ -231,8 +239,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       }
       if (!valid) return respond("Zgjedhja e mëparshme nuk është më e vlefshme ose nuk ka një kërkesë të vetme për të vazhduar. Shkruaj qartë cilën kërkesë dëshiron; nuk u krye asnjë veprim.", "clarification_stale");
       const process = target.process;
-      if (processes.active && processes[processes.active]?.status === "active") processes[processes.active]!.status = "suspended";
-      processes.active = null; processes.promptOwner = null;
+      suspendProcesses(state);
       delete processes.pendingChoice; delete processes.auxiliary;
       if (choice === "cancel") {
         if (process === "order") {
@@ -240,22 +247,25 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
           state = resetOrder(state);
           if (booking) state.fields.booking = booking;
           delete processes.order;
-        } else {
+        } else if (process === "booking") {
           const visual = processes.booking?.visual;
           delete processes.booking; delete state.fields.booking;
           if (visual && state.visual?.versionId === visual.versionId && state.visual.nodeId === visual.nodeId) delete state.visual;
           if (state.step_key === "booking_request") state.step_key = "choose_product";
+        } else {
+          const visual = processes[process]!.visual;
+          delete processes[process];
+          if (state.visual?.versionId === visual.versionId && state.visual.nodeId === visual.nodeId) delete state.visual;
         }
         state.conversationPaused = true;
         processes.informationOnly = true;
         return respond("Në rregull, e hoqëm kërkesën e papërfunduar nga kjo bisedë. Asnjë porosi ose rezervim i ruajtur nuk u anulua.", "clarification_cancel");
       }
-      processes[process]!.status = "suspended";
       delete processes.informationOnly;
       if (process === "order") state = restoreOrder(state, { resume: true });
       delete state.conversationPaused;
       // Navigation only: reuse the existing resume route, never pass the choice as a field or confirmation.
-      params = { ...params, state, message: process === "order" ? "Vazhdo porosinë" : "Vazhdo rezervimin" };
+      params = { ...params, state, message: process === "order" ? "Vazhdo porosinë" : process === "booking" ? "Vazhdo rezervimin" : "" };
       clarificationResume = process;
     } else {
       // Another topic invalidates the old choice. Ambiguous short answers keep it open.
@@ -263,12 +273,33 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       params = { ...params, state };
     }
   }
+  // The same explicit resume contract applies to saved custom/service flows.
+  // Resolve their names against pinned definitions, never a newly published graph.
+  if (!clarificationResume && (params.state?.conversationPaused || params.state?.processes?.informationOnly)
+    && !choice && !isQuestion(params.message) && /\b(vazhdo\w*|rifillo\w*|resume)\b/.test(foldText(params.message))) {
+    const matches: LocalProcessKind[] = [];
+    for (const kind of ["actionFlow", "service"] as const) {
+      const task = params.state.processes?.[kind];
+      if (!task || !clarificationTarget(params.state, kind)) continue;
+      const version = params.visualPreview ?? await loadVisualVersion(params.businessId, task.versionId);
+      if (version?.id !== task.versionId || version.graph.version !== 2) continue;
+      const flow = version.graph.flows.find(f => f.nodeIds.includes(task.visual.nodeId));
+      const namedFlow = flow?.label && foldText(params.message).includes(foldText(flow.label));
+      const entity = kind === "service" && !namedFlow ? await resolveVisualEntity(params.businessId, version.graph, params.message, undefined, params.mode === "test", { state: params.state, deliveredReply: params.deliveredReply }) : undefined;
+      if (namedFlow || entity?.mentioned && entity.mentioned.id === task.visual.binding?.entity.id && entity.mentioned.kind === task.visual.binding?.entity.kind && entity.selected)
+        matches.push(kind);
+    }
+    if (matches.length === 1) {
+      const state = structuredClone(params.state);
+      suspendProcesses(state);
+      delete state.conversationPaused; delete state.processes!.informationOnly; delete state.processes!.pendingClarification;
+      clarificationResume = matches[0];
+      params = { ...params, state, message: "" };
+    }
+  }
   const controlled = conversationControl(params);
   if (controlled) return controlled;
   params = resumeConversation(params);
-  if ((params.state?.staffHandoff || params.state?.visual?.status === "handoff" && !params.state.visual.advisory)
-    && (params.state?.entityPresentation || isEntityReference(params.message)))
-    return plainResult(structuredClone(params.state), "Biseda është në pritje të stafit. Zgjedhja nuk rifillon dhe nuk konfirmon kërkesën.");
   const replacementId = params.state?.processes?.pendingChoice?.kind === "replace" && affirmative(params.message)
     ? params.state.processes.pendingChoice.productId : undefined;
   // Resolve the customer's reference before guidance or old visual bindings can
@@ -306,7 +337,8 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     // The status answer replaces the last question. Preserve tasks, but do not let a
     // later bare yes accept an older replace/process choice the customer no longer sees.
     delete state.processes!.pendingChoice;
-    if (state.processes!.service) state.processes!.service.promptCurrent = false;
+    const suspended = currentProcessOwner(state) ?? state.processes!.active ?? interruptedProcess(state) ?? undefined;
+    suspendProcesses(state);
     const lookup = readOrderStatusLookup(state);
     const version = params.visualPreview ?? await loadVisualVersion(params.businessId, lookup?.visual?.versionId);
     const statusNode = version?.graph.version === 2 ? version.graph.nodes.find(node => node.kind === "order_status") : undefined;
@@ -322,7 +354,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     setOrderStatusLookup(state, nextLookup);
     state.processes!.promptOwner = null;
     const decision: ConversationRouting = { process: "information", action: result.orderStatusPending ? "clarify" : "answer", source: "rules",
-      reason: "Kontrollohet statusi i porosisë ekzistuese; proceset në vazhdim ruhen.", reusedFields: [], missingFields: result.orderStatusPending ? ["order_reference"] : [] };
+      reason: "Kontrollohet statusi i porosisë ekzistuese; proceset në vazhdim ruhen.", suspended, reusedFields: [], missingFields: result.orderStatusPending ? ["order_reference"] : [] };
     result.nextState = state; result.conversationRouting = decision;
     params.onTrace?.({ stage: "workflow", label: "Customer order status", data: decision });
     return result;
@@ -371,9 +403,10 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   }
   let state = await migrateState();
   const processes = state.processes!;
+  const interrupted = interruptedProcess(state);
   const oldProfile = JSON.stringify(state.context!.profile);
   const graphVersion = clarificationResume === "order" && !state.visual ? null
-    : params.visualPreview ?? await loadVisualVersion(params.businessId, processes.active === "booking" || clarificationResume === "booking" ? processes.booking?.versionId : state.visual?.versionId);
+    : params.visualPreview ?? await loadVisualVersion(params.businessId, clarificationResume === "service" || clarificationResume === "actionFlow" ? processes[clarificationResume]?.versionId : processes.active === "booking" || clarificationResume === "booking" ? processes.booking?.versionId : state.visual?.versionId);
   if (clarificationResume) params = { ...params, entityVersion: graphVersion };
   const entityMessage = processes.pendingChoice?.kind === "replace" && affirmative(params.message) ? processes.pendingChoice.message : params.message;
   const ordinaryQuestion = Boolean(processes.informationOnly && !explicitContinuation(entityMessage) && !bookingRequest(foldText(entityMessage))) || isEntityInformationRequest(entityMessage) || isQuestion(entityMessage) && !/\b(dua|kerkoj|rezervo|book|want|vazhdo|rifillo)\b/.test(foldText(entityMessage));
@@ -398,16 +431,14 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
             ),
         )
       : [];
-  const continuingAction =
-    savedAction?.promptCurrent &&
-    !ordinaryQuestion &&
-    !["order", "support"].includes(explicitIntent(params.message)) &&
-    !bookingRequest(foldText(params.message));
-  let namedAction = !ordinaryQuestion
-    ? actionFlows.find((f) =>
+  let namedAction = clarificationResume === "actionFlow"
+    ? actionFlows.find(f => f.nodeIds.includes(savedAction!.visual.nodeId))
+    : !ordinaryQuestion ? actionFlows.find((f) =>
         foldText(params.message).includes(foldText(f.label)),
       )
     : undefined;
+  const continuingAction = (currentProcessOwner(state) === "actionFlow" || interrupted === "actionFlow") && !namedAction && !ordinaryQuestion
+    && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
   if (
     !namedAction &&
     !continuingAction &&
@@ -433,15 +464,17 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       namedAction = actionFlows.find((f) => f.id === selected.target);
   }
   if (actionVersion && (continuingAction || namedAction)) {
+    const resumeNamed = Boolean(savedAction && namedAction?.nodeIds.includes(savedAction.visual.nodeId));
+    const prior = continuingAction || resumeNamed ? savedAction : undefined;
+    suspendProcesses(state, "actionFlow");
+    delete processes.auxiliary; delete processes.pendingChoice; delete processes.informationOnly; delete state.conversationPaused;
     const adapter = structuredClone(state);
-    adapter.context = { profile: structuredClone(state.context!.profile), order: structuredClone(savedAction?.order ?? {}), execution: { factOwner: "auxiliary" } };
-    adapter.fields = structuredClone(savedAction?.fields ?? {});
-    const resumeNamed =
-      savedAction && namedAction?.nodeIds.includes(savedAction.visual.nodeId);
+    adapter.context = { profile: structuredClone(state.context!.profile), order: structuredClone(prior?.order ?? {}), execution: { factOwner: "auxiliary" } };
+    adapter.fields = structuredClone(prior?.fields ?? {});
     adapter.visual = resumeNamed
-      ? { ...savedAction.visual, awaiting: false }
+      ? { ...structuredClone(savedAction!.visual), awaiting: false }
       : continuingAction
-        ? savedAction!.visual
+        ? structuredClone(savedAction!.visual)
         : {
             versionId: actionVersion.id,
             nodeId: namedAction!.entryNodeId,
@@ -450,9 +483,10 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
             visited: [],
             values: {},
           };
-    if (!continuingAction) { delete adapter.visual.pendingConfirmation; delete adapter.visual.confirmedConfirmation; }
+    if (!continuingAction || !savedAction?.promptCurrent) { delete adapter.visual.pendingConfirmation; delete adapter.visual.confirmedConfirmation; }
     const answer = await processAgentTurn({
       ...params,
+      message: resumeNamed ? "" : params.message,
       state: adapter,
       entityVersion: actionVersion,
       actionFlowRequest: true,
@@ -460,28 +494,24 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     const cursor = answer.nextState.visual;
     if (cursor?.status === "waiting")
       processes.actionFlow = {
+        id: prior?.id ?? randomUUID(),
         versionId: actionVersion.id,
         visual: cursor,
-        promptCurrent: true,
+        promptCurrent: Boolean(cursor.awaiting),
         order: answer.nextState.context?.order,
         fields: answer.nextState.fields,
       };
     else delete processes.actionFlow;
     state.context!.profile = answer.nextState.context?.profile ?? state.context!.profile;
     state.customer = answer.nextState.customer;
+    if (JSON.stringify(state.context!.profile) !== oldProfile && processes.order) invalidateOrderReview(processes.order.snapshot.execution);
     answer.nextState = state;
     processes.promptOwner = null;
+    answer.conversationRouting = { process: "information", action: resumeNamed ? "resume" : continuingAction ? "continue" : "start", source: "rules",
+      reason: clarificationResume ? "clarification_resume" : "action_flow", ...(resumeNamed ? { resumed: "actionFlow" } : {}), reusedFields: [], missingFields: [] };
     return answer;
   }
-  if (
-    savedAction &&
-    (ordinaryQuestion ||
-      explicitIntent(params.message) === "order" ||
-      explicitIntent(params.message) === "support" ||
-      bookingRequest(foldText(params.message)))
-  )
-    savedAction.promptCurrent = false;
-  const continueService = processes.service?.status === "active" && !ordinaryQuestion && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
+  const continueService = clarificationResume === "service" || (processes.service?.status === "active" || interrupted === "service") && !ordinaryQuestion && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
   let serviceVersion = continueService ? params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service!.versionId) : graphVersion;
   let entityResolution = !ordinaryQuestion && serviceVersion ? await resolveVisualEntity(params.businessId, serviceVersion.graph, entityMessage, continueService ? processes.service?.visual.binding : undefined, params.mode === "test", { state, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
   let resumingService = Boolean(continueService && entityResolution.selected?.entity.id === processes.service?.visual.binding?.entity.id);
@@ -494,7 +524,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   const orderVisual = processes.order?.status !== "completed" ? processes.order?.snapshot.visual : undefined;
   if (!ordinaryQuestion && orderVisual?.binding && !processes.pendingChoice) {
     const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, orderVisual.versionId);
-    const continuing = processes.active === "order" && explicitIntent(entityMessage) !== "support" && !bookingRequest(foldText(entityMessage));
+    const continuing = (processes.active === "order" || interrupted === "order") && explicitIntent(entityMessage) !== "support" && !bookingRequest(foldText(entityMessage));
     const match = pinned ? await resolveVisualEntity(params.businessId, pinned.graph, entityMessage, resumeOrder(foldText(entityMessage)) || continuing ? orderVisual.binding : undefined, params.mode === "test", { state, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
     if (match.selected?.entity.kind === "product" && match.selected.entity.id === orderVisual.binding.entity.id) { entityResolution = match; serviceVersion = pinned; resumingOrder = true; resumingService = false; }
   }
@@ -523,23 +553,24 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   const productOrder = selectedEntity?.entity.kind === "product" && Boolean(entityFlow && (entityFlow.kind === "order" || entityFlow.nodeIds.some(id => serviceVersion!.graph.nodes.some(node => node.id === id && node.kind === "product")) || entityFlow.kind === "custom" && (explicitIntent(entityMessage) === "order" || processes.order?.snapshot.product_id === selectedEntity.entity.id && orderVisual?.binding?.entity.id === selectedEntity.entity.id)));
   if (selectedEntity && entityFlow && !productOrder && !serviceBooking && serviceVersion && !processes.pendingChoice) {
     if (affirmative(params.message) && processes.service && !processes.service.promptCurrent) return entityClarification(state, "Cilën kërkesë dëshiron të konfirmosh? Shkruaj shërbimin që dëshiron të vazhdosh.");
-    if (processes.active === "order" && processes.order) processes.order.snapshot = snapshotOrder(state);
-    if (processes.active && processes[processes.active]) processes[processes.active]!.status = "suspended";
-    const old = processes.service?.status !== "completed" && processes.service?.visual.binding?.entity.id === selectedEntity.entity.id ? processes.service : undefined;
+    const old = processes.service?.status !== "completed" && processes.service?.visual.binding?.entity.id === selectedEntity.entity.id && processes.service.visual.binding.entity.kind === selectedEntity.entity.kind ? processes.service : undefined;
+    const resume = old?.status === "suspended" && (interrupted !== "service" || foldText(params.message).includes(foldText(selectedEntity.entity.name)));
+    suspendProcesses(state, "service");
+    delete processes.auxiliary; delete processes.informationOnly; delete state.conversationPaused;
     const adapter = migrateContext(emptyState()); adapter.schemaVersion = 3; adapter.processes = processes;
     adapter.context!.execution.factOwner = "service";
     adapter.context!.profile = structuredClone(state.context!.profile); adapter.customer = structuredClone(state.customer); adapter.recentMessages = state.recentMessages;
     adapter.fields = structuredClone(old?.fields ?? {}); adapter.context!.order = structuredClone(old?.order ?? {});
-    adapter.visual = old?.visual ?? { versionId: serviceVersion.id, nodeId: entityFlow.entryNodeId, status: "running", awaiting: false, visited: [], values: {}, binding: selectedEntity.binding };
-    if (old && old.status === "suspended") { delete adapter.visual.pendingConfirmation; delete adapter.visual.confirmedConfirmation; }
-    const answer = await processAgentTurn({ ...params, state: adapter, entityVersion: serviceVersion });
+    adapter.visual = structuredClone(old?.visual) ?? { versionId: serviceVersion.id, nodeId: entityFlow.entryNodeId, status: "running", awaiting: false, visited: [], values: {}, binding: selectedEntity.binding };
+    if (old?.status === "suspended") { if (resume) adapter.visual.awaiting = false; delete adapter.visual.pendingConfirmation; delete adapter.visual.confirmedConfirmation; }
+    const answer = await processAgentTurn({ ...params, message: resume ? "" : params.message, state: adapter, entityVersion: serviceVersion });
     const visual = answer.nextState.visual!;
     processes.service = { id: old?.id ?? randomUUID(), versionId: serviceVersion.id, visual, status: visual.status === "waiting" ? "active" : "completed", promptCurrent: visual.status === "waiting", fields: answer.nextState.fields, order: answer.nextState.context?.order ?? {} };
     state.context!.profile = answer.nextState.context?.profile ?? state.context!.profile; state.customer = answer.nextState.customer;
     if (JSON.stringify(state.context!.profile) !== oldProfile && processes.order) invalidateOrderReview(processes.order.snapshot.execution);
     state.visual = visual;
     processes.active = null; processes.promptOwner = null; delete processes.pendingChoice;
-    const decision: ConversationRouting = { process: "information", action: old ? "continue" : "start", source: "rules", reason: `Vazhdon rrjedha e lidhur me ${selectedEntity.entity.name}.`, reusedFields: Object.keys(state.context!.profile), missingFields: [] };
+    const decision: ConversationRouting = { process: "information", action: resume ? "resume" : old ? "continue" : "start", source: "rules", reason: clarificationResume ? "clarification_resume" : `Vazhdon rrjedha e lidhur me ${selectedEntity.entity.name}.`, ...(resume ? { resumed: "service" as const } : {}), reusedFields: Object.keys(state.context!.profile), missingFields: [] };
     answer.nextState = state; answer.workflowId = null; answer.conversationRouting = decision;
     return answer;
   }
@@ -583,6 +614,8 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   const clarify = (reply: string) => {
     decision.process = "clarify"; decision.action = "clarify"; decision.reason = reply;
     processes.promptOwner = null;
+    if (processes.actionFlow) processes.actionFlow.promptCurrent = false;
+    if (processes.service) processes.service.promptCurrent = false;
     return finish(plainResult(state, reply));
   };
   // Answer interruptions without forcing a choice. Replacement approval expires;
@@ -627,7 +660,12 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     message = "Konfirmoj";
   }
   if (route.process === "information") {
-    if (processes.service) processes.service.promptCurrent = false;
+    // Auxiliary input belongs to the information flow until it finishes, but its
+    // original suspended owner must survive every turn for the later continuation.
+    const previousOwner = currentProcessOwner(state) ?? processes.active ?? interrupted
+      ?? (processes.auxiliary?.process === "information" ? processes.lastDecision?.suspended : undefined);
+    decision.suspended = previousOwner ?? undefined;
+    suspendProcesses(state);
     decision.action = "answer"; decision.reason = "Pyetja merr përgjigje; progresi i porosisë dhe rezervimit ruhet.";
     processes.promptOwner = null;
     const version = freshEntityVersion ? serviceVersion : graphVersion;
@@ -645,7 +683,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       if (answer.nextState.visual?.status === "waiting") processes.auxiliary = { process: "information", visual: answer.nextState.visual, order: answer.nextState.context?.order, fields: answer.nextState.fields };
       else {
         delete processes.auxiliary;
-        answer.nextState.visual = processes.active === "order" ? processes.order?.snapshot.visual : processes.active === "booking" ? processes.booking?.visual : undefined;
+        answer.nextState.visual = previousOwner === "order" ? processes.order?.snapshot.visual : previousOwner === "booking" ? processes.booking?.visual : state.visual;
       }
       // An informational adapter owns only its auxiliary cursor, not order facts or approvals.
       // Explicit facts from this message were already validated above, before the adapter.
@@ -657,13 +695,9 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     return finish(answer);
   }
   if (route.process === "support") {
-    if (processes.service) processes.service.promptCurrent = false;
     decision.action = "answer"; decision.reason = "Klienti kërkon ndihmë; proceset e papërfunduara mbeten të ruajtura.";
-    if (processes.active) {
-      const task = processes[processes.active]; if (task) task.status = "suspended";
-      decision.suspended = processes.active;
-    }
-    processes.active = null; processes.promptOwner = null;
+    decision.suspended = currentProcessOwner(state) ?? processes.active ?? undefined;
+    suspendProcesses(state);
     if (contactFollowUp(message, state) || isStaffContactRequest(message)) {
       const result = await processLegacyAgentTurn({ ...params, state, informational: staffContactInstructions });
       result.nextState = state; result.handoff = true; result.advisoryHandoff = true;
@@ -685,7 +719,6 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   }
   const target = route.process;
   if (processes.informationOnly) { delete processes.informationOnly; delete state.conversationPaused; }
-  if (processes.service?.status === "active") processes.service.status = "suspended";
   delete processes.auxiliary;
   if (target === "booking" && processes.booking?.status === "completed") delete processes.booking;
   const task = processes[target];
@@ -695,11 +728,11 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     return clarify(`Ke një ${target === "order" ? "porosi" : "rezervim"} të papërfunduar. Ta zëvendësojmë me kërkesën e re? Shkruaj “Po” ose “Jo”.`);
   }
   const previousActive = processes.active;
-  if (previousActive && previousActive !== target) {
-    const previousTask = processes[previousActive];
-    if (previousTask && previousTask.status !== "completed") { previousTask.status = "suspended"; decision.suspended = previousActive; }
-  }
+  const previousOwner = currentProcessOwner(state) ?? previousActive ?? processes.lastDecision?.suspended;
+  suspendProcesses(state, target);
+  if (previousOwner && previousOwner !== target) decision.suspended = previousOwner;
   decision.action = task?.status === "suspended" || (task && previousActive !== target) ? "resume" : task?.status === "active" ? "continue" : "start";
+  if (task && interrupted === target && !explicitContinuation(message) && !confirmation && !params.selectedProductId) decision.action = "continue";
   if (decision.action === "resume") decision.resumed = target;
   decision.reason = decision.action === "resume" ? `Rifillon ${target === "order" ? "porosia" : "rezervimi"} me të dhënat e ruajtura.` : `Mesazhi i përket ${target === "order" ? "porosisë" : "rezervimit"}.`;
   decision.reusedFields = Object.keys(state.context!.profile).map(key => `customer_${key}`);
@@ -739,12 +772,12 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     return finish(result);
   }
   if (processes.order?.status === "completed") { delete processes.order; state = resetOrder(state); }
-  else if (processes.order) state = restoreOrder(state, { resume: decision.action === "resume" });
+  else if (processes.order) state = restoreOrder(state, { resume: decision.action === "resume" && !confirmation });
   else if (freshEntityVersion && state.visual?.binding && (!selectedEntity || selectedEntity.binding.flowId !== state.visual.binding.flowId || params.entityVersion?.id !== state.visual.versionId)) delete state.visual;
   let usedBookingNode = false;
   if (replacementDeclined) params = { ...params, entityVersion: undefined };
   // Resume is navigation, not a value for the pending field (including product_query).
-  const result = await processAgentTurn({ ...params, message: clarificationResume === "order" ? "" : message, state, orderRequest: Boolean(params.selectedProductId) || decision.action === "resume" || resumeOrder(foldText(message)) || explicitIntent(message) === "order",
+  const result = await processAgentTurn({ ...params, message: clarificationResume === "order" ? "" : message, state, orderRequest: Boolean(params.selectedProductId) || decision.action === "resume" && !confirmation || resumeOrder(foldText(message)) || explicitIntent(message) === "order",
     bookingTurn: async bookingState => {
       const adapter = bookingAdapterState(bookingState);
       const booking = await processBookingTurn({ businessId: params.businessId, message, state: adapter, mode: params.mode,

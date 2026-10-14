@@ -593,6 +593,21 @@ it.each(["uncertain", "prepared", "sending"])("does not consume a field after an
  await handleInboundMessage({ ...message, text:"Tiranë" }, queuedJob());
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ previousResponseId:null, state:expect.objectContaining({ conversationPaused:true, fields:{size:"L"} }) }));
 });
+it.each(["staff", "unconfirmed"])("C2 revokes every process prompt at the %s inbound boundary", async boundary => {
+ const visual = { versionId: "pinned", nodeId: "details", status: "waiting" as const, awaiting: true, visited: [], values: { note: "Keep" } };
+ savedState = { ...emptyState(), schemaVersion: 3, processes: { active: null,
+   service: { id: "service-task", status: "active", promptCurrent: true, versionId: "pinned", visual, fields: { note: "Keep" }, order: {} },
+   actionFlow: { id: "admin-task", versionId: "pinned", visual, promptCurrent: true, fields: { private: "Keep" } },
+ } };
+ if (boundary === "staff") outboundResult = { data: { body: "Stafi ju përgjigjet", source: "staff", delivery_status: "sent" }, error: null };
+ else deliveryAttempt = { status: "uncertain", reply: "Konfirmo" };
+ await handleInboundMessage({ ...message, text: "po" }, queuedJob());
+ const state = mocks.process.mock.calls[0][0].state;
+ expect(state.conversationPaused).toBe(true);
+ expect(state.processes.service).toMatchObject({ status: "suspended", promptCurrent: false, visual, fields: { note: "Keep" } });
+ expect(state.processes.actionFlow).toMatchObject({ promptCurrent: false, visual, fields: { private: "Keep" } });
+ expect(savedState.processes?.actionFlow?.promptCurrent).toBe(true);
+});
 it.each(["ignored", "failed", "sent"])("does not re-arm clarify after a settled queue attempt (%s)", async status => {
  savedState = { ...emptyState(), product_id:"product", step_key:"collect_customer", fields:{ size:"L" }, conversationPaused: false };
  deliveryAttempt = { status, reply:"Në cilin qytet?" };

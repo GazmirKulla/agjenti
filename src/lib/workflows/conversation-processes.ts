@@ -4,11 +4,12 @@ import { freshOrderReview, invalidateOrderReview, migrateContext, projectProfile
 import type { VisualVersion } from "./visual/types";
 
 export type ProcessKind = "order" | "booking";
+export type LocalProcessKind = ProcessKind | "service" | "actionFlow";
 /** A navigation choice, never approval of an order, booking or external action. */
 export type PendingClarification = {
   kind: "resume_process";
   expiresAt: number;
-  target: { process: ProcessKind; id: string; versionId: string | null; cursor: string } | null;
+  target: { process: LocalProcessKind; id: string; versionId: string | null; cursor: string } | null;
 };
 export type ConversationRouting = {
   process: ProcessKind | "information" | "support" | "clarify";
@@ -17,8 +18,8 @@ export type ConversationRouting = {
   source: "rules" | "ai";
   reusedFields: string[];
   missingFields: string[];
-  suspended?: ProcessKind;
-  resumed?: ProcessKind;
+  suspended?: LocalProcessKind;
+  resumed?: LocalProcessKind;
 };
 export type OrderTaskSnapshot = Pick<ConversationStatePayload,
   "product_id" | "product_type_id" | "step_key" | "fields" | "visual" | "completedVisual" |
@@ -33,7 +34,7 @@ export type ConversationProcesses = {
   order?: { id: string; status: "active" | "suspended" | "completed"; snapshot: OrderTaskSnapshot };
   booking?: { id: string; status: "active" | "suspended" | "completed"; draft?: BookingDraft; versionId?: string; visual?: ConversationStatePayload["visual"]; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
   service?: { id: string; status: "active" | "suspended" | "completed"; promptCurrent?: boolean; versionId: string; visual: NonNullable<ConversationStatePayload["visual"]>; fields: ConversationStatePayload["fields"]; order: SharedContext["order"] };
-  actionFlow?: { versionId: string; visual: NonNullable<ConversationStatePayload["visual"]>; promptCurrent: boolean; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
+  actionFlow?: { id?: string; versionId: string; visual: NonNullable<ConversationStatePayload["visual"]>; promptCurrent: boolean; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
   auxiliary?: { process: "information" | "support"; visual: NonNullable<ConversationStatePayload["visual"]>; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
   pendingChoice?: { kind: "process" | "replace"; process?: ProcessKind; message: string; productId?: string };
   pendingClarification?: PendingClarification;
@@ -41,6 +42,35 @@ export type ConversationProcesses = {
   informationOnly?: boolean;
   lastDecision?: ConversationRouting;
 };
+
+/** Read the existing ownership markers in one place, including pre-C1 v3 snapshots. */
+export function currentProcessOwner(state: ConversationStatePayload): LocalProcessKind | null {
+  const p = state.processes;
+  if (!p) return null;
+  const action = p.actionFlow?.promptCurrent && p.actionFlow.visual.status === "waiting" && p.actionFlow.visual.awaiting;
+  const service = p.service?.promptCurrent && p.service.status === "active" && p.service.visual.status === "waiting" && p.service.visual.awaiting;
+  if (action && service) return null; // Conflicting historical prompts cannot authorize a short answer.
+  if (action) return "actionFlow";
+  if (service) return "service";
+  return p.promptOwner && p[p.promptOwner]?.status === "active" ? p.promptOwner : null;
+}
+
+/** Suspend ownership, not business data. Each process keeps its own adapter snapshot. */
+export function suspendProcesses(state: ConversationStatePayload, except?: LocalProcessKind) {
+  const p = state.processes;
+  if (!p) return;
+  if (p.active === "order" && except !== "order" && p.order && state.context?.execution.factOwner === "order" && !p.auxiliary)
+    p.order.snapshot = snapshotOrder(state);
+  for (const kind of ["order", "booking"] as const)
+    if (kind !== except && p[kind]?.status === "active") p[kind]!.status = "suspended";
+  if (except !== "service" && p.service) {
+    if (p.service.status === "active") p.service.status = "suspended";
+    p.service.promptCurrent = false;
+  }
+  if (except !== "actionFlow" && p.actionFlow) p.actionFlow.promptCurrent = false;
+  if (p.active !== except) p.active = null;
+  if (p.promptOwner !== except) p.promptOwner = null;
+}
 
 export function snapshotOrder(state: ConversationStatePayload): OrderTaskSnapshot {
   const fields = structuredClone(state.fields);
@@ -90,7 +120,7 @@ export function restoreOrder(state: ConversationStatePayload, options: { resume?
   return next;
 }
 
-type CursorOwner = ProcessKind | "information" | "support" | "service";
+type CursorOwner = LocalProcessKind | "information" | "support";
 
 /** Classify only from the saved cursor and its immutable graph, never from node names. */
 function cursorOwner(state: ConversationStatePayload, version?: VisualVersion | null): CursorOwner | undefined {
@@ -116,6 +146,7 @@ function cursorOwner(state: ConversationStatePayload, version?: VisualVersion | 
     const kinds = new Set(graph.nodes.filter(node => flow.nodeIds.includes(node.id) && ["booking", "product"].includes(node.kind)).map(node => node.kind));
     if (kinds.size === 1) return kinds.has("booking") ? "booking" : "order";
     if (!kinds.size && visual.binding) return "service";
+    if (!kinds.size && graph.nodes.some(node => flow.nodeIds.includes(node.id) && node.kind === "action")) return "actionFlow";
     return;
   }
   // V1 has no named flows: a current/visited action identifies its cursor. For
@@ -169,6 +200,10 @@ export function migrateConversationProcesses(input: ConversationStatePayload | n
     if (owner === "service" && visual) {
       state.processes.service = { id: id(), versionId: visual.versionId, visual: structuredClone(visual),
         status: visual.status === "completed" ? "completed" : visual.status === "handoff" ? "suspended" : "active",
+        promptCurrent: visual.status === "waiting" && visual.awaiting, fields: structuredClone(state.fields), order: structuredClone(state.context!.order) };
+    }
+    if (owner === "actionFlow" && visual && visual.status !== "completed") {
+      state.processes.actionFlow = { id: id(), versionId: visual.versionId, visual: structuredClone(visual),
         promptCurrent: visual.status === "waiting" && visual.awaiting, fields: structuredClone(state.fields), order: structuredClone(state.context!.order) };
     }
     if ((owner === "information" || owner === "support") && visual && visual.status !== "completed") {

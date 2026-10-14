@@ -4,7 +4,7 @@ import { advanceSharedOrder, extractExplicitFacts, migrateContext, setFact, shar
 import { migrateConversationProcesses } from "@/lib/workflows/conversation-processes";
 import { rememberTurn } from "@/lib/workflows/guidance";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
-import type { AgentTurnResult } from "./process-agent-turn";
+import type { AgentTurnParams, AgentTurnResult } from "./process-agent-turn";
 const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn(), status: vi.fn(), entity: vi.fn() }));
 vi.mock("@/lib/workflows/visual/entity-routing", async original => ({ ...await original<object>(), resolveVisualEntity: mocks.entity }));
 vi.mock("@/lib/orders/customer-status", async original => ({ ...await original<object>(), customerOrderStatus: mocks.status }));
@@ -647,7 +647,7 @@ it("answers existing order status without consuming an order or booking confirma
   const snapshot = structuredClone(state.processes!);
   const next = await turn("Ku është porosia ime?", state);
   expect(next.reply).toBe("Status i verifikuar.");
-  expect(next.nextState.processes?.order).toEqual(snapshot.order);
+  expect(next.nextState.processes?.order).toEqual({ ...snapshot.order, status: "suspended" });
   expect(next.nextState.processes?.booking).toEqual(snapshot.booking);
   expect(next.nextState.processes?.promptOwner).toBeNull();
   expect(mocks.agent).not.toHaveBeenCalled();
@@ -731,7 +731,7 @@ it("does not read real orders until the published workflow enables the status ca
   expect(next.reply).toContain("nuk është aktiv");
   expect(mocks.status).not.toHaveBeenCalled();
   expect(mocks.agent).not.toHaveBeenCalled();
-  expect(next.nextState.processes?.order).toEqual(state.processes?.order);
+  expect(next.nextState.processes?.order).toEqual({ ...state.processes?.order, status: "suspended" });
 });
 
 function entityVersion(id = "bound-v1") {
@@ -958,6 +958,7 @@ it.each(["test", "production"] as const)("derives inactive entity preview access
   expect(mocks.entity.mock.calls.every(call => call[4] === (mode === "test"))).toBe(true);
 });
 it("reuses phone followed by a staff sentence after the turn processor extracts it again", async () => {
+  mocks.version.mockResolvedValue(entityVersion());
   const customerSteps = [{ key: "collect_customer", kind: "customer" as const }];
   mocks.agent.mockImplementation(async ({ state, message }) => {
     const next = structuredClone(state);
@@ -965,7 +966,7 @@ it("reuses phone followed by a staff sentence after the turn processor extracts 
     extractExplicitFacts(next, message);
     if (message.includes("Dua të flas")) {
       next.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: ["staff"], values: {}, advisory: true };
-      return result(next, "Po ia kaloj kërkesën stafit.");
+      return { ...result(next, "Kontakto stafin në kanalin e biznesit."), handoff: true, advisoryHandoff: true };
     }
     next.product_id = "puzzle"; next.step_key = "collect_customer";
     const orderState = advanceSharedOrder(next, "", false, customerSteps, true);
@@ -1003,13 +1004,14 @@ it.each(["ku?", "si?", "ne cilin numer?", "where?"])("keeps %s on the staff-cont
   expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("staff/contact question") }));
 });
 
-it("does not route a new catalog question to staff just because an earlier handoff exists", async () => {
+it("keeps a catalog question with staff while a non-advisory handoff owns the conversation", async () => {
   const state = emptyState(); state.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: [], values: {} };
-  expect((await turn("Sa kushton Montessori?", state)).conversationRouting?.process).toBe("information");
+  expect((await turn("Sa kushton Montessori?", state)).conversationRouting?.process).toBe("support");
+  expect(mocks.info).not.toHaveBeenCalled();
 });
 
 it("resolves a short follow-up against the latest topic, not a historical staff handoff", async () => {
-  const state = emptyState(); state.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: [], values: {} };
+  const state = emptyState(); state.visual = { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: [], values: {}, advisory: true };
   const catalog = await turn("Sa kushton Montessori?", state);
   expect((await turn("ku?", catalog.nextState)).conversationRouting?.process).toBe("information");
 });
@@ -1160,4 +1162,327 @@ it("suspends a pending action confirmation after a question instead of consuming
  const answer=await turn("Sa kushton?",state);
  expect(answer.nextState.processes?.actionFlow?.promptCurrent).toBe(false);
  expect(mocks.agent.mock.calls.some(([p])=>p.actionFlowRequest)).toBe(false);
+});
+
+describe("C1/C2 authoritative turn ownership", () => {
+  async function actionState(withOrder = false) {
+    const { addFlowTemplate } = await import("@/components/workflows/flow-templates");
+    const { starterVisualGraph } = await import("@/lib/workflows/visual/model");
+    const { advanceVisualWorkflow } = await import("@/lib/workflows/visual/runtime");
+    const { graph } = addFlowTemplate(starterVisualGraph(), "business_provision", "registration");
+    const version = { id: "admin-pinned", businessId: "business", createdAt: "now", graph };
+    mocks.version.mockResolvedValue(version);
+    const cursor = advanceVisualWorkflow({ graph, versionId: version.id, message: "", hasPhoto: false, intent: "unknown",
+      state: { versionId: version.id, nodeId: "registration_confirm", status: "running", awaiting: false, visited: [],
+        values: { biz_registration: "Studio sintetik", email_registration: "owner@example.test" } } }).state;
+    const state = migrateConversationProcesses(withOrder ? order() : emptyState(), () => "task");
+    state.processes!.promptOwner = null;
+    state.processes!.actionFlow = { versionId: version.id, visual: cursor, promptCurrent: true,
+      fields: { private_detail: "administrative-only" }, order: {} };
+    state.recentMessages = [{ role: "assistant", content: graph.nodes.find(n => n.id === cursor.nodeId)!.config.prompt! }];
+    return { state, version };
+  }
+
+  async function realVisualExecutor() {
+    const { executeVisualTurn } = await import("@/lib/workflows/visual/execute");
+    mocks.agent.mockImplementation((params: AgentTurnParams) => executeVisualTurn(params, async p => result(p.state ?? emptyState())));
+  }
+
+  async function pinnedOrderJourney(informationFlow = false) {
+    const productId = "11111111-1111-4111-8111-111111111111";
+    const graph: VisualGraph = { version: 2, name: "Pinned order", nodes: [
+      { id: "start", kind: "start", label: "Start", position: { x: 0, y: 0 }, config: {} },
+      { id: "size", kind: "collect", label: "Size", position: { x: 0, y: 100 }, config: { fieldKey: "size", fieldType: "text", prompt: "Çfarë madhësie?" } },
+      { id: "color", kind: "collect", label: "Color", position: { x: 0, y: 200 }, config: { fieldKey: "color", fieldType: "text", prompt: "Çfarë ngjyre?" } },
+      { id: "end", kind: "end", label: "End", position: { x: 0, y: 300 }, config: {} },
+    ], edges: [
+      { id: "e1", source: "start", target: "size", port: "next" },
+      { id: "e2", source: "size", target: "color", port: "next" },
+      { id: "e3", source: "color", target: "end", port: "next" },
+    ], flows: [{ id: "order-flow", kind: "order", label: "Porosia Puzzle", entryNodeId: "size", nodeIds: ["size", "color"], productIds: [productId] }] };
+    if (informationFlow) {
+      graph.nodes.push(
+        { id: "info", kind: "knowledge", label: "Information", position: { x: 200, y: 0 }, config: {} },
+        { id: "info_city", kind: "collect", label: "City", position: { x: 200, y: 100 }, config: { fieldKey: "shipping_city", fieldType: "text", prompt: "Për cilin qytet?" } },
+      );
+      graph.edges.push({ id: "e4", source: "info", target: "info_city", port: "next" }, { id: "e5", source: "info_city", target: "end", port: "next" });
+      graph.flows.push({ id: "info-flow", kind: "information", label: "Dërgesat", entryNodeId: "info", nodeIds: ["info", "info_city"] });
+    }
+    const version = { id: "order-pinned", businessId: "business", createdAt: "now", graph };
+    mocks.version.mockResolvedValue(version);
+    const state = migrateConversationProcesses(migrateContext({ ...emptyState(), product_id: productId, step_key: "size",
+      visual: { versionId: version.id, nodeId: "size", status: "waiting", awaiting: true, visited: ["size"], values: {},
+        binding: { flowId: "order-flow", entity: { kind: "product", id: productId } } } }), () => "order-task", version);
+    const entity = await vi.importActual<typeof import("@/lib/workflows/visual/entity-routing")>("@/lib/workflows/visual/entity-routing");
+    mocks.entity.mockImplementation(entity.resolveVisualEntity);
+    await realVisualExecutor();
+    const service = await import("@/lib/supabase/service");
+    const catalog = vi.spyOn(service, "createServiceSupabase").mockReturnValue({ from: (table: string) => {
+      const query = { select: () => query, eq: () => query, order: () => query,
+        range: async () => ({ data: table === "products" ? [{ id: productId, name: "Puzzle", price_amount: 20, currency: "EUR" }] : [], error: null }),
+        in: async () => ({ data: [], error: null }) };
+      return query;
+    } } as unknown as ReturnType<typeof service.createServiceSupabase>);
+    return { state, version, catalog };
+  }
+
+  it("keeps the interrupted order pinned when a newer version is published", async () => {
+    const { state, version, catalog } = await pinnedOrderJourney();
+    try {
+      mocks.version.mockImplementation(async (_business, id) => id ? version : { ...version, id: "newly-published" });
+      const info = await turn("Sa kushton?", state);
+      const answer = await turn("Large", info.nextState);
+      expect(answer.conversationRouting).toMatchObject({ process: "order", action: "continue" });
+      expect(answer.nextState.visual).toMatchObject({ versionId: version.id, nodeId: "color", values: { size: "Large" } });
+      expect(answer.externalActions).toBeUndefined();
+    } finally { catalog.mockRestore(); }
+  });
+
+  it("restores the interrupted order after a multi-turn information flow completes", async () => {
+    const { state, version, catalog } = await pinnedOrderJourney(true);
+    try {
+      const info = await turn("Sa kushton?", state);
+      expect(info.nextState.processes?.auxiliary?.visual.nodeId).toBe("info_city");
+      const completedInfo = await turn("Tiranë", info.nextState);
+      expect(completedInfo.nextState.processes?.auxiliary).toBeUndefined();
+      expect(completedInfo.conversationRouting?.suspended).toBe("order");
+      expect(completedInfo.nextState.visual).toMatchObject({ versionId: version.id, nodeId: "size", values: {} });
+      expect(completedInfo.nextState.processes?.order?.snapshot.fields.shipping_city).toBeUndefined();
+      const answer = await turn("Large", completedInfo.nextState);
+      expect(answer.conversationRouting).toMatchObject({ process: "order", action: "continue" });
+      expect(answer.nextState.visual).toMatchObject({ nodeId: "color", values: { size: "Large" } });
+      expect(answer.externalActions).toBeUndefined();
+    } finally { catalog.mockRestore(); }
+  });
+
+  it("executes the real action once in isolation and ignores a duplicate confirmation", async () => {
+    const { state } = await actionState(); await realVisualExecutor();
+    const answer = await turn("po", state);
+    expect(answer.externalActions?.filter(a => a.kind === "action.provision")).toEqual([
+      expect.objectContaining({ disposition: "SIMULATED" }),
+    ]);
+    expect(answer.nextState.processes?.actionFlow).toBeUndefined();
+    const repeated = await turn("po", answer.nextState);
+    expect(repeated.externalActions).toBeUndefined();
+    expect(mocks.agent).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects the real confirmation with jo and returns to correction without executing", async () => {
+    const { state } = await actionState(); await realVisualExecutor();
+    const answer = await turn("jo", state);
+    expect(answer.externalActions).toBeUndefined();
+    expect(answer.nextState.processes?.actionFlow?.visual).toMatchObject({ nodeId: "registration_name", awaiting: true });
+  });
+
+  it.each(["expiry", "facts", "missing"])("does not execute a %s action approval", async stale => {
+    const { state } = await actionState(); await realVisualExecutor();
+    const visual = state.processes!.actionFlow!.visual;
+    if (stale === "expiry") visual.pendingConfirmation!.expiresAt = Date.now() - 1;
+    if (stale === "facts") visual.values.biz_registration = "Klinikë tjetër";
+    if (stale === "missing") delete visual.pendingConfirmation;
+    const answer = await turn("po", state);
+    expect(answer.externalActions).toBeUndefined();
+    expect(answer.nextState.processes?.actionFlow?.visual.nodeId).toBe("registration_confirm");
+  });
+
+  it("requires delivery proof for a live action prompt", async () => {
+    const { state } = await actionState();
+    await processConversationMessage({ businessId: "business", message: "po", state, mode: "production", source: "instagram", hasPhoto: false, deliveredReply: null });
+    expect(mocks.agent).not.toHaveBeenCalled();
+    await processConversationMessage({ businessId: "business", message: "po", state, mode: "production", source: "instagram", hasPhoto: false, deliveredReply: state.recentMessages!.at(-1)!.content });
+    expect(mocks.agent).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ actionFlowRequest: true, mode: "production" }));
+  });
+
+  it("re-prompts the pinned action after information and requires a new confirmation", async () => {
+    const { state, version } = await actionState(); await realVisualExecutor();
+    mocks.version.mockImplementation(async (_business, id) => id ? version : { ...version, id: "newly-published" });
+    const info = await turn("Sa kushton?", state);
+    const resumed = await turn("Regjistrim biznesi", info.nextState);
+    expect(resumed.nextState.processes?.actionFlow?.visual).toMatchObject({ versionId: "admin-pinned", nodeId: "registration_confirm", awaiting: true });
+    expect(resumed.externalActions).toBeUndefined();
+    const approved = await turn("po", resumed.nextState);
+    expect(approved.externalActions).toContainEqual(expect.objectContaining({ kind: "action.provision", disposition: "SIMULATED" }));
+  });
+
+  it.each([undefined, 2] as const)("restores an administrative cursor from schema %s before short-reply control", async schemaVersion => {
+    const { state } = await actionState(); await realVisualExecutor();
+    state.visual = state.processes!.actionFlow!.visual; delete state.processes; state.schemaVersion = schemaVersion;
+    const answer = await turn("po", state);
+    expect(answer.externalActions).toContainEqual(expect.objectContaining({ kind: "action.provision", disposition: "SIMULATED" }));
+    expect(answer.nextState.schemaVersion).toBe(3);
+  });
+
+  it("keeps administrative fields out of a different named administrative flow", async () => {
+    const { state, version } = await actionState();
+    const { addFlowTemplate } = await import("@/components/workflows/flow-templates");
+    const { graph } = addFlowTemplate(version.graph, "business_provision", "other");
+    graph.flows.find(f => f.nodeIds.includes("other_name"))!.label = "Hapje laboratori";
+    mocks.version.mockResolvedValue({ ...version, graph });
+    await turn("Hapje laboratori", state);
+    expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ state: expect.objectContaining({ fields: {}, visual: expect.objectContaining({ nodeId: "other_name", values: {} }) }) }));
+  });
+
+  it("remembers the administrative owner across information when an older order also exists", async () => {
+    const { state } = await actionState(true);
+    const info = await turn("Sa kushton?", state);
+    expect(info.conversationRouting?.suspended).toBe("actionFlow");
+    mocks.agent.mockClear();
+    const acknowledged = await turn("po", info.nextState);
+    const clarification = await turn("dua te vazhdoj", acknowledged.nextState);
+    expect(clarification.nextState.processes?.pendingClarification?.target?.process).toBe("actionFlow");
+    expect(mocks.agent).not.toHaveBeenCalled();
+  });
+
+  it("accepts a real administrative field after information without copying order fields", async () => {
+    const { state } = await actionState(true); await realVisualExecutor();
+    const action = state.processes!.actionFlow!;
+    action.visual.nodeId = "registration_name"; action.visual.values = {}; delete action.visual.pendingConfirmation;
+    const info = await turn("Sa kushton?", state);
+    const followUp = await turn("Ku jeni?", info.nextState);
+    const next = await turn("Laborator sintetik", followUp.nextState);
+    expect(next.nextState.processes?.actionFlow?.visual.values.biz_registration).toBe("Laborator sintetik");
+    expect(next.nextState.processes?.actionFlow?.fields?.size).toBeUndefined();
+    expect(next.nextState.processes?.order?.snapshot.fields.size).toBe("L");
+    expect(next.externalActions).toBeUndefined();
+  });
+
+  it.each(["field", "name"])("restores a service after information for %s without confusing navigation and data", async input => {
+    const state = migrateConversationProcesses(emptyState(), () => "task");
+    state.processes!.service = { id: "consultation", status: "active", promptCurrent: true, versionId: "service-pinned", fields: {}, order: {},
+      visual: { versionId: "service-pinned", nodeId: "details", status: "waiting", awaiting: true, visited: [], values: {}, binding: { flowId: "service-flow", entity: { kind: "service", id: "consult" } } } };
+    mocks.version.mockResolvedValue(entityVersion("service-pinned")); mocks.entity.mockResolvedValue(entityResult("consult"));
+    const info = await turn("Sa kushton?", state);
+    const message = input === "name" ? "consult" : "Inspection";
+    await turn(message, info.nextState);
+    expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ message: input === "name" ? "" : message,
+      state: expect.objectContaining({ visual: expect.objectContaining({ awaiting: input === "field" }) }) }));
+  });
+
+  it("fails closed when historical administrative and service prompts conflict", async () => {
+    const { state } = await actionState();
+    state.processes!.service = { id: "service", status: "active", promptCurrent: true, versionId: "service-v1", fields: {}, order: {},
+      visual: { versionId: "service-v1", nodeId: "confirm", status: "waiting", awaiting: true, visited: [], values: {} } };
+    const next = await turn("po", state);
+    expect(next.externalActions).toBeUndefined(); expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.booking).not.toHaveBeenCalled();
+    expect(next.nextState.processes?.actionFlow?.promptCurrent).toBe(false);
+    expect(next.nextState.processes?.service?.promptCurrent).toBe(false);
+  });
+
+  it("cancels only the selected administrative request and leaves an independent order intact", async () => {
+    const { state } = await actionState(true);
+    const paused = await turn("Jo tani", state);
+    const clarification = await turn("dua te vazhdoj", paused.nextState);
+    const cancelled = await turn("leje fare", clarification.nextState);
+    expect(cancelled.nextState.processes?.actionFlow).toBeUndefined();
+    expect(cancelled.nextState.processes?.order).toEqual(paused.nextState.processes?.order);
+    expect(cancelled.externalActions).toBeUndefined(); expect(mocks.agent).not.toHaveBeenCalled();
+  });
+
+  it.each(["pause", "information-only"])("explicitly resumes the saved named action from %s", async control => {
+    const { state } = await actionState();
+    const paused = await turn("Jo tani", state);
+    const controlled = control === "information-only" ? await turn("informacion", paused.nextState) : paused;
+    const resumed = await turn("Vazhdo Regjistrim biznesi", controlled.nextState);
+    expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ actionFlowRequest: true, message: "",
+      entityVersion: expect.objectContaining({ id: "admin-pinned" }), state: expect.objectContaining({ visual: expect.objectContaining({ nodeId: "registration_confirm", awaiting: false }) }) }));
+    expect(resumed.nextState.conversationPaused).toBeUndefined();
+    expect(resumed.nextState.processes?.informationOnly).toBeUndefined();
+  });
+
+  it.each(["resume", "cancel"])("uses W1 %s for a suspended service without losing another task", async choice => {
+    const state = migrateConversationProcesses(order(), () => "order-task");
+    state.processes!.order!.status = "suspended"; state.processes!.active = null; state.processes!.promptOwner = null;
+    state.processes!.service = { id: "consultation", status: "active", promptCurrent: true, versionId: "service-pinned", fields: { detail: "Inspection" }, order: {},
+      visual: { versionId: "service-pinned", nodeId: "details", status: "waiting", awaiting: true, visited: [], values: { detail: "Inspection" }, binding: { flowId: "service-flow", entity: { kind: "service", id: "consult" } } } };
+    mocks.version.mockResolvedValue(entityVersion("service-pinned")); mocks.entity.mockResolvedValue(entityResult("consult"));
+    const paused = await turn("Jo tani", state);
+    const clarification = await turn("dua te vazhdoj", paused.nextState);
+    expect(clarification.nextState.processes?.pendingClarification?.target?.process).toBe("service");
+    const answer = await turn(choice === "resume" ? "kerkesen e meparshme" : "leje fare", clarification.nextState);
+    expect(answer.nextState.processes?.order).toEqual(state.processes!.order);
+    if (choice === "cancel") { expect(answer.nextState.processes?.service).toBeUndefined(); expect(mocks.agent).not.toHaveBeenCalled(); }
+    else expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ message: "", entityVersion: expect.objectContaining({ id: "service-pinned" }), state: expect.objectContaining({ visual: expect.objectContaining({ nodeId: "details", awaiting: false, values: { detail: "Inspection" } }) }) }));
+  });
+
+  it.each(["po", "jo"])("lets the current actionFlow consume %s before generic acknowledgement", async message => {
+    const { state } = await actionState();
+    await turn(message, state);
+    expect(mocks.agent).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ actionFlowRequest: true, message }));
+    expect(mocks.info).not.toHaveBeenCalled();
+    expect(mocks.booking).not.toHaveBeenCalled();
+  });
+
+  it("suspends the old order when an administrative flow takes the turn", async () => {
+    const { state } = await actionState(true);
+    const answer = await turn("Regjistrim biznesi", state);
+    expect(answer.nextState.processes?.active).toBeNull();
+    expect(answer.nextState.processes?.order?.status).toBe("suspended");
+    expect(answer.nextState.processes?.order?.snapshot.fields.size).toBe("L");
+    expect(answer.nextState.processes?.order?.snapshot.fields.private_detail).toBeUndefined();
+  });
+
+  it.each(["Jo tani", "Sa kushton?", "Ku është porosia ime?"])("revokes action prompt ownership on interruption: %s", async message => {
+    const { state } = await actionState();
+    const answer = await turn(message, state);
+    expect(answer.nextState.processes?.actionFlow?.promptCurrent).toBe(false);
+    expect(answer.nextState.processes?.actionFlow?.visual).toEqual(state.processes!.actionFlow!.visual);
+    mocks.agent.mockClear();
+    await turn("po", answer.nextState);
+    expect(mocks.agent).not.toHaveBeenCalled();
+  });
+
+  it.each(["order", "booking", "service"] as const)("suspends %s on information without losing its cursor", async kind => {
+    const state = migrateConversationProcesses(order(), () => "task");
+    if (kind === "booking") {
+      state.processes!.order!.status = "suspended";
+      state.processes!.active = "booking"; state.processes!.promptOwner = "booking";
+      state.processes!.booking = { id: "appointment", status: "active", versionId: "booking-pinned",
+        draft: { nonce: "appointment", phase: "collect", date: "2026-10-15", expires: Date.now() + 60000 } };
+    }
+    if (kind === "service") {
+      state.processes!.order!.status = "suspended"; state.processes!.active = null; state.processes!.promptOwner = null;
+      state.processes!.service = { id: "consultation", status: "active", promptCurrent: true, versionId: "service-pinned", fields: { reason: "Inspection" }, order: {},
+        visual: { versionId: "service-pinned", nodeId: "details", status: "waiting", awaiting: true, visited: [], values: { reason: "Inspection" } } };
+    }
+    const answer = await turn("Sa kushton?", state);
+    expect(answer.nextState.processes?.[kind]?.status).toBe("suspended");
+    expect(answer.nextState.processes?.active).toBeNull();
+    if (kind === "service") expect(answer.nextState.processes?.service?.visual).toEqual(state.processes!.service!.visual);
+    if (kind === "booking") expect(answer.nextState.processes?.booking?.draft).toEqual(state.processes!.booking!.draft);
+    if (kind === "order") expect(answer.nextState.processes?.order?.snapshot).toEqual(state.processes!.order!.snapshot);
+  });
+
+  it.each(["resume", "cancel"])("binds W1 %s to the suspended administrative request", async choice => {
+    const { state } = await actionState();
+    const paused = await turn("Jo tani", state);
+    const clarification = await turn("dua te vazhdoj", paused.nextState);
+    expect(clarification.nextState.processes?.pendingClarification?.target?.process).toBe("actionFlow");
+    mocks.agent.mockClear();
+    const answer = await turn(choice === "resume" ? "kerkesen e meparshme" : "leje fare", clarification.nextState);
+    expect(answer.nextState.processes?.pendingClarification).toBeUndefined();
+    if (choice === "cancel") {
+      expect(answer.nextState.processes?.actionFlow).toBeUndefined();
+      expect(mocks.agent).not.toHaveBeenCalled();
+    } else {
+      expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ actionFlowRequest: true, message: "", entityVersion: expect.objectContaining({ id: "admin-pinned" }),
+        state: expect.objectContaining({ visual: expect.objectContaining({ nodeId: "registration_confirm", awaiting: false }) }) }));
+    }
+  });
+
+  it("resumes a service cursor without consuming navigation as a field value", async () => {
+    const state = migrateConversationProcesses(emptyState(), () => "task");
+    state.processes!.service = { id: "consultation", status: "suspended", promptCurrent: false, versionId: "service-pinned", fields: {}, order: {},
+      visual: { versionId: "service-pinned", nodeId: "details", status: "waiting", awaiting: true, visited: [], values: {}, binding: { flowId: "consult", entity: { kind: "service", id: "consult" } } } };
+    mocks.version.mockResolvedValue(entityVersion("service-pinned"));
+    mocks.entity.mockResolvedValue(entityResult("consult"));
+    await turn("Konsultë", state);
+    expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ message: "", state: expect.objectContaining({ visual: expect.objectContaining({ nodeId: "details", awaiting: false }) }) }));
+  });
+
+  it.each(["po", "Regjistrim biznesi", "Vazhdo porosinë", "Dua rezervim"])("staff ownership blocks AI continuation for %s", async message => {
+    const { state } = await actionState(true); state.staffHandoff = true;
+    const answer = await turn(message, state);
+    expect(answer.reply).toContain("staf");
+    expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.booking).not.toHaveBeenCalled(); expect(mocks.info).not.toHaveBeenCalled();
+  });
 });

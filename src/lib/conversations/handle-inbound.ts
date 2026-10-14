@@ -13,6 +13,7 @@ import { fetchInstagramUserProfile } from "@/lib/instagram/user-profile";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
+import { suspendProcesses } from "@/lib/workflows/conversation-processes";
 import {
   emptyState,
   promptForStep,
@@ -357,13 +358,11 @@ export async function handleInboundMessage(
   if (!createdFresh && (resumedHandoff || staffReplied) && inboundState.conversationPaused !== false) {
     delete inboundState.staffHandoff;
     inboundState.conversationPaused = true;
+    suspendProcesses(inboundState);
     if (inboundState.processes) {
       const processes = inboundState.processes;
-      if (processes.active && processes[processes.active]) processes[processes.active]!.status = "suspended";
-      processes.active = null; processes.promptOwner = null;
       delete processes.pendingChoice; delete processes.auxiliary;
       delete processes.pendingClarification;
-      if (processes.service) processes.service.promptCurrent = false;
     }
   } else if (resumedHandoff) {
     delete inboundState.staffHandoff;
@@ -394,12 +393,11 @@ export async function handleInboundMessage(
     if (unconfirmedPrompt || (attempted && attempted.reply !== deliveredReply)) deliveredReply = null;
     if (unconfirmedPrompt) {
       inboundState.conversationPaused = true;
+      suspendProcesses(inboundState);
       if (inboundState.processes) {
-        inboundState.processes.promptOwner = null;
         delete inboundState.processes.pendingChoice;
         delete inboundState.processes.pendingClarification;
         delete inboundState.processes.auxiliary;
-        if (inboundState.processes.service) inboundState.processes.service.promptCurrent = false;
       }
     }
   }

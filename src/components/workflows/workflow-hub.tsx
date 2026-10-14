@@ -7,7 +7,8 @@ import type { VisualGraph, VisualFlow, VisualFlowKind, VisualTrace } from "@/lib
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import type { AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 
-export const processLabels: Record<VisualFlowKind | "clarify", string> = {
+export const processLabels: Record<VisualFlowKind | "clarify" | "service" | "actionFlow", string> = {
+  service: "Shërbimi", actionFlow: "Veprimi administrativ",
   information: "Informacion", order: "Porosi", booking: "Rezervim", support: "Staf", custom: "Rrjedhë tjetër", clarify: "Sqarim",
 };
 const processes = [
