@@ -133,6 +133,7 @@ export function BusinessAssistant({
   const { history, setHistory } = archive;
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
+  const [outgoing, setOutgoing] = useState<string | null>(null);
   const [mobile, setMobile] = useState(false);
   const inline = mobile && context.page === "home";
   const visible = open || inline;
@@ -208,7 +209,7 @@ export function BusinessAssistant({
   useEffect(() => {
     if (visible)
       end.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [history, result, visible]);
+  }, [history, result, visible, outgoing, busy]);
   useEffect(() => {
     if (mobile && workOpen && result?.preview) workBack.current?.focus();
   }, [mobile, workOpen, result?.preview]);
@@ -249,6 +250,8 @@ export function BusinessAssistant({
     setError("");
     setResult(null);
     const input = text.trim();
+    setText("");
+    setOutgoing(input || null);
     const contextKey = context.page === "workflows" ? `${slug}:workflows` : `${slug}:${JSON.stringify(context)}`;
     const generation = requestGeneration.current;
     const pin = workflowRequest.current?.scope === contextKey ? workflowRequest.current : null;
@@ -304,6 +307,7 @@ export function BusinessAssistant({
       setError(e instanceof Error ? e.message : "Kërkesa nuk përfundoi.");
       setText((current) => (current.trim() ? current : input));
     } finally {
+      if (generation === requestGeneration.current) setOutgoing(null);
       locked.current = false;
       setSending(false);
       setBusy(null);
@@ -505,6 +509,7 @@ export function BusinessAssistant({
               >
                 <p>{message.content}</p>
                 {message.materials?.length ? <div className="unified-attachments">{message.materials.map((item, index) => <FileCard key={index} item={item}/>)}</div> : null}
+                {message.role === "user" && <small className="chat-receipt">seen</small>}
                 {message.role === "assistant" && (
                   <div className="assistant-message-actions">
                     <MessageCopy text={message.content} />
@@ -512,6 +517,13 @@ export function BusinessAssistant({
                 )}
               </div>
             ))}
+            {outgoing && (
+              <div className="assistant-message assistant-message-user">
+                <p>{outgoing}</p>
+                <small className="chat-receipt">delivered</small>
+              </div>
+            )}
+            {busy === "plan" && <div className="chat-typing" role="status" aria-label="Po shkruan"><i /><i /><i /></div>}
           </div>
           {result?.slots && (
             <div className="assistant-slots" aria-label="Oraret e lira">

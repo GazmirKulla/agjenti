@@ -134,6 +134,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
     const files = original ? [] : uploads;
     if (inFlight.current || trainingBusy || voiceBusy || (!text && !simulated && !existing.length && !files.length)) return;
     if (index >= 40) { setError("Kjo bisedë arriti 40 mesazhe. Fillo një bisedë të re."); return; }
+    if (!original) setDraft("");
     const run = ++epoch.current; inFlight.current = true; controller.current = new AbortController();
     setError(""); setShowJump(false); setPendingIndex(index);
     setPending(text || (files.length || existing.length ? "Skedar i bashkëngjitur" : "[Foto e simuluar]"));
@@ -171,7 +172,11 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
       setTrainingFeedback(result.trainingReceipt ? { receipt: result.trainingReceipt, question: text || "[Skedar]", response: result.reply, workflowId: result.workflowId, stepKey: result.nextState.step_key ?? null } : null);
       clearComposer(true);
     } catch (e) {
-      if (epoch.current === run) { retry.current = { index, original }; setError(e instanceof Error ? e.message : "Nuk u lidhëm. Provo përsëri; mesazhi u ruajt këtu."); }
+      if (epoch.current === run) {
+        retry.current = { index, original };
+        if (!original) setDraft(current => current.trim() ? current : text);
+        setError(e instanceof Error ? e.message : "Nuk u lidhëm. Provo përsëri; mesazhi u ruajt këtu.");
+      }
     } finally {
       if (epoch.current === run) { inFlight.current = false; setPending(null); setPendingIndex(null); setPhase(""); focusComposer(); }
     }
@@ -230,13 +235,14 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
           {!messages.length && !pending && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti dhe përmirësoje gjatë bisedës.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
           {(pendingIndex !== null ? messages.slice(0,pendingIndex) : messages).map((entry,index)=><div className="chat-exchange" key={entry.id}>
             <div className="agent-test-bubble customer"><p>{entry.text}</p>{entry.photo && <span className="chat-file-pill">Foto e simuluar</span>}{entry.attachments.map((a,i)=><span className="chat-file-pill" key={i}>{a.preview?.startsWith("blob:") ? <Image unoptimized width={80} height={80} src={a.preview} alt={a.name}/> : <Icon name="file" size={15}/>} {a.name}</span>)}</div>
+            <small className="chat-receipt">seen</small>
             <div className="chat-message-actions customer"><CopyMessage text={entry.text}/><button type="button" className="chat-icon" aria-label="Ndrysho mesazhin" title="Ndrysho mesazhin" disabled={busy || voice} onClick={()=>edit(index)}><Icon name="edit" size={16}/></button></div>
             <div className="agent-test-bubble agent"><span className="chat-agent-avatar"><Icon name="spark" size={19}/></span><ChatMessage text={entry.result.reply}/></div>
             <div className="chat-message-actions"><CopyMessage text={entry.result.reply}/><button className="chat-icon" type="button" title="Rigjenero përgjigjen" aria-label="Rigjenero përgjigjen" disabled={busy || voice} onClick={()=>void send(index,entry)}><Icon name="refresh" size={16}/></button>{canSpeak && <button className="chat-icon" type="button" title={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} aria-label={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} onClick={()=>speak(entry)}><Icon name={speaking===entry.id ? "stop" : "volume"} size={16}/></button>}{entry.result.trainingReceipt && <button type="button" className="chat-train" disabled={busy || voice} onClick={()=>{
               const feedback={receipt:entry.result.trainingReceipt!,question:entry.text || "[Skedar]",response:entry.result.reply,workflowId:entry.result.workflowId,stepKey:entry.result.nextState.step_key??null}; setTrainingFeedback(feedback);setTrainingRequest(previous=>({key:(previous?.key??0)+1,feedback}));
             }}><Icon name="spark" size={14}/> Përmirëso</button>}</div>
           </div>)}
-          {pending !== null && <div className="chat-exchange"><div className="agent-test-bubble customer"><p>{pending}</p></div><p className="agent-test-thinking" role="status"><span className="chat-thinking-dot"/>{phase || "Po përgatisim mesazhin…"}</p></div>}
+          {pending !== null && <div className="chat-exchange"><div className="agent-test-bubble customer"><p>{pending}</p></div><small className="chat-receipt">delivered</small>{phase && !phase.startsWith("Agjenti") ? <p className="agent-test-thinking" role="status"><span className="chat-thinking-dot"/>{phase}</p> : <div className="chat-typing" role="status" aria-label="Agjenti po shkruan"><i /><i /><i /></div>}</div>}
         </div>
         {showJump && <button className="chat-jump chat-icon" type="button" aria-label="Shko te mesazhi i fundit" onClick={()=>{setShowJump(false);chatLog.current?.scrollTo({top:chatLog.current.scrollHeight,behavior:"smooth"});}}><Icon name="down" size={18}/></button>}
         <form className="agent-test-composer" onSubmit={e=>{e.preventDefault();void send();}}>
