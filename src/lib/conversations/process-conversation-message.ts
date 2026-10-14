@@ -772,7 +772,12 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     return finish(result);
   }
   if (processes.order?.status === "completed") { delete processes.order; state = resetOrder(state); }
-  else if (processes.order) state = restoreOrder(state, { resume: decision.action === "resume" && !confirmation });
+  else if (processes.order) {
+    state = restoreOrder(state, { resume: decision.action === "resume" && !confirmation });
+    // Entity discovery may use the latest publication, but this is still the saved
+    // order. Let the executor load its cursor's pin (or the authenticated preview).
+    if (state.visual && params.entityVersion?.id !== state.visual.versionId) params = { ...params, entityVersion: undefined };
+  }
   else if (freshEntityVersion && state.visual?.binding && (!selectedEntity || selectedEntity.binding.flowId !== state.visual.binding.flowId || params.entityVersion?.id !== state.visual.versionId)) delete state.visual;
   let usedBookingNode = false;
   if (replacementDeclined) params = { ...params, entityVersion: undefined };
