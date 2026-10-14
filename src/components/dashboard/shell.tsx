@@ -45,7 +45,7 @@ export function DashboardShell({
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [iconsOnly, setIconsOnly] = useState(false);
-  const [tip, setTip] = useState<{ text: string; top: number } | null>(null);
+  const [tip, setTip] = useState<{ text: string; top: number; left: number } | null>(null);
   const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -92,7 +92,8 @@ export function DashboardShell({
     if (!el || !text || (!iconRail && !el.classList.contains("sidebar-icon-toggle"))) return;
     const rect = el.getBoundingClientRect();
     const top = rect.top + rect.height / 2;
-    setTip((current) => current?.text === text && Math.abs(current.top - top) < 1 ? current : { text, top });
+    const left = rect.right + 8;
+    setTip((current) => current?.text === text && Math.abs(current.top - top) < 1 && Math.abs(current.left - left) < 1 ? current : { text, top, left });
   }
   function hideTip(event: React.MouseEvent | React.FocusEvent) {
     const next = (event.relatedTarget as HTMLElement | null)?.closest?.("[data-tip]");
@@ -215,26 +216,14 @@ export function DashboardShell({
         inert={mobile && !open ? true : undefined}
       >
         <div className="mobile-drawer-header">
-          <div className="sidebar-head">
-            <Link
-              href={platformAdmin || admin ? "/admin" : base}
-              className="dashboard-brand"
-              data-tip={iconRail ? "agjenti.app" : undefined}
-              onClick={() => setOpen(false)}
-            >
-              <BrandLogo size={36} priority />
-            </Link>
-            <button
-              type="button"
-              className="sidebar-icon-toggle"
-              aria-pressed={iconsOnly}
-              aria-label={t(iconsOnly ? "Shfaq menunë me tekst" : "Shfaq vetëm ikonat")}
-              data-tip={t(iconsOnly ? "Shfaq menunë me tekst" : "Shfaq vetëm ikonat")}
-              onClick={toggleIcons}
-            >
-              <Icon name="sidebar" size={18} />
-            </button>
-          </div>
+          <Link
+            href={platformAdmin || admin ? "/admin" : base}
+            className="dashboard-brand"
+            data-tip={iconRail ? "agjenti.app" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            <BrandLogo size={36} priority />
+          </Link>
           <button
             type="button"
             className="mobile-drawer-close"
@@ -316,7 +305,7 @@ export function DashboardShell({
         </footer>
       </aside>
       {tip && (
-        <div className="sidebar-tip" style={{ top: tip.top }} aria-hidden="true">
+        <div className="sidebar-tip" style={{ top: tip.top, left: tip.left }} aria-hidden="true">
           {tip.text}
         </div>
       )}
@@ -365,6 +354,21 @@ export function DashboardShell({
           >
             <Icon name="search" />
           </button>
+          <div className="topbar-search-row">
+          <button
+            type="button"
+            className="sidebar-icon-toggle"
+            aria-pressed={iconsOnly}
+            aria-label={t(iconsOnly ? "Shfaq menunë me tekst" : "Shfaq vetëm ikonat")}
+            data-tip={t(iconsOnly ? "Shfaq menunë me tekst" : "Shfaq vetëm ikonat")}
+            onClick={toggleIcons}
+            onMouseOver={showTip}
+            onMouseOut={hideTip}
+            onFocus={showTip}
+            onBlur={hideTip}
+          >
+            <Icon name="sidebar" size={18} />
+          </button>
           <div className="dashboard-search" id="dashboard-page-search">
             <Icon name="search" size={18} />
             <input
@@ -409,6 +413,7 @@ export function DashboardShell({
                 ) && <p>{t("Nuk u gjet asnjë faqe.")}</p>}
               </div>
             )}
+          </div>
           </div>
           <div className="topbar-actions">
             {!admin && slug && <button type="button" className="assistant-desktop-trigger" onClick={() => assistant?.setOpen(true)}><Icon name="spark" size={18}/><span>{agentName}</span></button>}
