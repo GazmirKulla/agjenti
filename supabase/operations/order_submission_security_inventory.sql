@@ -15,8 +15,8 @@ select r.rolname,r.rolsuper,r.rolbypassrls,r.rolinherit,r.rolcanlogin,
   has_database_privilege(r.oid,current_database(),'TEMP') as temporary_tables
 from pg_roles r where r.rolname in ('anon','authenticated','service_role','authenticator') order by r.rolname;
 
--- Effective rights include PUBLIC/inherited grants. Inspect column rights too,
--- both for post-revocation verification and exact restoration of the original ACL.
+-- Effective rights include PUBLIC/inherited grants. Inspect column rights too:
+-- revoking a table-level grant alone need not remove column-level INSERT/UPDATE.
 select c.oid::regclass as relation,pg_get_userbyid(c.relowner) as owner,
   c.relrowsecurity,c.relforcerowsecurity,c.relacl,r.rolname,
   has_table_privilege(r.oid,c.oid,'SELECT') as can_select,
