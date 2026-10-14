@@ -1,3 +1,4 @@
+import { ModuleDescription } from "@/components/dashboard/module-description";
 import "@/components/dashboard/actions.css";
 import Link from "next/link";
 import { policyCatalog } from "@/lib/actions/policies";
@@ -63,7 +64,8 @@ export default async function ActionsPage({ searchParams }: { searchParams?: Pro
                 const moduleId = toggleableModules.find(id => key === `module.${id}`);
                 const allowed = moduleId ? allowedModules.has(moduleId) : provision?.data === true;
                 return <article className="capability-card" key={`${business.id}:${key}`}>
-                  <h3>{definition.name}</h3><p>{definition.description}</p>
+                  <h3>{definition.name}</h3>
+                  {moduleId ? <ModuleDescription moduleId={moduleId} /> : <p>{definition.description}</p>}
                   <p className="muted-copy">{!moduleId && provision?.error ? "Leja nuk u verifikua" : allowed ? "Lejohet" : "Nuk lejohet"}{moduleId && allowed ? profile?.enabledModules.includes(moduleId) ? " · aktiv në hapësirë" : " · joaktiv në hapësirë" : ""}</p>
                   <ActionForm action={saveActionPolicy} className="grid gap-3">
                     <input type="hidden" name="scope" value="business" />

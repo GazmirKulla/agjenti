@@ -1,3 +1,4 @@
+import { ModuleDescription } from "@/components/dashboard/module-description";
 import "@/components/dashboard/actions.css";
 import Link from "next/link";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
@@ -200,7 +201,7 @@ export default async function BusinessActionsPage({
               const available = allowedModules.has(moduleId);
               const active = available && profile.enabledModules.includes(moduleId);
               return <article className="capability-card" key={moduleId}>
-                <h3>{mod.label}</h3><p>{mod.description}</p>
+                <h3>{mod.label}</h3><ModuleDescription moduleId={moduleId} />
                 <p className="muted-copy">{!available ? "Nuk lejohet nga administratori" : active ? "I lejuar · aktiv në hapësirë" : "I lejuar · joaktiv në hapësirë"}</p>
                 {active && <Link className="soft-link" href={`/b/${slug}/${mod.path}`}>Hap {mod.label} →</Link>}
               </article>;

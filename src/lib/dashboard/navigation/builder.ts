@@ -16,7 +16,8 @@ export function buildNavigationItems(
     variant === "mobile"
       ? profile.mobileNavigationItems
       : profile.navigationItems;
-  return ids.map((id) => {
+  // Older saved profiles may still include the retired placeholder.
+  return ids.filter((id) => id !== "staff").map((id) => {
     const mod = moduleRegistry[id];
     return {
       id,
