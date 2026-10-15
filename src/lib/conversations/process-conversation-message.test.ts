@@ -1118,7 +1118,7 @@ it("emits bounded coordinator metadata for an early acknowledgement without cust
   await processConversationMessage({ businessId: "business", source: "instagram", message: "Ok", state, hasPhoto: false, onTrace,
     bookingGuard: { jobId: 1, leaseToken: "secret-lease", conversationId: "conversation", revision: 4 } });
   const event = onTrace.mock.calls.map(([e]) => e).find(e => e.label === "Conversation coordinator completed");
-  expect(event.data).toEqual({ coordinator: "shared_v3", channel: "instagram", revision: 4, workflowVersion: "v1", process: "information", action: "answer", elapsedMs: expect.any(Number) });
+  expect(event.data).toEqual({ coordinator: "shared_v3", businessId: "business", executionMode: "live", channel: "instagram", revision: 4, workflowVersion: "v1", process: "information", action: "answer", elapsedMs: expect.any(Number) });
   expect(JSON.stringify(event)).not.toMatch(/secret-lease|Informacion privat|Ana/);
 });
 

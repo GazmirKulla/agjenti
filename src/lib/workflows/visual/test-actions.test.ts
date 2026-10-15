@@ -9,7 +9,9 @@ vi.mock("@/lib/instagram/send", () => ({ sendInstagramText: m.send }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: m.db }));
 import { simulateVisualWorkflow } from "./test-actions";
 import { starterVisualGraph } from "./model";
-import { readTestSession } from "@/lib/agents/test-chat/session";
+import { readTestSession, sealTestSession } from "@/lib/agents/test-chat/session";
+import { migrateContext } from "../context";
+import { snapshotOrder } from "../conversation-processes";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -57,6 +59,29 @@ describe("visual workflow preview sessions", () => {
     expect((await simulateVisualWorkflow("studio", graph, "Hi", first.session)).error).toContain("Rrjedha ndryshoi");
     expect(m.process).not.toHaveBeenCalled();
     expect(await simulateVisualWorkflow("studio", graph, "Hi", null)).toHaveProperty("turn");
+  });
+  it("rejects changed graphs even when no top-level visual cursor survived", async () => {
+    m.process.mockResolvedValueOnce({ reply: "Information only", nextState: emptyState(), previousResponseId: null });
+    const graph = starterVisualGraph();
+    const first = await simulateVisualWorkflow("studio", graph, "Hi");
+    graph.nodes.find(n => n.kind === "knowledge")!.config.prompt = "Changed draft";
+    m.process.mockClear();
+    expect((await simulateVisualWorkflow("studio", graph, "Continue", first.session)).error).toContain("Rrjedha ndryshoi");
+    expect(m.process).not.toHaveBeenCalled();
+  });
+  it("rejects a legacy sealed preview with a mismatched suspended process pin", async () => {
+    const state = migrateContext();
+    const snapshot = snapshotOrder(state);
+    snapshot.visual = { versionId: "preview:old", nodeId: "collect", status: "waiting", awaiting: true, visited: [], values: {} };
+    state.processes = { active: null, promptOwner: null, order: { id: "test-order", status: "suspended", snapshot } };
+    const token = sealTestSession(readTestSession(null, "user-a", "business-a"), state, null);
+    expect((await simulateVisualWorkflow("studio", starterVisualGraph(), "Continue", token)).error).toContain("Rrjedha ndryshoi");
+    expect(m.process).not.toHaveBeenCalled();
+  });
+  it("requires restart for a used legacy session with no remaining graph evidence", async () => {
+    const token = sealTestSession(readTestSession(null, "user-a", "business-a"), emptyState(), null);
+    expect((await simulateVisualWorkflow("studio", starterVisualGraph(), "Continue", token)).error).toContain("Rrjedha ndryshoi");
+    expect(m.process).not.toHaveBeenCalled();
   });
   it("rejects preview session replay by another user or business", async () => {
     const first = await simulateVisualWorkflow("studio", starterVisualGraph(), "Hi");

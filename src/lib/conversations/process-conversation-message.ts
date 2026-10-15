@@ -15,8 +15,8 @@ import { bookingAdapterState, currentProcessOwner, migrateConversationProcesses,
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
 import { customerOrderStatus, isOrderStatusFollowUp, isOrderStatusRequest, readOrderStatusLookup, setOrderStatusLookup, type OrderCustomerIdentity } from "@/lib/orders/customer-status";
 import { isEntityInformationRequest, resolveVisualEntity } from "@/lib/workflows/visual/entity-routing";
-import { ownedCollectNodes } from "@/lib/workflows/visual/facts";
-import { combineProductPresentations, isEntityReference, recordEntityPresentation } from "@/lib/products/entity-bridge";
+import { ownedCollectNodes, pendingCollectNode } from "@/lib/workflows/visual/facts";
+import { combineProductPresentations, isBareCollectionValue, isEntityReference, recordEntityPresentation } from "@/lib/products/entity-bridge";
 import { resolveCurrentProductReference } from "@/lib/products/resolve-reference";
 import {
   IsolationViolation,
@@ -147,6 +147,10 @@ export async function processConversationMessage(params: ConversationMessagePara
   } catch (error) {
     if (error instanceof IsolationViolation) throw error;
     if (!(error instanceof CapabilityEnforcementError)) throw error;
+    params.onTrace?.({ stage: "workflow", label: "Runtime capability blocked", status: "skipped", data: {
+      businessId: params.businessId, executionMode: isIsolatedExecution() ? "isolated" : "live",
+      reasonCode: error.code, validation: "not_executed", currentNodeId: params.state?.visual?.nodeId ?? null,
+    } });
     // Retain the original pinned version, collected fields and process cursors.
     result = plainResult(structuredClone(params.state ?? emptyState()), error.message);
     result.workflowId = params.persistedWorkflowId ?? params.state?.context?.execution.linear?.id ?? params.state?.linearSnapshot?.id ?? null;
@@ -172,6 +176,7 @@ export async function processConversationMessage(params: ConversationMessagePara
   // Operational metadata only: never copy messages, profile values or lease tokens.
   params.onTrace?.({ stage: "workflow", label: "Conversation coordinator completed", data: {
     coordinator: params.linearPreview ? "linear_preview" : usesSharedCoordinator(params) ? "shared_v3" : "legacy",
+    businessId: params.businessId, executionMode: isIsolatedExecution() ? "isolated" : "live",
     channel: params.source ?? (params.mode === "test" ? "admin_chat_lab" : "instagram"),
     revision: params.bookingGuard?.revision ?? null,
     workflowVersion: result.nextState.visual?.versionId ?? result.nextState.context?.execution.linear?.versionId ?? null,
@@ -310,8 +315,15 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     && !isQuestion(params.message) && !isEntityInformationRequest(params.message)
     && !bookingRequest(foldText(params.message)) && explicitIntent(params.message) !== "support"
     && (replacementId || params.state?.entityPresentation || isEntityReference(params.message))) {
-    const reference = await resolveCurrentProductReference({ businessId: params.businessId, message: params.message, state: params.state,
-      deliveredReply: params.deliveredReply, mode: params.mode, verifiedId: replacementId });
+    const cursor = params.state?.visual;
+    const referenceVersion = cursor ? params.visualPreview ?? await loadVisualVersion(params.businessId, cursor.versionId) : null;
+    const pendingField = referenceVersion ? pendingCollectNode(referenceVersion.graph, cursor) : undefined;
+    const collectingField = pendingField ? pendingField.config.fieldType ?? "text" : undefined;
+    // A typed reply needs no product lookup. In particular, an old catalog list
+    // must not impose product permissions on the current service/booking field.
+    const reference = !replacementId && isBareCollectionValue(params.message, collectingField) ? { status: "none" as const }
+      : await resolveCurrentProductReference({ businessId: params.businessId, message: params.message, state: params.state,
+      deliveredReply: params.deliveredReply, mode: params.mode, verifiedId: replacementId, collectingField });
     if (reference.status === "clarify") {
       const state = await migrateState();
       if (replacementId) delete state.processes!.pendingChoice;

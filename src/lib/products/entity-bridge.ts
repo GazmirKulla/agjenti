@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
 import { matchingCatalogNames } from "./match-name";
+import { validValue, type FieldType } from "@/lib/workflows/context";
 
 export type ReferenceProduct = { id: string; name: string; sku?: string | null; price_amount?: number | null; currency?: string | null };
 export type PresentedEntity = {
@@ -96,6 +97,15 @@ function relativeReference(message: string): { kind: "ordinal"; index: number } 
 }
 export const isEntityReference = (message: string) => Boolean(relativeReference(message) || positiveEntityText(message).correction);
 
+/** A typed literal or bare SKU can answer a pending field. Explicit entity
+ * navigation still wins; free-text names retain the existing W3 disambiguation. */
+export function isBareCollectionValue(message: string, fieldType: FieldType | undefined, catalog: readonly Pick<ReferenceProduct, "sku">[] = []) {
+  if (!fieldType || isEntityReference(message)) return false;
+  const text = message.trim();
+  return fieldType !== "text" && fieldType !== "photo" && validValue(text, fieldType)
+    || catalog.some(product => product.sku && foldText(product.sku) === foldText(text));
+}
+
 export type ProductResolution = { status: "none" } | { status: "selected"; product: ReferenceProduct; via: "name" | "ordinal" | "cheapest" | "this" | "correction" | "verified_id" }
   | { status: "clarify"; reason: string; reply: string };
 const clarify = (reason: string, reply = "Cilin produkt dëshiron? Shkruaj emrin e plotë; zgjedhja e mëparshme nuk u ndryshua."): ProductResolution => ({ status: "clarify", reason, reply });
@@ -106,6 +116,9 @@ export function resolveProductReference(args: {
   businessId: string; message: string; products: readonly ReferenceProduct[];
   state?: ConversationStatePayload | null; deliveredReply?: string | null; mode?: "test" | "production";
   verifiedId?: string;
+  /** Server-derived pending field: bare SKU-shaped values belong to collection.
+   * Explicit `sku ...`, named corrections and relative choices remain navigation. */
+  collectingField?: FieldType;
 }): ProductResolution {
   if (args.verifiedId) {
     const product = args.products.find(p => p.id === args.verifiedId);
@@ -113,6 +126,7 @@ export function resolveProductReference(args: {
   }
   const positive = positiveEntityText(args.message);
   const relative = relativeReference(positive.text);
+  if (isBareCollectionValue(args.message, args.collectingField, args.products)) return { status: "none" };
   if (relative?.kind === "ambiguous") return clarify("ambiguous_reference");
   if (!relative) {
     const text = foldText(positive.text).trim();

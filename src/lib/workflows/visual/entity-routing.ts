@@ -1,9 +1,10 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { foldText } from "../engine";
 import { matchingCatalogNames } from "@/lib/products/match-name";
-import { isEntityReference, positiveEntityText, resolveProductReference } from "@/lib/products/entity-bridge";
+import { isBareCollectionValue, isEntityReference, positiveEntityText, resolveProductReference } from "@/lib/products/entity-bridge";
 import type { ConversationStatePayload } from "../engine";
 import type { VisualGraph, VisualRunState } from "./types";
+import { pendingCollectNode } from "./facts";
 import { runtimeModules, requireRuntimeModules, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
 
 export type VisualEntity = { kind: "product" | "service"; id: string; name: string; productTypeId?: string | null; bookingEnabled?: boolean; price_amount?: number | null; currency?: string | null };
@@ -57,15 +58,18 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
   ];
   const available = entities.filter(entity => graph.flows.some(flow => (entity.kind === "product" ? flow.productIds : flow.serviceIds)?.includes(entity.id)));
   const text = foldText(message);
-  const skuMatches = entities.filter(entity => {
+  const pending = pendingCollectNode(graph, reference?.state?.visual);
+  const collectingField = pending ? pending.config.fieldType ?? "text" : undefined;
+  const fieldValue = !reference?.selectedProductId && isBareCollectionValue(message, collectingField, entities);
+  const skuMatches = fieldValue ? [] : entities.filter(entity => {
     const sku = entity.sku ? foldText(entity.sku) : "";
     return Boolean(sku && (text === sku || text === `sku ${sku}`));
   });
   const resolved = reference?.selectedProductId || isEntityReference(message) ? resolveProductReference({ businessId, message, products: activeProducts,
-    state: reference?.state, verifiedId: reference?.selectedProductId, deliveredReply: reference?.deliveredReply, mode: preview ? "test" : "production" }) : null;
+    state: reference?.state, verifiedId: reference?.selectedProductId, deliveredReply: reference?.deliveredReply, mode: preview ? "test" : "production", collectingField }) : null;
   if (resolved?.status === "clarify") return { clarification: resolved.reply, available };
   const positive = positiveEntityText(message);
-  const named = skuMatches.length ? skuMatches : matchingCatalogNames(entities, positive.text);
+  const named = fieldValue ? [] : skuMatches.length ? skuMatches : matchingCatalogNames(entities, positive.text);
   // A product-only lookup must not suppress an equally named service in the
   // existing visual router. Relative references already identify the entity kind.
   if (resolved?.status === "selected" && named.some(entity => entity.kind === "service")

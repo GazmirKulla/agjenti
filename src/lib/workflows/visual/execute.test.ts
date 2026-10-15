@@ -45,6 +45,34 @@ function waiting(nodeId: string, versionId = "version-1"): VisualRunState {
 beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(null); mocks.entity.mockResolvedValue({}); mocks.extract.mockResolvedValue(0); });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
+it.each([["4", "accepted"], ["many", "invalid"]] as const)("traces actual field validation (%s) without field values or graph payloads", async (message, status) => {
+  const graph = linear(node("quantity", "collect", { fieldKey: "quantity", fieldType: "number", prompt: "How many?" }),
+    node("reference", "collect", { fieldKey: "custom_reference", prompt: "Reference?" }));
+  const state = migrateContext(); state.visual = waiting("quantity");
+  setFact(state, "customer_phone", "+355691234567", "phone", "test");
+  const onTrace = vi.fn();
+  const result = await executeVisualTurn({ ...params(graph), message, state, onTrace }, vi.fn());
+  const event = onTrace.mock.calls.map(([event]) => event).find(event => event.label === "Visual workflow executed");
+  expect(event?.data).toMatchObject({ businessId: "business-a", executionMode: "isolated", workflowSource: "draft", versionId: "version-1",
+    fromNodeId: "quantity", currentNodeId: result.nextState.visual!.nodeId,
+    fieldValidation: expect.arrayContaining([expect.objectContaining({ nodeId: "quantity", fieldKey: "quantity", fieldType: "number", status })]) });
+  expect(event?.data).not.toHaveProperty("state");
+  expect(event?.data).not.toHaveProperty("graph");
+  expect(JSON.stringify(event)).not.toContain("+355691234567");
+});
+
+it("does not leave an explicit draft for a mentioned product without a draft binding", async () => {
+  const graph: VisualGraph = { ...linear(node("size", "collect", { fieldKey: "size", prompt: "Size?" })), version: 2,
+    flows: [{ id: "bound", kind: "order", label: "Retail", entryNodeId: "size", nodeIds: ["size"], productIds: ["00000000-0000-4000-8000-000000000001"] }] };
+  mocks.entity.mockResolvedValue({ mentioned: { id: "other-product", kind: "product", name: "Other kit" } });
+  const legacy = vi.fn(async (p: LegacyParams) => response(p, "Generic customer collection"));
+  const result = await executeVisualTurn({ ...params(graph), message: "Other kit", orderRequest: true }, legacy);
+  expect(legacy).not.toHaveBeenCalled();
+  expect(result.debug.fallbackReason).toBe("preview_binding_missing");
+  expect(result.nextState.visual).toBeUndefined();
+  expect(result.reply).toContain("draft");
+});
+
 it("W2 blocks an old visual confirmation after an invalid profile correction", async () => {
   const graph = linear(node("confirm", "confirm", { prompt: "Konfirmon?" }));
   graph.edges = graph.edges.filter(edge => edge.source !== "confirm");

@@ -36,11 +36,20 @@ export type VisualRunState = {
   forceCollect?: string;
   advisory?: boolean;
 };
+/** Execution evidence only; never includes collected values or prompt content. */
+export type VisualFieldValidation = {
+  nodeId: string;
+  fieldKey: string;
+  fieldType: NonNullable<VisualNode["config"]["fieldType"]>;
+  status: "accepted" | "invalid" | "reused" | "not_consumed";
+  reasonCode: "validated_input" | "invalid_value" | "canonical_value" | "question" | "input_already_consumed" | "prompt_not_yet_presented";
+};
 export type VisualExecution = {
   state: VisualRunState;
   action: { kind: "action" | "knowledge" | "order_status" | "product" | "booking" | "prompt" | "handoff" | "end"; nodeId: string; message?: string };
   traversedNodeIds: string[];
   inputConsumed: boolean;
+  fieldValidation?: VisualFieldValidation[];
   error?: string;
 };
 export type VisualVersion = { id: string; businessId: string; graph: VisualGraph; createdAt: string };

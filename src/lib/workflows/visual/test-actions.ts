@@ -17,7 +17,15 @@ export async function simulateVisualWorkflow(slug: string, raw: unknown, message
     if (!process.env.TOKEN_ENCRYPTION_KEY?.trim()) return { error: "Konfiguro çelësin e sesioneve të provës." };
     const session = readTestSession(token ?? null, user.id, access.business.id);
     const id = `preview:${visualGraphHash(graph)}`;
-    if (session.state.visual && session.state.visual.versionId !== id) return { error: "Rrjedha ndryshoi. Rifillo provën." };
+    // Read older sealed sessions too; a suspended process can own the only cursor.
+    const { state } = session;
+    const pins = [session.visualPreviewId, state.visual?.versionId, state.completedVisual?.versionId,
+      state.processes?.order?.snapshot.visual?.versionId, state.processes?.booking?.versionId,
+      state.processes?.booking?.visual?.versionId, state.processes?.service?.versionId,
+      state.processes?.service?.visual?.versionId, state.processes?.actionFlow?.versionId,
+      state.processes?.actionFlow?.visual?.versionId, state.processes?.auxiliary?.visual.versionId];
+    if (pins.some(pin => pin && pin !== id) || session.turns > 0 && !pins.some(Boolean)) return { error: "Rrjedha ndryshoi. Rifillo provën." };
+    session.visualPreviewId = id;
     const turn = await processConversationMessage({ businessId: access.business.id, mode: "test", message: message.trim(), hasPhoto,
       state: session.state, previousResponseId: session.previousResponseId,
       visualPreview: { id, businessId: access.business.id, graph, createdAt: new Date().toISOString() } });

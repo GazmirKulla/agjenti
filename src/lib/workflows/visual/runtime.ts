@@ -1,6 +1,6 @@
 import { isQuestion, validValue, profileKey } from "../context";
 import { foldText } from "../engine";
-import type { VisualExecution, VisualGraph, VisualIntent, VisualRunState } from "./types";
+import type { VisualExecution, VisualFieldValidation, VisualGraph, VisualIntent, VisualRunState } from "./types";
 import { confirmationFactKeys } from "./facts";
 export { explicitIntent as detectVisualIntent } from "../guidance";
 function confirmationKey(graph: VisualGraph, state: VisualRunState, nodeId = state.nodeId) {
@@ -17,9 +17,10 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     Object.assign(state.values,p.sharedValues);
   }
   const traversedNodeIds:string[]=[];
+  const fieldValidation: VisualFieldValidation[] = [];
   const skipped=new Set<string>();
   let consumed=p.inputAvailable===false;
-  const result=(kind:VisualExecution['action']['kind'],nodeId:string,message?:string):VisualExecution=>({state,action:{kind,nodeId,message},traversedNodeIds,inputConsumed:consumed});
+  const result=(kind:VisualExecution['action']['kind'],nodeId:string,message?:string):VisualExecution=>({state,action:{kind,nodeId,message},traversedNodeIds,inputConsumed:consumed,fieldValidation});
   if(state.versionId!==p.versionId)throw new Error('workflow_version_mismatch');
   if(state.status==='handoff')return result('handoff',state.nodeId,'Kërkesa juaj është në pritje të ekipit.');
   if(state.status==='completed')return result('end',state.nodeId);
@@ -65,9 +66,12 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     }
     const boundProfile=p.sharedValues&&n.config.fieldKey?profileKey(n.config.fieldKey):null;
     const fieldType=boundProfile==='phone'?'phone':boundProfile==='email'?'email':boundProfile?'text':n.config.fieldType||'text';
+    const record = (status: VisualFieldValidation["status"], reasonCode: VisualFieldValidation["reasonCode"]) => {
+      if (n.kind === "collect") fieldValidation.push({ nodeId: n.id, fieldKey: n.config.fieldKey!, fieldType, status, reasonCode });
+    };
     if(n.kind==='collect'&&state.forceCollect!==n.id&&p.sharedValues&&Object.hasOwn(state.values,n.config.fieldKey!)) {
       const known=state.values[n.config.fieldKey!];
-      if(validValue(known,fieldType)&&!skipped.has(n.id)) { skipped.add(n.id);advance('next');continue; }
+      if(validValue(known,fieldType)&&!skipped.has(n.id)) { record("reused", "canonical_value"); skipped.add(n.id);advance('next');continue; }
     }
     const wasAwaiting=state.awaiting;
     state.awaiting=true;state.status='waiting';
@@ -80,7 +84,7 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
         return result('prompt',n.id,n.config.prompt);
       }
     }
-    if(!wasAwaiting||consumed)return result('prompt',n.id,n.config.prompt);
+    if(!wasAwaiting||consumed) { record("not_consumed", !wasAwaiting ? "prompt_not_yet_presented" : "input_already_consumed"); return result('prompt',n.id,n.config.prompt); }
     const text=p.message.trim();
     if(n.kind==='confirm'){
       const t=foldText(text);
@@ -93,10 +97,11 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       if(!yes && p.sharedValues && p.graph.nodes.find(node=>node.id===state.nodeId)?.kind==='collect') state.forceCollect=state.nodeId;
       continue;
     }
-    if(isQuestion(text)) return result('prompt',n.id,n.config.prompt);
+    if(isQuestion(text)) { record("not_consumed", "question"); return result('prompt',n.id,n.config.prompt); }
     const type=fieldType;
     const valid=type==='photo'?p.hasPhoto:type==='email'?/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text):type==='phone'?/^\+?[\d\s().-]{7,24}$/.test(text)&&text.replace(/\D/g,'').length>=7:type==='number'?/^\d+(?:[.,]\d+)?$/.test(text):Boolean(text)&&text.length<=2000;
-    if(!valid)return result('prompt',n.id,`${n.config.prompt} ${type==='email'?'Vendos një email të vlefshëm.':type==='photo'?'Dërgo një foto.':type==='number'?'Vendos një numër.':type==='phone'?'Vendos një numër telefoni të vlefshëm.':''}`.trim());
+    if(!valid) { record("invalid", "invalid_value"); return result('prompt',n.id,`${n.config.prompt} ${type==='email'?'Vendos një email të vlefshëm.':type==='photo'?'Dërgo një foto.':type==='number'?'Vendos një numër.':type==='phone'?'Vendos një numër telefoni të vlefshëm.':''}`.trim()); }
+    record("accepted", "validated_input");
     state.values[n.config.fieldKey!]=type==='photo'?'photo_received':text.slice(0,2000);delete state.forceCollect;consumed=true;advance('next');
   }
   throw new Error('workflow_step_limit');

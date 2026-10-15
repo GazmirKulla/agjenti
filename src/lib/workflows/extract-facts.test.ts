@@ -37,3 +37,22 @@ it("does not store an invented age for a question asking its unknown value", asy
     expect(await extractMessageFacts(state, "Per cfare moshe eshte libri?", [{ key: "child_age", type: "number" }], { questionFacts: true })).toBe(0);
     expect(state.context?.order.child_age).toBeUndefined();
 });
+
+it.each([
+    ["quantity", "I need 4", "4"],
+    ["quantity", "Actually make it 5", "5"],
+    ["budget", "My budget is 1500.50", "1500.50"],
+])("grounds natural-language %s in the actual message, not an invented normalized value", async (key, message, value) => {
+    m.create.mockResolvedValue({ output_text: JSON.stringify({ facts: [{ key, value, evidence: message, confidence: 0.99 }] }) });
+    const state = migrateContext();
+    expect(await extractMessageFacts(state, message, [{ key, type: "number" }])).toBe(1);
+    expect(state.context?.order[key].value).toBe(value);
+    expect(state.context?.profile).toEqual({});
+});
+
+it("does not assume that spelling a number supplies a schema-valid grounded numeral", async () => {
+    m.create.mockResolvedValue({ output_text: JSON.stringify({ facts: [{ key: "quantity", value: "4", evidence: "four", confidence: 1 }] }) });
+    const state = migrateContext();
+    expect(await extractMessageFacts(state, "four", [{ key: "quantity", type: "number" }])).toBe(0);
+    expect(state.context?.order.quantity).toBeUndefined();
+});

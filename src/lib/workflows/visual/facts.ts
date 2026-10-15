@@ -1,5 +1,11 @@
 import type { VisualGraph, VisualRunState } from "./types";
 
+/** Only an actual waiting cursor owns a reply, never a historical snapshot. */
+export function pendingCollectNode(graph: VisualGraph, cursor?: VisualRunState) {
+  return cursor?.status === "waiting" && cursor.awaiting
+    ? graph.nodes.find(node => node.id === cursor.nodeId && node.kind === "collect") : undefined;
+}
+
 /** Only the current flow owns custom facts. V1 has one unnamed workflow. */
 function ownedNodes(graph: VisualGraph, cursor?: Pick<VisualRunState, "nodeId" | "binding">) {
   if (graph.version === 1) return graph.nodes;

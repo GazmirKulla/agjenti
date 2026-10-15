@@ -42,6 +42,10 @@ describe("W2 visual confirmation freshness", () => {
 });
 
 describe("visual graph publication", () => {
+  it.each(["date", "integer", "enum"])("rejects unsupported field type %s instead of inventing validation", fieldType => {
+    const graph = linear(node("configured", "collect", { fieldKey: "preferred_date", prompt: "Configured field?" }));
+    expect(normalizeVisualDraft({ ...graph, nodes: graph.nodes.map(n => n.id === "configured" ? { ...n, config: { ...n.config, fieldType } } : n) })).toBeNull();
+  });
   it("generates a deterministic connected starter without inventing customer fields", () => {
     const graph = starterVisualGraph();
     expect(starterVisualGraph()).toEqual(graph);
@@ -86,6 +90,22 @@ describe("visual graph publication", () => {
 });
 
 describe("visual runtime", () => {
+  it("distinguishes a reused fact, question, and unconsumed input from invalid input in execution evidence", () => {
+    const graph = linear(node("quantity", "collect", { fieldKey: "quantity", fieldType: "number", prompt: "Quantity?" }),
+      node("reference", "collect", { fieldKey: "custom_reference", prompt: "Reference?" }));
+    const first = run(graph);
+    expect(first.fieldValidation).toContainEqual({ nodeId: "quantity", fieldKey: "quantity", fieldType: "number", status: "not_consumed", reasonCode: "prompt_not_yet_presented" });
+    const question = run(graph, "What does it include?", first.state);
+    expect(question.fieldValidation?.[0]).toMatchObject({ status: "not_consumed", reasonCode: "question" });
+    const next = run(graph, "4", first.state);
+    expect(next.fieldValidation).toEqual([
+      { nodeId: "quantity", fieldKey: "quantity", fieldType: "number", status: "accepted", reasonCode: "validated_input" },
+      { nodeId: "reference", fieldKey: "custom_reference", fieldType: "text", status: "not_consumed", reasonCode: "prompt_not_yet_presented" },
+    ]);
+    expect(next.state.values.custom_reference).toBeUndefined();
+    const existing = advanceVisualWorkflow({ graph, versionId: "v1", state: first.state, message: "", hasPhoto: false, intent: "unknown", inputAvailable: false, sharedValues: { quantity: "4" } });
+    expect(existing.fieldValidation?.[0]).toMatchObject({ status: "reused", reasonCode: "canonical_value" });
+  });
   it.each(["Si të porosis?", "Ku është porosia?", "Nuk dua të blej"])("keeps informational/negative intent out of ordering: %s", message => {
     expect(detectVisualIntent(message)).toBe("question");
   });

@@ -14,7 +14,8 @@ import { isEntityInformationRequest, resolveVisualEntity } from "./entity-routin
 import { advanceVisualOrderReview, missingVisualOrderNode } from "./product-order";
 import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { nodeCapabilityKeys, flowCapabilityKeys } from "@/lib/capabilities/graph";
-import { ownedCollectNodes } from "./facts";
+import { ownedCollectNodes, pendingCollectNode } from "./facts";
+import type { VisualFieldValidation } from "./types";
 import { combineProductPresentations, type ReferenceProduct } from "@/lib/products/entity-bridge";
 
 type Legacy = (params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }) => Promise<AgentTurnResult>;
@@ -71,7 +72,18 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   }
   if (previous?.binding && !params.informationRequest && !params.orderStatusRequest && !informationalEntity && !selectedEntity) return simple("Produkti ose shërbimi i këtij procesi nuk është më aktiv. Kontakto stafin për të vazhduar.");
   const generalOrderFlows = () => version.graph.version === 2 ? version.graph.flows.filter(flow => flow.kind === "order" && !flow.productIds?.length && !flow.serviceIds?.length) : [];
-  if (!selectedEntity && entityResolution.mentioned?.kind === "product" && !generalOrderFlows().length) return legacy({ ...params, state: base, requireConfiguredWorkflow: true });
+  if (!selectedEntity && entityResolution.mentioned?.kind === "product" && !generalOrderFlows().length) {
+    if (params.visualPreview) {
+      params.onTrace?.({ stage: "workflow", label: "Draft preview blocked", status: "skipped", data: {
+        businessId: params.businessId, executionMode: "isolated", workflowSource: "draft", versionId: version.id,
+        reasonCode: "preview_binding_missing", validation: "not_executed", entityId: entityResolution.mentioned.id,
+      } });
+      const result = simple("Produkti nuk ka lidhje me këtë draft. Konfiguro lidhjen në rrjedhë dhe rifillo provën; nuk u ekzekutua një workflow tjetër.");
+      result.debug.fallbackReason = "preview_binding_missing";
+      return result;
+    }
+    return legacy({ ...params, state: base, requireConfiguredWorkflow: true });
+  }
   const boundFlow = selectedEntity && version.graph.version === 2 ? version.graph.flows.find(flow => flow.id === selectedEntity.binding.flowId) : undefined;
   const boundOrder = selectedEntity?.entity.kind === "product" && Boolean(boundFlow && (boundFlow.kind === "order" || boundFlow.nodeIds.some(id => version.graph.nodes.some(node => node.id === id && node.kind === "product")) || boundFlow.kind === "custom" && (params.orderRequest || base.product_id === selectedEntity.entity.id && previous?.binding?.entity.id === selectedEntity.entity.id)));
   if (!generalOrderFlows().length && !selectedEntity && !base.product_id && !entityResolution.mentioned && (params.orderRequest || detectVisualIntent(params.message) === "order") && entityResolution.available?.some(entity => entity.kind === "product")) return {
@@ -219,7 +231,12 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   const sharedValues = () => currentState.context ? Object.fromEntries(version.graph.nodes.filter(n=>n.config.fieldKey).flatMap(n=> {
     const fact=getFact(currentState,n.config.fieldKey!); return fact ? [[n.config.fieldKey!,fact.value]] : [];
   })) : { ...currentState.visual?.values, ...extractedValues };
-  const advance: typeof advanceVisualWorkflow = input => advanceVisualWorkflow({ ...input, sharedValues: sharedValues() });
+  const fieldValidation: VisualFieldValidation[] = [];
+  const advance: typeof advanceVisualWorkflow = input => {
+    const result = advanceVisualWorkflow({ ...input, sharedValues: sharedValues() });
+    fieldValidation.push(...result.fieldValidation ?? []);
+    return result;
+  };
   const reviewingOrder = boundOrder && Boolean(previous?.binding) && currentNode?.kind === "end" && previous?.awaiting && (!destination || destination === previous.nodeId);
   if (reviewingOrder) {
     const review = advanceVisualOrderReview(base, params.orderRequest ? "" : params.message, params.hasPhoto, false, version.graph, selectedEntity!.entity.name);
@@ -402,9 +419,15 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   turn.reply = replies.join("\n\n");
   turn.visualWorkflow = { graph: version.graph, state: execution.state, traversedNodeIds: traversed, routing:{action:guidance.action,from:previous?.nodeId??null,to:destination??execution.state.nodeId,source:guidance.source} };
   turn.debug.elapsedMs = Date.now() - started;
+  const pendingField = pendingCollectNode(version.graph, execution.state);
   params.onTrace?.({ stage: "workflow", label: "Visual workflow executed", data: {
     workflowName: version.graph.name, versionId: version.id, intent, method: "Conversation guidance with validated workflow navigation",
-    state: execution.state, traversedNodeIds: traversed, action: execution.action, preview: Boolean(params.visualPreview),
+    businessId: params.businessId, executionMode: params.mode === "test" || isIsolatedExecution() ? "isolated" : "live",
+    workflowSource: params.visualPreview ? "draft" : previous?.versionId === version.id ? "pinned" : "published",
+    fromNodeId: previous?.nodeId ?? null, currentNodeId: execution.state.nodeId,
+    fieldKey: pendingField?.config.fieldKey ?? null, fieldType: pendingField?.config.fieldType ?? (pendingField ? "text" : null),
+    binding: execution.state.binding ?? null, fieldValidation, traversedNodeIds: traversed,
+    action: { kind: execution.action.kind, nodeId: execution.action.nodeId }, preview: Boolean(params.visualPreview),
   } });
   turn.presentedProducts = combineProductPresentations(turn.reply, presentations);
   return turn;
