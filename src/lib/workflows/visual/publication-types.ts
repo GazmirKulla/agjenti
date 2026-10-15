@@ -15,7 +15,7 @@ export type PublicationReadiness = {
   canPublish: boolean;
   baseRevision: number;
   candidateGraphHash: string | null;
-  findings: { code: string; message: string }[];
+  findings: import("@/lib/capabilities/diagnostics").ReadinessFinding[];
 };
 export type PublicationReceipt = {
   revision: number;

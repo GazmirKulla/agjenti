@@ -4,6 +4,7 @@ import { capabilityRegistry, getCapability, type CapabilityAssessment, type Capa
 import type { VisualGraph } from "@/lib/workflows/visual/types";
 import { moduleEnforcementEnabled } from "./enforcement";
 import { googleConfigured } from "@/lib/calendar/google";
+import { hasOrderConfiguration } from "@/lib/orders/workflow-readiness";
 
 export type CapabilityAssessmentActor = { userId: string };
 
@@ -64,7 +65,10 @@ async function assessKnownCapability(definition: CapabilityDefinition, businessI
   if (["product.search", "product.recommend", "order.prepare"].includes(definition.key)) {
     const result = await countActive(db, "products", businessId, { is_active: true });
     if (result.error) throw new Error("Nuk u verifikua konfigurimi i katalogut.");
-    return statusFor(definition, modules, [], ["products: active records are queried server-side"], result.count ? [] : ["active_products"]);
+    const missing = result.count ? [] : ["active_products"];
+    if (definition.key === "order.prepare" && !(await hasOrderConfiguration(businessId, candidate))) missing.push(candidate ? "candidate_order_flow" : "published_order_flow");
+    return statusFor(definition, modules, [], ["products: active records are queried server-side",
+      ...(definition.key === "order.prepare" ? [candidate ? "candidate configuration only; execution requires a published or pinned workflow" : "order workflow checked separately from catalog visibility"] : [])], missing);
   }
   if (definition.key === "order.status.read") {
     if (candidate?.nodes.some(node => node.kind === "order_status"))

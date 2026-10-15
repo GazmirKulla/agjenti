@@ -18,7 +18,7 @@ import { entityWorkflowHref } from "@/components/workflows/entity-flow-link";
 import { ProductBusinessWorkflow } from "./business-workflow";
 
 const STATUS_LABEL: Record<string, string> = {
-  active: "Aktiv",
+  active: "Aktiv në katalog",
   draft: "Draft",
   unlinked: "I palidhur",
 };
@@ -519,7 +519,7 @@ export function ProductCatalog({
               </label>
               {!isMapped(configProduct) && (
                 <p className="muted-copy">
-                  Produkti aktiv është i disponueshëm për workflow-in kryesor. Procesi i posaçëm është opsional.
+                  Aktivizimi e bën produktin të kërkueshëm në katalog, jo të porositshëm automatikisht. Veprimet kërkojnë workflow dhe autorizim në server.
                 </p>
               )}
               <small

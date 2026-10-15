@@ -1,4 +1,5 @@
 import type { PublicationReadiness, PublicationReceipt } from "@/lib/workflows/visual/publication-types";
+import { ReadinessFindingView } from "./readiness-finding";
 
 const labels: Record<PublicationReadiness["status"], string> = {
   ready: "Gati për publikim", needs_setup: "Kërkon konfigurim", simulation_failed: "Simulimi dështoi",
@@ -8,7 +9,7 @@ const labels: Record<PublicationReadiness["status"], string> = {
 export function PublicationReadinessView({ publication }: { publication: PublicationReadiness }) {
   return <section aria-label="Gatishmëria e publikimit" style={{ padding: "12px", margin: "12px 0", border: "1px solid #c7ceda", borderRadius: "8px", overflowWrap: "anywhere" }}>
     <strong>{labels[publication.status]}</strong><p>Kontrolli: {publication.result} · revisioni {publication.baseRevision}</p>
-    {publication.findings.map(f => <p key={f.code}>{f.message}</p>)}
+    {publication.findings.map((f, i) => <ReadinessFindingView key={`${f.code}:${f.capabilityKey ?? i}`} finding={f} />)}
     <small>Ky është vlerësim, jo konfirmim publikimi. Bisedat aktive ruajnë versionin e tyre.</small>
   </section>;
 }

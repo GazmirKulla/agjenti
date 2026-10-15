@@ -7,7 +7,8 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { productCatalogColumns, type ProductRow } from "./catalog";
 import { publishedProductBindings } from "./workflow-binding";
 import { publishedBusinessWorkflow, type BusinessWorkflow } from "@/lib/workflows/visual/business-workflow";
-import { enforceOrderWorkflow } from "@/lib/capabilities/workflow";
+import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
+import { requireCatalogActivation } from "./activation";
 
 export type CatalogField = "workflow_id" | "product_type_id" | "is_active";
 type Change = { id: string; field: CatalogField; value: string | boolean | null; updatedAt: string };
@@ -45,22 +46,21 @@ export async function updateCatalogField(slug: string, change: Change): Promise<
     businessWorkflow = await publishedBusinessWorkflow(businessId);
     visual = (await publishedProductBindings(businessId)).get(next.id);
   }
-  catch { if (!next.workflow_id && next.is_active) return { error: "Nuk u verifikua rrjedha e publikuar. Provo përsëri." }; }
-  // Demote only when neither the main workflow nor a special process can serve it.
-  const demoted = next.is_active && (!next.product_type_id || (!next.workflow_id && !visual && !businessWorkflow)) && change.field !== "is_active";
+  catch { /* Workflow metadata is not a prerequisite for catalog availability. */ }
+  const demoted = next.is_active && !next.product_type_id && change.field !== "is_active";
   if (demoted) changes.is_active = next.is_active = false;
   if (next.is_active) {
-    const missing = [next.price_amount == null || !Number.isFinite(Number(next.price_amount)) || Number(next.price_amount) < 0 ? "çmimin" : "", !next.product_type_id ? "llojin" : "", !next.workflow_id && !visual && !businessWorkflow ? "workflow-n e publikuar" : ""].filter(Boolean);
-    if (missing.length) return { error: `Për aktivizim, plotëso ${missing.join(" dhe ")}.` };
+    try { await requireCatalogActivation(businessId, [next]); }
+    catch (error) { return { error: error instanceof Error ? error.message : "Nuk u verifikua katalogu." }; }
   }
   // Validate only references being changed, or all references for activation.
-  if (next.product_type_id && (change.field === "product_type_id" || next.is_active)) {
+  if (next.product_type_id && change.field === "product_type_id" && !next.is_active) {
     const type = await db.from("product_types").select("id").eq("id", next.product_type_id).eq("is_active", true).maybeSingle();
     if (type.error || !type.data) return { error: "Lloji nuk është aktiv. Zgjidh një lloj tjetër." };
   }
   if (next.workflow_id && (change.field === "workflow_id" || next.is_active)) {
-    try { await enforceOrderWorkflow(businessId, user.id, change.field === "workflow_id" ? [row.id] : []); }
-    catch { return { error: "Kontrollo modulet e porosive dhe produktin aktiv para lidhjes së workflow-t." }; }
+    try { if (change.field === "workflow_id") await requireRuntimeModules(businessId, capabilityModules(["order.prepare"])); }
+    catch { return { error: "Kontrollo modulet e porosive para lidhjes së workflow-t." }; }
     const workflow = await db.from("workflows").select("id").eq("business_id", businessId).eq("id", next.workflow_id).maybeSingle();
     if (workflow.error || !workflow.data) return { error: "Workflow-i nuk u gjet në këtë biznes. Zgjidh një tjetër." };
   }

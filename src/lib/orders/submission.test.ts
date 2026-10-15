@@ -24,6 +24,7 @@ function confirmed() {
   setFact(s, "size", "M", "text", "customer");
   setOrderTerms(s, { id: productId, price_amount: 19.5, currency: "EUR" });
   const steps = [{ key: "size", kind: "text" as const }, { key: "customer", kind: "customer" as const }];
+  s.context!.execution.linear = { id: "order-workflow", versionId: "published-linear", name: "Order", steps };
   s = advanceSharedOrder(s, "", false, steps);
   return advanceSharedOrder(s, "Po", false, steps);
 }
@@ -40,6 +41,7 @@ beforeEach(() => {
   m.from.mockImplementation((table: string) => {
     const q = { select: () => q, eq: (key: string, value: unknown) => { filters.push([table, key, value]); return q; },
       maybeSingle: async () => ({ data: table === "conversations" ? { id: args.conversationId }
+        : table === "linear_workflow_versions" ? { id: "published-linear", steps: [{ key: "size", kind: "text" }, { key: "customer", kind: "customer" }] }
         : table === "conversation_states" ? { collected: structuredClone(state), cart, revision, status: stateStatus }
         : table === "products" ? product : table === "order_submissions" && ledger
           ? { order_id: ledger.orderId, attempt_id: ledger.attemptId, status: ledger.status, external_order_id: ledger.externalOrderId, confirmation: ledger.confirmation } : null, error: null }) };
@@ -62,6 +64,13 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("W4 order submission boundary", () => {
+  it("refuses a catalog-only order even with fresh confirmation, before RPC or external dispatch", async () => {
+    delete state.context!.execution.linear;
+    state.step_key = "order_confirm";
+    state = advanceSharedOrder(state, "", false, []); state = advanceSharedOrder(state, "Po", false, []);
+    await expect(submitConfirmedOrder(args)).rejects.toMatchObject({ code: "workflow_not_ready" });
+    expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
+  });
   it("submits only once for concurrent identical requests; both callers see the same local order", async () => {
     let finish!: (v: unknown) => void;
     m.submit.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
@@ -180,7 +189,7 @@ describe("W4 order submission boundary", () => {
   });
   it("preserves suspended order facts, pinned version and booking cursor", async () => {
     // The pin is part of the review, so confirm again after establishing it.
-    state.context!.execution.linear = { id: "workflow", versionId: "pinned-v1", name: "Order", steps: [] };
+    state.context!.execution.linear!.versionId = "pinned-v1";
     state.step_key = "order_confirm";
     state = advanceSharedOrder(state, "", false, []); state = advanceSharedOrder(state, "Po", false, []);
     state.processes = { active: "booking", order: { id: "order-run", status: "completed", snapshot: snapshotOrder(state) } };

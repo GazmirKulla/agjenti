@@ -140,6 +140,9 @@ async function processTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
   return executeVisualTurn(params, processLegacyAgentTurn);
 }
 export async function processLegacyAgentTurn(params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }): Promise<AgentTurnResult> {
+  // Only the validated visual product-node adapter may opt into its built-in
+  // collection. Catalog visibility must never invent an order workflow.
+  const requireConfiguredWorkflow = params.requireConfiguredWorkflow !== false;
   const modules = await runtimeModules(params.businessId);
   if (params.informational === undefined && (params.state?.product_id || params.orderRequest || detectVisualIntent(params.message) === "order"))
     await requireRuntimeModules(params.businessId, capabilityModules(["order.prepare"]));
@@ -436,7 +439,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
         .eq("workflow_id", workflowId)
         .order("position");
       if (result.error) throw new Error("Nuk u ngarkuan hapat e workflow-t.");
-      if (params.requireConfiguredWorkflow && !result.data?.length) steps = [];
+      if (!result.data?.length) steps = [];
       if (result.data?.length)
         steps = result.data.map((s) => {
           const config = (s.config ?? {}) as { label?: string; prompt?: string; fieldKey?: string; fieldType?: WorkflowStepDef["fieldType"]; options?: string[] };
@@ -467,8 +470,9 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   if (selected && workflowId && !pinnedOrder) {
     state.orderWorkflowSnapshot = sealOrderSnapshot({businessId:params.businessId,productId:selected.id,workflowId,name:workflowName ?? "Porosia",steps});
   }
-  if (params.requireConfiguredWorkflow && selected && (!workflowId || !steps.length || workflowName === "Default customer collection")) {
-    return { reply: "Për këtë produkt, kontakto stafin për të vazhduar.", nextState: state, previousResponseId: null,
+  if (selected && (!steps.length || requireConfiguredWorkflow && (!workflowId || workflowName === "Default customer collection") || resolvedWorkflowId && !workflowId)) {
+    invalidateConfirmation(state);
+    return { reply: "Produkti është në katalog, por porositja automatike nuk është konfiguruar. Kontakto stafin për të vazhduar.", nextState: state, previousResponseId: null,
       workflowId: null, productName: selected.name, workflowProgress: [], handoff: true, advisoryHandoff: true,
       debug: { model: agentModel(), source: "fallback", fallbackReason: "workflow_not_configured", agentConfigured: Boolean(agent?.instructions), knowledgeCount: knowledge.length, productCount: products.length, workflowSteps: [], elapsedMs: Date.now() - started } };
   }

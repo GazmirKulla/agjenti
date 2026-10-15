@@ -23,3 +23,10 @@ it("integrates simulation into the existing semantic preview without contradicto
   expect(html).toContain("Prova automatike"); expect(html).not.toContain("Nuk është kryer simulim");
   expect(html).toContain("Rezultatet e provës së izoluar");
 });
+it("renders the capability, missing setup, affected step and remediation without implying execution", () => {
+  const report = simulateWorkflowProposal({ proposalId: "setup", baseRevision: 0, candidate: graph, before: graph,
+    capabilities: [{ capabilityKey: "product.search", status: "needs_setup", reasonCode: "missing_requirements", missingRequirements: ["active_products"] }] });
+  const html = renderToStaticMarkup(h(WorkflowSimulationReview, { report, onFocus: vi.fn() }));
+  for (const text of ["product.search", "active_products", "missing_requirements", "Hapat e prekur", "Si ta zgjidhësh", "Nuk u ekzekutua — nuk është test i dështuar."]) expect(html).toContain(text);
+  expect(html).not.toContain("U ekzekutua dhe dështoi.");
+});

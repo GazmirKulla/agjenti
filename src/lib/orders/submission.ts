@@ -5,6 +5,7 @@ import { freshOrderReview, migrateContext } from "@/lib/workflows/context";
 import { restoreOrder } from "@/lib/workflows/conversation-processes";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
+import { hasSubmissionWorkflow } from "./workflow-readiness";
 
 export type SubmissionReceipt = {
   orderId: string;
@@ -28,6 +29,7 @@ const errors: Record<string, [string, number]> = {
   commercial_terms_changed: ["Çmimi ose monedha ndryshoi. Klienti duhet ta rikonfirmojë porosinë.", 409],
   product_changed: ["Produkti ndryshoi. Klienti duhet ta rikonfirmojë porosinë.", 409],
   product_unavailable: ["Produkti nuk është aktiv në këtë biznes.", 400],
+  workflow_not_ready: ["Produkti është në katalog, por workflow-i i porosisë nuk u verifikua. Kontakto stafin.", 409],
   customer_unavailable: ["Klienti nuk i përket këtij biznesi.", 403],
   unsupported_order_scope: ["Dërgimi mbështet vetëm një produkt me sasi 1. Kjo kërkesë duhet shqyrtuar nga stafi.", 400],
   submission_unavailable: ["Porosia nuk u gjet në këtë bisedë.", 404],
@@ -96,6 +98,8 @@ export async function submitConfirmedOrder(input: { businessId: string; conversa
       || !Number.isFinite(product.price_amount) || product.price_amount < 0 || !/^[A-Z]{3}$/.test(product.currency ?? "")
       || terms.unitAmount !== product.price_amount || terms.currency !== product.currency) fail("commercial_terms_changed");
   if ((product.product_type_id ?? null) !== (state.product_type_id ?? null)) fail("product_changed");
+  await requireRuntimeModules(businessId, ["workflows"]);
+  if (!(await hasSubmissionWorkflow(businessId, state))) fail("workflow_not_ready");
   // The transaction rechecks actor, catalog, modules and the exact source snapshot
   // under the same conversation/state locks used by the inbound queue.
   const { data, error } = await db.rpc("submit_confirmed_order", {

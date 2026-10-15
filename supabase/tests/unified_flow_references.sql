@@ -37,9 +37,11 @@ begin
  begin
   perform save_products_with_visual_flow(b,u,2,'information','create','[{"name":"Premature active","sku":"ACTIVE","currency":"ALL","is_active":true}]');
   raise exception 'test_failed_premature_activation';
- exception when raise_exception then if sqlerrm<>'activation_requires_published' then raise; end if; end;
+ exception when raise_exception then if sqlerrm<>'catalog_configuration_required' then raise; end if; end;
  if exists(select 1 from products where sku='ACTIVE') then raise exception 'test_failed_activation_rollback'; end if;
  select draft into g from visual_workflows where business_id=b;
+ -- Readiness now requires the draft-bound catalog item to be active at publication.
+ update products set is_active=true where id=p;
  perform save_visual_workflow(b,u,2,g,'publish');
  select published_version_id into v from visual_workflows where business_id=b;
  perform save_products_with_visual_flow(b,u,3,'information','import','[{"name":"Imported","sku":"IMPORTED","external_id":"ext1","currency":"ALL"}]');

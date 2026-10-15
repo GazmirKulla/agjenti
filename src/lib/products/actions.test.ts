@@ -37,7 +37,7 @@ beforeEach(() => {
   m.rpc.mockResolvedValue({ data: 1, error: null });
   m.bindings.mockResolvedValue(new Map());
   rows = [
-    { id, product_type_id: "type", workflow_id: "workflow", price_amount: 25 },
+    { id, product_type_id: "type", workflow_id: "workflow", price_amount: 25, currency: "EUR" },
   ];
   m.user.mockResolvedValue({ id: "user" });
   m.access.mockResolvedValue({ business: { id: "business" } });
@@ -75,12 +75,12 @@ it("bulk activates verified visual assignments while retaining tenant-scoped sel
   m.bindings.mockResolvedValue(new Map([[id, { versionId: "v", flowId: "order", name: "Porositë" }]]));
   expect((await bulkConfigureProducts("test", payload)).success).toBeTruthy();
   expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }));
-  expect(m.or).toHaveBeenCalledWith(`workflow_id.not.is.null,id.in.(${id})`);
+  expect(m.or).not.toHaveBeenCalled();
 });
-it("refuses to activate a product with only a draft or disabled visual assignment", async () => {
+it("activates the catalog without requiring a published visual assignment", async () => {
   rows[0].workflow_id = null;
-  expect((await bulkConfigureProducts("test", payload)).error).toContain("workflow");
-  expect(m.update).not.toHaveBeenCalled();
+  expect((await bulkConfigureProducts("test", payload)).success).toBeTruthy();
+  expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }));
 });
 it("edits an active product linked to a published visual flow without demanding a linear definition", async () => {
   m.bindings.mockResolvedValue(new Map([[id, { versionId: "v", flowId: "order", name: "Porositë" }]]));
@@ -101,7 +101,7 @@ describe("catalog writes", () => {
     const form = new FormData();
     Object.entries({ name: "Libri i Shkronjave", price: "520", product_type_id: "type", is_active: "on" }).forEach(([key, value]) => form.set(key, value));
     expect(await createProduct("test", form)).toHaveProperty("success");
-    expect(businessWorkflow).toHaveBeenCalledWith("business");
+    expect(businessWorkflow).not.toHaveBeenCalled();
     expect(m.insert).toHaveBeenCalledWith(expect.objectContaining({ workflow_id: null, is_active: true }));
     expect(m.rpc).not.toHaveBeenCalled();
   });

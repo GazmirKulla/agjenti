@@ -2,6 +2,7 @@
 -- Run with psql -X -v ON_ERROR_STOP=1 -f ... . All fixtures/ACL changes roll back.
 -- Models TEMP + legacy DML privileges; NOT evidence of hosted Supabase grants.
 begin;
+\ir fixtures/order_readiness.sql
 do $$ begin
   if current_database() not like '%\_w4\_test' escape '\' then
     raise exception 'Use an isolated database ending in _w4_test';
@@ -21,7 +22,7 @@ do $$ declare f record; s jsonb; begin
   select * into f from pg_temp.w4sec_fixture;
   insert into auth.users(id,email) values(f.actor,f.actor||'@test.invalid'),(f.outsider,f.outsider||'@test.invalid');
   insert into public.businesses(id,name,slug,dashboard_profile) values(f.b,'W4 security','w4sec-'||f.b,
-    '{"source":"manual","version":1,"enabledModules":["orders","products"]}');
+    '{"source":"manual","version":1,"enabledModules":["orders","products","workflows"]}');
   insert into public.business_users(business_id,user_id,role) values(f.b,f.actor,'owner');
   insert into public.products(id,business_id,name,price_amount,currency) values(f.p,f.b,'Test',12.75,'EUR');
   insert into public.conversations(id,business_id) values(f.c,f.b);
@@ -31,6 +32,7 @@ do $$ declare f record; s jsonb; begin
       'orderTerms',jsonb_build_object('productId',f.p,'unitAmount',12.75,'currency','EUR','quantity',1),
       'orderReview',jsonb_build_object('id',gen_random_uuid(),'confirmed',true,'factsKey','server-test',
         'fieldKeys','[]'::jsonb,'expiresAt',4102444800000))));
+  s:=pg_temp.pin_test_order(f.b,f.actor,s);
   insert into public.conversation_states(conversation_id,business_id,collected,revision) values(f.c,f.b,s,7);
   update pg_temp.w4sec_fixture set state=s,receipt=public.submit_confirmed_order(f.b,f.actor,f.c,7,s,s,false);
 end $$;

@@ -9,6 +9,7 @@ import { unconfirmedSaveMessage, type VisualSaveResult } from "./save-result";
 import { evaluatePublicationPolicy } from "./publication-policy";
 import { reviewWorkflowPublication } from "./publication-service";
 import type { PublicationApproval, PublicationReadiness, PublicationReceipt } from "./publication-types";
+import { readinessFinding } from "@/lib/capabilities/diagnostics";
 
 export type WorkflowOperation = "draft" | "publish" | "enable" | "disable";
 /** Caller supplies server-verified identities. The RPC rechecks membership and revision atomically. */
@@ -49,7 +50,7 @@ export async function writeVisualWorkflow(
     try { capabilities = await enforceWorkflowCapabilities(businessId, userId, activationGraph, operation); }
     catch (error) {
       const failure = error instanceof CapabilityEnforcementError ? error : new CapabilityEnforcementError("unverified", "Nuk u verifikuan aftësitë e biznesit.");
-      return { error: failure.message, publication: { mode: requestId ? "assistant_strict" : "manual_legacy", result: failure.code === "unverified" ? "UNVERIFIED" : "BLOCKED", status: ["unverified", "unsupported"].includes(failure.code) ? "blocked" : "needs_setup", canPublish: false, canRequestApproval: false, baseRevision: revision, candidateGraphHash: null, findings: [{ code: failure.code, message: failure.message }] } };
+      return { error: failure.message, publication: { mode: requestId ? "assistant_strict" : "manual_legacy", result: failure.code === "unverified" ? "UNVERIFIED" : "BLOCKED", status: ["unverified", "unsupported"].includes(failure.code) ? "blocked" : "needs_setup", canPublish: false, canRequestApproval: false, baseRevision: revision, candidateGraphHash: null, findings: failure.findings?.map(f => ({ ...f, code: failure.code })) ?? [readinessFinding(failure.code, failure.message)] } };
     }
   }
   if (operation === "publish" && graph && requestId) {
@@ -87,7 +88,7 @@ export async function writeVisualWorkflow(
   );
   if (error)
     return {
-      ...(publication ? { publication: error.message.includes("stale_workflow") ? { ...publication, result: "BLOCKED" as const, status: "stale_proposal" as const, canPublish: false, findings: [{ code: "stale_revision", message: "Rrjedha ndryshoi gjatë publikimit. Rifresko faqen dhe kërko miratim të ri." }] } : { ...publication, result: "UNVERIFIED" as const, status: "blocked" as const, canPublish: false, findings: [{ code: "write_unconfirmed", message: "Serveri nuk konfirmoi publikimin. Rifresko historikun përpara se të provosh përsëri." }] } } : {}),
+      ...(publication ? { publication: error.message.includes("stale_workflow") ? { ...publication, result: "BLOCKED" as const, status: "stale_proposal" as const, canPublish: false, findings: [readinessFinding("stale_revision", "Rrjedha ndryshoi gjatë publikimit. Rifresko faqen dhe kërko miratim të ri.")] } : { ...publication, result: "UNVERIFIED" as const, status: "blocked" as const, canPublish: false, findings: [readinessFinding("write_unconfirmed", "Serveri nuk konfirmoi publikimin. Rifresko historikun përpara se të provosh përsëri.")] } } : {}),
       error: error.message.includes("stale_workflow")
         ? "Rrjedha ndryshoi në një dritare tjetër. Rifresko faqen para ruajtjes."
         : error.message.includes("invalid_workflow_targets")

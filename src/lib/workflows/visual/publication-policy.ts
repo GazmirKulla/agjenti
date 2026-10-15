@@ -6,6 +6,7 @@ import { getCapability } from "@/lib/capabilities/registry";
 import type { VisualGraph } from "./types";
 import type { SimulationReport } from "./simulation-types";
 import type { PublicationApproval, PublicationReadiness } from "./publication-types";
+import { capabilityFinding, readinessFinding } from "@/lib/capabilities/diagnostics";
 
 /** Server policy, not an authorization API. Evidence and identities MUST be loaded on the server. */
 export function evaluatePublicationPolicy(p: {
@@ -20,22 +21,30 @@ export function evaluatePublicationPolicy(p: {
   const result: PublicationReadiness = { mode: p.mode, result: "PASS", status: "ready", canRequestApproval: false, canPublish: false,
     baseRevision: p.revision, candidateGraphHash: hash, findings: [] };
   const block = (status: PublicationReadiness["status"], code: string, message: string, state: PublicationReadiness["result"] = "BLOCKED") => {
-    result.status = status; result.result = state; result.findings.push({ code, message }); return result;
+    result.status = status; result.result = state; result.findings.push(readinessFinding(code, message)); return result;
   };
   if (!p.authorized || p.ownedVersion === false) return block("blocked", "unauthorized", "Nuk u verifikua qasja ose pronësia e workflow-it në këtë biznes.");
   if (!Number.isInteger(p.revision) || p.revision < 0 || p.currentRevision !== undefined && p.revision !== p.currentRevision)
     return block("stale_proposal", "stale_revision", "Rrjedha ndryshoi në një dritare tjetër. Rifresko dhe përgatite propozimin përsëri.");
   if (!graph || !validateVisualGraph(p.candidate).graph) return block("blocked", "invalid_graph", "Plotëso hapat dhe lidhjet e shënuara para publikimit.", "FAIL");
-  if (p.runtimeBlockers?.length) return block("needs_setup", "runtime_not_ready", `Ruaje si draft dhe provoje. Para aktivizimit: ${p.runtimeBlockers.join(" ")}`);
+  if (p.runtimeBlockers?.length) {
+    block("needs_setup", "runtime_not_ready", `Ruaje si draft dhe provoje. Para aktivizimit: ${p.runtimeBlockers.join(" ")}`);
+    result.findings[0].missingRequirements = ["workflow_runtime_readiness"];
+    result.findings[0].remediation = p.runtimeBlockers.join(" ");
+    return result;
+  }
   // Manual compatibility concerns simulation only, never explicitly supplied capability restrictions.
-  if (p.capabilities?.some(c => !getCapability(c.capabilityKey) || c.status === "unsupported"))
-    return block("blocked", "unsupported_capability", "Rrjedha përmban një aftësi që nuk mbështetet.");
-  if (p.capabilities?.some(c => c.status !== "ready"))
-    return block("needs_setup", "capability_not_ready", "Modulet ose konfigurimi i kërkuar nuk janë gati.");
+  const unavailable = p.capabilities?.filter(c => !getCapability(c.capabilityKey) || c.status !== "ready") ?? [];
+  if (unavailable.length) {
+    result.status = unavailable.some(c => !getCapability(c.capabilityKey) || c.status === "unsupported") ? "blocked" : "needs_setup";
+    result.result = "BLOCKED";
+    result.findings = unavailable.map(c => capabilityFinding(getCapability(c.capabilityKey) ? c : { ...c, status: "unsupported" }, graph));
+    return result;
+  }
   if (p.mode === "manual_legacy") {
     // Deliberate compatibility exception: never relabel absent simulation as PASS.
     result.result = "UNVERIFIED"; result.status = "unverified_external_action"; result.canPublish = true;
-    result.findings.push({ code: "manual_compatibility", message: "Publikim manual sipas kontrolleve ekzistuese. Aftësitë dhe skenarët e jashtëm nuk janë validuar nga simulimi automatik; kjo nuk është PASS." });
+    result.findings.push(readinessFinding("manual_compatibility", "Publikim manual sipas kontrolleve ekzistuese. Aftësitë dhe skenarët e jashtëm nuk janë validuar nga simulimi automatik; kjo nuk është PASS.", { remediation: "Provo workflow-in dhe integrimet në mjedis të izoluar. Përjashtimi ekzistues manual nuk provon sjelljen." }));
     return result;
   }
   if (p.currentRevision === undefined || !p.currentDraft || visualGraphHash(normalizeVisualDraft(p.currentDraft)!) !== hash ||
@@ -46,6 +55,7 @@ export function evaluatePublicationPolicy(p: {
   if (!simulation || !p.proposalId || !matchesSimulationBinding(simulation, p.proposalId, p.revision, graph))
     return block("stale_proposal", "simulation_mismatch", "Simulimi nuk i përket këtij grafi ose revisioni. Përgatite propozimin përsëri.");
   const critical = simulation.scenarios.filter(s => s.critical);
+  result.findings.push(...critical.filter(s => s.result !== "PASS").flatMap(s => s.validationFindings.map(f => readinessFinding(f.code, f.message, f))));
   if (simulation.result === "FAIL" || critical.some(s => s.result === "FAIL")) return block("simulation_failed", "simulation_failed", "Simulimi dështoi. Kontrollo skenarët dhe hapat e shënuar.", "FAIL");
   if (simulation.result === "BLOCKED" || critical.some(s => s.result === "BLOCKED")) return block("blocked", "simulation_blocked", "Simulimi është i bllokuar. Plotëso kërkesat përpara publikimit.");
   if (!critical.length || simulation.result !== "PASS" || !simulation.canPublish || critical.some(s => s.result !== "PASS" || s.executionCount < 1))

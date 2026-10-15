@@ -6,7 +6,7 @@ export type SimulationBinding = {
   baseRevision: number;
   candidateGraphHash: string;
 };
-export type SimulationFinding = { code: string; message: string; nodeId?: string };
+export type SimulationFinding = import("@/lib/capabilities/diagnostics").ReadinessFinding;
 export type ScenarioResult = {
   scenarioId: string;
   description: string;

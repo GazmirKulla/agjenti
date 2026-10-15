@@ -1,6 +1,7 @@
 -- W4: ONLY on an isolated database, AFTER the migration has been approved/applied.
 -- Not executed as part of Vitest. Rolls back all fixtures, including fault injection.
 begin;
+\ir fixtures/order_readiness.sql
 create function pg_temp.reject_test_order_item() returns trigger language plpgsql as $$
 begin
   if new.options->>'size'='FAIL_ITEM' then raise exception 'test_item_insert_failure'; end if;
@@ -17,7 +18,7 @@ declare
   state jsonb; changed jsonb; r jsonb; again jsonb; oid uuid; blocked boolean;
 begin
   insert into auth.users(id,email) values(actor,'w4@test.invalid'),(outsider,'w4-other@test.invalid');
-  insert into businesses(id,name,slug,dashboard_profile) values(b,'W4','w4-'||b::text,'{"version":1,"source":"manual","enabledModules":["orders","products"]}'),
+  insert into businesses(id,name,slug,dashboard_profile) values(b,'W4','w4-'||b::text,'{"version":1,"source":"manual","enabledModules":["orders","products","workflows"]}'),
     (other_b,'W4 other','w4-'||other_b::text,null);
   insert into business_users(business_id,user_id,role) values(b,actor,'owner');
   insert into conversations(id,business_id,channel,whatsapp_participant_id) values(c,b,'whatsapp','w4-customer');
@@ -31,6 +32,7 @@ begin
     'context',jsonb_build_object('execution',jsonb_build_object('factOwner','order','orderConfirmed',true,
       'orderTerms',jsonb_build_object('productId',p,'unitAmount',19.5,'currency','EUR','quantity',1),
       'orderReview',jsonb_build_object('id',review_id,'confirmed',true,'factsKey','server-verified-facts','fieldKeys',jsonb_build_array('size'),'expiresAt',extract(epoch from now()+interval '30 minutes')*1000))));
+  state:=pg_temp.pin_test_order(b,actor,state);
   insert into conversation_states(conversation_id,business_id,collected,revision) values(c,b,state,7);
   if has_function_privilege('authenticated','public.submit_confirmed_order(uuid,uuid,uuid,integer,jsonb,jsonb,boolean)','execute')
     or has_function_privilege('authenticated','public.finish_order_submission(uuid,uuid,uuid,text,text)','execute')
@@ -70,7 +72,7 @@ begin
   update businesses set dashboard_profile=jsonb_set(dashboard_profile,'{enabledModules}','["products"]') where id=b;
   blocked:=false; begin perform submit_confirmed_order(b,actor,c,7,state,state,false); exception when others then blocked:=sqlerrm='module_disabled'; end;
   if not blocked then raise exception 'Explicit module deactivation bypassed'; end if;
-  update businesses set dashboard_profile=jsonb_set(dashboard_profile,'{enabledModules}','["products","orders"]') where id=b;
+  update businesses set dashboard_profile=jsonb_set(dashboard_profile,'{enabledModules}','["products","orders","workflows"]') where id=b;
   delete from business_users where business_id=b and user_id=actor;
   blocked:=false; begin perform submit_confirmed_order(b,actor,c,7,state,state,false); exception when others then blocked:=sqlerrm='unauthorized'; end;
   if not blocked then raise exception 'Revoked actor accepted'; end if;

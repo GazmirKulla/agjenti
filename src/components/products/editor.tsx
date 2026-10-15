@@ -42,7 +42,7 @@ export function ProductEditor({
     ["Emri i produktit", preview.name.trim().length >= 2],
     ["Çmimi i produktit", preview.price !== null],
     ["Lloji i produktit", !!preview.type],
-    ["Workflow kryesor / proces i posaçëm", !!preview.workflow || !!product?.visual_workflow || !!businessWorkflow?.active],
+    ["Workflow për veprime (veçmas katalogut)", !!preview.workflow || !!product?.visual_workflow || !!businessWorkflow?.active],
     ["Foto e produktit", !!preview.image],
   ] as const;
   const completed = checks.filter(([, ok]) => ok).length;
@@ -189,7 +189,7 @@ export function ProductEditor({
             )}
             {success && <p role="status">{success}</p>}
             <p className="muted-copy">
-              Produktet aktive përdoren nga Agjenti në workflow-in kryesor. Draftet qëndrojnë jashtë përgjigjeve për klientët.
+              Aktiv në katalog do të thotë i kërkueshëm dhe i rekomandueshëm. Porositja kërkon workflow dhe autorizim të veçantë. Draftet nuk u shfaqen klientëve.
             </p>
           </div>
         </aside>

@@ -1,6 +1,7 @@
 import { loadAllowedModules } from "@/lib/dashboard/modules/entitlements";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { getCapability, type CapabilityAvailability } from "./registry";
+import type { ReadinessFinding } from "./diagnostics";
 
 /** Explicit per-business rollout. Never derive this switch from a client request. */
 export function moduleEnforcementEnabled(businessId: string): boolean {
@@ -8,7 +9,7 @@ export function moduleEnforcementEnabled(businessId: string): boolean {
 }
 
 export class CapabilityEnforcementError extends Error {
-  constructor(public readonly code: CapabilityAvailability | "binding_unavailable", message: string) { super(message); }
+  constructor(public readonly code: CapabilityAvailability | "binding_unavailable", message: string, public readonly findings?: ReadinessFinding[]) { super(message); }
 }
 
 export async function runtimeModules(businessId: string): Promise<string[] | null> {

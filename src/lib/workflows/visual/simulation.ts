@@ -5,6 +5,8 @@ import { generateSimulationScenarios, syntheticValue, type Scenario } from "./si
 import type { VisualExecution, VisualGraph, VisualRunState } from "./types";
 import type { SimulationBinding, SimulationReport, ScenarioResult, SimulationStatus } from "./simulation-types";
 import { getCapability, type CapabilityAssessment } from "@/lib/capabilities/registry";
+import { capabilityFinding, readinessFinding } from "@/lib/capabilities/diagnostics";
+import { nodeCapabilityKeys } from "@/lib/capabilities/graph";
 
 const externalActions = new Set(["action", "knowledge", "product", "booking", "order_status", "handoff"]);
 const limits = { scenarios: 192, turns: 40, durationMs: 2000 };
@@ -45,7 +47,10 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
         result.attemptedActions.push({ kind: last.action.kind, nodeId: last.action.nodeId, disposition: "not_executed" });
         result.result = "UNVERIFIED";
         result.actualOutcome = "Runtime arriti te një shërbim real; veprimi nuk u krye.";
-        result.validationFindings.push({ code: "external_action_not_executed", nodeId: last.action.nodeId, message: "Nuk u thirr shërbimi, AI, katalogu, rezervimi, porosia ose stafi. Rezultati i tyre mbetet i paverifikuar." });
+        const node = graph.nodes.find(n => n.id === last!.action.nodeId)!;
+        for (const capabilityKey of nodeCapabilityKeys(node).length ? nodeCapabilityKeys(node) : [null])
+          result.validationFindings.push(readinessFinding("external_action_not_executed", "Nuk u thirr shërbimi, AI, katalogu, rezervimi, porosia ose stafi. Rezultati i tyre mbetet i paverifikuar.",
+            { nodeId: node.id, capabilityKey, missingRequirements: ["isolated_execution_evidence"], remediation: "Provo këtë veprim me adapter të izoluar dhe pritshmëri të pavarura. Mos përdor porosi ose mesazhe reale." }));
         break;
       }
       if (!s.followPrompts || last.action.kind === "end") break;
@@ -132,12 +137,15 @@ export function simulateWorkflowProposal(input: {
   }
   for (const capability of input.capabilities ?? []) if (capability.status !== "ready" || !getCapability(capability.capabilityKey)) {
     const unsupported = capability.status === "unsupported" || !getCapability(capability.capabilityKey);
-    const entry = blockedScenario(unsupported ? "unsupported_capability" : "capability_not_ready", unsupported ? "Kërkesa përmban një aftësi pa ekzekutues të mbështetur." : "Mungon konfigurimi ose verifikimi i një aftësie të kërkuar.");
+    const finding = capabilityFinding(unsupported ? { ...capability, status: "unsupported" } : capability, graph ?? undefined);
+    const entry = blockedScenario(finding.code, finding.message);
+    entry.validationFindings = [finding];
     entry.scenarioId += `:${report.scenarios.length}`; entry.category = "capability"; report.scenarios.push(entry);
   }
   if (input.assessmentUnavailable) report.scenarios.push(blockedScenario("assessment_unavailable", "Vlerësimi i aftësive ose autorizimit nuk u konfirmua."));
   if (input.clarificationRequired) report.scenarios.push(blockedScenario("clarification_required", "Qëllimi i kërkuar ka paqartësi; sqarimi nuk zëvendësohet nga një provë teknike."));
   report.validationFindings = [{ code: "structural_scope", message: "Të dhëna sintetike, qëllime të paracaktuara dhe vetëm runtime determinist. Nuk provohen kuptimi nga AI, përmbajtja e përgjigjeve apo integrimet reale." }];
+  for (const scenario of report.scenarios) scenario.validationFindings = scenario.validationFindings.map(f => readinessFinding(f.code, f.message, f));
   const statuses = report.scenarios.map(s => s.result);
   report.result = statuses.includes("FAIL") ? "FAIL" : statuses.includes("BLOCKED") ? "BLOCKED" : statuses.includes("UNVERIFIED") ? "UNVERIFIED" : statuses.length ? "PASS" : "UNVERIFIED";
   report.canPublish = report.scenarios.length > 0 && report.scenarios.every(s => !s.critical || s.result === "PASS" && s.executionCount > 0);

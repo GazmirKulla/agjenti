@@ -1,6 +1,7 @@
 -- W0-B, AFTER the migration, only in an isolated *_w4_test database.
 -- Real SET ROLE checks; no mock grants and no production/customer fixtures.
 begin;
+\ir fixtures/order_readiness.sql
 do $$ begin
   if current_database() not like '%\_w4\_test' escape '\' then
     raise exception 'Use an isolated database ending in _w4_test';
@@ -15,7 +16,7 @@ do $$ declare f record; s jsonb; begin
   select * into f from pg_temp.w0b_fixture;
   insert into auth.users(id,email) values(f.actor,f.actor||'@test.invalid'),(f.outsider,f.outsider||'@test.invalid');
   insert into public.businesses(id,name,slug,dashboard_profile) values
-    (f.b,'W0-B','w0b-'||f.b,'{"source":"manual","enabledModules":["products","orders"]}'),
+    (f.b,'W0-B','w0b-'||f.b,'{"source":"manual","enabledModules":["products","orders","workflows"]}'),
     (f.other_b,'W0-B foreign','w0b-'||f.other_b,null);
   insert into public.business_users(business_id,user_id,role) values(f.b,f.actor,'owner'),(f.other_b,f.outsider,'owner');
   insert into public.conversations(id,business_id) values(f.c,f.b);
@@ -31,6 +32,7 @@ do $$ declare f record; s jsonb; begin
       'orderTerms',jsonb_build_object('productId',f.p,'unitAmount',17,'currency','EUR','quantity',1),
       'orderReview',jsonb_build_object('id',gen_random_uuid(),'confirmed',true,'factsKey','server-test',
         'fieldKeys','[]'::jsonb,'expiresAt',4102444800000))));
+  s:=pg_temp.pin_test_order(f.b,f.actor,s);
   update pg_temp.w0b_fixture set state=s;
   insert into public.conversation_states(conversation_id,business_id,collected,revision) values(f.c,f.b,s,7);
 end $$;

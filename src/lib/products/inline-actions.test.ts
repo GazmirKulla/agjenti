@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProductRow } from "./catalog";
+vi.mock("@/lib/dashboard/modules/entitlements", () => ({ loadAllowedModules: async () => ["products", "orders", "workflows"] }));
 const businessWorkflow = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/workflows/visual/business-workflow", () => ({ publishedBusinessWorkflow: businessWorkflow }));
 const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), from: vi.fn(), update: vi.fn(), bindings: vi.fn() }));
@@ -55,11 +56,10 @@ it("does not demote an active product when removing a legacy link while its visu
   expect(result.product?.is_active).toBe(true);
   expect(m.update.mock.calls[0][0]).not.toHaveProperty("is_active");
 });
-it("does not activate when the published assignment cannot be verified", async () => {
+it("catalog activation does not depend on publication metadata availability", async () => {
   product.workflow_id = null;
   m.bindings.mockRejectedValue(new Error("unavailable"));
-  expect((await activate()).error).toContain("verifikua");
-  expect(m.update).not.toHaveBeenCalled();
+  expect((await activate()).product?.is_active).toBe(true);
 });
 const activate = () => updateCatalogField("test", { id, field: "is_active", value: true, updatedAt: stamp });
 
@@ -88,7 +88,7 @@ describe("inline product configuration", () => {
   });
   it("names activation requirements and refuses foreign workflows or inactive types", async () => {
     product.workflow_id = product.product_type_id = null; product.price_amount = null;
-    expect((await activate()).error).toMatch(/çmimin.*llojin.*workflow-n/);
+    expect((await activate()).error).toMatch(/çmimi.*monedha.*lloji/);
     product.workflow_id = workflow; product.product_type_id = type; product.price_amount = 0;
     workflowAvailable = false; expect((await activate()).error).toContain("këtë biznes");
     workflowAvailable = true; typeAvailable = false; expect((await activate()).error).toContain("nuk është aktiv");
@@ -107,12 +107,11 @@ describe("inline product configuration", () => {
     expect((await updateCatalogField("test", { id, field: "is_active", value: false, updatedAt: stamp })).product?.is_active).toBe(false);
     expect(queries.every(query => query.table === "products")).toBe(true);
   });
-  it("removing a mapping automatically demotes an active product and preserves other fields", async () => {
+  it("removing an order mapping preserves catalog activity and other fields", async () => {
     product.is_active = true;
     const result = await updateCatalogField("test", { id, field: "workflow_id", value: null, updatedAt: stamp });
-    expect(result.product).toMatchObject({ workflow_id: null, is_active: false, product_type_id: type, price_amount: 25 });
-    expect(result.success).toContain("draft");
-    expect(m.update.mock.calls[0][0]).toEqual({ workflow_id: null, is_active: false, updated_at: expect.any(String) });
+    expect(result.product).toMatchObject({ workflow_id: null, is_active: true, product_type_id: type, price_amount: 25 });
+    expect(m.update.mock.calls[0][0]).toEqual({ workflow_id: null, updated_at: expect.any(String) });
   });
   it("maps a draft without automatically publishing it", async () => {
     product.workflow_id = null;

@@ -26,6 +26,10 @@ begin
  perform save_visual_workflow(tenant,tenant,0,bound,'draft');
  if (select enabled or published_version_id is not null from visual_workflows where business_id=tenant) then raise exception 'Draft unexpectedly activated'; end if;
  if (select draft from visual_workflows where business_id=tenant)<>bound then raise exception 'Bindings not saved'; end if;
+ -- Package A: inactive references are configuration only, never publication-ready.
+ begin perform save_visual_workflow(tenant,tenant,1,bound,'publish'); raise exception 'Inactive product published' using errcode='XX001';
+ exception when raise_exception then if sqlerrm<>'invalid_workflow_targets' then raise; end if; end;
+ update products set is_active=true where id='aaaaaaaa-0000-4000-8000-000000003501';
  perform save_visual_workflow(tenant,tenant,1,bound,'publish');
  select published_version_id into old_version from visual_workflows where business_id=tenant;
  perform save_visual_workflow(tenant,tenant,2,graph,'draft');

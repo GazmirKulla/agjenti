@@ -25,6 +25,7 @@ function confirmedOrder() {
     setFact(next, `customer_${key}`, value, "text", "test");
   setFact(next, "size", "M", "text", "test");
   const steps = [{ key: "size", kind: "text" as const }, { key: "collect_customer", kind: "customer" as const }];
+  next.context!.execution.linear = { id: "workflow", versionId: "published-linear", name: "Order", steps };
   next = advanceSharedOrder(next, "", false, steps);
   return advanceSharedOrder(next, "Po", false, steps);
 }
@@ -86,7 +87,8 @@ it("submits the confirmed order snapshot while a booking owns the current cursor
     const q = { select: () => q, eq: () => q, update: () => q,
       insert: (row: Record<string, unknown>) => { if (table === "orders") inserted.push(row); return q; },
       single: async () => ({ data: { id: "new-order" } }),
-      maybeSingle: async () => ({ data: table === "conversations" ? { id: "conversation" } : table === "conversation_states" ? { collected: state, revision: 4, cart: [] } : table === "products" ? { id: "product", name: "Puzzle", price_amount: 1200, currency: "ALL" } : null }),
+      maybeSingle: async () => ({ data: table === "conversations" ? { id: "conversation" } : table === "conversation_states" ? { collected: state, revision: 4, cart: [] } : table === "products" ? { id: "product", name: "Puzzle", price_amount: 1200, currency: "ALL" }
+        : table === "linear_workflow_versions" ? { id: "published-linear", steps: [{ key: "size", kind: "text" }, { key: "collect_customer", kind: "customer" }] } : null }),
     }; return q;
   });
   m.ensure.mockResolvedValue({ ok: true, customerId: "customer" });

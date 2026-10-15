@@ -5,28 +5,35 @@ because the two workers must see them; cleanup is limited to their random IDs.
 """
 import argparse
 import json
+from pathlib import Path
 import select
 import subprocess
+import time
 import uuid
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--database-url", required=True)
 parser.add_argument("--psql", default="psql")
 args = parser.parse_args()
-if not urlparse(args.database_url).path.endswith("_w4_test"):
-    parser.error("Use a disposable database whose name ends with _w4_test")
+url = urlparse(args.database_url)
+query = parse_qs(url.query)
+host = url.hostname or query.get("host", [""])[0]
+if not url.path.endswith("_w4_test") or not host.startswith("/") or "hostaddr" in query:
+    parser.error("Use a disposable *_w4_test database through an explicit local Unix socket")
 cmd = [args.psql, args.database_url, "-X", "-qAt", "-v", "ON_ERROR_STOP=1"]
 
 
-def sql(statement):
-    result = subprocess.run(cmd + ["-c", statement], capture_output=True, text=True, timeout=15)
+def sql(statement, fixture=False):
+    helpers = ["-f", str(Path(__file__).parent / "fixtures/order_readiness.sql")] if fixture else []
+    result = subprocess.run(cmd + helpers + ["-c", statement], capture_output=True, text=True, timeout=15)
     if result.returncode:
         raise RuntimeError(result.stderr[-2000:])
     return result.stdout.strip()
 
 
 b, actor, c, product, review = [str(uuid.uuid4()) for _ in range(5)]
+assert sql("select inet_server_addr() is null") == "t"
 state = {
     "schemaVersion": 3, "product_id": product, "product_type_id": None,
     "step_key": "order_ready", "fields": {},
@@ -38,18 +45,56 @@ state = {
     }},
 }
 encoded = json.dumps(state)
-call = f"select submit_confirmed_order('{b}','{actor}','{c}',7,'{encoded}','{encoded}',false);"
 workers = []
 try:
-    sql(f"""
+    encoded = sql(f"""
       insert into auth.users(id,email) values('{actor}','{actor}@test.invalid');
       insert into businesses(id,name,slug,dashboard_profile) values('{b}','W4 concurrency','w4-{b}',
-        '{{"source":"manual","version":1,"enabledModules":["products","orders"]}}');
+        '{{"source":"manual","version":1,"enabledModules":["products","orders","workflows"]}}');
       insert into business_users(business_id,user_id,role) values('{b}','{actor}','owner');
       insert into products(id,business_id,name,price_amount,currency) values('{product}','{b}','Test',10,'USD');
       insert into conversations(id,business_id) values('{c}','{b}');
-      insert into conversation_states(conversation_id,business_id,collected,revision) values('{c}','{b}','{encoded}',7);
-    """)
+      select pg_temp.pin_test_order('{b}','{actor}','{encoded}');
+    """, fixture=True)
+    sql(f"insert into conversation_states(conversation_id,business_id,collected,revision) values('{c}','{b}','{encoded}',7);")
+    call = f"set role service_role; select public.submit_confirmed_order('{b}','{actor}','{c}',7,'{encoded}','{encoded}',false);"
+    # A concurrent deactivation wins before the readiness lock. Submission must
+    # observe the committed revocation and cannot persist or authorize dispatch.
+    for target, revoke, restore, expected in [
+        ("product", f"update public.products set is_active=false where id='{product}'",
+         f"update public.products set is_active=true where id='{product}'", "product_unavailable"),
+        ("workflow", f"select public.save_visual_workflow('{b}','{actor}',1,null,'disable')",
+         f"select public.save_visual_workflow('{b}','{actor}',2,null,'enable')", "workflow_not_ready"),
+        ("module", f"select public.save_business_modules('{b}','{actor}','{{\"version\":1,\"source\":\"manual\",\"enabledModules\":[\"products\",\"workflows\"]}}')",
+         f"select public.save_business_modules('{b}','{actor}','{{\"version\":1,\"source\":\"manual\",\"enabledModules\":[\"products\",\"orders\",\"workflows\"]}}')", "module_disabled"),
+    ]:
+        revoker = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True, bufsize=1)
+        workers.append(revoker)
+        revoker.stdin.write(f"begin;\n{revoke};\nselect 'locked';\n")
+        revoker.stdin.flush()
+        assert select.select([revoker.stdout], [], [], 10)[0], "Revoker did not acquire lock"
+        line = revoker.stdout.readline().strip()
+        if line != "locked":
+            # An RPC may emit its revision/void result before the marker.
+            assert revoker.stdout.readline().strip() == "locked"
+        app_name = f"readiness-{target}-{b}"
+        denied = subprocess.Popen(cmd + ["-c", f"set application_name='{app_name}'; {call}"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        workers.append(denied)
+        deadline = time.monotonic() + 10
+        while sql(f"select count(*) from pg_stat_activity where application_name='{app_name}' and wait_event_type='Lock'") != "1":
+            assert time.monotonic() < deadline and denied.poll() is None, "Submission did not wait on readiness lock"
+            time.sleep(0.01)
+        revoker.stdin.write("commit;\n")
+        revoker.stdin.close()
+        assert revoker.wait(timeout=10) == 0, revoker.stderr.read()
+        output, error = denied.communicate(timeout=10)
+        assert denied.returncode and expected in error and '"dispatch": true' not in output, (output, error)
+        assert sql(f"select count(*) from public.orders where business_id='{b}'") == "0"
+        assert sql(f"select count(*) from public.order_submissions where business_id='{b}'") == "0"
+        sql(restore)
+        print(f"PASS concurrent {target} deactivation: real lock wait, rejection, zero orders/dispatch")
     winner = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
     workers.append(winner)
     winner.stdin.write("begin;\n" + call + "\n")

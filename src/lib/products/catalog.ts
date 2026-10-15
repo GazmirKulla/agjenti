@@ -25,11 +25,11 @@ export function isMapped(p: ProductRow) {
   return Boolean(p.product_type_id && (p.workflow_id || p.visual_workflow || p.business_workflow?.active));
 }
 export function catalogStatus(p: ProductRow) {
-  return !isMapped(p) ? "unlinked" : p.is_active ? "active" : "draft";
+  return p.is_active ? "active" : !isMapped(p) ? "unlinked" : "draft";
 }
 export const statusNames = {
   unlinked: "I palidhur",
-  active: "Aktiv",
+  active: "Aktiv në katalog",
   draft: "Draft",
 };
 export function catalogFilter(

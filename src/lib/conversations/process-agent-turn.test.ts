@@ -157,7 +157,7 @@ describe("W3 presentation-to-order journeys", () => {
     mocks.generate.mockResolvedValue({ reply: "Puzzle — 20 EUR\nLibri — 10 EUR", presentedProducts: catalog, responseId: null, source: "ai", fallbackReason: null });
     return turn("Çfarë produktesh keni?", state);
   }
-  it.each(["i dyti", "the second one", "më i liri", "the cheapest"])("carries a verified selection into an unbound order workflow: %s", async message => {
+  it.each(["i dyti", "the second one", "më i liri", "the cheapest"])("preserves selection but refuses unconfigured default collection: %s", async message => {
     vi.stubEnv("OPENAI_API_KEY", "");
     const info = await presentation();
     expect(info.nextState.product_id).toBeNull();
@@ -165,7 +165,9 @@ describe("W3 presentation-to-order journeys", () => {
     const chosen = await turn(message, info.nextState);
     expect(chosen.nextState.product_id).toBe("p2");
     expect(chosen.nextState.processes?.order?.snapshot.product_id).toBe("p2");
-    expect(chosen.nextState.step_key).toBe("collect_customer");
+    expect(chosen.nextState.step_key).not.toBe("collect_customer");
+    expect(chosen.debug.fallbackReason).toBe("workflow_not_configured");
+    expect(chosen.reply).toContain("porositja automatike nuk është konfiguruar");
     expect(chosen.reply).not.toContain("Cilin produkt");
     expect(chosen.nextState.customer.name).toBeNull();
   });
@@ -324,6 +326,19 @@ it("loads the tenant customer journey for both live and test replies without cha
   expect(mocks.generate.mock.calls.at(-1)?.[0].businessProcess).toBe("");
 });
 describe("shared business turn processor", () => {
+  it.each([
+    ["missing", true], ["missing", false], ["empty", true], ["empty", false],
+  ] as const)("never falls back from a %s referenced workflow (configured required: %s)", async (kind, requireConfiguredWorkflow) => {
+    if (kind === "missing") fixtures.workflows = null;
+    else fixtures.workflow_steps = [];
+    const result = await processLegacyAgentTurn({ businessId: "business-a", message: "Bluzë", hasPhoto: false, requireConfiguredWorkflow });
+    expect(result.debug.fallbackReason).toBe("workflow_not_configured");
+    expect(result.workflowProgress).toEqual([]);
+    expect(result.nextState.customer.name).toBeNull();
+    expect(result.nextState.context?.execution.orderConfirmed).not.toBe(true);
+    expect(mocks.generate).not.toHaveBeenCalled();
+    expect(queries.find(q => q.table === "workflows")?.filters).toContainEqual(["business_id", "business-a"]);
+  });
   it("uses tenant agent, active knowledge, catalog prices and product workflow", async () => {
     const result = await processAgentTurn({
       businessId: "business-a",

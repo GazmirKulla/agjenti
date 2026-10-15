@@ -33,7 +33,7 @@ function query(table: string) {
   const result = () => {
     const data = table === "business_users" ? membership ? { business_id: "tenant-a" } : null
       : table === "platform_admins" ? null
-      : table === "products" || table === "booking_services" ? active && values.business_id === "tenant-a" ? [{ id: table === "products" ? productId : serviceId }] : []
+      : table === "products" || table === "booking_services" ? (active || values.is_active !== true) && values.business_id === "tenant-a" ? [{ id: table === "products" ? productId : serviceId }] : []
       : table === "business_calendar_settings" ? { agent_booking_enabled: true }
       : table === "google_calendar_connections" ? connection : null;
     return { data, error: null, count };
@@ -119,10 +119,11 @@ it.each(["inactive", "foreign"])("rejects %s product and service bindings on sav
   expect(filters).toContainEqual(["products", "business_id", "tenant-a"]); expect(filters).toContainEqual(["products", "is_active", true]);
   expect(filters).toContainEqual(["booking_services", "business_id", "tenant-a"]); expect(filters).toContainEqual(["booking_services", "is_active", true]);
 });
-it("rejects inactive bindings through the combined product/flow API too", async () => {
+it("allows inactive owned bindings through the draft-only product/flow API", async () => {
   active = false;
-  expect(await saveProductsWithVisualFlow("tenant-a", "actor", { flowId: "order", revision: 2 }, "bind", [{ id: productId }])).toHaveProperty("error");
-  expect(m.rpc).not.toHaveBeenCalled();
+  m.rpc.mockResolvedValue({ data: 1, error: null });
+  expect(await saveProductsWithVisualFlow("tenant-a", "actor", { flowId: "order", revision: 2 }, "bind", [{ id: productId }])).toHaveProperty("success");
+  expect(m.rpc).toHaveBeenCalledWith("save_products_with_visual_flow", expect.objectContaining({ p_business: "tenant-a", p_mode: "bind", p_revision: 2 }));
 });
 it("refuses revoked/cross-tenant membership even when module configuration is ready", async () => {
   membership = false;
