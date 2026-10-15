@@ -5,6 +5,8 @@ import {
 
 /** Read-only RPCs used by conversation context. Unknown RPCs fail closed. */
 const READ_RPC = new Set([
+  // Module policy is read-only and must still be enforced in Chat Lab/tests.
+  "allowed_business_modules",
   "search_catalog_sections",
   "can_execute_business_action",
   "workflow_runtime_readiness",
