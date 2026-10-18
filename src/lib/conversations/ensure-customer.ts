@@ -57,20 +57,29 @@ export async function ensureCustomerForConversation(
 		null;
 
 	if (instagramUserId || whatsappUserId) {
-		const { data: existing } = await supabase
+		const { data: existing, error: lookupError } = await supabase
 			.from("customers")
 			.select("id")
 			.eq("business_id", input.businessId)
 			.eq(whatsappUserId ? "whatsapp_user_id" : "instagram_user_id", whatsappUserId || instagramUserId)
 			.maybeSingle();
+		if (lookupError) {
+			return { ok: false, error: "Klienti nuk u gjet.", status: 500 };
+		}
 		if (existing?.id) {
-			await supabase
+			const { data: linked, error: linkError } = await supabase
 				.from("conversations")
 				.update({
 					customer_id: existing.id,
 					updated_at: new Date().toISOString(),
 				})
-				.eq("id", input.conversationId);
+				.eq("id", input.conversationId)
+				.eq("business_id", input.businessId)
+				.select("id")
+				.maybeSingle();
+			if (linkError || !linked) {
+				return { ok: false, error: "Klienti nuk u lidh me bisedën.", status: 500 };
+			}
 			const patch: Record<string, unknown> = {
 				updated_at: new Date().toISOString(),
 			};
@@ -78,7 +87,7 @@ export async function ensureCustomerForConversation(
 			if (displayName) patch.display_name = displayName;
 			if (username) patch.username = username;
 			if (Object.keys(patch).length > 1) {
-				await supabase.from("customers").update(patch).eq("id", existing.id);
+				await supabase.from("customers").update(patch).eq("id", existing.id).eq("business_id", input.businessId);
 			}
 			return { ok: true, customerId: existing.id as string, created: false };
 		}
@@ -100,21 +109,24 @@ export async function ensureCustomerForConversation(
 	if (createError || !created?.id) {
 		return {
 			ok: false,
-			error: createError?.message || "Klienti nuk u krijua.",
+			error: "Klienti nuk u krijua.",
 			status: 500,
 		};
 	}
 
-	const { error: linkError } = await supabase
+	const { data: linked, error: linkError } = await supabase
 		.from("conversations")
 		.update({
 			customer_id: created.id,
 			updated_at: new Date().toISOString(),
 		})
-		.eq("id", input.conversationId);
+		.eq("id", input.conversationId)
+		.eq("business_id", input.businessId)
+		.select("id")
+		.maybeSingle();
 
-	if (linkError) {
-		return { ok: false, error: linkError.message, status: 500 };
+	if (linkError || !linked) {
+		return { ok: false, error: "Klienti nuk u lidh me bisedën.", status: 500 };
 	}
 
 	return { ok: true, customerId: created.id as string, created: true };
