@@ -38,7 +38,9 @@ export async function updateCatalogField(slug: string, change: Change): Promise<
     // Reload through the page after the acknowledged draft assignment.
     return result;
   }
-  const changes: Record<string, unknown> = { [change.field]: change.value, updated_at: new Date().toISOString() };
+  // A status toggle must advance the revision even within one clock millisecond.
+  const updatedAt = change.field === "is_active" ? new Date(Math.max(Date.now(), Date.parse(change.updatedAt) + 1)).toISOString() : new Date().toISOString();
+  const changes: Record<string, unknown> = { [change.field]: change.value, updated_at: updatedAt };
   const next = { ...row, ...changes } as ProductRow;
   let visual: ProductRow["visual_workflow"];
   let businessWorkflow: BusinessWorkflow | null = null;
@@ -64,7 +66,12 @@ export async function updateCatalogField(slug: string, change: Change): Promise<
     const workflow = await db.from("workflows").select("id").eq("business_id", businessId).eq("id", next.workflow_id).maybeSingle();
     if (workflow.error || !workflow.data) return { error: "Workflow-i nuk u gjet në këtë biznes. Zgjidh një tjetër." };
   }
-  const saved = await db.from("products").update(changes).eq("business_id", businessId).eq("id", change.id).eq("updated_at", change.updatedAt).select(productCatalogColumns).maybeSingle();
+  if (change.field === "is_active" && row.is_active === change.value)
+    return { product: { ...row, visual_workflow: visual ?? null, business_workflow: businessWorkflow }, success: "Statusi i produktit është tashmë siç u kërkua." };
+  let write = db.from("products").update(changes).eq("business_id", businessId).eq("id", change.id).eq("updated_at", change.updatedAt);
+  // Timestamp precision can collide; also fence the status transition itself.
+  if (change.field === "is_active") write = write.eq("is_active", row.is_active);
+  const saved = await write.select(productCatalogColumns).maybeSingle();
   if (saved.error) return { error: "Ndryshimi nuk u ruajt. Provo përsëri." };
   if (!saved.data) return { error: "Produkti ndryshoi ndërkohë. Rifresko listën dhe provo përsëri." };
   revalidatePath(`/b/${slug}`, "layout");

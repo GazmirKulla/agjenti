@@ -9,7 +9,8 @@ import { loadAssistantWorkflow, prepareWorkflow, executeWorkflow, simulateAutoma
 import { automationIntentSchema } from "./automation-intent";
 import { automationInstructions, buildAutomationProposal, automationMessage, type AutomationProposal } from "./automation-proposal";
 import { summarizeWorkflowChanges } from "./semantic-summary";
-const workflowInstructions = `${automationInstructions} ${baseWorkflowInstructions}`;
+import { toActionPlan, actionPlanInstructions, type ActionPlan } from "./action-plan";
+const workflowInstructions = `${automationInstructions} ${baseWorkflowInstructions} ${actionPlanInstructions}`;
 import type { WorkflowCard } from "./workflow";
 import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
 import type { PublicationApproval } from "@/lib/workflows/visual/publication-types";
@@ -58,7 +59,7 @@ const columns: Record<string, string> = {
   profile: "id,name,updated_at",
   booking: bookingColumns,
 };
-export type PlanResult = { automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[] };
+export type PlanResult = { actionPlan?: ActionPlan; automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[] };
 export type Access = {
   userId: string;
   businessId: string;
@@ -80,6 +81,7 @@ export type Ticket = {
   serviceVersion?: { id: string; updatedAt: string };
 };
 export function assertEnabled(access: Access, action: Action) {
+  if (action === "automation_plan") throw new AssistantError("Plani është vetëm për shqyrtim; nuk është konfirmim për ekzekutim.");
   if (action === "clarify") return;
   if (!access.modules.includes(moduleFor(action)))
     throw new AssistantError(
@@ -218,6 +220,7 @@ export async function planRequest(
     })) : [];
   const selected = await loadSelectedContext(access, validatedContext);
   const context: Record<string, unknown> = {};
+  context.capabilityDefinitions = Object.values(capabilityRegistry).map(({ key, description }) => ({ key, description }));
   try {
     const capabilityAssessments = await assessBusinessCapabilities(access.businessId, { userId: access.userId });
     context.capabilities = summarizeCapabilityAssessments(capabilityAssessments);
@@ -384,6 +387,13 @@ export async function planRequest(
       throw new AssistantError(
         "Kërkesa nuk u analizua. Provo përsëri ose jep më shumë hollësi.",
       );
+    }
+    if (proposal.action === "automation_plan") {
+      const automation = await buildAutomationProposal({ mode: "plan", businessId: access.businessId, userId: access.userId,
+        request: text, intent: proposal.automation });
+      const actionPlan = toActionPlan(automation, text, proposal.automation!.clarificationQuestions);
+      // Do not echo model-authored claims of readiness/success or issue a mutation ticket.
+      return { actionPlan, message: "Ja plani për shqyrtim. Kontrollo gatishmërinë e secilit hap më poshtë. Asgjë nuk është ruajtur, aktivizuar ose publikuar." };
     }
     if (proposal.action === "clarify" && proposal.automation && access.modules.includes("workflows")) {
       const card = (context.workflow as WorkflowCard | undefined) ?? await loadAssistantWorkflow(access);

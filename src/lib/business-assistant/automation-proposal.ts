@@ -58,22 +58,25 @@ function graphCapabilities(before: VisualGraph, after: VisualGraph): string[] {
   return keys;
 }
 
-export async function buildAutomationProposal(input: {
-  businessId: string; userId: string; revision: number; publishedVersionId: string | null;
-  request: string; intent?: AutomationIntent; before: VisualGraph; after: VisualGraph; operations: Operation[];
-}): Promise<AutomationProposal> {
+type ProposalInput = { businessId: string; userId: string; request: string; intent?: AutomationIntent } & (
+  | { mode: "plan" }
+  | { mode?: "workflow"; revision: number; publishedVersionId: string | null; before: VisualGraph; after: VisualGraph; operations: Operation[] }
+);
+
+export async function buildAutomationProposal(input: ProposalInput): Promise<AutomationProposal> {
   const behaviors = [...(input.intent?.requestedBehaviors ?? [{ description: input.request.slice(0, 500), capabilityKeys: [] }])];
-  const enforced = moduleEnforcementEnabled(input.businessId);
-  const inferred = [...new Set([...unsupportedRequestKeys(input.request), ...graphCapabilities(input.before, input.after), ...(enforced ? graphRequirements(input.after).capabilityKeys : [])])];
+  const workflow = input.mode === "plan" ? undefined : input;
+  const enforced = Boolean(workflow) && moduleEnforcementEnabled(input.businessId);
+  const inferred = [...new Set([...unsupportedRequestKeys(input.request), ...(workflow ? graphCapabilities(workflow.before, workflow.after) : []), ...(enforced && workflow ? graphRequirements(workflow.after).capabilityKeys : [])])];
   for (const key of inferred) if (!behaviors.some(b => b.capabilityKeys.includes(key))) behaviors.push({ description: getCapability(key)?.description ?? `Aftësi e kërkuar: ${key}`, capabilityKeys: [key] });
   let assessments: CapabilityAssessment[] = [];
   let unavailable = false;
   const keys = [...new Set(behaviors.flatMap(b => b.capabilityKeys))];
-  try { assessments = await assessBusinessCapabilities(input.businessId, { userId: input.userId }, { keys, ...(enforced ? { candidate: input.after } : {}) }); }
+  try { assessments = await assessBusinessCapabilities(input.businessId, { userId: input.userId }, { keys, ...(enforced && workflow ? { candidate: workflow.after } : {}) }); }
   catch { unavailable = true; }
   let enforcementFailure: CapabilityEnforcementError | undefined;
-  if (enforced && !unavailable) {
-    try { await enforceWorkflowCapabilities(input.businessId, input.userId, input.after, "draft"); }
+  if (enforced && workflow && !unavailable) {
+    try { await enforceWorkflowCapabilities(input.businessId, input.userId, workflow.after, "draft"); }
     catch (error) { enforcementFailure = error instanceof CapabilityEnforcementError ? error : new CapabilityEnforcementError("unverified", "Nuk u verifikuan aftësitë e rrjedhës."); }
   }
   const capabilities = keys.map((key): CapabilityAssessment => {
@@ -84,27 +87,29 @@ export async function buildAutomationProposal(input: {
   if (enforced && capabilities.some(c => c.missingRequirements.some(key => key.startsWith("module:"))))
     enforcementFailure ??= new CapabilityEnforcementError("module_disabled", "Një modul i kërkuar nga propozimi është i çaktivizuar.");
   const clarificationQuestions = [...(input.intent?.clarificationQuestions ?? [])];
+  if (!workflow && behaviors.some(b => !b.capabilityKeys.length)) clarificationQuestions.push("Çfarë rezultati konkret pret nga hapi që ende nuk ka një aftësi të identifikuar?");
   if (unsupportedActions.length) clarificationQuestions.push("Automatizimi i plotë nuk mbështetet. Dëshiron të kërkosh një draft vetëm për pjesën e mbështetur?");
   if (unavailable) clarificationQuestions.push("Nuk u verifikuan aftësitë e biznesit. Provo përsëri para ruajtjes.");
   else if (capabilities.some(c => c.status === "needs_clarification")) clarificationQuestions.push("Duhen sqaruar aftësitë e paverifikuara para ruajtjes.");
   const rank: CapabilityReadiness[] = ["ready", "needs_setup", "needs_clarification", "unsupported"];
   const readiness = capabilities.reduce<CapabilityReadiness>((status, c) => rank.indexOf(c.status) > rank.indexOf(status) ? c.status : status,
     clarificationQuestions.length || enforcementFailure?.code === "unverified" ? "needs_clarification" : enforcementFailure ? "needs_setup" : "ready");
-  const validationFindings: AutomationProposal["validationFindings"] = validateVisualGraph(input.after).errors.map(e => ({ code: "invalid_graph", message: e.message, severity: "warning" }));
+  const validationFindings: AutomationProposal["validationFindings"] = workflow ? validateVisualGraph(workflow.after).errors.map(e => ({ code: "invalid_graph", message: e.message, severity: "warning" })) : [];
   if (unsupportedActions.length) validationFindings.push({ code: "unsupported_actions", message: "Këto veprime nuk kanë ekzekutim të mbështetur.", severity: "error" });
   if (unavailable) validationFindings.push({ code: "assessment_unavailable", message: "Gatishmëria nuk u verifikua.", severity: "error" });
   if (enforcementFailure) validationFindings.push({ code: enforcementFailure.code, message: enforcementFailure.message, severity: "error" });
   const missingRequirements = [...new Set(capabilities.flatMap(c => c.missingRequirements))];
   if (missingRequirements.length) validationFindings.push({ code: "needs_setup", message: "Nevojitet konfigurim para aktivizimit.", severity: "warning" });
   return {
-    version: 1, proposalId: randomUUID(), status: "proposed", readiness, baseRevision: input.revision, workflowVersionId: input.publishedVersionId,
+    // A plan is not a workflow snapshot and cannot become a save/publication ticket.
+    version: 1, proposalId: randomUUID(), status: "proposed", readiness, baseRevision: workflow?.revision ?? 0, workflowVersionId: workflow?.publishedVersionId ?? null,
     requestedBehaviors: behaviors.map(b => ({ ...b, readiness: unavailable || clarificationQuestions.length && !b.capabilityKeys.length ? "needs_clarification" : b.capabilityKeys.reduce<CapabilityReadiness>((s, key) => {
       const next = capabilities.find(c => c.capabilityKey === key)!.status; return rank.indexOf(next) > rank.indexOf(s) ? next : s;
     }, "ready") })),
     // Blocked requests never return executable operations masquerading as a partial success.
-    operations: unsupportedActions.length || clarificationQuestions.length || enforcementFailure ? [] : input.operations,
+    operations: unsupportedActions.length || clarificationQuestions.length || enforcementFailure ? [] : workflow?.operations ?? [],
     requiredCapabilities: capabilities, missingRequirements, unsupportedActions, assumptions: input.intent?.assumptions ?? [], clarificationQuestions, validationFindings,
-    canSaveDraft: !unavailable && !enforcementFailure && !clarificationQuestions.length && !capabilities.some(c => ["unsupported", "needs_clarification"].includes(c.status)),
+    canSaveDraft: Boolean(workflow) && !unavailable && !enforcementFailure && !clarificationQuestions.length && !capabilities.some(c => ["unsupported", "needs_clarification"].includes(c.status)),
   };
 }
 
@@ -132,4 +137,4 @@ export async function recheckAutomation(businessId: string, userId: string, prop
   }
 }
 
-export const automationInstructions = `For workflow_draft and automation questions return automation with every requested behavior, required capabilityKeys, assumptions and clarificationQuestions. For other actions use automation=null. Readiness is computed by the server, never invent it. Include unsupported behaviors even when proposing a supported subset. product.search and product.recommend concern catalog data only, never live inventory. inventory.check, back_in_stock.notify, schedule.trigger and arbitrary external integrations are unsupported. Never encode them as knowledge prompts, collect fields, labels, new node kinds or custom conditions. If any behavior is unsupported, explain the complete automation cannot run and ask the owner to explicitly request only the supported subset; never infer consent from history. Ambiguous scope must produce clarificationQuestions and no changes. No scripts, tools or credentials in graph configuration. Existing patch operations and draft/publish rules remain unchanged.`;
+export const automationInstructions = `For workflow_draft, automation_plan and automation questions return automation with every requested behavior, required capabilityKeys, assumptions and clarificationQuestions. For other actions use automation=null. Readiness is computed by the server, never invent it. Include unsupported behaviors even when proposing a supported subset. product.search and product.recommend concern catalog data only, never live inventory. inventory.check, back_in_stock.notify, schedule.trigger and arbitrary external integrations are unsupported. Never encode them as knowledge prompts, collect fields, labels, new node kinds or custom conditions. If any behavior is unsupported, explain the complete automation cannot run and ask the owner to explicitly request only the supported subset; never infer consent from history. Ambiguous scope must produce clarificationQuestions and no changes. No scripts, tools or credentials in graph configuration. Existing patch operations and draft/publish rules remain unchanged.`;

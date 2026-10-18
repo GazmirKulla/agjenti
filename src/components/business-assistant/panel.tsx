@@ -5,6 +5,8 @@ import { AssistantHistory, useAssistantHistory } from "./history";
 import { ProductCsvImport } from "@/components/dashboard/product-csv-import";
 import type { ImportSource } from "@/lib/products/import-model";
 import { LinearWorkflowCard } from "./linear-workflow-card";
+import { ActionPlanReview } from "./action-plan";
+import { refreshPlanCapability, type ActionPlan } from "@/lib/business-assistant/action-plan";
 import type { LinearCard } from "@/lib/business-assistant/linear-service";
 import {
   assistantSuggestions,
@@ -52,6 +54,7 @@ function MessageCopy({ text }: { text: string }) {
   );
 }
 type Result = {
+  actionPlan?: ActionPlan;
   publication?: import("@/lib/workflows/visual/publication-types").PublicationReadiness;
   receipt?: import("@/lib/workflows/visual/publication-types").PublicationReceipt;
   warning?: string;
@@ -545,6 +548,14 @@ export function BusinessAssistant({
           {result?.orderflows && <OrderFlowCard data={result.orderflows} slug={slug} onRequest={value => {setMode("text");setText(value);}} />}
           {result?.choices?.length ? <div className="assistant-quick-actions">{result.choices.map(choice=><button type="button" key={choice} disabled={Boolean(busy)} onClick={()=>{setMode("text");setText(choice);}}>{choice}</button>)}</div> : null}
           {result?.productImport && <ProductCsvImport key={result.productImport.token} slug={slug} initialSource={result.productImport} />}
+          {result?.actionPlan && <ActionPlanReview key={result.actionPlan.id} plan={result.actionPlan} slug={slug} busy={Boolean(busy)} onAssessment={assessment => {
+            const planId = result.actionPlan!.id;
+            setResult(current => current?.actionPlan?.id === planId ? { ...current, actionPlan: refreshPlanCapability(current.actionPlan, assessment) } : current);
+            router.refresh();
+          }} onRequest={value => {
+            setMode("text"); setText(value);
+            requestAnimationFrame(() => composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
+          }} />}
           {result?.workflow && <WorkflowCard key={JSON.stringify(result.workflow)} data={result.workflow} slug={slug} pending={Boolean(result.token)} onRequest={value => { setMode("text"); setText(value); }} />}
           {result?.linear && <LinearWorkflowCard data={result.linear} slug={slug} pending={Boolean(result.token)} onRequest={value=>{setMode("text");setText(value);}} />}
           {result?.preview && (
