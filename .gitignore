@@ -33,3 +33,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Disposable, credential-bearing local E2E runtime (never the production env).
+/.e2e-local/
+# Legacy Playwright reporter location; keep existing local evidence untracked.
+/e2e/.e2e-local/
+/test-results/
+/playwright-report/
