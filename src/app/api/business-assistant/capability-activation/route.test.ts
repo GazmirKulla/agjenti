@@ -10,6 +10,7 @@ vi.mock("@/lib/products/workflow-binding", () => ({ publishedProductBindings: as
 import { POST } from "./route";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/tokens";
 import { updateCatalogField } from "@/lib/products/inline-actions";
+import { saveKnowledgeEntry } from "@/lib/knowledge/actions";
 
 type Row = Record<string, unknown>;
 type Query = { table: string; filters: Row; patch?: Row; head?: boolean; limit?: number };
@@ -49,10 +50,10 @@ beforeEach(() => {
   m.from.mockImplementation((table: string) => {
     const query: Query = { table, filters: {} }; queries.push(query);
     const execute = () => {
-      if (table === "products" && (readFailure || postReadFailure && writes > 0) && !query.patch)
+      if (["products", "knowledge_entries"].includes(table) && (readFailure || postReadFailure && writes > 0) && !query.patch)
         return { data: null, error: { message: "private-db-secret" }, count: null };
       if (query.patch && writeFailure) return { data: null, error: { code: "write_failed" }, count: null };
-      if (query.patch && race) product().updated_at = "2026-10-18T10:00:00.000Z";
+      if (query.patch && race) tables[table][0].updated_at = "2026-10-18T10:00:00.000Z";
       let rows = (tables[table] ?? []).filter(row => Object.entries(query.filters).every(([key, value]) => row[key] === value));
       if (query.limit) rows = rows.slice(0, query.limit);
       if (query.patch) { for (const row of rows) Object.assign(row, query.patch); writes += rows.length; }
@@ -196,4 +197,94 @@ it("rejects invalid origin, session, membership, approval format and oversized p
   expect((await POST(req({ mode: "confirm", approved: "true" }))).status).toBe(400);
   expect((await POST(req({ text: "x".repeat(11000) }))).status).toBe(400);
   expect(writes).toBe(0);
+});
+
+function knowledge() {
+  m.profile.mockResolvedValue({ enabledModules: ["knowledge"] });
+  tables.knowledge_entries = [{ id, business_id: "tenant-a", title: "Orari", body: "Hapur në 09:00", is_active: false, updated_at: stamp }];
+  return tables.knowledge_entries[0];
+}
+async function knowledgeOffer() {
+  const result = await (await inspect("knowledge.answer")).json();
+  expect(result.status).toBe("available"); expect(writes).toBe(0);
+  return result.options[0].token as string;
+}
+const confirmKnowledge = (token: string, extra: Row = {}) => confirm(token, { capability: "knowledge.answer", ...extra });
+
+it("activates knowledge through the existing save service, preserves reviewed content and reassesses", async () => {
+  const entry = knowledge(); entry.title = " Orari "; entry.body = "  Hapur në 09:00\n";
+  const before = { ...entry }, token = await knowledgeOffer();
+  const response = await confirmKnowledge(token, { businessId: "foreign", entryId: "foreign", title: "AI replacement", readiness: "ready" });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ status: "activated", changed: true, assessment: { capabilityKey: "knowledge.answer", status: "ready" } });
+  expect(entry).toEqual({ ...before, is_active: true, updated_at: expect.any(String) }); expect(writes).toBe(1);
+  expect(queries.filter(q => q.patch).every(q => q.table === "knowledge_entries" && q.filters.business_id === "tenant-a" && q.filters.updated_at === stamp)).toBe(true);
+  expect(m.access).toHaveBeenCalledWith("owner-a", "canonical-a");
+});
+it.each(["disabled", "unauthorized", "empty", "incomplete", "active"])("knowledge %s cannot issue a new mutation ticket", async scenario => {
+  const entry = knowledge();
+  if (scenario === "disabled") m.profile.mockResolvedValue({ enabledModules: [] });
+  if (scenario === "unauthorized") tables.business_users[0].role = "staff";
+  if (scenario === "empty") tables.knowledge_entries = [];
+  if (scenario === "incomplete") entry.body = " ";
+  if (scenario === "active") entry.is_active = true;
+  const result = await (await inspect("knowledge.answer")).json();
+  expect(result.status).toBe(scenario === "active" ? "ready" : ["empty", "incomplete"].includes(scenario) ? "blocked" : scenario);
+  expect(result.options?.some((o: { token?: string }) => o.token)).not.toBe(true); expect(writes).toBe(0);
+});
+it("knowledge rejects stale content even when a writer fails to advance the revision", async () => {
+  const entry = knowledge(), token = await knowledgeOffer(); entry.body = "Different content";
+  expect((await confirmKnowledge(token)).status).toBe(409); expect(writes).toBe(0);
+});
+it("knowledge rejects expiry, different user/tenant, tampering and cross-capability tickets", async () => {
+  const catalogToken = await offer(); knowledge(); const token = await knowledgeOffer();
+  const ticket = JSON.parse(decryptSecret(token));
+  for (const invalid of [catalogToken, "forged", encryptSecret(JSON.stringify({ ...ticket, expires: 1 })),
+    encryptSecret(JSON.stringify({ ...ticket, userId: "foreign" })), encryptSecret(JSON.stringify({ ...ticket, businessId: "foreign" }))])
+    expect((await confirmKnowledge(invalid)).status).toBe(409);
+  expect((await confirm(token)).status).toBe(409); expect(writes).toBe(0);
+});
+it("knowledge rechecks role and module access and requires explicit approval", async () => {
+  knowledge(); const token = await knowledgeOffer();
+  expect((await confirmKnowledge(token, { approved: false })).status).toBe(400);
+  tables.business_users[0].role = "staff";
+  expect(await (await confirmKnowledge(token)).json()).toMatchObject({ status: "unauthorized", changed: false });
+  tables.business_users[0].role = "owner"; m.profile.mockResolvedValue({ enabledModules: [] });
+  expect(await (await confirmKnowledge(token)).json()).toMatchObject({ status: "disabled", changed: false }); expect(writes).toBe(0);
+});
+it("knowledge concurrent approval and replay consume one revision even within one millisecond", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(stamp));
+  const entry = knowledge(), token = await knowledgeOffer();
+  await Promise.all([confirmKnowledge(token), confirmKnowledge(token)]); expect(writes).toBe(1);
+  expect(await (await confirmKnowledge(token)).json()).toMatchObject({ status: "ready", changed: false });
+  const form = new FormData();
+  for (const key of ["id", "title", "body", "updated_at"]) form.set(key, String(entry[key]));
+  expect(await saveKnowledgeEntry("canonical-a", form)).toHaveProperty("success");
+  expect((await confirmKnowledge(token)).status).toBe(409); expect(writes).toBe(2); expect(entry.is_active).toBe(false);
+});
+it("knowledge failure before write fails closed; acknowledged write with failed reassessment stays unverified", async () => {
+  knowledge(); const token = await knowledgeOffer(); readFailure = true;
+  expect((await confirmKnowledge(token)).status).toBe(409); expect(writes).toBe(0);
+  readFailure = false; postReadFailure = true;
+  expect(await (await confirmKnowledge(token)).json()).toMatchObject({ status: "unverified", changed: true }); expect(writes).toBe(1);
+});
+it("knowledge detects concurrent edits, write errors and uncertain post-write cache outcomes", async () => {
+  const entry = knowledge(), token = await knowledgeOffer(); race = true;
+  expect((await confirmKnowledge(token)).status).toBe(409); expect(writes).toBe(0);
+  race = false; entry.updated_at = stamp; writeFailure = true;
+  expect((await confirmKnowledge(token)).status).toBe(409); expect(writes).toBe(0);
+  writeFailure = false; m.refresh.mockImplementation(() => { throw new Error("cache failure"); });
+  expect(await (await confirmKnowledge(token)).json()).toMatchObject({ status: "unverified", changed: null }); expect(writes).toBe(1);
+});
+it("the reused knowledge editor preserves manual validation, reauthentication and tenant/revision checks", async () => {
+  const entry = knowledge(), form = new FormData();
+  for (const key of ["id", "title", "body", "updated_at"]) form.set(key, String(entry[key]));
+  form.set("title", "  Titull i ri  "); form.set("is_active", "on");
+  m.user.mockResolvedValueOnce(null); expect(await saveKnowledgeEntry("a", form)).toHaveProperty("error");
+  m.access.mockResolvedValueOnce(null); expect(await saveKnowledgeEntry("a", form)).toHaveProperty("error");
+  form.set("body", " "); expect(await saveKnowledgeEntry("a", form)).toHaveProperty("error"); expect(writes).toBe(0);
+  form.set("body", "  Tekst i ri  ");
+  expect(await saveKnowledgeEntry("a", form)).toHaveProperty("success");
+  expect(entry).toMatchObject({ title: "Titull i ri", body: "Tekst i ri", is_active: true });
+  expect(await saveKnowledgeEntry("a", form)).toHaveProperty("error"); expect(writes).toBe(1);
 });

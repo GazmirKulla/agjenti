@@ -62,7 +62,7 @@ export function refreshPlanCapability(plan: ActionPlan, assessment: CapabilityAs
     return { ...step, capabilityReadiness: assessment.status, readiness: status === "READY" && plan.questions.length ? "BLOCKED" : status,
       reasonCode: assessment.reasonCode,
       missingConfiguration: assessment.missingRequirements.map(requirement => capabilityFinding({ ...assessment, missingRequirements: [requirement] }).remediation!),
-      proposedAction: status === "READY" ? "Kërkimi është gati sipas kontrollit të fundit. Ky rezultat nuk aktivizon porositjen ose publikon workflow." : step.proposedAction };
+      proposedAction: status === "READY" ? "Aftësia është gati sipas kontrollit të fundit. Ky rezultat nuk ekzekuton veprime biznesi ose publikon workflow." : step.proposedAction };
   }) };
 }
 

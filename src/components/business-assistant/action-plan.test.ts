@@ -42,8 +42,15 @@ it("offers a configuration check only for the selected supported slice, never an
     id: "plan", request: "Test", assessedAt: "2026-01-01", steps: [{ ...step, requiredCapability, supported, readiness: "NEEDS_CONFIGURATION" }], questions: [], assumptions: [],
   }, slug: "synthetic", busy: false, onRequest: vi.fn(), onAssessment: vi.fn() }));
   expect(render("product.search", true)).toContain("Kontrollo konfigurimin e katalogut");
+  expect(render("knowledge.answer", true)).toContain("Kontrollo konfigurimin e njohurive");
   expect(render("booking.create", true)).not.toContain("Kontrollo konfigurimin e katalogut");
   expect(render("inventory.check", false)).not.toContain("Kontrollo konfigurimin e katalogut");
+});
+it("reassessment uses capability-neutral copy for Knowledge without changing a Product step", () => {
+  const plan = { id: "plan", request: "Test", assessedAt: "2026-01-01", steps: [{ ...step, readiness: "NEEDS_CONFIGURATION" as const }, { ...step, id: "catalog", requiredCapability: "product.search" }], questions: [], assumptions: [] };
+  const updated = refreshPlanCapability(plan, { capabilityKey: "knowledge.answer", status: "ready", reasonCode: "verified_handler_and_configuration", missingRequirements: [] });
+  expect(updated.steps[0].readiness).toBe("READY"); expect(updated.steps[0].proposedAction).not.toContain("Kërkimi");
+  expect(updated.steps[1]).toBe(plan.steps[1]);
 });
 it("updates only the reassessed capability and preserves unrelated steps and unresolved business decisions", () => {
   const plan = { id: "plan", request: "Test", assessedAt: "2026-01-01", steps: [step, { ...step, id: "catalog", requiredCapability: "product.search", readiness: "NEEDS_CONFIGURATION" as const }], questions: ["Cila gjuhë?"], assumptions: [] };

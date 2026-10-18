@@ -32,3 +32,4 @@
 .catalog-activation-option span > * { display: block; }
 .catalog-activation-option small { color: var(--ink-muted); }
 .catalog-activation-dialog input { flex-shrink: 0; margin-top: 5px; accent-color: var(--accent); }
+.activation-knowledge-body{white-space:pre-wrap;overflow-wrap:anywhere;max-height:18rem;overflow:auto}

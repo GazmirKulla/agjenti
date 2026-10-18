@@ -7,29 +7,13 @@ import { updateCatalogField } from "@/lib/products/inline-actions";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { uuid } from "@/lib/calendar/model";
 import { AssistantError } from "./model";
+import { canConfigureCapability as canConfigure } from "./activation-access";
+import type { ActivationActor, CapabilityActivationResult } from "./activation-contract";
 
 const capability = "product.search";
-type Actor = { userId: string; businessId: string; slug: string; catalogSource: string };
+type Actor = ActivationActor;
 type Ticket = { purpose: "assistant-catalog-activation-v1"; capability: typeof capability; userId: string; businessId: string; productId: string; updatedAt: string; expires: number };
-export type CatalogActivationResult = {
-  status: "available" | "ready" | "disabled" | "unauthorized" | "unsupported" | "blocked" | "activated" | "unverified";
-  message: string;
-  assessment?: CapabilityAssessment;
-  /** Acknowledged configuration write; null means the write outcome is unknown. */
-  changed: boolean | null;
-  partial?: boolean;
-  options?: { id: string; name: string; price: number | null; currency: string; token?: string; blocker?: string }[];
-};
-
-async function canConfigure(actor: Actor) {
-  const db = createServiceSupabase();
-  const [member, admin] = await Promise.all([
-    db.from("business_users").select("role").eq("business_id", actor.businessId).eq("user_id", actor.userId).maybeSingle(),
-    db.from("platform_admins").select("user_id").eq("user_id", actor.userId).maybeSingle(),
-  ]);
-  if (member.error || admin.error) throw new AssistantError("Nuk u verifikuan lejet. Provo përsëri.");
-  return member.data?.role === "owner" || Boolean(admin.data);
-}
+export type CatalogActivationResult = CapabilityActivationResult;
 
 async function assess(actor: Actor) {
   try {
