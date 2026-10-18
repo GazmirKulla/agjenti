@@ -1,0 +1,70 @@
+.personal-assistant-slot { flex: none; margin-left: auto; }
+.personal-assistant-widget {
+  display: flex; align-items: center; gap: 2px; width: 270px; max-width: 100%; padding: 2px 6px;
+  border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--ink);
+  box-shadow: 0 2px 8px rgb(15 23 42 / .04);
+}
+.personal-assistant-widget[hidden] { display: none; }
+.personal-assistant-open { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; padding: 4px; border: 0; border-radius: 16px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.personal-assistant-avatar { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 56px; height: 56px; --accent: #7597ff; --accent-soft: #edf1ff; --brand-secondary: #192d5b; --brand-primary: #bcf5ff; --brand-primary-soft: #bcf5ff; }
+.personal-assistant-avatar[data-avatar="mint"] { --accent: #4dbea3; --accent-soft: #e6f7f0; --brand-secondary: #13473e; --brand-primary: #d4fff1; --brand-primary-soft: #d4fff1; }
+.personal-assistant-avatar[data-avatar="lilac"] { --accent: #ab8be8; --accent-soft: #f3edfc; --brand-secondary: #3c2a61; --brand-primary: #f2e4ff; --brand-primary-soft: #f2e4ff; }
+.personal-assistant-avatar .assistant-robot { width: 56px; height: 56px; }
+.personal-assistant-avatar .assistant-robot * { animation: none; }
+.personal-assistant-widget .personal-assistant-avatar { animation: personal-assistant-idle 5s ease-in-out infinite; }
+.personal-assistant-widget .personal-assistant-avatar, .personal-assistant-widget .assistant-robot { width: 48px; height: 48px; }
+.personal-assistant-widget .personal-assistant-eyebrow { display: none; }
+.personal-assistant-copy { display: grid; gap: 3px; min-width: 0; }
+.personal-assistant-eyebrow { color: var(--ink-muted); font-size: 9px; font-weight: 600; letter-spacing: .12em; line-height: 1.4; }
+.personal-assistant-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; font-weight: 600; line-height: 1.3; }
+.personal-assistant-status { display: flex; align-items: center; gap: 6px; color: var(--ink-muted); font-size: 11px; line-height: 1.5; white-space: nowrap; }
+.personal-assistant-status i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: #31816b; }
+[data-activity="working"] .personal-assistant-status i { background: #6486ed; }
+[data-activity="approval"] .personal-assistant-status i { background: #ae751b; box-shadow: 0 0 0 3px rgb(174 117 27 / .12); }
+[data-activity="offline"] .personal-assistant-status i { background: var(--ink-muted); }
+[data-activity="offline"] .personal-assistant-avatar { animation: none; }
+.personal-assistant-settings { display: inline-grid; place-items: center; flex: none; width: 36px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--ink-muted); cursor: pointer; font-size: 24px; }
+.personal-assistant-settings:hover, .personal-assistant-open:hover { background: var(--paper); }
+.personal-assistant-widget button:focus-visible, .personal-assistant-dialog button:focus-visible, .personal-assistant-settings:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.personal-assistant-dialog { margin: auto; width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 24px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 80px rgb(0 0 0 / .18); }
+.personal-assistant-dialog::backdrop { background: rgb(12 20 28 / .4); backdrop-filter: blur(4px); }
+.personal-assistant-dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.personal-assistant-dialog h2 { margin: 6px 0 0; font-size: 21px; font-weight: 600; line-height: 1.3; letter-spacing: -.03em; }
+.personal-assistant-preview { display: flex; gap: 16px; align-items: center; margin: 24px 0; padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); }
+.personal-assistant-preview strong { overflow-wrap: anywhere; font-size: 18px; }
+.personal-assistant-name { display: grid; gap: 8px; font-size: 13px; font-weight: 500; }
+.personal-assistant-dialog .personal-assistant-name input { width: 100%; min-height: 46px; font-size: 16px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.personal-assistant-dialog fieldset { margin: 20px 0; padding: 0; border: 0; min-width: 0; }
+.personal-assistant-dialog legend { margin-bottom: 10px; font-size: 13px; }
+.personal-assistant-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.personal-assistant-options label { position: relative; min-width: 0; cursor: pointer; }
+.personal-assistant-options label > span { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 14px; font-size: 12px; background: var(--surface); }
+.personal-assistant-options input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.personal-assistant-options input:checked + span { border-color: var(--accent); background: var(--accent-soft); }
+.personal-assistant-options input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.personal-assistant-dialog p { font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
+.personal-assistant-dialog footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.personal-assistant-dialog footer button { min-height: 44px; padding: 10px 16px; }
+.personal-assistant-dialog .assistant-primary { border: 1px solid transparent; border-radius: 12px; background: var(--primary); color: var(--on-primary); font-weight: 600; }
+.personal-assistant-dialog .assistant-secondary { border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); }
+.assistant-heading .personal-assistant-avatar { width: 44px; height: 44px; }
+.assistant-heading .personal-assistant-avatar .assistant-robot { width: 44px; height: 44px; }
+.assistant-heading .personal-assistant-settings { margin-left: auto; }
+.assistant-heading > div { min-width: 0; }
+.assistant-heading h2 { overflow-wrap: anywhere; }
+html[data-resolved="dark"] .personal-assistant-widget { box-shadow: 0 2px 8px rgb(0 0 0 / .12); }
+html[data-resolved="dark"] .personal-assistant-avatar { --accent-soft: #23304d; }
+html[data-resolved="dark"] .personal-assistant-avatar[data-avatar="mint"] { --accent-soft: #1e3b32; }
+html[data-resolved="dark"] .personal-assistant-avatar[data-avatar="lilac"] { --accent-soft: #332942; }
+html[data-resolved="dark"] [data-activity="available"] .personal-assistant-status i { background: #6bc9a5; }
+html[data-resolved="dark"] [data-activity="approval"] .personal-assistant-status i { background: #e4b566; }
+@keyframes personal-assistant-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@media (max-width: 760px) {
+  .assistant-first-mobile { --mobile-header-height: calc(138px + env(safe-area-inset-top, 0px)); }
+  .assistant-first-mobile .dashboard-topbar { flex-wrap: wrap; align-content: center; gap: 6px 8px; padding-bottom: 6px; }
+  .personal-assistant-slot { order: 10; flex: 0 0 100%; height: 58px; }
+  .personal-assistant-widget { width: 100%; height: 58px; padding: 2px 8px; border-radius: 16px; }
+  .personal-assistant-settings { width: 44px; }
+  .personal-assistant-dialog { padding: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .personal-assistant-widget .personal-assistant-avatar { animation: none; } }

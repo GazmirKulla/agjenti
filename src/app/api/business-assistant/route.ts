@@ -7,6 +7,7 @@ import { transcribeAudio } from "@/lib/business-intelligence/transcription";
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
 import { executeTicket, planRequest } from "@/lib/business-assistant/service";
 import { AssistantError } from "@/lib/business-assistant/model";
+import { readPersonalAssistantName } from "@/lib/business-assistant/identity";
 import { revalidatePath } from "next/cache";
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -100,10 +101,13 @@ export async function POST(request: Request) {
         "Biseda është shumë e gjatë. Fillo një kërkesë të re.",
       );
     const context = parseUIContext(body.context);
+    const assistantName = body.assistantName === undefined ? undefined : readPersonalAssistantName(body.assistantName);
+    if (assistantName === null) throw new AssistantError("Emri i asistentit duhet të ketë 1–32 karaktere në një rresht.");
     if (body.pendingToken !== undefined && (typeof body.pendingToken !== "string" || body.pendingToken.length > 300000)) throw new AssistantError("Propozim i pavlefshëm.");
     if (body.links !== undefined && !Array.isArray(body.links)) throw new AssistantError("Linke të pavlefshme.");
     const links = [...new Set([...(body.links ?? []), ...linksInText(body.text)])];
     const materials = await resolveMaterials(body.attachments ?? [], links, user.id, membership.business.id);
+    if (assistantName !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials, assistantName));
     if (materials.length) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials));
     if (body.pendingToken !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken));
     return json(context ? await planRequest(access, body.text.trim(), history, context) : await planRequest(access, body.text.trim(), history));

@@ -73,6 +73,21 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
+it.each([undefined, "Luna", "Migo", "D'Art"])("uses the personal name %s in the real owner planner, separately from business data", async name => {
+  m.profile.mockResolvedValue({ enabledModules: ["settings"] });
+  fixtures.businesses = { data: [{ id: "tenant-a", name: "Filiz Studio" }] };
+  m.response.mockResolvedValue({ output_text: JSON.stringify({ action: "clarify", id: null, changes: [], message: "Përgjigje sintetike." }) });
+  const response = await POST(request({ mode: "plan", text: "Si e ke emrin?", assistantName: name,
+    history: [{ role: "assistant", content: 'Unë jam Agjenti "Filiz Studio".' }] }));
+  expect(response.status).toBe(200);
+  const call = m.response.mock.calls[0][0];
+  expect(JSON.parse(call.input).assistant).toEqual({ name: name ?? "Migo" });
+  expect(JSON.parse(call.input).data.profile.rows[0].name).toBe("Filiz Studio");
+  expect(call.instructions).not.toContain("Your display name is Agjenti followed by the current business name");
+  expect(call.instructions).toContain("assistant.name");
+  expect(m.write).not.toHaveBeenCalled();
+});
+
 it.each([
   ["retail", ["product.search", "order.prepare"], "Dua përzgjedhjen e produktit, masës dhe sasisë dhe përgatitjen e porosisë për stafin"],
   ["salon", ["booking.availability.read", "booking.create"], "Dua që salloni të ofrojë orare për shërbimet dhe të rezervojë takime"],

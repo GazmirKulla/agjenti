@@ -2,6 +2,9 @@
 import "./workspace-layout.css";
 import "./mobile.css";
 import { AssistantHistory, useAssistantHistory } from "./history";
+import { AssistantAppearanceDialog, PersonalAssistantAvatar, PersonalAssistantWidget } from "./personal-assistant";
+import type { AssistantAppearance } from "./appearance";
+import { createPortal } from "react-dom";
 import { ProductCsvImport } from "@/components/dashboard/product-csv-import";
 import type { ImportSource } from "@/lib/products/import-model";
 import { LinearWorkflowCard } from "./linear-workflow-card";
@@ -80,6 +83,9 @@ export function BusinessAssistant({
   sendRef,
   slug,
   agentName,
+  businessName,
+  appearance,
+  saveAppearance,
   open,
   onClose,
   onOpen,
@@ -109,6 +115,9 @@ export function BusinessAssistant({
   sendRef: React.RefObject<(() => void) | null>;
   slug: string;
   agentName: string;
+  businessName: string;
+  appearance: AssistantAppearance;
+  saveAppearance: (value: AssistantAppearance) => string | null;
   open: boolean;
   onClose: () => void;
   onOpen: () => void;
@@ -132,6 +141,9 @@ export function BusinessAssistant({
   const end = useRef<HTMLDivElement>(null);
   const locked = useRef(false);
   const [busy, setBusy] = useState<"plan" | "confirm" | "audio" | null>(null);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [launcherTarget, setLauncherTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => { setLauncherTarget(document.getElementById("personal-assistant-slot")); }, []);
   const archive = useAssistantHistory(userId, slug);
   const { history, setHistory } = archive;
   const [result, setResult] = useState<Result | null>(null);
@@ -286,6 +298,7 @@ export function BusinessAssistant({
         text: input,
         history: pin ? workflowRequestHistory(pin.history) : lastContext.current === contextKey ? history.slice(-6) : [],
         context: effectiveContext,
+        assistantName: appearance.name,
         ...(lastContext.current === contextKey && (result?.workflow?.proposed || result?.editableFlow || result?.linear) && result.token ? { pendingToken: result.token } : {}),
       });
       if (generation !== requestGeneration.current) return;
@@ -395,6 +408,12 @@ export function BusinessAssistant({
   });
   return (
     <>
+      {launcherTarget && createPortal(
+        <PersonalAssistantWidget appearance={appearance} hidden={visible && !inline} busy={Boolean(busy)}
+          awaitingApproval={Boolean(result?.preview && result.token && !result.saved)}
+          onOpen={() => { onOpen(); if (inline) composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(); }} onSettings={() => setAppearanceOpen(true)} />,
+        launcherTarget,
+      )}
       {!visible && (
         <section
           className="assistant-mobile-dock"
@@ -429,16 +448,15 @@ export function BusinessAssistant({
         }}
       >
         <header className="assistant-heading" hidden={inline}>
-          <span className="assistant-mark">
-            <Icon name="spark" size={24} />
-          </span>
+          <PersonalAssistantAvatar avatar={appearance.avatar} />
           <div>
-            <h2 id="business-assistant-title">{agentName}</h2>
+            <h2 id="business-assistant-title">{appearance.name}</h2>
             <p>
-              Agjenti · {contextLabel(context)}
+              {businessName} · {contextLabel(context)}
               {context.entityId ? " · Elementi i zgjedhur" : ""}
             </p>
           </div>
+          <button type="button" className="personal-assistant-settings" onClick={() => setAppearanceOpen(true)} aria-label="Personalizo asistentin"><Icon name="settings" size={17} /></button>
           {mobile && (
             <button
               type="button"
@@ -453,7 +471,7 @@ export function BusinessAssistant({
             type="button"
             className="assistant-close"
             onClick={onClose}
-            aria-label={`Mbyll ${agentName}`}
+            aria-label="Mbyll bisedën"
           >
             ×
           </button>
@@ -696,6 +714,7 @@ export function BusinessAssistant({
           </aside>
         )}
       </dialog>
+      {appearanceOpen && <AssistantAppearanceDialog appearance={appearance} onSave={saveAppearance} onClose={() => setAppearanceOpen(false)} />}
       <AssistantHistory open={historyOpen} threads={archive.threads} busy={Boolean(busy)} warning={archive.warning} onClose={onHistoryClose}
         onSelect={thread => {
           if (locked.current) return;

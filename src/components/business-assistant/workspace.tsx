@@ -12,6 +12,8 @@ import {
 import { usePathname } from "next/navigation";
 import { useMaterialDraft } from "./materials";
 import { BusinessAssistant } from "./panel";
+import { useAssistantAppearance } from "./personal-assistant";
+import type { AssistantAppearance } from "./appearance";
 import { AssistantComposer } from "./composer";
 import { primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import {
@@ -46,6 +48,8 @@ type Workspace = ReturnType<typeof useMaterialDraft> & {
   modules: string[];
   external: boolean;
   name: string;
+  appearance: AssistantAppearance;
+  saveAppearance: (value: AssistantAppearance) => string | null;
   launch: (text?: string) => void;
   requestKey: number;
   userId: string;
@@ -74,6 +78,7 @@ export function AssistantWorkspaceProvider({
   userName?: string;
 }) {
   const materialDraft = useMaterialDraft();
+  const { appearance, save: saveAppearance } = useAssistantAppearance(userId, slug);
   const pathname = usePathname();
   const sendRef = useRef<(() => void) | null>(null);
   const resetRef = useRef<(() => void) | null>(null);
@@ -123,6 +128,7 @@ export function AssistantWorkspaceProvider({
         modules,
         external,
         name,
+        appearance, saveAppearance,
         launch,
         requestKey,
         userId, userName, historyOpen, setHistoryOpen, resetRef,
@@ -160,7 +166,10 @@ export function AssistantWorkspaceSurface() {
       requestKey={w.requestKey}
       sendRef={w.sendRef}
       slug={w.slug}
-      agentName={`Agjenti “${w.name}”`}
+      agentName={w.appearance.name}
+      businessName={w.name}
+      appearance={w.appearance}
+      saveAppearance={w.saveAppearance}
       modules={w.modules}
       open={w.open}
       onOpen={() => w.setOpen(true)}
@@ -190,7 +199,7 @@ export function AssistantEntry({ home = false }: { home?: boolean }) {
       {home && (
         <>
           <span className="assistant-home-identity">
-            Agjenti “{w.name}”
+            {w.appearance.name} · Asistenti yt
           </span>
           <div className="assistant-presence" aria-hidden="true"><span /><span /><span /></div>
           <h1>Çfarë do të bëjmë sot?</h1>

@@ -36,7 +36,6 @@ export function DashboardShell({
 }) {
   const t = useDashboardTranslator();
   const pathname = usePathname();
-  const agentName = `Agjenti “${name}”`;
   const [open, setOpen] = useState(false);
   const [backdrop, setBackdrop] = useState(false);
   const assistant = useAssistantWorkspace();
@@ -415,9 +414,7 @@ export function DashboardShell({
             )}
           </div>
           </div>
-          <div className="topbar-actions">
-            {!admin && slug && <button type="button" className="assistant-desktop-trigger" onClick={() => assistant?.setOpen(true)}><Icon name="spark" size={18}/><span>{agentName}</span></button>}
-          </div>
+          {!admin && slug && <div id="personal-assistant-slot" className="personal-assistant-slot" />}
         </header>
         <main className="dashboard-content">{!admin && <WorkspaceSectionNavigation navigation={workspace} section={section} base={base} pathname={pathname} />}{!admin && pathname !== base && <AssistantEntry/>}{children}</main>
       </div>
