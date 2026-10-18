@@ -77,10 +77,11 @@ begin
   blocked:=false; begin perform submit_confirmed_order(b,actor,c,7,state,state,false); exception when others then blocked:=sqlerrm='unauthorized'; end;
   if not blocked then raise exception 'Revoked actor accepted'; end if;
   insert into business_users(business_id,user_id,role) values(b,actor,'owner');
-  update conversations set customer_id=foreign_customer where id=c;
-  blocked:=false; begin perform submit_confirmed_order(b,actor,c,7,state,state,false); exception when others then blocked:=sqlerrm='customer_unavailable'; end;
-  if not blocked then raise exception 'Cross-tenant customer accepted'; end if;
-  update conversations set customer_id=null where id=c;
+  -- S1 rejects the invalid relationship before the order RPC can observe it.
+  blocked:=false; begin update conversations set customer_id=foreign_customer where id=c;
+  exception when foreign_key_violation then blocked:=true; end;
+  if not blocked or (select customer_id from conversations where id=c) is not null
+    then raise exception 'Cross-tenant customer accepted or failed write persisted'; end if;
   update conversation_states set cart='[{"quantity":2}]' where conversation_id=c;
   blocked:=false; begin perform submit_confirmed_order(b,actor,c,7,state,state,false); exception when others then blocked:=sqlerrm='unsupported_order_scope'; end;
   if not blocked then raise exception 'Multi-item cart flattened'; end if;
