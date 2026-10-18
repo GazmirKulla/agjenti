@@ -525,7 +525,7 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   }
   const continueService = clarificationResume === "service" || (processes.service?.status === "active" || interrupted === "service") && !ordinaryQuestion && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
   let serviceVersion = continueService ? params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service!.versionId) : graphVersion;
-  let entityResolution = !ordinaryQuestion && serviceVersion ? await resolveVisualEntity(params.businessId, serviceVersion.graph, entityMessage, continueService ? processes.service?.visual.binding : undefined, params.mode === "test", { state, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
+  let entityResolution = !ordinaryQuestion && serviceVersion ? await resolveVisualEntity(params.businessId, serviceVersion.graph, entityMessage, continueService ? processes.service?.visual.binding : undefined, params.mode === "test", { state, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply, draftPreview: Boolean(params.visualPreview) }) : {};
   let resumingService = Boolean(continueService && entityResolution.selected?.entity.id === processes.service?.visual.binding?.entity.id);
   if (!ordinaryQuestion && !continueService && processes.service && processes.service.status !== "completed") {
     const pinned = params.visualPreview ?? await loadVisualVersion(params.businessId, processes.service.versionId);
@@ -559,6 +559,12 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
   if (entityResolution.choices?.length) {
     return { ...entityClarification(state, `Cilin produkt ose shërbim dëshiron: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`),
       presentedProducts: entityResolution.choices.every(entity => entity.kind === "product") ? entityResolution.choices : undefined };
+  }
+  if (params.visualPreview && !selectedEntity && entityResolution.mentioned?.kind === "product"
+    && serviceVersion?.graph.version === 2 && !serviceVersion.graph.flows.some(flow => flow.kind === "order" && !flow.productIds?.length && !flow.serviceIds?.length)) {
+    // Let the existing executor report a missing draft binding before generic AI
+    // routing can turn a bare product name into an information-only response.
+    return processAgentTurn({ ...params, state, orderRequest: true });
   }
   const entityFlow = selectedEntity && serviceVersion?.graph.version === 2 ? serviceVersion.graph.flows.find(flow => flow.id === selectedEntity.binding.flowId) : undefined;
   const serviceBooking = selectedEntity?.entity.kind === "service" && entityFlow?.nodeIds.some(id => serviceVersion!.graph.nodes.some(node => node.id === id && node.kind === "booking"));

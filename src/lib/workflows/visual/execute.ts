@@ -58,7 +58,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     debug: { model: agentModel(), source: "fallback", fallbackReason: "visual_entity", agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: Date.now() - started } });
   const explicitOrder = params.orderRequest || detectVisualIntent(params.message) === "order";
   const informationalEntity = !explicitOrder && !params.bookingRequest && (isQuestion(params.message) || isEntityInformationRequest(params.message));
-  const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding, params.mode === "test", { state: base, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply }) : {};
+  const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding, params.mode === "test", { state: base, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply, draftPreview: Boolean(params.visualPreview) }) : {};
   const selectedEntity = entityResolution.selected;
   if (entityResolution.clarification) return simple(entityResolution.clarification);
   if (entityResolution.choices?.length) return { ...simple(`Cilin produkt ose shërbim dëshironi: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`),

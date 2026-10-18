@@ -15,8 +15,10 @@ export function isEntityInformationRequest(message: string) {
     && !/\b(porosit\w*|rezervo\w*|book|buy|vazhdo\w*|rifillo\w*)\b|\bdua\b.*\b(porosi\w*|rezervim\w*)\b/.test(text);
 }
 /** Production resolves active entries; isolated preview also permits inactive entries explicitly bound in the graph. */
-export async function resolveVisualEntity(businessId: string, graph: VisualGraph, message: string, saved?: VisualRunState["binding"], preview = false, reference?: { state?: ConversationStatePayload | null; selectedProductId?: string; deliveredReply?: string | null }): Promise<{ selected?: VisualEntitySelection; mentioned?: VisualEntity; choices?: VisualEntity[]; available?: VisualEntity[]; clarification?: string }> {
-  if (graph.version !== 2 || !graph.flows.some(flow => flow.productIds?.length || flow.serviceIds?.length)) return {};
+export async function resolveVisualEntity(businessId: string, graph: VisualGraph, message: string, saved?: VisualRunState["binding"], preview = false, reference?: { state?: ConversationStatePayload | null; selectedProductId?: string; deliveredReply?: string | null; draftPreview?: boolean }): Promise<{ selected?: VisualEntitySelection; mentioned?: VisualEntity; choices?: VisualEntity[]; available?: VisualEntity[]; clarification?: string }> {
+  // An explicit draft must also recognize unbound products so execution can fail
+  // closed. Test mode alone (e.g. Chat Lab with a published graph) is not a draft.
+  if (graph.version !== 2 || !reference?.draftPreview && !graph.flows.some(flow => flow.productIds?.length || flow.serviceIds?.length)) return {};
   const modules = await runtimeModules(businessId);
   if (saved) await requireRuntimeModules(businessId, [saved.entity.kind === "product" ? "products" : "services"]);
   const db = createServiceSupabase();

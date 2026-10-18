@@ -125,6 +125,40 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
+it.each([
+  ["Bluzë", false], ["Dua të porosis Bluzë", false], ["Bluzë", true],
+])("blocks an unbound draft product before AI fallback: %s (other binding: %s)", async (message, otherBinding) => {
+  const graph = structuredClone(versions.A.graph) as VisualGraphV2;
+  graph.flows = [{ ...graph.flows[0], kind: "custom", productIds: otherBinding ? ["00000000-0000-4000-8000-000000000002"] : [] }];
+  graph.nodes = graph.nodes.filter(node => !["information", "booking"].includes(node.id));
+  graph.edges = graph.edges.filter(edge => !["information", "booking"].includes(edge.source));
+  expect(validateVisualGraph(graph).errors).toEqual([]);
+  const result = await simulateVisualWorkflow("studio", graph, message);
+  expect(result.error).toBeUndefined();
+  expect(result.turn?.debug.fallbackReason).toBe("preview_binding_missing");
+  expect(result.turn?.nextState.context?.order).toEqual({});
+  expect(result.turn?.nextState.visual).toBeUndefined();
+  expect(mocks.generate).not.toHaveBeenCalled();
+  expect(queries.filter(query => query.table.startsWith("visual_workflow"))).toEqual([]);
+});
+
+it("keeps general draft order flows usable without product-specific bindings", async () => {
+  const result = await simulateVisualWorkflow("studio", versions.A.graph, "Dua të porosis Bluzë");
+  expect(result.error).toBeUndefined();
+  expect(result.turn?.reply).toBe("Detajet A?");
+  expect(result.turn?.nextState.visual?.versionId).toMatch(/^preview:/);
+  expect(mocks.generate).not.toHaveBeenCalled();
+});
+
+it("does not treat an information question about an unbound product as an order", async () => {
+  const graph = structuredClone(versions.A.graph) as VisualGraphV2;
+  graph.flows[0].kind = "custom";
+  const result = await simulateVisualWorkflow("studio", graph, "Sa kushton Bluzë?");
+  expect(result.error).toBeUndefined();
+  expect(result.turn?.reply).toBe("Informacion i biznesit.");
+  expect(result.turn?.nextState.context?.order).toEqual({});
+});
+
 it.each(["instagram", "whatsapp"] as const)("%s continues general order A after B is published", async source => {
   const state = order(); const before = structuredClone(state);
   const result = await turn("Vazhdo porosinë", state, source);

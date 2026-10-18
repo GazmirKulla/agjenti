@@ -86,6 +86,7 @@ vi.mock("@/lib/supabase/service", () => ({
         gt: () => chain,
         neq: () => chain,
         limit: () => chain,
+        range: () => chain,
         throwOnError: async () => ({ data: null, error: null }),
         then: (resolve: (value: unknown) => void, reject?: (error: unknown) => void) =>
           Promise.resolve({
