@@ -213,6 +213,7 @@ export function BusinessAssistant({
     // Keep an open review above the assistant when switching to its mobile modal.
     const childModals = Array.from(el.querySelectorAll<HTMLDialogElement>("dialog:modal"));
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const retainFocus = wasVisible.current && focused && el.contains(focused);
     if (visible && !inline && !wasVisible.current) returnFocus.current = focused;
     childModals.forEach(child => child.close());
     if (el.open) el.close();
@@ -220,9 +221,10 @@ export function BusinessAssistant({
       if (mobile && !inline) el.showModal();
       else el.show();
       // Opening the home surface is not a request to focus an action or keyboard.
-      if (inline && !childModals.length && document.activeElement instanceof HTMLElement && el.contains(document.activeElement)) document.activeElement.blur();
+      if (inline && !childModals.length && !retainFocus && document.activeElement instanceof HTMLElement && el.contains(document.activeElement)) document.activeElement.blur();
       childModals.forEach(child => child.showModal());
       if (childModals.some(child => focused && child.contains(focused))) focused?.focus();
+      else if (retainFocus) focused.focus({ preventScroll: true });
       else if (!inline && !wasVisible.current) composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
     } else if (wasVisible.current && returnFocus.current?.isConnected) {
       returnFocus.current.focus();
@@ -236,8 +238,18 @@ export function BusinessAssistant({
     return () => {document.body.style.overflow = previous;};
   }, [visible, mobile, inline]);
   useEffect(() => {
-    if (visible)
-      end.current?.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    if (visible) {
+      const plan = result?.actionPlan ? dialog.current?.querySelector(".action-plan") : null;
+      const body = plan?.closest<HTMLElement>(".assistant-body");
+      const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth";
+      if (plan && body) {
+        // Scroll the conversation, not Home behind its sticky mobile header.
+        body.scrollTo({
+          top: body.scrollTop + plan.getBoundingClientRect().top - body.getBoundingClientRect().top - parseFloat(getComputedStyle(body).paddingTop),
+          behavior,
+        });
+      } else end.current?.scrollIntoView({ block: "nearest", behavior });
+    }
   }, [history, result, visible, outgoing, busy]);
   useEffect(() => {
     if (mobile && workOpen && result?.preview) workBack.current?.focus();
@@ -578,7 +590,7 @@ export function BusinessAssistant({
           {result?.orderflows && <OrderFlowCard data={result.orderflows} slug={slug} onRequest={value => {setMode("text");setText(value);}} />}
           {result?.choices?.length ? <div className="assistant-quick-actions">{result.choices.map(choice=><button type="button" key={choice} disabled={Boolean(busy)} onClick={()=>{setMode("text");setText(choice);}}>{choice}</button>)}</div> : null}
           {result?.productImport && <ProductCsvImport key={result.productImport.token} slug={slug} initialSource={result.productImport} />}
-          {result?.actionPlan && <ActionPlanReview key={result.actionPlan.id} plan={result.actionPlan} slug={slug} busy={Boolean(busy)} onAssessment={assessment => {
+          {result?.actionPlan && <ActionPlanReview key={result.actionPlan.id} plan={result.actionPlan} slug={slug} businessName={businessName} busy={Boolean(busy)} onAssessment={assessment => {
             const planId = result.actionPlan!.id;
             setResult(current => current?.actionPlan?.id === planId ? { ...current, actionPlan: refreshPlanCapability(current.actionPlan, assessment) } : current);
             router.refresh();

@@ -111,6 +111,15 @@ it("keeps agency leads, quotes and customer registration unsupported alongside a
   expect(result.steps.map(s => s.readiness)).toEqual(["UNSUPPORTED", "UNSUPPORTED", "UNSUPPORTED", "READY"]);
   expect(result.steps.slice(0, 3).every(s => !s.supported && !s.approvalRequired)).toBe(true);
   expect(result.steps.some(s => s.requiredCapability === "business.provision")).toBe(false);
+  expect(result.steps[2].title).toBe("Regjistrimi automatik i klientit");
+  expect(result.steps.slice(0, 3).every(s => !s.title.includes(".create") && !s.title.includes(".capture"))).toBe(true);
+});
+
+it("names automatic order creation without substituting order preparation or enabling it", async () => {
+  respond(["order.create", "order.prepare"]);
+  const result = await plan("Dua krijimin automatik të porosisë dhe përgatitjen për stafin");
+  expect(result.steps[0]).toMatchObject({ title: "Krijimi automatik i porosisë", requiredCapability: "order.create", readiness: "UNSUPPORTED", supported: false, approvalRequired: false });
+  expect(result.steps[1]).toMatchObject({ requiredCapability: "order.prepare", readiness: "READY", supported: true });
 });
 
 it("plans disabled capabilities without requiring the workflows module or trusting model readiness", async () => {

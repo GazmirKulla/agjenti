@@ -4,14 +4,23 @@
 .action-plan h4 { font-size: 16px; }
 .action-plan-note, .action-plan-request { color: var(--ink-muted); font-size: 13px; }
 .action-plan-card { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); min-width: 0; }
-.action-plan-card header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.action-plan-card header { display: grid; gap: 10px; justify-items: start; }
 .action-plan-status { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); }
-.action-plan-card[data-status="APPROVED"] { border-color: var(--accent); }
+.action-plan-heading { display: grid; gap: 4px; }
+.action-plan-heading p { color: var(--ink-muted); font-size: 12px; }
+.action-plan-steps { list-style: none; display: grid; gap: 4px; padding: 0; margin: 0; }
+.action-plan .action-plan-steps button { display: flex; width: 100%; gap: 10px; align-items: center; text-align: left; border-color: transparent; background: transparent; }
+.action-plan-steps button[aria-current="step"] { border-color: var(--accent); background: var(--paper); }
+.action-plan-steps small { display: block; color: var(--ink-muted); font-size: 12px; }
+.action-plan-step-number { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; min-width: 26px; height: 26px; font-size: 12px; }
+.action-plan-blocker, .action-plan-outcome { border-left: 2px solid var(--accent); padding-left: 12px; }
+.action-plan-outcome { font-size: 13px; }
 .action-plan ul { margin: 6px 0 0; padding-left: 20px; }
 .action-plan-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .action-plan button { min-height: 44px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
 .action-plan button:disabled { opacity: .5; cursor: not-allowed; }
-.action-plan :is(button, textarea, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.action-plan button.action-plan-primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); font-weight: 600; }
+.action-plan:focus-visible, .action-plan :is(button, textarea, summary, article, section):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .action-plan details { color: var(--ink-muted); font-size: 12px; }
 .action-plan summary { cursor: pointer; padding: 8px 0; }
 .action-plan dl { margin: 8px 0; }
@@ -24,9 +33,11 @@
   .action-plan-card { padding: 14px; }
   .action-plan-actions > button { flex: 1 1 140px; }
 }
-.catalog-activation-dialog { box-sizing: border-box; width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); color: var(--ink); }
-.catalog-activation-dialog::backdrop { background: rgb(15 23 42 / .45); }
-.catalog-activation-dialog > * + * { margin-top: 16px; }
+.catalog-activation-dialog { box-sizing: border-box; width: 100%; min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); color: var(--ink); }
+.catalog-activation-dialog > * + * { margin-top: 12px; }
+.catalog-activation-dialog :is(button, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.activation-business, .activation-target { font-size: 13px; }
+.catalog-activation-dialog .action-plan-status { width: fit-content; }
 .catalog-activation-dialog fieldset { min-width: 0; margin-inline: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .catalog-activation-option, .catalog-activation-consent { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; }
 .catalog-activation-option span > * { display: block; }

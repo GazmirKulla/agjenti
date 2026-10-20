@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { businessGoals, contextualAction } from "./presentation";
+import { activationFeedback, businessGoals, contextualAction, uncertainActivation } from "./presentation";
 import { assistantContextKey, pinnedWorkflowContext } from "./request-context";
 import type { AssistantUIContext } from "@/lib/business-assistant/context";
+import type { CapabilityActivationResult } from "@/lib/business-assistant/activation-contract";
 
 const home: AssistantUIContext = { page: "home", entryPoint: "home" };
 const product: AssistantUIContext = { page: "products", entryPoint: "contextual", entityType: "product", entityId: "p1", selectedEntityIds: ["p1"] };
@@ -36,5 +37,35 @@ describe("one Migo presentation", () => {
     const scope = assistantContextKey("shop", original);
     expect(assistantContextKey("shop", current)).toBe(scope);
     expect(pinnedWorkflowContext(current, { scope, context: original, history: [] }).workflowSelection).toEqual({ nodeId: "a", flowId: "flow-a", revision: 7, dirty: true });
+  });
+});
+
+describe("activation evidence in approval cards", () => {
+  const confirmed: CapabilityActivationResult = { status: "activated", changed: true, message: "U aktivizua.",
+    assessment: { capabilityKey: "product.search", status: "ready", availability: "ready", missingRequirements: [], reasonCode: "verified_handler_and_configuration" } };
+  it("shows completed only for an acknowledged write and matching ready reassessment", () => {
+    expect(activationFeedback(confirmed, "product.search")).toMatchObject({ label: "U përfundua", unverified: false });
+    expect(activationFeedback({ ...confirmed, status: "ready", changed: false }, "product.search")).toMatchObject({ label: "Tashmë gati", unverified: false });
+  });
+  it.each([
+    { ...confirmed, assessment: undefined },
+    { ...confirmed, changed: null },
+    { ...confirmed, changed: false },
+    { ...confirmed, assessment: { ...confirmed.assessment!, capabilityKey: "knowledge.answer" } },
+    { ...confirmed, assessment: { ...confirmed.assessment!, status: "needs_setup" as const } },
+    { ...confirmed, assessment: { ...confirmed.assessment!, availability: "unverified" as const } },
+    { ...confirmed, assessment: { ...confirmed.assessment!, missingRequirements: ["active_products"] } },
+    { ...confirmed, status: "unverified" as const },
+  ])("does not turn HTTP success into verified activation: %j", result => {
+    expect(activationFeedback(result, "product.search")).toEqual({ label: "Nuk u verifikua", message: uncertainActivation, unverified: true });
+  });
+  it.each(["available", "blocked", "disabled", "unsupported", "unauthorized"] as const)("keeps %s safety explanations without claiming success", status => {
+    const feedback = activationFeedback({ status, changed: false, message: "Arsyeja e serverit." }, "product.search");
+    expect(feedback.message).toBe("Arsyeja e serverit.");
+    expect(feedback.label).not.toBe("U përfundua");
+  });
+  it("does not imply a write when the read-only inspection failed", () => {
+    expect(activationFeedback({ status: "unverified", changed: false, message: "Kontrolli dështoi; nuk u kërkua aktivizim." }, "product.search"))
+      .toEqual({ label: "Nuk u verifikua", message: "Kontrolli dështoi; nuk u kërkua aktivizim.", unverified: true });
   });
 });

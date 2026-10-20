@@ -42,6 +42,11 @@ const titles: Record<string, string> = {
   "booking.create": "Rezervim takimesh",
   "staff.handoff": "Kalimi i bisedës te stafi",
   "business.provision": "Krijim biznesi me ftesë",
+  // Names explain unsupported requests; they do not register or enable capabilities.
+  "customer.create": "Regjistrimi automatik i klientit",
+  "lead.capture": "Regjistrimi automatik i kontakteve të interesuara",
+  "quote.create": "Krijimi automatik i ofertës",
+  "order.create": "Krijimi automatik i porosisë",
 };
 
 function readinessFor(assessment: CapabilityAssessment | undefined, known: boolean): ActionPlanReadiness {
@@ -85,7 +90,7 @@ export function toActionPlan(proposal: AutomationProposal, request: string, ques
           : capabilityFinding({ ...assessment, missingRequirements: [requirement] }).remediation!;
       }) ?? [];
       return {
-        id: `${index}-${keyIndex}`, title: definition ? titles[definition.key] ?? definition.description : key ? "Veprim i pambështetur" : "Hap që kërkon sqarim",
+        id: `${index}-${keyIndex}`, title: key && Object.hasOwn(titles, key) ? titles[key] : definition?.description ?? (key ? "Veprim i pambështetur" : "Hap që kërkon sqarim"),
         description: definition?.description ?? (key ? "Ky veprim nuk ka ekzekutim të mbështetur. Nuk mund të aktivizohet nga ky plan." : "Nuk është identifikuar një aftësi për këtë kërkesë."),
         requestedBehavior: behavior.description === `Aftësi e kërkuar: ${key}` ? request : behavior.description,
         requiredCapability: key, capabilityReadiness: assessment?.status ?? null, readiness,

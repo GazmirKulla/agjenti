@@ -13,9 +13,9 @@ test.describe(capability, () => {
 const catalog = capability === 'product.search';
 const table = catalog ? 'products' : 'knowledge_entries';
 const moduleId = catalog ? 'products' : 'knowledge';
-const configureLabel = catalog ? 'Kontrollo konfigurimin e katalogut' : 'Kontrollo konfigurimin e njohurive';
+const configureLabel = 'Konfiguro';
 const dialogTitle = catalog ? 'Bëje katalogun të kërkueshëm' : 'Aktivizo njohurinë për përgjigje';
-const activateLabel = catalog ? 'Mirato dhe aktivizo produktin' : 'Mirato dhe aktivizo njohurinë';
+const activateLabel = 'Konfirmo aktivizimin';
 const consentLabel = catalog ? 'Miratoj që produkti i zgjedhur të bëhet i kërkueshëm për klientët.' : 'Miratoj që njohuria e zgjedhur të përdoret në përgjigjet për klientët.';
 const fixtures = JSON.parse(readFileSync(path.join(work, 'fixtures.json'), 'utf8'));
 const owner = fixtures.tenants.find(t => t.kind === 'retail');
@@ -89,9 +89,9 @@ async function openCard(page) {
   await page.goto(`/b/${slug}`);
   const input = page.locator('textarea[name="assistant-message"]:visible').first();
   await input.fill('Synthetic Phase 2B plan fixture');
-  await input.press('Enter');
+  await page.locator('dialog.assistant-workspace-panel').getByRole('button', { name: 'Dërgo mesazhin', exact: true }).click();
   await page.getByRole('button', { name: configureLabel, exact: true }).click();
-  await expect(page.getByRole('dialog', { name: dialogTitle })).toBeVisible();
+  await expect(page.getByRole('region', { name: dialogTitle })).toBeVisible();
   await expect(page.getByRole('radio', { name: /Phase 2B/ })).toBeEnabled();
 }
 
@@ -126,6 +126,8 @@ test.afterAll(() => {
 
 test('real card → authenticated activation → database → reassessed card (synthetic plan input)', async ({ page }) => {
   await openCard(page);
+  const configuration = page.getByRole('region', { name: dialogTitle, exact: true });
+  await expect(configuration).toContainText('ZZ Synthetic Phase 2B');
   const before = row();
   const button = page.getByRole('button', { name: activateLabel, exact: true });
   await expect(button).toBeDisabled();
@@ -140,10 +142,47 @@ test('real card → authenticated activation → database → reassessed card (s
   expect(await response.json()).toMatchObject({ status: 'activated', changed: true, assessment: { status: 'ready' } });
   expect(row().is_active).toBe(true);
   expect(row()).toEqual({ ...before, is_active: true, updated_at: expect.any(String) });
+  await expect(configuration).toContainText('U përfundua');
   await page.getByRole('button', { name: 'Kthehu te plani', exact: true }).click();
   await expect(page.locator('.action-plan-card')).toHaveAttribute('data-status', 'READY');
-  await expect(page.getByText('0 hapa të miratuar · 0 të refuzuar · Asgjë e publikuar')).toBeVisible();
+  await expect(page.locator('.action-plan-card')).toContainText('U përfundua');
+  await expect(page.getByRole('button', { name: 'Përfshi në plan', exact: true })).toBeEnabled();
+  await expect(page.getByText('0 të përfshirë · 0 të lënë jashtë · Asgjë e publikuar')).toBeVisible();
   await page.screenshot({ path: path.join(work, `${moduleId}-activation-ready.png`), fullPage: true });
+});
+test('mobile keyboard approval uses the same real writer and returns to the same plan', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openCard(page);
+  const configuration = page.getByRole('region', { name: dialogTitle, exact: true });
+  await expect(configuration).toBeFocused();
+  await expect(page.locator('dialog:modal')).toHaveCount(0); // Home is inline, not another modal.
+  await configuration.getByRole('radio', { name: /Phase 2B/ }).focus();
+  await page.keyboard.press('Space');
+  await configuration.getByRole('checkbox', { name: consentLabel }).focus();
+  await page.keyboard.press('Space');
+  await configuration.getByRole('button', { name: activateLabel, exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(configuration).toContainText('U përfundua');
+  expect(row().is_active).toBe(true);
+  await configuration.screenshot({ path: path.join(work, `ux2-${moduleId}-real-mobile.png`) });
+  await configuration.getByRole('button', { name: 'Kthehu te plani', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Plani i veprimeve', exact: true })).toBeFocused();
+  await expect(page.locator('.action-plan-card')).toContainText('U përfundua');
+});
+test('a stale reviewed record is rejected through the real UI without a retry button', async ({ page }) => {
+  await openCard(page);
+  await page.getByRole('radio', { name: /Phase 2B/ }).check();
+  await page.getByRole('checkbox', { name: consentLabel }).check();
+  sql(`update public.${table} set updated_at=clock_timestamp() where id=${quote(productId)} and business_id=${quote(businessId)};`);
+  const before = row();
+  await page.getByRole('button', { name: activateLabel, exact: true }).click();
+  const configuration = page.getByRole('region', { name: dialogTitle, exact: true });
+  await expect(configuration.getByRole('alert')).toContainText('ka ndryshuar ose është hequr');
+  await expect(configuration.getByRole('button', { name: activateLabel, exact: true })).toHaveCount(0);
+  expect(row()).toEqual(before);
+  await configuration.getByRole('button', { name: 'Kthehu te plani', exact: true }).click();
+  await expect(page.locator('.action-plan-card')).toContainText('Nuk u verifikua');
 });
 test('already active is read-only', async ({ page }) => {
   sql(`update public.${table} set is_active=true where id=${quote(productId)} and business_id=${quote(businessId)};`);
@@ -206,7 +245,7 @@ test('cancelling the real dialog never submits activation or changes the row', a
   const before = row(); await openCard(page);
   await page.getByRole('radio', { name: /Phase 2B/ }).check();
   await page.getByRole('button', { name: 'Anulo dhe kthehu te plani', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: dialogTitle })).not.toBeVisible();
+  await expect(page.getByRole('region', { name: dialogTitle })).not.toBeVisible();
   expect(confirmations).toBe(0); expect(row()).toEqual(before);
 });
 test('real PostgreSQL failure rolls back activation; retry after recovery succeeds', async ({ page }) => {

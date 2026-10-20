@@ -11,14 +11,14 @@ const step: ActionPlanStep = {
   missingConfiguration: [], requiredDecision: null, proposedAction: "Përfshije në plan.", approvalRequired: true, supported: true, reasonCode: "verified_handler_and_configuration",
 };
 it.each([
-  ["READY", "Gati për shqyrtim"], ["NEEDS_CONFIGURATION", "Kërkon konfigurim"], ["DISABLED", "I çaktivizuar"],
-  ["UNSUPPORTED", "Nuk mbështetet"], ["BLOCKED", "Kërkon verifikim / sqarim"],
+  ["READY", "Propozuar"], ["NEEDS_CONFIGURATION", "Kërkon konfigurim"], ["DISABLED", "Kërkon konfigurim"],
+  ["UNSUPPORTED", "Nuk mbështetet"], ["BLOCKED", "Nuk u verifikua"],
 ] as const)("shows %s and gates approval without hiding the explanation", (readiness, label) => {
   const onDecision = vi.fn();
   const html = renderToStaticMarkup(h(ApprovalCard, { step: { ...step, readiness }, onDecision, onRequest: vi.fn() }));
   expect(html).toContain(label); expect(html).toContain(step.description);
-  expect(html).toMatch(readiness === "READY" ? /<button type="button">Mirato hapin/ : /<button type="button" disabled="">Mirato hapin/);
-  expect(html).toContain('<details><summary>Hollësi teknike</summary>');
+  expect(html.includes(">Përfshi në plan</button>")).toBe(readiness === "READY");
+  expect(html).toContain('<details><summary>Detaje teknike</summary>');
   expect(html.split("<details>")[0]).not.toContain("knowledge.answer");
   expect(onDecision).not.toHaveBeenCalled();
 });
@@ -26,9 +26,9 @@ it("separates local approval and rejection from server readiness", () => {
   const render = (readiness: ActionPlanStep["readiness"], decision: "approved" | "rejected") => renderToStaticMarkup(h(ApprovalCard, {
     step: { ...step, readiness }, decision, onDecision: vi.fn(), onRequest: vi.fn(),
   }));
-  expect(render("READY", "approved")).toContain("Miratuar vetëm në plan");
-  expect(render("DISABLED", "approved")).not.toContain("Miratuar vetëm në plan");
-  expect(render("READY", "rejected")).toContain("Refuzuar në këtë shqyrtim");
+  expect(render("READY", "approved")).toContain("Përfshirë vetëm në plan");
+  expect(render("DISABLED", "approved")).not.toContain("Përfshirë vetëm në plan");
+  expect(render("READY", "rejected")).toContain("Lënë jashtë planit");
 });
 it("states the non-publishing and transient contract and escapes model prose", () => {
   const html = renderToStaticMarkup(h(ActionPlanReview, { plan: {
@@ -41,10 +41,46 @@ it("offers a configuration check only for the selected supported slice, never an
   const render = (requiredCapability: string, supported: boolean) => renderToStaticMarkup(h(ActionPlanReview, { plan: {
     id: "plan", request: "Test", assessedAt: "2026-01-01", steps: [{ ...step, requiredCapability, supported, readiness: "NEEDS_CONFIGURATION" }], questions: [], assumptions: [],
   }, slug: "synthetic", busy: false, onRequest: vi.fn(), onAssessment: vi.fn() }));
-  expect(render("product.search", true)).toContain("Kontrollo konfigurimin e katalogut");
-  expect(render("knowledge.answer", true)).toContain("Kontrollo konfigurimin e njohurive");
-  expect(render("booking.create", true)).not.toContain("Kontrollo konfigurimin e katalogut");
-  expect(render("inventory.check", false)).not.toContain("Kontrollo konfigurimin e katalogut");
+  expect(render("product.search", true)).toContain(">Konfiguro</button>");
+  expect(render("knowledge.answer", true)).toContain(">Konfiguro</button>");
+  expect(render("booking.create", true)).not.toContain(">Konfiguro</button>");
+  expect(render("inventory.check", false)).not.toContain(">Konfiguro</button>");
+});
+it("focuses one card while keeping unsupported steps visible in the summary", () => {
+  const html = renderToStaticMarkup(h(ActionPlanReview, { plan: {
+    id: "plan", request: "Test", assessedAt: "2026-01-01", steps: [step, { ...step, id: "unsupported", title: "Regjistrimi i klientit", supported: false, readiness: "UNSUPPORTED", requiredCapability: "customer.create" }], questions: [], assumptions: [],
+  }, businessName: "Dyqani A", slug: "shop-a", busy: false, onRequest: vi.fn() }));
+  expect(html.match(/<article /g)).toHaveLength(1);
+  expect(html).toContain("Regjistrimi i klientit");
+  expect(html).toContain("Nuk mbështetet");
+  expect(html).toContain("Dyqani A");
+  expect(html).not.toContain("customer.create");
+  expect(html).not.toContain(">Publiko");
+});
+it("does not equate conversational customer facts with CRM registration", () => {
+  const html = renderToStaticMarkup(h(ApprovalCard, {
+    step: { ...step, supported: false, requiredCapability: "customer.create", readiness: "UNSUPPORTED" }, onDecision: vi.fn(), onRequest: vi.fn(),
+  }));
+  expect(html).toContain("Mbledhja e të dhënave në bisedë nuk krijon një klient në CRM.");
+  expect(html).not.toContain(">Përfshi në plan</button>");
+  expect(html).not.toContain(">Konfiguro</button>");
+});
+it("does not present a previously selected but now unverified step as included or completed", () => {
+  const html = renderToStaticMarkup(h(ApprovalCard, {
+    step, decision: "approved", feedback: { label: "Nuk u verifikua", message: "Kontrollo gjendjen.", unverified: true }, onDecision: vi.fn(), onRequest: vi.fn(),
+  }));
+  expect(html).toContain("Nuk u verifikua");
+  expect(html).not.toContain("Përfshirë vetëm në plan");
+  expect(html).not.toContain(">Përfshi në plan</button>");
+});
+it("distinguishes an unresolved request from a confirmed unsupported action", () => {
+  const html = renderToStaticMarkup(h(ApprovalCard, {
+    step: { ...step, supported: false, requiredCapability: null, readiness: "BLOCKED", requiredDecision: "Çfarë rezultati pret?" },
+    onDecision: vi.fn(), onRequest: vi.fn(),
+  }));
+  expect(html).toContain("Kërkon sqarim");
+  expect(html).not.toContain("Nuk mbështetet");
+  expect(html).not.toContain(">Përfshi në plan</button>");
 });
 it("reassessment uses capability-neutral copy for Knowledge without changing a Product step", () => {
   const plan = { id: "plan", request: "Test", assessedAt: "2026-01-01", steps: [{ ...step, readiness: "NEEDS_CONFIGURATION" as const }, { ...step, id: "catalog", requiredCapability: "product.search" }], questions: [], assumptions: [] };
