@@ -8,7 +8,7 @@ import {
   listMemberships,
   requireBusinessAccess,
 } from "@/lib/tenant/access";
-import { DashboardShell } from "@/components/dashboard/shell";
+import { AppShell } from "@/components/dashboard/shell";
 import { getAppSettings } from "@/lib/platform/settings";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
@@ -41,7 +41,7 @@ export default async function BusinessLayout({
   return (
     <DashboardLanguageProvider language={language}>
     <AssistantWorkspaceProvider key={`${user.id}:${business.slug}`} userId={user.id} userName={typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : typeof user.user_metadata?.name === "string" ? user.user_metadata.name : undefined} slug={business.slug} name={business.name} modules={dashboardProfile.enabledModules} external={business.catalog_source === "external"}>
-    <DashboardShell
+        <AppShell
       name={business.name}
       slug={business.slug}
       platformAdmin={access.admin}
@@ -68,7 +68,7 @@ export default async function BusinessLayout({
       <BillingUsageNotice slug={business.slug} usage={billingUsage} />
       <BusinessIntelligencePanel slug={business.slug} />
       {children}
-    </DashboardShell>
+        </AppShell>
     </AssistantWorkspaceProvider>
     </DashboardLanguageProvider>
   );

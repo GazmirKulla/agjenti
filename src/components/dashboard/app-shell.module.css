@@ -1,0 +1,22 @@
+.shell:global(.dashboard-shell) { --sidebar-width: 216px; }
+.shell :global(.dashboard-sidebar) { overflow: visible; padding: 22px 12px 14px; gap: 18px; }
+.shell :global(.dashboard-sidebar > nav) { flex: 1; min-height: 0; overflow-y: auto; }
+.shell :global(.dashboard-sidebar-footer) { flex-shrink: 0; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
+.profile { position: relative; min-width: 0; }
+.profileTrigger { display: flex; align-items: center; gap: 10px; padding: 10px 8px; width: 100%; color: var(--ink); border: 0; background: transparent; border-radius: 12px; text-align: left; cursor: pointer; min-height: 48px; }
+.profileTrigger:hover { background: var(--accent-soft); }
+.profileTrigger :global(.profile-avatar) { flex-shrink: 0; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; }
+.profileCopy { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.profileCopy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.profileCopy small { font-size: 11px; color: var(--ink-muted); }
+.popover { position: absolute; bottom: calc(100% + 8px); left: 0; width: min(280px, calc(100vw - 48px)); padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 38px #0004; z-index: 80; }
+.profileHeading { display: grid; gap: 3px; padding: 10px 12px 14px; border-bottom: 1px solid var(--line); margin-bottom: 5px; }
+.profileHeading strong { font-size: 13px; overflow-wrap: anywhere; }
+.profileHeading span { font-size: 11px; color: var(--ink-muted); overflow-wrap: anywhere; }
+.popover a,.popover button { display: flex; gap: 10px; align-items: center; padding: 11px 12px; border: 0; border-radius: 8px; background: transparent; width: 100%; font: inherit; font-size: 13px; text-align: left; color: var(--ink); cursor: pointer; min-height: 44px; }
+.popover :is(a,button):hover,.popover [aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+.popover form { border-top: 1px solid var(--line); margin-top: 5px; padding-top: 5px; }
+.popover p { font-size: 12px; padding: 8px; }
+.profile :is(a,button):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media(min-width:761px) { .shell:global(.is-icons) { --sidebar-width: 72px; } .shell:global(.is-icons) .profileTrigger { justify-content: center; padding-inline: 0; } }
+@media(max-width:760px) { .shell :global(.dashboard-sidebar) { width: min(320px, 88vw); gap: 14px; } .popover { max-height: calc(100dvh - 110px); overflow-y: auto; } }

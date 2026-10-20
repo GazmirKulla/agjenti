@@ -41,7 +41,7 @@ describe("Scoped dashboard language", () => {
     expect(disconnected).toContain("Connect your business account");
     expect(disconnected).toContain("/api/instagram/oauth/start?businessId=b1");
   });
-  it("translates primary navigation but preserves business submenus", () => {
+  it("translates the compact navigation and keeps manual business destinations intact", () => {
     const navigation = organizeWorkspace([
       { id: "services", path: "services", label: "Shërbimet", icon: "products" },
       { id: "catalogs", path: "catalogs", label: "Katalogët", icon: "catalogs" },
@@ -49,7 +49,13 @@ describe("Scoped dashboard language", () => {
     const html = render("en", h(WorkspaceNavigation, { navigation, base: "/b/shop", pathname: "/b/shop/inbox", section: "conversations", onNavigate: () => {} }));
     expect(html).toContain("Conversations");
     expect(html).toContain("Business");
-    expect(html).toContain("Shërbimet");
+    expect(html).toContain("Migo");
+    expect(html).toContain("/b/shop/business");
+    expect(html).not.toContain("/b/shop/services"); // Secondary destination, not a primary item.
+    expect(navigation.search).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "services", label: "Shërbimet" }),
+      expect.objectContaining({ path: "catalogs", label: "Katalogët" }),
+    ]));
     expect(html).toContain("/b/shop/inbox");
   });
   it("exposes both language choices and identifies the selected language", () => {

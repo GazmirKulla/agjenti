@@ -1,5 +1,7 @@
 "use client";
-import { DashboardLanguageSwitch, useDashboardTranslator } from "./language";
+import { useDashboardTranslator } from "./language";
+import { ProfilePopover } from "./profile-popover";
+import s from "./app-shell.module.css";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -11,7 +13,7 @@ import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
 import { AssistantWorkspaceSurface, AssistantEntry, useAssistantWorkspace } from "@/components/business-assistant/workspace";
 
-export function DashboardShell({
+export function AppShell({
   children,
   name,
   slug,
@@ -158,7 +160,7 @@ export function DashboardShell({
     );
     (closeButton ?? focusable()[0])?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !event.defaultPrevented) {
         event.preventDefault();
         setOpen(false);
       }
@@ -198,7 +200,7 @@ export function DashboardShell({
   return (
     <div
       style={{"--assistant-panel-width": `${assistant?.panelWidth ?? 440}px`} as React.CSSProperties}
-      className={`dashboard-shell ${iconRail ? "is-icons" : ""} ${!admin && slug ? "has-assistant-dock assistant-first-mobile migo-workspace" : ""} ${!admin && pathname === base ? "mobile-assistant-home" : ""} ${assistant?.open && pathname !== base ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
+      className={`dashboard-shell ${!admin ? s.shell : ""} ${iconRail ? "is-icons" : ""} ${!admin && slug ? "has-assistant-dock assistant-first-mobile migo-workspace" : ""} ${!admin && pathname === base ? "mobile-assistant-home" : ""} ${assistant?.open && pathname !== base ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
     >
       <aside
         ref={sidebar}
@@ -283,13 +285,10 @@ export function DashboardShell({
                 <span className="nav-label">{admin ? item.label : t(item.label)}</span>
               </Link>
             );
-          }) : mobile ? <>
-            {[{ path: "", label: "Asistenti", icon: "spark" }, { path: "inbox", label: "Bisedat", icon: "inbox" }, { path: "business", label: "Biznesi", icon: "briefcase" }].map(item => <Link key={item.path} href={`${base}${item.path ? `/${item.path}` : ""}`} className={`dashboard-nav ${isDashboardRoute(pathname, base, item.path) ? "active" : ""}`} aria-current={isDashboardRoute(pathname, base, item.path) ? "page" : undefined} onClick={() => { setOpen(false); assistant?.setOpen(false); }}><Icon name={item.icon}/><span className="nav-label">{item.label}</span></Link>)}
-          </> : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} iconsOnly={iconRail} onNavigate={() => setOpen(false)} />}
+          }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} iconsOnly={iconRail} onNavigate={() => { setOpen(false); if (mobile) assistant?.setOpen(false); }} />}
         </nav>
         <footer className="dashboard-sidebar-footer">
-          {!admin && <DashboardLanguageSwitch />}
-          <Link
+          {!admin ? <ProfilePopover key={pathname} base={base} name={userName || email || name} email={email} compact={iconRail} onNavigate={() => { setOpen(false); assistant?.setOpen(false); }} /> : <Link
             href={`${base}/account`}
             className={`dashboard-nav sidebar-account-link ${isDashboardRoute(pathname, base, "account") ? "active" : ""}`}
             aria-current={isDashboardRoute(pathname, base, "account") ? "page" : undefined}
@@ -300,7 +299,7 @@ export function DashboardShell({
               {(userName || email || name).slice(0, 2).toUpperCase()}
             </span>
             <span className="nav-label">{t("Llogaria")}</span>
-          </Link>
+          </Link>}
         </footer>
       </aside>
       {tip && (
@@ -419,8 +418,8 @@ export function DashboardShell({
         <main className="dashboard-content">
           {/* Stable placement retains pending cards and the composer across navigation. */}
           {!admin && <AssistantWorkspaceSurface/>}
-          {!admin && <WorkspaceSectionNavigation navigation={workspace} section={section} base={base} pathname={pathname} />}
-          {!admin && pathname !== base && <AssistantEntry/>}
+          {!admin && !isDashboardRoute(pathname, base, "settings") && <WorkspaceSectionNavigation navigation={workspace} section={section} base={base} pathname={pathname} />}
+          {!admin && pathname !== base && !isDashboardRoute(pathname, base, "settings") && <AssistantEntry/>}
           {children}
         </main>
       </div>
@@ -451,3 +450,6 @@ export function DashboardShell({
     </div>
   );
 }
+
+// Compatibility for the independent administrator layout.
+export { AppShell as DashboardShell };

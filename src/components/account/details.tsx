@@ -3,7 +3,7 @@ import { ThemeSwitch } from "@/components/theme/theme-switch";
 import { signOut } from "@/lib/auth/actions";
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 
-export async function AccountDetails() {
+export async function AccountDetails({ profileOnly = false }: { profileOnly?: boolean } = {}) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await listMemberships(user.id);
@@ -16,8 +16,8 @@ export async function AccountDetails() {
     <div className="account-page-inner account-panel">
         <div className="account-page-title">
           <p>LLOGARIA JOTE</p>
-          <h1>Profili dhe cilësimet</h1>
-          <span>Menaxho të dhënat dhe preferencat e llogarisë tënde.</span>
+          <h1>{profileOnly ? "Profili" : "Profili dhe cilësimet"}</h1>
+          <span>{profileOnly ? "Të dhënat e llogarisë me të cilën je identifikuar." : "Menaxho të dhënat dhe preferencat e llogarisë tënde."}</span>
         </div>
 
         <section
@@ -62,7 +62,7 @@ export async function AccountDetails() {
           </dl>
         </section>
 
-        <section
+        {!profileOnly && <><section
           className="account-card"
           aria-labelledby="account-appearance-title"
         >
@@ -83,7 +83,7 @@ export async function AccountDetails() {
               Dil nga llogaria
             </button>
           </form>
-        </section>
+        </section></>}
     </div>
   );
 }

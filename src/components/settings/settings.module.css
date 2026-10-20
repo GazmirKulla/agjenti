@@ -1,0 +1,37 @@
+.workspace { max-width: 1240px; margin: 0 auto; color: var(--ink); min-width: 0; }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 4px 0 24px; border-bottom: 1px solid var(--line); }
+.heading h1 { margin: 0; font-size: 26px; font-weight: 650; }
+.heading p { margin: 4px 0 0; font-size: 13px; color: var(--ink-muted); }
+.heading a { color: var(--accent); font-size: 13px; padding: 10px 0; }
+.body { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 36px; padding-top: 24px; }
+.navigation { align-self: start; position: sticky; top: 100px; }
+.navigation>summary { display: none; }
+.navigation section+section { margin-top: 22px; }
+.navigation h2 { margin: 0 10px 6px; font: inherit; font-size: 11px; font-weight: 650; color: var(--ink-muted); letter-spacing: .05em; text-transform: uppercase; }
+.navigation a { display: block; padding: 10px; min-height: 40px; border-radius: 8px; font-size: 13px; color: var(--ink); }
+.navigation a:hover,.navigation [aria-current=page] { background: var(--accent-soft); color: var(--accent); }
+.workspace :is(a,button,summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.content { min-width: 0; padding-bottom: 32px; }
+.content :global(.account-page-inner) { width: 100%; max-width: none; margin: 0; }
+.content :global(.account-panel) { padding: 0; background: transparent; border: 0; box-shadow: none; }
+.content :global(.page-heading) { margin-top: 0; }
+.content :global(.page-heading h1),.content :global(.account-page-title h1) { font-size: 24px; }
+.content :global(.billing-plans) { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.section { padding: 0 0 26px; margin-bottom: 26px; border-bottom: 1px solid var(--line); }
+.section h2 { font-size: 20px; margin: 0 0 8px; }
+.section p { color: var(--ink-muted); font-size: 14px; margin-bottom: 20px; line-height: 1.6; }
+.links { display: grid; gap: 8px; }
+.links a { padding: 12px 0; color: var(--accent); border-bottom: 1px solid var(--line); }
+.appearance { max-width: 560px; }
+.appearance :global(.personal-assistant-name) { display: grid; gap: 8px; }
+.appearance input:not([type=radio]) { padding: 12px; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; color: var(--ink); }
+.appearance fieldset { margin-block: 24px; }
+.appearance footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+@media(max-width:1000px) { .body { grid-template-columns: 160px minmax(0,1fr); gap: 20px; } }
+@media(max-width:760px) {
+  .heading { gap: 12px; padding-bottom: 16px; }.heading h1 { font-size: 24px; }.heading a { flex-shrink: 0; font-size: 12px; }
+  .body { display: block; padding-top: 16px; }.navigation { position: static; border-bottom: 1px solid var(--line); margin-bottom: 24px; padding-bottom: 12px; }
+  .navigation>summary { display: block; cursor: pointer; padding: 10px 0; font-size: 14px; }.navigation>summary::after { content: "⌄"; float: right; }
+  .navigation nav { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; padding-top: 12px; }.navigation section+section { margin-top: 0; }
+  .navigation a { min-height: 44px; }.content :global(.billing-plans) { grid-template-columns: 1fr; }
+}

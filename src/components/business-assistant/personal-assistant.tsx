@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "@/components/dashboard/icon";
 import { readPersonalAssistantName } from "@/lib/business-assistant/identity";
 import { TalkingRobot } from "./talking-robot";
@@ -67,32 +67,44 @@ export function AssistantAppearanceDialog({ appearance, onSave, onClose }: {
   appearance: AssistantAppearance; onSave: (value: AssistantAppearance) => string | null; onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [draft, setDraft] = useState(appearance);
-  const [error, setError] = useState("");
+  const id = useId();
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
     return () => element?.close();
   }, []);
-  return <dialog ref={dialog} className="personal-assistant-dialog" aria-labelledby="personal-assistant-title" aria-describedby="personal-assistant-scope" onCancel={onClose}>
-    <form onSubmit={event => {
+  return <dialog ref={dialog} className="personal-assistant-dialog" aria-labelledby={`${id}-title`} aria-describedby={`${id}-scope`} onCancel={onClose}>
+    <AssistantAppearanceForm appearance={appearance} onSave={onSave} onClose={onClose} id={id}/>
+  </dialog>;
+}
+
+export function AssistantAppearanceForm({ appearance, onSave, onClose, id: providedId }: {
+  appearance: AssistantAppearance; onSave: (value: AssistantAppearance) => string | null; onClose?: () => void; id?: string;
+}) {
+  const generatedId = useId();
+  const id = providedId ?? generatedId;
+  const [draft, setDraft] = useState(appearance);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setDraft(appearance); }, [appearance]);
+  return <form onChange={() => setSaved(false)} onSubmit={event => {
       event.preventDefault();
       if (!draft.name.trim()) { setError("Shkruaj një emër për asistentin."); return; }
       const failure = onSave({ ...draft, name: draft.name.trim() });
-      if (failure) setError(failure); else onClose();
+      if (failure) setError(failure); else { setError(""); setSaved(true); onClose?.(); }
     }}>
-      <header><div><span className="personal-assistant-eyebrow">PAK MË PERSONAL</span><h2 id="personal-assistant-title">Asistenti yt, në stilin tënd.</h2></div>
-        <button type="button" className="personal-assistant-settings" onClick={onClose} aria-label="Mbyll personalizimin">×</button>
+      <header><div><span className="personal-assistant-eyebrow">PAK MË PERSONAL</span><h2 id={`${id}-title`}>Asistenti yt, në stilin tënd.</h2></div>
+        {onClose && <button type="button" className="personal-assistant-settings" onClick={onClose} aria-label="Mbyll personalizimin">×</button>}
       </header>
       <div className="personal-assistant-preview"><PersonalAssistantAvatar avatar={draft.avatar} /><strong>{draft.name.trim() || "Asistenti yt"}</strong></div>
       <label className="personal-assistant-name">Emri i asistentit<input autoComplete="off" value={draft.name} maxLength={32} required onChange={event => { setDraft({ ...draft, name: event.target.value }); setError(""); }} /></label>
       <fieldset><legend>Ngjyra e avatarit</legend><div className="personal-assistant-options">{assistantAvatars.map(avatar => <label key={avatar.id}>
-        <input type="radio" name="personal-assistant-avatar" value={avatar.id} checked={draft.avatar === avatar.id} onChange={() => setDraft({ ...draft, avatar: avatar.id })} />
+        <input type="radio" name={`${id}-avatar`} value={avatar.id} checked={draft.avatar === avatar.id} onChange={() => setDraft({ ...draft, avatar: avatar.id })} />
         <span><PersonalAssistantAvatar avatar={avatar.id} />{avatar.label}</span>
       </label>)}</div></fieldset>
-      <p id="personal-assistant-scope">Vetëm për ty, në këtë shfletues dhe për këtë biznes. Nuk ndryshon agjentët që flasin me klientët.</p>
+      <p id={`${id}-scope`}>Vetëm për ty, në këtë shfletues dhe për këtë biznes. Nuk ndryshon agjentët që flasin me klientët.</p>
       {error && <p role="alert" className="assistant-error">{error}</p>}
-      <footer><button type="button" className="assistant-secondary" onClick={onClose}>Anulo</button><button type="submit" className="assistant-primary">Ruaj pamjen</button></footer>
-    </form>
-  </dialog>;
+      {saved && <p role="status">Pamja u ruajt në këtë shfletues.</p>}
+      <footer>{onClose && <button type="button" className="assistant-secondary" onClick={onClose}>Anulo</button>}<button type="submit" className="assistant-primary">Ruaj pamjen</button></footer>
+    </form>;
 }

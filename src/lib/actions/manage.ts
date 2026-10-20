@@ -121,6 +121,7 @@ export async function saveBusinessActionSettings(slug: string, form: FormData) {
     });
     if (error) throw new Error("Konfigurimi nuk u ruajt.");
     revalidatePath(`/b/${slug}/actions`);
+    revalidatePath(`/b/${slug}/settings/actions`);
     return { success: "Konfigurimi u ruajt." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Ruajtja dështoi." };
@@ -145,6 +146,7 @@ export async function prepareBusiness(slug: string, form: FormData) {
       },
     });
     revalidatePath(`/b/${slug}/actions`);
+    revalidatePath(`/b/${slug}/settings/actions`);
     return {
       success: "Biznesi u përgatit. Ftesa është gati për dërgim.",
       ...result,
@@ -173,6 +175,7 @@ export async function changeInvitation(slug: string, form: FormData) {
     if (error)
       throw new Error("Ftesa nuk u ndryshua. Mund të jetë pranuar ndërkohë.");
     revalidatePath(`/b/${slug}/actions`);
+    revalidatePath(`/b/${slug}/settings/actions`);
     return { success: "Ftesa u përditësua." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Veprimi dështoi." };

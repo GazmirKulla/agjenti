@@ -8,6 +8,7 @@ vi.mock("@/lib/tenant/access", () => ({
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => m }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { saveActionPolicy, saveBusinessActionSettings } from "./manage";
+import { revalidatePath } from "next/cache";
 beforeEach(() => {
   vi.clearAllMocks(); m.admin.mockResolvedValue(true); m.rpc.mockResolvedValue({ error: null });
   m.settings = { staff_allowed: true };
@@ -21,6 +22,14 @@ it("preserves existing staff access when the owner edits invitation settings", a
   form.set("action_key", "business.provision"); form.set("invitation_days", "7");
   expect(await saveBusinessActionSettings("shop", form)).toHaveProperty("success");
   expect(m.rpc).toHaveBeenCalledWith("save_business_action_settings", expect.objectContaining({ p_staff: true, p_business: "business", p_user: "owner" }));
+  expect(revalidatePath).toHaveBeenCalledWith("/b/shop/settings/actions");
+  expect(revalidatePath).toHaveBeenCalledWith("/b/shop/actions");
+});
+it("does not invalidate settings or report success when the configuration write fails", async () => {
+  m.rpc.mockResolvedValue({ error: { message: "synthetic denied write" } });
+  const form = new FormData(); form.set("action_key", "business.provision");
+  expect(await saveBusinessActionSettings("shop", form)).toHaveProperty("error");
+  expect(revalidatePath).not.toHaveBeenCalled();
 });
 it("ignores a forged staff checkbox instead of granting access", async () => {
   m.settings = { staff_allowed: false };

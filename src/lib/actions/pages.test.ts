@@ -17,7 +17,7 @@ vi.mock("@/lib/dashboard/modules/entitlements", () => ({ loadAllowedModules: asy
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: async () => ({ enabledModules: ["products", "workflows"] }) }));
 import PermissionsPage from "@/app/admin/businesses/[id]/permissions/page";
 import AdminPage from "@/app/admin/actions/page";
-import BusinessPage from "@/app/b/[slug]/actions/page";
+import BusinessPage from "@/app/b/[slug]/settings/actions/page";
 import { policyCatalog } from "./policies";
 function fixture() {
   const tables: Record<string, unknown[]> = {

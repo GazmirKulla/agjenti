@@ -106,9 +106,27 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   useEffect(() => {
     if (!dirty) return;
     const prevent = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    // App Router links do not trigger beforeunload. Preserve the existing local
+    // revision-scoped recovery before leaving the editor for Settings or Migo.
+    const navigate = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = (event.target as Element | null)?.closest<HTMLAnchorElement>("a[href]");
+      if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
+      const url = new URL(link.href, location.href);
+      if (url.origin !== location.origin || url.pathname === location.pathname) return;
+      const backup = persistWorkflowDraft(slug, workspace.revision, graphRef.current);
+      const message = backup.status === "saved"
+        ? "Ke ndryshime të paruajtura. Kopja lokale mund të rikthehet kur të kthehesh në editor; nuk është publikuar. Vazhdo?"
+        : "Ke ndryshime të paruajtura dhe kopja lokale nuk u ruajt. Largimi do t’i humbasë. Vazhdo?";
+      if (!window.confirm(message)) { event.preventDefault(); event.stopPropagation(); }
+    };
     window.addEventListener("beforeunload", prevent);
-    return () => window.removeEventListener("beforeunload", prevent);
-  }, [dirty]);
+    document.addEventListener("click", navigate, true);
+    return () => {
+      window.removeEventListener("beforeunload", prevent);
+      document.removeEventListener("click", navigate, true);
+    };
+  }, [dirty, slug, workspace.revision]);
   useEffect(() => { chatEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [messages, testing]);
 
   function resetTest() { setTurn(undefined); setTrace(undefined); setSession(null); setMessages([]); }

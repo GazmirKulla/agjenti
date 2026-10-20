@@ -240,7 +240,7 @@ export default async function AgentsPage({
               Aktivizimi i agjentit zgjedh konfigurimin. Dërgimi automatik
               kontrollohet edhe nga cilësimi i biznesit dhe statusi i bisedës.
             </p>
-            <Link href={`/b/${slug}/settings`} className="soft-link">
+            <Link href={`/b/${slug}/settings/business`} className="soft-link">
               Hap cilësimet →
             </Link>
           </div>

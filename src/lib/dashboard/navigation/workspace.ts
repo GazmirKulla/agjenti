@@ -41,7 +41,11 @@ export function organizeWorkspace(items: NavItem[]) {
     { id: "settings", section: "settings", path: "settings", label: "Cilësimet", icon: "settings" },
   ];
   const search = [...primary, ...items, ...agent, ...settings, ...integrations].filter((item, index, all) => all.findIndex(other => other.path === item.path && other.label === item.label) === index);
-  return { primary, agent, settings, integrations, business, groups, search };
+  const main = ["home", "conversations", "activity", "customers"].flatMap(id => {
+    const item = primary.find(item => item.id === id);
+    return item ? [{ ...item, label: id === "home" ? "Migo" : item.label }] : [];
+  });
+  return { primary, main, agent, settings, integrations, business, groups, search };
 }
 
 export function activeWorkspaceLink(pathname: string, base: string, links: WorkspaceLink[]) {
