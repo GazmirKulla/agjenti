@@ -15,13 +15,14 @@ export class PersistenceError extends Error {
 }
 export const isUuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export function storageError(message: string): never {
+  // Stable SQL error codes retained for the legacy RPC during the naming rollout.
   if (/migo_(revision_conflict|request_conflict|busy)/.test(message)) throw new PersistenceError("Biseda ndryshoi ose po përpunohet në një dritare tjetër. Rifresko dhe rishqyrto.", 409);
   if (/migo_not_found/.test(message)) throw new PersistenceError("Biseda nuk është më e disponueshme.", 404);
   if (/migo_forbidden/.test(message)) throw new PersistenceError("Nuk ke më qasje në këtë biznes.", 403);
   throw new PersistenceError("Historiku nuk u ruajt. Provo përsëri; mos e trajto kërkesën si të përfunduar.");
 }
 export async function writeConversation(access: Access, id: string, operation: string, revision: number | null = null, request: string | null = null, payload: unknown = {}) {
-  const { data, error } = await createServiceSupabase().rpc("write_migo_conversation", {
+  const { data, error } = await createServiceSupabase().rpc("write_assistant_conversation", {
     p_business: access.businessId, p_user: access.userId, p_id: id, p_operation: operation,
     p_revision: revision, p_request: request, p_payload: payload,
   });
@@ -32,15 +33,15 @@ export async function readConversation(access: Access, id: string, before?: numb
   if (!isUuid(id)) throw new PersistenceError("Bisedë e pavlefshme.", 400);
   // User JWT + real RLS, including membership revocation and private ownership.
   const db = await createServerSupabase();
-  const owner = await db.from("migo_conversations").select("*").eq("id", id).eq("business_id", access.businessId).eq("owner_user_id", access.userId).maybeSingle();
+  const owner = await db.from("assistant_conversations").select("*").eq("id", id).eq("business_id", access.businessId).eq("owner_user_id", access.userId).maybeSingle();
   if (owner.error) storageError(owner.error.message);
   if (!owner.data) throw new PersistenceError("Biseda nuk është më e disponueshme.", 404);
-  let query = db.from("migo_messages").select("*").eq("conversation_id", id).order("seq", { ascending: false }).limit(51);
+  let query = db.from("assistant_messages").select("*").eq("conversation_id", id).order("seq", { ascending: false }).limit(51);
   if (before) query = query.lt("seq", before);
-  const [messages, plan] = await Promise.all([query, db.from("migo_plan_snapshots").select("revision,snapshot,preferences")
+  const [messages, plan] = await Promise.all([query, db.from("assistant_plan_snapshots").select("revision,snapshot,preferences")
     .eq("conversation_id", id).eq("revision", owner.data.plan_revision).maybeSingle()]);
   if (messages.error || plan.error) storageError("read_failed");
-  const fence = await db.from("migo_conversations").select("revision").eq("id", id).maybeSingle();
+  const fence = await db.from("assistant_conversations").select("revision").eq("id", id).maybeSingle();
   if (fence.error) storageError("read_failed");
   if (!fence.data) throw new PersistenceError("Biseda nuk është më e disponueshme.", 404);
   if (fence.data.revision !== owner.data.revision) {
@@ -53,7 +54,7 @@ export async function readConversation(access: Access, id: string, before?: numb
 }
 export async function listConversations(access: Access, cursor?: string) {
   const db = await createServerSupabase();
-  let query = db.from("migo_conversations").select("id,title,revision,plan_revision,updated_at,pending_request,pending_since")
+  let query = db.from("assistant_conversations").select("id,title,revision,plan_revision,updated_at,pending_request,pending_since")
     .eq("business_id", access.businessId).eq("owner_user_id", access.userId).order("updated_at", { ascending: false }).order("id", { ascending: false }).limit(21);
   if (cursor) {
     let parts: string[];
@@ -143,7 +144,7 @@ export async function persistedTurn(
   const view = await readConversation(access, id);
   if (started.duplicate) {
     const db = await createServerSupabase();
-    const previous = await db.from("migo_messages").select("kind").eq("conversation_id", id).eq("request_id", requestId).eq("role", "assistant").maybeSingle();
+    const previous = await db.from("assistant_messages").select("kind").eq("conversation_id", id).eq("request_id", requestId).eq("role", "assistant").maybeSingle();
     if (previous.error) storageError(previous.error.message);
     if (!previous.data || previous.data.kind === "interrupted")
       throw new PersistenceError("Kërkesa është ruajtur, por përgjigjja ende nuk është konfirmuar. Mos e dërgo sërish si veprim të ri.", 409);

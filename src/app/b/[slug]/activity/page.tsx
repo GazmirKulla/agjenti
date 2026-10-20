@@ -12,16 +12,17 @@ export default async function ActivityPage({ params }: { params: Promise<{ slug:
     .order("created_at", { ascending: false }).limit(8);
   if (error) throw new Error("Nuk u ngarkua aktiviteti i integrimit.");
   return <>
-    <PageHeading title="Aktiviteti" description="Aktiviteti i integrimit dhe hyrjet te historiku ekzistues i biznesit." />
+    <PageHeading title="Aktiviteti i integrimeve" description="Regjistrimet e lidhjeve me kanalet; kjo nuk është një pasqyrë e plotë e operacioneve." />
     <section className="panel section-pad">
       <h2>Aktiviteti i integrimit të biznesit</h2>
       <p className="muted-copy">Deri në 8 regjistrimet më të fundit, të njëjtat që shfaqen edhe te Bisedat.</p>
-      <div className="space-y-3 mt-4"><IntegrationActivity logs={data ?? []} /></div>
+      <div className="space-y-3 mt-4">{data?.length ? <IntegrationActivity logs={data} /> : <p>Ende nuk ka regjistrime integrimi. Porositë dhe rezervimet kontrollohen në hapësirat e tyre.</p>}</div>
     </section>
     <nav className="flex flex-wrap gap-3 mt-5" aria-label="Historiku në hapësirat ekzistuese">
       <Link className="btn btn-ghost" href={`/b/${slug}/inbox`}>Bisedat →</Link>
       {profile.enabledModules.includes("agents") && <Link className="btn btn-ghost" href={`/b/${slug}/agents/memory`}>Memoria e agjentit →</Link>}
-      {profile.enabledModules.includes("workflows") && <Link className="btn btn-ghost" href={`/b/${slug}/workflows`}>Workflow dhe versionet →</Link>}
+      {profile.enabledModules.includes("orders") && <Link className="btn btn-ghost" href={`/b/${slug}/orders`}>Porositë →</Link>}
+      {profile.enabledModules.includes("bookings") && <Link className="btn btn-ghost" href={`/b/${slug}/bookings`}>Rezervimet →</Link>}
     </nav>
   </>;
 }

@@ -81,7 +81,7 @@ it.each([undefined, "Luna", "Migo", "D'Art"])("uses the personal name %s in the 
     history: [{ role: "assistant", content: 'Unë jam Agjenti "Filiz Studio".' }] }));
   expect(response.status).toBe(200);
   const call = m.response.mock.calls[0][0];
-  expect(JSON.parse(call.input).assistant).toEqual({ name: name ?? "Migo" });
+  expect(JSON.parse(call.input).assistant).toEqual({ name: name ?? "Asistenti AI" });
   expect(JSON.parse(call.input).data.profile.rows[0].name).toBe("Filiz Studio");
   expect(call.instructions).not.toContain("Your display name is Agjenti followed by the current business name");
   expect(call.instructions).toContain("assistant.name");

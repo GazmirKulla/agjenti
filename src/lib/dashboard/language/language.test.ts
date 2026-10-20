@@ -49,7 +49,7 @@ describe("Scoped dashboard language", () => {
     const html = render("en", h(WorkspaceNavigation, { navigation, base: "/b/shop", pathname: "/b/shop/inbox", section: "conversations", onNavigate: () => {} }));
     expect(html).toContain("Conversations");
     expect(html).toContain("Business");
-    expect(html).toContain("Migo");
+    expect(html).toContain("AI Assistant");
     expect(html).toContain("/b/shop/business");
     expect(html).not.toContain("/b/shop/services"); // Secondary destination, not a primary item.
     expect(navigation.search).toEqual(expect.arrayContaining([

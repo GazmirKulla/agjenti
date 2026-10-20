@@ -20,7 +20,7 @@ export function SettingsLayout({ slug, name, children }: { slug: string; name: s
     return () => media.removeEventListener("change", sync);
   }, [pathname]);
   return <section className={s.workspace} aria-label={t("Cilësimet")}>
-    <header className={s.heading}><div><h1>{t("Cilësimet")}</h1><p>{name}</p></div><Link href={base}>← {t("Kthehu te Migo")}</Link></header>
+    <header className={s.heading}><div><h1>{t("Cilësimet")}</h1><p>{name}</p></div><Link href={base}>← {t("Kthehu te asistenti")}</Link></header>
     <div className={s.body}>
       <details ref={navigation} className={s.navigation} open key={pathname}>
         <summary>{t("Seksionet e cilësimeve")}</summary>

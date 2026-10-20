@@ -1,4 +1,4 @@
-export const defaultPersonalAssistantName = "Migo";
+export const defaultPersonalAssistantName = "Asistenti AI";
 
 /** A display preference only. It must never supply tenant identity or permissions. */
 export function readPersonalAssistantName(value: unknown): string | null {

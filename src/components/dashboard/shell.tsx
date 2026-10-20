@@ -200,7 +200,7 @@ export function AppShell({
   return (
     <div
       style={{"--assistant-panel-width": `${assistant?.panelWidth ?? 440}px`} as React.CSSProperties}
-      className={`dashboard-shell ${!admin ? s.shell : ""} ${iconRail ? "is-icons" : ""} ${!admin && slug ? "has-assistant-dock assistant-first-mobile migo-workspace" : ""} ${!admin && pathname === base ? "mobile-assistant-home" : ""} ${assistant?.open && pathname !== base ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
+      className={`dashboard-shell ${!admin ? s.shell : ""} ${iconRail ? "is-icons" : ""} ${!admin && slug ? "has-assistant-dock assistant-first-mobile assistant-workspace" : ""} ${!admin && pathname === base ? "mobile-assistant-home" : ""} ${assistant?.open && pathname !== base ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
     >
       <aside
         ref={sidebar}
@@ -285,7 +285,7 @@ export function AppShell({
                 <span className="nav-label">{admin ? item.label : t(item.label)}</span>
               </Link>
             );
-          }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} iconsOnly={iconRail} onNavigate={() => { setOpen(false); if (mobile) assistant?.setOpen(false); }} />}
+          }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} assistantName={assistant?.appearance.name} iconsOnly={iconRail} onNavigate={() => { setOpen(false); if (mobile) assistant?.setOpen(false); }} />}
         </nav>
         <footer className="dashboard-sidebar-footer">
           {!admin ? <ProfilePopover key={pathname} base={base} name={userName || email || name} email={email} compact={iconRail} onNavigate={() => { setOpen(false); assistant?.setOpen(false); }} /> : <Link
@@ -336,7 +336,7 @@ export function AppShell({
             <small>{admin ? "Administrimi" : "Agjenti.app"}</small>
           </Link>}
           {!admin && <div className="mobile-assistant-tools">
-            <button type="button" aria-label="Historiku i asistentit" onClick={() => assistant?.setHistoryOpen(true)}><Icon name="history" size={21}/></button>
+            <button type="button" aria-label="Historiku i asistentit" aria-expanded={assistant?.historyOpen} aria-controls="assistant-history" onClick={() => assistant?.setHistoryOpen(true)}><Icon name="history" size={21}/></button>
             <button type="button" aria-label="Bisedë e re me asistentin" disabled={assistant?.sending} onClick={() => { assistant?.resetRef.current?.(); assistant?.setOpen(true); }}><Icon name="edit" size={21}/></button>
           </div>}
           <button

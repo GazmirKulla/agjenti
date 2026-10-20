@@ -83,7 +83,7 @@ export async function POST(request: Request) {
           reference: { table: tables[ticket.action.split("_")[0]],
             ...(ticket.action === "booking_create" ? { request_key: `assistant:${ticket.id}` } : { id: ticket.id }) } } };
       };
-      // Keep legacy callers compatible; the Migo UI always uses durable requests.
+      // Keep legacy callers compatible; the owner assistant UI uses durable requests.
       const result = body.conversationId
         ? await persistedTurn(access, body, { content: "Konfirmova ndryshimin e shqyrtuar.", mode: "confirm", fingerprintData: body.token }, execute)
         : await executeTicket(access, body.token);

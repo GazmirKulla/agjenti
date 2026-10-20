@@ -6,19 +6,18 @@ import { Icon } from "./icon";
 import { activeWorkspaceLink, type organizeWorkspace, type WorkspaceSection } from "@/lib/dashboard/navigation/workspace";
 import s from "./workspace-navigation.module.css";
 
-type Props = { navigation: ReturnType<typeof organizeWorkspace>; section?: WorkspaceSection; base: string; pathname: string; onNavigate: () => void; iconsOnly?: boolean };
+type Props = { navigation: ReturnType<typeof organizeWorkspace>; section?: WorkspaceSection; base: string; pathname: string; onNavigate: () => void; iconsOnly?: boolean; assistantName?: string };
 
-export function WorkspaceNavigation({ navigation, section, base, pathname, onNavigate, iconsOnly = false }: Props) {
+export function WorkspaceNavigation({ navigation, section, base, pathname, onNavigate, iconsOnly = false, assistantName }: Props) {
   const t = useDashboardTranslator();
   const renderLink = (item: typeof navigation.primary[number]) => {
-    const label = t(item.label);
+    const label = item.id === "home" && assistantName ? assistantName : t(item.label);
     return <Link key={item.id} href={`${base}${item.path ? `/${item.path}` : ""}`} className={`dashboard-nav ${section === item.section ? "active" : ""}`} aria-current={section === item.section ? "page" : undefined} data-tip={iconsOnly ? label : undefined} onClick={onNavigate}><Icon name={item.icon} /><span className="nav-label">{label}</span></Link>;
   };
   return <>
     {navigation.main.map(renderLink)}
     <hr className={s.divider} />
-    <Link href={`${base}/business`} className={`dashboard-nav ${pathname === `${base}/business` ? "active" : ""}`} aria-current={pathname === `${base}/business` ? "page" : undefined} data-tip={iconsOnly ? t("Biznesi") : undefined} onClick={onNavigate}><Icon name="briefcase"/><span className="nav-label">{t("Biznesi")}</span></Link>
-    {navigation.agent.some(item => item.id === "agents") && renderLink({ id: "agent", path: "agents", section: "agent", label: "Agjenti i klientëve", icon: "agents" })}
+    <Link href={`${base}/business`} className={`dashboard-nav ${pathname === `${base}/business` || (section && !["home", "conversations", "activity", "customers", "settings"].includes(section)) ? "active" : ""}`} aria-current={pathname === `${base}/business` ? "page" : undefined} data-tip={iconsOnly ? t("Biznesi") : undefined} onClick={onNavigate}><Icon name="briefcase"/><span className="nav-label">{t("Biznesi")}</span></Link>
   </>;
 }
 

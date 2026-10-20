@@ -13,6 +13,7 @@ import SettingsLayout from "./layout";
 import AccountRedirect from "../account/page";
 import BillingRedirect from "../billing/page";
 import ActionsRedirect from "../actions/page";
+import AssistantRedirect from "./migo/page";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -24,15 +25,16 @@ it.each([
   ["account", AccountRedirect, "profile"],
   ["billing", BillingRedirect, "billing"],
   ["actions", ActionsRedirect, "actions"],
+  ["migo", AssistantRedirect, "assistant"],
 ] as const)("preserves %s deep links after checking the canonical tenant", async (_, page, target) => {
   await expect(page({ params: Promise.resolve({ slug: "old-alias" }) })).rejects.toThrow(`redirect:/b/canonical-a/settings/${target}`);
   expect(access.business).toHaveBeenCalledWith("signed-in-user", "old-alias");
 });
-it.each([SettingsRoot, AccountRedirect, BillingRedirect, ActionsRedirect])("rejects foreign tenant redirects", async page => {
+it.each([SettingsRoot, AccountRedirect, BillingRedirect, ActionsRedirect, AssistantRedirect])("rejects foreign tenant redirects", async page => {
   access.business.mockResolvedValue(null);
   await expect(page({ params: Promise.resolve({ slug: "tenant-b" }) })).rejects.toThrow("redirect:/auth/continue");
 });
-it.each([SettingsRoot, AccountRedirect, BillingRedirect, ActionsRedirect])("requires a current authenticated session", async page => {
+it.each([SettingsRoot, AccountRedirect, BillingRedirect, ActionsRedirect, AssistantRedirect])("requires a current authenticated session", async page => {
   access.user.mockResolvedValue(null);
   await expect(page({ params: Promise.resolve({ slug: "tenant-a" }) })).rejects.toThrow("redirect:/login");
   expect(access.business).not.toHaveBeenCalled();
@@ -53,6 +55,6 @@ it("makes only supported destinations primary and retains optional modules in ma
 });
 it("has one distinct route per settings section", () => {
   const routes = settingsGroups.flatMap(group => group.items.map(item => item.path));
-  expect(routes).toEqual(["profile", "preferences", "business", "billing", "migo", "modules", "actions", "advanced"]);
+  expect(routes).toEqual(["profile", "preferences", "business", "billing", "assistant", "modules", "actions", "advanced"]);
   expect(new Set(routes).size).toBe(routes.length);
 });

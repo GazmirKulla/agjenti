@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { organizeWorkspace, workspaceSection, activeWorkspaceLink } from "./workspace";
+import { businessWorkspaceGroups, organizeWorkspace, workspaceSection, activeWorkspaceLink } from "./workspace";
 import { buildAdminNavigation, buildNavigationItems } from "./builder";
 import { legacyDashboardProfile } from "../profile/legacy";
 import { moduleRegistry, navigationOrder } from "../modules/registry";
@@ -45,6 +45,18 @@ it("does not expose optional modules omitted by the business profile", () => {
 
 it("leaves administrator navigation independent of the business grouping", () => {
   expect(buildAdminNavigation("mobile").map(item => item.path)).toEqual(["", "businesses", "conversations", "pricing", "actions", "app"]);
+});
+
+it("keeps manual offers, knowledge, channels, behavior and operations in task groups without duplicates", () => {
+  const groups = businessWorkspaceGroups(navigation);
+  expect(groups.map(group => group.id)).toEqual(["offer", "knowledge", "channels", "behavior", "operations"]);
+  const paths = groups.flatMap(group => group.items.map(item => item.path));
+  expect(new Set(paths).size).toBe(paths.length);
+  for (const path of ["products", "services", "catalogs", "knowledge", "sources", "instagram", "whatsapp", "agents", "agents/test", "orders", "bookings", "calendar", "leads"])
+    expect(paths).toContain(path);
+  expect(paths).not.toContain("workflows"); // Still reachable in Advanced, never removed.
+  const limited = organizeWorkspace(allItems.filter(item => ["dashboard", "inbox", "services"].includes(item.id)));
+  expect(businessWorkspaceGroups(limited).flatMap(group => group.items.map(item => item.path))).toEqual(["services"]);
 });
 
 

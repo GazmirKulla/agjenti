@@ -35,7 +35,7 @@ export function organizeWorkspace(items: NavItem[]) {
       const item = items.find(item => item.id === id);
       return item ? [{ ...item, section: id }] : [];
     }),
-    { id: "agent", section: "agent", path: "agents", label: "Agjenti i klientëve", icon: "agents" },
+    ...(agent.some(item => item.id === "agents") ? [{ id: "agent", section: "agent" as const, path: "agents", label: "Agjenti i klientëve", icon: "agents" }] : []),
     { id: "activity", section: "activity", path: "activity", label: "Aktiviteti", icon: "history" },
     ...(integrations.length ? [{ id: "integrations", section: "integrations" as const, path: "integrations", label: "Integrimet", icon: "integrations" }] : []),
     { id: "settings", section: "settings", path: "settings", label: "Cilësimet", icon: "settings" },
@@ -43,9 +43,25 @@ export function organizeWorkspace(items: NavItem[]) {
   const search = [...primary, ...items, ...agent, ...settings, ...integrations].filter((item, index, all) => all.findIndex(other => other.path === item.path && other.label === item.label) === index);
   const main = ["home", "conversations", "activity", "customers"].flatMap(id => {
     const item = primary.find(item => item.id === id);
-    return item ? [{ ...item, label: id === "home" ? "Migo" : item.label }] : [];
+    return item ? [{ ...item, label: id === "home" ? "Asistenti AI" : item.label }] : [];
   });
   return { primary, main, agent, settings, integrations, business, groups, search };
+}
+
+/** Manual destinations, grouped by the owner's task; never changes module access. */
+export function businessWorkspaceGroups(navigation: ReturnType<typeof organizeWorkspace>) {
+  const definitions = [
+    { id: "offer", label: "Çfarë ofron biznesi", description: "Produktet, shërbimet dhe katalogët që u ofron klientëve.", paths: ["products", "services", "catalogs"] },
+    { id: "knowledge", label: "Çfarë di agjenti", description: "Informacioni dhe burimet që përdor për t'u përgjigjur.", paths: ["knowledge", "sources"] },
+    { id: "channels", label: "Ku komunikon agjenti", description: "Lidhjet me Instagram dhe WhatsApp.", paths: ["instagram", "whatsapp"] },
+    { id: "behavior", label: "Si sillet agjenti", description: "Identiteti, udhëzimet dhe provat e agjentit të klientëve.", paths: ["agents", "agents/memory", "agents/test"] },
+    { id: "operations", label: "Puna e përditshme", description: "Porositë, rezervimet dhe kërkesat e klientëve.", paths: ["orders", "bookings", "calendar", "leads"] },
+  ];
+  const links = [...navigation.agent, ...navigation.search];
+  return definitions.map(group => ({ ...group, items: group.paths.flatMap(path => {
+    const item = links.find(item => item.path === path);
+    return item ? [item] : [];
+  }) })).filter(group => group.items.length);
 }
 
 export function activeWorkspaceLink(pathname: string, base: string, links: WorkspaceLink[]) {

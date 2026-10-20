@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryMessage } from "@/lib/business-assistant/history";
 import type { ConversationView, StoredConversation, PlanningPreferences, StoredMessage } from "@/lib/business-assistant/persistence-model";
 import type { FileCardItem } from "./file-card";
+export { AssistantHistoryDrawer as AssistantHistory } from "./history-drawer";
 
 export type ChatMessage = HistoryMessage & { materials?: FileCardItem[]; kind?: StoredMessage["kind"] };
 type View = ConversationView & { recovery?: { verified: boolean; message: string } };
@@ -13,10 +14,12 @@ export function useAssistantHistory(userId: string, slug: string) {
   const [warning, setWarning] = useState("");
   const [restoration, setRestoration] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [next, setNext] = useState<string | null>(null);
   const current = useRef<View | null>(null);
   const inFlight = useRef(false);
   const generation = useRef(0);
+  // Compatibility key from UX-3; selection only, not a canonical assistant identity.
   const selectedKey = `agjenti:migo-selected:v1:${userId}:${slug}`;
   const url = `/api/business-assistant/conversations?slug=${encodeURIComponent(slug)}`;
   const request = useCallback(async (suffix = "", body?: unknown) => {
@@ -78,7 +81,7 @@ export function useAssistantHistory(userId: string, slug: string) {
     const interval = window.setInterval(sync, 15000);
     return () => { clearInterval(interval); window.removeEventListener("focus", sync); document.removeEventListener("visibilitychange", sync); };
   }, [request, accept]);
-  return { history, setHistory, threads, warning, view, loading, restoration, next, inFlight, accept,
+  return { history, setHistory, threads, warning, view, loading, listLoading, restoration, next, inFlight, accept,
     async ensureConversation() {
       if (loading) throw new Error("Prit ngarkimin e historikut.");
       if (current.current) return current.current.conversation;
@@ -91,15 +94,19 @@ export function useAssistantHistory(userId: string, slug: string) {
     },
     selectThread(thread: StoredConversation) { return load(thread.id); },
     async refreshThreads() {
-      try { const data = await request(); setThreads(data.conversations); setNext(data.next); }
-      catch (e) { setWarning((e as Error).message); }
+      const g = generation.current;
+      setListLoading(true);
+      try { const data = await request(); if (g === generation.current) { setThreads(data.conversations); setNext(data.next); } }
+      catch (e) { if (g === generation.current) setWarning((e as Error).message); }
+      finally { setListLoading(false); }
     },
     async rename(thread: StoredConversation, title: string) {
       try {
         const data = await request("", { mode: "rename", id: thread.id, revision: thread.revision, title });
         setThreads(items => items.map(t => t.id === thread.id ? data.conversation : t));
         if (current.current?.conversation.id === thread.id) accept(data);
-      } catch (e) { setWarning((e as Error).message); }
+        return true;
+      } catch (e) { setWarning((e as Error).message); return false; }
     },
     async remove(thread: StoredConversation) {
       try {
@@ -109,7 +116,8 @@ export function useAssistantHistory(userId: string, slug: string) {
           generation.current++; current.current = null; setView(null); setHistory([]); setRestoration(n => n + 1);
           try { localStorage.removeItem(selectedKey); } catch {}
         }
-      } catch (e) { setWarning((e as Error).message); }
+        return true;
+      } catch (e) { setWarning((e as Error).message); return false; }
     },
     async olderMessages() {
       const active = current.current;
@@ -121,9 +129,12 @@ export function useAssistantHistory(userId: string, slug: string) {
       } catch (e) { setWarning((e as Error).message); }
     },
     async moreThreads() {
-      if (!next) return;
-      try { const data = await request(`&cursor=${encodeURIComponent(next)}`); setThreads(items => [...items, ...data.conversations.filter((t: StoredConversation) => !items.some(i => i.id === t.id))]); setNext(data.next); }
-      catch (e) { setWarning((e as Error).message); }
+      if (!next || listLoading) return;
+      const g = generation.current;
+      setListLoading(true);
+      try { const data = await request(`&cursor=${encodeURIComponent(next)}`); if (g === generation.current) { setThreads(items => [...items, ...data.conversations.filter((t: StoredConversation) => !items.some(i => i.id === t.id))]); setNext(data.next); } }
+      catch (e) { if (g === generation.current) setWarning((e as Error).message); }
+      finally { setListLoading(false); }
     },
     async savePreferences(preferences: PlanningPreferences) {
       const active = current.current;
@@ -142,27 +153,4 @@ export function useAssistantHistory(userId: string, slug: string) {
       if (g === generation.current && current.current?.conversation.id === active.conversation.id) accept(data, true);
     },
   };
-}
-
-export function AssistantHistory({ open, threads, busy, warning, onClose, onSelect, onNew, onRename, onDelete, onMore }: {
-  open: boolean; threads: StoredConversation[]; busy: boolean; warning: string;
-  onClose: () => void; onSelect: (thread: StoredConversation) => void; onNew: () => void;
-  onRename: (thread: StoredConversation, title: string) => void; onDelete: (thread: StoredConversation) => void; onMore?: () => void;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    if (open && !ref.current?.open) ref.current?.showModal();
-    else if (!open) ref.current?.close();
-  }, [open]);
-  return <dialog ref={ref} className="assistant-history" aria-labelledby="assistant-history-title" onCancel={onClose}>
-    <header><div><h2 id="assistant-history-title">Bisedat me Migo</h2><p>Private · për ty dhe këtë biznes · ruajtur në server</p></div><button type="button" onClick={onClose} aria-label="Mbyll historikun">×</button></header>
-    {warning && <p role="alert">{warning}</p>}
-    <button type="button" className="assistant-primary" disabled={busy} onClick={onNew}>Bisedë e re</button>
-    <div className="assistant-history-list">{threads.length ? threads.map(thread => <article key={thread.id}>
-      <button type="button" disabled={busy} onClick={() => onSelect(thread)}><strong>{thread.title}</strong><small>{new Date(thread.updated_at).toLocaleDateString("sq-AL")}</small></button>
-      <div><button type="button" disabled={busy} aria-label={`Riemërto ${thread.title}`} onClick={() => { const title = window.prompt("Titulli i bisedës", thread.title); if (title?.trim()) onRename(thread, title); }}>Riemërto</button>
-        <button type="button" disabled={busy} aria-label={`Fshi ${thread.title}`} onClick={() => { if (window.confirm("Fshi përgjithmonë mesazhet dhe planet e kësaj bisede? Veprimet e kryera në biznes nuk zhbëhen.")) onDelete(thread); }}>Fshi</button></div>
-    </article>) : <p>Bisedat që zhvillon do të shfaqen këtu.</p>}</div>
-    {onMore && <button type="button" disabled={busy} onClick={onMore}>Më shumë biseda</button>}
-  </dialog>;
 }

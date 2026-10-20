@@ -107,7 +107,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
     if (!dirty) return;
     const prevent = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
     // App Router links do not trigger beforeunload. Preserve the existing local
-    // revision-scoped recovery before leaving the editor for Settings or Migo.
+    // revision-scoped recovery before leaving the editor for Settings or the assistant.
     const navigate = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       const link = (event.target as Element | null)?.closest<HTMLAnchorElement>("a[href]");

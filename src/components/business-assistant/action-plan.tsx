@@ -26,8 +26,8 @@ export function ApprovalCard({ step, decision, busy = false, feedback, onDecisio
     <header><span className="action-plan-status" role="status">{label}</span><h4 id={titleId}>{step.title}</h4></header>
     <p>{step.description}</p>
     {unsupported && <p className="action-plan-blocker">{step.requiredCapability === "customer.create"
-      ? "Regjistrimi automatik i klientit nuk konfigurohet nga Migo. Mbledhja e të dhënave në bisedë nuk krijon një klient në CRM."
-      : "Ky hap nuk mund të konfigurohet nga Migo. Mund të vazhdosh me pjesën e mbështetur të planit."}</p>}
+      ? "Regjistrimi automatik i klientit nuk konfigurohet nga asistenti. Mbledhja e të dhënave në bisedë nuk krijon një klient në CRM."
+      : "Ky hap nuk mund të konfigurohet nga asistenti. Mund të vazhdosh me pjesën e mbështetur të planit."}</p>}
     {step.readiness === "DISABLED" && <p className="action-plan-blocker">Funksioni është i çaktivizuar ose nuk lejohet nga paketa. Ky plan nuk aktivizon module dhe nuk ndryshon leje.</p>}
     {step.missingConfiguration.length > 0 && <div className="action-plan-blocker"><strong>Çfarë na duhet</strong><ul>{step.missingConfiguration.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
     {step.requiredDecision && <p>{step.requiredDecision}</p>}
