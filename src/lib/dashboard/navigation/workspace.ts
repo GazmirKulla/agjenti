@@ -35,7 +35,7 @@ export function organizeWorkspace(items: NavItem[]) {
       const item = items.find(item => item.id === id);
       return item ? [{ ...item, section: id }] : [];
     }),
-    { id: "agent", section: "agent", path: "agents", label: "Agjenti im", icon: "agents" },
+    { id: "agent", section: "agent", path: "agents", label: "Agjenti i klientëve", icon: "agents" },
     { id: "activity", section: "activity", path: "activity", label: "Aktiviteti", icon: "history" },
     ...(integrations.length ? [{ id: "integrations", section: "integrations" as const, path: "integrations", label: "Integrimet", icon: "integrations" }] : []),
     { id: "settings", section: "settings", path: "settings", label: "Cilësimet", icon: "settings" },

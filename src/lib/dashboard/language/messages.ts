@@ -6,6 +6,8 @@ export const english: Record<string, string> = {
   "Porositë": "Orders",
   "Klientët": "Customers",
   "Agjenti im": "My agent",
+  "Agjenti i klientëve": "Customer agent",
+  "Avancuar": "Advanced",
   "Aktiviteti": "Activity",
   "Integrimet": "Integrations",
   "Cilësimet": "Settings",

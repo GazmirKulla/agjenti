@@ -75,7 +75,7 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
   const localDiff = diffWorkflowGraphs(workspace.graph, graph);
   const canRestoreRecovery = recovery?.status === "recoverable" && recovery.draft.baseRevision === workspace.revision;
   const locked = pending || testing || refreshRequired || Boolean(recovery);
-  useWorkflowAssistantContext({ nodeId: selectedId ?? activeFlow?.entryNodeId, flowId: selectedFlow?.id, revision: workspace.revision, dirty });
+  useWorkflowAssistantContext({ nodeId: selectedId ?? activeFlow?.entryNodeId, flowId: selectedFlow?.id, revision: workspace.revision, dirty }, [selectedFlow?.label, selected?.label].filter(Boolean).join(" · "));
   const focusedItem = bindingFocus ? (bindingFocus.kind === "product" ? bindingCatalog.products : bindingCatalog.services).find(item => item.id === bindingFocus.id) : undefined;
 
   useEffect(() => {

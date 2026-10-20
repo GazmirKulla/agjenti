@@ -4,6 +4,11 @@ export type RequestMessage = { role: "user" | "assistant"; content: string };
 export type WorkflowRequestPin = { scope: string; context: AssistantUIContext; history: RequestMessage[] };
 type ContinuationResult = { clarifying?: boolean; choices?: string[]; token?: string; workflow?: { proposed?: unknown }; editableFlow?: boolean; linear?: unknown; saved?: boolean };
 
+/** The displayed continuity notice uses exactly the request's existing history boundary. */
+export function assistantContextKey(slug: string, context: AssistantUIContext) {
+  return context.page === "workflows" ? `${slug}:workflows` : `${slug}:${JSON.stringify(context)}`;
+}
+
 /** Selecting another card is navigation, not an answer that retargets a pending edit. */
 export function pinnedWorkflowContext(current: AssistantUIContext, pin?: WorkflowRequestPin | null): AssistantUIContext {
   if (!pin || current.page !== "workflows" || !pin.context.workflowSelection) return structuredClone(current);

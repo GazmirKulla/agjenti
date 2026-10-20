@@ -198,7 +198,7 @@ export function DashboardShell({
   return (
     <div
       style={{"--assistant-panel-width": `${assistant?.panelWidth ?? 440}px`} as React.CSSProperties}
-      className={`dashboard-shell ${iconRail ? "is-icons" : ""} ${!admin && slug ? "has-assistant-dock assistant-first-mobile" : ""} ${!admin && pathname === base ? "mobile-assistant-home" : ""} ${assistant?.open ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
+      className={`dashboard-shell ${iconRail ? "is-icons" : ""} ${!admin && slug ? "has-assistant-dock assistant-first-mobile migo-workspace" : ""} ${!admin && pathname === base ? "mobile-assistant-home" : ""} ${assistant?.open && pathname !== base ? "assistant-panel-open" : ""} ${open ? "drawer-open" : ""} ${keyboardOpen ? "keyboard-open" : ""} ${inboxDetailView ? "inbox-detail-view" : ""}`}
     >
       <aside
         ref={sidebar}
@@ -416,7 +416,13 @@ export function DashboardShell({
           </div>
           {!admin && slug && <div id="personal-assistant-slot" className="personal-assistant-slot" />}
         </header>
-        <main className="dashboard-content">{!admin && <WorkspaceSectionNavigation navigation={workspace} section={section} base={base} pathname={pathname} />}{!admin && pathname !== base && <AssistantEntry/>}{children}</main>
+        <main className="dashboard-content">
+          {/* Stable placement retains pending cards and the composer across navigation. */}
+          {!admin && <AssistantWorkspaceSurface/>}
+          {!admin && <WorkspaceSectionNavigation navigation={workspace} section={section} base={base} pathname={pathname} />}
+          {!admin && pathname !== base && <AssistantEntry/>}
+          {children}
+        </main>
       </div>
       {admin && <nav
         className="mobile-bottom-nav"
@@ -442,7 +448,6 @@ export function DashboardShell({
         ))}
       </nav>}
 
-      {!admin && <AssistantWorkspaceSurface/>}
     </div>
   );
 }

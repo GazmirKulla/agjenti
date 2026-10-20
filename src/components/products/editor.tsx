@@ -12,6 +12,7 @@ import { ActionForm } from "@/components/dashboard/action-form";
 import { productMoney as money } from "@/lib/products/catalog";
 import { ProductTips } from "./shared";
 import type { ProductRow, Option } from "@/lib/products/catalog";
+import { usePageAssistantContext } from "@/components/business-assistant/workspace";
 export function ProductEditor({
   slug,
   product,
@@ -23,6 +24,7 @@ export function ProductEditor({
   types: Option[];
   workflows: Option[];
 }) {
+  usePageAssistantContext(product ? { entityType: "product", entityId: product.id, selectionLabel: product.name } : {});
   const businessWorkflow = workflows.find(w => w.businessWorkflow)?.businessWorkflow;
   const [preview, setPreview] = useState({
     name: product?.name ?? "",

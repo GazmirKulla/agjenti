@@ -38,7 +38,17 @@ export function WorkspaceSectionNavigation({ navigation, section, base, pathname
   if (section === "integrations") return pathname === `${base}/integrations` ? null : <div className={s.context}><Link className="soft-link" href={`${base}/integrations`}>{t("← Integrimet")}</Link></div>;
   const links = section === "agent" ? navigation.agent : section === "settings" ? navigation.settings : section === "business" ? navigation.business : [];
   if (!links.length) return null;
-  const title = section === "agent" ? "Agjenti im" : section === "settings" ? "Cilësimet" : "Biznesi";
+  const title = section === "agent" ? "Agjenti i klientëve" : section === "settings" ? "Cilësimet" : "Biznesi";
   const active = activeWorkspaceLink(pathname, base, links);
-  return <section className={s.context}><p>{title}</p><nav aria-label={`Seksionet — ${title}`} className={s.sections}>{links.map(item => <Link key={item.id} href={`${base}/${item.path}`} aria-current={active === item.path ? "page" : undefined}><Icon name={item.icon} size={16} />{item.label}</Link>)}</nav></section>;
+  const advanced = links.filter(item => item.id === "workflows");
+  return <section className={s.context}>
+    <p>{t(title)}{section === "agent" ? " — Instagram / WhatsApp" : ""}</p>
+    <nav aria-label={`Seksionet — ${t(title)}`} className={s.sections}>
+      {links.filter(item => item.id !== "workflows").map(item => <Link key={item.id} href={`${base}/${item.path}`} aria-current={active === item.path ? "page" : undefined}><Icon name={item.icon} size={16} />{t(item.label)}</Link>)}
+      {!!advanced.length && <details key={pathname} className={s.advanced} open={active === "workflows"}>
+        <summary>{t("Avancuar")}</summary>
+        {advanced.map(item => <Link key={item.id} href={`${base}/${item.path}`} aria-current={active === item.path ? "page" : undefined}><Icon name={item.icon} size={16} />Workflow Designer</Link>)}
+      </details>}
+    </nav>
+  </section>;
 }

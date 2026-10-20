@@ -4,9 +4,9 @@ import { FileCard, type FileCardItem } from "./file-card";
 import { Icon } from "@/components/dashboard/icon";
 import "./composer.css";
 export type ComposerItem = FileCardItem & { id: string };
-export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOpen, placeholder = "Pyet ose kërko një ndryshim…", busy = false, items = [], onFiles, onRemove, onLink, maxLength = 12000, canSubmit, onStop, children }: {
+export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOpen, label = "Shkruaji Agjentit", placeholder = "Pyet ose kërko një ndryshim…", busy = false, items = [], onFiles, onRemove, onLink, maxLength = 12000, canSubmit, onStop, children }: {
   id: string; value: string; onChange: (value: string) => void; onSubmit: () => void; onVoice: () => void; onOpen?: () => void;
-  placeholder?: string; busy?: boolean; multiline?: boolean; items?: ComposerItem[]; onFiles?: (files: File[]) => void;
+  label?: string; placeholder?: string; busy?: boolean; multiline?: boolean; items?: ComposerItem[]; onFiles?: (files: File[]) => void;
   onRemove?: (id: string) => void; onLink?: (url: string) => void; maxLength?: number; canSubmit?: boolean; onStop?: () => void; children?: ReactNode;
 }) {
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -58,7 +58,7 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
     }/>)}</div>}
 
       <button ref={menuButton} type="button" disabled={busy} aria-label="Shto foto, skedar ose link" aria-controls={`${id}-menu`} aria-expanded={menu} onClick={() => setMenu(v => !v)}><Icon name="plus" size={22} /></button>
-      <label className="sr-only" htmlFor={id}>Shkruaji Agjentit</label>
+      <label className="sr-only" htmlFor={id}>{label}</label>
       <textarea ref={textarea} id={id} autoComplete="off" inputMode="text" name="assistant-message" value={value} onChange={e => onChange(e.target.value)} rows={1} enterKeyHint="enter" maxLength={maxLength} placeholder={placeholder} disabled={busy}
         onPaste={e => { if (onFiles && e.clipboardData.files.length) { e.preventDefault(); onFiles(Array.from(e.clipboardData.files)); } }}
         onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !window.matchMedia("(max-width: 760px)").matches) { e.preventDefault(); if (canSend) onSubmit(); } if (e.key === "Escape") { setMenu(false); setLink(null); } }} />

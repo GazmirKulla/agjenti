@@ -1,4 +1,3 @@
-import { AssistantEntry } from "@/components/business-assistant/workspace";
 import { Suspense } from "react";
 import { DashboardLoading } from "@/components/dashboard/loading";
 import { redirect } from "next/navigation";
@@ -18,8 +17,8 @@ export default async function BusinessDashboard({
   if (!access) redirect("/auth/continue");
   const dashboardProfile = await loadDashboardProfile(access.business.id);
   return (
-    <div className="assistant-first-home">
-      <AssistantEntry home/>
+    <details className="assistant-first-home business-hub-overview">
+      <summary>Pasqyra e biznesit dhe veprimet manuale</summary>
       <Suspense fallback={<DashboardLoading />}>
         <Overview
           compact
@@ -27,6 +26,6 @@ export default async function BusinessDashboard({
           dashboardProfile={dashboardProfile}
         />
       </Suspense>
-    </div>
+    </details>
   );
 }

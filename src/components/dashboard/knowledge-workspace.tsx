@@ -12,6 +12,7 @@ import {
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { saveKnowledgeEntry } from "@/lib/knowledge/actions";
+import { AssistantRecordContext } from "@/components/business-assistant/workspace";
 
 export async function KnowledgeWorkspace({
   slug,
@@ -164,6 +165,7 @@ export async function KnowledgeWorkspace({
           ),
           detail: (
             <>
+              {!services && <AssistantRecordContext entityType="knowledge" entityId={e.id} selectionLabel={e.title} />}
               <div className="detail-header">
                 <div>
                   <h2>{e.title}</h2>

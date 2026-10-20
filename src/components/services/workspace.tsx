@@ -289,7 +289,7 @@ export function ServicesWorkspace({
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("all"),
     [editor, setEditor] = useState<BusinessService | "new" | null>(null);
-  usePageAssistantContext(editor && editor !== "new" ? { entityType: "service", entityId: editor.id } : {});
+  usePageAssistantContext(editor && editor !== "new" ? { entityType: "service", entityId: editor.id, selectionLabel: editor.name } : {});
   const shown = services.filter(
     (s) =>
       (filter === "all" ||

@@ -1,6 +1,8 @@
 "use client";
 import "./workspace-layout.css";
 import "./mobile.css";
+import "./one-migo.css";
+import { businessGoals } from "./presentation";
 import { AssistantHistory, useAssistantHistory } from "./history";
 import { AssistantAppearanceDialog, PersonalAssistantAvatar, PersonalAssistantWidget } from "./personal-assistant";
 import type { AssistantAppearance } from "./appearance";
@@ -12,7 +14,6 @@ import { ActionPlanReview } from "./action-plan";
 import { refreshPlanCapability, type ActionPlan } from "@/lib/business-assistant/action-plan";
 import type { LinearCard } from "@/lib/business-assistant/linear-service";
 import {
-  assistantSuggestions,
   contextLabel,
   type AssistantUIContext,
 } from "@/lib/business-assistant/context";
@@ -32,7 +33,7 @@ import { WorkflowChangeReview } from "@/components/workflows/workflow-change-rev
 import { PublicationReceiptView } from "@/components/workflows/publication-readiness";
 import type { WorkflowCard as WorkflowCardData } from "@/lib/business-assistant/workflow";
 
-import { pinnedWorkflowContext, continuesWorkflowRequest, workflowRequestHistory, type WorkflowRequestPin } from "./request-context";
+import { assistantContextKey, pinnedWorkflowContext, continuesWorkflowRequest, workflowRequestHistory, type WorkflowRequestPin } from "./request-context";
 
 function MessageCopy({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -95,6 +96,7 @@ export function BusinessAssistant({
   mode,
   setMode,
   context,
+  selectionLabel,
   panelWidth,
   setPanelWidth,
   requestKey = 0,
@@ -102,6 +104,7 @@ export function BusinessAssistant({
   userName,
   historyOpen,
   onHistoryClose,
+  onHistoryOpen,
   resetRef,
 }: {
   materialDraft: ReturnType<typeof import("./materials").useMaterialDraft>;
@@ -111,6 +114,7 @@ export function BusinessAssistant({
   userName?: string;
   historyOpen: boolean;
   onHistoryClose: () => void;
+  onHistoryOpen: () => void;
   resetRef: React.RefObject<(() => void) | null>;
   sendRef: React.RefObject<(() => void) | null>;
   slug: string;
@@ -127,6 +131,7 @@ export function BusinessAssistant({
   mode: "text" | "audio";
   setMode: React.Dispatch<React.SetStateAction<"text" | "audio">>;
   context: AssistantUIContext;
+  selectionLabel?: string;
   panelWidth: number;
   setPanelWidth: React.Dispatch<React.SetStateAction<number>>;
 }) {
@@ -134,6 +139,8 @@ export function BusinessAssistant({
   const materialProps = { items: materials, onFiles: addFiles, onLink: addLink, onRemove: removeMaterial };
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const wasVisible = useRef(false);
   const [workOpen, setWorkOpen] = useState(false);
   const workBack = useRef<HTMLButtonElement>(null);
   const workTrigger = useRef<HTMLButtonElement>(null);
@@ -150,12 +157,14 @@ export function BusinessAssistant({
   const [error, setError] = useState("");
   const [outgoing, setOutgoing] = useState<string | null>(null);
   const [mobile, setMobile] = useState(false);
-  const inline = mobile && context.page === "home";
+  const inline = context.page === "home";
+  const Greeting = inline ? "h1" : "h3";
   const visible = open || inline;
   const [expanded, setExpanded] = useState(false);
   const [requestContext, setRequestContext] =
     useState<AssistantUIContext | null>(null);
   const lastContext = useRef("");
+  const [requestLabel, setRequestLabel] = useState<string>();
   const previousMaterials = useRef<{ context: string; tokens: string[]; links: string[] } | null>(null);
   const workflowRequest = useRef<WorkflowRequestPin | null>(null);
   const requestGeneration = useRef(0);
@@ -204,6 +213,7 @@ export function BusinessAssistant({
     // Keep an open review above the assistant when switching to its mobile modal.
     const childModals = Array.from(el.querySelectorAll<HTMLDialogElement>("dialog:modal"));
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (visible && !inline && !wasVisible.current) returnFocus.current = focused;
     childModals.forEach(child => child.close());
     if (el.open) el.close();
     if (visible) {
@@ -213,17 +223,21 @@ export function BusinessAssistant({
       if (inline && !childModals.length && document.activeElement instanceof HTMLElement && el.contains(document.activeElement)) document.activeElement.blur();
       childModals.forEach(child => child.showModal());
       if (childModals.some(child => focused && child.contains(focused))) focused?.focus();
+      else if (!inline && !wasVisible.current) composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+    } else if (wasVisible.current && returnFocus.current?.isConnected) {
+      returnFocus.current.focus();
     }
+    wasVisible.current = visible;
   }, [visible, mobile, inline]);
   useEffect(() => {
-    if (!visible || !mobile) return;
+    if (!visible || !mobile || inline) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {document.body.style.overflow = previous;};
-  }, [visible,mobile]);
+  }, [visible, mobile, inline]);
   useEffect(() => {
     if (visible)
-      end.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      end.current?.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   }, [history, result, visible, outgoing, busy]);
   useEffect(() => {
     if (mobile && workOpen && result?.preview) workBack.current?.focus();
@@ -267,12 +281,13 @@ export function BusinessAssistant({
     const input = text.trim();
     setText("");
     setOutgoing(input || null);
-    const contextKey = context.page === "workflows" ? `${slug}:workflows` : `${slug}:${JSON.stringify(context)}`;
+    const contextKey = assistantContextKey(slug, context);
     const generation = requestGeneration.current;
     const pin = workflowRequest.current?.scope === contextKey ? workflowRequest.current : null;
     const effectiveContext = pinnedWorkflowContext(context, pin);
     const materialContext = `${slug}:${JSON.stringify(effectiveContext)}`;
     setRequestContext(effectiveContext);
+    if (!pin) setRequestLabel(selectionLabel);
     if (effectiveContext.page === "workflows" && effectiveContext.workflowSelection) workflowRequest.current = pin ?? { scope: contextKey, context: effectiveContext, history: [] };
     try {
       const tokens: string[] = [];
@@ -414,18 +429,6 @@ export function BusinessAssistant({
           onOpen={() => { onOpen(); if (inline) composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(); }} onSettings={() => setAppearanceOpen(true)} />,
         launcherTarget,
       )}
-      {!visible && (
-        <section
-          className="assistant-mobile-dock"
-          aria-label={agentName}
-          style={{ bottom: viewport.bottom }}
-        >
-          <AssistantComposer {...materialProps} id="assistant-dock-input" value={text} busy={Boolean(busy)} onOpen={onOpen}
-            onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
-            onSubmit={() => { onOpen(); setMode("text"); void analyze(); }}
-            onVoice={() => { primeVoiceCapture(); setMode("audio"); onOpen(); }} />
-        </section>
-      )}
       <dialog
         ref={dialog}
         className={`business-assistant assistant-workspace-panel ${inline ? "assistant-inline-home" : ""} ${context.page === "home" ? "is-home" : ""} ${expanded ? "is-expanded" : ""} ${mode === "audio" ? "is-voice" : ""} ${result?.preview ? "has-work-detail" : ""} ${workOpen && result?.preview ? "is-work-open" : ""}`}
@@ -440,23 +443,24 @@ export function BusinessAssistant({
         aria-label={inline ? agentName : undefined}
         aria-labelledby={inline ? undefined : "business-assistant-title"}
         onCancel={(event) => {
+          event.preventDefault();
           if (mobile && workOpen && result?.preview) { event.preventDefault(); returnToConversation(); }
-          else onClose();
+          else if (!inline) onClose();
         }}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && !mobile) onClose();
+          if (event.key === "Escape" && !mobile && !inline && event.target instanceof Element && event.target.closest("dialog") === dialog.current) onClose();
         }}
       >
-        <header className="assistant-heading" hidden={inline}>
-          <PersonalAssistantAvatar avatar={appearance.avatar} />
+        <header className="assistant-heading" hidden={inline && mobile}>
+          {!inline && <PersonalAssistantAvatar avatar={appearance.avatar} />}
           <div>
-            <h2 id="business-assistant-title">{appearance.name}</h2>
+            <h2 id="business-assistant-title">{appearance.name} <span className="assistant-identity-role">— Asistenti yt</span></h2>
             <p>
-              {businessName} · {contextLabel(context)}
-              {context.entityId ? " · Elementi i zgjedhur" : ""}
+              Për biznesin {businessName}
             </p>
           </div>
-          <button type="button" className="personal-assistant-settings" onClick={() => setAppearanceOpen(true)} aria-label="Personalizo asistentin"><Icon name="settings" size={17} /></button>
+          {!mobile && <button type="button" className="personal-assistant-settings" onClick={onHistoryOpen} aria-label="Historiku i asistentit"><Icon name="history" size={17} /></button>}
+          {!inline && <button type="button" className="personal-assistant-settings" onClick={() => setAppearanceOpen(true)} aria-label="Personalizo asistentin"><Icon name="settings" size={17} /></button>}
           {mobile && (
             <button
               type="button"
@@ -467,16 +471,16 @@ export function BusinessAssistant({
               {expanded ? "↙" : "↗"}
             </button>
           )}
-          <button
+          {!inline && <button
             type="button"
             className="assistant-close"
             onClick={onClose}
             aria-label="Mbyll bisedën"
           >
             ×
-          </button>
+          </button>}
         </header>
-        {!mobile && (
+        {!mobile && !inline && (
           <label className="assistant-panel-resize">
             Gjerësia e panelit
             <input
@@ -490,15 +494,22 @@ export function BusinessAssistant({
           </label>
         )}
         <div className={`assistant-body ${!history.length && !result && !error ? "is-empty" : ""}`} aria-busy={Boolean(busy)}>
+          <div className="assistant-context-status" aria-label="Konteksti i kërkesës" role="status">
+            <span>{businessName} · {contextLabel(context)}{selectionLabel ? ` · ${selectionLabel}` : context.entityId ? ` · Elementi ${context.entityId.slice(0, 8)}` : ""}</span>
+            {!!history.length && lastContext.current !== assistantContextKey(slug, context) && <p>Faqja ose zgjedhja ndryshoi. Mesazhi tjetër përdor kontekstin e mësipërm, pa historikun e mëparshëm. Mesazhet e mëparshme mbeten të dukshme këtu.</p>}
+            {workflowRequest.current?.scope === assistantContextKey(slug, context) && <p>Kërkesa në vazhdim mbetet te rrjedha/nyja fillestare{requestLabel ? `: ${requestLabel}` : ""}. Për një zgjedhje tjetër, nis bisedë të re.</p>}
+            {context.workflowSelection?.dirty && <p>Ka ndryshime të paruajtura në editor. Ruaji ose anuloji atje përpara se të aplikosh një ndryshim me {appearance.name}.</p>}
+            {(result?.preview || result?.actionPlan) && requestContext && assistantContextKey(slug, requestContext) !== assistantContextKey(slug, context) && <p>Propozimi i hapur i përket: {contextLabel(requestContext)}{requestLabel ? ` · ${requestLabel}` : ""}. Navigimi nuk e ndryshon objektivin e tij.</p>}
+          </div>
           {mode === "text" && !history.length && !result && (
             <div className="assistant-welcome">
-              {inline && <><span className="mobile-assistant-emblem"><Icon name="spark" size={32} /></span><p className="mobile-assistant-eyebrow">HAPËSIRA JOTE E PUNËS</p></>}
-              <h3>{inline ? `Përshëndetje${userName?.trim() ? `, ${userName.trim().split(/\s+/)[0]}` : ""}.` : "Çfarë dëshiron të ndryshosh?"}{inline && <><br/><span>Çfarë bëjmë sot?</span></>}</h3>
+              {inline && <p className="mobile-assistant-eyebrow">{appearance.name} — Asistenti yt</p>}
+              <Greeting>{inline ? `Përshëndetje${userName?.trim() ? `, ${userName.trim().split(/\s+/)[0]}` : ""}.` : "Çfarë dëshiron të ndryshosh?"}{inline && <><br/><span>Çfarë bëjmë sot?</span></>}</Greeting>
               <p>
                 {inline ? "Jam këtu për të të ndihmuar me biznesin. Pyet ose kërko një ndryshim." : "Menaxho produktet, shërbimet, njohuritë dhe takimet me një kërkesë."}
               </p>
               <div className="assistant-examples">
-                {assistantSuggestions(context, modules, external).map(
+                {businessGoals(context, modules, external).map(
                   ({ text: example, label }) => (
                     <button
                       type="button"
@@ -506,6 +517,7 @@ export function BusinessAssistant({
                       onClick={() => {
                         setText(example);
                         setMode("text");
+                        composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
                       }}
                       disabled={Boolean(busy)}
                     >
@@ -626,7 +638,7 @@ export function BusinessAssistant({
             </button>
           </div>
           {mode === "text" ? (
-            <AssistantComposer {...materialProps} id="business-assistant-input" value={text} busy={Boolean(busy)} multiline
+            <AssistantComposer {...materialProps} id="business-assistant-input" label={`Shkruaji ${appearance.name}`} value={text} busy={Boolean(busy)} multiline
               onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
               onSubmit={() => void analyze()} onVoice={() => { primeVoiceCapture(); setMode("audio"); }} />
           ) : (
@@ -719,7 +731,7 @@ export function BusinessAssistant({
         onSelect={thread => {
           if (locked.current) return;
           reset(); archive.selectThread(thread);
-          lastContext.current = context.page === "workflows" ? `${slug}:workflows` : `${slug}:${JSON.stringify(context)}`;
+          lastContext.current = assistantContextKey(slug, context);
           onHistoryClose(); onOpen();
         }} onClear={() => { if (!locked.current) { reset(); archive.clearHistory(); } }} />
     </>

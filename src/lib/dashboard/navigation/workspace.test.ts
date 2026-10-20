@@ -13,7 +13,7 @@ it("retains a reachable destination and search result for every existing module"
     expect(destinations.some(destination => destination.path === item.path), item.id).toBe(true);
     expect(navigation.search.some(destination => destination.path === item.path && destination.label === item.label), item.id).toBe(true);
   }
-  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Produkte", "Shërbime", "Porosi", "Leads", "Klientë", "Agjenti im", "Aktiviteti", "Integrimet", "Cilësimet"]);
+  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Produkte", "Shërbime", "Porosi", "Leads", "Klientë", "Agjenti i klientëve", "Aktiviteti", "Integrimet", "Cilësimet"]);
 });
 
 it("groups workflow and its deep links under the agent while keeping the original URL", () => {

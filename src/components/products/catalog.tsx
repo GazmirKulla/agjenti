@@ -44,6 +44,7 @@ export function ProductCatalog({
     searchQuery: query,
     filters: { status: filter },
     selectedEntityIds: selected,
+    selectionLabel: selected.length === 1 ? products.find(product => product.id === selected[0])?.name : selected.length ? `${selected.length} produkte të zgjedhura` : undefined,
   });
   const [pending, start] = useTransition();
   const [notice, setNotice] = useState("");

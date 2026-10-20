@@ -177,8 +177,8 @@ export default async function AgentsPage({
   return (
     <>
       <PageHeading
-        title={`Agjenti AI i ${access.business.name}`}
-        description="Konfiguro mënyrën si Agjenti AI komunikon me klientët."
+        title="Agjenti i klientëve"
+        description={`Instagram / WhatsApp · Konfiguro mënyrën si agjenti komunikon me klientët e ${access.business.name}. Asistenti yt të ndihmon me konfigurimin; bisedat me klientët mbeten veç.`}
       >
         <Link href={`/b/${slug}/agents/memory`} className="soft-link">
           Memoria e Agjentit →
@@ -224,7 +224,7 @@ export default async function AgentsPage({
             <div className="agent-illustration">
               <Icon name="agents" size={66} />
             </div>
-            <h2 className="text-lg mt-5">Një asistent për biznesin tënd</h2>
+            <h2 className="text-lg mt-5">Agjenti që u përgjigjet klientëve</h2>
             <p className="muted-copy">
               Përcakto tonin, rregullat dhe mënyrën e komunikimit në udhëzimet e
               agjentit. Përgjigjet mbështeten te produktet dhe njohuritë e
