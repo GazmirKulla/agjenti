@@ -20,6 +20,23 @@ beforeEach(() => {
   m.orderPrepare.mockResolvedValue({message:"Kontrollo",token:"sealed"});
   m.prepare.mockResolvedValue({message:"Kontrollo",token:"sealed"});
 });
+it("reuses a recovered graph only as descriptive input for a fresh proposal", async () => {
+  const graph = starterVisualGraph(); graph.name = "Draft i rikthyer";
+  m.response.mockResolvedValueOnce(respond("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Propozim i ri"}]' }]));
+  await planRequest(access, "Ndrysho emrin", [], { page: "home", entryPoint: "home" }, undefined, [], "Migo", {
+    version: 1, request: "Propozim i vjetër", visualDraft: { graph, revision: 7 },
+  }, { first: "deferred" });
+  expect(JSON.parse(m.response.mock.calls[0][0].input).data.workflow.workspace.graph.name).toBe("Draft i rikthyer");
+  expect(JSON.parse(m.response.mock.calls[0][0].input).data.recoveredPlan.planningPreferences).toEqual({ first: "deferred" });
+  expect(m.prepare.mock.calls[0][3]).toEqual(graph);
+});
+it("a recovered draft cannot skip the existing save-before-publication boundary", async () => {
+  m.response.mockResolvedValueOnce(respond("workflow_publish"));
+  await expect(planRequest(access, "Publiko", [], { page: "home", entryPoint: "home" }, undefined, [], "Migo", {
+    version: 1, request: "Draft", visualDraft: { graph: starterVisualGraph(), revision: 7 },
+  })).rejects.toThrow("Ruaj propozimin si draft");
+  expect(m.prepare).not.toHaveBeenCalled();
+});
 it("loads a workflow on demand from home and ties the proposal to the version the model saw", async () => {
   m.response.mockResolvedValueOnce(respond("workflow_load")).mockResolvedValueOnce(respond("workflow_draft",[{field:"operations",value:'[{"op":"rename","name":"Shitjet"}]'}]));
   await planRequest(access,"Ndrysho emrin e rrjedhës në Shitjet",[],{page:"home",entryPoint:"home"});

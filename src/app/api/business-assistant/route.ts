@@ -5,7 +5,8 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { transcribeAudio } from "@/lib/business-intelligence/transcription";
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
-import { executeTicket, planRequest } from "@/lib/business-assistant/service";
+import { executeTicket, openTicket, planRequest } from "@/lib/business-assistant/service";
+import { persistedTurn, PersistenceError, reassessPlan } from "@/lib/business-assistant/persistence";
 import { AssistantError } from "@/lib/business-assistant/model";
 import { readPersonalAssistantName } from "@/lib/business-assistant/identity";
 import { revalidatePath } from "next/cache";
@@ -74,11 +75,22 @@ export async function POST(request: Request) {
     if (body.mode === "confirm") {
       if (typeof body.token !== "string" || body.token.length > 300000)
         throw new AssistantError("Konfirmim i pavlefshëm.");
-      const result = await executeTicket(access, body.token);
+      const execute = async () => {
+        const ticket = openTicket(body.token, access);
+        const result = await executeTicket(access, body.token);
+        const tables: Record<string, string> = { product: "products", service: "booking_services", knowledge: "knowledge_entries", agent: "ai_agents", profile: "businesses", booking: "bookings", workflow: "assistant_visual_requests", orderflow: "assistant_workflow_changes", linear: "products" };
+        return { ...result, saved: true, outcome: { status: "backend_acknowledged", action: ticket.action,
+          reference: { table: tables[ticket.action.split("_")[0]],
+            ...(ticket.action === "booking_create" ? { request_key: `assistant:${ticket.id}` } : { id: ticket.id }) } } };
+      };
+      // Keep legacy callers compatible; the Migo UI always uses durable requests.
+      const result = body.conversationId
+        ? await persistedTurn(access, body, { content: "Konfirmova ndryshimin e shqyrtuar.", mode: "confirm", fingerprintData: body.token }, execute)
+        : await executeTicket(access, body.token);
       let warning: string | undefined;
       try { revalidatePath(`/b/${slug}`, "layout"); }
       catch { warning = "Ndryshimi u ruajt. Rifresko faqen për të përditësuar pamjen."; }
-      return json({ ...result, saved: true, ...(warning ? { warning } : {}) });
+      return json({ ...result, ...(!body.conversationId ? { saved: true } : {}), ...(warning ? { warning } : {}) });
     }
     if (
       body.mode !== "plan" ||
@@ -107,6 +119,29 @@ export async function POST(request: Request) {
     if (body.links !== undefined && !Array.isArray(body.links)) throw new AssistantError("Linke të pavlefshme.");
     const links = [...new Set([...(body.links ?? []), ...linksInText(body.text)])];
     const materials = await resolveMaterials(body.attachments ?? [], links, user.id, membership.business.id);
+    if (body.conversationId) return json(await persistedTurn(access, body, {
+      content: body.text.trim(), context, mode: "plan",
+      fingerprintData: [body.attachments ?? [], links],
+    }, async (history, prior, preferences) => {
+      // Stored context is historical data. Selection/revision conflicts are never silently retargeted.
+      let effectiveContext = context;
+      if (prior) {
+        const checked = await reassessPlan(access, { revision: 0, snapshot: prior, preferences: {} });
+        if (!checked.recovery.verified) throw new PersistenceError(`${checked.recovery.message} Fillo një bisedë të re për një objektiv tjetër.`, 409);
+        prior = checked.plan!.snapshot;
+        const pages: Record<string, string> = { product: "products", service: "services", knowledge: "knowledge", booking: "bookings", agent: "agents" };
+        const targetContext = prior.target && pages[prior.target.kind]
+          ? parseUIContext({ page: pages[prior.target.kind], entityType: prior.target.kind, entityId: prior.target.id, entryPoint: "contextual" }) : undefined;
+        const retainedContext = targetContext ?? prior.context;
+        const priorIds = retainedContext?.selectedEntityIds?.length ? retainedContext.selectedEntityIds : retainedContext?.entityId ? [retainedContext.entityId] : [];
+        const nextIds = context?.selectedEntityIds?.length ? context.selectedEntityIds : context?.entityId ? [context.entityId] : [];
+        if (priorIds.length && nextIds.length && JSON.stringify([...priorIds].sort()) !== JSON.stringify([...nextIds].sort()))
+          throw new PersistenceError("Ky plan i përket një elementi tjetër. Fillo një bisedë të re për zgjedhjen e re.", 409);
+        if (priorIds.length && !nextIds.length) effectiveContext = retainedContext;
+      }
+      return { ...await planRequest(access, body.text.trim(), history, effectiveContext, body.pendingToken, materials, assistantName, prior, preferences),
+        recoveryContext: effectiveContext };
+    }));
     if (assistantName !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials, assistantName));
     if (materials.length) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials));
     if (body.pendingToken !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken));
@@ -116,11 +151,11 @@ export async function POST(request: Request) {
       {
         ...(error instanceof AssistantError && error.publication ? { publication: error.publication } : {}),
         error:
-          error instanceof AssistantError
+          error instanceof AssistantError || error instanceof PersistenceError
             ? error.message
             : "Veprimi nuk përfundoi. Provo përsëri pas pak.",
       },
-      error instanceof AssistantError ? 400 : 500,
+      error instanceof PersistenceError ? error.status : error instanceof AssistantError ? 400 : 500,
     );
   }
 }

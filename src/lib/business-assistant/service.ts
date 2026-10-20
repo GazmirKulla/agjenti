@@ -1,5 +1,6 @@
 import { requireActionAccess } from "@/lib/actions/access";
 import { defaultPersonalAssistantName, readPersonalAssistantName } from "./identity";
+import { modelPlanContext, type PlanningPreferences, type RecoverablePlan } from "./persistence-model";
 import { sealImportSource } from "@/lib/products/import-service";
 import { importFields, type ImportField, type ImportSource } from "@/lib/products/import-model";
 import type { AssistantMaterial } from "./materials";
@@ -210,6 +211,8 @@ export async function planRequest(
   pendingToken?: string,
   materials: AssistantMaterial[] = [],
   assistantName?: string,
+  recoveredPlan?: RecoverablePlan,
+  planningPreferences: PlanningPreferences = {},
 ): Promise<PlanResult> {
   if (!process.env.OPENAI_API_KEY)
     throw new AssistantError("Asistenti AI nuk është konfiguruar ende.");
@@ -222,6 +225,11 @@ export async function planRequest(
     })) : [];
   const selected = await loadSelectedContext(access, validatedContext);
   const context: Record<string, unknown> = {};
+  // Recovery is descriptive context, never an approval or a sealed ticket.
+  if (recoveredPlan) {
+    try { context.recoveredPlan = modelPlanContext(recoveredPlan, planningPreferences); }
+    catch (error) { throw new AssistantError((error as Error).message); }
+  }
   context.capabilityDefinitions = Object.values(capabilityRegistry).map(({ key, description }) => ({ key, description }));
   try {
     const capabilityAssessments = await assessBusinessCapabilities(access.businessId, { userId: access.userId });
@@ -301,19 +309,30 @@ export async function planRequest(
   if (pendingOrderFlow) {
     context.orderflows = await loadOrderFlows(access, pendingOrderFlow.before?.id as string | undefined);
     context.pendingOrderflow = { action: pendingOrderFlow.action, id: pendingOrderFlow.before?.id ?? null, ...pendingOrderFlow.values };
+  } else if (recoveredPlan?.orderDraft) {
+    const draft = recoveredPlan.orderDraft;
+    context.orderflows = await loadOrderFlows(access, draft.source?.id);
+    context.pendingOrderflow = { action: draft.action, id: draft.source?.id ?? null,
+      name: draft.name, steps: draft.steps, products: draft.products, scope: draft.scope };
   }
   if (validatedContext?.page === "workflows" && access.modules.includes("workflows")) context.workflow = await loadAssistantWorkflow(access);
   if (pendingWorkflow) {
     const card = await loadAssistantWorkflow(access);
     if (card.workspace.revision !== pendingWorkflow.before?.revision) throw new AssistantError("Rrjedha ndryshoi. Përgatite propozimin përsëri.");
     context.workflow = { ...card, workspace: { ...card.workspace, graph: pendingWorkflow.values.graph }, pendingDraft: true };
+  } else if (recoveredPlan?.visualDraft) {
+    const card = await loadAssistantWorkflow(access);
+    if (card.workspace.revision !== recoveredPlan.visualDraft.revision) throw new AssistantError("Rrjedha ndryshoi. Rishqyrto draftin në editor.");
+    context.workflow = { ...card, workspace: { ...card.workspace, graph: recoveredPlan.visualDraft.graph }, pendingDraft: true };
   }
-  if (sharedWorkflowEnabled(access.businessId) && access.modules.includes("workflows") && access.modules.includes("products") && (pendingLinear || ["products","workflows"].includes(validatedContext?.page??""))) {
-    context.linear=await loadLinearContext(access,pendingLinear?.id??(validatedContext?.entityType==="product"?validatedContext.entityId:null));
+  if (sharedWorkflowEnabled(access.businessId) && access.modules.includes("workflows") && access.modules.includes("products") && (pendingLinear || recoveredPlan?.linearDraft || ["products","workflows"].includes(validatedContext?.page??""))) {
+    context.linear=await loadLinearContext(access,pendingLinear?.id??recoveredPlan?.linearDraft?.productId??(validatedContext?.entityType==="product"?validatedContext.entityId:null));
     if(pendingLinear) {
       const card=context.linear as LinearCard;
       if((card.draft?.revision??0)!==pendingLinear.before?.revision) throw new AssistantError("Drafti ndryshoi. Rifillo propozimin.");
       context.linear={...card,pendingDefinition:pendingLinear.values.definition};
+    } else if (recoveredPlan?.linearDraft) {
+      context.linear = { ...context.linear as LinearCard, pendingDefinition: recoveredPlan.linearDraft.definition };
     }
   }
   const timezone = access.modules.includes("bookings")
@@ -442,7 +461,7 @@ export async function planRequest(
       if (proposal.action==="linear_load" || !context.linear || (proposal.id && (context.linear as LinearCard).productId!==proposal.id)) {
         context.linear=await loadLinearContext(access,proposal.id);continue;
       }
-      if(pendingLinear && proposal.action==="linear_publish") throw new AssistantError("Ruaj propozimin si draft para publikimit.");
+      if((pendingLinear || recoveredPlan?.linearDraft) && proposal.action==="linear_publish") throw new AssistantError("Ruaj propozimin si draft para publikimit.");
       return prepareLinear(access,proposal,context.linear as LinearCard);
     }
     if (proposal.action.startsWith("workflow_")) {
@@ -454,8 +473,8 @@ export async function planRequest(
         context.workflow = await loadAssistantWorkflow(access);
         continue;
       }
-      if (pendingWorkflow && proposal.action === "workflow_publish") throw new AssistantError("Ruaj propozimin si draft përpara publikimit.");
-      return prepareWorkflow(access, proposal, (context.workflow as WorkflowCard | undefined)?.workspace.revision, pendingWorkflow?.values.graph);
+      if ((pendingWorkflow || recoveredPlan?.visualDraft) && proposal.action === "workflow_publish") throw new AssistantError("Ruaj propozimin si draft përpara publikimit.");
+      return prepareWorkflow(access, proposal, (context.workflow as WorkflowCard | undefined)?.workspace.revision, pendingWorkflow?.values.graph ?? recoveredPlan?.visualDraft?.graph);
     }
     if (proposal.action === "search") {
       context.searchResult = await searchContext(access, proposal);

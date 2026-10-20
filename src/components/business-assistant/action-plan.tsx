@@ -5,6 +5,7 @@ import "./action-plan.css";
 import { CapabilityActivationDialog } from "./catalog-activation";
 import type { CapabilityAssessment } from "@/lib/capabilities/registry";
 import { isUnsupportedStep, planStepLabel, type ActivationFeedback } from "./presentation";
+import type { PlanningPreferences } from "@/lib/business-assistant/persistence-model";
 
 type Decision = "approved" | "rejected";
 export function ApprovalCard({ step, decision, busy = false, feedback, onDecision, onRequest, onConfigure, onNext }: {
@@ -59,12 +60,25 @@ export function ApprovalCard({ step, decision, busy = false, feedback, onDecisio
   </article>;
 }
 
-/** Transient presentation only: local selection is never a server approval ticket. */
-export function ActionPlanReview({ plan, busy, onRequest, slug, businessName, onAssessment }: {
+/** Planning preferences may be durable; they are never execution authorization. */
+export function ActionPlanReview({ plan, busy, onRequest, slug, businessName, onAssessment, initialPreferences, onSavePreferences, recoveryBlocked = false }: {
   plan: ActionPlan; busy: boolean; onRequest: (message: string) => void;
   slug?: string; businessName?: string; onAssessment?: (assessment: CapabilityAssessment) => void;
+  initialPreferences?: PlanningPreferences; onSavePreferences?: (value: PlanningPreferences) => Promise<void>; recoveryBlocked?: boolean;
 }) {
-  const [decisions, setDecisions] = useState<Record<string, Decision | undefined>>({});
+  const [decisions, setDecisions] = useState<Record<string, Decision | undefined>>(() => Object.fromEntries(Object.entries(initialPreferences ?? {}).map(([key, value]) => [key, value === "included" ? "approved" : "rejected"])));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  async function saveDecisions(next: Record<string, Decision | undefined>) {
+    if (saving) return;
+    setSaving(true); setSaveError("");
+    try {
+      if (onSavePreferences) await onSavePreferences(Object.fromEntries(Object.entries(next).filter(([, value]) => value).map(([key, value]) => [key, value === "approved" ? "included" : "deferred"])));
+      setDecisions(next);
+    } catch { setSaveError("Zgjedhjet nuk u ruajtën. Rifresko planin; një dritare tjetër mund ta ketë ndryshuar."); }
+    finally { setSaving(false); }
+  }
+  busy = busy || saving;
   const [selectedId, setSelectedId] = useState<string>();
   const [configuring, setConfiguring] = useState<"product.search" | "knowledge.answer" | null>(null);
   // Last server outcomes for display; never keep approval tokens here.
@@ -77,7 +91,11 @@ export function ActionPlanReview({ plan, busy, onRequest, slug, businessName, on
   const next = focused && plan.steps.find(step => step.id !== focused.id && !decisions[step.id]);
   return <section ref={section} tabIndex={-1} className="action-plan" aria-label="Plani i veprimeve">
     <header className="action-plan-heading"><h3>Ta përgatisim bashkë</h3>{businessName && <p>Për biznesin <strong>{businessName}</strong></p>}</header>
-    <p>Zgjedhim hapat, pastaj konfigurojmë çfarë mungon. “Përfshi në plan” nuk ruan, aktivizon apo publikon asgjë.</p>
+    <p>Zgjedhim hapat, pastaj konfigurojmë çfarë mungon. {onSavePreferences
+      ? "“Përfshi në plan” ruan vetëm zgjedhjen tënde; nuk ndryshon të dhëna biznesi, aktivizon apo publikon asgjë."
+      : "“Përfshi në plan” nuk ruan, aktivizon apo publikon asgjë."}</p>
+    {saveError && <p role="alert">{saveError}</p>}
+    {recoveryBlocked && <p role="alert">Gatishmëria e ruajtur është e vjetër. Kërko rivlerësim para konfigurimit.</p>}
     {unsupported.length > 0 && <p className="action-plan-blocker"><strong>Nuk mbështetet</strong>: {unsupported.map(step => step.title).join(", ")}. Mund të vazhdosh me hapat e tjerë.</p>}
     {plan.questions.length > 0 && <div><strong>Para se të vazhdojmë</strong><ul>{plan.questions.map((q, index) => <li key={index}>{q}</li>)}</ul></div>}
     {configuring && slug && onAssessment ? <CapabilityActivationDialog key={`${slug}:${configuring}`} capability={configuring} slug={slug} businessName={businessName ?? slug}
@@ -95,21 +113,21 @@ export function ActionPlanReview({ plan, busy, onRequest, slug, businessName, on
         </ol>
         </details>}
         {focused ? <ApprovalCard key={focused.id} step={focused} decision={decisions[focused.id]} feedback={outcomes[focused.requiredCapability ?? ""]} busy={busy}
-          onConfigure={slug && onAssessment && focused.supported && (focused.requiredCapability === "product.search" || focused.requiredCapability === "knowledge.answer") &&
+          onConfigure={!recoveryBlocked && slug && onAssessment && focused.supported && (focused.requiredCapability === "product.search" || focused.requiredCapability === "knowledge.answer") &&
             (["NEEDS_CONFIGURATION", "DISABLED", "BLOCKED"].includes(focused.readiness) || outcomes[focused.requiredCapability]?.unverified)
             ? () => setConfiguring(focused.requiredCapability as "product.search" | "knowledge.answer") : undefined}
           onNext={next ? () => { setSelectedId(next.id); section.current?.focus(); } : undefined}
-          onDecision={decision => setDecisions(current => ({ ...current, [focused.id]: decision }))}
+          onDecision={decision => { void saveDecisions({ ...decisions, [focused.id]: decision }); }}
           onRequest={message => onRequest(`Përditëso vetëm planin për këtë kërkesë, pa ruajtur ose aktivizuar asgjë: ${plan.request}\nHapi: ${focused.requestedBehavior}\nNdryshimi që kërkoj: ${message}`)} /> : <p>Nuk ka ende hapa. Sqaro rezultatin që dëshiron në chat.</p>}
         <p role="status" className="action-plan-note">{included} të përfshirë · {omitted} të lënë jashtë · Asgjë e publikuar</p>
         <details><summary>Rishiko planin</summary>
           {plan.assumptions.length > 0 && <><strong>Supozimet</strong><ul>{plan.assumptions.map((a, index) => <li key={index}>{a}</li>)}</ul></>}
           <div className="action-plan-actions">
-            <button type="button" disabled={busy} onClick={() => setDecisions(Object.fromEntries(plan.steps.map(step => [step.id, "rejected"])))}>Lëre planin për më vonë</button>
+            <button type="button" disabled={busy} onClick={() => void saveDecisions(Object.fromEntries(plan.steps.map(step => [step.id, "rejected"])))}>Lëre planin për më vonë</button>
             <button type="button" disabled={busy} onClick={() => onRequest(`Rivlerëso vetëm planin dhe gatishmërinë aktuale, pa ruajtur ose aktivizuar asgjë: ${plan.request}`)}>Kërko rivlerësim në chat</button>
           </div>
         </details>
       </>}
-    <p className="action-plan-note">Zgjedhjet nuk ruhen pas ringarkimit ose një plani të ri. Publikimi mbetet veprim më vete te Workflow Designer.</p>
+    <p className="action-plan-note">{onSavePreferences ? "Zgjedhjet ruhen si preferenca planifikimi, jo si autorizime. " : "Zgjedhjet nuk ruhen pas ringarkimit ose një plani të ri. "}Publikimi mbetet veprim më vete te Workflow Designer.</p>
   </section>;
 }

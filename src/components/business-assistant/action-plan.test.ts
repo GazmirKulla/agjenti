@@ -37,6 +37,15 @@ it("states the non-publishing and transient contract and escapes model prose", (
   expect(html).toContain("nuk ruan, aktivizon apo publikon"); expect(html).toContain("Zgjedhjet nuk ruhen");
   expect(html).not.toContain("<script>"); expect(html).toContain("&lt;script&gt;");
 });
+it("recovered preferences are displayed as planning only, never execution or publication approval", () => {
+  const html = renderToStaticMarkup(h(ActionPlanReview, { plan: {
+    id: "saved-plan", request: "Test", assessedAt: "2026-01-01", steps: [step], questions: [], assumptions: [],
+  }, busy: false, onRequest: vi.fn(), initialPreferences: { [step.id]: "included" }, onSavePreferences: vi.fn() }));
+  expect(html).toContain("ruan vetëm zgjedhjen tënde");
+  expect(html).toContain("1 të përfshirë");
+  expect(html).toContain("Asgjë e publikuar");
+  expect(html).not.toContain("Zgjedhjet nuk ruhen");
+});
 it("offers a configuration check only for the selected supported slice, never an unsupported capability", () => {
   const render = (requiredCapability: string, supported: boolean) => renderToStaticMarkup(h(ActionPlanReview, { plan: {
     id: "plan", request: "Test", assessedAt: "2026-01-01", steps: [{ ...step, requiredCapability, supported, readiness: "NEEDS_CONFIGURATION" }], questions: [], assumptions: [],

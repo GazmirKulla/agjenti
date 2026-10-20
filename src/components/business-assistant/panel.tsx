@@ -4,6 +4,7 @@ import "./mobile.css";
 import "./one-migo.css";
 import { businessGoals } from "./presentation";
 import { AssistantHistory, useAssistantHistory } from "./history";
+import { hasRecoverableWork, type ConversationView } from "@/lib/business-assistant/persistence-model";
 import { AssistantAppearanceDialog, PersonalAssistantAvatar, PersonalAssistantWidget } from "./personal-assistant";
 import type { AssistantAppearance } from "./appearance";
 import { createPortal } from "react-dom";
@@ -58,6 +59,8 @@ function MessageCopy({ text }: { text: string }) {
   );
 }
 type Result = {
+  persistence?: ConversationView;
+  recovered?: boolean;
   actionPlan?: ActionPlan;
   publication?: import("@/lib/workflows/visual/publication-types").PublicationReadiness;
   receipt?: import("@/lib/workflows/visual/publication-types").PublicationReceipt;
@@ -154,6 +157,8 @@ export function BusinessAssistant({
   const archive = useAssistantHistory(userId, slug);
   const { history, setHistory } = archive;
   const [result, setResult] = useState<Result | null>(null);
+  const [recovered, setRecovered] = useState(false);
+  const sendAttempt = useRef<{ key: string; id: string } | null>(null);
   const [error, setError] = useState("");
   const [outgoing, setOutgoing] = useState<string | null>(null);
   const [mobile, setMobile] = useState(false);
@@ -168,6 +173,21 @@ export function BusinessAssistant({
   const previousMaterials = useRef<{ context: string; tokens: string[]; links: string[] } | null>(null);
   const workflowRequest = useRef<WorkflowRequestPin | null>(null);
   const requestGeneration = useRef(0);
+  const recoveredView = useRef(archive.view);
+  recoveredView.current = archive.view;
+  useEffect(() => {
+    const view = recoveredView.current;
+    const snapshot = view?.plan?.snapshot;
+    if (view?.messages.some(message => message.request_id === sendAttempt.current?.id && message.role === "assistant"))
+      sendAttempt.current = null;
+    requestGeneration.current++;
+    workflowRequest.current = null;
+    previousMaterials.current = null;
+    lastContext.current = snapshot?.context ? assistantContextKey(slug, snapshot.context) : "";
+    setRequestContext(snapshot?.context ?? null);
+    setResult(snapshot ? { message: snapshot.message, preview: snapshot.preview, actionPlan: snapshot.actionPlan } : null);
+    setRecovered(hasRecoverableWork(snapshot));
+  }, [archive.restoration, slug]);
   useEffect(() => {
     requestGeneration.current++;
     workflowRequest.current = null;
@@ -263,7 +283,7 @@ export function BusinessAssistant({
       `/api/business-assistant?slug=${encodeURIComponent(slug)}`,
       {
         method: "POST",
-        signal: abort.current.signal,
+        signal: AbortSignal.any([abort.current.signal, AbortSignal.timeout(100000)]),
         ...(body instanceof FormData
           ? { body }
           : {
@@ -279,12 +299,14 @@ export function BusinessAssistant({
         workflow: previous.workflow ? { ...previous.workflow, publication: data.publication } : undefined } : { publication: data.publication });
       throw new Error(data.error || "Kërkesa nuk përfundoi.");
     }
+    if (data.persistence) archive.accept(data.persistence, Boolean(data.recovered));
     return data;
   }
   async function analyze(event?: React.FormEvent) {
     event?.preventDefault();
     if (locked.current || (!text.trim() && !materials.length)) return;
     locked.current = true;
+    archive.inFlight.current = true;
     setWorkOpen(false);
     setBusy("plan");
     setSending(true);
@@ -302,6 +324,9 @@ export function BusinessAssistant({
     if (!pin) setRequestLabel(selectionLabel);
     if (effectiveContext.page === "workflows" && effectiveContext.workflowSelection) workflowRequest.current = pin ?? { scope: contextKey, context: effectiveContext, history: [] };
     try {
+      const conversation = await archive.ensureConversation();
+      const attemptKey = JSON.stringify([conversation.id, input, effectiveContext, materials.map(m => m.name)]);
+      if (sendAttempt.current?.key !== attemptKey) sendAttempt.current = { key: attemptKey, id: crypto.randomUUID() };
       const tokens: string[] = [];
       for (const item of materials) {
         if (!item.file) continue;
@@ -319,6 +344,7 @@ export function BusinessAssistant({
       const materialTokens = reuse?.tokens ?? tokens;
       const materialLinks = [...new Set([...(pastedLinks.length ? [] : reuse?.links ?? []), ...materials.flatMap(item => item.url ? [item.url] : []), ...pastedLinks])];
       const data = await request({
+        conversationId: conversation.id, revision: conversation.revision, requestId: sendAttempt.current.id,
         mode: "plan",
         attachments: materialTokens,
         links: materialLinks,
@@ -335,23 +361,27 @@ export function BusinessAssistant({
         history: [...(pin?.history ?? []), { role: "user", content: input }, { role: "assistant", content: data.message || "Kontrollo propozimin." }],
       } : null;
       lastContext.current = contextKey;
-      setHistory((prev) => [
+      if (!data.persistence) setHistory((prev) => [
         ...prev.slice(-78),
         { role: "user", content: input, materials: [...materials.map(({name, preview, url, size}) => ({name, preview, url, size})), ...pastedLinks.filter(url => !materials.some(item => item.url === url)).map(url => ({name: url, url}))] },
         { role: "assistant", content: data.message || "Kontrollo propozimin." },
       ]);
       setResult(data);
+      setRecovered(Boolean(data.recovered));
+      sendAttempt.current = null;
       setText("");
       setMaterials([]);
       setMaterialError("");
     } catch (e) {
       if (generation !== requestGeneration.current) return;
-      setResult(result);
+      setResult(null);
       setError(e instanceof Error ? e.message : "Kërkesa nuk përfundoi.");
       setText((current) => (current.trim() ? current : input));
+      if (archive.view) void archive.selectThread(archive.view.conversation);
     } finally {
-      if (generation === requestGeneration.current) setOutgoing(null);
+      setOutgoing(null);
       locked.current = false;
+      archive.inFlight.current = false;
       setSending(false);
       setBusy(null);
     }
@@ -369,25 +399,33 @@ export function BusinessAssistant({
   async function confirm() {
     if (locked.current || !result?.token) return;
     locked.current = true;
+    archive.inFlight.current = true;
     setBusy("confirm");
     setSending(true);
     setError("");
     try {
-      const data = await request({ mode: "confirm", token: result.token });
+      const conversation = await archive.ensureConversation();
+      const key = `confirm:${conversation.id}:${result.token}`;
+      if (sendAttempt.current?.key !== key) sendAttempt.current = { key, id: crypto.randomUUID() };
+      const data = await request({ mode: "confirm", token: result.token, conversationId: conversation.id, revision: conversation.revision, requestId: sendAttempt.current.id });
+      sendAttempt.current = null;
       workflowRequest.current = null;
       setRequestContext(null);
       setResult(data);
       setWorkOpen(false);
       requestAnimationFrame(() => composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
-      setHistory((prev) => [
+      if (!data.persistence) setHistory((prev) => [
         ...prev,
         { role: "assistant", content: data.message || "Ndryshimi u ruajt." },
       ]);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ruajtja nuk përfundoi.");
+      setResult(previous => previous ? { ...previous, token: undefined } : null);
+      if (archive.view) void archive.selectThread(archive.view.conversation);
     } finally {
       locked.current = false;
+      archive.inFlight.current = false;
       setBusy(null);
       setSending(false);
     }
@@ -471,7 +509,7 @@ export function BusinessAssistant({
               Për biznesin {businessName}
             </p>
           </div>
-          {!mobile && <button type="button" className="personal-assistant-settings" onClick={onHistoryOpen} aria-label="Historiku i asistentit"><Icon name="history" size={17} /></button>}
+          <button type="button" className="personal-assistant-settings" onClick={() => { void archive.refreshThreads(); onHistoryOpen(); }} aria-label="Historiku i asistentit"><Icon name="history" size={17} /></button>
           {!inline && <button type="button" className="personal-assistant-settings" onClick={() => setAppearanceOpen(true)} aria-label="Personalizo asistentin"><Icon name="settings" size={17} /></button>}
           {mobile && (
             <button
@@ -508,11 +546,17 @@ export function BusinessAssistant({
         <div className={`assistant-body ${!history.length && !result && !error ? "is-empty" : ""}`} aria-busy={Boolean(busy)}>
           <div className="assistant-context-status" aria-label="Konteksti i kërkesës" role="status">
             <span>{businessName} · {contextLabel(context)}{selectionLabel ? ` · ${selectionLabel}` : context.entityId ? ` · Elementi ${context.entityId.slice(0, 8)}` : ""}</span>
-            {!!history.length && lastContext.current !== assistantContextKey(slug, context) && <p>Faqja ose zgjedhja ndryshoi. Mesazhi tjetër përdor kontekstin e mësipërm, pa historikun e mëparshëm. Mesazhet e mëparshme mbeten të dukshme këtu.</p>}
+            {!!history.length && lastContext.current !== assistantContextKey(slug, context) && <p>Faqja ose zgjedhja ndryshoi. Migo përdor historikun e autorizuar të kësaj bisede dhe kontekstin e faqes; objektivi i një plani të hapur nuk ndryshon nga navigimi.</p>}
             {workflowRequest.current?.scope === assistantContextKey(slug, context) && <p>Kërkesa në vazhdim mbetet te rrjedha/nyja fillestare{requestLabel ? `: ${requestLabel}` : ""}. Për një zgjedhje tjetër, nis bisedë të re.</p>}
             {context.workflowSelection?.dirty && <p>Ka ndryshime të paruajtura në editor. Ruaji ose anuloji atje përpara se të aplikosh një ndryshim me {appearance.name}.</p>}
             {(result?.preview || result?.actionPlan) && requestContext && assistantContextKey(slug, requestContext) !== assistantContextKey(slug, context) && <p>Propozimi i hapur i përket: {contextLabel(requestContext)}{requestLabel ? ` · ${requestLabel}` : ""}. Navigimi nuk e ndryshon objektivin e tij.</p>}
           </div>
+          {archive.loading && <p role="status">Po ngarkohet biseda…</p>}
+          {archive.warning && <p role="alert">{archive.warning}</p>}
+          {archive.view?.conversation.pending_request && !busy && <p role="status">Ka një kërkesë pa përgjigje të konfirmuar. Mund të jetë në përpunim ose e ndërprerë; asnjë veprim nuk përsëritet automatikisht.</p>}
+          {recovered && <div className="assistant-recovery" role="status"><strong>Plan i rikthyer — jo autorizim për ekzekutim</strong><p>{archive.view?.recovery?.message || "Gatishmëria e mëparshme është historike. Rishqyrto përpara çdo veprimi."}</p>
+            <button type="button" disabled={Boolean(busy)} onClick={() => { setText(`Rishqyrto planin e ruajtur dhe përgatit propozim të ri, pa ekzekutuar ose publikuar: ${archive.view?.plan?.snapshot.request ?? ""}`); composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(); }}>Rishqyrto me Migo</button></div>}
+          {archive.view?.before && <button type="button" disabled={Boolean(busy)} onClick={() => void archive.olderMessages()}>Mesazhe më të vjetra</button>}
           {mode === "text" && !history.length && !result && (
             <div className="assistant-welcome">
               {inline && <p className="mobile-assistant-eyebrow">{appearance.name} — Asistenti yt</p>}
@@ -553,6 +597,8 @@ export function BusinessAssistant({
                 className={`assistant-message assistant-message-${message.role}`}
               >
                 <p>{message.content}</p>
+                {message.kind === "backend_outcome" && <small>Njoftim historik i backend-it · jo miratim për veprim të ri</small>}
+                {message.kind === "interrupted" && <small>Rezultat i pakonfirmuar</small>}
                 {message.materials?.length ? <div className="unified-attachments">{message.materials.map((item, index) => <FileCard key={index} item={item}/>)}</div> : null}
                 {message.role === "user" && <small className="chat-receipt">seen</small>}
                 {message.role === "assistant" && (
@@ -565,7 +611,7 @@ export function BusinessAssistant({
             {outgoing && (
               <div className="assistant-message assistant-message-user">
                 <p>{outgoing}</p>
-                <small className="chat-receipt">delivered</small>
+                <small className="chat-receipt">Po dërgohet…</small>
               </div>
             )}
             {busy === "plan" && <div className="chat-typing" role="status" aria-label="Po shkruan"><i /><i /><i /></div>}
@@ -590,7 +636,9 @@ export function BusinessAssistant({
           {result?.orderflows && <OrderFlowCard data={result.orderflows} slug={slug} onRequest={value => {setMode("text");setText(value);}} />}
           {result?.choices?.length ? <div className="assistant-quick-actions">{result.choices.map(choice=><button type="button" key={choice} disabled={Boolean(busy)} onClick={()=>{setMode("text");setText(choice);}}>{choice}</button>)}</div> : null}
           {result?.productImport && <ProductCsvImport key={result.productImport.token} slug={slug} initialSource={result.productImport} />}
-          {result?.actionPlan && <ActionPlanReview key={result.actionPlan.id} plan={result.actionPlan} slug={slug} businessName={businessName} busy={Boolean(busy)} onAssessment={assessment => {
+          {result?.actionPlan && <ActionPlanReview key={`${result.actionPlan.id}:${archive.restoration}`} plan={result.actionPlan} slug={slug} businessName={businessName} busy={Boolean(busy)}
+            initialPreferences={archive.view?.plan?.preferences} onSavePreferences={archive.view?.plan ? archive.savePreferences : undefined}
+            recoveryBlocked={recovered && !archive.view?.recovery?.verified} onAssessment={assessment => {
             const planId = result.actionPlan!.id;
             setResult(current => current?.actionPlan?.id === planId ? { ...current, actionPlan: refreshPlanCapability(current.actionPlan, assessment) } : current);
             router.refresh();
@@ -604,7 +652,7 @@ export function BusinessAssistant({
             <button ref={workTrigger} type="button" className="assistant-work-trigger"
               aria-controls="assistant-work-detail" aria-expanded={!mobile || workOpen}
               onClick={() => { setWorkOpen(true); if (!mobile) workBack.current?.focus(); }}>
-              <span><strong>{result.preview.title}</strong><small>Në pritje të konfirmimit</small></span>
+              <span><strong>{result.preview.title}</strong><small>{recovered ? "Plan i rikthyer · kërkon rishqyrtim" : "Në pritje të konfirmimit"}</small></span>
               <span>Shiko ndryshimin →</span>
             </button>
           )}
@@ -650,7 +698,7 @@ export function BusinessAssistant({
             </button>
           </div>
           {mode === "text" ? (
-            <AssistantComposer {...materialProps} id="business-assistant-input" label={`Shkruaji ${appearance.name}`} value={text} busy={Boolean(busy)} multiline
+            <AssistantComposer {...materialProps} id="business-assistant-input" label={`Shkruaji ${appearance.name}`} value={text} busy={Boolean(busy) || archive.loading} multiline
               onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
               onSubmit={() => void analyze()} onVoice={() => { primeVoiceCapture(); setMode("audio"); }} />
           ) : (
@@ -664,7 +712,7 @@ export function BusinessAssistant({
                 if (mobile) returnToConversation();
                 else composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
               }}>← Biseda</button>
-              <span>Në pritje të konfirmimit</span>
+              <span>{recovered ? "Kërkon rishqyrtim të ri" : "Në pritje të konfirmimit"}</span>
             </header>
           {result?.preview && (
             <section
@@ -698,34 +746,36 @@ export function BusinessAssistant({
                 <p className="assistant-notice">{result.preview.notice}</p>
               )}
               <p className="assistant-notice">
-                Asgjë nuk është ruajtur ende. Konfirmimi vlen për 10 minuta.
+                {recovered ? "Ky është propozimi historik, jo leje për veprim. Rishqyrtoje me Migo për një konfirmim të ri." : "Asgjë nuk është ruajtur ende. Konfirmimi vlen për 10 minuta."}
               </p>
               <div className="assistant-preview-actions">
-                <button
+                {result.token && <button
                   type="button"
                   className="assistant-primary"
                   onClick={confirm}
                   disabled={Boolean(busy)}
                 >
                   {busy === "confirm" ? "Po ruhet…" : result.workflow ? result.preview.title : "Konfirmo ndryshimin"}
-                </button>
+                </button>}
                 <button
                   type="button"
                   className="assistant-secondary"
                   disabled={Boolean(busy)}
-                  onClick={() => {
+                  onClick={async () => {
+                    if (locked.current) return;
+                    const generation = requestGeneration.current;
+                    locked.current = true; archive.inFlight.current = true;
+                    try {
+                      if (archive.view?.plan) await archive.closePlan();
+                      else setHistory(prev => [...prev, { role: "assistant", content: "Propozimi u anulua; asgjë nuk u ruajt." }]);
+                    if (generation !== requestGeneration.current) return;
                     setWorkOpen(false);
                     requestAnimationFrame(() => composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
                     workflowRequest.current = null;
                     setRequestContext(null);
                     setResult(null);
-                    setHistory((prev) => [
-                      ...prev,
-                      {
-                        role: "assistant",
-                        content: "Propozimi u anulua; asgjë nuk u ruajt.",
-                      },
-                    ]);
+                    } catch (e) { setError((e as Error).message); }
+                    finally { locked.current = false; archive.inFlight.current = false; }
                   }}
                 >
                   Anulo
@@ -739,13 +789,14 @@ export function BusinessAssistant({
         )}
       </dialog>
       {appearanceOpen && <AssistantAppearanceDialog appearance={appearance} onSave={saveAppearance} onClose={() => setAppearanceOpen(false)} />}
-      <AssistantHistory open={historyOpen} threads={archive.threads} busy={Boolean(busy)} warning={archive.warning} onClose={onHistoryClose}
+      <AssistantHistory open={historyOpen} threads={archive.threads} busy={Boolean(busy) || archive.loading} warning={archive.warning} onClose={onHistoryClose}
         onSelect={thread => {
           if (locked.current) return;
-          reset(); archive.selectThread(thread);
-          lastContext.current = assistantContextKey(slug, context);
+          reset(); void archive.selectThread(thread);
           onHistoryClose(); onOpen();
-        }} onClear={() => { if (!locked.current) { reset(); archive.clearHistory(); } }} />
+        }} onNew={() => { reset(); onHistoryClose(); onOpen(); }}
+        onRename={(thread, title) => void archive.rename(thread, title)} onDelete={thread => void archive.remove(thread)}
+        onMore={archive.next ? () => void archive.moreThreads() : undefined} />
     </>
   );
 }
