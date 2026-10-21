@@ -4156,3 +4156,6 @@ html[data-resolved="dark"] .business-assistant .onboarding-next { color: var(--o
 .dashboard-language-switch button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); font-weight: 600; }
 .dashboard-language-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dashboard-language-switch button:disabled { cursor: wait; opacity: .65; }
+
+/* Embedded business pages keep their controls; navigation belongs to the native host. */
+.native-business-content { min-height: 100dvh; padding: 16px; width: 100%; min-width: 0; }

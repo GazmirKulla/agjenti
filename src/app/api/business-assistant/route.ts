@@ -1,7 +1,10 @@
+import { after } from "next/server";
+import { deliverMobileNotifications } from "@/lib/mobile/notifications";
+import { getRequestUser, permittedWrite, bearerToken } from "@/lib/auth/request";
 import { resolveMaterials, linksInText } from "@/lib/business-assistant/materials";
 import { simulateVisualWorkflow } from "@/lib/workflows/visual/test-actions";
 import { parseUIContext } from "@/lib/business-assistant/context";
-import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { transcribeAudio } from "@/lib/business-intelligence/transcription";
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
@@ -40,17 +43,21 @@ async function readJson(request: Request) {
   }
 }
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin)
+  if (!permittedWrite(request))
     return json({ error: "Kërkesë e palejuar." }, 403);
   try {
     const slug = new URL(request.url).searchParams.get("slug") ?? "";
-    const user = await getSessionUser();
+    const user = await getRequestUser(request);
     if (!user) return json({ error: "Hyr përsëri në llogari." }, 401);
     const membership = await requireBusinessAccess(user.id, slug);
     if (!membership)
       return json({ error: "Nuk ke qasje në këtë biznes." }, 403);
+    if (bearerToken(request)) after(async () => {
+      try { await deliverMobileNotifications(); } catch { /* Durable outbox remains for the scheduled retry. */ }
+    });
     const profile = await loadDashboardProfile(membership.business.id);
     const access = {
+      accessToken: bearerToken(request),
       userId: user.id,
       businessId: membership.business.id,
       modules: profile.enabledModules,

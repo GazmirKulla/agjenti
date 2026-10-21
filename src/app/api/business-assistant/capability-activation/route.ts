@@ -1,4 +1,5 @@
-import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { getRequestUser, permittedWrite } from "@/lib/auth/request";
+import { requireBusinessAccess } from "@/lib/tenant/access";
 import { confirmCatalogActivation, inspectCatalogActivation } from "@/lib/business-assistant/catalog-activation";
 import { AssistantError } from "@/lib/business-assistant/model";
 import { confirmKnowledgeActivation, inspectKnowledgeActivation } from "@/lib/business-assistant/knowledge-activation";
@@ -6,9 +7,9 @@ export const runtime = "nodejs";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) return json({ error: "Kërkesë e palejuar." }, 403);
+  if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   try {
-    const user = await getSessionUser();
+    const user = await getRequestUser(request);
     if (!user) return json({ error: "Hyr përsëri në llogari." }, 401);
     const membership = await requireBusinessAccess(user.id, new URL(request.url).searchParams.get("slug") ?? "");
     if (!membership) return json({ error: "Nuk ke qasje në këtë biznes." }, 403);

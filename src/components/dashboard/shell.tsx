@@ -36,6 +36,8 @@ export function AppShell({
   navigationItems: NavItem[];
   mobileNavigationItems: NavItem[];
 }) {
+  const [nativeHost, setNativeHost] = useState(false);
+  useEffect(() => { setNativeHost(/AgjentiNative\/2\.0/.test(navigator.userAgent)); }, []);
   const t = useDashboardTranslator();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -197,6 +199,7 @@ export function AppShell({
   const searchItems = admin ? items : workspace.search;
   const primaryItems = mobileNavigationItems;
   const mobilePaths = new Set(primaryItems.map((item) => item.path));
+  if (nativeHost && !admin) return <main className="native-business-content">{children}</main>;
   return (
     <div
       style={{"--assistant-panel-width": `${assistant?.panelWidth ?? 440}px`} as React.CSSProperties}

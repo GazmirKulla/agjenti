@@ -1,11 +1,12 @@
-import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { getRequestUser, permittedWrite } from "@/lib/auth/request";
+import { requireBusinessAccess } from "@/lib/tenant/access";
 import { inspectAttachment, readAttachmentForm, sealAttachment } from "@/lib/business-assistant/materials";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) return json({ error: "Kërkesë e palejuar." }, 403);
-  const user = await getSessionUser();
+  if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
+  const user = await getRequestUser(request);
   if (!user) return json({ error: "Hyr përsëri në llogari." }, 401);
   const access = await requireBusinessAccess(user.id, new URL(request.url).searchParams.get("slug") ?? "");
   if (!access) return json({ error: "Nuk ke qasje në këtë biznes." }, 403);

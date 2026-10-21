@@ -1,3 +1,4 @@
+import { bearerClient } from "@/lib/auth/request";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -32,7 +33,7 @@ export async function writeConversation(access: Access, id: string, operation: s
 export async function readConversation(access: Access, id: string, before?: number, attempt = 0): Promise<ConversationView> {
   if (!isUuid(id)) throw new PersistenceError("Bisedë e pavlefshme.", 400);
   // User JWT + real RLS, including membership revocation and private ownership.
-  const db = await createServerSupabase();
+  const db = (access.accessToken ? bearerClient(access.accessToken) : await createServerSupabase());
   const owner = await db.from("assistant_conversations").select("*").eq("id", id).eq("business_id", access.businessId).eq("owner_user_id", access.userId).maybeSingle();
   if (owner.error) storageError(owner.error.message);
   if (!owner.data) throw new PersistenceError("Biseda nuk është më e disponueshme.", 404);
@@ -53,7 +54,7 @@ export async function readConversation(access: Access, id: string, before?: numb
     before: (messages.data?.length ?? 0) > 50 ? rows[0].seq : null, plan: plan.data as StoredPlan | null };
 }
 export async function listConversations(access: Access, cursor?: string) {
-  const db = await createServerSupabase();
+  const db = (access.accessToken ? bearerClient(access.accessToken) : await createServerSupabase());
   let query = db.from("assistant_conversations").select("id,title,revision,plan_revision,updated_at,pending_request,pending_since")
     .eq("business_id", access.businessId).eq("owner_user_id", access.userId).order("updated_at", { ascending: false }).order("id", { ascending: false }).limit(21);
   if (cursor) {
@@ -143,7 +144,7 @@ export async function persistedTurn(
   const started = await writeConversation(access, id, "begin", Number(body.revision), requestId, { content: input.content, context, fingerprint });
   const view = await readConversation(access, id);
   if (started.duplicate) {
-    const db = await createServerSupabase();
+    const db = (access.accessToken ? bearerClient(access.accessToken) : await createServerSupabase());
     const previous = await db.from("assistant_messages").select("kind").eq("conversation_id", id).eq("request_id", requestId).eq("role", "assistant").maybeSingle();
     if (previous.error) storageError(previous.error.message);
     if (!previous.data || previous.data.kind === "interrupted")

@@ -107,6 +107,11 @@ export function AssistantWorkspaceProvider({
       : {}),
   };
   const launch = (prompt?: string) => {
+    const native = (window as Window & { ReactNativeWebView?: { postMessage: (value: string) => void } }).ReactNativeWebView;
+    if (native && /AgjentiNative\/2\.0/.test(navigator.userAgent)) {
+      native.postMessage(JSON.stringify({ type: "assistant", slug, context, prompt }));
+      return;
+    }
     if (prompt !== undefined) { setText(prompt); setRequestKey(key => key + 1); }
     setMode("text");
     setOpen(true);

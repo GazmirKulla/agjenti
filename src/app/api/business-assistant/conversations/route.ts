@@ -1,16 +1,17 @@
-import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { getRequestUser, permittedWrite, bearerToken } from "@/lib/auth/request";
+import { requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { isUuid, listConversations, readConversation, reassessPlan, writeConversation, PersistenceError } from "@/lib/business-assistant/persistence";
 import { planningPreferences } from "@/lib/business-assistant/persistence-model";
 
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
 async function accessFor(request: Request) {
-  const user = await getSessionUser();
+  const user = await getRequestUser(request);
   if (!user) throw new PersistenceError("Hyr përsëri në llogari.", 401);
   const access = await requireBusinessAccess(user.id, new URL(request.url).searchParams.get("slug") ?? "");
   if (!access) throw new PersistenceError("Nuk ke qasje në këtë biznes.", 403);
   const profile = await loadDashboardProfile(access.business.id);
-  return { userId: user.id, businessId: access.business.id, modules: profile.enabledModules, catalogSource: access.business.catalog_source };
+  return { accessToken: bearerToken(request), userId: user.id, businessId: access.business.id, modules: profile.enabledModules, catalogSource: access.business.catalog_source };
 }
 function failure(error: unknown) {
   return json({ error: error instanceof PersistenceError ? error.message : "Historiku nuk u ngarkua. Provo përsëri." }, error instanceof PersistenceError ? error.status : 503);
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   } catch (error) { return failure(error); }
 }
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) return json({ error: "Kërkesë e palejuar." }, 403);
+  if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   try {
     const access = await accessFor(request);
     const reader = request.body?.getReader();

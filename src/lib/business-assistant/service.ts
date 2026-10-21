@@ -63,6 +63,8 @@ const columns: Record<string, string> = {
 };
 export type PlanResult = { actionPlan?: ActionPlan; automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[] };
 export type Access = {
+  /** Request-scoped user JWT for RLS reads; never persisted or included in model input. */
+  accessToken?: string;
   userId: string;
   businessId: string;
   modules: string[];

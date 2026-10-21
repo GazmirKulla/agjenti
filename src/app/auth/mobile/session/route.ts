@@ -29,7 +29,9 @@ export async function POST(request: Request) {
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     if (!body || typeof body.access_token !== "string" || typeof body.refresh_token !== "string" ||
         !body.access_token || !body.refresh_token || body.access_token.length > 8192 || body.refresh_token.length > 8192) return failure(400);
-    const response = NextResponse.redirect(new URL("/auth/mobile/continue", request.url), 303);
+    const next = typeof body.next === "string" && /^\/(?:b\/[^\\?#]+(?:[?][^\\#]*)?|onboarding|account)$/.test(body.next)
+      ? body.next : "/auth/mobile/continue";
+    const response = NextResponse.redirect(new URL(next, request.url), 303);
     response.headers.set("Cache-Control", "no-store");
     response.headers.set("Referrer-Policy", "no-referrer");
     const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {

@@ -17,6 +17,10 @@
     {
       "path": "/api/cron/workflow-inbound",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/mobile-notifications",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
