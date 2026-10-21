@@ -37,3 +37,11 @@ it("bounds request size and rejects malformed payloads", async () => {
   expect((await request({}, "{}")).status).toBe(400);
   expect(m.create).not.toHaveBeenCalled();
 });
+it("opens only an internal supported destination after session exchange", async () => {
+  const internal = await request({}, JSON.stringify({ access_token: "access", refresh_token: "refresh", next: "/b/one/products" }));
+  expect(internal.headers.get("location")).toBe("https://agjenti.app/b/one/products");
+  for (const next of ["https://evil.example", "//evil.example", "/\\evil.example"]) {
+    const response = await request({}, JSON.stringify({ access_token: "access", refresh_token: "refresh", next }));
+    expect(response.headers.get("location")).toBe("https://agjenti.app/auth/mobile/continue");
+  }
+});

@@ -1,11 +1,11 @@
 -- Native devices and durable notification delivery. No client can read push tokens.
-create table public.mobile_devices (
+create table if not exists public.mobile_devices (
  token text primary key check (length(token) between 20 and 250),
  user_id uuid not null references auth.users(id) on delete cascade,
  platform text not null check (platform in ('ios','android')),
  updated_at timestamptz not null default now()
 );
-create table public.mobile_notification_events (
+create table if not exists public.mobile_notification_events (
  id uuid primary key default gen_random_uuid(),
  user_id uuid not null references auth.users(id) on delete cascade,
  business_id uuid not null references public.businesses(id) on delete cascade,
@@ -15,7 +15,7 @@ create table public.mobile_notification_events (
  created_at timestamptz not null default now(),
  unique(conversation_id,message_seq)
 );
-create table public.mobile_notification_deliveries (
+create table if not exists public.mobile_notification_deliveries (
  id uuid primary key default gen_random_uuid(),
  event_id uuid not null references public.mobile_notification_events(id) on delete cascade,
  token text not null references public.mobile_devices(token) on delete cascade,
@@ -31,7 +31,7 @@ alter table public.mobile_notification_deliveries enable row level security;
 revoke all on public.mobile_devices, public.mobile_notification_events, public.mobile_notification_deliveries from public,anon,authenticated;
 grant all on public.mobile_devices, public.mobile_notification_events, public.mobile_notification_deliveries to service_role;
 
-create function public.queue_mobile_assistant_notification() returns trigger language plpgsql security definer set search_path=public as $$
+create or replace function public.queue_mobile_assistant_notification() returns trigger language plpgsql security definer set search_path=public as $$
 declare event uuid; owner_id uuid; business uuid;
 begin
  if new.role <> 'assistant' or new.kind not in ('assistant','backend_outcome','interrupted') then return new; end if;
@@ -46,13 +46,14 @@ begin
  return new;
 end $$;
 revoke all on function public.queue_mobile_assistant_notification() from public,anon,authenticated;
+drop trigger if exists mobile_assistant_notification on public.assistant_messages;
 create trigger mobile_assistant_notification after insert on public.assistant_messages for each row execute function public.queue_mobile_assistant_notification();
 
-create function public.claim_mobile_deliveries() returns setof public.mobile_notification_deliveries language sql security definer set search_path=public as $$
+create or replace function public.claim_mobile_deliveries() returns setof public.mobile_notification_deliveries language sql security definer set search_path=public as $$
  update mobile_notification_deliveries set status='sending', attempts=attempts+1, next_attempt=now()+interval '5 minutes'
- where id in (select id from mobile_notification_deliveries where status in ('pending','sending','receipt') and next_attempt<=now() and attempts<8 order by next_attempt for update skip locked limit 100)
+ where id in (select id from mobile_notification_deliveries where status in ('pending','sending','receipt') and next_attempt<=now() and attempts<8 order by next_attempt for update skip locked limit 20)
  returning *;
 $$;
 revoke all on function public.claim_mobile_deliveries() from public,anon,authenticated;
 grant execute on function public.claim_mobile_deliveries() to service_role;
-create index mobile_delivery_pending on public.mobile_notification_deliveries(next_attempt) where status in ('pending','sending','receipt');
+create index if not exists mobile_delivery_pending on public.mobile_notification_deliveries(next_attempt) where status in ('pending','sending','receipt');

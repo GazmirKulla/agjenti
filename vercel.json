@@ -20,7 +20,7 @@
     },
     {
       "path": "/api/cron/mobile-notifications",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 6 * * *"
     }
   ]
 }
