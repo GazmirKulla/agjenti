@@ -158,7 +158,7 @@ export async function persistedTurn(
     const ticket = data.token ? openTicket(data.token, access) : undefined;
     const targetKind = ticket?.action.split("_")[0];
     const retained = !data.saved && !ticket && !data.actionPlan && !data.preview && hasRecoverableWork(view.plan?.snapshot) ? view.plan?.snapshot : undefined;
-    const snapshot = safePlanSnapshot({
+    const snapshot = data.briefing ? undefined : safePlanSnapshot({
       ...retained, version: 1, request: retained?.request ?? input.content, context: data.recoveryContext ?? context, message: data.message,
       ...(data.actionPlan ? { actionPlan: data.actionPlan } : {}),
       ...(data.preview ? { preview: data.preview } : {}),
@@ -176,7 +176,9 @@ export async function persistedTurn(
     });
     const finished = await writeConversation(access, id, "finish", null, requestId, {
       content: (data.message || "Kontrollo propozimin.").slice(0, 12000),
-      snapshot, preferences: retained ? view.plan?.preferences ?? {} : {}, ...(data.saved ? { outcome: data.outcome } : {}),
+      // An informational briefing appends messages, not a replacement plan/revision.
+      ...(!data.briefing ? { snapshot, preferences: retained ? view.plan?.preferences ?? {} : {} } : {}),
+      ...(data.saved ? { outcome: data.outcome } : {}),
     });
     const persistence = await readConversation(access, id);
     if (persistence.conversation.revision !== finished.revision)

@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   cfg: {
     agent_booking_enabled: true,
     timezone: "Europe/Tirane",
-    confirmation_mode: "manual",
+    confirmation_mode: "manual" as "manual" | "automatic",
   },
   services: [
     {
@@ -91,7 +91,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 const confirmState = () => {
   const draft: BookingDraft = { serviceId: "service", date: "2026-10-15", time: "09:00", name: "Klienti", phase: "confirm", nonce: "request-1", expires: Date.now() + 600000 };
-  draft.review = { factsKey: bookingReviewKey("business", draft) };
+  draft.review = { factsKey: bookingReviewKey("business", draft, undefined, { service: mocks.services[0], settings: mocks.cfg }) };
   return ({
   ...emptyState(),
   fields: {
@@ -222,7 +222,7 @@ it("preserves an explicit booking recipient and contact instead of overwriting t
   setFact(state,"customer_phone","+355691234567","phone","prior_order");
   const draft=state.fields.booking as BookingDraft;
   draft.name="Bora"; draft.contact="+355699876543";
-  draft.review = { factsKey: bookingReviewKey("business", draft) };
+  draft.review = { factsKey: bookingReviewKey("business", draft, undefined, { service: mocks.services[0], settings: mocks.cfg }) };
   const turn=await processBookingTurn({businessId:"business",message:"Konfirmoj",state,conversationKey:"conversation"});
   expect(mocks.persist).toHaveBeenCalledWith("business",expect.objectContaining({name:"Bora",contact:"+355699876543"}),undefined);
   expect(turn?.nextState.context?.profile.name?.value).toBe("Ana");
@@ -242,7 +242,7 @@ it("seeds missing booking contact from shared profile without promoting another 
 it("reports the persisted booking when a replay returns details different from a later draft", async () => {
   const state=confirmState();
   state.fields.booking.time="11:00"; state.fields.booking.name="Bora";
-  state.fields.booking.review = { factsKey: bookingReviewKey("business", state.fields.booking) };
+  state.fields.booking.review = { factsKey: bookingReviewKey("business", state.fields.booking, undefined, { service: mocks.services[0], settings: mocks.cfg }) };
   const turn=await processBookingTurn({businessId:"business",message:"Konfirmoj",state,conversationKey:"conversation"});
   expect(turn?.reply).toContain("09:00");
   expect(turn?.reply).toContain("Klienti");

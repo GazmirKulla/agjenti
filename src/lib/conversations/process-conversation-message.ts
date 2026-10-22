@@ -25,6 +25,7 @@ import {
   snapshotExternalActions,
 } from "@/lib/runtime/execution-context";
 import { runIsolated } from "@/lib/runtime/isolated-run";
+import { readContext as readCatalogContext } from "@/lib/catalogs/ranking";
 
 export type ConversationMessageParams = AgentTurnParams & {
   /** Server webhook identity, never accepted from chat text or preview state. */
@@ -382,6 +383,8 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
     if (params.state?.processes?.informationOnly) {
       const answer = await processLegacyAgentTurn({ ...params, state: structuredClone(params.state),
         informational: "Answer only the informational request. Do not start, resume or confirm a process." });
+      const catalogContext = readCatalogContext(answer.nextState.fields.catalog_context);
+      if (catalogContext) params.state.fields.catalog_context = catalogContext;
       answer.nextState = params.state;
       return answer;
     }
@@ -694,10 +697,13 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       const adapter = structuredClone(state);
       adapter.context = { profile: structuredClone(state.context!.profile), order: structuredClone(processes.auxiliary?.order ?? {}), execution: { factOwner: "auxiliary" } };
       adapter.fields = structuredClone(processes.auxiliary?.fields ?? {});
+      if (state.fields.catalog_context) adapter.fields.catalog_context = structuredClone(state.fields.catalog_context);
       adapter.visual = processes.auxiliary?.process === "information" ? processes.auxiliary.visual : undefined;
       // An informational subflow may collect its own details. Keep the order's pinned
       // cursor separately; only the shared facts cross back into that task.
       const answer = await processAgentTurn({ ...params, state: adapter, informationRequest: true });
+      const catalogContext = readCatalogContext(answer.nextState.fields.catalog_context);
+      if (catalogContext) state.fields.catalog_context = catalogContext;
       if (answer.nextState.visual?.status === "waiting") processes.auxiliary = { process: "information", visual: answer.nextState.visual, order: answer.nextState.context?.order, fields: answer.nextState.fields };
       else {
         delete processes.auxiliary;
@@ -709,6 +715,10 @@ async function processMessage(params: ConversationMessageParams): Promise<AgentT
       return finish(answer);
     }
     const answer = await processLegacyAgentTurn({ ...params, state: structuredClone(state), informational: `Respond to the current message in the context of the recent conversation, including answers to a question you asked the customer. Use verified business information and the configured agent's tone. Respond naturally to greetings, including obvious typos. If the message is unclear, briefly ask what the customer needs; do not assume there is a request to change or resume an order or booking. Continue the relevant conversation without starting an order or asking which product they want unless they request ordering. Preserve every unfinished task. Do not confirm or perform an action and do not repeat the previous workflow question.${knowledge?.config.prompt ? ` Configured informational workflow guidance: ${knowledge.config.prompt}` : ""}` });
+    // Qualification is auxiliary information, not permission to merge adapter
+    // order facts, approvals or cursors back into the suspended process.
+    const catalogContext = readCatalogContext(answer.nextState.fields.catalog_context);
+    if (catalogContext) state.fields.catalog_context = catalogContext;
     answer.nextState = state;
     return finish(answer);
   }

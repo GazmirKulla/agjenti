@@ -150,6 +150,13 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   const started = Date.now();
   const trace = params.onTrace;
   trace?.({ stage: "overview", label: "Message received", data: { input: params.message, mode: params.mode ?? "production", source: params.source ?? "instagram" } });
+  // Service facts are maintained by sync_service_knowledge, but services can be
+  // enabled independently. This must not unlock unrelated knowledge content.
+  const knowledgeQuery = !modules || modules.includes("knowledge") || modules.includes("services")
+    ? db.from("knowledge_entries").select("title,body,intent_key")
+      .eq("business_id", params.businessId).eq("is_active", true)
+    : null;
+  if (modules && !modules.includes("knowledge")) knowledgeQuery?.eq("intent_key", "service");
   const [productResult, agentResult, knowledgeResult, trainingMemories, operating] = await Promise.all([
     modules && !modules.includes("products") ? { data: [], error: null } : db
       .from("products")
@@ -164,13 +171,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       .eq("business_id", params.businessId)
       .eq("is_active", true)
       .maybeSingle(),
-    modules && !modules.includes("knowledge") ? { data: [], error: null } : db
-      .from("knowledge_entries")
-      .select("title,body,intent_key")
-      .eq("business_id", params.businessId)
-      .eq("is_active", true)
-      .order("sort_order")
-      .limit(1000),
+    knowledgeQuery?.order("sort_order").limit(1000) ?? { data: [], error: null },
     loadActiveTrainingMemories(params.businessId),
     loadBusinessProcess(params.businessId),
   ]);
@@ -199,7 +200,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     return context;
   }
   const rankedKnowledge = rankKnowledge(
-    knowledgeResult.data ?? [],
+    (knowledgeResult.data ?? []).filter(k => !modules || modules.includes(k.intent_key === "service" ? "services" : "knowledge")),
     params.message,
   );
   const knowledge = rankedKnowledge.slice(0, 12).map((k) => k.entry);
@@ -238,9 +239,13 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     );
   trace?.({ stage: "context", label: "Context retrieval completed", data: { sources, service: service ? service.entry : null } });
   if (params.informational !== undefined) {
+    if (sources) state.fields.catalog_context = sources.context;
     const trainingContext = trainingFor(null, null);
     const links = sources?.documents.map(d => `${d.title}: ${d.url}`).join("\n") ?? "";
-    const generated = await generateAgentReply({
+    const generated = sources?.clarification ? {
+      reply: sources.clarification, source: "fallback" as const, fallbackReason: "catalog_clarification",
+      presentedProducts: undefined,
+    } : await generateAgentReply({
       businessProcess, trainingContext, ...(trace ? { onTrace: trace } : {}),
       instructions: (agent?.instructions || "Answer in the customer's language.") +
         (params.informational ? `\nBusiness owner's reply guidance: ${params.informational}` : ""),

@@ -42,9 +42,14 @@ export type BookingDraft = {
   /** Only profile-seeded values follow later profile corrections; recipients may differ. */
   profileSeeds?: { name?: string; contact?: string };
 };
-export function bookingReviewKey(businessId: string, draft: BookingDraft, versionId?: string) {
+export function bookingReviewKey(businessId: string, draft: BookingDraft, versionId?: string, terms?: {
+  service?: Pick<BookingService, "name" | "duration_minutes" | "buffer_minutes">;
+  settings: Pick<CalendarSettings, "timezone" | "confirmation_mode">;
+}) {
   return JSON.stringify([businessId, versionId ?? null, draft.nonce, draft.serviceId ?? null,
-    draft.date ?? null, draft.time ?? null, draft.name ?? null, draft.contact ?? null]);
+    draft.date ?? null, draft.time ?? null, draft.name ?? null, draft.contact ?? null,
+    terms ? [terms.service?.name, terms.service?.duration_minutes, terms.service?.buffer_minutes,
+      terms.settings.timezone, terms.settings.confirmation_mode] : null]);
 }
 export function explicitBookingConfirmation(message: string) {
   return /^(po|po konfirmoj|konfirmoj|yes|confirm)[.!]?$/i.test(message.trim());
@@ -175,7 +180,10 @@ export async function processBookingTurn(params: {
       draft.profileSeeds = { ...draft.profileSeeds, [key]: value };
     }
   }
-  const needsReview = expired || params.resume || draft.phase === "confirm" && draft.review?.factsKey !== bookingReviewKey(params.businessId, draft, existingState.visual?.versionId);
+  const reviewKey = () => bookingReviewKey(params.businessId, draft, existingState.visual?.versionId,
+    { service: activeServices.find(s => s.id === draft.serviceId), settings });
+  // Historical reviews without the offered service/calendar terms need a fresh prompt.
+  const needsReview = expired || params.resume || draft.phase === "confirm" && draft.review?.factsKey !== reviewKey();
   if (needsReview) {
     draft.phase = "collect";
     draft.expires = Date.now() + 30 * 60000;
@@ -327,8 +335,8 @@ export async function processBookingTurn(params: {
   if (!draft.name || draft.name.trim().length < 2)
     return reply("Në emër të kujt ta përgatis kërkesën?");
   draft.phase = "confirm";
-  draft.review = { factsKey: bookingReviewKey(params.businessId, draft, existingState.visual?.versionId) };
+  draft.review = { factsKey: reviewKey() };
   return reply(
-    `${expired ? "Konfirmimi i mëparshëm skadoi; orari u kontrollua sërish. " : ""}Konfirmon ${service.name} (${service.duration_minutes} min), më ${draft.date} në ${draft.time}, në emër të ${draft.name}? Shkruaj “Konfirmoj” ose korrigjo të dhënat.${settings.confirmation_mode === "manual" ? " Pas konfirmimit tënd, kërkesa pret miratimin e biznesit." : ""}`,
+    `${expired ? "Konfirmimi i mëparshëm skadoi; orari u kontrollua sërish. " : ""}Konfirmon ${service.name} (${service.duration_minutes} min), më ${draft.date} në ${draft.time} (${settings.timezone}), në emër të ${draft.name}? Shkruaj “Konfirmoj” ose korrigjo të dhënat.${settings.confirmation_mode === "manual" ? " Pas konfirmimit tënd, kërkesa pret miratimin e biznesit." : ""}`,
   );
 }

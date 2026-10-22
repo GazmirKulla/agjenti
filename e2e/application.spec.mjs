@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { createDecipheriv, createCipheriv, randomBytes } from 'node:crypto';
+import { createDecipheriv, createCipheriv, randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { work, verifyContainers, localKeys, sql } from './local.mjs';
@@ -99,6 +99,56 @@ test('real login, owner dashboard and PostgREST RLS reject a foreign tenant', as
   expect(own.data).toEqual([{ id: t.id }]); expect(foreign.data).toEqual([]);
   const rpc = await client.rpc('save_visual_workflow', { p_business: tenant('quote').id, p_user: t.userId, p_revision: 2, p_graph: null, p_operation: 'disable' });
   expect(rpc.error).not.toBeNull();
+});
+
+test('inbox rejects foreign customer links without hiding owned conversations or customers', async ({ page }) => {
+  const t = tenant('retail'), other = tenant('quote');
+  const ownCustomer = randomUUID(), foreignCustomer = randomUUID(), conversation = randomUUID();
+  const originalProfile = JSON.parse(sql(`select dashboard_profile from public.businesses where id=${quote(t.id)};`));
+  const client = createClient(keys.api, keys.anon, { auth: { persistSession: false, autoRefreshToken: false } });
+  try {
+    sql(`update public.businesses set dashboard_profile=${json({ ...originalProfile,
+      enabledModules: [...new Set([...originalProfile.enabledModules, 'customers', 'leads'])] })} where id=${quote(t.id)};
+      insert into public.customers(id,business_id,display_name,phone,instagram_user_id) values
+      (${quote(ownCustomer)},${quote(t.id)},'AUDIT_OWN_CUSTOMER','+355690001111',${quote(ownCustomer)}),
+      (${quote(foreignCustomer)},${quote(other.id)},'AUDIT_FOREIGN_CUSTOMER','+355690009999',null);`);
+    const signed = await client.auth.signInWithPassword({ email: t.email, password: fixtures.password });
+    expect(signed.error).toBeNull();
+    // S1 closes the former write-policy gap. Keep the read-side visibility checks
+    // without disabling constraints to fabricate an impossible persisted relation.
+    const inserted = await client.from('conversations').insert({ id: conversation, business_id: t.id,
+      customer_id: foreignCustomer, participant_display_name: 'AUDIT_OWN_PARTICIPANT', auto_reply: false });
+    expect(inserted.error?.code).toBe('23503');
+    const unlinked = await client.from('conversations').insert({ id: conversation, business_id: t.id,
+      customer_id: null, instagram_participant_id: ownCustomer, participant_display_name: 'AUDIT_OWN_PARTICIPANT', auto_reply: false });
+    expect(unlinked.error).toBeNull();
+    await login(page, t);
+    await page.goto(`/b/${t.slug}/inbox/${conversation}`);
+    await expect(page.getByText('AUDIT_OWN_PARTICIPANT', { exact: true }).first()).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('AUDIT_FOREIGN_CUSTOMER');
+    await expect(page.locator('body')).not.toContainText('+355690009999');
+    // Exercise the actual authorized manual-promotion endpoint and service writer.
+    const linked = await page.request.post(`/api/businesses/${t.id}/conversations/${conversation}/customer`,
+      { data: { name: 'AUDIT_OWN_CUSTOMER', phone: '+355690001111' } });
+    expect(linked.status()).toBe(200);
+    expect(await linked.json()).toMatchObject({ ok: true, customerId: ownCustomer, created: false });
+    await page.reload();
+    await expect(page.getByText('AUDIT_OWN_CUSTOMER', { exact: true }).first()).toBeVisible();
+    await expect(page.locator('body')).toContainText('+355690001111');
+    await page.goto(`/b/${t.slug}/customers`);
+    await expect(page.getByText('AUDIT_OWN_CUSTOMER', { exact: true }).first()).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('AUDIT_FOREIGN_CUSTOMER');
+    await page.goto(`/b/${t.slug}/leads`);
+    // Leads currently uses the module placeholder/activation page, not a CRM list.
+    await expect(page).toHaveURL(`http://localhost:3103/b/${t.slug}/leads`);
+    await expect(page.getByRole('heading', { name: 'Leads', exact: true }).first()).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('AUDIT_FOREIGN_CUSTOMER');
+  } finally {
+    sql(`begin; update public.businesses set dashboard_profile=${json(originalProfile)} where id=${quote(t.id)};
+      delete from public.conversations where id=${quote(conversation)} and business_id=${quote(t.id)};
+      delete from public.customers where (id=${quote(ownCustomer)} and business_id=${quote(t.id)})
+        or (id=${quote(foreignCustomer)} and business_id=${quote(other.id)}); commit;`);
+  }
 });
 
 test('published retail: entity, size/quantity, invalid input, interruption/resume and cancellation', async ({ page }) => {

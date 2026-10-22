@@ -111,7 +111,9 @@ export function matches(values: string[], query: string) {
   const q = canonical(query);
   return values.some((v) => {
     const s = canonical(v);
-    return s === q || q.includes(s) || s.includes(q);
+    // Match whole terms/phrases, never country codes inside unrelated words.
+    const words = (value: string) => ` ${value.replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+    return Boolean(s && q) && (words(q).includes(words(s)) || words(s).includes(words(q)));
   });
 }
 export function rankCatalogs(

@@ -35,7 +35,19 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
   let message = s.message, photo = !!s.photo, last: VisualExecution | undefined;
   const responseEvidence: string[] = [];
   try {
-    for (let turn = 0; turn < limits.turns; turn++) {
+    if (s.awaiting && graph.nodes.find(n => n.id === s.nodeId)?.kind === "confirm") {
+      // A waiting cursor alone is not a presented confirmation. Obtain the real
+      // runtime receipt before testing either answer (or missing/ambiguous input).
+      const prompt = advanceVisualWorkflow({ graph, versionId, state, message: "", hasPhoto: false,
+        intent: s.intent, sharedValues: s.sharedValues, inputAvailable: false });
+      result.executionCount++;
+      result.inputMessages.unshift("");
+      result.traversedNodeIds.push(...prompt.traversedNodeIds);
+      responseEvidence.push(JSON.stringify([prompt.action.kind, prompt.action.nodeId, prompt.action.message]));
+      if (prompt.action.kind !== "prompt" || prompt.action.nodeId !== s.nodeId) throw new Error("confirmation_prompt_missing");
+      state = prompt.state;
+    }
+    for (let turn = result.executionCount; turn < limits.turns; turn++) {
       last = advanceVisualWorkflow({ graph, versionId, state, message, hasPhoto: photo, intent: s.intent, sharedValues: s.sharedValues });
       result.executionCount++;
       state = last.state;
@@ -62,7 +74,7 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
     if (last && !result.attemptedActions.length) {
       const e = s.expectation, node = graph.nodes.find(n => n.id === e.nodeId), key = node?.config.fieldKey;
       const matches = e.kind === "complete" || e.kind === "regression" ? last.action.kind === "end"
-        : e.kind === "branch" ? state?.branchPorts?.[e.nodeId!] === e.port && result.traversedNodeIds[1] === e.target
+        : e.kind === "branch" ? state?.branchPorts?.[e.nodeId!] === e.port && last.traversedNodeIds[1] === e.target
         : e.kind === "suspend" ? last.action.kind === "prompt" && last.action.nodeId === e.nodeId && JSON.stringify(state?.values) === JSON.stringify(s.values ?? {})
         : e.kind === "collect" ? !!key && state?.values[key] === e.value
         : !!key && state?.values[key] === e.value && result.traversedNodeIds[1] === e.target;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { emptyMetadata, validateIndex, type Catalog } from "./model";
-import { rankCatalogs, routeIntent, readContext } from "./ranking";
+import { rankCatalogs, routeIntent, readContext, matches } from "./ranking";
 import { rankKnowledge } from "./source-ranking";
 const catalog = (id: string, more: Partial<Catalog> = {}): Catalog => ({
   id,
@@ -30,6 +30,16 @@ const catalog = (id: string, more: Partial<Catalog> = {}): Catalog => ({
   ...more,
 });
 describe("catalog source selection", () => {
+  it("matches complete catalog terms and aliases without matching codes inside words", () => {
+    for (const [code, country] of [["UK", "Ukraine"], ["US", "Russia"], ["US", "Australia"]])
+      expect(matches([code], country)).toBe(false);
+    expect(matches(["UK"], "For UK customers")).toBe(true);
+    expect(matches(["industrial pumps"], "industrial-pumps")).toBe(true);
+    expect(matches(["EN"], "anglisht")).toBe(true);
+    expect(matches(["Germany"], "gjermani")).toBe(true);
+    expect(matches([""], "UK")).toBe(false);
+    expect(matches(["UK"], "")).toBe(false);
+  });
   it("routes documents separately from exact commercial information", () => {
     expect(routeIntent("Më dërgo katalogun teknik")).toBe("catalog");
     expect(routeIntent("price list")).toBe("catalog");

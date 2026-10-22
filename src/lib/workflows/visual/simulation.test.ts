@@ -39,6 +39,26 @@ describe("isolated automatic simulation", () => {
     expect(report.scenarios.find(s => s.scenarioId === "branch:channel:yes")).toMatchObject({ result: "PASS", traversedNodeIds: ["channel", "phone"], selectedBranches: { channel: "yes" } });
     expect(report.scenarios.find(s => s.scenarioId === "branch:channel:no")).toMatchObject({ result: "PASS", traversedNodeIds: ["channel", "end"], selectedBranches: { channel: "no" } });
   });
+  it("presents a real confirmation before testing yes/no or missing/ambiguous input", () => {
+    const graph: VisualGraph = { version: 1, name: "Confirm", nodes: [node("start", "start"),
+      node("confirm", "confirm", { prompt: "Confirm?" }), node("yes", "end"), node("no", "end")], edges: [
+      { id: "first", source: "start", target: "confirm", port: "next" },
+      { id: "yes", source: "confirm", target: "yes", port: "yes" },
+      { id: "no", source: "confirm", target: "no", port: "no" }] };
+    const report = run(graph);
+    expect(report.result).toBe("PASS");
+    for (const port of ["yes", "no"]) {
+      expect(report.scenarios.find(s => s.scenarioId === `branch:confirm:${port}`)).toMatchObject({
+        result: "PASS", executionCount: 2, traversedNodeIds: ["confirm", "confirm", port], selectedBranches: { confirm: port },
+      });
+    }
+    for (const category of ["missing_input", "ambiguous_input"]) {
+      expect(report.scenarios.find(s => s.scenarioId === `${category}:confirm`)).toMatchObject({
+        result: "PASS", executionCount: 2, traversedNodeIds: ["confirm", "confirm"], selectedBranches: {},
+      });
+    }
+    expect(forbidden).not.toHaveBeenCalled();
+  });
   it("keeps missing and ambiguous input out of collected values", () => {
     const report = run(collectGraph());
     for (const category of ["missing_input", "ambiguous_input"]) {

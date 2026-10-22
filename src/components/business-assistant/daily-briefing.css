@@ -1,0 +1,41 @@
+.daily-briefing {
+  flex: 0 0 auto;
+  margin: 12px 0 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  width: 100%;
+  max-width: 850px;
+  align-self: center;
+  text-align: left;
+}
+.daily-briefing[hidden] { display: none; }
+.daily-briefing header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.briefing-eyebrow { display: flex; align-items: center; gap: 7px; color: var(--ink-muted); font-size: 12px; }
+.daily-briefing h2 { font-size: 17px; line-height: 1.4; margin: 5px 0 0; }
+.briefing-refresh { flex-shrink: 0; min-height: 40px; gap: 6px; }
+.briefing-periods { display: flex; flex-wrap: wrap; gap: 4px; margin: 16px 0 10px; }
+.briefing-periods button { border: 1px solid transparent; background: transparent; color: var(--ink-muted); border-radius: 9px; padding: 7px 12px; cursor: pointer; font: inherit; font-size: 12px; min-height: 36px; }
+.briefing-periods button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--line); }
+.daily-briefing :is(button,a,summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.briefing-range, .briefing-freshness { font-size: 11px; color: var(--ink-muted); line-height: 1.5; }
+.briefing-summary { font-size: 13px; line-height: 1.6; margin: 10px 0 14px; }
+.briefing-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.briefing-metrics > div { padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.briefing-metrics dt { font-size: 11px; color: var(--ink-muted); line-height: 1.5; }
+.briefing-metrics a { color: inherit; text-decoration: none; }
+.briefing-metrics a:hover { text-decoration: underline; }
+.briefing-metrics dd { margin: 8px 0 0; font-size: 25px; font-weight: 600; }
+.briefing-metrics dd.is-unavailable { font-size: 12px; line-height: 1.5; font-weight: 400; }
+.briefing-attention { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; font-size: 12px; line-height: 1.5; }
+.briefing-attention a { color: var(--ink); }
+.briefing-definitions { font-size: 11px; color: var(--ink-muted); margin-top: 14px; line-height: 1.6; }
+.briefing-definitions summary { cursor: pointer; }
+.briefing-definitions p { margin: 6px 0; }
+.briefing-freshness { margin: 12px 0 0; }
+@media (max-width: 700px) {
+  .daily-briefing { padding: 15px; border-radius: 16px; }
+  .briefing-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .briefing-refresh span { display: none; }
+}

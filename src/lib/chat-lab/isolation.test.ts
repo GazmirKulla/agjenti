@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   cfg: {
     agent_booking_enabled: true,
     timezone: "Europe/Tirane",
-    confirmation_mode: "manual",
+    confirmation_mode: "manual" as const,
     hours: [1, 2, 3, 4, 5].map((day) => ({ day, start: "09:00", end: "17:00" })),
     closed_dates: [] as string[],
   },
@@ -153,7 +153,7 @@ function confirmState() {
     nonce: "request-1",
     expires: Date.now() + 600000,
   };
-  draft.review = { factsKey: bookingReviewKey("business", draft) };
+  draft.review = { factsKey: bookingReviewKey("business", draft, undefined, { service: mocks.services[0], settings: mocks.cfg }) };
   return { ...emptyState(), fields: { booking: draft } };
 }
 

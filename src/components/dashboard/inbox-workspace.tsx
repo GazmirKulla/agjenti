@@ -11,6 +11,7 @@ import { InboxList } from "./inbox-list";
 import { EmptyState, PageHeading, formatDate, money } from "./ui";
 
 type CustomerJoin = {
+  business_id: string;
   display_name: string | null;
   username: string | null;
   phone: string | null;
@@ -46,9 +47,10 @@ export async function InboxWorkspace({
   const { data: rows, error } = await db
     .from("conversations")
     .select(
-      "id,channel,status,last_message_preview,unread_count,participant_display_name,participant_username,customers(display_name,username)",
+      "id,channel,status,last_message_preview,unread_count,participant_display_name,participant_username,customers(business_id,display_name,username)",
     )
     .eq("business_id", businessId)
+    .eq("customers.business_id", businessId)
     .order("last_message_at", { ascending: false })
     .limit(100);
   if (error) throw new Error(t("Nuk u ngarkuan bisedat."));
@@ -81,9 +83,10 @@ export async function InboxWorkspace({
   const { data: conversation, error: conversationError } = await db
     .from("conversations")
     .select(
-      "id,channel,status,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(display_name,username,phone,created_at)",
+      "id,channel,status,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(business_id,display_name,username,phone,created_at)",
     )
     .eq("business_id", businessId)
+    .eq("customers.business_id", businessId)
     .eq("id", selected)
     .maybeSingle();
   if (conversationError) throw new Error(t("Nuk u ngarkua biseda."));
@@ -129,7 +132,10 @@ export async function InboxWorkspace({
   if (messageResult.error || orderResult.error || logResult.error)
     throw new Error(t("Nuk u ngarkuan detajet e bisedës."));
 
-  const customer = conversation.customers as unknown as CustomerJoin;
+  // The service-role client bypasses RLS; a parent tenant filter alone does not
+  // authorize its FK target. Keep unmatched conversations, never foreign PII.
+  const joinedCustomer = conversation.customers as unknown as CustomerJoin;
+  const customer = joinedCustomer?.business_id === businessId ? joinedCustomer : null;
   const name = conversationDisplayName({
     participant_display_name: conversation.participant_display_name,
     participant_username: conversation.participant_username,
@@ -139,7 +145,7 @@ export async function InboxWorkspace({
     customer?.username || conversation.participant_username
       ? `@${customer?.username || conversation.participant_username}`
       : conversation.channel === "whatsapp" ? "WhatsApp" : "Instagram";
-  const linkedCustomer = Boolean(conversation.customer_id);
+  const linkedCustomer = Boolean(customer);
 
   return (
     <>
@@ -154,6 +160,7 @@ export async function InboxWorkspace({
           selected={selected}
           rows={(rows ?? []).map((r) => {
             const c = r.customers as unknown as {
+              business_id: string;
               display_name: string | null;
               username: string | null;
             } | null;
@@ -164,7 +171,7 @@ export async function InboxWorkspace({
               name: conversationDisplayName({
                 participant_display_name: r.participant_display_name,
                 participant_username: r.participant_username,
-                customers: c,
+                customers: c?.business_id === businessId ? c : null,
               }),
               preview: r.last_message_preview,
               unread: r.unread_count,

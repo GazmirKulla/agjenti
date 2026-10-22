@@ -12,6 +12,9 @@ import { executeTicket, openTicket, planRequest } from "@/lib/business-assistant
 import { persistedTurn, PersistenceError, reassessPlan } from "@/lib/business-assistant/persistence";
 import { AssistantError } from "@/lib/business-assistant/model";
 import { readPersonalAssistantName } from "@/lib/business-assistant/identity";
+import { loadBriefing, BriefingError } from "@/lib/business-assistant/briefing";
+import { briefingQuestion, briefingAnswer } from "@/lib/business-assistant/briefing-model";
+import { dashboardLanguage } from "@/lib/dashboard/language/core";
 import { revalidatePath } from "next/cache";
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -120,6 +123,19 @@ export async function POST(request: Request) {
         "Biseda është shumë e gjatë. Fillo një kërkesë të re.",
       );
     const context = parseUIContext(body.context);
+    const briefingPeriod = briefingQuestion(body.text);
+    if (briefingPeriod && !body.attachments?.length && !body.links?.length) {
+      const answer = async () => {
+        const briefing = await loadBriefing(slug, briefingPeriod);
+        return { briefing, message: briefingAnswer(briefing, dashboardLanguage(body.language)) };
+      };
+      // Explicit user questions may join the existing history. Automatic Home reads use GET
+      // and never touch persistence. Read-only questions do not reassess/execute old plans.
+      return json(body.conversationId
+        ? await persistedTurn(access, body, { content: body.text.trim(), context, mode: "plan" },
+          async (_history, prior) => ({ ...await answer(), recoveryContext: prior?.context ?? context }))
+        : await answer());
+    }
     const assistantName = body.assistantName === undefined ? undefined : readPersonalAssistantName(body.assistantName);
     if (assistantName === null) throw new AssistantError("Emri i asistentit duhet të ketë 1–32 karaktere në një rresht.");
     if (body.pendingToken !== undefined && (typeof body.pendingToken !== "string" || body.pendingToken.length > 300000)) throw new AssistantError("Propozim i pavlefshëm.");
@@ -162,7 +178,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Veprimi nuk përfundoi. Provo përsëri pas pak.",
       },
-      error instanceof PersistenceError ? error.status : error instanceof AssistantError ? 400 : 500,
+      error instanceof BriefingError ? error.status : error instanceof PersistenceError ? error.status : error instanceof AssistantError ? 400 : 500,
     );
   }
 }

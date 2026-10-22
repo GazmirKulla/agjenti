@@ -3,6 +3,9 @@ import "./workspace-layout.css";
 import "./mobile.css";
 import "./assistant-workspace.css";
 import { businessGoals } from "./presentation";
+import { DailyBriefing } from "./daily-briefing";
+import { briefingQuestion } from "@/lib/business-assistant/briefing-model";
+import { useDashboardLanguage } from "@/components/dashboard/language";
 import { AssistantHistory, useAssistantHistory } from "./history";
 import { hasRecoverableWork, type ConversationView } from "@/lib/business-assistant/persistence-model";
 import { AssistantAppearanceDialog, PersonalAssistantAvatar, PersonalAssistantWidget } from "./personal-assistant";
@@ -59,6 +62,7 @@ function MessageCopy({ text }: { text: string }) {
   );
 }
 type Result = {
+  briefing?: import("@/lib/business-assistant/briefing-model").Briefing;
   persistence?: ConversationView;
   recovered?: boolean;
   actionPlan?: ActionPlan;
@@ -141,6 +145,7 @@ export function BusinessAssistant({
   const { materials, setMaterials, addFiles, addLink, removeMaterial, setSending, materialError, setMaterialError } = materialDraft;
   const materialProps = { items: materials, onFiles: addFiles, onLink: addLink, onRemove: removeMaterial };
   const router = useRouter();
+  const language = useDashboardLanguage();
   const dialog = useRef<HTMLDialogElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const wasVisible = useRef(false);
@@ -291,7 +296,7 @@ export function BusinessAssistant({
           ? { body }
           : {
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
+              body: JSON.stringify({ ...body, language }),
             }),
       },
     );
@@ -343,7 +348,7 @@ export function BusinessAssistant({
         setMaterials(current => current.map(m => m.id === item.id ? { ...m, token: uploaded.attachment.token, status: "Gati" } : m));
       }
       const pastedLinks = (input.match(/https?:\/\/[^\s<>"']+/g) ?? []).map(url => url.replace(/[.,;!?)}\]]+$/, ""));
-      const reuse = !materials.length && !pastedLinks.length && previousMaterials.current?.context === materialContext ? previousMaterials.current : null;
+      const reuse = !briefingQuestion(input) && !materials.length && !pastedLinks.length && previousMaterials.current?.context === materialContext ? previousMaterials.current : null;
       const materialTokens = reuse?.tokens ?? tokens;
       const materialLinks = [...new Set([...(pastedLinks.length ? [] : reuse?.links ?? []), ...materials.flatMap(item => item.url ? [item.url] : []), ...pastedLinks])];
       const data = await request({
@@ -358,19 +363,20 @@ export function BusinessAssistant({
         ...(lastContext.current === contextKey && (result?.workflow?.proposed || result?.editableFlow || result?.linear) && result.token ? { pendingToken: result.token } : {}),
       });
       if (generation !== requestGeneration.current) return;
-      previousMaterials.current = { context: materialContext, tokens: materialTokens, links: materialLinks };
-      workflowRequest.current = effectiveContext.page === "workflows" && effectiveContext.workflowSelection && continuesWorkflowRequest(data) ? {
+      if (!data.briefing) previousMaterials.current = { context: materialContext, tokens: materialTokens, links: materialLinks };
+      workflowRequest.current = data.briefing ? workflowRequest.current : effectiveContext.page === "workflows" && effectiveContext.workflowSelection && continuesWorkflowRequest(data) ? {
         scope: contextKey, context: effectiveContext,
         history: [...(pin?.history ?? []), { role: "user", content: input }, { role: "assistant", content: data.message || "Kontrollo propozimin." }],
       } : null;
-      lastContext.current = contextKey;
+      if (!data.briefing) lastContext.current = contextKey;
       if (!data.persistence) setHistory((prev) => [
         ...prev.slice(-78),
         { role: "user", content: input, materials: [...materials.map(({name, preview, url, size}) => ({name, preview, url, size})), ...pastedLinks.filter(url => !materials.some(item => item.url === url)).map(url => ({name: url, url}))] },
         { role: "assistant", content: data.message || "Kontrollo propozimin." },
       ]);
-      setResult(data);
-      setRecovered(Boolean(data.recovered));
+      setResult(data.briefing ? result : data);
+      if (data.briefing) { setRequestContext(requestContext); setRequestLabel(requestLabel); }
+      if (!data.briefing) setRecovered(Boolean(data.recovered));
       sendAttempt.current = null;
       setText("");
       setMaterials([]);
@@ -563,6 +569,7 @@ export function BusinessAssistant({
           {recovered && <div className="assistant-recovery" role="status"><strong>Plan i rikthyer — jo autorizim për ekzekutim</strong><p>{archive.view?.recovery?.message || "Gatishmëria e mëparshme është historike. Rishqyrto përpara çdo veprimi."}</p>
             <button type="button" disabled={Boolean(busy)} onClick={() => { setText(`Rishqyrto planin e ruajtur dhe përgatit propozim të ri, pa ekzekutuar ose publikuar: ${archive.view?.plan?.snapshot.request ?? ""}`); composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(); }}>Rishqyrto me {appearance.name}</button></div>}
           {archive.view?.before && <button type="button" disabled={Boolean(busy)} onClick={() => void archive.olderMessages()}>Mesazhe më të vjetra</button>}
+          <DailyBriefing key={`${userId}:${slug}`} slug={slug} active={inline && mode === "text" && !historyOpen} />
           {mode === "text" && !history.length && !result && (
             <div className="assistant-welcome">
               {inline && <p className="mobile-assistant-eyebrow">{appearance.name} — Asistenti yt</p>}
