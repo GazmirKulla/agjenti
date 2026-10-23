@@ -20,6 +20,8 @@ vi.mock("@/lib/dashboard/modules/entitlements", async () => {
 
 // Keep coordinator, agent turn, version store, entity router and visual executor real.
 import { processConversationMessage } from "./process-conversation-message";
+import { processAgentTurn } from "./process-agent-turn";
+import { decisionForTurn } from "./turn-decision";
 import { migrateContext, setFact } from "@/lib/workflows/context";
 import { snapshotOrder } from "@/lib/workflows/conversation-processes";
 import { validateVisualGraph } from "@/lib/workflows/visual/model";
@@ -397,6 +399,102 @@ it("2A invalid numeric prose remains unconsumed; a real information detour prese
   expect(resume.turnDecision?.kind).toBe("resume");
   expect(resume.nextState.visual?.versionId).toBe("A");
   expect(resume.nextState.context?.order.quantity).toBeUndefined();
+});
+
+it("2B retail inflection selects the named product, then resumes the same order after information", async () => {
+  const graph = retailGraph();
+  graph.flows[0].productIds = [productId];
+  products[0].name = "Paketa Parashkollore";
+  products.push({ ...products[0], id: "00000000-0000-4000-8000-000000000002", name: "Kursi Parashkollor" });
+  published = "A";
+  const started = await turn("Atëherë dua Paketën Parashkollore. Më ndihmon dot ta porosis?", migrateContext());
+  expect(started.nextState.product_id).toBe(productId);
+  expect(started.reply).toContain("size?");
+  expect(started.turnDecision).toMatchObject({ kind: "new_process", entity: { id: productId, kind: "product" } });
+  const size = await turn("M", started.nextState);
+  const info = await turn("Sa kushton?", size.nextState);
+  published = "B";
+  const resumed = await turn("Vazhdo porosinë", info.nextState);
+  expect(resumed.reply).toBe("Quantity?");
+  expect(resumed.nextState.product_id).toBe(productId);
+  expect(resumed.nextState.processes?.order?.id).toBe(started.nextState.processes?.order?.id);
+  expect(resumed.nextState.context?.order.size.value).toBe("M");
+  expect(resumed.nextState.visual?.versionId).toBe("A");
+  expect(resumed.nextState.visual?.confirmedConfirmation).toBeUndefined();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("2B an adapter cannot reinterpret an order field correction as a booking route", async () => {
+  const state = order(), message = "Ndrysho Rezervim";
+  const decision = decisionForTurn({ message, state, executor: "workflow", process: "order" });
+  expect(decision.kind).toBe("correction");
+  const result = await processAgentTurn({ businessId, state, message, hasPhoto: false, mode: "test", turnDecision: decision, bookingTurn: mocks.booking });
+  expect(mocks.booking).not.toHaveBeenCalled();
+  expect(result.nextState.visual?.nodeId).toBe("details");
+  expect(result.nextState.visual?.versionId).toBe("A");
+  expect(result.nextState.fields.booking).toBeUndefined();
+});
+
+it("2B service presentation → selection remains information, explicit booking uses the verified service", async () => {
+  const serviceId = "00000000-0000-4000-8000-000000000003";
+  services = [{ id: serviceId, name: "Konsulta", business_id: businessId, is_active: true, booking_enabled: true, duration_minutes: 30, buffer_minutes: 0 }];
+  (versions.A.graph as VisualGraphV2).flows.find(f => f.kind === "booking")!.serviceIds = [serviceId];
+  published = "A";
+  mocks.generate.mockResolvedValue({ reply: "Konsulta", presentedServices: services, source: "ai", fallbackReason: null });
+  const info = await turn("Më trego shërbimet", migrateContext());
+  expect(info.nextState.entityPresentation?.entities).toMatchObject([{ id: serviceId, kind: "service" }]);
+  const selected = await processConversationMessage({ businessId, message: "ai shërbimi", state: info.nextState, deliveredReply: info.reply, source: "instagram", hasPhoto: false });
+  expect(selected.turnDecision).toMatchObject({ entity: { kind: "service", id: serviceId }, intent: "information" });
+  expect(selected.nextState.processes?.booking).toBeUndefined();
+  expect(mocks.booking).not.toHaveBeenCalled();
+  const booked = await processConversationMessage({ businessId, message: "Dua të rezervoj shërbimin e parë", state: selected.nextState, deliveredReply: selected.reply, source: "instagram", hasPhoto: false });
+  expect(booked.conversationRouting?.process).toBe("booking");
+  expect(booked.nextState.processes?.booking?.visual?.binding?.entity.id).toBe(serviceId);
+  expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ selectedServiceId: serviceId }));
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("2B deactivated service reference cannot replace a suspended order", async () => {
+  const state = order();
+  recordEntityPresentation(state, businessId, "Konsulta", [{ id: "removed", name: "Konsulta" }], "service");
+  state.recentMessages = [{ role: "user", content: "Shërbimet?" }, { role: "assistant", content: "Konsulta" }];
+  const result = await processConversationMessage({ businessId, state, message: "ai shërbimi", deliveredReply: "Konsulta", source: "instagram", hasPhoto: false });
+  expect(result.turnDecision).toMatchObject({ kind: "clarification", entity: { kind: "service", status: "unresolved" } });
+  expect(result.nextState.processes?.order?.id).toBe("order-a");
+  expect(result.nextState.processes?.order?.snapshot.visual?.versionId).toBe("A");
+  expect(result.nextState.processes?.booking).toBeUndefined();
+  expect(mocks.booking).not.toHaveBeenCalled();
+});
+
+it.each(["active", "inactive", "foreign", "module_off"])("2B relative service replacement revalidates after its confirmation prompt: %s", async eligibility => {
+  const first = "00000000-0000-4000-8000-000000000003", second = "00000000-0000-4000-8000-000000000004";
+  services = [first, second].map((id, index) => ({ id, name: index ? "Trajnimi" : "Konsulta", business_id: businessId, is_active: true, booking_enabled: true, duration_minutes: 30, buffer_minutes: 0 }));
+  (versions.A.graph as VisualGraphV2).flows.find(f => f.kind === "booking")!.serviceIds = [first, second];
+  published = "A";
+  const started = await turn("Dua të rezervoj Konsulta", migrateContext());
+  started.nextState.processes!.booking!.draft!.serviceId = first;
+  started.nextState.fields.booking = structuredClone(started.nextState.processes!.booking!.draft);
+  recordEntityPresentation(started.nextState, businessId, "Konsulta, Trajnimi", services, "service");
+  started.nextState.recentMessages = [{ role: "user", content: "Shërbimet?" }, { role: "assistant", content: "Konsulta, Trajnimi" }];
+  const change = await processConversationMessage({ businessId, message: "Dua të rezervoj shërbimin e dytë", state: started.nextState, deliveredReply: "Konsulta, Trajnimi", source: "instagram", hasPhoto: false });
+  expect(change.nextState.processes?.pendingChoice).toMatchObject({ kind: "replace", process: "booking" });
+  mocks.booking.mockClear();
+  if (eligibility === "inactive") services[1].is_active = false;
+  if (eligibility === "foreign") services[1].business_id = "other-business";
+  if (eligibility === "module_off") {
+    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
+    mocks.profile.mockResolvedValue({ enabledModules: ["products", "orders", "workflows"] });
+  }
+  const accepted = await processConversationMessage({ businessId, message: "Po", state: change.nextState, deliveredReply: change.reply, source: "instagram", hasPhoto: false });
+  if (eligibility !== "active") {
+    expect(accepted.turnDecision?.kind).toBe(eligibility === "module_off" ? "blocked" : "clarification");
+    expect(accepted.nextState.processes?.booking?.draft?.serviceId).toBe(first);
+    expect(mocks.booking).not.toHaveBeenCalled();
+    return;
+  }
+  expect(accepted.nextState.processes?.pendingChoice).toBeUndefined();
+  expect(accepted.nextState.processes?.booking?.visual?.binding?.entity.id).toBe(second);
+  expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ selectedServiceId: second }));
 });
 
 it("round-trips a bound retail draft through the real server action, sealed session and coordinator", async () => {

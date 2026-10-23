@@ -36,7 +36,7 @@ export type ConversationProcesses = {
   service?: { id: string; status: "active" | "suspended" | "completed"; promptCurrent?: boolean; versionId: string; visual: NonNullable<ConversationStatePayload["visual"]>; fields: ConversationStatePayload["fields"]; order: SharedContext["order"] };
   actionFlow?: { id?: string; versionId: string; visual: NonNullable<ConversationStatePayload["visual"]>; promptCurrent: boolean; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
   auxiliary?: { process: "information" | "support"; visual: NonNullable<ConversationStatePayload["visual"]>; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
-  pendingChoice?: { kind: "process" | "replace"; process?: ProcessKind; message: string; productId?: string };
+  pendingChoice?: { kind: "process" | "replace"; process?: ProcessKind; message: string; productId?: string; serviceId?: string };
   pendingClarification?: PendingClarification;
   /** Explicit information-only choice; a follow-up must not infer a purchase/reservation. */
   informationOnly?: boolean;

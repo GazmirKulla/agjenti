@@ -2,7 +2,7 @@ import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workfl
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
 import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
 import { chooseGuidance, clarification, invalidateConfirmation } from "../guidance";
-import { decidedFieldGuidance } from "@/lib/conversations/turn-decision";
+import { decidedFieldGuidance, informationalDecision } from "@/lib/conversations/turn-decision";
 import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
 import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext, sharedPrompt, setOrderTerms } from "../context";
 import { agentModel } from "@/lib/agents/generate";
@@ -22,6 +22,7 @@ import { combineProductPresentations, type ReferenceProduct } from "@/lib/produc
 type Legacy = (params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }) => Promise<AgentTurnResult>;
 
 export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Legacy): Promise<AgentTurnResult> {
+  if (informationalDecision(params.turnDecision)) params = { ...params, informationRequest: true, orderRequest: false, bookingRequest: false };
   if (params.visualPreview && (params.mode !== "test" || params.visualPreview.businessId !== params.businessId)) throw new Error("invalid_workflow_preview");
   let previous = params.state?.visual;
   if (previous?.status === "completed" && params.entityVersion !== undefined && params.entityVersion?.id !== previous.versionId) previous = undefined;
@@ -34,13 +35,13 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     return legacyReply({ ...params, trainingVisualScope: undefined });
   }
   let version = loadedVersion;
-  const presentations: { reply: string; presentedProducts?: ReferenceProduct[] }[] = [];
+  const presentations: { reply: string; presentedProducts?: ReferenceProduct[]; presentedServices?: ReferenceProduct[] }[] = [];
   const legacy = async (p: Parameters<Legacy>[0], executedNodeId?: string) => {
     const nodeId = executedNodeId ?? p.state?.visual?.nodeId;
     const flow = version.graph.version === 2 && p.state?.visual?.versionId === version.id
       ? version.graph.flows.find(f => f.nodeIds.includes(nodeId ?? "")) : undefined;
     const answer = await legacyReply({ ...p, trainingVisualScope: flow && nodeId ? { flowId: flow.id, nodeId } : undefined });
-    presentations.push({ reply: answer.reply, presentedProducts: answer.presentedProducts });
+    presentations.push({ reply: answer.reply, presentedProducts: answer.presentedProducts, presentedServices: answer.presentedServices });
     return answer;
   };
   if (version.businessId !== params.businessId || !validateVisualGraph(version.graph).graph) throw new Error("invalid_visual_workflow");
@@ -58,12 +59,19 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   const simple = (reply: string): AgentTurnResult => ({ reply, nextState: base, previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
     debug: { model: agentModel(), source: "fallback", fallbackReason: "visual_entity", agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: Date.now() - started } });
   const explicitOrder = params.orderRequest || (params.turnDecision ? params.turnDecision.intent === "order" : detectVisualIntent(params.message) === "order");
-  const informationalEntity = !explicitOrder && !params.bookingRequest && (isQuestion(params.message) || isEntityInformationRequest(params.message));
-  const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding, params.mode === "test", { state: base, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply, draftPreview: Boolean(params.visualPreview) }) : {};
+  const informationalEntity = params.turnDecision ? informationalDecision(params.turnDecision)
+    : !explicitOrder && !params.bookingRequest && (isQuestion(params.message) || isEntityInformationRequest(params.message));
+  const decidedEntity = params.turnDecision?.entity;
+  const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding, params.mode === "test", { state: base,
+    selectedProductId: params.selectedProductId ?? (decidedEntity?.status === "resolved" && decidedEntity.kind === "product" ? decidedEntity.id : undefined),
+    selectedServiceId: params.selectedServiceId ?? (decidedEntity?.status === "resolved" && decidedEntity.kind === "service" ? decidedEntity.id : undefined),
+    deliveredReply: params.deliveredReply, draftPreview: Boolean(params.visualPreview) }) : {};
   const selectedEntity = entityResolution.selected;
-  if (entityResolution.clarification) return simple(entityResolution.clarification);
+  if (entityResolution.clarification) return { ...simple(entityResolution.clarification),
+    ...(params.turnDecision ? { turnDecision: { ...params.turnDecision, kind: "clarification" as const, reason: "entity" as const } } : {}) };
   if (entityResolution.choices?.length) return { ...simple(`Cilin produkt ose shërbim dëshironi: ${entityResolution.choices.map(entity => entity.name).join(", ")}?`),
-    presentedProducts: entityResolution.choices.every(entity => entity.kind === "product") ? entityResolution.choices : undefined };
+    presentedProducts: entityResolution.choices.every(entity => entity.kind === "product") ? entityResolution.choices : undefined,
+    presentedServices: entityResolution.choices.every(entity => entity.kind === "service") ? entityResolution.choices : undefined };
   if (!selectedEntity && entityResolution.mentioned?.kind === "product" && previous?.binding && entityResolution.mentioned.id !== previous.binding.entity.id) {
     if (base.product_id && base.step_key !== "order_ready") {
       if (base.processes) base.processes.pendingChoice = { kind: "replace", process: "order", message: params.message, productId: entityResolution.mentioned.id };
@@ -71,7 +79,8 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     }
     previous = undefined; active = null; delete base.visual;
   }
-  if (previous?.binding && !params.informationRequest && !params.orderStatusRequest && !informationalEntity && !selectedEntity) return simple("Produkti ose shërbimi i këtij procesi nuk është më aktiv. Kontakto stafin për të vazhduar.");
+  if (previous?.binding && !params.informationRequest && !params.orderStatusRequest && !informationalEntity && !selectedEntity) return { ...simple("Produkti ose shërbimi i këtij procesi nuk është më aktiv. Kontakto stafin për të vazhduar."),
+    ...(params.turnDecision ? { turnDecision: { ...params.turnDecision, kind: "blocked" as const, reason: "capability" as const } } : {}) };
   const generalOrderFlows = () => version.graph.version === 2 ? version.graph.flows.filter(flow => flow.kind === "order" && !flow.productIds?.length && !flow.serviceIds?.length) : [];
   if (!selectedEntity && entityResolution.mentioned?.kind === "product" && !generalOrderFlows().length) {
     if (params.visualPreview) {
@@ -115,7 +124,9 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     answer.handoff = true; answer.advisoryHandoff = true;
     return answer;
   }
-  let intent = params.bookingRequest ? "booking" as const : detectVisualIntent(params.message);
+  let intent = params.bookingRequest ? "booking" as const : params.turnDecision
+    ? params.turnDecision.intent === "information" ? "question" as const : params.turnDecision.intent === "undetermined" ? "unknown" as const : params.turnDecision.intent
+    : detectVisualIntent(params.message);
   let navigating = false;
   let revisiting = false;
   const currentNode = version.graph.nodes.find(n => n.id === previous?.nodeId);
@@ -155,15 +166,20 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   const informationFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "information" && flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
   const continuingInformation = params.informationRequest && !params.orderStatusRequest && previous?.status === "waiting" && Boolean(informationFlow) && !statusFlow;
   const correctionRequest = /\b(ndrysho\w*|korrigjo\w*|ktheh\w*|pas|mbrapa|change|correct|instead|back)\b/.test(params.message.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase());
+  // A correction may select a field within the decided process, not a new
+  // order/booking flow. Legacy callers without a decision retain their routing.
+  const correctingFlow = params.turnDecision?.kind === "correction" && version.graph.version === 2
+    ? version.graph.flows.find(flow => previous?.binding ? flow.id === previous.binding.flowId : flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
+  const correctionRoutes = correctingFlow ? routes.filter(route => correctingFlow.nodeIds.includes(route.id)) : routes;
   const guidance = params.actionFlowRequest && !correctionRequest ? {action:"continue" as const,target:null,source:"rules" as const} : enteringEntity ? { action: "route" as const, target: boundFlow!.entryNodeId, source: "rules" as const }
     : params.informationRequest && !params.orderStatusRequest && !informationEntries.length ? { action: "answer" as const, target: null, source: "rules" as const }
     : continuingStatus ? { action: "continue" as const, target: null, source: "rules" as const }
     : params.orderStatusRequest && statusEntries.length ? { action: "route" as const, target: statusEntries[0].id, source: "rules" as const }
     : !correctionRequest && (continuingBooking || continuingOrder || continuingInformation) ? { action: "continue" as const, target: null, source: "rules" as const }
     : params.informationRequest && informationEntries.length === 1 ? { action: "route" as const, target: informationEntries[0].id, source: "rules" as const }
-    : params.bookingRequest && bookingNodes.length === 1 ? { action: "route" as const, target: bookingNodes[0].id, source: "rules" as const } : decidedFieldGuidance(params.turnDecision) ?? await chooseGuidance({message:params.message,state:base,targets,routes,
+    : params.bookingRequest && bookingNodes.length === 1 ? { action: "route" as const, target: bookingNodes[0].id, source: "rules" as const } : decidedFieldGuidance(params.turnDecision, routes) ?? await chooseGuidance({message:params.message,state:base,targets: targets.filter(target => correctionRoutes.some(route => route.id === target.id)),routes: correctionRoutes,
     current:currentNode ? {id:currentNode.id,label:currentNode.label,prompt:currentNode.config.prompt,fieldKey:currentNode.config.fieldKey,kind:currentNode.kind} : undefined,
-    allowOrder:routes.some(n=>n.kind==="product"), allowSupport:routes.some(n=>n.kind==="handoff" || n.kind==="support_entry"),
+    allowOrder:params.turnDecision?.kind !== "correction" && routes.some(n=>n.kind==="product"), allowSupport:params.turnDecision?.kind !== "correction" && routes.some(n=>n.kind==="handoff" || n.kind==="support_entry"),
   });
   params.onTrace?.({stage:"workflow",label:"New message routed",data:{...guidance,from:previous?.nodeId??null,candidates:routes.map(r=>r.id)}});
   let extractedValues: Record<string, string> = {};
@@ -398,6 +414,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       const answer = await legacy({ ...params, state: turn.nextState, informational: "Përgjigju pyetjes pa ndryshuar të dhënat e porosisë." });
       replies.push(answer.reply);
       turn.presentedProducts = answer.presentedProducts;
+      turn.presentedServices = answer.presentedServices;
     }
     // Keep required collection pending, but never append it to an unrelated answer.
     if (informationalInterruption) { finished = true; break; }
@@ -431,5 +448,6 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     action: { kind: execution.action.kind, nodeId: execution.action.nodeId }, preview: Boolean(params.visualPreview),
   } });
   turn.presentedProducts = combineProductPresentations(turn.reply, presentations);
+  turn.presentedServices = combineProductPresentations(turn.reply, presentations.map(part => ({ reply: part.reply, presentedProducts: part.presentedServices })));
   return turn;
 }

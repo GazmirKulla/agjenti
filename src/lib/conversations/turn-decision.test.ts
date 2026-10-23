@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { collectionInput, decisionForTurn, turnIntent } from "./turn-decision";
+import { collectionInput, decidedFieldGuidance, decisionForTurn, turnIntent } from "./turn-decision";
 import { recordEntityPresentation, resolveProductReference } from "@/lib/products/entity-bridge";
 import { emptyState } from "@/lib/workflows/engine";
 import { rememberTurn } from "@/lib/workflows/guidance";
 
 describe("Package 2A meaning is independent from entity reference and punctuation", () => {
+  it("2B selects only an unambiguous entry for the already decided process", () => {
+    const decision = decisionForTurn({ message: "Dua të porosis", executor: "workflow", process: "order" });
+    expect(decidedFieldGuidance(decision, [{ id: "book", label: "Booking", kind: "booking" }, { id: "order", label: "Order", kind: "product" }])).toMatchObject({ action: "route", target: "order" });
+    expect(decidedFieldGuidance(decision, [{ id: "one", label: "One", kind: "product" }, { id: "two", label: "Two", kind: "product" }])).toMatchObject({ action: "clarify", target: null });
+  });
   it.each([
     ["Më trego produktin e dytë.", "information"],
     ["Dua ta porosis produktin e dytë.", "order"],

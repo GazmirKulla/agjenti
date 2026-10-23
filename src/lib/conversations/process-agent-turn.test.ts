@@ -26,7 +26,18 @@ import { emptyState } from "@/lib/workflows/engine";
 import { migrateContext } from "@/lib/workflows/context";
 import { starterVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
 import { processConversationMessage } from "./process-conversation-message";
+import { decisionForTurn } from "./turn-decision";
 const fixtures: Record<string, unknown> = {};
+it("2B legacy consumes an informational decision without converting the entity to an order", async () => {
+  const state = migrateContext();
+  const message = "Produkt A";
+  const decision = decisionForTurn({ message, state, executor: "legacy_information", intent: "information" });
+  const result = await processLegacyAgentTurn({ businessId: "business-a", message, hasPhoto: false, state, turnDecision: decision });
+  expect(result.nextState.product_id).toBeNull();
+  expect(result.nextState.step_key).toBe(state.step_key);
+  expect(result.workflowProgress).toEqual([]);
+  expect(mocks.from.mock.calls.map(call => call[0])).not.toContain("workflows");
+});
 afterEach(() => vi.unstubAllEnvs());
 it("blocks the legacy linear order adapter after module deactivation without reading or writing business records", async () => {
   vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");

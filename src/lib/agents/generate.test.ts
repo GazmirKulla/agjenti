@@ -21,6 +21,21 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("reply source diagnostics", () => {
+  it("2B renders verified service slots, rejects invented IDs and never creates mixed-kind ordinal evidence", async () => {
+    const services = [{ id: "s1", name: "Konsulta" }, { id: "s2", name: "Trajnimi" }];
+    mocks.create.mockResolvedValue({ output_text: "[[service:s2]], [[service:s1]], [[service:foreign]]" });
+    const result = await generateAgentReply({ ...params, referenceServices: services });
+    expect(result.reply).toBe("Trajnimi, Konsulta, [shërbim i paverifikuar]");
+    expect(result.presentedServices?.map(s => s.id)).toEqual(["s2", "s1"]);
+    expect(result.presentedProducts).toEqual([]);
+    expect(params.state.fields.booking).toBeUndefined();
+    mocks.create.mockResolvedValue({ output_text: "[[product:p1]], [[service:s1]]" });
+    const mixed = await generateAgentReply({ ...params, referenceProducts: [{ id: "p1", name: "Libri" }], referenceServices: services });
+    expect(mixed.presentedProducts).toEqual([]);
+    expect(mixed.presentedServices).toEqual([]);
+    mocks.create.mockResolvedValue({ output_text: "Konsulta, [[service:s2]]" });
+    expect((await generateAgentReply({ ...params, referenceServices: services })).presentedServices).toEqual([]);
+  });
   it("W3 renders only verified product references; model prose never selects a product", async () => {
     mocks.create.mockResolvedValue({ id: "reply", output_text: "Sugjeroj [[product:p2]] dhe [[product:p1]]. [[product:foreign]]" });
     const state = emptyState();

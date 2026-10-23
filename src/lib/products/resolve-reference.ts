@@ -1,6 +1,6 @@
 import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { resolveProductReference, type ReferenceProduct } from "./entity-bridge";
+import { resolveProductReference, resolveServiceReference, type ReferenceProduct } from "./entity-bridge";
 
 /** Read-only entry point for the shared coordinator. Both tenant ownership and
  * active status are rechecked; presentation metadata is never a catalog cache. */
@@ -18,4 +18,19 @@ export async function resolveCurrentProductReference(args: Omit<Parameters<typeo
   const result = resolveProductReference({ ...args, products });
   if (result.status === "selected" && args.purpose !== "information") await requireRuntimeModules(args.businessId, capabilityModules(["order.prepare"]));
   return result;
+}
+
+/** Same presentation boundary for services; selection never authorizes booking. */
+export async function resolveCurrentServiceReference(args: Omit<Parameters<typeof resolveServiceReference>[0], "services">) {
+  await requireRuntimeModules(args.businessId, ["services"]);
+  const db = createServiceSupabase();
+  const services: ReferenceProduct[] = [];
+  for (let from = 0; ; from += 500) {
+    const { data, error } = await db.from("booking_services").select("id,name")
+      .eq("business_id", args.businessId).eq("is_active", true).order("id").range(from, from + 499);
+    if (error) return { status: "clarify" as const, reason: "catalog_unverified", reply: "Nuk u verifikua katalogu i shërbimeve. Zgjedhja e mëparshme nuk u ndryshua." };
+    services.push(...data ?? []);
+    if (!data || data.length < 500) break;
+  }
+  return resolveServiceReference({ ...args, services });
 }

@@ -1,6 +1,6 @@
 import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
 import { currentProcessOwner, type ConversationRouting, type LocalProcessKind } from "@/lib/workflows/conversation-processes";
-import { explicitIntent } from "@/lib/workflows/guidance";
+import { explicitIntent, type GuidanceTarget } from "@/lib/workflows/guidance";
 import { validValue, type FieldType } from "@/lib/workflows/context";
 import { positiveEntityText } from "@/lib/products/entity-bridge";
 
@@ -87,6 +87,17 @@ export function decisionForTurn(input: {
 
 /** Compatibility bridge: navigation/correction still needs graph-local targets,
  * but a field answer already owned by the coordinator must not be rerouted. */
-export function decidedFieldGuidance(decision?: TurnDecision) {
-  return decision?.kind === "field_answer" ? { action: "continue" as const, target: null, source: "rules" as const } : undefined;
+export function decidedFieldGuidance(decision?: TurnDecision, routes?: GuidanceTarget[]) {
+  if (!decision) return;
+  if (["field_answer", "continuation", "resume"].includes(decision.kind)) return { action: "continue" as const, target: null, source: "rules" as const };
+  if (decision.kind === "new_process" && routes) {
+    const kind = decision.process === "order" ? "product" : decision.process === "booking" ? "booking" : undefined;
+    const entries = kind ? routes.filter(route => route.kind === kind) : [];
+    if (entries.length) return entries.length === 1 ? { action: "route" as const, target: entries[0].id, source: "rules" as const }
+      : { action: "clarify" as const, target: null, source: "rules" as const };
+  }
+}
+
+export function informationalDecision(decision?: TurnDecision) {
+  return Boolean(decision && ["information", "entity_reference", "interruption"].includes(decision.kind));
 }

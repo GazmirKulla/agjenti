@@ -15,3 +15,10 @@ it.each(["Dua te porosis", "E keni ne gjendje?", "M", "Montxyzori"])("does not i
 it("does not fuzzy match numbers or short names", () => {
  expect(matchingCatalogNames([{ name: "AB123456" }, { name: "Puma" }], "AB123457 Pumo")).toEqual([]);
 });
+
+it("2B uses inflection evidence without choosing an equally plausible partial name", () => {
+ const entries = [{ name: "Paketa Parashkollore" }, { name: "Kursi Parashkollor" }];
+ expect(matchingCatalogNames(entries, "Atëherë dua Paketën Parashkollore. Më ndihmon dot ta porosis?")).toEqual([entries[0]]);
+ expect(matchingCatalogNames([{ name: "Paketa" }, { name: "Paketa Plus" }], "Paketën")).toHaveLength(2);
+ expect(matchingCatalogNames([{ name: "Konsulta" }, { name: "Konsultim tjetër" }], "Sa zgjat Konsultën?")).toEqual([{ name: "Konsulta" }]);
+});

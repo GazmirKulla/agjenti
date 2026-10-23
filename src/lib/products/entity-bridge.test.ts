@@ -3,7 +3,7 @@ import { emptyState } from "@/lib/workflows/engine";
 import { rememberTurn } from "@/lib/workflows/guidance";
 import { migrateContext } from "@/lib/workflows/context";
 import { migrateConversationProcesses, restoreOrder, snapshotOrder } from "@/lib/workflows/conversation-processes";
-import { combineProductPresentations, recordEntityPresentation, renderProductReferences, resolveProductReference, type ReferenceProduct } from "./entity-bridge";
+import { combineProductPresentations, recordEntityPresentation, recordReplyPresentation, renderProductReferences, resolveProductReference, resolveServiceReference, type ReferenceProduct } from "./entity-bridge";
 
 const products: ReferenceProduct[] = [
   { id: "p1", name: "Puzzle", price_amount: 20, currency: "EUR" },
@@ -17,6 +17,52 @@ function presented(list = products) {
   return state;
 }
 const resolve = (message: string, state = presented(), catalog = products) => resolveProductReference({ businessId: "business", message, state, products: catalog, mode: "test" });
+
+describe("2B shared presentation evidence for services", () => {
+  const services = [{ id: "s1", name: "Konsulta" }, { id: "s2", name: "Trajnimi" }];
+  function shown(list = services) {
+    const state = emptyState();
+    const render = renderProductReferences(list.map(s => `[[service:${s.id}]]`).join("\n"), list, "service");
+    recordEntityPresentation(state, "business", render.reply, render.presentedProducts, "service");
+    rememberTurn(null, state, "Shërbimet?", render.reply);
+    return state;
+  }
+  it.each(["i dyti", "shërbimin e dytë"])("resolves %s without borrowing product identity", message => {
+    const state = shown();
+    expect(resolveServiceReference({ businessId: "business", message, state, services, mode: "test" })).toMatchObject({ status: "selected", service: { id: "s2" } });
+    expect(resolve(message, state).status).toBe("clarify");
+    expect(state.product_id).toBeNull();
+  });
+  it("resolves a single service pronoun and rejects stale, undelivered and foreign evidence", () => {
+    const state = shown([services[0]]);
+    const args = { businessId: "business", message: "ai shërbimi", services, state };
+    expect(resolveServiceReference(args).status).toBe("clarify");
+    expect(resolveServiceReference({ ...args, deliveredReply: "Konsulta" })).toMatchObject({ status: "selected", service: { id: "s1" } });
+    expect(resolveServiceReference({ ...args, mode: "test", businessId: "foreign" }).status).toBe("clarify");
+    state.entityPresentation!.expiresAt = 0;
+    expect(resolveServiceReference({ ...args, mode: "test" }).status).toBe("clarify");
+  });
+  it("other requires exactly two displayed choices and a current selection", () => {
+    const state = presented();
+    expect(resolve("jo atë, tjetrin", state).status).toBe("clarify");
+    state.product_id = "p1";
+    expect(resolve("jo atë, tjetrin", state)).toMatchObject({ status: "selected", product: { id: "p2" } });
+    expect(resolve("jo atë, tjetrin", state, [products[0]]).status).toBe("clarify");
+  });
+  it("mixed composed replies invalidate ordinal evidence instead of selecting a preferred kind", () => {
+    const state = presented();
+    recordReplyPresentation(state, "business", { reply: "Puzzle, Konsulta", presentedProducts: [products[0]], presentedServices: [services[0]] });
+    expect(state.entityPresentation).toBeUndefined();
+    expect(resolve("i dyti", state).status).toBe("clarify");
+  });
+  it("other uses the current canonical selection, not a historical order snapshot", () => {
+    const state = migrateConversationProcesses(migrateContext(presented()), () => "task");
+    state.context!.execution.factOwner = "order"; state.product_id = "p1";
+    state.processes!.order = { id: "task", status: "active", snapshot: snapshotOrder(state) };
+    state.product_id = "p2";
+    expect(resolve("jo atë, tjetrin", state)).toMatchObject({ status: "selected", product: { id: "p1" } });
+  });
+});
 
 describe("W3 verified presentation and references", () => {
   it("records only rendered tenant catalog slots, in display order, bounded and without selecting a product", () => {

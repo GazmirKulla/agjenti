@@ -1,7 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { foldText } from "../engine";
 import { matchingCatalogNames } from "@/lib/products/match-name";
-import { isBareCollectionValue, isEntityReference, positiveEntityText, resolveProductReference } from "@/lib/products/entity-bridge";
+import { isBareCollectionValue, isEntityReference, positiveEntityText, referenceEntityKind, resolveProductReference, resolveServiceReference } from "@/lib/products/entity-bridge";
 import type { ConversationStatePayload } from "../engine";
 import type { VisualGraph, VisualRunState } from "./types";
 import { pendingCollectNode } from "./facts";
@@ -15,7 +15,7 @@ export function isEntityInformationRequest(message: string) {
     && !/\b(porosit\w*|rezervo\w*|book|buy|vazhdo\w*|rifillo\w*)\b|\bdua\b.*\b(porosi\w*|rezervim\w*)\b/.test(text);
 }
 /** Production resolves active entries; isolated preview also permits inactive entries explicitly bound in the graph. */
-export async function resolveVisualEntity(businessId: string, graph: VisualGraph, message: string, saved?: VisualRunState["binding"], preview = false, reference?: { state?: ConversationStatePayload | null; selectedProductId?: string; deliveredReply?: string | null; draftPreview?: boolean }): Promise<{ selected?: VisualEntitySelection; mentioned?: VisualEntity; choices?: VisualEntity[]; available?: VisualEntity[]; clarification?: string }> {
+export async function resolveVisualEntity(businessId: string, graph: VisualGraph, message: string, saved?: VisualRunState["binding"], preview = false, reference?: { state?: ConversationStatePayload | null; selectedProductId?: string; selectedServiceId?: string; deliveredReply?: string | null; draftPreview?: boolean }): Promise<{ selected?: VisualEntitySelection; mentioned?: VisualEntity; choices?: VisualEntity[]; available?: VisualEntity[]; clarification?: string }> {
   // An explicit draft must also recognize unbound products so execution can fail
   // closed. Test mode alone (e.g. Chat Lab with a published graph) is not a draft.
   if (graph.version !== 2 || !reference?.draftPreview && !graph.flows.some(flow => flow.productIds?.length || flow.serviceIds?.length)) return {};
@@ -36,6 +36,7 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
     all((from, to) => modules && !modules.includes("services") ? Promise.resolve({ data: [], error: null }) : db.from("booking_services").select("id,name,booking_enabled").eq("business_id", businessId).eq("is_active", true).order("id").range(from, to)),
   ]);
   const activeProducts = [...products];
+  const activeServices = [...services];
   if (preview && !moduleEnforcementEnabled(businessId)) {
     const boundProducts = [...new Set(graph.flows.flatMap(flow => flow.productIds ?? []))];
     const boundServices = [...new Set(graph.flows.flatMap(flow => flow.serviceIds ?? []))];
@@ -62,12 +63,16 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
   const text = foldText(message);
   const pending = pendingCollectNode(graph, reference?.state?.visual);
   const collectingField = pending ? pending.config.fieldType ?? "text" : undefined;
-  const fieldValue = !reference?.selectedProductId && isBareCollectionValue(message, collectingField, entities);
+  const fieldValue = !reference?.selectedProductId && !reference?.selectedServiceId && isBareCollectionValue(message, collectingField, entities);
   const skuMatches = fieldValue ? [] : entities.filter(entity => {
     const sku = entity.sku ? foldText(entity.sku) : "";
     return Boolean(sku && (text === sku || text === `sku ${sku}`));
   });
-  const resolved = reference?.selectedProductId || isEntityReference(message) ? resolveProductReference({ businessId, message, products: activeProducts,
+  const serviceReference = reference?.selectedServiceId || !reference?.selectedProductId && referenceEntityKind(message, reference?.state) === "service";
+  const serviceResult = serviceReference && (reference?.selectedServiceId || isEntityReference(message)) ? resolveServiceReference({ businessId, message, services: activeServices,
+    state: reference?.state, verifiedId: reference?.selectedServiceId, deliveredReply: reference?.deliveredReply, mode: preview ? "test" : "production", collectingField }) : null;
+  if (serviceResult?.status === "clarify") return { clarification: serviceResult.reply, available };
+  const resolved = !serviceReference && (reference?.selectedProductId || isEntityReference(message)) ? resolveProductReference({ businessId, message, products: activeProducts,
     state: reference?.state, verifiedId: reference?.selectedProductId, deliveredReply: reference?.deliveredReply, mode: preview ? "test" : "production", collectingField }) : null;
   if (resolved?.status === "clarify") return { clarification: resolved.reply, available };
   const positive = positiveEntityText(message);
@@ -76,7 +81,8 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
   // existing visual router. Relative references already identify the entity kind.
   if (resolved?.status === "selected" && named.some(entity => entity.kind === "service")
     && named.some(entity => entity.kind === "product" && entity.id === resolved.product.id)) return { choices: named, available };
-  const mentioned = resolved?.status === "selected" ? entities.filter(entity => entity.kind === "product" && entity.id === resolved.product.id)
+  const mentioned = serviceResult?.status === "selected" ? entities.filter(entity => entity.kind === "service" && entity.id === serviceResult.service.id)
+    : resolved?.status === "selected" ? entities.filter(entity => entity.kind === "product" && entity.id === resolved.product.id)
     : named;
   const canonicalId = saved?.entity.kind === "product" && reference?.state?.context?.execution.factOwner === "order"
     ? reference.state.product_id ?? saved.entity.id : saved?.entity.id;
