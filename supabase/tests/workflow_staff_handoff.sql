@@ -33,7 +33,11 @@ begin
   if (select status from workflow_inbound_queue where id=j.id)<>'uncertain' then raise exception 'Failure reported as success'; end if;
   if exists(select 1 from messages where conversation_id=cid and direction='outbound') then raise exception 'Failed acknowledgement stored as sent'; end if;
   if (select status from conversations where id=cid)<>'paused' then raise exception 'Delivery failure reactivated AI'; end if;
-  -- Staff explicitly reactivates; a new handoff prepared before takeover is discarded.
+  -- A status toggle alone must not bypass an uncertain preceding send.
+  if exists(select 1 from claim_workflow_inbound(array[bid])) then raise exception 'Uncertain send replayed'; end if;
+  perform finish_workflow_send(j.id,j.lease_token,true,'late-handoff-'||ch,null);
+  -- After reconciliation, staff explicitly reactivates; a new handoff
+  -- prepared before takeover is still discarded.
   update conversations set status='active',auto_reply=true where id=cid;
   insert into workflow_inbound_queue(business_id,channel,connection_id,participant_id,external_id,payload) values(bid,ch,conn,'person','second-handoff','{}');
   select * into j from claim_workflow_inbound(array[bid]);

@@ -5,13 +5,12 @@ import { MessageRoutingView } from "@/components/workflows/message-routing";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { simulateAgentTurn } from "@/lib/agents/test-chat/actions";
 import type { TestAttachment } from "@/lib/agents/test-chat/attachments";
 import { Icon } from "@/components/dashboard/icon";
 import { AudioRecorder, primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import { TrainingSession, type TrainingFeedback, type TrainingRequest } from "./training-session";
 import { ChatMessage, CopyMessage } from "./chat-message";
-import { newConversation, replaySession, forkConversation, readHistory, transcript, type TestConversation, type ChatEntry } from "./chat-history";
+import { newConversation, replaySession, readHistory, transcript, type TestConversation, type ChatEntry, type PendingTestTurn, reconcileTestConversation } from "./chat-history";
 import "./test-chat.css";
 const reasons: Record<string, string> = {
   workflow_not_configured: "Produkti ka nevojë për një workflow.",
@@ -21,8 +20,8 @@ const reasons: Record<string, string> = {
 };
 const initialChat: TestConversation = { id: "initial", title: "Bisedë e re", entries: [], updatedAt: 0 };
 type Upload = { id: string; file: File; preview?: string };
-export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAgentTurn }: {
-  slug: string; businessName: string; userId: string; onTurn?: typeof simulateAgentTurn;
+export function AgentTestChat({ slug, businessName, userId }: {
+  slug: string; businessName: string; userId: string;
 }) {
   const [chats, setChats] = useState<TestConversation[]>([initialChat]);
   const [activeId, setActiveId] = useState("initial");
@@ -39,6 +38,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
   const [editing, setEditing] = useState<number | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
+  const [waitStopped, setWaitStopped] = useState(false);
   const [phase, setPhase] = useState("");
   const [error, setError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
@@ -61,7 +61,10 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
   const chat = chats.find(c => c.id === activeId) ?? chats[0];
   const messages = chat.entries;
   const last = messages.at(-1)?.result ?? null;
-  const busy = pending !== null || trainingBusy || voiceBusy;
+  const preparing = pending !== null || trainingBusy || voiceBusy;
+  const busy = preparing || Boolean(chat.outbox?.length);
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
   const storageKey = `agjenti:test-chat:v1:${userId}:${slug}`;
   useEffect(() => {
     try { const saved = readHistory(sessionStorage.getItem(storageKey)); if (saved.length) { setChats(saved); setActiveId(saved[0].id); } }
@@ -88,22 +91,70 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
   useEffect(() => {
     if (chatLog.current && !showJump) chatLog.current.scrollTop = chatLog.current.scrollHeight;
   }, [messages.length, pending, phase, activeId, showJump]);
+  useEffect(() => {
+    if (!ready) return;
+    let disposed = false, running = false;
+    async function sync() {
+      if (disposed || running) return;
+      running = true;
+      try {
+        for (const current of chatsRef.current.filter(c => c.outbox?.length)) {
+          const url = `/api/agent-test/turns?slug=${encodeURIComponent(slug)}`;
+          const response = await fetch(`${url}&stream=${current.id}`, { cache: "no-store", signal: AbortSignal.timeout(15000) });
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.error || "Statusi nuk u ngarkua.");
+          if (disposed) return;
+          const jobs = body.jobs ?? [];
+          setChats(all => all.map(c => c.id === current.id ? reconcileTestConversation(c,jobs) : c));
+          // One enqueue at a time; processing happens serially in the server
+          // queue. Reconcile first when the enqueue response was lost.
+          const next = current.outbox?.find(o => !o.accepted && !jobs.some((j: { requestId: string }) => j.requestId === o.id));
+          if (!next || next.status !== "queued") continue;
+          const posted = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
+            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: { message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
+          const result = await posted.json();
+          if (disposed) return;
+          setChats(all => all.map(c => c.id !== current.id ? c : { ...c, outbox: c.outbox?.map(o => o.id !== next.id ? o : { ...o, accepted: posted.ok, status: posted.ok ? "queued" : "failed", error: result.error }) }));
+        }
+      } catch {
+        if (!disposed) setStorageNotice("Lidhja/statusi nuk u konfirmua. Po rakordojmë të njëjtën kërkesë; nuk është dërgim i ri.");
+      } finally { running = false; }
+    }
+    const interval = window.setInterval(() => void sync(), 1000);
+    const reconnect = () => void sync();
+    window.addEventListener("online", reconnect);
+    return () => { disposed = true; clearInterval(interval); window.removeEventListener("online", reconnect); };
+  }, [ready, slug]);
+  async function retryOperation(operation: PendingTestTurn) {
+    try {
+      const response = await fetch(`/api/agent-test/turns?slug=${encodeURIComponent(slug)}`, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: { message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setChats(all => all.map(c => c.id !== chat.id ? c : { ...c, outbox: c.outbox?.map(o => o.id === operation.id ? { ...o, accepted: true, status: "queued", error: undefined } : o) }));
+      setWaitStopped(false);
+    } catch { setError("Retry nuk u konfirmua. Identiteti i kërkesës ruhet."); }
+  }
   function clearComposer(keepPreviews = false) {
     retry.current = null;
     for (const u of uploads) if (u.preview && !keepPreviews) { URL.revokeObjectURL(u.preview); objectUrls.current.delete(u.preview); }
     setDraft(""); setPhoto(false); setUploads([]); setRetained([]); setEditing(null); setError(""); setVoice(false);
   }
   function stop() {
-    epoch.current++; controller.current?.abort(); inFlight.current = false;
-    setPending(null); setPendingIndex(null); setPhase("");
+    setWaitStopped(true);
+    setStorageNotice("U ndal vetëm pritja vizuale. Puna në server mund të vazhdojë; rezultati do të rakordohet.");
   }
   function reset() {
-    stop(); clearComposer(); setTrainingFeedback(null); setTrainingRequest(null);
+    const next = newConversation();
+    const all = [next, ...chats.filter(x => x.entries.length || x.outbox?.length)];
+    if (all.slice(8).some(c => c.outbox?.length)) { setError("Ruajmë bisedat në proces. Fshi një bisedë të përfunduar për të hapur një të re."); return; }
+    clearComposer(); setTrainingFeedback(null); setTrainingRequest(null); setWaitStopped(false);
+    if (chat.outbox?.length) setStorageNotice("Biseda e mëparshme ruhet në historik. Puna e saj nuk është anuluar.");
     window.speechSynthesis?.cancel(); setSpeaking(null);
-    const next = newConversation(); setChats(c => [next, ...c.filter(x => x.entries.length)].slice(0,8)); setActiveId(next.id); setShowJump(false);
+    setChats(all.slice(0,8)); setActiveId(next.id); setShowJump(false);
   }
   function selectChat(id: string) {
-    if (busy) return;
+    if (preparing) return;
     clearComposer(); setActiveId(id); setTrainingFeedback(null); setTrainingRequest(null); setShowJump(false);
     setChats(current => [...current.filter(c=>c.id===id), ...current.filter(c=>c.id!==id)]);
     window.speechSynthesis?.cancel(); setSpeaking(null);
@@ -113,7 +164,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
     setRenaming(null);
   }
   function addFiles(files: File[]) {
-    if (busy) return;
+    if (pending !== null || trainingBusy || voiceBusy) return;
     const valid: Upload[] = [];
     for (const file of files) {
       if (uploads.length + retained.length + valid.length >= 3) { setError("Deri në 3 skedarë për mesazh."); break; }
@@ -134,8 +185,10 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
     const existing = original?.attachments ?? retained;
     const files = original ? [] : uploads;
     if (inFlight.current || trainingBusy || voiceBusy || (!text && !simulated && !existing.length && !files.length)) return;
+    index = original || editing !== null ? index : messages.length + (chat.outbox?.length ?? 0);
     if (index >= 40) { setError("Kjo bisedë arriti 40 mesazhe. Fillo një bisedë të re."); return; }
     if (!original) setDraft("");
+    setWaitStopped(false);
     const run = ++epoch.current; inFlight.current = true; controller.current = new AbortController();
     setError(""); setShowJump(false); setPendingIndex(index);
     setPending(text || (files.length || existing.length ? "Skedar i bashkëngjitur" : "[Foto e simuluar]"));
@@ -159,19 +212,27 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
         attachments.push(body.attachment);
       }
       if (epoch.current !== run) return;
-      setPhase("Agjenti po përgjigjet…");
-      const result = await onTurn({ slug, message: text, hasMedia: simulated, attachments: attachments.map(a => a.token), session: replaySession(messages,index) });
-      if (epoch.current !== run) return;
-      if ("error" in result) throw new Error(result.error);
-      const entry: ChatEntry = { id: crypto.randomUUID(), text, photo: simulated, attachments, result };
-      if (index < messages.length) {
-        const fork = forkConversation(chat,index,entry);
-        setChats(current => [fork, ...current].slice(0,8)); setActiveId(fork.id);
-      } else {
-        setChats(current => current.map(c => c.id === chat.id ? { ...c, entries: [...c.entries,entry], title: c.entries.length ? c.title : (text || attachments[0]?.name || "Provë me foto").slice(0,65), updatedAt: Date.now() } : c));
-      }
-      setTrainingFeedback(result.trainingReceipt ? { receipt: result.trainingReceipt, question: text || "[Skedar]", response: result.reply, workflowId: result.workflowId, stepKey: result.nextState.step_key ?? null } : null);
-      clearComposer(true);
+      // A queued turn may have completed while attachments were prepared.
+      // Append to the current reconciled conversation, never the captured one.
+      const currentChat = chatsRef.current.find(c => c.id === chat.id) ?? chat;
+      const currentEntries = currentChat.entries;
+      if (!original && editing === null) index = currentEntries.length + (currentChat.outbox?.length ?? 0);
+      if (index >= 40) throw new Error("Kjo bisedë arriti 40 mesazhe. Fillo një bisedë të re.");
+      const targetId = index < messages.length || chat.id === "initial" ? crypto.randomUUID() : chat.id;
+      const base = index < currentEntries.length ? { ...currentChat, id: targetId, title: `${chat.title.slice(0,55)} · version`, entries: currentEntries.slice(0,index), outbox: [] } : { ...currentChat, id: targetId };
+      const operation: PendingTestTurn = { id: crypto.randomUUID(), sequence: index, text, photo: simulated, attachments,
+        session: replaySession(currentEntries, Math.min(index, currentEntries.length)), status: "queued" };
+      const nextChat = { ...base, outbox: [...(base.outbox ?? []), operation], title: index ? base.title : (text || attachments[0]?.name || "Provë me foto").slice(0,65), updatedAt: Date.now() };
+      const allChats = [nextChat, ...chatsRef.current.filter(c => c.id !== targetId && (chat.id !== "initial" || c.id !== "initial"))];
+      if (allChats.slice(8).some(c => c.outbox?.length)) throw new Error("Nuk mund të hiqet një bisedë në proces. Fshi një bisedë të përfunduar.");
+      const nextChats = allChats.slice(0,8);
+      // Persist identity BEFORE any request. Without storage, do not submit an
+      // operation that this browser cannot reconcile after reload.
+      sessionStorage.setItem(storageKey, JSON.stringify(nextChats, (key,value) => key === "preview" ? undefined : value));
+      chatsRef.current = nextChats; setChats(nextChats); setActiveId(targetId);
+      setUploads([]); setRetained([]); setPhoto(false); setEditing(null);
+      // Do not clear text typed while attachment preparation was in progress.
+      retry.current = null;
     } catch (e) {
       if (epoch.current === run) {
         retry.current = { index, original };
@@ -213,7 +274,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
         <button className="chat-icon" type="button" title="Eksporto bisedën" aria-label="Eksporto bisedën" disabled={!messages.length || busy} onClick={download}><Icon name="download" /></button>
         <button className="chat-icon" type="button" title="Zgjero / zvogëlo" aria-label="Zgjero bisedën" aria-pressed={expanded} onClick={()=>setExpanded(v=>!v)}><Icon name="expand" /></button>
         <button className="chat-toolbar-button" type="button" aria-expanded={showDetails} onClick={()=>setShowDetails(v=>!v)}><Icon name="workflows" size={17}/> Rrjedha</button>
-        <button className="chat-toolbar-button primary" type="button" disabled={busy || voice} onClick={reset}><Icon name="plus" size={17}/> Bisedë e re</button>
+        <button className="chat-toolbar-button primary" type="button" disabled={preparing || voice} onClick={reset}><Icon name="plus" size={17}/> Bisedë e re</button>
       </nav>
     </header>
     <div className="chat-safety-note">Provë private · Nuk dërgon mesazhe në Instagram dhe nuk krijon porosi reale.</div>
@@ -223,36 +284,44 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
         <h3>Bisedat e tua</h3><input aria-label="Kërko bisedat" placeholder="Kërko bisedat…" value={search} onChange={e=>setSearch(e.target.value)}/>
         <p>8 bisedat e fundit në këtë skedë të shfletuesit.</p>
         {chats.filter(c => (c.title + c.entries.map(e=>e.text+e.result.reply).join(" ")).toLocaleLowerCase().includes(search.toLocaleLowerCase())).map(c => <div className={`chat-history-row ${c.id===chat.id ? "active" : ""}`} key={c.id}>
-          {renaming?.id === c.id ? <input autoFocus aria-label="Emri i bisedës" maxLength={80} value={renaming.title} onChange={e=>setRenaming({...renaming,title:e.target.value})} onBlur={saveTitle} onKeyDown={e=>{if(e.key==="Enter")saveTitle();if(e.key==="Escape")setRenaming(null);}}/> : <button disabled={busy || voice} onClick={()=>selectChat(c.id)} type="button" aria-current={c.id===chat.id ? "true" : undefined}><span>{c.title}</span><small>{c.entries.length} mesazhe</small></button>}
+          {renaming?.id === c.id ? <input autoFocus aria-label="Emri i bisedës" maxLength={80} value={renaming.title} onChange={e=>setRenaming({...renaming,title:e.target.value})} onBlur={saveTitle} onKeyDown={e=>{if(e.key==="Enter")saveTitle();if(e.key==="Escape")setRenaming(null);}}/> : <button disabled={preparing || voice} onClick={()=>selectChat(c.id)} type="button" aria-current={c.id===chat.id ? "true" : undefined}><span>{c.title}</span><small>{c.entries.length} mesazhe</small></button>}
           <button className="chat-icon" type="button" title="Riemërto bisedën" aria-label={`Riemërto ${c.title}`} disabled={busy || voice} onClick={()=>setRenaming({id:c.id,title:c.title})}><Icon name="edit" size={14}/></button>
           <button className="chat-icon" type="button" title="Fshi bisedën" aria-label={`Fshi ${c.title}`} disabled={busy || voice} onClick={()=>{
             const next=chats.filter(x=>x.id!==c.id); const fallback=next.length ? next : [newConversation()]; setChats(fallback); if(c.id===activeId) { clearComposer(); setActiveId(fallback[0].id); setTrainingFeedback(null); setTrainingRequest(null); window.speechSynthesis?.cancel(); setSpeaking(null); }
           }}><Icon name="trash" size={14}/></button>
         </div>)}
-        {storageNotice && <p role="status">{storageNotice}</p>}
       </aside>}
       <div className="agent-test-conversation">
+        {storageNotice && <p role="status">{storageNotice}</p>}
         {last && <TestConfiguration configuration={last.configuration} slug={slug} agentConfigured={last.debug.agentConfigured} />}
         <div className="agent-test-log" ref={chatLog} role="log" aria-label="Biseda e provës" aria-live="polite" onScroll={e=>{ const el=e.currentTarget; setShowJump(el.scrollHeight-el.scrollTop-el.clientHeight>120); }}>
-          {!messages.length && !pending && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti dhe përmirësoje gjatë bisedës.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
+          {!messages.length && !pending && !chat.outbox?.length && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti dhe përmirësoje gjatë bisedës.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
           {(pendingIndex !== null ? messages.slice(0,pendingIndex) : messages).map((entry,index)=><div className="chat-exchange" key={entry.id}>
             <div className="agent-test-bubble customer"><p>{entry.text}</p>{entry.photo && <span className="chat-file-pill">Foto e simuluar</span>}{entry.attachments.map((a,i)=><span className="chat-file-pill" key={i}>{a.preview?.startsWith("blob:") ? <Image unoptimized width={80} height={80} src={a.preview} alt={a.name}/> : <Icon name="file" size={15}/>} {a.name}</span>)}</div>
-            <small className="chat-receipt">seen</small>
+            <small className="chat-receipt">Përpunuar · provë lokale</small>
             <div className="chat-message-actions customer"><CopyMessage text={entry.text}/><button type="button" className="chat-icon" aria-label="Ndrysho mesazhin" title="Ndrysho mesazhin" disabled={busy || voice} onClick={()=>edit(index)}><Icon name="edit" size={16}/></button></div>
             <div className="agent-test-bubble agent"><span className="chat-agent-avatar"><Icon name="spark" size={19}/></span><ChatMessage text={entry.result.reply}/></div>
             <div className="chat-message-actions"><CopyMessage text={entry.result.reply}/><button className="chat-icon" type="button" title="Rigjenero përgjigjen" aria-label="Rigjenero përgjigjen" disabled={busy || voice} onClick={()=>void send(index,entry)}><Icon name="refresh" size={16}/></button>{canSpeak && <button className="chat-icon" type="button" title={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} aria-label={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} onClick={()=>speak(entry)}><Icon name={speaking===entry.id ? "stop" : "volume"} size={16}/></button>}{entry.result.trainingReceipt && <button type="button" className="chat-train" disabled={busy || voice} onClick={()=>{
               const feedback={receipt:entry.result.trainingReceipt!,question:entry.text || "[Skedar]",response:entry.result.reply,workflowId:entry.result.workflowId,stepKey:entry.result.nextState.step_key??null}; setTrainingFeedback(feedback);setTrainingRequest(previous=>({key:(previous?.key??0)+1,feedback}));
             }}><Icon name="spark" size={14}/> Përmirëso</button>}</div>
           </div>)}
-          {pending !== null && <div className="chat-exchange"><div className="agent-test-bubble customer"><p>{pending}</p></div><small className="chat-receipt">delivered</small>{phase && !phase.startsWith("Agjenti") ? <p className="agent-test-thinking" role="status"><span className="chat-thinking-dot"/>{phase}</p> : <div className="chat-typing" role="status" aria-label="Agjenti po shkruan"><i /><i /><i /></div>}</div>}
+          {chat.outbox?.map(operation => <div className="chat-exchange" key={operation.id}>
+            <div className="agent-test-bubble customer"><p>{operation.text || "[Skedar/foto prove]"}</p></div>
+            <small className="chat-receipt">{operation.status === "processing" ? "AI po përpunon · provë lokale" : operation.status === "failed" ? "Nuk u përfundua" : "Në radhë · provë lokale"}</small>
+            {operation.status === "processing" && !waitStopped && <p role="status">Duke pritur përgjigjen e AI-së…</p>}
+            {operation.error && <p role="alert">{operation.error}</p>}
+            {operation.status === "failed" && <button type="button" onClick={()=>void retryOperation(operation)}>Provo përsëri të njëjtën kërkesë</button>}
+          </div>)}
+          {Boolean(chat.outbox?.length) && !waitStopped && <button type="button" onClick={stop}>Ndalo pritjen</button>}
+          {pending !== null && <div className="chat-exchange"><div className="agent-test-bubble customer"><p>{pending}</p></div><small className="chat-receipt">Po përgatitet lokalisht</small>{phase && !phase.startsWith("Agjenti") ? <p className="agent-test-thinking" role="status"><span className="chat-thinking-dot"/>{phase}</p> : <p role="status">Po përgatitet mesazhi lokalisht…</p>}</div>}
         </div>
         {showJump && <button className="chat-jump chat-icon" type="button" aria-label="Shko te mesazhi i fundit" onClick={()=>{setShowJump(false);chatLog.current?.scrollTo({top:chatLog.current.scrollHeight,behavior:"smooth"});}}><Icon name="down" size={18}/></button>}
         <form className="agent-test-composer" onSubmit={e=>{e.preventDefault();void send();}}>
           {editing !== null && <div className="chat-edit-notice"><span>Po ndryshon mesazhin {editing+1}. Origjinali ruhet si bisedë më vete.</span><button type="button" className="chat-icon" aria-label="Anulo ndryshimin" disabled={busy} onClick={()=>clearComposer()}><Icon name="close" size={16}/></button></div>}
           {voice ? <AudioRecorder busy={voiceBusy} variant="assistant" purpose="request" onAnalyze={transcribe} onBack={()=>setVoice(false)}/> : <AssistantComposer
             id="agent-test-message" value={draft} onChange={setDraft} maxLength={2000} placeholder="Shkruaj një mesazh si klient…"
-            busy={busy} onSubmit={()=>void send()} onVoice={()=>{ primeVoiceCapture(); setVoice(true); }} onFiles={addFiles}
-            canSubmit={Boolean(draft.trim() || photo || uploads.length || retained.length)} onStop={pending !== null ? stop : undefined}
+            busy={trainingBusy || voiceBusy} onSubmit={()=>void send()} onVoice={()=>{ primeVoiceCapture(); setVoice(true); }} onFiles={addFiles}
+            canSubmit={Boolean(draft.trim() || photo || uploads.length || retained.length)}
             items={[...uploads.map(u=>({id:u.id,name:u.file.name,preview:u.preview})), ...retained.map((a,i)=>({id:`retained-${i}`,name:a.name}))]}
             onRemove={id=>{if(id.startsWith("retained-")) setRetained(current=>current.filter((_,i)=>`retained-${i}`!==id)); else setUploads(current=>current.filter(u=>{if(u.id!==id)return true;if(u.preview){URL.revokeObjectURL(u.preview);objectUrls.current.delete(u.preview);}return false;}));}}
           />}
@@ -374,6 +443,6 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
           </p>
         </aside>}
     </div>
-    <TrainingSession target={{ slug }} feedback={trainingFeedback} request={trainingRequest} memoryHref={`/b/${slug}/agents/memory`} busy={pending !== null || voiceBusy || voice} onBusyChange={setTrainingBusy} onChanged={reset} />
+    <TrainingSession target={{ slug }} feedback={trainingFeedback} request={trainingRequest} memoryHref={`/b/${slug}/agents/memory`} busy={busy || voice} onBusyChange={setTrainingBusy} onChanged={reset} />
   </section>;
 }

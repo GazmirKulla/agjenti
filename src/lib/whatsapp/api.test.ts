@@ -4,7 +4,7 @@ afterEach(() => vi.unstubAllGlobals());
 const input = { accountId: "123456", token: "private-token", to: "355691234567", body: "Përshëndetje" };
 it("uses the WhatsApp transport and bearer token, returning Meta's receipt", async () => {
   const fetcher = vi.fn().mockResolvedValue(Response.json({ messages: [{ id: "wamid.sent" }] })); vi.stubGlobal("fetch", fetcher);
-  expect(await sendWhatsAppText(input)).toEqual({ ok: true, messageId: "wamid.sent" });
+  expect(await sendWhatsAppText(input)).toMatchObject({ ok: true, messageId: "wamid.sent", parts: [{ messageId: "wamid.sent", status: "sent" }] });
   const [url, request] = fetcher.mock.calls[0];
   expect(url).toMatch(/^https:\/\/graph.facebook.com\/v[\d.]+\/123456\/messages$/);
   expect(url).not.toContain(input.token);

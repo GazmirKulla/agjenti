@@ -1,114 +1,47 @@
-import { NextResponse } from "next/server";
-import { decryptSecret } from "@/lib/crypto/tokens";
-import { channelAdapter } from "@/lib/conversations/channel";
-import { instagramWindowClosedError, isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { createServiceSupabase } from "@/lib/supabase/service";
-import { isPlatformAdmin } from "@/lib/tenant/access";
+import { after, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
+import { transportAccess, isTransportId } from "@/lib/conversations/transport-access";
+import { runWorkflowQueue } from "@/lib/conversations/workflow-queue";
 
-async function canAccess(userId: string, businessId: string) {
-	if (await isPlatformAdmin(userId)) return true;
-	const service = createServiceSupabase();
-	const { data } = await service
-		.from("business_users")
-		.select("user_id")
-		.eq("business_id", businessId)
-		.eq("user_id", userId)
-		.maybeSingle();
-	return Boolean(data);
+export const maxDuration = 180;
+type Context = { params: Promise<{ id: string; conversationId: string }> };
+export async function POST(request: Request, context: Context) {
+  const { id: businessId, conversationId } = await context.params;
+  const access = await transportAccess(businessId);
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const raw = await request.text();
+    if (raw.length > 25000) throw new Error("Mesazhi është shumë i gjatë.");
+    const body = JSON.parse(raw);
+    if (!isTransportId(body.requestId) || !isTransportId(conversationId) || typeof body.body !== "string" || !body.body.trim() || body.body.length > 20000) throw new Error("Mesazh ose identitet i pavlefshëm.");
+    const text = body.body.trim();
+    const isRetry = body.retryAttempt !== undefined;
+    if (isRetry && (!Number.isInteger(body.retryAttempt) || body.retryAttempt < 1 || body.retryAttempt > 3)) return NextResponse.json({ error: "Provë e pavlefshme." }, { status: 400 });
+    const { data, error } = await access.db.rpc(isRetry ? "retry_staff_transport" : "enqueue_transport_operation", isRetry ? {
+      p_business: businessId, p_user: access.userId, p_conversation: conversationId, p_request: body.requestId, p_attempt: body.retryAttempt,
+    } : {
+      p_business: businessId, p_user: access.userId, p_request: body.requestId, p_kind: "staff", p_scope: conversationId,
+      p_sequence: null, p_fingerprint: createHash("sha256").update(JSON.stringify({ conversationId, text })).digest("hex"), p_payload: { body: text },
+    });
+    if (error) return NextResponse.json({ error: "Mesazhi nuk u pranua. Kontrollo bisedën, lejet dhe dritaren 24-orëshe.", code: "transport_rejected" }, { status: 409 });
+    after(() => runWorkflowQueue().then(() => {}));
+    return NextResponse.json({ accepted: true, requestId: body.requestId, status: data.status }, { status: 202 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Kërkesë e pavlefshme." }, { status: 400 });
+  }
 }
-
-export async function POST(
-	request: Request,
-	context: { params: Promise<{ id: string; conversationId: string }> },
-) {
-	const { id: businessId, conversationId } = await context.params;
-	const supabase = await createServerSupabase();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-	if (!user || !(await canAccess(user.id, businessId))) {
-		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-	}
-	const body = (await request.json()) as { body?: string };
-	const text = body.body?.trim();
-	if (!text) return NextResponse.json({ error: "Mesazhi është bosh." }, { status: 400 });
-
-	const service = createServiceSupabase();
-	const { data: conversation } = await service
-		.from("conversations")
-		.select(
-			"id,business_id,channel,customer_id,instagram_participant_id,instagram_connection_id,whatsapp_participant_id,whatsapp_connection_id,last_inbound_at,status",
-		)
-		.eq("id", conversationId)
-		.eq("business_id", businessId)
-		.maybeSingle();
-	if (!conversation) return NextResponse.json({ error: "Biseda nuk u gjet." }, { status: 404 });
-	if (!isInstagramMessagingWindowOpen(conversation.last_inbound_at)) {
-		return NextResponse.json(conversation.channel === "whatsapp" ? { error: "Dritarja 24-orëshe ka mbaruar. Klienti duhet të shkruajë përsëri.", code: "whatsapp_window_closed" } : instagramWindowClosedError(), { status: 409 });
-	}
-
-	const adapter = channelAdapter(conversation.channel);
-    const connectionId = conversation[adapter.connection];
-    let recipientId = conversation[adapter.participant] as string | null;
-	if (!recipientId && conversation.channel !== "whatsapp" && conversation.customer_id) {
-		const { data: customer } = await service
-			.from("customers")
-			.select("instagram_user_id")
-			.eq("id", conversation.customer_id)
-			.maybeSingle();
-		recipientId = customer?.instagram_user_id ?? null;
-	}
-	const { data: conn } = await service
-		.from(adapter.table)
-		.select(conversation.channel === "whatsapp" ? "phone_number_id,access_token_ciphertext,status" : "ig_user_id,access_token_ciphertext,status")
-		.eq("id", connectionId)
-        .eq("business_id", businessId)
-		.maybeSingle();
-	if (!recipientId || !conn || conn.status !== "connected") {
-		return NextResponse.json({ error: "Kanali i mesazheve nuk është i lidhur." }, { status: 400 });
-	}
-
-	let token: string;
-	try {
-		token = decryptSecret(conn.access_token_ciphertext);
-	} catch {
-		return NextResponse.json({ error: "Token i pavlefshëm." }, { status: 500 });
-	}
-
-	// Claim staff ownership before sending so queued AI output is discarded.
-	const { data: owned, error: ownershipError } = await service.from("conversations")
-		.update({ status: "paused", auto_reply: false, openai_previous_response_id: null, updated_at: new Date().toISOString() })
-		.eq("id", conversationId).eq("business_id", businessId).select("id").maybeSingle();
-	if (ownershipError || !owned) return NextResponse.json({ error: "Biseda nuk u kalua te stafi. Mesazhi nuk u dërgua." }, { status: 409 });
-	const send = await adapter.send({
-		accountId: String("phone_number_id" in conn ? conn.phone_number_id : conn.ig_user_id),
-		token,
-		to: recipientId,
-		body: text,
-	});
-	if (!send.ok) {
-		return NextResponse.json({ error: send.error, code: send.code }, { status: 400 });
-	}
-
-	const { error: historyError } = await service.from("messages").insert({
-		business_id: businessId,
-		conversation_id: conversationId,
-		[adapter.connection]: connectionId,
-		direction: "outbound",
-		source: "staff",
-		body: text,
-		external_message_id: send.messageId ?? null,
-		delivery_status: "sent",
-	});
-	if (historyError) return NextResponse.json({ error: "Mesazhi u dërgua, por nuk u ruajt në historik. Mos e ridërgo; agjenti mbetet në pauzë.", delivered: true, messageId: send.messageId }, { status: 502 });
-	await service
-		.from("conversations")
-		.update({
-			last_message_at: new Date().toISOString(),
-			last_message_preview: text.slice(0, 140),
-		})
-		.eq("id", conversationId).eq("business_id", businessId);
-
-	return NextResponse.json({ ok: true, messageId: send.messageId });
+export async function GET(request: Request, context: Context) {
+  const { id: businessId, conversationId } = await context.params;
+  const access = await transportAccess(businessId);
+  if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { data: conversation, error: lookupError } = await access.db.from("conversations").select("id").eq("business_id", businessId).eq("id", conversationId).maybeSingle();
+  if (lookupError) return NextResponse.json({ error: "Statusi nuk u ngarkua." }, { status: 503 });
+  if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const { data, error } = await access.db.from("workflow_inbound_queue").select("client_request_id,status,error,reply,created_at,provider_message_id,attempts,operator_user_id,message_transport_parts(part_index,status,external_message_id)")
+    .eq("business_id", businessId).eq("conversation_id", conversationId).eq("operation_kind", "staff").order("id", { ascending: false }).limit(100);
+  if (error) return NextResponse.json({ error: "Statusi nuk u ngarkua." }, { status: 503 });
+  if (data?.some(j => ["queued", "prepared", "processing", "sending"].includes(j.status))) after(() => runWorkflowQueue().then(() => {}));
+  return NextResponse.json({ jobs: (data ?? []).reverse().map(j => ({ requestId: j.client_request_id, status: j.status, error: j.error, body: j.reply, createdAt: j.created_at, attempts: j.attempts,
+    canRetry: j.operator_user_id === access.userId && j.status === "uncertain" && j.attempts < 3 && j.message_transport_parts?.length === 1 && j.message_transport_parts[0].part_index === 0 && j.message_transport_parts[0].status === "failed" && !j.message_transport_parts[0].external_message_id,
+  })) }, { headers: { "Cache-Control": "no-store" } });
 }

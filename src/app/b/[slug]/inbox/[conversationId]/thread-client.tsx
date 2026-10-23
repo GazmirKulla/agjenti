@@ -7,6 +7,7 @@ import Image from "next/image";
 import type { NormalizedAttachment } from "@/lib/instagram/types";
 import { Icon } from "@/components/dashboard/icon";
 import Link from "next/link";
+import { useReplyOutbox } from "@/components/agents/reply-outbox";
 import { IntegrationActivity, type IntegrationActivityLog } from "@/components/dashboard/integration-activity";
 type Message = {
   id: string;
@@ -17,9 +18,12 @@ type Message = {
   created_at: string;
   delivery_status: string | null;
   delivery_error: string | null;
+  transport_request_id?: string | null;
+  message_transport_parts?: { id: string; part_index: number; part_count: number; body: string; status: string }[];
 };
 export function ThreadClient(props: {
   businessId: string;
+  userId: string;
   conversationId: string;
   slug: string;
   status: string;
@@ -39,6 +43,7 @@ export function ThreadClient(props: {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const outbox = useReplyOutbox(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/messages`, `agjenti:reply:${props.userId}:${props.businessId}:${props.conversationId}`, () => router.refresh());
   async function request(path: string, body?: object) {
     if (pending) return;
     setPending(true);
@@ -171,6 +176,7 @@ export function ThreadClient(props: {
               className={`chat-message ${m.direction === "outbound" ? "outbound" : "inbound"}`}
             >
               {m.body && <p>{m.body}</p>}
+              {(m.message_transport_parts?.length ?? 0) > 1 && <details><summary>Pjesët e dërgimit</summary>{m.message_transport_parts?.slice().sort((a,b)=>a.part_index-b.part_index).map(p=><p key={p.id}>Pjesa {p.part_index+1}/{p.part_count}: {p.status}</p>)}</details>}
               {(Array.isArray(m.media) ? m.media : []).map(
                 (attachment, index) => {
                   const url = attachment?.sourceUrl;
@@ -223,17 +229,19 @@ export function ThreadClient(props: {
               {m.delivery_error && (
                 <p className="text-danger text-xs mt-1">{t(m.delivery_error)}</p>
               )}
+              {m.transport_request_id && outbox.operations.some(o => o.requestId === m.transport_request_id && o.canRetry) && <button type="button" onClick={()=>void outbox.retry(m.transport_request_id!)}>Provo përsëri të njëjtin dërgim</button>}
             </div>
           ))
         ) : (
           <p className="muted-copy text-center">{t("Biseda ende nuk ka mesazhe.")}</p>
         )}
+        {outbox.operations.filter(o => !props.messages.some(m => m.transport_request_id === o.requestId)).map(o => <div key={o.requestId} className="chat-message outbound"><p>{o.body}</p><small>{o.status === "prepared" || o.status === "queued" ? "Në radhë" : o.status === "sending" ? "Duke dërguar" : o.status === "sent" ? "Pranuar nga kanali" : o.status === "uncertain" ? "Dërgim i pakonfirmuar — mos e ridërgo" : "Dështoi"}</small>{o.error && <p role="alert">{o.error}</p>}{o.status === "failed" && !o.accepted && <button type="button" onClick={()=>outbox.retry(o.requestId)}>Provo përsëri</button>}</div>)}
       </div>
       <form
         className="chat-composer"
         onSubmit={(e) => {
           e.preventDefault();
-          if (text.trim()) void request("messages", { body: text.trim() });
+          if (text.trim() && outbox.enqueue(text.trim())) setText("");
         }}
       >
         <div className="composer-label">
@@ -247,22 +255,22 @@ export function ThreadClient(props: {
           onChange={(e) => setText(e.target.value)}
           placeholder={t("Shkruaj një mesazh…")}
           rows={3}
-          disabled={pending}
+          maxLength={props.channel === "whatsapp" ? 4096 : 20000}
         />
         <div className="composer-footer">
           <span>{t("Mesazhi dërgohet në")} {props.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</span>
           <button
             className="btn btn-primary"
             type="submit"
-            disabled={pending || !text.trim()}
+            disabled={!text.trim()}
           >
-            {pending ? t("Duke dërguar…") : t("Dërgo")}
+            {t("Dërgo")}
             <Icon name="arrow" size={16} />
           </button>
         </div>
-        {error && (
+        {(error || outbox.error) && (
           <p role="alert" className="text-sm text-danger mt-3">
-            {t(error)}
+            {t(error || outbox.error)}
           </p>
         )}
       </form>

@@ -25,6 +25,15 @@ dgram.createSocket = () => { throw new Error('E2E_UDP_BLOCKED'); };
 const originalFetch = globalThis.fetch;
 globalThis.fetch = (input, init) => {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+  // Transport certification only: redirect precisely identified synthetic
+  // accounts to the local fake provider. All real Meta credentials/hosts stay
+  // blocked; no product code or external network path is replaced/enabled.
+  if (process.env.E2E_TRANSPORT_PROVIDER === 'synthetic' && process.env.E2E_R3_PROVIDER === 'synthetic' &&
+    url.protocol === 'https:' && ['graph.instagram.com', 'graph.facebook.com'].includes(url.hostname) &&
+    /^\/v\d+\.\d+\/synthetic-transport-[a-f0-9-]+\/messages$/.test(url.pathname) &&
+    new Headers(init?.headers).get('Authorization') === 'Bearer synthetic-transport-local-only' && init?.method === 'POST') {
+    return originalFetch(`http://127.0.0.1:55325/meta/${url.hostname === 'graph.instagram.com' ? 'instagram' : 'whatsapp'}`, init);
+  }
   if (url.protocol !== 'http:') throw new Error('E2E_PROTOCOL_BLOCKED');
   check(url.hostname, url.port);
   return originalFetch(input, init);

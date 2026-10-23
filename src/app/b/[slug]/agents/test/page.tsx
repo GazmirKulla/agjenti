@@ -26,7 +26,7 @@ export default async function AgentTestPage({
         </Link>
       </div>
       <AgentTestChat
-        key={access.business.id}
+        key={`${access.business.id}:${user.id}`}
         slug={slug}
         userId={user.id}
         businessName={access.business.name}

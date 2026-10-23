@@ -1,4 +1,5 @@
 import { inboxHistory, type InboxHistoryMessage } from "./inbox-history";
+import { isAcceptedDelivery } from "./delivery-status";
 import { inboundBatch } from "./message-batch";
 import { randomUUID } from "node:crypto";
 import { InboundPersistenceError } from "./inbound-persistence-error";
@@ -363,7 +364,7 @@ export async function handleInboundMessage(
   const [{ data: historyRows, error: historyError }, { data: lastOutbound, error: outboundError }] = await Promise.all([
     supabase.from("messages").select("body,direction,source,delivery_status,external_message_id")
       .eq("business_id", businessId).eq("conversation_id", conversationId)
-      .or("and(direction.eq.inbound,source.eq.customer),and(direction.eq.outbound,delivery_status.eq.sent,source.in.(agent,staff))")
+      .or("and(direction.eq.inbound,source.eq.customer),and(direction.eq.outbound,delivery_status.in.(sent,delivered,read),source.in.(agent,staff))")
       .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(10 + batch.originals.length),
     // Ownership evidence must not disappear when many messages arrive during pause.
     supabase.from("messages").select("body,source,delivery_status")
@@ -373,7 +374,7 @@ export async function handleInboundMessage(
   if (historyError || outboundError) throw new Error("Conversation history unavailable");
   const history = inboxHistory((historyRows ?? []) as InboxHistoryMessage[], new Set(batch.originals.map(original => original.externalMessageId)));
   inboundState.recentMessages = history.messages;
-  const staffReplied = history.staffReplied || lastOutbound?.source === "staff" && lastOutbound.delivery_status === "sent";
+  const staffReplied = history.staffReplied || lastOutbound?.source === "staff" && isAcceptedDelivery(lastOutbound.delivery_status);
   const resumedHandoff = inboundState.staffHandoff || inboundState.visual?.status === "handoff" && !inboundState.visual.advisory;
   // Fresh threads and explicit AI resume start clean. Only a live staff takeover
   // (or an unfinished handoff still marked in state) should arm the clarify guard.
@@ -401,7 +402,7 @@ export async function handleInboundMessage(
     ]);
     return !error && !businessError && current?.status === "active" && Boolean(current.auto_reply ?? business?.auto_reply ?? false);
   };
-  let deliveredReply: string | null = lastOutbound?.source === "agent" && lastOutbound.delivery_status === "sent" ? lastOutbound.body : null;
+  let deliveredReply: string | null = lastOutbound?.source === "agent" && isAcceptedDelivery(lastOutbound.delivery_status) ? lastOutbound.body : null;
   let unconfirmedPrompt = false;
   if (job) {
     const { data: attempted, error: attemptError } = await supabase.from("workflow_inbound_queue")

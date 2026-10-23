@@ -14,5 +14,5 @@ it("does not retry or send later chunks after a missing receipt", async () => {
 });
 it("returns the provider receipt after confirmed delivery", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ message_id: "confirmed" })));
-  expect(await sendInstagramText(params)).toEqual({ ok: true, messageId: "confirmed" });
+  expect(await sendInstagramText(params)).toMatchObject({ ok: true, messageId: "confirmed", parts: [{ messageId: "confirmed", status: "sent" }] });
 });

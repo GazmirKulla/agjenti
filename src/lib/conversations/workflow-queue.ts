@@ -1,5 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
+import { encryptSecret } from "@/lib/crypto/tokens";
+import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/execute-turn";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import { channelAdapter } from "./channel";
@@ -18,6 +20,9 @@ export type WorkflowJob = {
     reply: string | null;
     conversation_id?: string | null;
     batch_payloads?: NormalizedIncomingMessage[] | null;
+    operation_kind?: "inbound" | "staff" | "test";
+    operator_user_id?: string;
+    test_stream_id?: string;
 };
 export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage) {
     if (isIsolatedExecution()) refuseIsolatedEffect("background_job", "workflow_queue");
@@ -56,7 +61,15 @@ async function sendPrepared(job: WorkflowJob) {
     if (!claimed) return; // A staff takeover can discard prepared output atomically.
     job.status = "sending";
     const sent = job.payload.channel !== "whatsapp" || isInstagramMessagingWindowOpen(new Date(job.payload.timestamp).toISOString())
-      ? await adapter.send({ accountId: String("phone_number_id" in connection ? connection.phone_number_id : connection.ig_user_id), token: String(token), to: job.participant_id, body: job.reply ?? "" })
+      ? await adapter.send({ accountId: String("phone_number_id" in connection ? connection.phone_number_id : connection.ig_user_id), token: String(token), to: job.participant_id, body: job.reply ?? "",
+          onPart: async (part, total) => {
+            const receipt = { p_job: job.id, p_token: job.lease_token, p_index: part.index, p_total: total, p_body: part.body, p_status: part.status, p_external: part.messageId ?? null, p_error: part.error ?? null };
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try { const { error } = await db.rpc("record_transport_part", receipt); if (!error) return; }
+                catch { /* Retry the idempotent DB receipt, never the external part. */ }
+            }
+            throw new Error("Part receipt persistence failed; do not resend");
+          } })
       : { ok: false as const, error: "Dritarja 24-orëshe ka mbaruar." };
     const confirmed = sent.ok && typeof sent.messageId === "string" && Boolean(sent.messageId.trim());
     const receipt = { p_id: job.id, p_token: job.lease_token, p_ok: confirmed,
@@ -72,18 +85,21 @@ async function sendPrepared(job: WorkflowJob) {
     }
     throw new Error("Send receipt unavailable");
 }
-export async function runWorkflowQueue(maxJobs = 10) {
+export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: string; userId: string; streamId: string }) {
     const db = createServiceSupabase();
     let processed = 0;
     const started = Date.now();
     let attempts = 0;
     while (attempts < maxJobs && Date.now() - started < 45000) {
         // Transport safety applies to every tenant, independently of workflow rollout.
-        const { data, error } = await db.rpc("claim_workflow_inbound_batch", { p_businesses: null });
+        const { data, error } = testScope
+          ? await db.rpc("claim_workflow_transport", { p_businesses: [testScope.businessId], p_test_user: testScope.userId, p_test_stream: testScope.streamId })
+          : await db.rpc("claim_workflow_inbound_batch", { p_businesses: null });
         if (error)
             throw new Error("Queue claim failed");
         const job = data?.[0] as WorkflowJob | undefined;
         if (!job) {
+            if (testScope) break;
             const { data: delay, error: waitError } = await db.rpc("workflow_inbound_batch_wait_ms");
             if (waitError) throw new Error("Queue wakeup lookup failed");
             if (typeof delay !== "number" || delay <= 0) break;
@@ -94,6 +110,25 @@ export async function runWorkflowQueue(maxJobs = 10) {
         }
         attempts++;
         try {
+            if (job.operation_kind === "test") {
+                if (!testScope || job.business_id !== testScope.businessId || job.operator_user_id !== testScope.userId || job.test_stream_id !== testScope.streamId) throw new Error("Test transport isolation violation");
+                const { executeAgentTestTurn } = await import("@/lib/agents/test-chat/execute-turn");
+                const { data: prior, error: priorError } = await db.from("workflow_inbound_queue").select("result_ciphertext,status")
+                  .eq("business_id", job.business_id).eq("operator_user_id", job.operator_user_id!).eq("test_stream_id", job.test_stream_id!)
+                  .lt("id", job.id).order("id", { ascending: false }).limit(1).maybeSingle();
+                if (priorError || prior && (prior.status !== "sent" || !prior.result_ciphertext)) throw new Error("Previous turn unavailable");
+                const input = { ...job.payload } as unknown as TestChatInput;
+                if (prior) {
+                    const previous = JSON.parse(decryptSecret(prior.result_ciphertext)) as TestChatResult;
+                    if ("error" in previous) throw new Error("Previous turn failed");
+                    input.session = previous.session;
+                }
+                const result = await executeAgentTestTurn(input, job.operator_user_id!);
+                const { error } = await db.rpc("finish_test_transport", { p_id: job.id, p_token: job.lease_token, p_result: "error" in result ? null : encryptSecret(JSON.stringify(result)), p_error: "error" in result ? result.error : null });
+                if (error) throw new Error("Test result commit failed");
+                processed++;
+                continue;
+            }
             if (job.status !== "prepared") {
                 const { handleInboundMessage } = await import("./handle-inbound");
                 await handleInboundMessage({ ...job.payload, timestamp: new Date(job.payload.timestamp) }, job);

@@ -1,0 +1,106 @@
+// Real disposable PostgreSQL/Auth/PostgREST; no provider or customer traffic.
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import path from 'node:path';
+import {createClient} from '@supabase/supabase-js';
+import {work,project,verifyContainers,localKeys} from './local.mjs';
+
+assert.equal(project,'agjenti-e2e-local-messages-20261024');
+verifyContainers();
+const f=JSON.parse(readFileSync(path.join(work,'fixtures.json'),'utf8')),keys=localKeys();
+const db=createClient(keys.api,keys.service,{auth:{persistSession:false,autoRefreshToken:false}});
+const a=f.tenants[0],b=f.tenants[1],connection=randomUUID(),conversation=randomUUID(),stream=randomUUID(),participant=`test-${randomUUID()}`;
+const own=createClient(keys.api,keys.anon,{auth:{persistSession:false,autoRefreshToken:false}});
+const foreign=createClient(keys.api,keys.anon,{auth:{persistSession:false,autoRefreshToken:false}});
+let checks=0;
+const ok=async promise=>{const r=await promise;assert.equal(r.error,null,r.error?.message);return r.data;};
+const rpc=(name,args)=>ok(db.rpc(name,args));
+const check=(name)=>{checks++;console.log(`PASS ${name}`);};
+const enqueue=(request,sequence,scope=stream,user=a.userId,business=a.id)=>db.rpc('enqueue_transport_operation',{
+ p_business:business,p_user:user,p_request:request,p_kind:'test',p_scope:scope,p_sequence:sequence,p_fingerprint:'a'.repeat(64),p_payload:{message:'synthetic',slug:a.slug},
+});
+const claim=()=>rpc('claim_workflow_transport',{p_businesses:[a.id],p_test_user:a.userId,p_test_stream:stream});
+try {
+ await ok(own.auth.signInWithPassword({email:a.email,password:f.password}));
+ await ok(foreign.auth.signInWithPassword({email:b.email,password:f.password}));
+ const request=randomUUID();
+ const duplicate=await Promise.all(Array.from({length:6},()=>ok(enqueue(request,0))));
+ assert.equal(new Set(duplicate.map(j=>j.id)).size,1);check('concurrent duplicate requests have one job');
+ const j1=duplicate[0],j2=await ok(enqueue(randomUUID(),1)),j3=await ok(enqueue(randomUUID(),2));
+ const claims=await Promise.all(Array.from({length:6},claim));
+ assert.deepEqual(claims.flat().map(j=>j.id),[j1.id]);check('concurrent claims serialize three messages');
+ assert.equal((await rpc('claim_workflow_inbound_batch',{p_businesses:[a.id]})).length,0);check('live worker cannot claim private Agent Test');
+ assert.ok((await enqueue(randomUUID(),4)).error);assert.ok((await enqueue(randomUUID(),0,randomUUID(),b.userId,a.id)).error);check('sequence gap and cross-tenant membership rejected');
+ const old=claims.flat()[0];
+ await ok(db.from('workflow_inbound_queue').update({leased_until:'2000-01-01T00:00:00Z'}).eq('id',j1.id));
+ const current=(await claim())[0];assert.equal(current.id,j1.id);assert.notEqual(current.lease_token,old.lease_token);
+ assert.ok((await db.rpc('finish_test_transport',{p_id:j1.id,p_token:old.lease_token,p_result:'stale',p_error:null})).error);
+ await rpc('finish_test_transport',{p_id:j1.id,p_token:current.lease_token,p_result:'sealed-synthetic',p_error:null});
+ assert.equal((await claim())[0].id,j2.id);check('lease fence rejects stale completion; next turn follows committed first');
+ await ok(db.from('workflow_inbound_queue').update({attempts:3,leased_until:'2000-01-01T00:00:00Z'}).eq('id',j2.id));
+ assert.equal((await claim()).length,0);assert.equal((await claim()).length,0);
+ assert.equal((await ok(db.from('workflow_inbound_queue').select('status').eq('id',j3.id).single())).status,'queued');check('retry limit stops failed predecessor without skipping facts');
+ assert.equal((await own.from('workflow_inbound_queue').select('id').eq('test_stream_id',stream)).error?.code,'42501');check('raw test queue not exposed to authenticated users');
+ await ok(db.from('instagram_connections').insert({id:connection,business_id:a.id,ig_user_id:connection,access_token_ciphertext:'synthetic-only',status:'connected'}));
+ await ok(db.from('conversations').insert({id:conversation,business_id:a.id,instagram_connection_id:connection,instagram_participant_id:participant,channel:'instagram',last_inbound_at:new Date().toISOString(),status:'active',auto_reply:true}));
+ const staffRequest=randomUUID();
+ const staff=await rpc('enqueue_transport_operation',{p_business:a.id,p_user:a.userId,p_request:staffRequest,p_kind:'staff',p_scope:conversation,p_sequence:null,p_fingerprint:'b'.repeat(64),p_payload:{body:'one two'}});
+ const c=await ok(db.from('conversations').select('status,auto_reply').eq('id',conversation).single());assert.deepEqual(c,{status:'paused',auto_reply:false});
+ const sending=(await rpc('claim_workflow_inbound_batch',{p_businesses:[a.id]}))[0];assert.equal(sending.id,staff.id);
+ assert.equal(await rpc('begin_workflow_send',{p_id:staff.id,p_token:sending.lease_token}),true);check('staff enqueue atomically takes ownership before send');
+ await ok(db.from('workflow_inbound_queue').update({leased_until:'2000-01-01T00:00:00Z'}).eq('id',staff.id));
+ const stalePart=await db.rpc('record_transport_part',{p_job:staff.id,p_token:sending.lease_token,p_index:0,p_total:2,p_body:'one',p_status:'sending',p_external:null,p_error:null});
+ assert.ok(stalePart.error,'Expired sender must not begin another external part');
+ await ok(db.from('workflow_inbound_queue').update({leased_until:new Date(Date.now()+120000).toISOString()}).eq('id',staff.id));
+ check('expired sender cannot begin another part');
+ const receipt=(external,status,who=participant,client=db)=>client.rpc('record_transport_receipt',{p_connection:connection,p_participant:who,p_external:external,p_status:status,p_occurred:new Date().toISOString()});
+ const part=(index,status,external)=>rpc('record_transport_part',{p_job:staff.id,p_token:sending.lease_token,p_index:index,p_total:2,p_body:index?'two':'one',p_status:status,p_external:external,p_error:null});
+ const first=`first-${randomUUID()}`,second=`second-${randomUUID()}`;
+ await ok(receipt(first,'read'));await ok(receipt(first,'delivered'));await ok(receipt(first,'sent'));await ok(receipt(first,'read'));
+ await ok(db.from('workflow_inbound_queue').update({leased_until:'2000-01-01T00:00:00Z'}).eq('id',staff.id));
+ await part(0,'sent',first);check('late acknowledged part may be persisted after lease expiry');
+ await ok(db.from('workflow_inbound_queue').update({leased_until:new Date(Date.now()+120000).toISOString()}).eq('id',staff.id));
+ await part(1,'sent',second);
+ await rpc('finish_workflow_send',{p_id:staff.id,p_token:sending.lease_token,p_ok:true,p_external:second,p_error:null});
+ const message=await ok(db.from('messages').select('id,delivery_status,transport_request_id').eq('transport_request_id',staffRequest).single());assert.equal(message.delivery_status,'sent');
+ const parts=await ok(db.from('message_transport_parts').select('status,part_index').eq('job_id',staff.id).order('part_index'));assert.deepEqual(parts.map(p=>p.status),['read','sent']);check('early duplicate/out-of-order receipt survives ACK; aggregate does not overclaim');
+ await ok(receipt(second,'read','wrong-recipient'));
+ assert.equal((await ok(db.from('messages').select('delivery_status').eq('id',message.id).single())).delivery_status,'sent');
+ await ok(receipt(second,'delivered'));assert.equal((await ok(db.from('messages').select('delivery_status').eq('id',message.id).single())).delivery_status,'delivered');
+ await ok(receipt(second,'read'));await ok(receipt(second,'delivered'));assert.equal((await ok(db.from('messages').select('delivery_status').eq('id',message.id).single())).delivery_status,'read');check('exact recipient and monotonic all-part status');
+ const buffered=await ok(db.from('message_transport_receipts').select('participant_id').eq('connection_id',connection));
+ assert.deepEqual(buffered.map(r=>r.participant_id),['wrong-recipient']);check('matched receipts leave the bounded early-event buffer');
+ assert.equal((await ok(own.from('message_transport_parts').select('id').eq('job_id',staff.id))).length,2);
+ assert.equal((await ok(foreign.from('message_transport_parts').select('id').eq('job_id',staff.id))).length,0);
+ assert.ok((await receipt(second,'read',participant,own)).error);
+ assert.ok((await own.rpc('claim_workflow_transport',{p_businesses:[a.id],p_test_user:a.userId,p_test_stream:stream})).error);check('real RLS: same-tenant read, cross-tenant denial, privileged RPC denial');
+ await rpc('finish_workflow_send',{p_id:staff.id,p_token:sending.lease_token,p_ok:true,p_external:second,p_error:null});
+ assert.equal((await ok(db.from('messages').select('id').eq('transport_request_id',staffRequest))).length,1);check('receipt transaction recovery is idempotent');
+ const rejectedRequest=randomUUID();
+ const rejected=await rpc('enqueue_transport_operation',{p_business:a.id,p_user:a.userId,p_request:rejectedRequest,p_kind:'staff',p_scope:conversation,p_sequence:null,p_fingerprint:'c'.repeat(64),p_payload:{body:'definite rejection'}});
+ const attempt=(await rpc('claim_workflow_inbound_batch',{p_businesses:[a.id]}))[0];assert.equal(attempt.id,rejected.id);
+ await rpc('begin_workflow_send',{p_id:attempt.id,p_token:attempt.lease_token});
+ await rpc('record_transport_part',{p_job:attempt.id,p_token:attempt.lease_token,p_index:0,p_total:1,p_body:'definite rejection',p_status:'failed',p_external:null,p_error:'synthetic 400'});
+ await rpc('finish_workflow_send',{p_id:attempt.id,p_token:attempt.lease_token,p_ok:false,p_external:null,p_error:'synthetic 400'});
+ const beforeRetry=await ok(db.from('messages').select('id,delivery_status').eq('transport_request_id',rejectedRequest).single());assert.equal(beforeRetry.delivery_status,'failed');
+ const retryArgs={p_business:a.id,p_user:a.userId,p_conversation:conversation,p_request:rejectedRequest,p_attempt:attempt.attempts};
+ assert.ok((await db.rpc('retry_staff_transport',{...retryArgs,p_user:b.userId})).error);
+ assert.ok((await own.rpc('retry_staff_transport',retryArgs)).error);
+ const rearms=await Promise.all([rpc('retry_staff_transport',retryArgs),rpc('retry_staff_transport',retryArgs)]);assert.ok(rearms.every(j=>j.id===rejected.id&&j.status==='prepared'));
+ const secondAttempt=(await rpc('claim_workflow_inbound_batch',{p_businesses:[a.id]}))[0];assert.equal(secondAttempt.id,rejected.id);assert.equal(secondAttempt.attempts,2);
+ assert.equal((await rpc('retry_staff_transport',retryArgs)).status,'prepared'); // Stale approval cannot reset the current lease.
+ await rpc('begin_workflow_send',{p_id:attempt.id,p_token:secondAttempt.lease_token});
+ await rpc('record_transport_part',{p_job:attempt.id,p_token:secondAttempt.lease_token,p_index:0,p_total:1,p_body:'definite rejection',p_status:'sent',p_external:'retry-accepted',p_error:null});
+ await rpc('finish_workflow_send',{p_id:attempt.id,p_token:secondAttempt.lease_token,p_ok:true,p_external:'retry-accepted',p_error:null});
+ const afterRetry=await ok(db.from('messages').select('id,delivery_status').eq('transport_request_id',rejectedRequest));assert.deepEqual(afterRetry,[{id:beforeRetry.id,delivery_status:'sent'}]);
+ assert.equal((await rpc('retry_staff_transport',retryArgs)).status,'sent');assert.equal((await rpc('claim_workflow_inbound_batch',{p_businesses:[a.id]})).length,0);
+ check('verified rejection retry preserves message/job identity, fences duplicate approvals and rechecks authorization');
+ console.log(`${checks} PASS; real isolated Auth/PostgREST/PostgreSQL; provider and LLM NOT exercised.`);
+} finally {
+ // Only this script's synthetic identities; no shared fixture reset.
+ await ok(db.from('workflow_inbound_queue').delete().eq('test_stream_id',stream));
+ await ok(db.from('workflow_inbound_queue').delete().eq('connection_id',connection));
+ await ok(db.from('conversations').delete().eq('id',conversation));
+ await ok(db.from('instagram_connections').delete().eq('id',connection));
+}

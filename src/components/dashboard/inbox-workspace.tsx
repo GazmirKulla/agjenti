@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { conversationDisplayName } from "@/lib/conversations/ensure-customer";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { ThreadClient } from "@/app/b/[slug]/inbox/[conversationId]/thread-client";
+import { getSessionUser } from "@/lib/tenant/access";
 import { AddCustomerButton } from "./add-customer-button";
 import { InboxList } from "./inbox-list";
 import { EmptyState, PageHeading, formatDate, money } from "./ui";
@@ -30,6 +31,8 @@ export async function InboxWorkspace({
   view?: "customer";
 }) {
   const t = await getDashboardTranslator();
+  const user = await getSessionUser();
+  if (!user) notFound();
   const db = createServiceSupabase();
   const [instagram, whatsapp] = await Promise.all([
     db.from("instagram_connections").select("status,expires_at").eq("business_id", businessId).neq("status", "disconnected").maybeSingle(),
@@ -115,7 +118,7 @@ export async function InboxWorkspace({
     db
       .from("messages")
       .select(
-        "id,direction,source,body,media,created_at,delivery_status,delivery_error",
+        "id,direction,source,body,media,created_at,delivery_status,delivery_error,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)",
       )
       .eq("business_id", businessId)
       .eq("conversation_id", selected)
@@ -179,7 +182,8 @@ export async function InboxWorkspace({
           })}
         />
         <ThreadClient
-          key={selected}
+          key={`${user.id}:${selected}`}
+          userId={user.id}
           businessId={businessId}
           conversationId={selected}
           slug={slug}

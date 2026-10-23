@@ -1,10 +1,11 @@
 import { splitInstagramText } from "@/lib/instagram/split-text";
+import type { MessagePart, PartObserver } from "@/lib/conversations/delivery-status";
 import { graphVersion } from "@/lib/instagram/oauth";
 import { isIsolatedExecution, refuseIsolatedEffect, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
 
 export type SendInstagramResult =
-	| { ok: true; messageId?: string }
-	| { ok: false; skipped?: boolean; error: string; code?: string };
+	| { ok: true; messageId?: string; parts?: MessagePart[] }
+	| { ok: false; skipped?: boolean; error: string; code?: string; parts?: MessagePart[] };
 
 type MetaErrorBody = {
 	error?: {
@@ -38,6 +39,7 @@ async function postMessage(
 	} catch (err) {
 		return {
 			ok: false,
+			code: "send_uncertain",
 			error: err instanceof Error ? err.message : "Instagram API: rrjeti dështoi.",
 		};
 	}
@@ -53,6 +55,7 @@ async function postMessage(
 		}
 		return {
 			ok: false,
+			...(response.status >= 500 ? { code: "send_uncertain" } : {}),
 			error: data?.error?.error_user_msg || data?.error?.message || `Instagram API error (${response.status})`,
 		};
 	}
@@ -67,6 +70,7 @@ export async function sendInstagramText(params: {
 	token: string;
 	to: string;
 	body: string;
+	onPart?: PartObserver;
 }): Promise<SendInstagramResult> {
 	assertBusinessEffectAllowed("instagram.send");
 	if (isIsolatedExecution()) refuseIsolatedEffect("customer.message", "instagram");
@@ -74,13 +78,22 @@ export async function sendInstagramText(params: {
 	if (!text) return { ok: false, error: "Mesazhi është bosh." };
 	const chunks = splitInstagramText(text);
 	let lastId: string | undefined;
-	for (const chunk of chunks) {
+	const parts: MessagePart[] = [];
+	for (const [index, chunk] of chunks.entries()) {
+		await params.onPart?.({ index, body: chunk, status: "sending" }, chunks.length);
 		const send = await postMessage(params.accountId, params.token, {
 			recipient: { id: params.to },
 			message: { text: chunk },
 		});
-		if (!send.ok) return send;
+		const part: MessagePart = send.ok
+			? { index, body: chunk, status: "sent", messageId: send.messageId }
+			: { index, body: chunk, status: send.code === "send_uncertain" || send.code === "receipt_missing" ? "uncertain" : "failed", error: send.error };
+		parts.push(part);
+		// Persist each acknowledgement before the next external send. A failed
+		// persistence call stops here; it must never replay the provider request.
+		await params.onPart?.(part, chunks.length);
+		if (!send.ok) return { ...send, parts };
 		lastId = send.messageId ?? lastId;
 	}
-	return { ok: true, messageId: lastId };
+	return { ok: true, messageId: lastId, parts };
 }

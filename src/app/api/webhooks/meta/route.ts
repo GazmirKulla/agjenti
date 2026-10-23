@@ -1,4 +1,5 @@
 import { parseWhatsAppWebhook } from "@/lib/whatsapp/parse-webhook";
+import { parseProviderReceipts, persistProviderReceipts } from "@/lib/conversations/provider-receipts";
 import { verifyMetaSignature } from "@/lib/instagram/meta-webhook";
 import { enqueueWorkflowMessage, runWorkflowQueue } from "@/lib/conversations/workflow-queue";
 import { after, NextResponse } from "next/server";
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
 
 		if ((payload.object as string) === "whatsapp_business_account") {
             if (!verifyMetaSignature(rawBody, signature)) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+            await persistProviderReceipts(parseProviderReceipts(payload));
             for (const message of parseWhatsAppWebhook(payload)) await enqueueWorkflowMessage(message);
             after(async () => { await runWorkflowQueue(); });
             return NextResponse.json({ received: true });
@@ -59,6 +61,7 @@ export async function POST(request: Request) {
 		}
 
 		const { messages, ignored } = parseInstagramWebhookPayload(payload);
+        await persistProviderReceipts(parseProviderReceipts(payload));
 		console.log("[meta webhook][POST]", {
 			accepted: messages.length,
 			ignored: ignored.length,

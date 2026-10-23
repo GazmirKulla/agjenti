@@ -23,7 +23,7 @@ describe("Scoped dashboard language", () => {
     expect(translator("en")("External API detail")).toBe("External API detail");
   });
   it("translates manual chat controls and preserves customer content and channel", () => {
-    const thread = h(ThreadClient, { businessId: "test", conversationId: "thread", slug: "test", status: "paused", channel: "whatsapp", customerName: "Klienti", logs: [], messages: [{ id: "1", direction: "inbound", source: "customer", body: "Shkruaj një mesazh", media: null, created_at: "2026-10-12T10:00:00Z", delivery_status: null, delivery_error: null }] });
+    const thread = h(ThreadClient, { userId: "synthetic-user", businessId: "test", conversationId: "thread", slug: "test", status: "paused", channel: "whatsapp", customerName: "Klienti", logs: [], messages: [{ id: "1", direction: "inbound", source: "customer", body: "Shkruaj një mesazh", media: null, created_at: "2026-10-12T10:00:00Z", delivery_status: null, delivery_error: null }] });
     const english = render("en", thread);
     expect(english).toContain("Resume AI agent");
     expect(english).toContain("Manual reply");

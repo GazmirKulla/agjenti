@@ -57,21 +57,31 @@ export function localKeys() {
   return { api, anon: status.ANON_KEY, service: status.SERVICE_ROLE_KEY };
 }
 const manifestPath = path.join(work, 'migrations.json');
+export function pendingMigrations(previous, current) {
+  // Append-only local migration testing. Never tolerate edited, reordered or
+  // removed applied SQL, including a changed dependency guard.
+  assert.ok(previous.length <= current.length, 'Applied migration removed');
+  assert.deepEqual(current.slice(0, previous.length), previous, 'Migration drift: use a separately reviewed fresh local stack');
+  return current.slice(previous.length);
+}
 export function migrationSql(payload) {
   // Supabase applies each migration transactionally. Preserve files that already
   // own their transaction; otherwise TEMP ... ON COMMIT DROP needs this wrapper.
   const statements = payload.replace(/^\s*--[^\n]*$/gm, '').trimStart();
   return /^begin\s*;/i.test(statements) ? payload : `begin;\n${payload}\ncommit;`;
 }
-function replay() {
+function replay(applyPending = false) {
   const files = readdirSync(path.join(root, 'supabase/migrations')).filter(f => f.endsWith('.sql')).sort();
   const current = files.map(name => ({ name, sha256: hash(readFileSync(path.join(root, 'supabase/migrations', name))) }));
-  if (existsSync(manifestPath)) {
-    assert.deepEqual(JSON.parse(readFileSync(manifestPath, 'utf8')), current, 'Migration drift: use a separately reviewed fresh local stack');
-    return;
-  }
-  assert.equal(sql("select count(*) from pg_tables where schemaname='public';"), '0', 'Partial/unknown schema: do not retry blindly');
-  for (const file of current) {
+  const previous = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : [];
+  const pending = pendingMigrations(previous, current);
+  if (!pending.length) return;
+  assert.ok(applyPending, 'Pending local migrations: run the explicit local up command first');
+  if (!previous.length) assert.equal(sql("select count(*) from pg_tables where schemaname='public';"), '0', 'Partial/unknown schema: do not retry blindly');
+  // app() has already verified containers too; never apply pending SQL before
+  // rechecking private network identity on an incremental replay.
+  verifyContainers();
+  for (const file of pending) {
     const payload = readFileSync(path.join(root, 'supabase/migrations', file.name), 'utf8');
     let preflight = '';
     if (file.name === '20261014140000_order_write_boundary.sql') {
@@ -90,6 +100,8 @@ function replay() {
       throw error;
     }
     console.log(`Applied LOCAL ${file.name}`);
+    previous.push(file);
+    writeFileSync(manifestPath, JSON.stringify(previous, null, 2));
   }
   writeFileSync(manifestPath, JSON.stringify(current, null, 2));
   sql("notify pgrst, 'reload schema';");
@@ -107,10 +119,10 @@ async function up() {
   // CLI output may contain disposable local keys: keep it private, not in logs.
   supabase(['start', '-x', 'studio,postgres-meta,logflare,vector,realtime,edge-runtime,supavisor,imgproxy']);
   verifyContainers();
-  replay();
+  replay(true);
   console.log('Local Supabase ready; production credentials never loaded.');
 }
-async function app(syntheticR3 = false) {
+async function app(syntheticR3 = false, transport = false) {
   verifyContainers();
   assert.ok(existsSync(manifestPath), 'Migration replay incomplete');
   replay(); // Existing manifest must match before app startup, not merely exist.
@@ -131,10 +143,15 @@ async function app(syntheticR3 = false) {
   // Dedicated controlled-provider command only. Never load a real API key or
   // grant external egress. Ordinary `app` retains its provider-denied behavior.
   if (syntheticR3) {
-    assert.equal(project, 'agjenti-e2e-local-recovery-3a-20261023');
+    assert.equal(project, transport ? 'agjenti-e2e-local-messages-20261024' : 'agjenti-e2e-local-recovery-3a-20261023');
     env.OPENAI_API_KEY = 'synthetic-r3-local-only';
     env.OPENAI_BASE_URL = 'http://127.0.0.1:55325/v1';
     env.E2E_R3_PROVIDER = 'synthetic';
+    if (transport) {
+      env.E2E_TRANSPORT_PROVIDER = 'synthetic';
+      env.META_APP_SECRET = 'synthetic-transport-webhook';
+      env.INSTAGRAM_APP_SECRET = 'synthetic-transport-webhook';
+    }
   }
   const child = spawn(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'), 'dev', '--hostname', '127.0.0.1', '--port', '3103'], { cwd: dir, env, stdio: 'inherit' });
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
@@ -146,6 +163,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (command === 'up') await up();
     else if (command === 'app') await app();
     else if (command === 'app-r3') await app(true);
+    else if (command === 'app-transport') await app(true, true);
     else if (command === 'down') { verifyNetwork(); supabase(['stop', '--project-id', project]); console.log('Local stack stopped; data retained.'); }
     else if (command === 'status') { verifyContainers(); console.log('Local dependencies isolated and available.'); }
     else throw new Error('Use up | app | status | down');

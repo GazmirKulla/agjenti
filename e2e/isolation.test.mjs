@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { safeEnv, root, migrationSql } from './local.mjs';
+import { safeEnv, root, migrationSql, pendingMigrations } from './local.mjs';
 import path from 'node:path';
 
 test('application environment does not inherit cloud/provider credentials or proxies', () => {
   const env = safeEnv();
-  for (const key of ['SUPABASE_ACCESS_TOKEN', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'E2E_R3_PROVIDER', 'META_APP_SECRET', 'GOOGLE_CALENDAR_CLIENT_SECRET', 'NODE_OPTIONS', 'HTTP_PROXY'])
+  for (const key of ['SUPABASE_ACCESS_TOKEN', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'E2E_R3_PROVIDER', 'E2E_TRANSPORT_PROVIDER', 'META_APP_SECRET', 'GOOGLE_CALENDAR_CLIENT_SECRET', 'NODE_OPTIONS', 'HTTP_PROXY'])
     assert.equal(env[key], undefined);
 });
 test('migration replay supplies atomicity without replacing existing transactions or guards', () => {
@@ -14,6 +14,14 @@ test('migration replay supplies atomicity without replacing existing transaction
   assert.equal(migrationSql(statement), `begin;\n${statement}\ncommit;`);
   const owned = '-- security guard\n\nbegin;\nselect 1;\ncommit;';
   assert.equal(migrationSql(owned), owned);
+});
+test('incremental local replay accepts only an identical applied prefix',()=>{
+ const old=[{name:'a.sql',sha256:'one'}],next=[...old,{name:'b.sql',sha256:'two'}];
+ assert.deepEqual(pendingMigrations(old,next),[next[1]]);
+ assert.deepEqual(pendingMigrations(old,old),[]);
+ assert.throws(()=>pendingMigrations(old,[]));
+ assert.throws(()=>pendingMigrations(old,[{name:'a.sql',sha256:'changed'},next[1]]));
+ assert.throws(()=>pendingMigrations(old,[next[1],old[0]]));
 });
 test('fresh instance isolates resources and rejects unsafe identifiers', () => {
   const inspect = "import('./e2e/local.mjs').then(m=>console.log(JSON.stringify([m.work,m.project,m.network])))";
@@ -41,5 +49,12 @@ test('synthetic provider opt-in still blocks external fetch and TLS',()=>{
   for(const code of ["fetch('https://api.openai.com/v1/responses')","require('tls').connect(443,'example.invalid')","require('net').connect(443,'192.0.2.1')"]){
     const result=spawnSync(process.execPath,['--require',path.join(root,'e2e/network-guard.cjs'),'-e',code],{encoding:'utf8',env:{...safeEnv(),E2E_R3_PROVIDER:'synthetic'}});
     assert.notEqual(result.status,0);assert.match(result.stderr,/E2E_(?:PROTOCOL|TLS|OUTBOUND)_BLOCKED/);
+  }
+});
+test('transport opt-in cannot forward a real account or a non-synthetic credential',()=>{
+  for(const [account,token] of [['123456','synthetic-transport-local-only'],['synthetic-transport-abc','not-the-synthetic-token']]){
+    const code=`fetch('https://graph.instagram.com/v22.0/${account}/messages',{method:'POST',headers:{Authorization:'Bearer ${token}'},body:'{}'})`;
+    const result=spawnSync(process.execPath,['--require',path.join(root,'e2e/network-guard.cjs'),'-e',code],{encoding:'utf8',env:{...safeEnv(),E2E_R3_PROVIDER:'synthetic',E2E_TRANSPORT_PROVIDER:'synthetic'}});
+    assert.notEqual(result.status,0);assert.match(result.stderr,/E2E_PROTOCOL_BLOCKED/);
   }
 });
