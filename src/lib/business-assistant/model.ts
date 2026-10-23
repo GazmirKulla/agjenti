@@ -1,4 +1,5 @@
 import { parseService } from "@/lib/services/model";
+import { instructionGuidanceNotice } from "@/lib/agents/configuration-contract";
 import { readAutomationIntent, type AutomationIntent } from "./automation-intent";
 import { localInstant, validDate, validTime, uuid } from "@/lib/calendar/model";
 
@@ -46,6 +47,7 @@ export type Proposal = {
 };
 export type Row = Record<string, unknown>;
 export type Preview = {
+  agentConfiguration?: { agentId: string; active: boolean | null };
   title: string;
   subject?: string;
   fields: { label: string; before: string; after: string }[];
@@ -352,6 +354,7 @@ export function previewFor(
   }
   return {
     title: `${action.endsWith("_create") ? "Krijo" : "Ndrysho"} ${names[action.split("_")[0]]}`,
+    ...(action === "agent_update" ? { agentConfiguration: { agentId: String(before?.id ?? ""), active: typeof before?.is_active === "boolean" ? before.is_active : null } } : {}),
     subject: String(
       before?.name ??
         before?.title ??
@@ -371,6 +374,11 @@ export function previewFor(
         before: display(k, before?.[k], true),
         after: display(k, v),
       })),
+    ...(action === "agent_update" ? { notice: `${before?.is_active === false
+      ? "Agjenti i klientëve është joaktiv. Konfirmimi ndryshon vetëm udhëzimet; ato nuk përdoren derisa ta aktivizosh veçmas te Agjentët."
+      : before?.is_active === true
+        ? "Agjenti i klientëve është aktiv. Konfirmimi ndryshon vetëm udhëzimet; pas ruajtjes verifikohet nëse ato janë ende konfigurimi aktiv për përgjigjet e reja."
+        : "Statusi i agjentit nuk u verifikua. Konfirmimi ndryshon vetëm udhëzimet, jo aktivizimin."} ${instructionGuidanceNotice}` } : {}),
     ...(action === "product_create" || action === "service_create"
       ? {
           notice:

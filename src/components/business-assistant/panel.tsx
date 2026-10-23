@@ -3,6 +3,7 @@ import "./workspace-layout.css";
 import "./mobile.css";
 import "./assistant-workspace.css";
 import { businessGoals } from "./presentation";
+import { AgentEffectObservation, AgentInstructionNotice } from "./agent-configuration";
 import { DailyBriefing } from "./daily-briefing";
 import { briefingQuestion } from "@/lib/business-assistant/briefing-model";
 import { useDashboardLanguage } from "@/components/dashboard/language";
@@ -62,6 +63,7 @@ function MessageCopy({ text }: { text: string }) {
   );
 }
 type Result = {
+  configurationEffect?: import("@/lib/agents/configuration-contract").AgentConfigurationEffect;
   briefing?: import("@/lib/business-assistant/briefing-model").Briefing;
   persistence?: ConversationView;
   recovered?: boolean;
@@ -674,6 +676,7 @@ export function BusinessAssistant({
               <Icon name="check" size={22} />
               <div>
                 <strong>{result.message}</strong>
+                {result.configurationEffect && <AgentEffectObservation effect={result.configurationEffect} />}
                 {result.receipt && <PublicationReceiptView receipt={result.receipt} />}
                 {result.warning && <p>{result.warning}</p>}
                 {result.path && (
@@ -756,7 +759,7 @@ export function BusinessAssistant({
                 ))}
               </dl>}
               {result.preview.notice && (
-                <p className="assistant-notice">{result.preview.notice}</p>
+                result.preview.agentConfiguration ? <AgentInstructionNotice preview={result.preview} slug={slug} /> : <p className="assistant-notice">{result.preview.notice}</p>
               )}
               <p className="assistant-notice">
                 {recovered ? `Ky është propozimi historik, jo leje për veprim. Rishqyrtoje me ${appearance.name} për një konfirmim të ri.` : "Asgjë nuk është ruajtur ende. Konfirmimi vlen për 10 minuta."}

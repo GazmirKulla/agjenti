@@ -10,6 +10,7 @@ import {
 import { readTestSession, sealTestSession } from "./session";
 import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
 import { readAttachment } from "./attachments";
+import { collectTestConfiguration } from "./provenance";
 export type TestChatInput = {
   slug: string;
   message: string;
@@ -104,7 +105,9 @@ export async function simulateAgentTurn(
       setupSignature = null;
     }
 
+    const provenance = collectTestConfiguration();
     const turn = await processConversationMessage({
+      onTrace: provenance.onTrace,
       mode: "test",
       businessId: access.business.id,
       message: text || (attachments.length ? "Çfarë mund të më thuash për skedarin që dërgova?" : text),
@@ -150,6 +153,7 @@ export async function simulateAgentTurn(
     }
     return {
       ...turn,
+      configuration: provenance.finish(turn),
       productName: turn.productName,
       workflowProgress: turn.workflowProgress,
       setupTestPassed,

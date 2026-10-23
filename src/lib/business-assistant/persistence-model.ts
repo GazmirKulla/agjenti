@@ -27,7 +27,8 @@ export type StoredMessage = {
   seq: number; request_id: string; role: "user" | "assistant";
   kind: "user" | "assistant" | "backend_outcome" | "interrupted";
   content: string; context: AssistantUIContext; created_at: string;
-  outcome?: { action: string; reference: { table: string; id?: string; request_key?: string }; status: string } | null;
+  outcome?: { action: string; reference: { table: string; id?: string; request_key?: string }; status: string;
+    configurationEffect?: import("@/lib/agents/configuration-contract").AgentConfigurationEffect } | null;
 };
 export type StoredPlan = { revision: number; snapshot: RecoverablePlan; preferences: PlanningPreferences };
 export type ConversationView = {

@@ -1,4 +1,5 @@
 "use client";
+import { TestConfiguration } from "./test-configuration";
 import { AssistantComposer } from "@/components/business-assistant/composer";
 import { MessageRoutingView } from "@/components/workflows/message-routing";
 import { useEffect, useRef, useState } from "react";
@@ -231,6 +232,7 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
         {storageNotice && <p role="status">{storageNotice}</p>}
       </aside>}
       <div className="agent-test-conversation">
+        {last && <TestConfiguration configuration={last.configuration} slug={slug} agentConfigured={last.debug.agentConfigured} />}
         <div className="agent-test-log" ref={chatLog} role="log" aria-label="Biseda e provës" aria-live="polite" onScroll={e=>{ const el=e.currentTarget; setShowJump(el.scrollHeight-el.scrollTop-el.clientHeight>120); }}>
           {!messages.length && !pending && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti dhe përmirësoje gjatë bisedës.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
           {(pendingIndex !== null ? messages.slice(0,pendingIndex) : messages).map((entry,index)=><div className="chat-exchange" key={entry.id}>
@@ -335,12 +337,6 @@ export function AgentTestChat({ slug, businessName, userId, onTurn = simulateAge
               </>
             )}
           </dl>
-          {last && !last.debug.agentConfigured && last.debug.fallbackReason !== "workflow_prompt" && (
-            <p className="agent-test-notice">
-              Nuk ka udhëzime nga një agjent aktiv. Po përdoren udhëzimet bazë.{" "}
-              <Link href={`/b/${slug}/agents`}>Konfiguro agjentin →</Link>
-            </p>
-          )}
           {last?.debug.fallbackReason && last.debug.fallbackReason !== "workflow_prompt" && (
             <p role="status" className="agent-test-notice">
               {reasons[last.debug.fallbackReason] ||

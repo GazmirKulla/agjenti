@@ -1,4 +1,6 @@
 import { requireActionAccess } from "@/lib/actions/access";
+import { observeAgentEffect, requireAgentConfigurationAccess } from "@/lib/agents/configuration";
+import { configurationEffectMessage, type AgentConfigurationEffect } from "@/lib/agents/configuration-contract";
 import { defaultPersonalAssistantName, readPersonalAssistantName } from "./identity";
 import { modelPlanContext, type PlanningPreferences, type RecoverablePlan } from "./persistence-model";
 import { sealImportSource } from "@/lib/products/import-service";
@@ -12,7 +14,7 @@ import { automationIntentSchema } from "./automation-intent";
 import { automationInstructions, buildAutomationProposal, automationMessage, type AutomationProposal } from "./automation-proposal";
 import { summarizeWorkflowChanges } from "./semantic-summary";
 import { toActionPlan, actionPlanInstructions, type ActionPlan } from "./action-plan";
-const workflowInstructions = `${automationInstructions} ${baseWorkflowInstructions} ${actionPlanInstructions}`;
+const workflowInstructions = `${automationInstructions} ${baseWorkflowInstructions} ${actionPlanInstructions} agent_update saves general model guidance, not a deterministic response template. Never promise an exact response solely from saving instructions. Explain this limitation for exact-message requests; creating or publishing a supported workflow response is a separate explicit approval, not part of agent_update.`;
 import type { WorkflowCard } from "./workflow";
 import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
 import type { PublicationApproval } from "@/lib/workflows/visual/publication-types";
@@ -633,6 +635,10 @@ export async function executeTicket(access: Access, token: string) {
   if (t.action.startsWith("workflow_")) return executeWorkflow(access, t);
   if(t.action.startsWith("linear_")) return executeLinear(access,t);
   const kind = t.action.split("_")[0];
+  if (kind === "agent") {
+    try { await requireAgentConfigurationAccess(access.businessId, access.userId); }
+    catch { throw new AssistantError("Nuk ke më qasje për të ndryshuar agjentin në këtë biznes."); }
+  }
   if (kind === "booking") {
     const v = t.values;
     if (t.serviceVersion) {
@@ -668,7 +674,9 @@ export async function executeTicket(access: Access, token: string) {
   if (t.before) {
     let query = db
       .from(tables[kind])
-      .update({ ...t.values, updated_at: new Date().toISOString() })
+      .update({ ...t.values, updated_at: kind === "agent"
+        ? new Date(Math.max(Date.now(), (Date.parse(String(t.before.updated_at)) || 0) + 1)).toISOString()
+        : new Date().toISOString() })
       .eq("id", t.id)
       .eq("updated_at", t.before.updated_at);
     if (kind === "agent")
@@ -704,8 +712,11 @@ export async function executeTicket(access: Access, token: string) {
         );
     }
   }
+  const configurationEffect: AgentConfigurationEffect | undefined = kind === "agent"
+    ? await observeAgentEffect(access.businessId, t.id, String(t.values.instructions)) : undefined;
   return {
-    message: "Ndryshimet u ruajtën.",
+    ...(configurationEffect ? { configurationEffect } : {}),
+    message: configurationEffect ? configurationEffectMessage(configurationEffect) : "Ndryshimet u ruajtën.",
     path: kind === "profile" ? "settings" : moduleFor(t.action),
   };
 }

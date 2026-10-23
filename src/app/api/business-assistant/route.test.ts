@@ -68,6 +68,14 @@ it("returns structured stale-publication blockers, never a successful save", asy
   expect(response.status).toBe(400);
   expect(await response.json()).toMatchObject({ publication: { status: "stale_proposal", canPublish: false } });
 });
+it("C1: returns server effectiveness evidence, ignoring forged client evidence", async () => {
+  const configurationEffect = { saved: true, effective: false, status: "inactive", behaviorVerified: false, targetAgentId: "server-agent", targetActive: false, activeAgentId: null, instructionHash: "server-hash", checkedAt: "2026-10-23T10:00:00Z" };
+  m.execute.mockResolvedValueOnce({ message: "Udhëzimet u ruajtën, por nuk përdoren ende.", path: "agents", configurationEffect });
+  const response = await POST(req({ mode: "confirm", token: "sealed-ticket", configurationEffect: { effective: true, behaviorVerified: true, targetAgentId: "foreign-agent" } }));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ saved: true, configurationEffect });
+  expect(m.execute).toHaveBeenCalledWith(expect.objectContaining({ businessId: "business", userId: "user" }), "sealed-ticket");
+});
 it("rejects cross-origin requests before authentication and analysis", async () => {
   expect(
     (await POST(req({ mode: "plan", text: "hello" }, "https://evil.test")))

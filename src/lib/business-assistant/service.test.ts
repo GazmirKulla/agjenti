@@ -40,6 +40,10 @@ beforeEach(() => {
   m.responses.length = 0;
   process.env.TOKEN_ENCRYPTION_KEY = "assistant-test-only-key";
   m.from.mockImplementation((table: string) => {
+    if (["business_users", "platform_admins"].includes(table)) {
+      const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: table === "business_users" ? { business_id: access.businessId } : null, error: null }) };
+      return q;
+    }
     const calls: [string, unknown[]][] = [];
     m.queries.push({ table, calls });
     const result = m.responses.shift() ?? { data: null, error: null };
@@ -57,6 +61,7 @@ beforeEach(() => {
       "ilike",
       "order",
       "limit",
+      "or",
     ])
       chain[name] = (...args: unknown[]) => {
         calls.push([name, args]);
@@ -64,6 +69,57 @@ beforeEach(() => {
       };
     return chain;
   });
+});
+it("C1: persists inactive instructions without implying effectiveness or activation", async () => {
+  const before = { id, name: "Synthetic agent", instructions: "Old", is_active: false, updated_at: "v1" };
+  m.responses.push({ data: before });
+  const plan = await prepareProposal({ ...access, modules: ["agents"] }, {
+    action: "agent_update", id, message: "Change greeting", changes: [{ field: "instructions", value: "New greeting" }],
+  }, "Europe/Tirane");
+  expect(plan.preview?.notice).toContain("joaktiv");
+  m.responses.push({ data: { id } }, { data: [{ ...before, instructions: "New greeting" }] });
+  const result = await executeTicket({ ...access, modules: ["agents"] }, plan.token!);
+  expect(result).toMatchObject({ configurationEffect: { saved: true, effective: false, status: "inactive", behaviorVerified: false } });
+  expect(result.message).toContain("nuk përdoren ende");
+  const update = m.queries.find(q => q.calls.some(([op]) => op === "update"));
+  expect(update?.calls.find(([op]) => op === "update")?.[1][0]).not.toHaveProperty("is_active");
+});
+it.each(["effective", "superseded", "unverified"] as const)("C1: returns server-observed %s after an acknowledged update", async status => {
+  const before = { id, name: "Synthetic", instructions: "Old", is_active: true, updated_at: "v1" };
+  m.responses.push({ data: before });
+  const plan = await prepareProposal({ ...access, modules: ["agents"] }, { action: "agent_update", id, message: "", changes: [{ field: "instructions", value: "New" }] }, "UTC");
+  expect(plan.preview?.notice).toContain("nuk garantojnë tekst identik");
+  m.responses.push({ data: { id } }, status === "unverified" ? { error: { code: "failed" } } : { data: [{ ...before, instructions: status === "superseded" ? "Newer" : "New" }] });
+  expect(await executeTicket({ ...access, modules: ["agents"] }, plan.token!)).toMatchObject({ configurationEffect: { status, saved: true, behaviorVerified: false, effective: status === "unverified" ? null : status === "effective" } });
+});
+it.each([{ data: null }, { data: null, error: { code: "write_failed" } }])("C1: no success or effectiveness read when update fails or is stale", async failure => {
+  m.responses.push(failure);
+  await expect(executeTicket({ ...access, modules: ["agents"] }, ticket({ action: "agent_update", before: { id, updated_at: "old", instructions: "Old" }, values: { instructions: "New" } }))).rejects.toThrow();
+  expect(m.queries).toHaveLength(1);
+});
+it("C1: rejects expired and cross-actor/tenant agent approvals before reading instructions", async () => {
+  for (const values of [{ expires: 0 }, { userId: "other" }, { businessId: "other" }]) {
+    await expect(executeTicket({ ...access, modules: ["agents"] }, ticket({ action: "agent_update", ...values }))).rejects.toThrow();
+  }
+  expect(m.queries).toHaveLength(0);
+});
+it("C1: rechecks revoked membership at confirmation, before any configuration read or write", async () => {
+  m.from.mockImplementation((table: string) => {
+    if (!["business_users", "platform_admins"].includes(table)) throw Error("Unexpected configuration access");
+    const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: null, error: null }) };
+    return q;
+  });
+  await expect(executeTicket({ ...access, modules: ["agents"] }, ticket({ action: "agent_update", before: { id, updated_at: "old", instructions: "Old" }, values: { instructions: "New" } }))).rejects.toThrow("qasje");
+  expect(m.from.mock.calls.map(([table]) => table)).toEqual(["business_users", "platform_admins"]);
+});
+it("C1: an agent approval is consumed by its content/revision fence", async () => {
+  const token = ticket({ action: "agent_update", before: { id, updated_at: "2026-10-23T00:00:00Z", instructions: "Old" }, values: { instructions: "New" } });
+  const a = { ...access, modules: ["agents"] };
+  m.responses.push({ data: { id } }, { data: [{ id, is_active: true, instructions: "New" }] }, { data: null });
+  expect(await executeTicket(a, token)).toHaveProperty("configurationEffect.status", "effective");
+  await expect(executeTicket(a, token)).rejects.toThrow("kanë ndryshuar");
+  expect(m.queries[2].calls).toContainEqual(["eq", ["updated_at", "2026-10-23T00:00:00Z"]]);
+  expect(m.queries[2].calls).toContainEqual(["eq", ["instructions", "Old"]]);
 });
 const ticket = (overrides: Partial<Ticket> = {}) =>
   encryptSecret(

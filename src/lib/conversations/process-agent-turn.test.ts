@@ -27,7 +27,27 @@ import { migrateContext } from "@/lib/workflows/context";
 import { starterVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
 import { processConversationMessage } from "./process-conversation-message";
 import { decisionForTurn } from "./turn-decision";
+import { instructionHash } from "@/lib/agents/configuration";
 const fixtures: Record<string, unknown> = {};
+it("C1: each turn reports the actual active agent and new content loaded into generation", async () => {
+  const onTrace = vi.fn();
+  for (const [id, instructions] of [["agent-a", "Old instructions"], ["agent-a", "Updated instructions"], ["agent-b", "Other active instructions"]]) {
+    fixtures.ai_agents = { id, name: id, instructions, is_active: true, updated_at: "same timestamp" };
+    await processLegacyAgentTurn({ businessId: "business-a", message: "Përshëndetje", hasPhoto: false, informational: "Answer only", onTrace });
+    expect(mocks.generate.mock.calls.at(-1)?.[0].instructions).toContain(instructions);
+    const read = onTrace.mock.calls.filter(([e]) => e.label === "Customer agent configuration loaded").at(-1)?.[0].data.agentConfiguration;
+    expect(read).toMatchObject({ agentId: id, active: true, instructionHash: instructionHash(instructions), fallbackReason: null });
+    expect(read).not.toHaveProperty("instructions");
+  }
+  expect(queries.filter(q => q.table === "ai_agents").every(q => q.filters.some(f => f[0] === "business_id" && f[1] === "business-a"))).toBe(true);
+});
+it("C1: an absent active agent is traced as base instructions, not an edited inactive target", async () => {
+  fixtures.ai_agents = null;
+  const onTrace = vi.fn();
+  await processLegacyAgentTurn({ businessId: "business-a", message: "Përshëndetje", hasPhoto: false, informational: "Answer", onTrace });
+  expect(mocks.generate.mock.calls.at(-1)?.[0].instructions).toContain("Answer in the customer's language.");
+  expect(onTrace.mock.calls.find(([e]) => e.label === "Customer agent configuration loaded")?.[0].data.agentConfiguration).toMatchObject({ agentId: null, instructionHash: null, fallbackReason: "no_active_agent" });
+});
 it("2B legacy consumes an informational decision without converting the entity to an order", async () => {
   const state = migrateContext();
   const message = "Produkt A";
@@ -614,7 +634,7 @@ it("captures real context and workflow without changing the production result", 
   const production = await processAgentTurn(input);
   const test = await processAgentTurn({ ...input, mode: "test", source: "admin_chat_lab", onTrace });
   expect({ ...test, debug: { ...test.debug, elapsedMs: 0 } }).toEqual({ ...production, debug: { ...production.debug, elapsedMs: 0 } });
-  expect(onTrace.mock.calls.map(([event]) => event.label)).toEqual(["Message received", "loadBusinessContext", "Business context loaded", "Intent routed", "Context retrieval completed", "Workflow resolved"]);
+  expect(onTrace.mock.calls.map(([event]) => event.label)).toEqual(["Message received", "loadBusinessContext", "Customer agent configuration loaded", "Business context loaded", "Intent routed", "Context retrieval completed", "Workflow resolved"]);
   expect(onTrace.mock.calls.at(-1)?.[0].data).toMatchObject({ workflowId: "workflow-a", state: { step_key: "collect_size" }, steps: [{ key: "collect_size", required: true }, { key: "awaiting_photo", required: true }, { key: "collect_customer", required: true }] });
 });
 

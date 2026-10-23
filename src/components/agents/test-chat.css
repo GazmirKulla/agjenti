@@ -5,6 +5,14 @@
   color: var(--ink);
   overflow: hidden;
 }
+.test-configuration { padding: 10px 20px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-muted); }
+.test-configuration summary { cursor: pointer; color: var(--ink); padding: 5px 0; }
+.test-configuration summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.test-configuration dl { display: grid; gap: 7px; }
+.test-configuration dl > div { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr); gap: 10px; }
+.test-configuration dd { margin: 0; overflow-wrap: anywhere; }
+.test-configuration small { display: block; }
+.test-configuration .agent-test-notice { margin: 0 0 5px; }
 .agent-test-header {
   padding: 22px 24px;
   border-bottom: 1px solid var(--line);

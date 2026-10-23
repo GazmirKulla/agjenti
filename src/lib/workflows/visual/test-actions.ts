@@ -5,6 +5,7 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { readTestSession, sealTestSession } from "@/lib/agents/test-chat/session";
 import { type AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { validateVisualGraph } from "./model";
+import { collectTestConfiguration } from "@/lib/agents/test-chat/provenance";
 
 export async function simulateVisualWorkflow(slug: string, raw: unknown, message: string, token?: string | null, hasPhoto = false): Promise<{ turn?: AgentTurnResult; session?: string; error?: string }> {
   try {
@@ -26,10 +27,12 @@ export async function simulateVisualWorkflow(slug: string, raw: unknown, message
       state.processes?.actionFlow?.visual?.versionId, state.processes?.auxiliary?.visual.versionId];
     if (pins.some(pin => pin && pin !== id) || session.turns > 0 && !pins.some(Boolean)) return { error: "Rrjedha ndryshoi. Rifillo provën." };
     session.visualPreviewId = id;
+    const provenance = collectTestConfiguration(id);
     const turn = await processConversationMessage({ businessId: access.business.id, mode: "test", message: message.trim(), hasPhoto,
+      onTrace: provenance.onTrace,
       state: session.state, previousResponseId: session.previousResponseId,
       visualPreview: { id, businessId: access.business.id, graph, createdAt: new Date().toISOString() } });
-    return { turn, session: sealTestSession(session, turn.nextState, turn.previousResponseId) };
+    return { turn: { ...turn, configuration: provenance.finish(turn) }, session: sealTestSession(session, turn.nextState, turn.previousResponseId) };
   } catch {
     return { error: "Prova nuk u përfundua. Rifillo sesionin dhe provo përsëri." };
   }

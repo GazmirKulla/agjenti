@@ -22,6 +22,7 @@ import { simulateAgentTurn } from "./actions";
 import { readTestSession, sealTestSession, MAX_TEST_TURNS } from "./session";
 import { emptyState } from "@/lib/workflows/engine";
 import { sealAttachment } from "./attachments";
+import { configurationRead } from "@/lib/agents/configuration";
 const input = { slug: "zana", message: "Bluzë" };
 beforeEach(() => {
   vi.clearAllMocks();
@@ -48,6 +49,19 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("test chat action", () => {
+  it("C1: derives provenance only from authorized runtime events, ignoring supplied IDs/hashes", async () => {
+    const turn = await mocks.process();
+    mocks.process.mockImplementationOnce(async params => {
+      params.onTrace({ stage: "context", label: "Customer agent configuration loaded", data: { agentConfiguration: configurationRead({ id: "real-active", name: "Actual", instructions: "Private", is_active: true }) } });
+      params.onTrace({ stage: "ai", label: "AI request sent", data: { request: { instructions: "Private" } } });
+      params.onTrace({ stage: "workflow", label: "Visual workflow executed", data: { versionId: "pinned-A", workflowSource: "pinned" } });
+      return turn;
+    });
+    const result = await simulateAgentTurn({ ...input, agentId: "foreign", instructionHash: "forged" } as typeof input);
+    expect(result).toMatchObject({ configuration: { agents: [{ agentId: "real-active", generationRequested: true }], workflow: { versionId: "pinned-A", mode: "pinned" }, behaviorVerified: false } });
+    expect(JSON.stringify(result)).not.toContain("Private");
+    expect(mocks.process.mock.calls.at(-1)?.[0]).not.toHaveProperty("agentId");
+  });
   it("uses owned attachments as test context and carries them in checkpoints without collecting their text as profile fields", async () => {
     const attachment = sealAttachment({name:"photo.png",kind:"image",text:"A blue shirt"},"user-a","business-a");
     const first=await simulateAgentTurn({...input,message:"",attachments:[attachment.token]});

@@ -1,4 +1,5 @@
 import { conversationControl, resumeConversation } from "./conversation-control";
+import { agentConfigurationColumns, configurationRead } from "@/lib/agents/configuration";
 import { decidedFieldGuidance, informationalDecision, type TurnDecision } from "./turn-decision";
 import { recordReplyPresentation, resolveProductReference, type ReferenceProduct } from "@/lib/products/entity-bridge";
 import { capabilityModules, requireRuntimeModules, runtimeModules, CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
@@ -30,6 +31,8 @@ import {
 } from "@/lib/workflows/engine";
 
 export type AgentTurnResult = {
+  /** Authorized test entry points only; observation, never permission or behavioral proof. */
+  configuration?: import("@/lib/agents/configuration-contract").TestConfigurationProvenance;
   turnDecision?: TurnDecision;
   /** Server-rendered catalog references in reply; finalized by the coordinator. */
   presentedProducts?: ReferenceProduct[];
@@ -175,7 +178,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       .eq("is_active", true),
     db
       .from("ai_agents")
-      .select("instructions")
+      .select(agentConfigurationColumns)
       .eq("business_id", params.businessId)
       .eq("is_active", true)
       .maybeSingle(),
@@ -202,6 +205,9 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   if (moduleEnforcementEnabled(params.businessId) && params.state?.product_id && params.informational === undefined && !products.some(p => p.id === params.state!.product_id))
     throw new CapabilityEnforcementError("binding_unavailable", "Produkti i këtij procesi nuk është më aktiv në këtë biznes. Progresi yt është ruajtur.");
   const agent = agentResult.data;
+  trace?.({ stage: "context", label: "Customer agent configuration loaded", data: {
+    agentConfiguration: configurationRead(agent),
+  } });
   function trainingFor(workflowId: string | null, stepKey: string | null | undefined) {
     const context = selectTrainingContext(trainingMemories, workflowId, stepKey, params.message, params.trainingVisualScope);
     if (context.rules.length) trace?.({ stage: "context", label: "Business training selected", data: { workflowId, stepKey, rules: context.rules } });
@@ -556,6 +562,8 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
 
   trace?.({ stage: "workflow", label: "Workflow resolved", data: {
     workflowId, workflowName, previousStep: params.state?.step_key ?? "choose_product",
+    versionId: state.context?.execution.linear?.versionId ?? state.linearSnapshot?.versionId ?? null,
+    workflowSource: params.linearPreview ? "draft" : pinned ? "pinned" : state.context?.execution.linear ? "published" : "unavailable",
     state, steps, progress: workflowProgress, selectedProduct: selected,
   } });
   const trainingContext = trainingFor(workflowId, state.step_key);
