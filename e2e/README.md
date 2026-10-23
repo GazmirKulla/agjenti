@@ -1,7 +1,46 @@
 # Isolated local acceptance environment
 
-Status (2026-10-23): **fresh environment recovered; service-relative-reference acceptance gate FAIL; full C1 model planning UNVERIFIED**.
+Status (2026-10-23): **Package 2B local acceptance PASS after service routing correction; full C1 model planning UNVERIFIED**.
 This is test infrastructure, not a replacement workflow/runtime implementation.
+
+## Package 2B final correction — local, not deployed
+
+Verified on `main` based on `c3bb863`, using the retained
+`recovery-20261023` disposable instance, not the original local stack.
+
+- Reproduced the earlier service-relative failure before runtime changes. The
+  owner clarified that a bare service reference must remain informational;
+  process tests now supply explicit intent, while retaining ID/cursor assertions
+  and adding negative assertions for bare references.
+- The coordinator preserves explicit `service` intent and a one-turn, expiring
+  selection prompt bound to tenant, delivered reply, candidate IDs and version.
+  It reuses catalog/module/runtime guards and never treats that prompt as approval.
+- Also reproduced/fixed `vazhdo` after an information interruption being consumed
+  as numeric budget input. Resume now re-prompts the pinned cursor without
+  consuming navigation or restoring old confirmations.
+- Final local browser gate: 14/14 application scenarios and 4/4 service cases.
+  The pending-selection case additionally passed with a real selected-service
+  session transplanted to another tenant: authentication/session validation denied it.
+- The exact browser-returned pending/selected states round-trip through the real
+  PostgreSQL `prepare_workflow_reply` RPC; stale revision is rejected. This SQL
+  check rolls back. Test Chat itself persists sealed sessions, not channel DB rows.
+- PostgreSQL 17.11 Package 1 transport/concurrency regressions pass. Focused
+  Vitest: 479 tests; full suite: 2,195 tests in 209 files. TypeScript passes;
+  ESLint has zero errors and seven existing warnings. No new migration.
+- Service fixtures use a unique pair per run and are deactivated afterward;
+  historical fixtures/immutable versions are retained. `Landing page` is used
+  as field input because `Website` also matches older synthetic catalog entries;
+  ambiguous catalog references still require clarification, not arbitrary selection.
+
+Private evidence: `2b-final-reproduced.log`, `2b-service-final.log`,
+`2b-service-tenant-final.log`, `2b-application-final.log`, their result JSON,
+`2b-final-postgres.log`, `2b-final-targeted.log`, `2b-final-vitest.log` and
+`2b-final-database.log` under the instance directory. Earlier failure logs are
+retained. Never commit session tokens or fixture credentials.
+
+This closes the local routing/continuity gate, not live Instagram/WhatsApp,
+LLM answer quality, external date extraction or provider execution certification.
+C1 is unchanged. No Package 3 implementation, commit, push or deployment.
 
 ## Recovery gate — 2026-10-23
 

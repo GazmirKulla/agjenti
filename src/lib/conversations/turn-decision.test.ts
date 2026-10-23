@@ -18,6 +18,10 @@ describe("Package 2A meaning is independent from entity reference and punctuatio
     ["Si ta porosis Paketën Parashkollore?", "undetermined"],
     ["Më trego shërbimin e dytë.", "information"],
     ["Dua të rezervoj shërbimin e dytë.", "booking"],
+    ["Dua të vazhdoj me shërbimin e dytë", "service"],
+    ["Dua të vazhdoj me Konsultën", "service"],
+    ["shërbimin e dytë", "undetermined"],
+    ["Nuk dua të vazhdoj me shërbimin", "undetermined"],
     ["i dyti", "undetermined"],
     ["Nuk dua ta porosis, sa kushton?", "information"],
   ])("%s → %s", (message, intent) => expect(turnIntent(message)).toBe(intent));

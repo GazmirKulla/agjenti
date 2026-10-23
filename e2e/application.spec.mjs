@@ -314,8 +314,10 @@ test('module OFF preserves cursor and facts rather than advancing', async ({ pag
 
 test('quote owns project_type/budget independently of retail facts', async ({ page }) => {
   await startChat(page, tenant('quote'));
-  const start = await send(page, 'E2E Website'); expect(start.reply).toBe('project_type A?');
-  const project = await send(page, 'Website'); expect(project.reply).toBe('budget A?');
+  const reference = await send(page, 'E2E Website'); expect(reference.state.processes.service).toBeUndefined();
+  const start = await send(page, 'Dua të vazhdoj me E2E Website'); expect(start.reply).toBe('project_type A?');
+  const project = await send(page, 'Landing page'); expect(project.reply).toBe('budget A?');
+  expect(project.state.processes.service.order.project_type.value).toBe('Landing page');
   const invalid = await send(page, 'many'); expect(invalid.state.processes.service.visual.nodeId).toBe('budget');
   const valid = await send(page, '1500'); expect(valid.state.processes.service.order.budget.value).toBe('1500');
   expect(valid.state.context.order.quantity).toBeUndefined(); expect(valid.state.context.order.child_age).toBeUndefined();

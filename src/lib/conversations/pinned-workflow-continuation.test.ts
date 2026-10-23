@@ -588,7 +588,9 @@ it("collects quote fields in their service process across interruption, without 
   graph.edges.push({ id: "project-budget", source: "project", target: "budget", port: "next" },
     { id: "budget-reference", source: "budget", target: "reference", port: "next" }, { id: "reference-end", source: "reference", target: "end", port: "next" });
   graph.flows.push({ id: "quote", kind: "custom", label: "Quote", entryNodeId: "project", nodeIds: ["project", "budget", "reference"], serviceIds: [serviceId] });
-  const start = await turn("Web project", state, "instagram", versions.A);
+  const reference = await turn("Web project", state, "instagram", versions.A);
+  expect(reference.nextState.processes?.service).toBeUndefined();
+  const start = await turn("Dua të vazhdoj me Web project", state, "instagram", versions.A);
   expect(start.reply).toBe("Project type?");
   const project = await turn("Website", start.nextState, "instagram", versions.A);
   expect(project.reply).toBe("Budget?");

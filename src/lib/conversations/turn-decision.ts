@@ -9,7 +9,7 @@ export type TurnEntity =
   | { status: "resolved"; kind: "product" | "service"; id: string }
   | { status: "unresolved"; kind: "product" | "service" | "unknown" };
 export type CollectionTarget = { key: string; type: FieldType; options?: string[] };
-export type TurnIntent = "information" | "order" | "booking" | "support" | "undetermined";
+export type TurnIntent = "information" | "order" | "booking" | "service" | "support" | "undetermined";
 /** Ephemeral server-owned decision. Never persisted as another state authority,
  * accepted from an HTTP payload, or used as authorization/confirmation evidence.
  * `workflow` delegates graph/linear selection to the existing adapter. */
@@ -38,6 +38,9 @@ export function turnIntent(message: string): TurnIntent {
   if (/\b(?:dua|deshiroj|kerkoj|want|vazhdo\w*|rifillo\w*)\b.*\b(?:rezerv\w*|takim\w*|booking|appointment)\b|^(?:rezervo\w*|book)\b/.test(positive)) return "booking";
   if (explicitIntent(message) === "order") return "order";
   if (/\b(?:me trego|me thuaj|dua te di|informacion\w*|information|show me|tell me|sa kushton|how much|cmim\w*|price)\b/.test(text)) return "information";
+  // A request to continue with a service is distinct from asking about it or
+  // booking it. Catalog resolution must still establish a supported binding.
+  if (/\b(?:dua|deshiroj|kerkoj|want)\b.*\b(?:sherbim\w*|service)\b|\b(?:vazhdo\w*|rifillo\w*|continue|resume)\b.*\b(?:me|with|sherbim\w*|service)\b/.test(positive)) return "service";
   return "undetermined";
 }
 
@@ -80,7 +83,7 @@ export function decisionForTurn(input: {
   }
   if (routing?.process === "information" || context.intent === "information") return { ...context, kind: routing?.suspended || owner ? "interruption" : context.entity.status !== "none" ? "entity_reference" : "information" };
   if (input.field && context.intent === "undetermined") return { ...context, kind: "field_answer", field: input.field };
-  if (routing?.action === "start" || !owner && (context.intent === "order" || context.intent === "booking")) return { ...context, kind: "new_process" };
+  if (routing?.action === "start" || !owner && (context.intent === "order" || context.intent === "booking" || context.intent === "service")) return { ...context, kind: "new_process" };
   if (context.entity.status !== "none" && !owner && context.intent === "undetermined") return { ...context, kind: "entity_reference" };
   return { ...context, kind: owner ? "continuation" : "information" };
 }

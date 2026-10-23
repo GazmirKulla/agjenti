@@ -785,9 +785,9 @@ it("resumes an order's pinned graph after visiting a service on a newer publicat
 it("uses latest bindings for a new service while keeping the previous order snapshot", async () => {
   const state = boundState();
   mocks.version.mockImplementation(async (_business, id) => entityVersion(id ?? "bound-v2"));
-  mocks.entity.mockImplementation(async (_b, graph, message) => message === "Konsultë" && graph ? entityResult("consult") : {});
+  mocks.entity.mockImplementation(async (_b, graph, message) => message === "Dua të vazhdoj me Konsultë" && graph ? entityResult("consult") : {});
   mocks.agent.mockImplementation(async ({ state }) => { const next = structuredClone(state); next.visual.status = "waiting"; return result(next, "Çfarë të duhet?"); });
-  const next = await turn("Konsultë", state);
+  const next = await turn("Dua të vazhdoj me Konsultë", state);
   expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: expect.objectContaining({ id: "bound-v2" }), state: expect.objectContaining({ product_id: null, fields: {} }) }));
   expect(next.nextState.processes?.order?.snapshot.visual?.versionId).toBe("bound-v1");
   expect(next.nextState.processes?.order?.status).toBe("suspended");

@@ -125,7 +125,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     return answer;
   }
   let intent = params.bookingRequest ? "booking" as const : params.turnDecision
-    ? params.turnDecision.intent === "information" ? "question" as const : params.turnDecision.intent === "undetermined" ? "unknown" as const : params.turnDecision.intent
+    ? params.turnDecision.intent === "information" ? "question" as const : params.turnDecision.intent === "undetermined" || params.turnDecision.intent === "service" ? "unknown" as const : params.turnDecision.intent
     : detectVisualIntent(params.message);
   let navigating = false;
   let revisiting = false;

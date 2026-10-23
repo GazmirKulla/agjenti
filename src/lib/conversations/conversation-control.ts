@@ -4,6 +4,7 @@ import { emptyState, foldText, type ConversationStatePayload } from "@/lib/workf
 import { currentProcessOwner, suspendProcesses, type PendingClarification, type LocalProcessKind } from "@/lib/workflows/conversation-processes";
 import { explicitIntent, rememberTurn } from "@/lib/workflows/guidance";
 import type { AgentTurnParams, AgentTurnResult } from "./process-agent-turn";
+import { turnIntent } from "./turn-decision";
 export const resumeClarificationPrompt = "Dëshiron të vazhdojmë kërkesën e mëparshme, apo po kërkon vetëm informacion?";
 export function clarificationChoice(message: string): "information" | "resume" | "cancel" | null {
     const text = foldText(message).trim().replace(/[.!]+$/, "").trim();
@@ -47,7 +48,7 @@ export function shortReply(message: string): boolean {
 }
 export function explicitContinuation(message: string): boolean {
     const text = foldText(message);
-    return explicitIntent(message) === "order" || explicitIntent(message) === "support"
+    return turnIntent(message) === "service" || explicitIntent(message) === "order" || explicitIntent(message) === "support"
         || /\b(?:vazhdo\w*|rifillo\w*|resume|konfirmoj|dua|rezervo|book)\b.*\b(?:porosi\w*|rezerv\w*|takim\w*|order|booking)\b/.test(text);
 }
 function deferral(message: string): boolean {

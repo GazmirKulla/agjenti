@@ -38,6 +38,9 @@ export type ConversationProcesses = {
   auxiliary?: { process: "information" | "support"; visual: NonNullable<ConversationStatePayload["visual"]>; order?: SharedContext["order"]; fields?: ConversationStatePayload["fields"] };
   pendingChoice?: { kind: "process" | "replace"; process?: ProcessKind; message: string; productId?: string; serviceId?: string };
   pendingClarification?: PendingClarification;
+  /** One-turn service disambiguation after explicit process intent. Never an
+   * approval or selected entity; catalog/module/binding guards run on consumption. */
+  pendingServiceSelection?: { businessId: string; versionId: string; serviceIds: string[]; prompt: string; expiresAt: number };
   /** Explicit information-only choice; a follow-up must not infer a purchase/reservation. */
   informationOnly?: boolean;
   lastDecision?: ConversationRouting;
