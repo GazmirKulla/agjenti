@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--pg-bin', required=True)
 parser.add_argument('--baseline', action='store_true')
 parser.add_argument('--extra-sql', type=Path, help='Additional regression SQL, only in this fresh socket-only cluster')
+parser.add_argument('--order-correction', action='store_true', help='Also verify staff submission versus correction in a disposable clone')
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
 pg = Path(args.pg_bin)
@@ -88,6 +89,9 @@ try:
     print(f'PASS fresh migration chain ({applied} files), PostgreSQL {sql("show server_version")}, Unix socket only: {work}', flush=True)
     if args.extra_sql:
         print(run(cmd + ['-f', str(args.extra_sql.resolve())]), flush=True)
+    if args.order_correction:
+        from order_correction_concurrency import verify_order_correction
+        verify_order_correction(cmd, env, root)
 
     # Fixed IDs live only in this freshly initialized private cluster.
     b, actor, conn, c, other = [f'00000000-0000-4000-8000-{n:012d}' for n in range(9101, 9106)]
