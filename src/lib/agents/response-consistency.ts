@@ -26,6 +26,11 @@ const normalize = (text: string) => foldText(text).replace(/\s+/g, " ").trim();
 // Execution receipts are intentionally NOT an input: this informational generator
 // has no execution authority. Receipt-backed replies stay in domain adapters.
 const actionClaims = [
+  /\b(?:porosi\w*|rezervim\w*|pages\w*|order|booking|payment)\b.{0,35}\b(?:eshte ne pritje|po procesohet|is pending|is processing)\b/,
+  /\b(?:tentuam|tentova|we attempted|i attempted)\b.{0,35}\b(?:dergo\w*|krijo\w*|rezervo\w*|submit|create|book)\b/,
+  /\b(?:porosi\w*|rezervim\w*|takim\w*|pages\w*|order|booking|payment)\b.{0,45}\b(?:u (?:krye|perfundu[ae]|realizua)|eshte (?:kryer|perfunduar|realizuar))\b/,
+  /\b(?:njoftim\w*|mesazh\w*|notification|message)\b.{0,25}\b(?:iu dergua|u dergua|eshte derguar|was sent|has been sent)\b/,
+  /\b(?:rezervuam|rezervova|regjistruam|konfirmuam|njoftuam|derguam)\b.{0,35}\b(?:takim\w*|rezervim\w*|porosi\w*|klient\w*|staf\w*|ekip\w*)\b/,
   /\b(?:porosi\w*|order\w*)\b.{0,45}\b(?:u krijua|u dergua|u regjistrua|u konfirmua|eshte (?:krijuar|konfirmuar|derguar)|(?:has been |is |was )?(?:placed|created|submitted|confirmed))\b/,
   /\b(?:rezervim\w*|takimi|booking|appointment)\b.{0,45}\b(?:u (?:konfirmua|rezervua|ndryshua|anulua)|eshte (?:konfirmuar|rezervuar|anuluar)|(?:has been |is |was )?(?:confirmed|booked|reserved|cancelled|rescheduled))\b/,
   /\b(?:pagesa|payment)\b.{0,35}\b(?:u (?:mor|pranua|krye)|eshte (?:pranuar|kryer)|(?:has been |is |was )?(?:received|accepted|processed))\b/,
@@ -47,8 +52,40 @@ function affirmed(sentence: string, match: RegExpExecArray) {
   const before = sentence.slice(Math.max(0, match.index - 55), match.index);
   const claim = match[0];
   return !uncertainty.test(before + claim)
-    && !/\b(?:nuk|not|never|if|nese|kur|when)\b/.test(before)
+    && !/\b(?:nuk|not|never|if|nese|kur|when|sikur|mund|duhet|synojme|tentuam|tentova|kerkuam|propozojme|would|could|should|trying|attempted|requested)\b/.test(before)
     && !/\b(?:nuk|not|never)\b/.test(claim);
+}
+// Polarity belongs to a proposition, not a whole paragraph/window. In R4 an
+// unrelated "nuk e di" suppressed a later completed-action assertion. Split
+// coordination as well as contrast; never let one claim authorize its sibling.
+function claimClauses(text: string, literals: string[] = []) {
+  const spans: Array<[number, number]> = [];
+  for (const literal of literals.filter(Boolean)) {
+    for (let at = text.indexOf(literal); at >= 0; at = text.indexOf(literal, at + literal.length)) spans.push([at, at + literal.length]);
+  }
+  const clauses: string[] = []; let start = 0;
+  for (const match of text.matchAll(/(?:\s*[,;]\s*|\s+)(?:por|mirepo|megjithate|ndersa|but|however|yet|dhe|and)\s+|;\s*|,\s+(?=\D)/gi)) {
+    if (spans.some(([a, b]) => match.index >= a && match.index + match[0].length <= b)) continue;
+    clauses.push(text.slice(start, match.index)); start = match.index + match[0].length;
+  }
+  return [...clauses, text.slice(start)];
+}
+
+// Bounded lexical support for customer recall, not a general entailment model.
+// Exact values alone cannot validate "not <value>" or "<value> and <invention>".
+// Strip only presentation words; every remaining token must be supported by the
+// requested facts. Unknown assertions get an attributed, canonical restatement.
+const presentationWords = new Set("ti ju ke keni te me e i a u yt jote juaj tuaj yte tende tend tua eshte jane quhesh quheni emri emrin telefonin telefoni email adresen adresa qyteti qytetin profilin profili ne instagram instagramin biznesi biznesin biznesit deklaruar thene treguar dhene shkruar sipas deklarimit deklarimeve tua fundit korrigjimit shet shes shitje ofron ofroj ofrimi dhe po pra sakte you your is are have told said declared name business profile on sell selling offer according to".split(" "));
+const words = (text: string) => normalize(text).replace(/@(?=[a-z0-9_])/g, "").split(/[^a-z0-9_]+/).filter(Boolean);
+const stem = (word: string) => word.replace(/(?:ash|esh|in|it|at|et|a|i|e)$/, "");
+function supportedRecall(answer: string, values: string[], inflectedValues: string[] = []) {
+  const expected = values.flatMap(words);
+  const inflections = inflectedValues.flatMap(words);
+  return words(answer).every(word => presentationWords.has(word) || expected.includes(word)
+    // Albanian noun inflection, never numeric values/short names or arbitrary
+    // prefix matching (which accepted unsupported extensions of a known fact).
+    || inflections.some(value => value.length >= 4 && word.length >= 4
+      && stem(value) === stem(word)));
 }
 const labels: Record<string, { label: string; question: RegExp }> = {
   name: { label: "Emrin", question: /\b(?:quhesh|quhem|emr\w*|name)\b/ },
@@ -88,13 +125,17 @@ export function validateResponse(text: string, evidence: Evidence): ConsistencyR
   let reply = text.split(/(?<=[.!?])\s+|\n+/).map(part => {
     // Contrast clauses are validated independently; a disclaimer cannot launder
     // a second affirmative claim. Preserve the original sentence if unmodified.
-    const clauses = part.split(/\s+(?:por|but|however)\s+/i);
+    // Catalog text can contain conjunctions. Preserve those literal spans for
+    // numeric attribution only; untrusted names must never shield action claims.
+    for (const clause of claimClauses(normalize(part))) {
+      if (!clause.endsWith("?") && actionClaims.some(pattern => { const match = pattern.exec(clause); return match && affirmed(clause, match); })) {
+        add("unsupported_critical_claim", "execution_receipt_absent"); return executionUnknown;
+      }
+    }
+    const clauses = claimClauses(normalize(part), entities.map(e => normalize(e.name)));
     for (const clause of clauses) {
       const normalized = normalize(clause);
       if (normalized.endsWith("?")) continue; // A question is not an execution receipt.
-      if (actionClaims.some(pattern => { const match = pattern.exec(normalized); return match && affirmed(normalized, match); })) {
-        add("unsupported_critical_claim", "execution_receipt_absent"); return executionUnknown;
-      }
       const stock = availability.exec(normalized);
       if (stock && !/\b(?:nuk (?:kam|kemi) (?:te dhena|informacion|burim|konfirmim)|nuk mund|nuk (?:konfirmon|garanton)|nuk eshte verifikuar|cannot|unverified|not (?:verified|guaranteed)|if|nese)\b/.test(normalized)) {
         add("unsupported_critical_claim", "availability_unverified"); return "Disponueshmëria nuk është verifikuar. Prania në katalog nuk provon stok ose termine të lira.";
@@ -111,6 +152,9 @@ export function validateResponse(text: string, evidence: Evidence): ConsistencyR
       const duration = /\b(\d+)\s*(?:minuta|min|minutes)\b/.exec(normalized);
       const freePrice = /\b(?:eshte falas|is free|kushton zero|costs nothing)\b/.test(normalized);
       if (numericPrices.length || duration || freePrice) {
+        // Attribute each proposition's values to its own unique entity. The
+        // former sentence-wide check rejected correct multi-price answers;
+        // accepting a bag of catalog numbers instead would allow swapped prices.
         const named = entities.filter(e => namesEntity(clause, e));
         if (named.length !== 1) { add("unverifiable", "numeric_claim_entity_ambiguous"); return limitation; }
         const entity = named[0];
@@ -155,7 +199,10 @@ export function validateResponse(text: string, evidence: Evidence): ConsistencyR
   const declaredLabels: Record<string, string> = { instagram_handle: "profilin në Instagram", business_type: "biznesin tënd", stated_needs: "pyetjet/nevojat" };
   const personal = reference?.keys.map(key => ({ key, fact: evidence.customer.profile[key] ?? evidence.customer.declared[key] }))
     .filter(item => item.fact?.authority === "customer_declared" && !item.fact.truncated) ?? [];
-  const denial = /\b(?:nuk ma ke|nuk me ke|nuk e di|nuk (?:quhesh|quheni|shet)|nuk (?:ke|keni) (?:dhene|thene|treguar)|haven't told|have not told|don't know|not provided)\b/.test(answer);
+  const denialPattern = /\b(?:nuk ma ke|nuk me ke|nuk e di|nuk (?:eshte|jane|quhesh|quheni|shet)|nuk (?:ke|keni) (?:dhene|thene|treguar)|haven't told|have not told|don't know|not provided|is not|isn't)\b/;
+  const personalAssertion = /\b(?:ti|ju|ke|keni|yt|jote|quhesh|quheni|you|your)\b/;
+  const denial = claimClauses(answer).some(clause => denialPattern.test(clause)
+    && (personalAssertion.test(clause) || personal.some(({ key, fact }) => labels[key]?.question.test(clause) || clause.includes(normalize(fact.value)))));
   const containsFact = (key: string, value: string) => {
     const expected = normalize(value).replace(/^@/, "");
     if (new RegExp(`(?:^|[^a-z0-9_])${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9_])`).test(answer)) return true;
@@ -164,11 +211,17 @@ export function validateResponse(text: string, evidence: Evidence): ConsistencyR
     // rroba online'). Not a semantic truth classifier for arbitrary descriptions.
     const content = expected.split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !/^(shitje|shet|shes|ofroj|ofron|biznesi|eshte|online)$/.test(w));
     const words = answer.split(/[^a-z0-9]+/);
-    return content.length > 0 && content.every(w => words.some(a => a.slice(0, 4) === w.slice(0, 4)))
+    return content.length > 0 && content.every(w => words.some(a => stem(a) === stem(w)))
       && (!expected.includes("online") || words.includes("online")) && !/\b(?:nuk|not|never)\b/.test(answer);
   };
   const statements = personal.map(({ key, fact }) => `Ti ke deklaruar ${labels[key]?.label.toLowerCase() ?? declaredLabels[key]}: ${fact.value}.`);
-  if (personal.length && (denial || personal.some(({ key, fact }) => !containsFact(key, fact.value)))) {
+  const personalAssertions = reply.split(/(?<=[.!?])\s+|\n+/).filter(sentence => !sentence.endsWith("?")
+    && personalAssertion.test(normalize(sentence))
+    && !/^(?:nese|sikur|if|suppose)\b/.test(normalize(sentence)));
+  const unsupportedExtension = personalAssertions.some(sentence => claimClauses(normalize(sentence)).some(clause => !uncertainty.test(clause)
+    && !/^(?:nese|sikur|if|suppose)\b/.test(clause) && !supportedRecall(clause, personal.map(p => p.fact.value),
+      personal.filter(p => p.key === "business_type" || p.key === "stated_needs").map(p => p.fact.value))));
+  if (personal.length && (denial || unsupportedExtension || personal.some(({ key, fact }) => !containsFact(key, fact.value)))) {
     add("contradiction", `known_customer_${personal[0].key}`);
     reply = statements.join("\n");
   }
@@ -181,6 +234,34 @@ export function validateResponse(text: string, evidence: Evidence): ConsistencyR
     // A handle is a declaration, not account ownership or proof of a sales channel.
     const safe = "Kanali i shitjes nuk është verifikuar nga këto deklarime. Profili në Instagram nuk provon se shet atje.";
     if (!reply.includes(safe)) { add("unverifiable", "sales_channel_not_established"); reply = [...statements, safe].join("\n"); }
+  }
+  // Generic, process-owned recall uses only the selected authoritative projection,
+  // never historical visual values, general preferences or the profile. Field
+  // keys are server-defined, not a domain-specific list of ages/sizes/diagnoses.
+  // Natural-language synonyms not present in this contract remain a limitation.
+  const process = evidence.customer.process;
+  if (!reference && process) {
+    const fields = Object.entries(process.fields).filter(([, f]) => f.authority === "customer_declared" && !f.truncated);
+    const keyIn = (text: string, key: string) => new RegExp(`(?:^|[^a-z0-9_])${normalize(key).replace(/_/g, "[_ ]")}(?:$|[^a-z0-9_])`).test(text);
+    reply = reply.split(/(?<=[.!?])\s+|\n+/).map(sentence => {
+      const normalized = normalize(sentence);
+      if (normalized.endsWith("?") || uncertainty.test(normalized) || /^(?:nese|sikur|if|suppose)\b/.test(normalized)) return sentence;
+      const named = fields.filter(([key]) => keyIn(normalized, key));
+      const assertsOwn = /\b(?:ti (?:ke|je)|ke deklaruar|yt|jote|juaj|your|you (?:have|are))\b/.test(normalized);
+      if (!named.length && !assertsOwn) return sentence;
+      const relevant = named.length ? named : fields;
+      // A key/value assertion must carry THAT field's current value, not a
+      // supported value from a different key in the same context.
+      const mismatch = claimClauses(normalized).some(clause => {
+        const claims = fields.filter(([key]) => keyIn(clause, key));
+        return claims.some(([, f]) => !words(f.value).every(w => words(clause).includes(w)));
+      });
+      if (mismatch || !supportedRecall(sentence, relevant.flatMap(([key, f]) => [key, key.replace(/_/g, " "), f.value]))) {
+        add("contradiction", "process_fact_unsupported");
+        return relevant.length ? `Për kërkesën aktuale ke deklaruar: ${relevant.map(([key, f]) => `${key}: ${f.value}`).join("; ")}. Këto janë deklarime, jo rezultat ekzekutimi apo diagnozë e verifikuar.` : limitation;
+      }
+      return sentence;
+    }).join("\n");
   }
   // Only free informational prose. Never suppress an executor's required prompt,
   // correction/review, invalid-field request or pending process clarification.
