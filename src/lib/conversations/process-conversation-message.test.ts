@@ -765,7 +765,7 @@ it("routes a named bound product out of an active booking before adapting state"
   state.processes!.active = "booking"; state.processes!.promptOwner = "booking";
   state.processes!.booking = { id: "b", status: "active", draft: { nonce: "b", phase: "collect", serviceId: "session", expires: Date.now()+60000 } };
   mocks.version.mockResolvedValue(entityVersion()); mocks.entity.mockResolvedValue(entityResult("puzzle"));
-  const next = await turn("Puzzle", state);
+  const next = await turn("Dua të porosis Puzzle", state);
   expect(next.conversationRouting?.process).toBe("order");
   expect(next.nextState.processes?.booking?.status).toBe("suspended");
   expect(mocks.agent).toHaveBeenCalledWith(expect.not.objectContaining({ bookingRequest: true }));
@@ -798,7 +798,27 @@ it("does not turn product price questions into new orders or bookings", async ()
   const next = await turn("Sa kushton Puzzle?");
   expect(next.conversationRouting?.process).toBe("information");
   expect(next.nextState.processes?.order).toBeUndefined(); expect(next.nextState.processes?.booking).toBeUndefined();
-  expect(mocks.entity).not.toHaveBeenCalled();
+  expect(mocks.entity).toHaveBeenCalledWith("business", expect.anything(), "Sa kushton Puzzle?", undefined, true, expect.anything());
+});
+it("2A named bookable service information does not book; explicit booking uses the same typed decision", async () => {
+  mocks.version.mockResolvedValue(entityVersion()); mocks.entity.mockResolvedValue(entityResult("session"));
+  const info = await turn("Më trego Session");
+  expect(info.turnDecision).toMatchObject({ kind: "entity_reference", intent: "information", entity: { status: "resolved", kind: "service", id: "session" } });
+  expect(info.nextState.processes?.booking).toBeUndefined(); expect(mocks.booking).not.toHaveBeenCalled();
+  const booked = await turn("Dua të rezervoj Session", info.nextState);
+  expect(booked.turnDecision).toMatchObject({ kind: "new_process", intent: "booking" });
+  expect(mocks.agent.mock.calls.at(-1)![0].turnDecision).toBe(booked.turnDecision);
+});
+it("2A a bare bound product cannot silently replace an active booking with an order", async () => {
+  const state = migrateConversationProcesses(emptyState(), () => "id");
+  state.processes!.active = "booking"; state.processes!.promptOwner = "booking";
+  state.processes!.booking = { id: "b", status: "active", draft: { nonce: "b", phase: "collect", serviceId: "session", expires: Date.now() + 60000 } };
+  mocks.version.mockResolvedValue(entityVersion()); mocks.entity.mockResolvedValue(entityResult("puzzle"));
+  const result = await turn("Puzzle", state);
+  expect(result.turnDecision).toMatchObject({ kind: "interruption", entity: { status: "resolved", id: "puzzle" } });
+  expect(result.nextState.processes?.order).toBeUndefined();
+  expect(result.nextState.processes?.booking?.draft).toEqual(state.processes!.booking!.draft);
+  expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.booking).not.toHaveBeenCalled();
 });
 it("resumes isolated nonbookable service fields using their original graph and rejects stale yes", async () => {
   const state = boundState(); state.processes!.order!.status = "suspended"; state.processes!.active = null;
@@ -818,7 +838,7 @@ it("requires replacement confirmation before changing a booked service", async (
   const state = migrateConversationProcesses(emptyState(), () => "id"); state.processes!.active = "booking";
   state.processes!.booking = { id: "b", status: "active", draft: { nonce: "b", phase: "collect", serviceId: "other", expires: Date.now()+60000 } };
   mocks.version.mockResolvedValue(entityVersion()); mocks.entity.mockResolvedValue(entityResult("session"));
-  const next = await turn("Session", state);
+  const next = await turn("Dua të rezervoj Session", state);
   expect(next.nextState.processes?.pendingChoice?.kind).toBe("replace");
   expect(next.nextState.processes?.booking?.draft?.serviceId).toBe("other");
   expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.booking).not.toHaveBeenCalled();

@@ -369,10 +369,40 @@ function retailGraph() {
   return graph;
 }
 
+it.each(["quantity", "budget", "child_age"])("2A consumes punctuation on the actual pinned numeric %s exactly once", async key => {
+  const state = collecting(key, "number");
+  const before = structuredClone(state);
+  const result = await turn("4?", state);
+  expect(state).toEqual(before);
+  expect(result.turnDecision).toMatchObject({ kind: "field_answer", field: { key, type: "number" }, versionId: "A", executor: "workflow" });
+  expect(result.nextState.visual).toMatchObject({ versionId: "A", nodeId: "confirm", values: { [key]: "4" } });
+  expect(result.nextState.context?.order[key].value).toBe("4");
+  expect(result.nextState.visual?.confirmedConfirmation).toBeUndefined();
+  expect(result.nextState.recentMessages?.at(-2)?.content).toBe("4?");
+  expect(result.externalActions).toBeUndefined();
+  const duplicate = await turn("4?", result.nextState);
+  expect(duplicate.nextState.visual?.values[key]).toBe("4");
+  expect(duplicate.nextState.visual?.confirmedConfirmation).toBeUndefined();
+});
+
+it("2A invalid numeric prose remains unconsumed; a real information detour preserves the process", async () => {
+  const state = collecting("quantity", "number");
+  const invalid = await turn("many", state);
+  expect(invalid.nextState.visual?.nodeId).toBe("details");
+  expect(invalid.nextState.context?.order.quantity).toBeUndefined();
+  const info = await turn("Sa kushton?", invalid.nextState);
+  expect(info.turnDecision?.kind).toBe("interruption");
+  expect(info.nextState.processes?.order?.status).toBe("suspended");
+  const resume = await turn("Vazhdo porosinë", info.nextState);
+  expect(resume.turnDecision?.kind).toBe("resume");
+  expect(resume.nextState.visual?.versionId).toBe("A");
+  expect(resume.nextState.context?.order.quantity).toBeUndefined();
+});
+
 it("round-trips a bound retail draft through the real server action, sealed session and coordinator", async () => {
   const graph = retailGraph();
   published = "missing"; // No published graph; this draft is the only execution source.
-  const start = await simulateVisualWorkflow("synthetic-retail", graph, "Bluzë");
+  const start = await simulateVisualWorkflow("synthetic-retail", graph, "Dua të porosis Bluzë");
   expect(start.error).toBeUndefined();
   expect(start.turn!.reply).toBe("size?");
   expect(start.turn!.nextState.context?.order.size).toBeUndefined(); // Selecting a product is not a size answer.
@@ -491,7 +521,7 @@ it("validates dates with the existing booking adapter, not a fictitious visual d
   vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
   mocks.profile.mockResolvedValue({ enabledModules: ["services", "bookings", "workflows", "knowledge"] });
   mocks.bookParse.mockResolvedValue({ bookingIntent: true, cancel: false, serviceId, date: null, time: null, name: null, contact: null });
-  const start = await simulateVisualWorkflow("synthetic-appointments", graph, "Consultation");
+  const start = await simulateVisualWorkflow("synthetic-appointments", graph, "Dua të rezervoj Consultation");
   expect(start.error).toBeUndefined();
   expect(start.turn!.reply).toContain("dat");
   mocks.bookParse.mockResolvedValue({ bookingIntent: true, cancel: false, serviceId, date: "2026-02-30", time: null, name: null, contact: null });

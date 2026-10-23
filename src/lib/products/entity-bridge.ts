@@ -84,7 +84,7 @@ export function positiveEntityText(message: string): { text: string; correction:
 function relativeReference(message: string): { kind: "ordinal"; index: number } | { kind: "cheapest" | "this" | "ambiguous" } | null {
   const text = foldText(message).replace(/[.!?]+$/g, "").trim();
   const cheapest = /\b(?:me i liri|me te lirin|me te lire|the cheapest|cheapest)\b/.test(text);
-  const ordinals = [/\b(?:i pari|te parin|e para|the first|first one)\b/, /\b(?:i dyti|te dytin|e dyta|the second|second one)\b/, /\b(?:i treti|te tretin|e treta|the third|third one)\b/];
+  const ordinals = [/\b(?:i pari|te parin|e para|e pare|the first|first one)\b/, /\b(?:i dyti|te dytin|e dyta|e dyte|the second|second one)\b/, /\b(?:i treti|te tretin|e treta|e trete|the third|third one)\b/];
   if (ordinals.filter(pattern => pattern.test(text)).length + Number(cheapest) > 1) return { kind: "ambiguous" };
   if (cheapest) return { kind: "cheapest" };
   const index = ordinals.findIndex(pattern => pattern.test(text));
@@ -92,7 +92,7 @@ function relativeReference(message: string): { kind: "ordinal"; index: number } 
   const numbered = text.match(/^(?:(?:dua|zgjedh|i want)\s+)?(?:produktin?|numrin?|number|#)\s*(\d{1,2})$/);
   if (numbered) return { kind: "ordinal", index: Number(numbered[1]) };
   if (/^(?:dua ta (?:blej|marr|porosis)|e dua)$/.test(text)) return { kind: "this" };
-  if (/^(?:(?:dua|zgjedh|e dua|i want|buy|order)\s+)?(?:kete|kete produkt|this one|this|it|ate)(?:\s+(?:ta porosis|ta blej))?$/.test(text)) return { kind: "this" };
+  if (/^(?:(?:dua|zgjedh|e dua|me trego|i want|show me|buy|order)\s+)?(?:kete(?: produkt(?:in)?)?|ate(?: produkt(?:in)?)?|this one|this|it)(?:\s+(?:ta porosis|ta blej))?$/.test(text)) return { kind: "this" };
   return null;
 }
 export const isEntityReference = (message: string) => Boolean(relativeReference(message) || positiveEntityText(message).correction);

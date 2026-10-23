@@ -2,6 +2,7 @@ import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workfl
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
 import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
 import { chooseGuidance, clarification, invalidateConfirmation } from "../guidance";
+import { decidedFieldGuidance } from "@/lib/conversations/turn-decision";
 import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
 import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext, sharedPrompt, setOrderTerms } from "../context";
 import { agentModel } from "@/lib/agents/generate";
@@ -56,7 +57,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   if (!previous) delete base.visual;
   const simple = (reply: string): AgentTurnResult => ({ reply, nextState: base, previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
     debug: { model: agentModel(), source: "fallback", fallbackReason: "visual_entity", agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: Date.now() - started } });
-  const explicitOrder = params.orderRequest || detectVisualIntent(params.message) === "order";
+  const explicitOrder = params.orderRequest || (params.turnDecision ? params.turnDecision.intent === "order" : detectVisualIntent(params.message) === "order");
   const informationalEntity = !explicitOrder && !params.bookingRequest && (isQuestion(params.message) || isEntityInformationRequest(params.message));
   const entityResolution = !params.informationRequest && !params.orderStatusRequest && !informationalEntity ? await resolveVisualEntity(params.businessId, version.graph, params.message, previous?.binding, params.mode === "test", { state: base, selectedProductId: params.selectedProductId, deliveredReply: params.deliveredReply, draftPreview: Boolean(params.visualPreview) }) : {};
   const selectedEntity = entityResolution.selected;
@@ -160,7 +161,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     : params.orderStatusRequest && statusEntries.length ? { action: "route" as const, target: statusEntries[0].id, source: "rules" as const }
     : !correctionRequest && (continuingBooking || continuingOrder || continuingInformation) ? { action: "continue" as const, target: null, source: "rules" as const }
     : params.informationRequest && informationEntries.length === 1 ? { action: "route" as const, target: informationEntries[0].id, source: "rules" as const }
-    : params.bookingRequest && bookingNodes.length === 1 ? { action: "route" as const, target: bookingNodes[0].id, source: "rules" as const } : await chooseGuidance({message:params.message,state:base,targets,routes,
+    : params.bookingRequest && bookingNodes.length === 1 ? { action: "route" as const, target: bookingNodes[0].id, source: "rules" as const } : decidedFieldGuidance(params.turnDecision) ?? await chooseGuidance({message:params.message,state:base,targets,routes,
     current:currentNode ? {id:currentNode.id,label:currentNode.label,prompt:currentNode.config.prompt,fieldKey:currentNode.config.fieldKey,kind:currentNode.kind} : undefined,
     allowOrder:routes.some(n=>n.kind==="product"), allowSupport:routes.some(n=>n.kind==="handoff" || n.kind==="support_entry"),
   });

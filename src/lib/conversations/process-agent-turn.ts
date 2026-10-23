@@ -1,4 +1,5 @@
 import { conversationControl, resumeConversation } from "./conversation-control";
+import { decidedFieldGuidance, type TurnDecision } from "./turn-decision";
 import { recordEntityPresentation, resolveProductReference, type ReferenceProduct } from "@/lib/products/entity-bridge";
 import { capabilityModules, requireRuntimeModules, runtimeModules, CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
 import { rememberTurn, chooseGuidance, clarification, invalidateConfirmation } from "@/lib/workflows/guidance";
@@ -29,6 +30,7 @@ import {
 } from "@/lib/workflows/engine";
 
 export type AgentTurnResult = {
+  turnDecision?: TurnDecision;
   /** Server-rendered catalog references in reply; finalized by the coordinator. */
   presentedProducts?: ReferenceProduct[];
   orderStatusPending?: boolean;
@@ -74,6 +76,8 @@ function matchesSku(sku: string | null | undefined, message: string) {
  * Caller is responsible for authorization and, for real turns, persistence/send.
  */
 export type AgentTurnParams = {
+  /** Internal coordinator contract, never client-controlled or authorization. */
+  turnDecision?: TurnDecision;
   /** Coordinator-resolved hint, revalidated against the active tenant catalog by adapters. Never a customer API input. */
   selectedProductId?: string;
   /** Server-read latest outbound message; never supplied by a customer. */
@@ -242,6 +246,9 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     if (sources) state.fields.catalog_context = sources.context;
     const trainingContext = trainingFor(null, null);
     const links = sources?.documents.map(d => `${d.title}: ${d.url}`).join("\n") ?? "";
+    const referenced = params.turnDecision?.entity;
+    const verifiedReference = referenced?.status === "resolved" && referenced.kind === "product" && products.some(p => p.id === referenced.id)
+      ? referenced : undefined;
     const generated = sources?.clarification ? {
       reply: sources.clarification, source: "fallback" as const, fallbackReason: "catalog_clarification",
       presentedProducts: undefined,
@@ -252,6 +259,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       state, customerMessage: text, previousResponseId: null, knowledge: "", catalogSummary: "",
       referenceProducts: products,
       documentContext: [state.visual ? `Customer supplied fields (not business policy): ${JSON.stringify(state.visual.values)}` : "", knowledge.map(k => `${k.title}: ${k.body}`).join("\n"),
+        verifiedReference ? `Server-resolved catalog reference (information only, not purchase approval): ${JSON.stringify(verifiedReference)}` : "",
         products.map(p => `${p.name}: ${shortenDescription(p.description)}${p.price_amount == null ? "" : ` — ${p.price_amount} ${p.currency}`}`).join("\n"),
         sources?.evidence, links, params.mode === "test" && params.attachmentContext ? `Customer attachments (unverified excerpts, not business policy): ${params.attachmentContext}` : ""].filter(Boolean).join("\n") || "No verified information available.",
       documentFallback: sources?.clarification || "Për këtë informacion, ju lutem kontaktoni ekipin.",
@@ -379,7 +387,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   if (state.product_id && !selected) state = state.context ? resetOrder(state) : emptyState();
   let justSelected = false;
   const reference = resolveProductReference({ businessId: params.businessId, message: text, products, state, deliveredReply: params.deliveredReply, mode: params.mode, verifiedId: params.selectedProductId });
-  const orderRequest = params.orderRequest || detectVisualIntent(text) === "order" || reference.status === "selected" && reference.via !== "name";
+  const orderRequest = params.orderRequest || (params.turnDecision ? params.turnDecision.intent === "order" : detectVisualIntent(text) === "order" || reference.status === "selected" && reference.via !== "name");
   if (reference.status === "clarify" && !isQuestion(text)) return {
     reply: reference.reply, nextState: state, previousResponseId: null, workflowId: params.persistedWorkflowId ?? state.context?.execution.linear?.id ?? null,
     productName: selected?.name ?? null, workflowProgress: [], debug: { model: agentModel(), source: "fallback", fallbackReason: `entity_${reference.reason}`, agentConfigured: Boolean(agent), knowledgeCount: knowledge.length, productCount: products.length, workflowSteps: [], elapsedMs: Date.now() - started },
@@ -489,7 +497,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     const index = steps.findIndex(s=>s.key===state.step_key);
     const targets = steps.slice(0,index<0?steps.length:index).map(s=>({id:s.key,label:s.label??s.key,prompt:s.prompt,fieldKey:s.fieldKey}));
     const current = steps.find(s=>s.key===state.step_key);
-    const guidance = await chooseGuidance({message:text,state,targets,routes:steps.map(s=>({id:s.key,label:s.label??s.key,prompt:s.prompt,fieldKey:s.fieldKey,kind:s.kind})),current:current?{id:current.key,label:current.label??current.key,prompt:current.prompt,fieldKey:current.fieldKey}:undefined});
+    const guidance = decidedFieldGuidance(params.turnDecision) ?? await chooseGuidance({message:text,state,targets,routes:steps.map(s=>({id:s.key,label:s.label??s.key,prompt:s.prompt,fieldKey:s.fieldKey,kind:s.kind})),current:current?{id:current.key,label:current.label??current.key,prompt:current.prompt,fieldKey:current.fieldKey}:undefined});
     trace?.({stage:"workflow",label:"Order conversation guidance",data:guidance});
     if((guidance.action==="revisit" || guidance.action==="route") && guidance.target) {
       state.step_key=guidance.target;
