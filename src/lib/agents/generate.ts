@@ -5,6 +5,7 @@ import { trainingPrompt, type TrainingContext } from "./training/model";
 import { projectCustomerContext, redactUnrequestedContact } from "./customer-context";
 import type { TraceObserver } from "@/lib/conversations/trace";
 import type { BusinessGrounding } from "./business-grounding";
+import { validateResponse } from "./response-consistency";
 import {
   promptForStep,
   type ConversationStatePayload,
@@ -44,16 +45,6 @@ export async function generateAgentReply(params: {
   const currentStep = params.workflowProgress?.find(step => step.status === "current");
   const standardPrompt = promptForStep(params.state.step_key);
   const fallback = params.documentFallback || (currentStep?.kind === "customer" ? promptForStep("collect_customer") : standardPrompt !== "Si mund t'ju ndihmoj?" ? standardPrompt : currentStep?.label || standardPrompt);
-  if (!process.env.OPENAI_API_KEY?.trim()) {
-    params.onTrace?.({ stage: "ai", label: "AI skipped: missing API key", status: "skipped" });
-    return {
-      reply: fallback,
-      responseId: null,
-      source: "fallback",
-      fallbackReason: "missing_api_key",
-    };
-  }
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 25000, maxRetries: 0 });
   const customerContext = projectCustomerContext(params.state, params.customerMessage);
   // A saved selection is not proof that its entity is still active/available.
   if (customerContext.process?.entity) {
@@ -61,6 +52,25 @@ export async function generateAgentReply(params: {
     const catalog = entity.kind === "product" ? params.referenceProducts : params.referenceServices;
     if (!catalog?.some(item => item.id === entity.id)) delete customerContext.process.entity;
   }
+  const finish = (text: string, responseId: string | null, source: "ai" | "fallback", fallbackReason: string | null) => {
+    const result = validateResponse(text, { customer: customerContext, grounding: params.grounding,
+      products: params.referenceProducts ?? [], services: params.referenceServices ?? [],
+      message: params.customerMessage, state: params.state, informational: Boolean(params.documentContext) });
+    params.onTrace?.({ stage: "ai", label: "Response consistency checked", status: result.changed ? "skipped" : "success",
+      data: { scope: "bounded_deterministic_claims", result: result.status, changed: result.changed, findings: result.findings } });
+    const products = renderProductReferences(result.reply, params.grounding?.products.records ?? params.referenceProducts ?? []);
+    const services = renderProductReferences(products.reply, params.grounding?.services.records ?? params.referenceServices ?? [], "service");
+    const mixed = result.reply.includes("[[product:") && result.reply.includes("[[service:");
+    return { reply: services.reply, presentedProducts: mixed ? [] : products.presentedProducts,
+      presentedServices: mixed ? [] : services.presentedProducts,
+      responseId: result.changed ? null : responseId, source: result.changed ? "fallback" as const : source,
+      fallbackReason: result.changed ? "response_consistency" : fallbackReason };
+  };
+  if (!process.env.OPENAI_API_KEY?.trim()) {
+    params.onTrace?.({ stage: "ai", label: "AI skipped: missing API key", status: "skipped" });
+    return finish(fallback, null, "fallback", "missing_api_key");
+  }
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 25000, maxRetries: 0 });
   const evidence = JSON.stringify(customerContext);
   const history = recentConversation(params.state).map(message => ({ ...message,
     content: redactUnrequestedContact(message.content, params.state, customerContext) }));
@@ -114,33 +124,18 @@ export async function generateAgentReply(params: {
   params.onTrace?.({ stage: "ai", label: "AI request sent", data: { request } });
   try {
     const response = await client.responses.create(request);
+    // Do not expose rejected raw prose in traces or reuse its provider history.
     params.onTrace?.({ stage: "ai", label: "AI response received", data: {
-      response, parsed: { text: response.output_text?.trim() || null }, usage: response.usage ?? null,
+      id: response.id ?? null, usage: response.usage ?? null,
     } });
     const text = response.output_text?.trim() || fallback;
-    const renderedProducts = renderProductReferences(text, params.referenceProducts ?? []);
-    const renderedServices = renderProductReferences(renderedProducts.reply, params.referenceServices ?? [], "service");
-    // Mixed lists do not define an unambiguous product/service ordinal space.
-    const mixed = text.includes("[[product:") && text.includes("[[service:");
-    return {
-      reply: renderedServices.reply,
-      presentedProducts: mixed ? [] : renderedProducts.presentedProducts,
-      presentedServices: mixed ? [] : renderedServices.presentedProducts,
-      responseId: response.id ?? null,
-      source: response.output_text?.trim() ? "ai" : "fallback",
-      fallbackReason: response.output_text?.trim() ? null : "empty_reply",
-    };
+    return finish(text, response.id ?? null, response.output_text?.trim() ? "ai" : "fallback", response.output_text?.trim() ? null : "empty_reply");
   } catch (err) {
     params.onTrace?.({ stage: "ai", label: "AI provider failed; workflow fallback used", status: "error" });
     console.error(
       "[agent] OpenAI failed:",
       err instanceof Error ? err.message : err,
     );
-    return {
-      reply: fallback,
-      responseId: params.previousResponseId,
-      source: "fallback",
-      fallbackReason: "provider_error",
-    };
+    return finish(fallback, params.previousResponseId, "fallback", "provider_error");
   }
 }

@@ -21,6 +21,45 @@ beforeEach(() => {
   vi.stubEnv("OPENAI_API_KEY", "test-key");
 });
 afterEach(() => vi.unstubAllEnvs());
+describe("R3 critical response boundary", () => {
+  it("does not expose a fabricated booking confirmation or keep its provider history", async () => {
+    mocks.create.mockResolvedValue({ id: "unsafe-response", output_text: "Rezervimi u konfirmua për nesër." });
+    const result = await generateAgentReply(params);
+    expect(result.reply).not.toContain("u konfirmua");
+    expect(result.responseId).toBeNull();
+  });
+  it("corrects denial of a current customer-declared name without mutating facts", async () => {
+    const { migrateContext, setFact } = await import("@/lib/workflows/context");
+    const state = migrateContext(); setFact(state, "customer_name", "Miqail", "text", "message_label");
+    const before = structuredClone(state);
+    mocks.create.mockResolvedValue({ output_text: "Nuk ma ke treguar emrin." });
+    const result = await generateAgentReply({ ...params, state, customerMessage: "Si quhem?" });
+    expect(result.reply).toContain("Miqail");
+    expect(result.reply).not.toContain("Nuk ma ke"); expect(state).toEqual(before);
+  });
+  it("does not allow prose to override a verified product price", async () => {
+    mocks.create.mockResolvedValue({ output_text: "Libri kushton 999 EUR." });
+    const result = await generateAgentReply({ ...params, referenceProducts: [{ id: "p", name: "Libri", price_amount: 20, currency: "EUR" }] });
+    expect(result.reply).not.toContain("999 EUR");
+    expect(result.reply).toContain("20 EUR");
+    expect(result.responseId).toBeNull();
+  });
+  it.each(["missing_key", "provider_error"])("validates configured fallback too: %s", async cause => {
+    if (cause === "missing_key") vi.stubEnv("OPENAI_API_KEY", "");
+    else mocks.create.mockRejectedValue(new Error("synthetic provider failure"));
+    const result = await generateAgentReply({ ...params, documentFallback: "Pagesa u pranua." });
+    expect(result.reply).toContain("Nuk kam konfirmim");
+    expect(result.fallbackReason).toBe("response_consistency");
+    expect(result.responseId).toBeNull();
+  });
+  it("never exposes rejected raw model prose in response traces", async () => {
+    const onTrace = vi.fn();
+    mocks.create.mockResolvedValue({ id: "unsafe", output_text: "Booking confirmed for PRIVATE_SENTINEL." });
+    await generateAgentReply({ ...params, onTrace });
+    expect(JSON.stringify(onTrace.mock.calls)).not.toContain("PRIVATE_SENTINEL");
+    expect(onTrace.mock.calls.at(-1)?.[0].data).toMatchObject({ result: "unsupported_critical_claim", changed: true });
+  });
+});
 describe("reply source diagnostics", () => {
   it("R2 keeps business evidence separate from customer claims, disables stale provider history and preserves unknown states", async () => {
     const grounding: BusinessGrounding = {
@@ -126,13 +165,14 @@ describe("reply source diagnostics", () => {
   });
 });
 
-it("observes the exact provider request and response only when explicitly opted in", async () => {
+it("observes the provider request and usage without exposing raw unvalidated response prose", async () => {
   const onTrace = vi.fn();
   const response = { id: "resp_trace", output_text: "  Reply  ", usage: { input_tokens: 12, output_tokens: 4 } };
   mocks.create.mockResolvedValue(response);
   await generateAgentReply({ ...params, onTrace });
   expect(onTrace.mock.calls[0][0].data.request).toEqual(mocks.create.mock.calls[0][0]);
-  expect(onTrace.mock.calls[1][0].data).toEqual({ response, parsed: { text: "Reply" }, usage: response.usage });
+  expect(onTrace.mock.calls[1][0].data).toEqual({ id: response.id, usage: response.usage });
+  expect(onTrace.mock.calls[2][0].data).toMatchObject({ result: "valid", changed: false });
 });
 
 it("supplies approved training with factual and workflow boundaries to the real provider request", async () => {

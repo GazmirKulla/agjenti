@@ -84,8 +84,15 @@ test('R1 authenticated declarations survive 25 turns, corrections, reload and re
   expect(state.context.profile).not.toHaveProperty('instagram_handle');
   expect(state.context.order).not.toHaveProperty('business_type');
   expect(state.context.profile.name.value).toBe('Synthetic');
+  // R3: actual UI/API output must use scoped facts even with the provider absent.
+  state = await send('Si quhem?');
+  expect(state.recentMessages.at(-1).content).toBe('Ti ke deklaruar emrin: Synthetic.');
+  state = await send('Quhem Corrected Synthetic');
+  state = await send('Si quhem?');
+  expect(state.recentMessages.at(-1).content).toBe('Ti ke deklaruar emrin: Corrected Synthetic.');
+  expect(state.context.profile.name.value).toBe('Corrected Synthetic');
   roundtrip(state); expect(counts()).toBe(before);
-  await test.info().attach('r1-boundaries', { body: Buffer.from(JSON.stringify({ turns: 30, historyMessages: state.recentMessages.length,
+  await test.info().attach('r1-boundaries', { body: Buffer.from(JSON.stringify({ turns: 32, historyMessages: state.recentMessages.length,
     canonicalKeys: Object.keys(state.customerDeclaredFacts), sqlRoundtrip: true, staleRevisionRejected: true, deletionVerified: true,
     reusableProfilePromotion: false, businessEffectsUnchanged: true, realModelCalled: false })), contentType: 'application/json' });
 });
