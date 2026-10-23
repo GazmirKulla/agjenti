@@ -6,9 +6,12 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const work = path.join(root, '.e2e-local');
-export const project = 'agjenti-e2e-local';
-export const network = 'agjenti_e2e_isolated';
+// Separate opt-in instance; never repair/reset the default stack or its manifests.
+const instance = process.env.E2E_INSTANCE ?? '';
+assert.ok(!instance || /^[a-z][a-z0-9-]{0,31}$/.test(instance), 'Invalid local E2E instance');
+export const work = path.join(root, '.e2e-local', ...(instance ? ['instances', instance] : []));
+export const project = `agjenti-e2e-local${instance ? `-${instance}` : ''}`;
+export const network = `agjenti_e2e_isolated${instance ? `_${instance}` : ''}`;
 const cli = path.join(root, 'node_modules/.bin/supabase');
 const stack = path.join(work, 'stack');
 const dbContainer = `supabase_db_${project}`;
@@ -95,7 +98,9 @@ async function up() {
   mkdirSync(path.join(stack, 'supabase'), { recursive: true, mode: 0o700 });
   assert.ok(!existsSync(path.join(stack, 'supabase/.temp/project-ref')), 'Linked project forbidden');
   assert.match(run(cli, ['--version']), /2\.121\.0/);
-  cpSync(path.join(root, 'e2e/supabase/config.toml'), path.join(stack, 'supabase/config.toml'));
+  const config = readFileSync(path.join(root, 'e2e/supabase/config.toml'), 'utf8');
+  assert.ok(config.includes('project_id = "agjenti-e2e-local"'));
+  writeFileSync(path.join(stack, 'supabase/config.toml'), config.replace('project_id = "agjenti-e2e-local"', `project_id = "${project}"`));
   const networks = run('docker', ['network', 'ls', '--format', '{{.Name}}']).split('\n');
   if (!networks.includes(network)) run('docker', ['network', 'create', '--internal', '--opt', 'com.docker.network.bridge.host_binding_ipv4=127.0.0.1', '--label', `agjenti.e2e=${project}`, network]);
   verifyNetwork();
@@ -108,6 +113,7 @@ async function up() {
 async function app() {
   verifyContainers();
   assert.ok(existsSync(manifestPath), 'Migration replay incomplete');
+  replay(); // Existing manifest must match before app startup, not merely exist.
   const keys = localKeys();
   const fixtures = JSON.parse(readFileSync(path.join(work, 'fixtures.json'), 'utf8'));
   const dir = mkdtempSync(path.join(work, 'app-'));

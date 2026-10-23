@@ -1,7 +1,115 @@
 # Isolated local acceptance environment
 
-Status (2026-10-22): **original timeout recovered; resumed E2E blocked by local migration drift**.
+Status (2026-10-23): **fresh environment recovered; service-relative-reference acceptance gate FAIL; full C1 model planning UNVERIFIED**.
 This is test infrastructure, not a replacement workflow/runtime implementation.
+
+## Recovery gate — 2026-10-23
+
+Checkout: `main`, `3834a65`. Application source and migrations were not changed.
+The original stack, volumes, `.e2e-local/migrations.json`, `.env.local`, and
+unrelated audit documents were preserved. Only test infrastructure/scenarios changed.
+
+### Migration diagnosis
+
+Original manifest: 60 files, all recorded hashes match the repository. Current
+chain: 64 files. The four missing names are:
+
+- `20261020104503_migo_private_conversations.sql`
+- `20261020112745_assistant_identity_neutralization.sql`
+- `20261021150000_mobile_notifications.sql`
+- `20261022221309_conversation_transport_reliability.sql`
+
+The manifest timestamp is October 18, before those changes. The first two migrations'
+effects nevertheless exist in the old database: all 32 selected schema-dump blocks
+for the assistant tables, compatibility views, writers, constraints, policies and
+ACLs match the fresh chain. They were not recorded by this runner; how/when they
+were installed is not established. Mobile tables and Package 1 helpers were absent.
+This is unrecorded schema drift, not four conclusively unapplied migrations.
+Neither stack has a `supabase_migrations.schema_migrations` ledger: this runner
+uses direct transactional SQL and a hash manifest, not the CLI migration writer.
+No historical records were fabricated or repaired.
+
+### Separate disposable instance
+
+`E2E_INSTANCE=recovery-20261023` selects project
+`agjenti-e2e-local-recovery-20261023`, network
+`agjenti_e2e_isolated_recovery-20261023` and private files under
+`.e2e-local/instances/recovery-20261023/`. The original default remains unchanged.
+The fresh stack applied all 64 files, retaining W0-B's rejection/acknowledgement
+checks. All 64 SHA-256 hashes matched. PostgreSQL 17.11, Auth and PostgREST ran
+locally; network, RLS and RPC checks passed. No hosted project was linked.
+
+The same fixed loopback ports remain protected by the existing network guard.
+Only ONE transport/app instance may run at once; a port conflict must stop startup,
+never kill an unrelated listener. Container networks and volumes are separate.
+App startup now rechecks the complete migration manifest, not just its existence.
+
+For a new recovery run, choose a NEW `recovery-*` instance name (lowercase, max
+32 characters), export it in each terminal, and use the existing commands:
+
+1. `node e2e/transport.mjs`
+2. `node e2e/local.mjs up`, then `node e2e/fixtures.mjs`
+3. `node e2e/local.mjs app`
+4. `node_modules/.bin/playwright test --config e2e/playwright.config.mjs e2e/application.spec.mjs --max-failures=1`
+5. Immediately before the C1 gate, run
+   `node_modules/.bin/vitest run --config e2e/vitest.recovery.config.mjs`, then
+   `node_modules/.bin/playwright test --config e2e/playwright.config.mjs e2e/recovery-gate.spec.mjs --max-failures=1`.
+6. Stop only this app, then `node e2e/local.mjs down`, then its transport.
+   Volumes and evidence are retained. Never delete an old manifest to force replay.
+
+C1 proposal preparation uses the actual server validator and real database, but
+an explicitly synthetic intent instead of LLM planning. Tickets expire normally;
+the preparer refuses to overwrite prior ticket evidence. Use a fresh instance for
+a clean rerun, not replays or hand-edited revisions on old fixtures.
+
+### Verified results and boundaries
+
+- Application suite: 12 scenarios passed, plus appointment fail-closed and Chat
+  Lab passed in a targeted run (14 unique scenarios). Original bare-name inputs
+  incorrectly assumed automatic order/booking intent after 2A/2B. The corrected
+  inputs explicitly request ordering/booking; expected field/state behavior was
+  retained, and bare references are asserted not to start those processes.
+- Covered real login, tenant/RLS rejection, draft preview, size/quantity,
+  interruption/resume/cancel, stale preview/session, missing binding, module OFF,
+  immutable A/B pinning, quote fields, information-only handling and real SQL RPC
+  authorization/revision rejection. Test-chat persistence is sealed browser state,
+  not a claim of live inbound-channel persistence.
+- C1: 5 checks passed. The actual authenticated confirmation API saved inactive
+  and active instructions plus durable receipts; replay, stale and cross-tenant
+  requests were rejected/recovered correctly. Runtime hashes and draft/published/
+  pinned provenance matched actual reads. `behaviorVerified` remained false.
+- The complete natural-language Owner Assistant → approval-card flow is NOT
+  certified: without an AI key, the actual planner returns its configuration
+  error. No API interception or model response was substituted as real E2E.
+- New confirmed failing boundary: a quote catalog with `E2E Website` and
+  `E2E Website Plus` presents two real services and persists their display order.
+  Replying `shërbimin e dytë` returns the informational fallback instead of
+  `project_type A?`; no service process/binding is established. The regression
+  remains failing; service interruption/resume after that point was not executed.
+  Source inspection identifies the conflicting routing rule in
+  `process-conversation-message.ts:349–364`: a resolved service reference sets
+  `informationRequest: !booking`. Non-booking custom service flows therefore enter
+  `ordinaryQuestion` at line 493 and skip service entity execution at line 609.
+  This explains the observed information route; no application fix was made.
+- Package 1 real PostgreSQL tests passed on a separate fresh Unix-socket-only
+  17.11 cluster: 64-file replay, atomic resume, stale revision/worker rejection,
+  concurrent claims, retry exhaustion, receipt/replay and tenant boundaries.
+  `shared_workflow_context.sql` also passed on the fresh full Supabase stack.
+- Full application Vitest: 2171/208 PASS. Infrastructure: 17 PASS. TypeScript
+  PASS. ESLint: 0 errors, 7 existing warnings. No orders, bookings, messages,
+  inbound jobs or real integrations were created by the application E2E.
+
+Evidence is private/ignored under the instance directory: `bootstrap.log`,
+`migrations.json`, `schema-acl.log`, schema dumps, `transport-postgres.log`,
+`application-e2e.log`, `appointment-lab.log`, `recovery-gate.log`, saved result
+JSON and browser traces. Original failures are retained separately. These files
+can contain synthetic sessions; do not publish them or commit fixture credentials.
+
+Environment recovery: PASS. Package 2B certification: FAIL at the relative
+service selection boundary. Package C1: PARTIAL (real persistence/provenance pass,
+model planning/behavior unverified). Package 3: NO-GO pending review of that failure.
+
+## Historical evidence — before this recovery
 
 ## Resumed preflight — stop before E2E
 

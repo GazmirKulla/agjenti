@@ -15,6 +15,14 @@ test('migration replay supplies atomicity without replacing existing transaction
   const owned = '-- security guard\n\nbegin;\nselect 1;\ncommit;';
   assert.equal(migrationSql(owned), owned);
 });
+test('fresh instance isolates resources and rejects unsafe identifiers', () => {
+  const inspect = "import('./e2e/local.mjs').then(m=>console.log(JSON.stringify([m.work,m.project,m.network])))";
+  const result = spawnSync(process.execPath, ['-e', inspect], { cwd: root, env: { ...safeEnv(), E2E_INSTANCE: 'recovery-test' }, encoding: 'utf8' });
+  assert.equal(result.status, 0);
+  assert.deepEqual(JSON.parse(result.stdout), [path.join(root, '.e2e-local/instances/recovery-test'), 'agjenti-e2e-local-recovery-test', 'agjenti_e2e_isolated_recovery-test']);
+  const invalid = spawnSync(process.execPath, ['-e', inspect], { cwd: root, env: { ...safeEnv(), E2E_INSTANCE: '../default' }, encoding: 'utf8' });
+  assert.notEqual(invalid.status, 0);
+});
 for (const [name, code, error] of [
   ['external fetch', "fetch('https://example.invalid')", 'E2E_PROTOCOL_BLOCKED'],
   ['external HTTP', "fetch('http://example.invalid')", 'E2E_OUTBOUND_BLOCKED'],

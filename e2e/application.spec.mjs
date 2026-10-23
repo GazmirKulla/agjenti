@@ -44,6 +44,7 @@ async function send(page, message, preview = false) {
   expect(raw.error).toBeUndefined();
   const result = raw.turn ?? raw;
   const session = decode(raw.session);
+  await test.info().attach('turn-evidence', { body: Buffer.from(JSON.stringify({ message, reply: result.reply, decision: result.turnDecision, routing: result.conversationRouting, configuration: result.configuration, state: session.state })), contentType: 'application/json' });
   await expect(page.getByText(result.reply, { exact: true }).last()).toBeVisible();
   return { ...result, state: session.state, token: raw.session, request };
 }
@@ -71,7 +72,8 @@ test('bootstrap smoke: real login → tenant → draft preview → configured fi
   const t = tenant('retail'); await login(page, t);
   await page.goto(`/b/${t.slug}/workflows`);
   await page.getByRole('button', { name: 'Provo rrjedhën' }).click();
-  const first = await send(page, 'E2E Shirt', true);
+  // Package 2A/2B: a bare entity reference is not permission to start an order.
+  const first = await send(page, 'Dua të porosis E2E Shirt', true);
   expect(first.reply).toBe('size DRAFT?');
   expect(first.state.visual.versionId).toMatch(/^preview:/);
   const second = await send(page, 'M', true);
@@ -153,7 +155,10 @@ test('inbox rejects foreign customer links without hiding owned conversations or
 
 test('published retail: entity, size/quantity, invalid input, interruption/resume and cancellation', async ({ page }) => {
   const t = tenant('retail'); await startChat(page, t);
-  const start = await send(page, 'E2E Shirt');
+  const reference = await send(page, 'E2E Shirt');
+  expect(reference.state.processes.order).toBeUndefined();
+  expect(reference.state.context.order).toEqual({});
+  const start = await send(page, 'Dua të porosis E2E Shirt');
   expect(start.reply).toBe('size A?'); expect(start.state.visual.versionId).toBe(t.versionA);
   const size = await send(page, 'M'); expect(size.reply).toBe('quantity A?');
   const invalid = await send(page, 'many'); expect(invalid.state.visual.nodeId).toBe('quantity');
@@ -192,7 +197,7 @@ test('draft preview uses DRAFT graph; changed graph rejects old session; missing
   const t = tenant('retail'); await login(page, t);
   await page.goto(`/b/${t.slug}/workflows`);
   await page.getByRole('button', { name: 'Provo rrjedhën' }).click();
-  const start = await send(page, 'E2E Shirt', true);
+  const start = await send(page, 'Dua të porosis E2E Shirt', true);
   expect(start.reply).toBe('size DRAFT?'); expect(start.state.visual.versionId).toMatch(/^preview:/);
   const args = JSON.parse(start.request.body);
   args[1].name += ' changed'; args[3] = start.token;
@@ -209,7 +214,7 @@ test('draft preview uses DRAFT graph; changed graph rejects old session; missing
 
 test('real published A stays pinned when B is seeded through the authorized SQL RPC', async ({ page }) => {
   const t = tenant('retail'); await startChat(page, t);
-  const first = await send(page, 'E2E Shirt'); expect(first.state.visual.versionId).toBe(t.versionA);
+  const first = await send(page, 'Dua të porosis E2E Shirt'); expect(first.state.visual.versionId).toBe(t.versionA);
   const interrupted = await send(page, 'What does this product include?');
   expect(interrupted.state.processes.order.status).toBe('suspended');
   const revision = Number(sql(`select revision from public.visual_workflows where business_id=${quote(t.id)};`));
@@ -232,7 +237,7 @@ test('real published A stays pinned when B is seeded through the authorized SQL 
     expect(newProcess.state.processes.order.id).not.toBe(first.state.processes.order.id);
     expect(newProcess.state.visual.versionId).not.toBe(t.versionA);
     await page.evaluate(() => sessionStorage.clear()); await page.reload();
-    const fresh = await send(page, 'E2E Shirt'); expect(fresh.reply).toBe('size B?'); expect(fresh.state.visual.versionId).not.toBe(t.versionA);
+    const fresh = await send(page, 'Dua të porosis E2E Shirt'); expect(fresh.reply).toBe('size B?'); expect(fresh.state.visual.versionId).not.toBe(t.versionA);
     expect(fresh.state.visual.versionId).toBe(newProcess.state.visual.versionId);
     expect(fresh.state.processes.order.id).not.toBe(first.state.processes.order.id);
   } finally {
@@ -246,7 +251,7 @@ test('real published A stays pinned when B is seeded through the authorized SQL 
 
 test('expired and cross-tenant sealed sessions fail before executing another turn', async ({ page }) => {
   const t = tenant('retail'); await startChat(page, t);
-  const first = await send(page, 'E2E Shirt');
+  const first = await send(page, 'Dua të porosis E2E Shirt');
   const args = JSON.parse(first.request.body);
   const headers = { 'next-action': first.request.headers['next-action'], origin: 'http://localhost:3103', 'content-type': 'text/plain;charset=UTF-8' };
   args[0].message = 'M';
@@ -298,7 +303,7 @@ test('real publication RPC rejects stale revision, invalid binding and unauthori
 
 test('module OFF preserves cursor and facts rather than advancing', async ({ page }) => {
   const t = tenant('retail'); await startChat(page, t);
-  await send(page, 'E2E Shirt'); const before = await send(page, 'M');
+  await send(page, 'Dua të porosis E2E Shirt'); const before = await send(page, 'M');
   const profile = JSON.parse(sql(`select dashboard_profile from public.businesses where id=${quote(t.id)};`));
   sql(`select public.save_business_modules(${quote(t.id)},${quote(t.userId)},${json({ ...profile, enabledModules: profile.enabledModules.filter(m => m !== 'orders') })});`);
   try {
@@ -325,7 +330,9 @@ test('information-only business never creates an order or booking process', asyn
 
 test('appointment fails closed without the external extraction provider (not date E2E)', async ({ page }) => {
   await startChat(page, tenant('appointment'));
-  const result = await send(page, 'E2E Consultation');
+  const reference = await send(page, 'E2E Consultation');
+  expect(reference.state.processes.booking).toBeUndefined();
+  const result = await send(page, 'Dua të rezervoj E2E Consultation');
   expect(result.reply).toContain('Nuk e kuptova');
   expect(result.state.processes.booking.draft.serviceId).toBe(tenant('appointment').entityId);
   expect(result.state.processes.booking.draft.date).toBeUndefined();
@@ -335,7 +342,7 @@ test('Chat Lab real admin session executes published retail with isolated state'
   await login(page, fixtures.labUser); await page.goto('/admin/chat-lab');
   await page.getByPlaceholder('Search businesses…').fill('E2E retail');
   await page.getByRole('button', { name: /E2E retail/ }).click();
-  await page.getByPlaceholder('Write a customer message…').fill('E2E Shirt');
+  await page.getByPlaceholder('Write a customer message…').fill('Dua të porosis E2E Shirt');
   const { result } = await readServerAction(page, () => page.getByRole('button', { name: 'Send ↑', exact: true }).click());
   expect(result.error).toBeUndefined(); expect(result.reply).toBe('size A?');
   expect(decode(result.session).state.visual.versionId).toBe(tenant('retail').versionA);
