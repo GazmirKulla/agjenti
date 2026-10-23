@@ -56,3 +56,31 @@ it("does not assume that spelling a number supplies a schema-valid grounded nume
     expect(await extractMessageFacts(state, "four", [{ key: "quantity", type: "number" }])).toBe(0);
     expect(state.context?.order.quantity).toBeUndefined();
 });
+it("preserves the existing configured multiline text contract, rather than imposing onboarding constraints", async () => {
+    const state = migrateContext(), value = "Landing page\nOnline catalog";
+    m.create.mockResolvedValue({ output_text: JSON.stringify({ facts: [{ key: "project_description", value, evidence: value, confidence: 1 }] }) });
+    expect(await extractMessageFacts(state, value, [{ key: "project_description", type: "text" }])).toBe(1);
+    expect(state.context?.order.project_description?.value).toBe(value);
+});
+
+it.each([
+    { owner: "order" as const, key: "size", type: "text" as const, value: "M", options: ["S", "M"] },
+    { owner: "service" as const, key: "project_type", type: "text" as const, value: "Website" },
+    { owner: "service" as const, key: "budget", type: "number" as const, value: "1500" },
+    { owner: "auxiliary" as const, key: "preferred_date", type: "text" as const, value: "2026-11-02" },
+    { owner: "auxiliary" as const, key: "equipment_count", type: "number" as const, value: "8" },
+])("server-scoped $key candidates reuse state v3 without authorizing arbitrary keys", async ({ owner, key, type, value, options }) => {
+    const state = migrateContext(); state.schemaVersion = 3;
+    state.context!.execution.factOwner = owner;
+    const message = `Deklarimi: ${value}`;
+    m.create.mockResolvedValue({ output_text: JSON.stringify({ facts: [
+        { key, value, evidence: message, confidence: 1 },
+        { key: "unauthorized_business_setting", value, evidence: message, confidence: 1 },
+    ] }) });
+    expect(await extractMessageFacts(state, message, [{ key, type, options }])).toBe(1);
+    expect(state.context?.order).toEqual({ [key]: { value, type, source: `message:${message}`, validated: true } });
+    expect(state.context?.execution.factOwner).toBe(owner);
+    expect(state.context?.profile).toEqual({});
+    expect(state.customerDeclaredFacts).toBeUndefined();
+    expect(migrateContext(JSON.parse(JSON.stringify(state))).context).toEqual(state.context);
+});

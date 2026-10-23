@@ -26,9 +26,17 @@ insert into public.workflow_inbound_queue(business_id,connection_id,participant_
 begin perform public.prepare_workflow_reply(q.id,q.lease_token,c,0,saved,null,'STALE',null,false); raise exception 'stale_accepted' using errcode='XX001'; exception when raise_exception then if sqlerrm<>'stale_state' then raise; end if; end;
 end $test$; rollback;`);
 }
-test('F1/F2/F3: original multiline, 34 turns, corrections and reload with no business effects',async({page,context})=>{
+const captures = [
+  { id: 'original', message: 'Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj', business: 'Shitje rrobash online', needs: 'Kam pyetje per masat, a eshte gjendje etj' },
+  { id: 'A', message: 'Miqail\nSHitje rroba online\nfiliz_studio_\nSa kushton, a e keni kete masen', business: 'SHitje rroba online', needs: 'Sa kushton, a e keni kete masen' },
+  { id: 'B', message: 'Për të shmangur ngatërrimin, shkruaj me etiketa:\nEmri: Miqail\nLloji i biznesit: Shitje rroba Online\nInstagram: filiz_studio_\nPyetjet tipike: sa kushton? a e keni masen X? etj', business: 'Shitje rroba Online', needs: 'sa kushton? a e keni masen X? etj' },
+  { id: 'C', message: 'Emri: Miqail\nLloji i biznesit: Shitje rroba Online\nInstagram: filiz_studio_\nPyetjet tipike: sa kushton? a e keni masen X? etj', business: 'Shitje rroba Online', needs: 'sa kushton? a e keni masen X? etj' },
+  { id: 'partial', message: 'Emri: Miqail\nLloji i biznesit: Shitje rroba Online\nInstagram: not-valid\nPyetjet tipike: sa kushton? a e keni masen X? etj', business: 'Shitje rroba Online', needs: 'sa kushton? a e keni masen X? etj', partial: true },
+];
+for (const capture of captures) test(`P0/F1/F2/F3: ${capture.id}, long conversation, corrections and reload without business effects`,async({page,context})=>{
 test.setTimeout(180000);expect(project).toBe('agjenti-e2e-local-recovery-3a-20261023');verifyContainers();
-const health=await fetch('http://127.0.0.1:55325/health').then(r=>r.json());expect(health.synthetic).toBe(true);
+// Synchronous Docker preflight can outlive keep-alive; don't reuse an idle socket.
+const health=await fetch('http://127.0.0.1:55325/health',{headers:{connection:'close'}}).then(r=>r.json());expect(health.synthetic).toBe(true);
 const before=effects(),evidence=[];
 await observeServerActions(page);
 await context.route('**/*',r=>[origin,keys.api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
@@ -39,19 +47,49 @@ await send('Përshëndetje');await send('Çfarë ofron Agjenti.app?');
 const question=await send('Cilat të dhëna të duhen?');expect(question.state.pendingCustomerQuestion?.fields).toEqual(['name','business_type','instagram_handle','stated_needs']);expect(question.turn.reply).not.toContain('[[ask_customer:');
 roundtrip(question.state,question.turn.reply);
 // Original preceding prose unavailable: server-rendered question is the declared substitute.
-let current=await send('Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj');
-expect(current.state.context.profile.name.value).toBe('Miqail');expect(current.state.customerDeclaredFacts.business_type.value).toBe('Shitje rrobash online');expect(current.state.customerDeclaredFacts.instagram_handle.value).toBe('filiz_studio_');expect(current.state.customerDeclaredFacts.stated_needs.value).toBe('Kam pyetje per masat, a eshte gjendje etj');expect(current.state.pendingCustomerQuestion).toBeUndefined();
-for(const message of ['Ku mund të regjistrohem?','Ta bëjmë një test sikur ti të ishe klienti?','A është produkti në gjendje?','Për cilin produkt po flasim?',...Array.from({length:12},(_,i)=>`Çfarë informacioni keni? ${i}`)])current=await send(message);
+let current=await send(capture.message);
+if(capture.partial){
+  expect(current.state.context.profile.name.value).toBe('Miqail');
+  expect(current.state.customerDeclaredFacts.business_type.value).toBe(capture.business);
+  expect(current.state.customerDeclaredFacts.stated_needs.value).toBe(capture.needs);
+  expect(current.state.customerDeclaredFacts.instagram_handle).toBeUndefined();
+  expect(current.state.pendingCustomerQuestion.fields).toEqual(['instagram_handle']);
+  expect(current.turn.reply).not.toContain('Emri:');roundtrip(current.state,current.turn.reply);
+  await page.reload();current=await send('Instagram: filiz_studio_');
+}
+expect(current.state.context.profile.name.value).toBe('Miqail');expect(current.state.customerDeclaredFacts.business_type.value).toBe(capture.business);expect(current.state.customerDeclaredFacts.instagram_handle.value).toBe('filiz_studio_');expect(current.state.customerDeclaredFacts.stated_needs.value).toBe(capture.needs);expect(current.state.pendingCustomerQuestion).toBeUndefined();
+for(const message of ['sapo ti shkrova me lart','a po me kupton?','Ku mund të regjistrohem?','Ta bëjmë një test sikur ti të ishe klienti?','A keni këmishë të zezë në gjendje?','Për cilin produkt po flasim?',...Array.from({length:12},(_,i)=>`Çfarë informacioni keni? ${i}`)]) { current=await send(message); expect(current.state.pendingCustomerQuestion).toBeUndefined(); }
 expect(current.state.recentMessages).toHaveLength(10);expect(JSON.stringify(current.state.recentMessages)).not.toContain('filiz_studio_');await page.reload();
 for(const message of ['Si e kisha emrin une?','Po ta dhashë që në fillim.','Po dhe si quhem?','Si e kam emrin?']){current=await send(message);expect(current.turn.reply).toContain('Miqail');expect(current.turn.reply).not.toContain('Nuk ma ke');}
-for(const message of ['Çfarë shes unë?','Jo, unë Miqaili çfarë shes?','Edhe njëherë, çfarë shes unë?']){current=await send(message);expect(current.turn.reply).toContain('Shitje rrobash online');expect(current.turn.reply).not.toContain('automatizim AI');}
+for(const message of ['Çfarë shes unë?','Jo, unë Miqaili çfarë shes?','Edhe njëherë, çfarë shes unë?']){current=await send(message);expect(current.turn.reply).toContain(capture.business);expect(current.turn.reply).not.toContain('automatizim AI');}
 current=await send('Ku i shes?');expect(current.turn.reply).toContain('nuk provon');
 current=await send('Cili është Instagram-i im?');expect(current.turn.reply).toContain('filiz_studio_');
+// Customer reply formatting puts question examples on separate lines. Preserve
+// every word/punctuation; exact authoritative value is asserted independently.
+current=await send('Çfarë pyetjesh marr zakonisht?');expect(current.turn.reply.replace(/\s+/g,' ')).toContain(capture.needs);
+expect(current.state.customerDeclaredFacts.stated_needs.value).toBe(capture.needs);
 current=await send('Si quhem? përgjigju saktë');expect(current.turn.reply).toBe('Ti quhesh Miqail.');
 current=await send('A njoftove stafin?');expect(current.turn.reply).not.toContain('Stafi u njoftua');expect(current.state.staffHandoff).not.toBe(true);
 current=await send('Si mund të kontaktoj stafin?');expect(current.state.staffHandoff).not.toBe(true); // staff module OFF: no ownership takeover
 current=await send('Profili im në Instagram është corrected_shop');current=await send('Cili është Instagrami im?');expect(current.turn.reply).toContain('corrected_shop');expect(current.turn.reply).not.toContain('filiz_studio_');
 expect(evidence.length).toBeGreaterThanOrEqual(28);expect(current.state.context.profile.name.value).toBe('Miqail');expect(current.state.context.order).toEqual({});roundtrip(current.state,current.turn.reply);expect(effects()).toBe(before);
-const after=await fetch('http://127.0.0.1:55325/health').then(r=>r.json());expect(after.calls).toBeGreaterThan(health.calls);
+const after=await fetch('http://127.0.0.1:55325/health',{headers:{connection:'close'}}).then(r=>r.json());expect(after.calls).toBeGreaterThan(health.calls);
 await test.info().attach('boundaries-only',{body:Buffer.from(JSON.stringify({syntheticModel:true,realModel:false,turns:evidence.length,sqlRoundtrip:true,staleRejected:true,zeroBusinessEffects:true,evidence})),contentType:'application/json'});
+});
+
+test('P0 duplicate partial answer exits clarification loop without losing accepted facts', async ({page,context}) => {
+  test.setTimeout(90000);verifyContainers();const before=effects();
+  await observeServerActions(page);
+  await context.route('**/*',r=>[origin,keys.api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
+  await context.routeWebSocket('**/*',r=>new URL(r.url()).origin==='ws://localhost:3103'?r.connectToServer():r.close());
+  await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(t.email);await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(f.password);
+  await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${t.slug}`);await page.goto(`/b/${t.slug}/agents/test`);
+  async function send(message){const input=page.locator('#agent-test-message');await input.fill(message);const{result}=await readServerAction(page,()=>input.press('Enter'));expect(result.error).toBeUndefined();await expect(page.getByText(result.reply,{exact:true}).last()).toBeVisible();expect(result.externalActions??[]).toEqual([]);return{state:decode(result.session),reply:result.reply};}
+  await send('Cilat të dhëna të duhen?');
+  const partial='Emri: Elira; Instagram: not-valid';
+  const first=await send(partial);expect(first.state.context.profile.name.value).toBe('Elira');roundtrip(first.state,first.reply);
+  const duplicate=await send(partial);expect(duplicate.state.pendingCustomerQuestion.fields).not.toContain('name');
+  const stopped=await send(partial);expect(stopped.state.pendingCustomerQuestion).toBeUndefined();expect(stopped.reply).not.toContain('Emri:');
+  expect(stopped.state.context.profile.name.value).toBe('Elira');expect(stopped.state.staffHandoff).not.toBe(true);
+  roundtrip(stopped.state,stopped.reply);expect(effects()).toBe(before);
 });

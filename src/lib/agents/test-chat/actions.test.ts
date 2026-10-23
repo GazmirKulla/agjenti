@@ -49,6 +49,18 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("test chat action", () => {
+  it("does not return a candidate fact acknowledgement when sealing the new state fails", async () => {
+    mocks.process.mockImplementationOnce(async () => {
+      // Encryption exists at preflight but is unavailable at commit/seal time.
+      vi.stubEnv("TOKEN_ENCRYPTION_KEY", "");
+      return { reply: "Faleminderit për deklarimet.", nextState: emptyState(), debug: { source: "rules" } };
+    });
+    const result = await simulateAgentTurn(input);
+    expect(result).toHaveProperty("error");
+    expect(result).not.toHaveProperty("reply");
+    expect(result).not.toHaveProperty("session");
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
   it("C1: derives provenance only from authorized runtime events, ignoring supplied IDs/hashes", async () => {
     const turn = await mocks.process();
     mocks.process.mockImplementationOnce(async params => {

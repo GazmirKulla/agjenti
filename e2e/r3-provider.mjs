@@ -23,6 +23,7 @@ const server = http.createServer(async (req, res) => {
         : /emrin|quhem/.test(lower) ? 'Nuk ma ke treguar emrin.'
         : /instagram/.test(lower) ? 'Nuk ma ke treguar Instagramin.'
         : /shes/.test(lower) ? 'Ti ofron automatizim AI si Agjenti.app.'
+        : /pyetjesh marr/.test(lower) ? "Nuk m'i ke treguar pyetjet."
         : lower.includes('njoftove stafin') ? 'Stafi u njoftua.'
         : lower.includes('ofron agjenti') ? 'Agjenti.app ofron automatizim AI.'
         : 'Përgjigje sintetike për verifikim, jo këshillë biznesi.';

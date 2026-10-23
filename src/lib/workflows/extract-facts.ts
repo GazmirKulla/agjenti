@@ -1,13 +1,9 @@
 import OpenAI from "openai";
-import { getFact, isQuestion, setFact, validValue, type FieldType } from "./context";
+import { getFact, isQuestion, setFact } from "./context";
+import { validFieldCandidate, type CandidateField } from "./field-candidates";
 import type { ConversationStatePayload } from "./engine";
 import { agentModel } from "@/lib/agents/generate";
-export type ExtractableField = {
-    key: string;
-    type: FieldType;
-    label?: string;
-    options?: string[];
-};
+export type ExtractableField = Pick<CandidateField, "key" | "type" | "label" | "options">;
 /** AI proposes values; exact evidence, allowed field keys and type validation decide what is stored. */
 export async function extractMessageFacts(state: ConversationStatePayload, message: string, fields: ExtractableField[], options?: { questionFacts?: boolean }) {
     if (!state.context || !message.trim() || (!options?.questionFacts && isQuestion(message) && !/[;\n]|(?:^|[, ])(?:emri|name|telefon|tel|phone|email|adresa|qyteti)\s*[:=]|\b(?:im|ime|my|jam|quhem|banoj|jetoj)\b/i.test(message)) || !process.env.OPENAI_API_KEY?.trim())
@@ -49,7 +45,7 @@ export async function extractMessageFacts(state: ConversationStatePayload, messa
                 continue;
             seen.add(key);
             const field = allowed.get(key);
-            if (!field || !validValue(value, field.type) || field.type === "photo" || (field.options?.length && !field.options.includes(value)))
+            if (!field || !validFieldCandidate(field, value))
                 continue;
             if (getFact(state, key)?.value === value) {
                 count++;

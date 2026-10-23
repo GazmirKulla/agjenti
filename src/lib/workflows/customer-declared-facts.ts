@@ -1,4 +1,4 @@
-import type { Fact } from "./context";
+import { isQuestion, type Fact } from "./context";
 import { foldText, type ConversationStatePayload } from "./engine";
 
 /** Conversation-local only. Never hydrate from / copy to conversation_profiles,
@@ -9,17 +9,18 @@ export type CustomerDeclaredFacts = Partial<Record<CustomerDeclaredKey, Fact>>;
 
 export function validDeclaredValue(key: CustomerDeclaredKey, value: unknown): value is string {
   if (typeof value !== "string" || !value.trim() || value.length > 300 || /[\n\r\x00-\x1f]/.test(value)) return false;
+  if (key !== "stated_needs" && isQuestion(value)) return false;
+  if (/^(?:ignore\b|ignoro\b|anulo\b|leje\b|vazhdo\b|rezervo\b|porosit\b|http|www|po$|jo$|ok$)/.test(foldText(value))) return false;
   return key !== "instagram_handle" || /^@?[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,28}[A-Za-z0-9_])?$/.test(value);
 }
 
 /** Explicit own statements only, not free-form summaries or LLM-inferred facts.
  * Commas are retained in stated needs; newline/semicolon delimit statements. */
 export function extractCustomerDeclaredFacts(state: ConversationStatePayload, message: string) {
-  if (state.staffHandoff || state.visual?.status === "handoff") return 0;
+  if (state.staffHandoff || state.conversationPaused || state.visual?.status === "handoff") return 0;
   let count = 0;
   for (const part of message.split(/[;\n]/)) {
     const raw = part.trim();
-    if (raw.includes("?")) continue;
     const label = raw.match(/^([^:]{1,70}):\s*(.+)$/);
     let key: CustomerDeclaredKey | undefined, value: string | undefined;
     if (label) {

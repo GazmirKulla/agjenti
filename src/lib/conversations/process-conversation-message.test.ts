@@ -1,7 +1,7 @@
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => mocks.denyModules ? [] : [...MODULE_IDS], requireModuleAllowed: async () => {} };
 });
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyState, type ConversationStatePayload } from "@/lib/workflows/engine";
@@ -10,7 +10,7 @@ import { migrateConversationProcesses } from "@/lib/workflows/conversation-proce
 import { rememberTurn } from "@/lib/workflows/guidance";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
 import type { AgentTurnParams, AgentTurnResult } from "./process-agent-turn";
-const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn(), status: vi.fn(), entity: vi.fn() }));
+const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn(), status: vi.fn(), entity: vi.fn(), denyModules: false }));
 vi.mock("@/lib/workflows/visual/entity-routing", async original => ({ ...await original<object>(), resolveVisualEntity: mocks.entity }));
 vi.mock("@/lib/orders/customer-status", async original => ({ ...await original<object>(), customerOrderStatus: mocks.status }));
 vi.mock("./process-agent-turn", () => ({ processAgentTurn: mocks.agent, processLegacyAgentTurn: mocks.info }));
@@ -43,6 +43,7 @@ it("preserves pinned execution and collected values when the runtime denies a di
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.denyModules = false;
   vi.unstubAllEnvs();
   mocks.guidance.mockResolvedValue({ action: "continue", target: null, source: "rules" });
   mocks.version.mockResolvedValue(null);
@@ -84,6 +85,16 @@ describe("R3 server-owned customer question boundary", () => {
     expect(answer.nextState.context?.profile.name).toBeUndefined();
     expect(answer.nextState.pendingCustomerQuestion).toBeUndefined();
     expect(answer.nextState.staffHandoff).toBe(true);
+  });
+  it("module revocation discards candidate checkpoint facts rather than committing a false acknowledgement", async () => {
+    const question = await ask(), original = structuredClone(question.nextState);
+    mocks.denyModules = true;
+    const answer = await turn("Emri: Elira; Pyetjet tipike: sa kushton?", question.nextState);
+    expect(answer.turnDecision?.kind).toBe("blocked");
+    expect(answer.reply).toContain("çaktivizuar");
+    expect(answer.nextState.context?.profile.name).toBeUndefined();
+    expect(answer.nextState.customerDeclaredFacts).toBeUndefined();
+    expect(question.nextState).toEqual(original);
   });
 });
 describe("R1 conversation-only declarations", () => {

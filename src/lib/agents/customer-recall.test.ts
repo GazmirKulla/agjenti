@@ -3,6 +3,17 @@ import {migrateContext,extractExplicitFacts} from "@/lib/workflows/context";
 import {extractCustomerDeclaredFacts} from "@/lib/workflows/customer-declared-facts";
 import {projectCustomerContext} from "./customer-context";
 import {validateResponse} from "./response-consistency";
+it("question examples are declarations, not requests for unknown identity or verified business instructions", () => {
+  const state = migrateContext();
+  expect(extractCustomerDeclaredFacts(state, "Pyetjet tipike: sa kushton? a e keni masen X?")).toBe(1);
+  const message = "Çfarë pyetjesh marr zakonisht?";
+  const customer = projectCustomerContext(state, message);
+  expect(customer.declared.stated_needs).toMatchObject({ value: "sa kushton? a e keni masen X?" });
+  const result = validateResponse("Nuk m'i ke treguar pyetjet.", { state, message, customer, informational: true, products: [], services: [] });
+  expect(result.reply).toContain("sa kushton?");
+  expect(extractCustomerDeclaredFacts(state, "Instagram: cili është profili yt?; Lloji i biznesit: çfarë shes?")).toBe(0);
+  expect(state.context?.order).toEqual({});
+});
 function fixture(message:string){const state=migrateContext();extractExplicitFacts(state,"Quhem Miqail");extractCustomerDeclaredFacts(state,"Instagram: filiz_studio_; Lloji i biznesit: Shitje rrobash online; Pyetjet tipike: masat dhe gjendja");return{state,message,customer:projectCustomerContext(state,message),informational:true,products:[],services:[]};}
 it.each(["Si e kisha emrin une?","Po dhe si quhem?","Si e kam emrin?"])("F2/F3 supported name variants share the same authority: %s",message=>{
 const e=fixture(message);expect(e.customer.profile.name.value).toBe("Miqail");expect(validateResponse("Nuk ma ke treguar emrin.",e).reply).toBe("Ti ke deklaruar emrin: Miqail.");expect(validateResponse("Ti quhesh Miqail.",e).reply).toBe("Ti quhesh Miqail.");});
