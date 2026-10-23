@@ -55,6 +55,9 @@ let failInboundId: string | null;
 let duplicateResult: { data: { id: string } | null; error: { code: string; message: string } | null };
 let webhookEvents: Set<string>;
 let duplicateFilters: Record<string, unknown>;
+let originalReceipt: { data: { conversation_id: string } | null; error: { message: string } | null };
+let originalStatus: string;
+let conversationLookups: Record<string, unknown>[];
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
@@ -75,7 +78,10 @@ beforeEach(() => {
   duplicateResult = { data: { id: "inbound-a" }, error: null };
   webhookEvents = new Set();
   duplicateFilters = {};
-  mocks.rpc.mockResolvedValue({ error: null });
+  originalReceipt = { data: null, error: null };
+  originalStatus = "active";
+  conversationLookups = [];
+  mocks.rpc.mockResolvedValue({ data: true, error: null });
   mocks.process.mockResolvedValue({
     reply: "Përgjigje nga pipeline",
     nextState: { ...emptyState(), step_key: "collect_size" },
@@ -92,6 +98,7 @@ beforeEach(() => {
     const filters: Record<string, unknown> = {};
     const result = () => {
       if (table === "businesses" && op === "select" && businessPolicyError) return { data: null, error: businessPolicyError };
+      if (table === "conversations" && op === "select") conversationLookups.push({ ...filters });
       if (table === "conversations" && op === "select" && newConversation) return { data: null, error: null };
       if (table === "messages" && op === "insert" && inserted.direction === "inbound") {
         if (inserted.external_message_id === failInboundId) return { data: null, error: { code: "57014", message: "timeout" } };
@@ -101,6 +108,7 @@ beforeEach(() => {
       if (table === "workflow_inbound_queue" && op === "select") return {data:deliveryAttempt,error:null};
       if (table === "messages" && op === "select" && columns.startsWith("body,direction")) return historyResult ?? {data: [...(savedState.recentMessages ?? [])].reverse().map((row, i) => ({ body: row.content, direction: row.role === "user" ? "inbound" : "outbound", source: row.role === "user" ? "customer" : "agent", delivery_status: "sent", external_message_id: `history-${i}` })), error:null};
       if (table === "messages" && op === "select" && filters.direction === "outbound") return outboundResult;
+      if (table === "messages" && op === "select" && columns === "conversation_id") return originalReceipt;
       if (table === "messages" && op === "select") {
         duplicateFilters = filters;
         return duplicateResult;
@@ -131,8 +139,8 @@ beforeEach(() => {
               }
             : table === "conversations"
                 ? {
-                    id: "conversation-a",
-                    status: paused ? "paused" : "active",
+                    id: typeof filters.id === "string" ? filters.id : "conversation-a",
+                    status: paused ? "paused" : originalStatus,
                     auto_reply: conversationAuto,
                     openai_previous_response_id: "resp_old",
                   }
@@ -180,6 +188,38 @@ beforeEach(() => {
 });
 
 const queuedJob = () => ({ id: 17, business_id: "business-a", connection_id: "connection-a", participant_id: message.externalParticipantId, payload: message, status: "processing", lease_token: "lease-a", reply: null });
+
+it.each([false, true])("retry uses original conversation, never a newer same-participant thread; receipt=%s", async fromReceipt => {
+  originalStatus = "completed";
+  if (fromReceipt) originalReceipt = { data: { conversation_id: "original-conversation" }, error: null };
+  const job: WorkflowJob = { ...queuedJob(), ...(fromReceipt ? {} : { conversation_id: "original-conversation" }) };
+  await handleInboundMessage(message, job);
+  expect(conversationLookups[0]).toMatchObject({ id: "original-conversation", business_id: "business-a" });
+  expect(mocks.rpc).toHaveBeenCalledWith("bind_workflow_inbound", expect.objectContaining({ p_conversation: "original-conversation" }));
+  expect(writes.some(w => w.table === "conversations" && w.operation === "insert")).toBe(false);
+  expect(mocks.process).not.toHaveBeenCalled();
+  expect(mocks.send).not.toHaveBeenCalled();
+});
+
+it.each([false, null])("does not persist inbound or execute before binding is confirmed (%s)", async data => {
+  mocks.rpc.mockResolvedValue({ data, error: null });
+  await expect(handleInboundMessage(message, queuedJob())).rejects.toThrow("binding not confirmed");
+  expect(writes.some(w => w.table === "messages" && w.operation === "insert")).toBe(false);
+  expect(mocks.process).not.toHaveBeenCalled();
+});
+
+it("does not fall back to another conversation after the original identity read fails", async () => {
+  originalReceipt = { data: null, error: { message: "unavailable" } };
+  await expect(handleInboundMessage(message, queuedJob())).rejects.toThrow("identity unavailable");
+  expect(conversationLookups).toHaveLength(0);
+  expect(mocks.process).not.toHaveBeenCalled();
+});
+
+it("does not recreate a missing pinned conversation", async () => {
+  newConversation = true;
+  await expect(handleInboundMessage(message, { ...queuedJob(), conversation_id: "gone" })).rejects.toThrow("original conversation unavailable");
+  expect(writes.some(w => w.table === "conversations" && w.operation === "insert")).toBe(false);
+});
 describe.each(["instagram", "whatsapp"] as const)("%s policy reads through the real inbound/queue boundary", channel => {
   const job = (): WorkflowJob => ({ ...queuedJob(), payload: {
     ...message, channel, timestamp: new Date(),
@@ -190,7 +230,7 @@ describe.each(["instagram", "whatsapp"] as const)("%s policy reads through the r
     mocks.rpc.mockImplementation(async (name: string) => {
       if (name === "claim_workflow_inbound_batch") return { data: jobs.length ? [jobs.shift()] : [], error: null };
       if (name === "workflow_inbound_batch_wait_ms") return { data: 0, error: null };
-      if (name === "begin_workflow_send") return { data: true, error: null };
+      if (name === "begin_workflow_send" || name === "bind_workflow_inbound") return { data: true, error: null };
       if (["prepare_workflow_reply", "finish_workflow_send"].includes(name)) return { data: null, error: null };
       throw new Error(`Unexpected RPC: ${name}`);
     });
@@ -304,7 +344,7 @@ it("persists the four original messages and generates one combined turn", async 
  expect(writes.filter(w => w.table === "messages").map(w => w.data)).toEqual(originals.map(original => expect.objectContaining({ external_message_id: original.externalMessageId, body: original.text })));
  expect(mocks.process).toHaveBeenCalledOnce();
  expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ message: texts.join("\n") }));
- expect(mocks.rpc).toHaveBeenCalledOnce();
+ expect(mocks.rpc.mock.calls.filter(([name]) => name === "prepare_workflow_reply")).toHaveLength(1);
  expect(job.status).toBe("prepared");
  expect(mocks.send).not.toHaveBeenCalled();
 });
@@ -314,7 +354,7 @@ it("does not process a partly saved batch and resumes it without changing member
  failInboundId = "second";
  await expect(handleInboundMessage(message, job)).rejects.toThrow("message_insert");
  expect(mocks.process).not.toHaveBeenCalled();
- expect(mocks.rpc).not.toHaveBeenCalled();
+ expect(mocks.rpc).not.toHaveBeenCalledWith("prepare_workflow_reply", expect.anything());
  failInboundId = null;
  inboundResult = { data: null, error: { code: "23505", message: "already saved" } };
  await handleInboundMessage(message, job);
@@ -326,7 +366,7 @@ describe("inbound persistence boundary", () => {
     inboundResult = { data: null, error: { code: "XX000", message: "Private database details" } };
     await expect(handleInboundMessage(message, queued ? queuedJob() : undefined)).rejects.toThrow();
     expect(mocks.process).not.toHaveBeenCalled();
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalledWith("prepare_workflow_reply", expect.anything());
     expect(mocks.send).not.toHaveBeenCalled();
     expect(writes.filter(w => w.table === "conversation_states")).toEqual([]);
     expect(webhookEvents.size).toBe(0);
@@ -360,7 +400,7 @@ describe("inbound persistence boundary", () => {
     duplicateResult = { data: null, error };
     await expect(handleInboundMessage(message, queuedJob())).rejects.toThrow();
     expect(mocks.process).not.toHaveBeenCalled();
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalledWith("prepare_workflow_reply", expect.anything());
   });
   it("records a safe correlation identifier and database code without database details", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -594,7 +634,7 @@ it("preserves the advisory cursor on the next live inbound turn",async()=>{
 
 it("commits a non-pilot Instagram turn with a revision and lease before the queue sends it", async () => {
   vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
-  mocks.rpc.mockResolvedValue({ error: null });
+  mocks.rpc.mockResolvedValue({ data: true, error: null });
   const job = { id: 1, business_id: "business-a", connection_id: "connection-a", participant_id: message.externalParticipantId, payload: message, status: "processing", lease_token: "lease-a", reply: null };
   await handleInboundMessage(message, job);
   expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_id: 1, p_token: "lease-a", p_revision: 0, p_conversation: "conversation-a" }));
@@ -604,7 +644,7 @@ it("commits a non-pilot Instagram turn with a revision and lease before the queu
   expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ state: { ...migrateContext(emptyState()), recentMessages: [] }, bookingGuard: expect.objectContaining({ revision: 0, leaseToken: "lease-a" }) }));
 });
 it.each(["stale_state", "lease_lost"])("W2 refuses to overwrite corrected state when a concurrent turn returns %s", async error => {
-  mocks.rpc.mockResolvedValue({ error: { message: error } });
+  mocks.rpc.mockImplementation(async (name: string) => name === "bind_workflow_inbound" ? { data: true, error: null } : { error: { message: error } });
   const before = structuredClone(savedState);
   const job = queuedJob();
   await expect(handleInboundMessage({ ...message, text: "Po" }, job)).rejects.toThrow("State commit failed");
@@ -673,7 +713,7 @@ it("persists every paused inbound without executing or sending, including queue 
   const inbound = writes.filter(write => write.table === "messages" && (write.data as {direction:string}).direction === "inbound");
   expect(inbound.map(write => (write.data as {external_message_id:string}).external_message_id)).toEqual(["msg-a", "paused-2"]);
   expect(mocks.process).not.toHaveBeenCalled();
-  expect(mocks.rpc).not.toHaveBeenCalled();
+  expect(mocks.rpc).not.toHaveBeenCalledWith("prepare_workflow_reply", expect.anything());
   expect(mocks.send).not.toHaveBeenCalled();
 });
 it("uses staff and paused customer history after reactivation without feeding it into fields", async () => {

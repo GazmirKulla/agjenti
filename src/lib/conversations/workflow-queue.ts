@@ -16,6 +16,7 @@ export type WorkflowJob = {
     status: string;
     lease_token: string;
     reply: string | null;
+    conversation_id?: string | null;
     batch_payloads?: NormalizedIncomingMessage[] | null;
 };
 export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage) {

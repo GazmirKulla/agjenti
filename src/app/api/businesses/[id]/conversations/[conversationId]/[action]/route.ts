@@ -56,6 +56,29 @@ export async function POST(
         { error: "Lidh Instagram-in ose WhatsApp-in dhe përfundo konfigurimin nga Dashboard." },
         { status: 409 },
       );
+    const { data: snapshot, error: readError } = await service
+      .from("conversation_states").select("revision")
+      .eq("conversation_id", conversationId).eq("business_id", businessId).maybeSingle();
+    if (readError) return NextResponse.json({ error: "Gjendja nuk u verifikua. Provo përsëri." }, { status: 500 });
+    if (!snapshot) return NextResponse.json({ error: "Gjendja e bisedës nuk u gjet në këtë biznes." }, { status: 404 });
+    if (!Number.isInteger(snapshot.revision)) return NextResponse.json({ error: "Gjendja e bisedës nuk është e vlefshme." }, { status: 409 });
+    try {
+      const { data: revision, error } = await service.rpc("resume_conversation_agent", {
+        p_business: businessId, p_user: user.id, p_conversation: conversationId, p_revision: snapshot.revision,
+      });
+      if (error) {
+        const conflict = error.code === "55P03" || error.code === "40P01" || ["stale_state", "state_missing", "state_invalid", "queue_transition_conflict", "delivery_unverified"].includes(error.message);
+        const status = error.message === "unauthorized" ? 403 : error.message === "invalid_conversation" ? 404 : conflict ? 409 : 500;
+        return NextResponse.json({ error: error.message === "delivery_unverified"
+          ? "Një dërgim është ende në proces ose i paverifikuar. Verifiko rezultatin para rifillimit."
+          : conflict ? "Biseda ndryshoi ose po përpunohet. Rifresko dhe provo përsëri."
+          : "Agjenti nuk u rifillua. Kontrollo qasjen dhe provo përsëri." }, { status });
+      }
+      if (revision !== snapshot.revision + 1) return NextResponse.json({ error: "Rifillimi nuk u konfirmua. Rifresko gjendjen para një prove tjetër." }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    } catch {
+      return NextResponse.json({ error: "Rezultati i rifillimit nuk u konfirmua. Rifresko gjendjen; mos e përsërit automatikisht." }, { status: 500 });
+    }
   }
 
   if (action === "delete") {
@@ -115,7 +138,6 @@ export async function POST(
 
   const states: Record<string, { status: string; auto_reply: boolean }> = {
     pause: { status: "paused", auto_reply: false },
-    resume: { status: "active", auto_reply: true },
     complete: { status: "completed", auto_reply: false },
   };
   const state = Object.hasOwn(states, action) ? states[action] : undefined;
@@ -138,47 +160,5 @@ export async function POST(
       { error: "Biseda nuk u gjet në këtë biznes." },
       { status: 404 },
     );
-  if (action === "resume") {
-    const { data: collected } = await service
-      .from("conversation_states")
-      .select("collected")
-      .eq("conversation_id", conversationId)
-      .eq("business_id", businessId)
-      .maybeSingle();
-    if (collected?.collected && typeof collected.collected === "object") {
-      const next = { ...(collected.collected as Record<string, unknown>) };
-      delete next.staffHandoff;
-      // Explicit false: inbound must not re-arm the "previous request?" clarify prompt.
-      next.conversationPaused = false;
-      const visual = next.visual as { status?: string; advisory?: boolean } | undefined;
-      if (visual?.status === "handoff" && !visual.advisory) {
-        next.completedVisual = visual;
-        next.visual = { ...visual, status: "completed" };
-      }
-      if (next.processes && typeof next.processes === "object") {
-        const processes = next.processes as Record<string, unknown>;
-        processes.active = null;
-        processes.promptOwner = null;
-        delete processes.pendingChoice;
-        delete processes.auxiliary;
-      }
-      await service
-        .from("conversation_states")
-        .update({ collected: next, updated_at: new Date().toISOString() })
-        .eq("conversation_id", conversationId)
-        .eq("business_id", businessId);
-    }
-    await service
-      .from("workflow_inbound_queue")
-      .update({
-        status: "ignored",
-        leased_until: null,
-        error: "Staff resumed the agent",
-        reply: null,
-      })
-      .eq("business_id", businessId)
-      .eq("conversation_id", conversationId)
-      .in("status", ["queued", "processing", "prepared", "sending", "uncertain"]);
-  }
   return NextResponse.json({ ok: true });
 }

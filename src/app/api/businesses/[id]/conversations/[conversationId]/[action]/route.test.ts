@@ -31,6 +31,7 @@ const request = (action = "pause") =>
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.setup.mockResolvedValue({ connected: true, launched: true });
+  mocks.rpc.mockResolvedValue({ data: 5, error: null });
   const query = {
     update: mocks.update,
     delete: mocks.delete,
@@ -47,7 +48,7 @@ beforeEach(() => {
   mocks.getUser.mockResolvedValue({ data: { user: { id: "user-a" } } });
   mocks.admin.mockResolvedValue(true);
   mocks.maybeSingle.mockResolvedValue({
-    data: { id: "conversation-a" },
+    data: { id: "conversation-a", revision: 4 },
     error: null,
   });
 });
@@ -110,13 +111,13 @@ describe("conversation status actions", () => {
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.delete).not.toHaveBeenCalled();
   });
-  it.each(["pause", "resume", "complete"])(
+  it.each(["pause", "complete"])(
     "persists %s only within the requested business",
     async (action) => {
       expect((await request(action)).status).toBe(200);
       expect(mocks.eq).toHaveBeenCalledWith("business_id", "business-a");
       expect(mocks.update).toHaveBeenCalledWith(
-        expect.objectContaining({ auto_reply: action === "resume" }),
+        expect.objectContaining({ auto_reply: false }),
       );
     },
   );
@@ -166,6 +167,43 @@ describe("conversation status actions", () => {
   );
 });
 
+it("resumes through one authorized revision-bound RPC without direct writes", async () => {
+  expect((await request("resume")).status).toBe(200);
+  expect(mocks.rpc).toHaveBeenCalledWith("resume_conversation_agent", {
+    p_business: "business-a", p_user: "user-a", p_conversation: "conversation-a", p_revision: 4,
+  });
+  expect(mocks.update).not.toHaveBeenCalled();
+});
+
+it.each(["stale_state", "state_missing", "state_invalid", "queue_transition_conflict", "delivery_unverified"])("rejects resume: %s", async message => {
+  mocks.rpc.mockResolvedValue({ data: null, error: { message } });
+  expect((await request("resume")).status).toBe(409);
+  expect(mocks.update).not.toHaveBeenCalled();
+});
+
+it.each([["unauthorized", undefined, 403], ["invalid_conversation", undefined, 404], ["busy", "55P03", 409], ["deadlock", "40P01", 409]] as const)("maps RPC rejection %s without success", async (message, code, status) => {
+  mocks.rpc.mockResolvedValue({ data: null, error: { message, code } });
+  expect((await request("resume")).status).toBe(status);
+});
+
+it.each([{ data: null, error: null, status: 404 }, { data: null, error: { message: "DB failure" }, status: 500 }])("rejects a missing or failed state read", async ({ data, error, status }) => {
+  mocks.maybeSingle.mockResolvedValue({ data, error });
+  expect((await request("resume")).status).toBe(status);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+  expect(mocks.update).not.toHaveBeenCalled();
+});
+
+it.each([null, false, 4, 6])("does not treat an unconfirmed RPC result as success: %s", async data => {
+  mocks.rpc.mockResolvedValue({ data, error: null });
+  expect((await request("resume")).status).toBe(500);
+});
+
+it("does not retry an unknown resume outcome", async () => {
+  mocks.rpc.mockRejectedValue(new Error("Response lost"));
+  expect((await request("resume")).status).toBe(500);
+  expect(mocks.rpc).toHaveBeenCalledTimes(1);
+});
+
 it("cannot resume automatic replies before required setup", async () => {
   mocks.setup.mockResolvedValue({
     available: true,
@@ -174,4 +212,19 @@ it("cannot resume automatic replies before required setup", async () => {
   });
   expect((await request("resume")).status).toBe(409);
   expect(mocks.update).not.toHaveBeenCalled();
+});
+
+it.each(["conversation_states", "workflow_inbound_queue"])("resume never claims success after %s write failure", async failedTable => {
+  mocks.rpc.mockResolvedValue({ data: null, error: { message: "injected_write_failure" } });
+  mocks.from.mockImplementation((table: string) => {
+    let writing = false;
+    const query = {
+      select: () => query, eq: () => query, in: () => query,
+      update: () => { writing = true; return query; },
+      maybeSingle: async () => ({ data: table === "conversation_states" ? { revision: 4, collected: { staffHandoff: true } } : { id: "conversation-a" }, error: null }),
+      then: (resolve: (result: unknown) => unknown) => Promise.resolve(resolve({ data: null, error: writing && table === failedTable ? { message: "injected_write_failure" } : null })),
+    };
+    return query;
+  });
+  expect((await request("resume")).status).toBe(500);
 });

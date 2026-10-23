@@ -161,16 +161,30 @@ export async function handleInboundMessage(
     displayName = profile.name;
   }
 
-  const { data: open } = await supabase
+  // A retry belongs to its original conversation, not whichever thread happens
+  // to be active now. Old unbound jobs may recover ONLY from an exact receipt.
+  let originalConversationId = job?.conversation_id;
+  if (job && !originalConversationId) {
+    const { data: receipt, error } = await supabase.from("messages").select("conversation_id")
+      .eq("business_id", businessId).eq(adapter.connection, conn.id)
+      .eq("external_message_id", job.payload.externalMessageId)
+      .eq("direction", "inbound").eq("source", "customer").maybeSingle();
+    if (error) throw new Error("Queued conversation identity unavailable");
+    originalConversationId = receipt?.conversation_id;
+  }
+  let conversationQuery = supabase
     .from("conversations")
     .select("id,status,auto_reply,openai_previous_response_id")
     .eq("business_id", businessId)
     .eq(adapter.participant, message.externalParticipantId)
-    .eq(adapter.connection, conn.id)
-    .in("status", ["active", "paused"])
-    .order("created_at", { ascending: false })
+    .eq(adapter.connection, conn.id);
+  conversationQuery = originalConversationId
+    ? conversationQuery.eq("id", originalConversationId)
+    : conversationQuery.in("status", ["active", "paused"]);
+  const { data: open, error: conversationReadError } = await conversationQuery.order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (job && (conversationReadError || originalConversationId && !open)) throw new Error("Queued original conversation unavailable");
 
   let conversationId = open?.id as string | undefined;
   let previousId: string | null = null;
@@ -253,6 +267,14 @@ export async function handleInboundMessage(
     return;
   }
 
+  if (job) {
+    const { data: bound, error } = await supabase.rpc("bind_workflow_inbound", {
+      p_id: job.id, p_token: job.lease_token, p_conversation: conversationId,
+    });
+    if (error || bound !== true) throw new Error("Queued conversation binding not confirmed");
+    job.conversation_id = conversationId;
+  }
+
   const correlationId = job ? `workflow-job:${job.id}` : randomUUID();
   let persistenceStage: InboundPersistenceError["stage"] = "message_insert";
   try {
@@ -312,7 +334,7 @@ export async function handleInboundMessage(
   const conversationStatus = createdFresh ? "active" : open?.status;
   const convAuto = createdFresh ? business?.auto_reply : open?.auto_reply;
   const autoOn = convAuto ?? business?.auto_reply ?? false;
-  if (!autoOn || conversationStatus === "paused") {
+  if (!autoOn || conversationStatus !== "active") {
     console.log("[inbound] skip auto-reply", {
       autoOn,
       conversationStatus: conversationStatus ?? null,
