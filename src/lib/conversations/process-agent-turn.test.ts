@@ -29,6 +29,31 @@ import { processConversationMessage } from "./process-conversation-message";
 import { decisionForTurn } from "./turn-decision";
 import { instructionHash } from "@/lib/agents/configuration";
 const fixtures: Record<string, unknown> = {};
+it("R2: exact product count uses database count, not the returned subset or the model", async () => {
+  productCount = 2001;
+  const result = await processLegacyAgentTurn({ businessId: "business-a", message: "Sa produkte keni?", hasPhoto: false, informational: "Answer only" });
+  expect(result.reply).toContain("2001");
+  expect(mocks.generate).not.toHaveBeenCalled();
+});
+it("R2: excludes irrelevant knowledge and supplies current structured service facts", async () => {
+  fixtures.booking_services = [{ id: "s", name: "Konsultë", description: "Konsultë sintetike", price_amount: 30, currency: "EUR", price_mode: "from", duration_minutes: 45, booking_enabled: false }];
+  fixtures.knowledge_entries = [{ id: "unrelated", title: "Dërgesa", body: "Dy ditë", intent_key: "policy" }];
+  await processLegacyAgentTurn({ businessId: "business-a", message: "Më trego për Konsultë", hasPhoto: false, informational: "Answer only" });
+  const request = mocks.generate.mock.calls.at(-1)?.[0];
+  expect(JSON.stringify(request)).not.toContain("Dy ditë");
+  expect(request.grounding.services.records[0]).toMatchObject({ id: "s", price_amount: 30, duration_minutes: 45, booking_enabled: false });
+});
+it("R2: unavailable catalog during information does not reset an existing process even outside module rollout", async () => {
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "");
+  failedTable = "products";
+  const state = migrateContext({ ...emptyState(), product_id: "product-a", step_key: "collect_size", fields: { size: "M" } });
+  state.context!.execution.linear = { id: "workflow-a", versionId: "pinned-a", name: "Order", steps: [{ key: "collect_size", kind: "text" }] };
+  const before = structuredClone(state);
+  const result = await processLegacyAgentTurn({ businessId: "business-a", message: "Sa produkte keni?", state, hasPhoto: false, informational: "Answer only" });
+  expect(result.nextState).toEqual(before);
+  expect(result.reply).toContain("Nuk munda");
+  expect(mocks.generate).not.toHaveBeenCalled();
+});
 it("C1: each turn reports the actual active agent and new content loaded into generation", async () => {
   const onTrace = vi.fn();
   for (const [id, instructions] of [["agent-a", "Old instructions"], ["agent-a", "Updated instructions"], ["agent-b", "Other active instructions"]]) {
@@ -119,11 +144,13 @@ it("keeps the Montessori product from a combined greeting, purchase and availabi
 });
 let queries: { table: string; filters: unknown[][] }[] = [];
 let failedTable = "";
+let productCount: number | undefined;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.retrieve.mockResolvedValue(null);
   queries = [];
   failedTable = "";
+  productCount = undefined;
   Object.assign(fixtures, {
     products: [
       {
@@ -153,6 +180,7 @@ beforeEach(() => {
     const result = () => ({
       data: fixtures[table] ?? null,
       error: failedTable === table ? { message: "unavailable" } : null,
+      count: table === "products" && productCount !== undefined ? productCount : Array.isArray(fixtures[table]) ? (fixtures[table] as unknown[]).length : 0,
     });
     const chain = {
       select: vi.fn(() => chain),
@@ -439,7 +467,8 @@ describe("shared business turn processor", () => {
     expect(mocks.generate).toHaveBeenCalledWith(
       expect.objectContaining({
         instructions: "Udhëzimet vetëm të biznesit A",
-        knowledge: "Dërgesa: Brenda dy ditësh",
+        // Shipping policy is unrelated to this product-selection turn.
+        knowledge: "",
         catalogSummary: "Bluzë — 1800 ALL — Pambuk i butë",
         previousResponseId: null,
       }),
@@ -815,7 +844,8 @@ it("answers about an unbound catalog product, then starts ordering through the m
   const answer = await processAgentTurn({ businessId: "business-a", mode: "test", visualPreview: preview, message: question, hasPhoto: false, informationRequest: true });
   expect(answer.nextState.product_id).toBeNull();
   expect(answer.nextState.step_key).toBe("choose_product");
-  expect(mocks.generate.mock.calls.at(-1)?.[0].documentContext).toContain("520 ALL");
+  expect(answer.reply).toContain("520 ALL");
+  expect(mocks.generate).not.toHaveBeenCalled(); // Exact current price is server-rendered.
   expect(queries.find(q => q.table === "products")?.filters).toContainEqual(["is_active", true]);
   answer.nextState.recentMessages = [{ role: "user", content: question }, { role: "assistant", content: answer.reply }];
   const order = await processAgentTurn({ businessId: "business-a", mode: "test", visualPreview: preview, message: "Dua ta blej", state: answer.nextState, hasPhoto: false, orderRequest: true });

@@ -10,6 +10,14 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 import { retrieveBusinessSources } from "./retrieval";
 import { emptyMetadata } from "./model";
+it("R2 reports no matching sections without treating unrelated text as business evidence", async () => {
+  mocks.rpc.mockResolvedValue({ data: [{ catalog_id: "doc", heading: "Refunds", body: "Unsupported refund promise", page: 4, semantic: 0 }] });
+  const onRead = vi.fn();
+  const first = await retrieveBusinessSources("tenant", "industrial pumps catalog", null);
+  const result = await retrieveBusinessSources("tenant", "Germany", first?.context, undefined, onRead);
+  expect(result?.evidence).not.toContain("Unsupported refund promise");
+  expect(onRead.mock.calls.at(-1)?.[0]).toMatchObject({ source: "catalog_sections", businessId: "tenant", status: "no_match", reason: "no_relevant_sections" });
+});
 let filters: unknown[][] = [];
 beforeEach(() => {
   vi.stubEnv("OPENAI_API_KEY", "");

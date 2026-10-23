@@ -3,7 +3,7 @@ import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine"
 import { matchingCatalogNames } from "./match-name";
 import { validValue, type FieldType } from "@/lib/workflows/context";
 
-export type ReferenceProduct = { id: string; name: string; sku?: string | null; price_amount?: number | null; currency?: string | null };
+export type ReferenceProduct = { id: string; name: string; sku?: string | null; price_amount?: number | null; currency?: string | null; price_mode?: "fixed" | "from" | "request" };
 export type PresentedEntity = {
   id: string;
   kind: "product" | "service";
@@ -42,7 +42,7 @@ export function renderProductReferences(text: string, catalog: readonly Referenc
       if (products.length === MAX_PRESENTED_ENTITIES) return "[produkt shtesë — kërko listë më të shkurtër]";
       products.push(product);
     } else repeated = true;
-    return `${product.name}${product.price_amount != null && product.currency ? ` — ${product.price_amount} ${product.currency}` : ""}`;
+    return `${product.name}${product.price_mode !== "request" && product.price_amount != null && product.currency ? ` — ${product.price_mode === "from" ? "nga " : ""}${product.price_amount} ${product.currency}` : ""}`;
   });
   // A mixed/repeated list has no trustworthy ordinal order. Keep the answer,
   // but require explicit customer names instead of inventing presentation evidence.

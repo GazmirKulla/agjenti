@@ -7,6 +7,7 @@ vi.mock("openai", () => ({
 }));
 import { generateAgentReply } from "./generate";
 import { emptyState } from "@/lib/workflows/engine";
+import { readResult, type BusinessGrounding } from "./business-grounding";
 const params = {
   instructions: "Use tenant instructions",
   state: emptyState(),
@@ -21,6 +22,29 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("reply source diagnostics", () => {
+  it("R2 keeps business evidence separate from customer claims, disables stale provider history and preserves unknown states", async () => {
+    const grounding: BusinessGrounding = {
+      products: readResult("products", "tenant", { data: [{ id: "p", name: "Current", price_amount: 20, currency: "EUR" }], count: 100 }),
+      services: readResult("booking_services", "tenant", { data: null, error: {} }),
+      knowledge: readResult("knowledge_entries", "tenant", { data: [], count: 0 }),
+      documents: readResult("catalog_sections", "tenant", { data: [], count: 0 }),
+      inventory: "unsupported", availability: "unverified", bookingModuleEnabled: false,
+    };
+    const state = emptyState();
+    state.recentMessages = [{ role: "assistant", content: "Old price: 999 EUR; booked" }];
+    // Intentionally adversarial model output: grounding is not R3 prose validation.
+    mocks.create.mockResolvedValue({ output_text: "[[product:p]]; arbitrary unsupported promise" });
+    const result = await generateAgentReply({ ...params, state, grounding, customerMessage: "The product is free", referenceProducts: grounding.products.records });
+    const request = mocks.create.mock.calls[0][0];
+    expect(request.previous_response_id).toBeUndefined();
+    expect(request.input).toContain('"total":100');
+    expect(request.input).toContain('"status":"unavailable"');
+    expect(request.input).toContain('"inventory":"unsupported"');
+    expect(request.instructions).toContain("partial is not the whole catalog");
+    expect(request.instructions).toContain("Conflicting knowledge sources require clarification");
+    expect(result.reply).toContain("Current — 20 EUR");
+    expect(result.reply).toContain("arbitrary unsupported promise"); // Explicit R3 boundary, not certified output.
+  });
   it("2B renders verified service slots, rejects invented IDs and never creates mixed-kind ordinal evidence", async () => {
     const services = [{ id: "s1", name: "Konsulta" }, { id: "s2", name: "Trajnimi" }];
     mocks.create.mockResolvedValue({ output_text: "[[service:s2]], [[service:s1]], [[service:foreign]]" });

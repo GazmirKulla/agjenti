@@ -100,7 +100,10 @@ beforeEach(() => {
         const found = versions[String(filters.id)];
         return { data: found?.businessId === filters.business_id ? { id: found.id, graph: found.graph, created_at: found.createdAt, businesses: { agent_collection_policy: found.collectionPolicy } } : null, error: null };
       }
-      if (table === "products") return { data: products.filter(product => product.business_id === filters.business_id && product.is_active === filters.is_active), error: null };
+      if (table === "products") {
+        const data = products.filter(product => product.business_id === filters.business_id && product.is_active === filters.is_active);
+        return { data, count: data.length, error: null };
+      }
       if (table === "booking_services") return { data: services.filter(service => Object.entries(filters).every(([key, value]) => service[key as keyof typeof service] === value)), error: null };
       if (table === "business_calendar_settings") return { data: { agent_booking_enabled: true, timezone: "Europe/Tirane", confirmation_mode: "manual" }, error: null };
       if (["knowledge_entries", "agent_training_memories"].includes(table)) return { data: [], error: null };
@@ -196,7 +199,8 @@ it("does not treat an information question about an unbound product as an order"
   graph.flows[0].kind = "custom";
   const result = await simulateVisualWorkflow("studio", graph, "Sa kushton Bluzë?");
   expect(result.error).toBeUndefined();
-  expect(result.turn?.reply).toBe("Informacion i biznesit.");
+  expect(result.turn?.reply).toBe("Bluzë: 20 EUR."); // R2 exact price, no model needed.
+  expect(mocks.generate).not.toHaveBeenCalled();
   expect(result.turn?.nextState.context?.order).toEqual({});
 });
 

@@ -13,6 +13,7 @@ const ignored = new Set([
   "your",
   "me",
   "nga",
+  "cfare", "mund", "mundet", "how", "what", "about", "tell", "please", "eshte", "can",
 ]);
 export function rankKnowledge<
   T extends { title: string; body: string; intent_key?: string | null },
@@ -35,5 +36,8 @@ export function rankKnowledge<
             0.3;
       return { entry, score, index };
     })
+    // Conservative lexical evidence, not a semantic-confidence guarantee. A
+    // lone weak body overlap in a long question must not become business policy.
+    .filter(item => item.score >= 0.15)
     .sort((a, b) => b.score - a.score || a.index - b.index);
 }

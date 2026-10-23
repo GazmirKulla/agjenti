@@ -4,6 +4,8 @@ import OpenAI from "openai";
 import { agentModel } from "@/lib/agents/generate";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, type Catalog } from "./model";
+import type { BusinessGrounding } from "@/lib/agents/business-grounding";
+import { rankKnowledge } from "./source-ranking";
 import {
   rankCatalogs,
   readContext,
@@ -19,9 +21,12 @@ export async function retrieveBusinessSources(
   message: string,
   rawContext: unknown,
   onTrace?: TraceObserver,
+  onRead?: (result: BusinessGrounding["documents"]) => void,
 ) {
+  const report = (status: BusinessGrounding["documents"]["status"], reason: string, records: BusinessGrounding["documents"]["records"] = []) =>
+    onRead?.({ source: "catalog_sections", businessId, status, reason, retrievedAt: new Date().toISOString(), total: null, records });
   const modules = await runtimeModules(businessId);
-  if (modules && !modules.includes("catalogs")) return null;
+  if (modules && !modules.includes("catalogs")) { report("unavailable", "module_disabled"); return null; }
   const db = createServiceSupabase();
   const catalogStarted = Date.now();
   const result = await db
@@ -38,11 +43,14 @@ export async function retrieveBusinessSources(
     error: result.error ? "Catalog context could not be loaded; product fallback retained" : null, readOnly: true,
   } });
   // Rollout compatibility: businesses using only products retain their existing path.
-  if (result.error || !result.data?.length) return null;
+  if (result.error || !result.data?.length) {
+    report(result.error ? "unavailable" : "no_match", result.error ? "read_failed" : "no_active_indexed_catalogs");
+    return null;
+  }
   const catalogs = result.data as Catalog[];
   const old = readContext(rawContext);
   const intent = routeIntent(message);
-  if (intent === "product") return null;
+  if (intent === "product") { report("unverified", "not_relevant_to_structured_product_read"); return null; }
   const context =
     old?.pending && intent !== "catalog"
       ? {
@@ -179,7 +187,8 @@ export async function retrieveBusinessSources(
     input: { businessId, query, vectorDimensions: vector.length }, output: found.data,
     durationMs: Date.now() - searchStarted, error: found.error ? "Catalog search failed" : null, readOnly: true,
   } });
-  if (found.error)
+  if (found.error) {
+    report("unavailable", "section_read_failed");
     return intent === "catalog" || old?.pending
       ? {
           context,
@@ -189,6 +198,7 @@ export async function retrieveBusinessSources(
           evidence: "",
         }
       : null;
+  }
   const ranked = rankCatalogs(
     catalogs,
     (found.data ?? []) as Hit[],
@@ -196,9 +206,12 @@ export async function retrieveBusinessSources(
     context.requirements,
   );
   const best = ranked[0];
-  if (intent === "general" && !old?.pending && (!best || best.relevance < 0.55))
+  if (intent === "general" && !old?.pending && (!best || best.relevance < 0.55)) {
+    report("no_match", "insufficient_relevance_in_bounded_search");
     return null;
+  }
   if (!best || best.relevance < 0.2) {
+    report("no_match", "insufficient_relevance_in_bounded_search");
     const pending: keyof Requirements = context.requirements.market
       ? "market"
       : context.requirements.language
@@ -247,16 +260,19 @@ export async function retrieveBusinessSources(
   )
     required.push("purpose");
   const missing = required.find((k) => !context.requirements[k]);
-  if (missing)
+  if (missing) {
+    report("unverified", "qualification_required");
     return {
       context: { ...context, pending: missing },
       clarification: questions[missing],
       documents: [],
       evidence: "",
     };
+  }
   const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
   // A configured canonical origin prevents producing attacker-controlled document links.
-  if (!/^https?:\/\//.test(origin))
+  if (!/^https?:\/\//.test(origin)) {
+    report("unavailable", "canonical_origin_missing");
     return {
       context,
       clarification:
@@ -264,6 +280,7 @@ export async function retrieveBusinessSources(
       documents: [],
       evidence: "",
     };
+  }
   const documents = [
     {
       id: best.catalog.id,
@@ -271,10 +288,15 @@ export async function retrieveBusinessSources(
       url: `${origin}/api/catalogs/share/${best.catalog.share_token}`,
     },
   ];
-  const evidence = best.sections
+  // A relevant catalog does not make every returned section relevant. Keep
+  // positive lexical evidence or strong semantic matches, not zero-score hits.
+  const sections = best.sections.filter(s => s.semantic >= 0.55 || rankKnowledge([{ title: s.heading, body: s.body }], query).length > 0);
+  const evidence = sections
     .slice(0, 4)
-    .map((s) => `${s.heading}${s.page ? ` (faqe ${s.page})` : ""}\n${s.body}`)
+    .map((s) => `${s.heading}${s.page ? ` (faqe ${s.page})` : ""}\n${s.body.slice(0, 1800)}`)
     .join("\n\n");
+  report(evidence ? "partial" : "no_match", evidence ? "ranked_excerpts_not_complete_policy" : "no_relevant_sections",
+    documents.map(d => ({ ...d, excerpt: evidence })));
   return {
     context: { ...context, pending: undefined },
     clarification: null,

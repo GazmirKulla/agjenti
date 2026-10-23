@@ -15,6 +15,7 @@ import { loadActiveTrainingMemories } from "@/lib/agents/training/load";
 import { selectTrainingContext } from "@/lib/agents/training/model";
 import { retrieveBusinessSources } from "@/lib/catalogs/retrieval";
 import { rankKnowledge } from "@/lib/catalogs/source-ranking";
+import { exactBusinessAnswer, projectBusinessGrounding, readBusinessGrounding } from "@/lib/agents/business-grounding";
 import { routeIntent } from "@/lib/catalogs/ranking";
 import { agentModel, generateAgentReply } from "@/lib/agents/generate";
 import { shortenDescription } from "@/lib/products/parse";
@@ -162,47 +163,39 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   const started = Date.now();
   const trace = params.onTrace;
   trace?.({ stage: "overview", label: "Message received", data: { input: params.message, mode: params.mode ?? "production", source: params.source ?? "instagram" } });
-  // Service facts are maintained by sync_service_knowledge, but services can be
-  // enabled independently. This must not unlock unrelated knowledge content.
-  const knowledgeQuery = !modules || modules.includes("knowledge") || modules.includes("services")
-    ? db.from("knowledge_entries").select("title,body,intent_key")
-      .eq("business_id", params.businessId).eq("is_active", true)
-    : null;
-  if (modules && !modules.includes("knowledge")) knowledgeQuery?.eq("intent_key", "service");
-  const [productResult, agentResult, knowledgeResult, trainingMemories, operating] = await Promise.all([
-    modules && !modules.includes("products") ? { data: [], error: null } : db
-      .from("products")
-      .select(
-        "id,name,sku,description,product_type_id,workflow_id,price_amount,currency",
-      )
-      .eq("business_id", params.businessId)
-      .eq("is_active", true),
+  const referenced = params.turnDecision?.entity;
+  const groundingEntity = referenced?.status === "resolved" ? referenced
+    : params.state?.visual?.binding?.entity ?? (params.state?.product_id ? { kind: "product" as const, id: params.state.product_id } : undefined);
+  const [businessRead, agentResult, trainingMemories, operating] = await Promise.all([
+    readBusinessGrounding(db, params.businessId, modules, groundingEntity),
     db
       .from("ai_agents")
       .select(agentConfigurationColumns)
       .eq("business_id", params.businessId)
       .eq("is_active", true)
       .maybeSingle(),
-    knowledgeQuery?.order("sort_order").limit(1000) ?? { data: [], error: null },
     loadActiveTrainingMemories(params.businessId),
     loadBusinessProcess(params.businessId),
   ]);
   const businessProcess = businessProcessContext(operating.process);
   if (businessProcess) trace?.({ stage: "workflow", label: "Business customer journey loaded", data: { process: operating.process, revision: operating.revision, informational: true } });
-  if (productResult.error || agentResult.error || knowledgeResult.error) {
+  const failedRead = [businessRead.products, businessRead.services, businessRead.knowledge]
+    .some(r => r.status === "unavailable" && r.reason !== "module_disabled");
+  if (agentResult.error || params.informational === undefined && failedRead) {
     trace?.({ stage: "context", label: "Business context failed to load", status: "error", data: {
-      products: productResult.error ? "failed" : "loaded",
+      products: businessRead.products.status,
       instructions: agentResult.error ? "failed" : "loaded",
-      knowledge: knowledgeResult.error ? "failed" : "loaded",
+      knowledge: businessRead.knowledge.status,
     } });
     throw new Error("Nuk u ngarkua konfigurimi i agjentit.");
   }
-  trace?.({ stage: "tools", label: "loadBusinessContext", status: "success", data: {
+  trace?.({ stage: "tools", label: "loadBusinessContext", status: failedRead ? "error" : "success", data: {
     input: { businessId: params.businessId, activeOnly: true },
-    output: { products: productResult.data?.length ?? 0, knowledge: knowledgeResult.data?.length ?? 0, agent: Boolean(agentResult.data) },
+    output: { products: businessRead.products.records.length, knowledge: businessRead.knowledge.records.length, agent: Boolean(agentResult.data),
+      reads: [businessRead.products, businessRead.services, businessRead.knowledge].map(r => ({ source: r.source, status: r.status, reason: r.reason, total: r.total, returned: r.records.length })) },
     durationMs: Date.now() - started, readOnly: true,
   } });
-  const products = productResult.data ?? [];
+  const products = businessRead.products.records;
   if (moduleEnforcementEnabled(params.businessId) && params.state?.product_id && params.informational === undefined && !products.some(p => p.id === params.state!.product_id))
     throw new CapabilityEnforcementError("binding_unavailable", "Produkti i këtij procesi nuk është më aktiv në këtë biznes. Progresi yt është ruajtur.");
   const agent = agentResult.data;
@@ -214,11 +207,10 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     if (context.rules.length) trace?.({ stage: "context", label: "Business training selected", data: { workflowId, stepKey, rules: context.rules } });
     return context;
   }
-  const rankedKnowledge = rankKnowledge(
-    (knowledgeResult.data ?? []).filter(k => !modules || modules.includes(k.intent_key === "service" ? "services" : "knowledge")),
-    params.message,
-  );
-  const knowledge = rankedKnowledge.slice(0, 12).map((k) => k.entry);
+  const grounding = projectBusinessGrounding(businessRead, params.message, groundingEntity);
+  const verifiedReference = referenced?.status === "resolved" && (referenced.kind === "product" ? products : businessRead.services.records).some(p => p.id === referenced.id)
+    ? referenced : undefined;
+  const knowledge = grounding.knowledge.records;
   trace?.({ stage: "context", label: "Business context loaded", data: {
     businessId: params.businessId, instructions: agent?.instructions ?? null,
     products, knowledge, previousState: params.state ?? emptyState(),
@@ -228,7 +220,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   let state = structuredClone(params.state ?? emptyState());
   const text = params.message.trim();
   if(state.context && state.step_key==="order_ready" && detectVisualIntent(text)==="order" && params.informational===undefined) state=resetOrder(state);
-  if (!moduleEnforcementEnabled(params.businessId) && state.product_id && !products.some((p) => p.id === state.product_id))
+  if (params.informational === undefined && !moduleEnforcementEnabled(params.businessId) && state.product_id && !products.some((p) => p.id === state.product_id))
     state = state.context ? resetOrder(state) : emptyState();
   const exactProduct = products.some(
     (p) => foldText(p.name) === foldText(text) || matchesSku(p.sku, text),
@@ -236,48 +228,39 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   const intent = routeIntent(text);
   trace?.({ stage: "overview", label: "Intent routed", data: { intent, method: "Deterministic product / catalog / general router" } });
   const wantsDocument = intent === "catalog";
+  const exact = params.informational !== undefined ? exactBusinessAnswer(businessRead, text, verifiedReference) : undefined;
   const sources =
-    (exactProduct || (state.product_id && !state.fields.catalog_context)) &&
+    exact || (exactProduct || (state.product_id && !state.fields.catalog_context)) &&
     !wantsDocument
       ? null
       : await retrieveBusinessSources(
           params.businessId,
           text,
           state.fields.catalog_context,
-          ...(trace ? [trace] : []),
+          trace,
+          result => { grounding.documents = result; },
         );
-  const service =
-    !state.product_id &&
-    !exactProduct &&
-    rankedKnowledge.find(
-      (k) => k.entry.intent_key === "service" && k.score >= 0.7,
-    );
+  const service = !state.product_id && !exactProduct && rankKnowledge(businessRead.services.records.map(s => ({
+    id: s.id, title: s.name, body: s.description ?? "" })), text).find(k => k.score >= 0.7);
   trace?.({ stage: "context", label: "Context retrieval completed", data: { sources, service: service ? service.entry : null } });
   if (params.informational !== undefined) {
-    // Service identity comes from the active tenant catalog, never knowledge text.
-    const serviceResult = modules && !modules.includes("services") ? { data: [], error: null }
-      : await db.from("booking_services").select("id,name").eq("business_id", params.businessId).eq("is_active", true).order("name").limit(500);
-    if (serviceResult.error) throw new Error("Nuk u verifikua katalogu i shërbimeve.");
-    const services = serviceResult.data ?? [];
+    const services = grounding.services.records;
     if (sources) state.fields.catalog_context = sources.context;
     const trainingContext = trainingFor(null, null);
     const links = sources?.documents.map(d => `${d.title}: ${d.url}`).join("\n") ?? "";
-    const referenced = params.turnDecision?.entity;
-    const verifiedReference = referenced?.status === "resolved" && (referenced.kind === "product" ? products : services).some(p => p.id === referenced.id)
-      ? referenced : undefined;
-    const generated = sources?.clarification ? {
+    const generated = exact ? { ...exact, source: "fallback" as const, fallbackReason: "authoritative_business_read" } : sources?.clarification ? {
       reply: sources.clarification, source: "fallback" as const, fallbackReason: "catalog_clarification",
       presentedProducts: undefined, presentedServices: undefined,
     } : await generateAgentReply({
-      businessProcess, trainingContext, ...(trace ? { onTrace: trace } : {}),
+      grounding, businessProcess, trainingContext, ...(trace ? { onTrace: trace } : {}),
       instructions: (agent?.instructions || "Answer in the customer's language.") +
         (params.informational ? `\nBusiness owner's reply guidance: ${params.informational}` : ""),
       state, customerMessage: text, previousResponseId: null, knowledge: "", catalogSummary: "",
-      referenceProducts: products,
+      referenceProducts: grounding.products.records,
       referenceServices: services,
       documentContext: [knowledge.map(k => `${k.title}: ${k.body}`).join("\n"),
         verifiedReference ? `Server-resolved catalog reference (information only, not purchase approval): ${JSON.stringify(verifiedReference)}` : "",
-        products.map(p => `${p.name}: ${shortenDescription(p.description)}${p.price_amount == null ? "" : ` — ${p.price_amount} ${p.currency}`}`).join("\n"),
+        grounding.products.records.map(p => `${p.name}: ${shortenDescription(p.description)}${p.price_amount == null ? "" : ` — ${p.price_amount} ${p.currency}`}`).join("\n"),
         sources?.evidence, links, params.mode === "test" && params.attachmentContext ? `Customer attachments (unverified excerpts, not business policy): ${params.attachmentContext}` : ""].filter(Boolean).join("\n") || "No verified information available.",
       documentFallback: sources?.clarification || "Për këtë informacion, ju lutem kontaktoni ekipin.",
     });
@@ -293,6 +276,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     trace?.({ stage: "workflow", label: "Service information; workflow not advanced", data: { state, workflowId: null, steps: [] } });
     const trainingContext = trainingFor(null, null);
     const generated = await generateAgentReply({
+    grounding,
     businessProcess,
       trainingContext,
       ...(trace ? { onTrace: trace } : {}),
@@ -302,8 +286,9 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       customerMessage: text,
       previousResponseId: null,
       catalogSummary: "",
-      documentContext: `Verified business service: ${service.entry.title}\n${service.entry.body}`,
-      documentFallback: `${service.entry.title}: ${service.entry.body}`,
+      referenceServices: grounding.services.records,
+      documentContext: `Current service description (not availability or permission): ${service.entry.title}\n${service.entry.body}`,
+      documentFallback: `${service.entry.title}: ${service.entry.body || "Për hollësi kontakto biznesin."}`,
     });
     return {
       reply: generated.reply,
@@ -360,6 +345,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
           fallbackReason: "catalog_clarification",
         }
       : await generateAgentReply({
+          grounding,
           businessProcess,
           trainingContext,
       ...(trace ? { onTrace: trace } : {}),
@@ -569,6 +555,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   } });
   const trainingContext = trainingFor(workflowId, state.step_key);
   const generated = navigationReply ? {reply:navigationReply,responseId:params.previousResponseId??null,source:"fallback" as const,fallbackReason:"navigation_clarification"} : state.context && !informationalTurn && !isQuestion(text) ? { reply: sharedPrompt(state, steps, productName ?? undefined), responseId: null, source: "fallback" as const, fallbackReason: "shared_workflow_prompt" } : await generateAgentReply({
+    grounding,
     businessProcess,
     trainingContext,
       ...(trace ? { onTrace: trace } : {}),
@@ -579,7 +566,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     knowledge: knowledge.map((k) => `${k.title}: ${k.body}`).join("\n"),
     customerMessage: text || "[media]",
     previousResponseId: params.previousResponseId ?? null,
-    catalogSummary: products
+    catalogSummary: grounding.products.records
       .map((p) => {
         const price =
           p.price_amount == null ? "" : ` — ${p.price_amount} ${p.currency}`;
@@ -587,7 +574,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
         return desc ? `${p.name}${price} — ${desc}` : `${p.name}${price}`;
       })
       .join("\n"),
-    referenceProducts: products,
+    referenceProducts: grounding.products.records,
     workflowProgress,
   });
   return {
