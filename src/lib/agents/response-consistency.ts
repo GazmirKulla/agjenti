@@ -194,41 +194,66 @@ export function validateResponse(text: string, evidence: Evidence): ConsistencyR
   // Share R1's fact reference; never independently route the conversation or
   // recover values from prior assistant prose. Keep verification scoped to the
   // projected fields, rather than exposing the whole customer profile.
-  const reference = isQuestion(evidence.message) || /\b(?:dhashe|provided)\b/.test(user)
-    ? evidence.customer.reference ?? customerFactReference(evidence.message, evidence.state) : undefined;
+  const requested = evidence.customer.reference ?? customerFactReference(evidence.message, evidence.state);
+  const reference = isQuestion(evidence.message) || requested?.recall || /\b(?:dhashe|provided)\b/.test(user)
+    ? requested : undefined;
   const declaredLabels: Record<string, string> = { instagram_handle: "profilin në Instagram", business_type: "biznesin tënd", stated_needs: "pyetjet/nevojat" };
+  const recallLabels: Record<string, string[]> = {
+    name: ["emri", "emrin", "name"], phone: ["telefoni", "telefonin", "phone"], email: ["email"], city: ["qyteti", "qytetin", "city"], address: ["adresa", "adresen", "address"],
+    instagram_handle: ["instagram", "instagrami", "instagramin", "handle"], business_type: ["biznesi", "biznesin", "business"], stated_needs: ["pyetjet", "nevojat", "tipike", "questions", "needs"],
+  };
+  const namesFact = (clause: string, key: string) => recallLabels[key]?.some(label => words(clause).includes(label)) ?? false;
   const personal = reference?.keys.map(key => ({ key, fact: evidence.customer.profile[key] ?? evidence.customer.declared[key] }))
     .filter(item => item.fact?.authority === "customer_declared" && !item.fact.truncated) ?? [];
+  const missing = reference?.keys.filter(key => !personal.some(p => p.key === key)) ?? [];
   const denialPattern = /\b(?:nuk ma ke|nuk me ke|nuk e di|nuk (?:eshte|jane|quhesh|quheni|shet)|nuk (?:ke|keni) (?:dhene|thene|treguar)|haven't told|have not told|don't know|not provided|is not|isn't)\b/;
+  const absence = /\b(?:nuk|mungon|mungojne|unknown|unavailable|not|haven't|don't|missing)\b/;
   const personalAssertion = /\b(?:ti|ju|ke|keni|yt|jote|quhesh|quheni|you|your)\b/;
-  const denial = claimClauses(answer).some(clause => denialPattern.test(clause)
-    && (personalAssertion.test(clause) || personal.some(({ key, fact }) => labels[key]?.question.test(clause) || clause.includes(normalize(fact.value)))));
-  const containsFact = (key: string, value: string) => {
+  const answerClauses = reply.split(/(?<=[.!?])\s+|\n+/).flatMap(sentence => claimClauses(normalize(sentence)));
+  const denial = answerClauses.some(clause => denialPattern.test(clause)
+    && personal.some(({ key, fact }) => namesFact(clause, key) || clause.includes(normalize(fact.value))));
+  const containsFact = (key: string, value: string, claim = answer) => {
     const expected = normalize(value).replace(/^@/, "");
-    if (new RegExp(`(?:^|[^a-z0-9_])${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9_])`).test(answer)) return true;
+    if (new RegExp(`(?:^|[^a-z0-9_])${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9_])`).test(claim)) return true;
     if (key !== "business_type" && key !== "stated_needs") return false;
     // Bounded lexical paraphrases only (e.g. 'shitje rrobash online' / 'shet
     // rroba online'). Not a semantic truth classifier for arbitrary descriptions.
     const content = expected.split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !/^(shitje|shet|shes|ofroj|ofron|biznesi|eshte|online)$/.test(w));
-    const words = answer.split(/[^a-z0-9]+/);
+    const words = claim.split(/[^a-z0-9]+/);
     return content.length > 0 && content.every(w => words.some(a => stem(a) === stem(w)))
-      && (!expected.includes("online") || words.includes("online")) && !/\b(?:nuk|not|never)\b/.test(answer);
+      && (!expected.includes("online") || words.includes("online"));
   };
   const statements = personal.map(({ key, fact }) => `Ti ke deklaruar ${labels[key]?.label.toLowerCase() ?? declaredLabels[key]}: ${fact.value}.`);
   const personalAssertions = reply.split(/(?<=[.!?])\s+|\n+/).filter(sentence => !sentence.endsWith("?")
     && personalAssertion.test(normalize(sentence))
     && !/^(?:nese|sikur|if|suppose)\b/.test(normalize(sentence)));
-  const unsupportedExtension = personalAssertions.some(sentence => claimClauses(normalize(sentence)).some(clause => !uncertainty.test(clause)
-    && !/^(?:nese|sikur|if|suppose)\b/.test(clause) && !supportedRecall(clause, personal.map(p => p.fact.value),
+  const unavailableStatements = missing.map(key => {
+    const reason = evidence.customer.unavailable?.find(item => item.key === key)?.reason;
+    return `Për ${labels[key]?.label.toLowerCase() ?? declaredLabels[key]}: ${reason && reason !== "missing" ? "vlera nuk mund të verifikohet plotësisht në këtë kontekst" : "nuk kam deklarim të disponueshëm në këtë kontekst"}.`;
+  });
+  const neverSupplied = /\b(?:nuk (?:(?:ma|me) )?ke|haven't|have not|never)\b.{0,25}\b(?:dhene|thene|treguar|supplied|provided|told)\b/;
+  const unavailableClause = (clause: string) => absence.test(clause) && missing.some(key => namesFact(clause, key))
+    && !neverSupplied.test(clause) && !personal.some(({ key }) => namesFact(clause, key));
+  const supportedLabels = personal.flatMap(p => recallLabels[p.key] ?? []);
+  const unsupportedExtension = personalAssertions.some(sentence => claimClauses(normalize(sentence)).some(clause => !uncertainty.test(clause) && !unavailableClause(clause)
+    && !/^(?:nese|sikur|if|suppose)\b/.test(clause) && !supportedRecall(clause, [...personal.map(p => p.fact.value), ...supportedLabels],
       personal.filter(p => p.key === "business_type" || p.key === "stated_needs").map(p => p.fact.value))));
-  if (personal.length && (denial || unsupportedExtension || personal.some(({ key, fact }) => !containsFact(key, fact.value)))) {
+  const missingUnsupported = missing.some(key => !answerClauses.some(clause => namesFact(clause, key) && unavailableClause(clause)));
+  const assignedMismatch = reply.split(/(?<=[.!?])\s+|\n+/).some(sentence =>
+    claimClauses(normalize(sentence), personal.map(p => normalize(p.fact.value))).some(clause => {
+      const named = personal.filter(({ key }) => namesFact(clause, key));
+      return named.length === 1 && !containsFact(named[0].key, named[0].fact.value, clause) && !clause.endsWith("?");
+    }));
+  if (personal.length && (denial || unsupportedExtension || assignedMismatch || missingUnsupported || personal.some(({ key, fact }) => !containsFact(key, fact.value)))) {
     add("contradiction", `known_customer_${personal[0].key}`);
-    reply = statements.join("\n");
+    reply = [...statements, ...unavailableStatements].join("\n");
   }
-  if (reference && !personal.length && !uncertainty.test(answer)
-    && /\b(?:ti (?:quhesh|shet|ofron|ke)|quhesh|emri yt|your (?:name|business|instagram))\b/.test(answer)) {
+  const inventedMissing = reply.split(/(?<=[.!?])\s+|\n+/).some(sentence => claimClauses(normalize(sentence)).some(clause =>
+    !clause.endsWith("?") && (!absence.test(clause) || neverSupplied.test(clause)) && missing.some(key => namesFact(clause, key))));
+  if (reference?.keys.length && !personal.length && (inventedMissing || !uncertainty.test(answer)
+    && /\b(?:ti (?:quhesh|shet|ofron|ke)|quhesh|emri yt|your (?:name|business|instagram))\b/.test(answer))) {
     add("unverifiable", "customer_fact_absent");
-    reply = "Nuk kam një deklarim të ruajtur për këtë të dhënë. Mund ta japësh ose ta sqarosh?";
+    reply = unavailableStatements.join("\n");
   }
   if (reference?.relation === "sales_location") {
     // A handle is a declaration, not account ownership or proof of a sales channel.
@@ -240,7 +265,24 @@ export function validateResponse(text: string, evidence: Evidence): ConsistencyR
   // keys are server-defined, not a domain-specific list of ages/sizes/diagnoses.
   // Natural-language synonyms not present in this contract remain a limitation.
   const process = evidence.customer.process;
-  if (!reference && process) {
+  if (reference?.process && !process) {
+    add("unverifiable", "process_context_unavailable");
+    reply = [...statements, ...unavailableStatements, evidence.customer.diagnostic === "ambiguous_process"
+      ? "Cilën kërkesë dëshiron të rikujtosh? Ka disa procese dhe nuk do t’i bashkoj të dhënat e tyre."
+      : "Nuk kam një proces të vlefshëm të përzgjedhur në këtë kontekst. Kjo nuk provon se të dhënat nuk janë dhënë më parë."].join("\n");
+  }
+  if (reference?.process && process) {
+    const fields = Object.entries(process.fields).filter(([, f]) => f.authority === "customer_declared" && !f.truncated);
+    // The selected process supplies a bounded set of configured fields. Correct
+    // recall must not become a blanket absence claim, nor borrow profile facts.
+    if (fields.length && (fields.some(([, f]) => !words(f.value).every(w => words(reply).includes(w)))
+      || claimClauses(normalize(reply)).some(clause => absence.test(clause)
+        && fields.some(([key, f]) => words(clause).includes(key) || normalize(clause).includes(normalize(f.value)))))) {
+      add("contradiction", "known_process_facts");
+      reply = [...statements, ...unavailableStatements, `Për kërkesën aktuale ke deklaruar: ${fields.map(([key, f]) => `${key}: ${f.value}`).join("; ")}.`].join("\n");
+    }
+  }
+  if ((!reference || reference.process) && process) {
     const fields = Object.entries(process.fields).filter(([, f]) => f.authority === "customer_declared" && !f.truncated);
     const keyIn = (text: string, key: string) => new RegExp(`(?:^|[^a-z0-9_])${normalize(key).replace(/_/g, "[_ ]")}(?:$|[^a-z0-9_])`).test(text);
     reply = reply.split(/(?<=[.!?])\s+|\n+/).map(sentence => {

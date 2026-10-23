@@ -3,6 +3,7 @@ import { currentProcessOwner, type ConversationRouting, type LocalProcessKind } 
 import { explicitIntent, type GuidanceTarget } from "@/lib/workflows/guidance";
 import { validValue, type FieldType } from "@/lib/workflows/context";
 import { positiveEntityText } from "@/lib/products/entity-bridge";
+import { customerFactReference } from "@/lib/agents/customer-fact-reference";
 
 export type TurnEntity =
   | { status: "none" }
@@ -36,6 +37,8 @@ export function turnIntent(message: string): TurnIntent {
   const positive = text.replace(/\b(?:nuk dua|s dua|do not want|don t want)\b.*?(?=[,;.!]|\b(?:dua|kerkoj|want)\b|$)/g, " ");
   if (/\b(?:dua|deshiroj|kerkoj|want)\b.*\b(?:porosi\w*|blej|buy|order)\b|\b(?:vazhdo\w*|rifillo\w*|resume)\b.*\b(?:porosi\w*|order)\b/.test(positive)) return "order";
   if (/\b(?:dua|deshiroj|kerkoj|want|vazhdo\w*|rifillo\w*)\b.*\b(?:rezerv\w*|takim\w*|booking|appointment)\b|^(?:rezervo\w*|book)\b/.test(positive)) return "booking";
+  const recall = customerFactReference(message);
+  if (recall?.recall || recall?.process) return "information";
   if (explicitIntent(message) === "order") return "order";
   if (/\b(?:me trego|me thuaj|dua te di|informacion\w*|information|show me|tell me|sa kushton|how much|cmim\w*|price)\b/.test(text)) return "information";
   // A request to continue with a service is distinct from asking about it or

@@ -55,6 +55,15 @@ beforeEach(() => {
   mocks.booking.mockImplementation(async ({ state }) => { const next = structuredClone(state); next.fields.booking = { nonce: "booking-1", phase: "collect", serviceId: "service", date: "2026-10-15", expires: Date.now() + 60000 }; next.step_key = "booking_request"; return result(next, "Në çfarë ore?"); });
 });
 const turn = (message: string, state?: ConversationStatePayload) => processConversationMessage({ businessId: "business", message, state, hasPhoto: false, mode: "test" });
+it.each(["Më kujto preferencat për porosinë.", "Rikujto emrin dhe Instagramin."])("P1 recall is information, never a pending field answer: %s", async message => {
+  const state = order(), before = structuredClone(state.context);
+  const reply = await turn(message, state);
+  expect(reply.conversationRouting?.process).toBe("information");
+  expect(reply.turnDecision?.intent).toBe("information");
+  expect(mocks.agent).not.toHaveBeenCalled();
+  expect(reply.nextState.context?.order).toEqual(before?.order);
+  expect(reply.nextState.processes?.order?.snapshot.execution.linear?.versionId).toBe("v1");
+});
 describe("R3 server-owned customer question boundary", () => {
   async function ask() {
     mocks.info.mockImplementation(async ({ state }) => ({ ...result(state, "[[ask_customer:name,business_type,instagram_handle,stated_needs]]"),

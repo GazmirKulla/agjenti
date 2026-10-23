@@ -14,6 +14,8 @@ export type CustomerContext = {
   declared: Record<string, ProjectedFact>;
   /** Presence prevents re-asking without disclosing unrelated contact values. */
   suppliedProfileKeys?: string[];
+  /** Requested keys omitted from projection are not proof they were never supplied. */
+  unavailable?: Array<{ key: string; reason: "missing" | "invalid" | "unverified" | "truncated" }>;
   process?: { kind: Domain; id: string | null; versionId: string | null; status: string;
     fields: Record<string, ProjectedFact>; entity?: { kind: "product" | "service"; id: string };
     /** Collection is not availability, approval, handoff or execution evidence. */
@@ -63,6 +65,17 @@ export function projectCustomerContext(input: ConversationStatePayload, message:
     const raw = state.customerDeclaredFacts?.[key];
     const f = raw && validDeclaredValue(key, raw.value) ? fact(raw) : undefined;
     if (f) out.declared[key] = f;
+  }
+  if (reference?.keys.length) {
+    out.unavailable = reference.keys.flatMap(key => {
+      const raw = state.context?.profile[key as typeof profileKeys[number]] ?? state.customerDeclaredFacts?.[key as typeof customerDeclaredKeys[number]];
+      const projected = out.profile[key] ?? out.declared[key];
+      const reason = !raw ? "missing" as const : !projected ? "invalid" as const
+        : projected.truncated ? "truncated" as const : projected.authority !== "customer_declared" ? "unverified" as const : undefined;
+      return reason ? [{ key, reason }] : [];
+    });
+    // Personal recall never implicitly discloses an unrelated active process.
+    if (!reference.process) return out;
   }
   const candidates: Candidate[] = [], p = state.processes, owner = state.context?.execution.factOwner;
   const visualOK = (visual: ConversationStatePayload["visual"], version?: string) => !visual
@@ -117,9 +130,12 @@ export function projectCustomerContext(input: ConversationStatePayload, message:
   }
   if (selected) {
     const fields: Record<string, ProjectedFact> = {};
+    const requestedKeys = reference?.process || reference?.recall ? Object.keys(selected.fields).filter(key => mentions(text, key)) : [];
+    if (reference?.recall && requestedKeys.length) out.reference = { ...reference, process: true };
     for (const key of Object.keys(selected.fields).sort()) {
       if (Object.keys(fields).length >= 24) break;
       if (!safeFieldKey(key) || secrets.test(key) || selected.invalid?.includes(key) || key.startsWith("customer_")) continue;
+      if (requestedKeys.length && !requestedKeys.includes(key)) continue;
       const f = fact(selected.fields[key]); if (!f) continue;
       if ((contact.test(key) || ["phone", "email"].includes(f.type)) && !(ownQuestion && mentions(text, key))) continue;
       // Suspended tasks are shown only for an explicit domain or field request.

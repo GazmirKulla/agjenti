@@ -22,6 +22,26 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("R3 critical response boundary", () => {
+  it("P1 sends selected composite facts, not an entire state, and validates denial against that same projection", async () => {
+    const { migrateContext, setFact } = await import("@/lib/workflows/context");
+    const { extractCustomerDeclaredFacts } = await import("@/lib/workflows/customer-declared-facts");
+    const state = migrateContext(); setFact(state, "customer_name", "Drita", "text", "message_label");
+    setFact(state, "customer_phone", "0690000000", "phone", "message_label");
+    extractCustomerDeclaredFacts(state, "Instagram: synthetic_books; Lloji i biznesit: Shitje librash online; Pyetjet tipike: çmimet");
+    state.recentMessages = [{ role: "assistant", content: "Ti quhesh Wrong." }];
+    const customerMessage = "Më kujto emrin dhe Instagramin.";
+    mocks.create.mockResolvedValue({ id: "rejected", output_text: "Nuk më ke dhënë të dhëna." });
+    const result = await generateAgentReply({ ...params, state, customerMessage });
+    const request = mocks.create.mock.calls[0][0];
+    const projected = JSON.parse(request.input.split("\n").find((line: string) => line.startsWith("Collected state (source of truth): ")).split(": ").slice(1).join(": "));
+    expect(projected.reference.keys).toEqual(["name", "instagram_handle"]);
+    expect(projected.profile.name.value).toBe("Drita"); expect(projected.declared.instagram_handle.value).toBe("synthetic_books");
+    expect(JSON.stringify(projected)).not.toMatch(/0690000000|Shitje|Wrong/);
+    expect(result.reply).toContain("Drita"); expect(result.reply).toContain("synthetic_books"); expect(result.responseId).toBeNull();
+    const correct = "Emri yt: Drita. Instagrami yt: synthetic_books.";
+    mocks.create.mockResolvedValue({ id: "accepted", output_text: correct });
+    expect((await generateAgentReply({ ...params, state, customerMessage })).reply).toBe(correct);
+  });
   it("does not expose a fabricated booking confirmation or keep its provider history", async () => {
     mocks.create.mockResolvedValue({ id: "unsafe-response", output_text: "Rezervimi u konfirmua për nesër." });
     const result = await generateAgentReply(params);

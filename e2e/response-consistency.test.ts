@@ -55,11 +55,20 @@ it('R3 validated reply precedes history and real PostgreSQL send preparation, re
     const recall = await processConversationMessage({ businessId: tenant.id, state: turn.nextState, message: 'Si quhem?', hasPhoto: false, mode: 'test' });
     expect(recall.reply).toBe('Ti ke deklaruar emrin: Synthetic R3.');
     expect(recall.nextState.recentMessages?.at(-1)?.content).toBe(recall.reply);
+    // P1: the same real coordinator path must persist a composite, not a false
+    // absence claim. Facts here are synthetic and remain conversation-local.
+    const { extractCustomerDeclaredFacts } = await import('@/lib/workflows/customer-declared-facts');
+    extractCustomerDeclaredFacts(recall.nextState, 'Instagram: synthetic_p1; Lloji i biznesit: Shitje librash online');
+    model.text = 'Nuk më ke dhënë asnjë të dhënë.';
+    const composite = await processConversationMessage({ businessId: tenant.id, state: recall.nextState,
+      message: 'Më kujto emrin, biznesin dhe Instagramin.', hasPhoto: false, mode: 'test' });
+    for (const value of ['Synthetic R3', 'synthetic_p1', 'Shitje librash online']) expect(composite.reply).toContain(value);
+    expect(composite.nextState.recentMessages?.at(-1)?.content).toBe(composite.reply);
     // Actual production SQL boundary, synthetic channel rows and complete rollback.
     const json = (value: unknown) => `${quote(JSON.stringify(value))}::jsonb`;
     sql(`begin; set local lock_timeout='5s'; set local statement_timeout='10s';
       do $test$ declare c uuid:=gen_random_uuid(); channel_id uuid:=gen_random_uuid(); q public.workflow_inbound_queue;
-        state jsonb:=${json(recall.nextState)}; answer text:=${quote(recall.reply)};
+        state jsonb:=${json(composite.nextState)}; answer text:=${quote(composite.reply)};
       begin
         insert into public.instagram_connections(id,business_id,ig_user_id,access_token_ciphertext) values(channel_id,${quote(tenant.id)},channel_id::text,'synthetic-only');
         insert into public.conversations(id,business_id,instagram_participant_id,instagram_connection_id,auto_reply,status)
