@@ -29,7 +29,10 @@ async function send(page, message) {
   const { result: raw } = await readServerAction(page, () => input.press('Enter'));
   expect(raw.error).toBeUndefined(); const result = raw.turn ?? raw;
   await expect(page.getByText(result.reply, { exact: true }).last()).toBeVisible();
-  return { ...result, state: decode(raw.session) };
+  const state = decode(raw.session);
+  await test.info().attach('collection-turn', { body: Buffer.from(JSON.stringify({ message, reply: result.reply,
+    preparedRequest: result.preparedRequest, state })), contentType: 'application/json' });
+  return { ...result, state };
 }
 function configure(t, profileFields = []) {
   // Explicit test fixture administration, not runtime auto-activation/publication.
@@ -90,15 +93,81 @@ test('digital request: configured fields -> email only -> reviewed; no shipping 
   expect(done.state.visual.collection).toMatchObject({ businessId: t.id, mode: 'collection_only' });
   verifyPersistence(t, review.state, done.state);
 });
+test('physical request: profile requirements, interruption, correction and fresh review', async ({ page }) => {
+  const t = tenant('retail');
+  configure(t, ['name', 'phone', 'city', 'address']);
+  try {
+    await login(page, t);
+    expect((await send(page, 'Dua të porosis E2E Shirt')).reply).toBe('size A?');
+    expect((await send(page, 'M')).reply).toBe('quantity A?');
+    const invalid = await send(page, 'many');
+    expect(invalid.state.context.order.quantity).toBeUndefined();
+    expect(invalid.state.visual.nodeId).toBe('quantity');
+    const info = await send(page, 'What does this product include?');
+    expect(info.state.processes.order.status).toBe('suspended');
+    const resumed = await send(page, 'Vazhdo porosinë');
+    expect(resumed.reply).toBe('quantity A?');
+    expect(resumed.state.context.order.size.value).toBe('M');
+    await send(page, '2');
+    expect((await send(page, 'po')).reply).toContain('emrin');
+    expect((await send(page, 'Ana Test')).reply).toContain('telefonin');
+    expect((await send(page, '+355691234567')).reply).toContain('qytetin');
+    expect((await send(page, 'Tirane')).reply).toContain('adresën');
+    const review = await send(page, 'Rruga Sintetike 12');
+    expect(review.state.step_key).toBe('order_confirm');
+    const done = await send(page, 'po');
+    expect(done.preparedRequest).toMatchObject({ review: 'customer_confirmed', transaction: 'not_executed_by_agent',
+      collectedFields: { customer_city: 'Tirane', customer_address: 'Rruga Sintetike 12' } });
+    const corrected = await send(page, 'telefoni: +355699876543');
+    expect(corrected.state.context.profile.phone.value).toBe('+355699876543');
+    expect(corrected.state.context.execution.orderConfirmed).toBe(false);
+    expect(corrected.state.context.execution.orderReview.confirmed).toBe(false);
+    expect(corrected.state.context.execution.orderReview.id).not.toBe(done.state.context.execution.orderReview.id);
+    expect(corrected.state.context.order.quantity.value).toBe('2');
+    verifyPersistence(t, review.state, corrected.state);
+    // A missing projection is not evidence of a fresh corrected review.
+    expect(corrected.preparedRequest).toBeDefined();
+    expect(corrected.preparedRequest.review).not.toBe('customer_confirmed');
+    expect(corrected.preparedRequest.collectedFields.customer_phone).toBe('+355699876543');
+    expect(corrected.state.processes.order.id).toBe(done.state.processes.order.id);
+    expect(corrected.state.visual.versionId).toBe(done.state.visual.versionId);
+    expect(corrected.state.processes.order.status).toBe('active');
+    expect(corrected.state.step_key).toBe('order_confirm');
+    const duplicate = await send(page, 'telefoni: +355699876543');
+    expect(duplicate.preparedRequest).toMatchObject({ review: 'review_requested', collectedFields: { customer_phone: '+355699876543' } });
+    expect(duplicate.state.processes.order.id).toBe(done.state.processes.order.id);
+    const reconfirmed = await send(page, 'po');
+    expect(reconfirmed.preparedRequest).toMatchObject({ review: 'customer_confirmed', collectedFields: { customer_phone: '+355699876543' } });
+    expect(reconfirmed.state.processes.order.id).toBe(done.state.processes.order.id);
+    const phrase = await send(page, 'Telefoni im është +355699876543');
+    expect(phrase.turnDecision.kind).toBe('correction');
+    expect(phrase.preparedRequest).toMatchObject({ review: 'review_requested', collectedFields: { customer_phone: '+355699876543' } });
+    expect((await send(page, 'po')).preparedRequest.review).toBe('customer_confirmed');
+    const rejected = await send(page, 'telefoni: many');
+    expect(rejected.preparedRequest).toBeDefined();
+    expect(rejected.state.context.profile.phone.value).toBe('+355699876543');
+    expect(rejected.turnDecision.kind).toBe('clarification');
+    verifyPersistence(t, corrected.state, reconfirmed.state);
+  } finally { configure(t, ['email']); }
+});
 test('service collection -> safe summary; no order/booking or false handoff', async ({ page }) => {
   const t = tenant('quote'); await login(page, t);
   expect((await send(page, 'Dua të vazhdoj me E2E Website')).reply).toBe('project_type A?');
   expect((await send(page, 'Landing page')).reply).toBe('budget A?');
+  const invalid = await send(page, 'many');
+  expect(invalid.state.processes.service.order.budget).toBeUndefined();
+  expect(invalid.state.processes.service.visual.nodeId).toBe('budget');
+  expect((await send(page, 'What are your hours?')).state.processes.service.status).toBe('suspended');
+  expect((await send(page, 'vazhdo')).reply).toBe('budget A?');
   expect((await send(page, '1200')).reply).toBe('Confirm A?');
   const done = await send(page, 'po');
   expect(done.preparedRequest).toMatchObject({ domain: 'service', validation: 'valid', handoff: 'not_handed_off' });
   expect(done.state.processes.service.order).toHaveProperty('budget.value', '1200');
   expect(done.state.product_id).toBeNull();
+  const correction = await send(page, 'budget: 1500');
+  expect(correction.turnDecision.kind).toBe('clarification');
+  expect(correction.preparedRequest).toMatchObject({ domain: 'service', collectedFields: { budget: '1200' } });
+  expect(correction.state.processes.service.order.budget.value).toBe('1200');
 });
 test('real Auth/PostgREST denies direct policy writes, RPC spoofing and cross-tenant reads', async () => {
   const t = tenant('retail');
@@ -115,5 +184,5 @@ test('real Auth/PostgREST denies direct policy writes, RPC spoofing and cross-te
   await db.auth.signOut();
 });
 test.afterAll(() => {
-  expect(sql('select (select count(*) from public.orders)+(select count(*) from public.order_submissions)+(select count(*) from public.bookings)+(select count(*) from public.customers)+(select count(*) from public.messages);')).toBe('0');
+  expect(sql('select (select count(*) from public.orders)+(select count(*) from public.order_items)+(select count(*) from public.order_submissions)+(select count(*) from public.bookings)+(select count(*) from public.customers)+(select count(*) from public.messages)+(select count(*) from public.workflow_inbound_queue)+(select count(*) from public.workflow_booking_effects);')).toBe('0');
 });

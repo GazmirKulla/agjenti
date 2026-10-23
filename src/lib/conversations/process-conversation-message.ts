@@ -28,6 +28,7 @@ import {
 } from "@/lib/runtime/execution-context";
 import { runIsolated } from "@/lib/runtime/isolated-run";
 import { readContext as readCatalogContext } from "@/lib/catalogs/ranking";
+import { correctPreparedRequest } from "./prepared-request-correction";
 
 export type ConversationMessageParams = AgentTurnParams & {
   /** Server webhook identity, never accepted from chat text or preview state. */
@@ -112,10 +113,13 @@ function entityClarification(state: ConversationStatePayload, reply: string): Ag
   suspendProcesses(state);
   return { ...plainResult(state, reply), conversationRouting: { process: "clarify", action: "clarify", source: "rules", reason: reply, reusedFields: [], missingFields: [] } };
 }
+function explicitPhone(message: string) {
+  return message.match(/(?:telefoni?\s*(?:im)?|numri\s+im|my\s+(?:phone|number))\s*(?:(?:është|eshte|is)\s*|[:=]\s*)(\+?[\d ().-]{7,24}\d)/i);
+}
 function explicitProfile(state: ConversationStatePayload, message: string, profileOnly = false) {
   extractExplicitFacts(state, message, profileOnly ? [] : state.context?.execution.linear?.steps ?? []);
   // Contact labels anchor the number to this customer's own statement, including mixed question/fact turns.
-  const phone = message.match(/(?:telefoni?\s*(?:im)?|numri\s+im|my\s+(?:phone|number))\s*(?:(?:është|eshte|is)\s*|[:=]\s*)(\+?[\d ().-]{7,24}\d)/i);
+  const phone = explicitPhone(message);
   if (phone) setFact(state, "customer_phone", phone[1].trim(), "phone", "message_phone");
 }
 
@@ -516,6 +520,20 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
   const graphVersion = selectedPending ? params.visualPreview ?? await loadVisualVersion(params.businessId, pendingSelection!.versionId)
     : clarificationResume === "order" && !state.visual ? null
     : params.visualPreview ?? await loadVisualVersion(params.businessId, clarificationResume === "service" || clarificationResume === "actionFlow" ? processes[clarificationResume]?.versionId : processes.active === "booking" || clarificationResume === "booking" ? processes.booking?.versionId : state.visual?.versionId);
+  // Reuse the existing explicit phone parser, but only a complete statement:
+  // embedded profile facts in an information question are not a review request.
+  const phoneStatement = explicitPhone(params.message.trim());
+  const correctionMessage = phoneStatement?.index === 0 && phoneStatement[0].length === params.message.trim().length
+    ? `telefoni: ${phoneStatement[1].trim()}` : params.message;
+  const correction = await correctPreparedRequest({ businessId: params.businessId, message: correctionMessage, state, version: graphVersion });
+  if (correction) {
+    const routing: ConversationRouting = { process: correction.corrected ? "order" : "clarify", action: correction.corrected ? "correct" : "clarify",
+      source: "rules", reason: "prepared_request_correction", reusedFields: [], missingFields: [] };
+    correction.state.processes!.lastDecision = routing;
+    scope.decision = { ...decisionForTurn({ message: params.message, state: correction.state, routing, executor: "coordinator" }),
+      ...(correction.corrected ? { kind: "correction" as const } : { kind: "clarification" as const, reason: "process" as const }) };
+    return { ...plainResult(correction.state, correction.reply), preparedRequest: correction.preparedRequest, conversationRouting: routing };
+  }
   if (clarificationResume) params = { ...params, entityVersion: graphVersion };
   if (selectedPending && (!graphVersion || graphVersion.id !== pendingSelection!.versionId))
     return entityClarification(state, "Versioni i kërkesës së mëparshme nuk është më i disponueshëm. Shkruaj sërish shërbimin që dëshiron të vazhdosh.");

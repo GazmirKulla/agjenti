@@ -28,6 +28,8 @@ import { validateVisualGraph } from "@/lib/workflows/visual/model";
 import { simulateVisualWorkflow } from "@/lib/workflows/visual/test-actions";
 import { readTestSession } from "@/lib/agents/test-chat/session";
 import { recordEntityPresentation } from "@/lib/products/entity-bridge";
+import { advanceVisualOrderReview } from "@/lib/workflows/visual/product-order";
+import { withCollectionPolicy } from "@/lib/runtime/execution-context";
 
 const businessId = "business-a";
 const productId = "00000000-0000-4000-8000-000000000001";
@@ -96,7 +98,7 @@ beforeEach(() => {
       if (table === "visual_workflows") return { data: { published_version_id: published, enabled: true }, error: null };
       if (table === "visual_workflow_versions") {
         const found = versions[String(filters.id)];
-        return { data: found?.businessId === filters.business_id ? { id: found.id, graph: found.graph, created_at: found.createdAt } : null, error: null };
+        return { data: found?.businessId === filters.business_id ? { id: found.id, graph: found.graph, created_at: found.createdAt, businesses: { agent_collection_policy: found.collectionPolicy } } : null, error: null };
       }
       if (table === "products") return { data: products.filter(product => product.business_id === filters.business_id && product.is_active === filters.is_active), error: null };
       if (table === "booking_services") return { data: services.filter(service => Object.entries(filters).every(([key, value]) => service[key as keyof typeof service] === value)), error: null };
@@ -104,6 +106,7 @@ beforeEach(() => {
       if (["knowledge_entries", "agent_training_memories"].includes(table)) return { data: [], error: null };
       if (table === "ai_agents") return { data: { instructions: "Përgjigju vetëm për biznesin." }, error: null };
       if (table === "business_discovery") return { data: null, error: null };
+      if (table === "order_submissions") return { data: null, error: null };
       throw new Error(`Unexpected table: ${table}`);
     };
     const chain = {
@@ -126,6 +129,42 @@ beforeEach(() => {
   }));
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+
+it.each(["correct", "phone_phrase", "staff", "module", "cancelled"])("post-confirmation %s retains A after B publication and respects existing ownership guards", async scenario => {
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", businessId);
+  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
+  const a = versions.A;
+  if (a.graph.version !== 2) throw new Error("fixture");
+  a.graph.flows[0].productIds = [productId];
+  const pin = { businessId, versionId: "A", flowId: "order", revision: 1, domain: "order" as const, mode: "collection_only" as const, profileFields: ["phone" as const] };
+  a.collectionPolicy = { version: 1, revision: 1, scopes: [pin] };
+  let state = order(); state.product_id = productId;
+  setFact(state, "detail_A", "Synthetic", "text", "customer");
+  setFact(state, "customer_phone", "+355691234567", "phone", "customer");
+  state.visual = { ...state.visual!, nodeId: "end", values: { confirm: "po", detail_A: "Synthetic" }, branchPorts: { confirm: "yes" },
+    binding: { flowId: "order", entity: { id: productId, kind: "product" } }, collection: pin };
+  state = withCollectionPolicy(pin, () => advanceVisualOrderReview(state, "", false, true, a.graph, "Bluzë")).nextState;
+  state = withCollectionPolicy(pin, () => advanceVisualOrderReview(state, "po", false, false, a.graph, "Bluzë")).nextState;
+  state.visual!.status = "completed"; state.visual!.awaiting = false;
+  state.processes = { active: null, promptOwner: null, order: { id: "stable-order", status: "completed", snapshot: snapshotOrder(state) } };
+  if (scenario === "staff") state.staffHandoff = true;
+  if (scenario === "cancelled") { delete state.processes.order; state.conversationPaused = true; }
+  if (scenario === "module") mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "products", "services", "knowledge"] });
+  const before = structuredClone(state);
+  const answer = await turn(scenario === "phone_phrase" ? "Telefoni im është +355699876543" : "telefoni: +355699876543", state);
+  expect(state).toEqual(before);
+  expect(answer.nextState.visual?.versionId).toBe("A");
+  if (scenario === "correct" || scenario === "phone_phrase") {
+    expect(answer.turnDecision?.kind).toBe("correction");
+    expect(answer.preparedRequest).toMatchObject({ review: "review_requested", collectedFields: { customer_phone: "+355699876543" }, source: { versionId: "A" } });
+    expect(answer.nextState.processes?.order).toMatchObject({ id: "stable-order", status: "active" });
+    expect(queries.filter(q => q.table === "visual_workflow_versions").every(q => q.filters.id === "A")).toBe(true);
+  } else {
+    expect(answer.nextState.context?.profile.phone?.value).toBe("+355691234567");
+    expect(answer.nextState.processes?.order?.status).not.toBe("active");
+  }
+  expect(mocks.booking).not.toHaveBeenCalled();
+});
 
 it.each([
   ["Bluzë", false], ["Dua të porosis Bluzë", false], ["Bluzë", true],
