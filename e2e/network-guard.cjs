@@ -5,7 +5,8 @@ const tls = require('node:tls');
 const dgram = require('node:dgram');
 const { syncBuiltinESMExports } = require('node:module');
 function check(host, port) {
-  if (!['127.0.0.1', 'localhost', '::1'].includes(host) || ![3103, 55321].includes(Number(port)))
+  const allowedPorts = process.env.E2E_R3_PROVIDER === 'synthetic' ? [3103, 55321, 55325] : [3103, 55321];
+  if (!['127.0.0.1', 'localhost', '::1'].includes(host) || !allowedPorts.includes(Number(port)))
     throw new Error('E2E_OUTBOUND_BLOCKED');
 }
 const originalConnect = net.Socket.prototype.connect;

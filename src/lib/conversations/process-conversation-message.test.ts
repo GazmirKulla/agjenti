@@ -54,6 +54,38 @@ beforeEach(() => {
   mocks.booking.mockImplementation(async ({ state }) => { const next = structuredClone(state); next.fields.booking = { nonce: "booking-1", phase: "collect", serviceId: "service", date: "2026-10-15", expires: Date.now() + 60000 }; next.step_key = "booking_request"; return result(next, "Në çfarë ore?"); });
 });
 const turn = (message: string, state?: ConversationStatePayload) => processConversationMessage({ businessId: "business", message, state, hasPhoto: false, mode: "test" });
+describe("R3 server-owned customer question boundary", () => {
+  async function ask() {
+    mocks.info.mockImplementation(async ({ state }) => ({ ...result(state, "[[ask_customer:name,business_type,instagram_handle,stated_needs]]"),
+      previousResponseId: "unrendered-provider-response", debug: { ...result(state).debug, source: "ai" } }));
+    const question = await turn("Cilat të dhëna të duhen?", migrateContext());
+    expect(question.nextState.pendingCustomerQuestion?.fields).toEqual(["name", "business_type", "instagram_handle", "stated_needs"]);
+    expect(question.previousResponseId).toBeNull();
+    expect(question.nextState.recentMessages?.at(-1)?.content).toBe(question.reply);
+    return question;
+  }
+  it("consumes the original response exactly once without a second extractor or process dispatch", async () => {
+    const question = await ask(), before = structuredClone(question.nextState);
+    vi.clearAllMocks();
+    const answer = await turn("Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj", question.nextState);
+    expect(question.nextState).toEqual(before);
+    expect(answer.nextState.context?.profile.name?.value).toBe("Miqail");
+    expect(answer.nextState.customerDeclaredFacts?.business_type?.value).toBe("Shitje rrobash online");
+    expect(answer.nextState.pendingCustomerQuestion).toBeUndefined();
+    expect(answer.conversationRouting?.reason).toBe("customer_question_answer");
+    expect(answer.turnDecision?.executor).toBe("coordinator");
+    expect(answer.nextState.recentMessages).toHaveLength(4);
+    expect(mocks.extract).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.info).not.toHaveBeenCalled(); expect(mocks.booking).not.toHaveBeenCalled();
+  });
+  it("staff takeover cannot consume a pending customer answer", async () => {
+    const question = await ask(); question.nextState.staffHandoff = true;
+    const answer = await turn("Miqail\nShitje rrobash online", question.nextState);
+    expect(answer.nextState.customerDeclaredFacts).toBeUndefined();
+    expect(answer.nextState.context?.profile.name).toBeUndefined();
+    expect(answer.nextState.pendingCustomerQuestion).toBeUndefined();
+    expect(answer.nextState.staffHandoff).toBe(true);
+  });
+});
 describe("R1 conversation-only declarations", () => {
   it("preserves declaration corrections across information, booking and order resume without process field contamination", async () => {
     const start = order();

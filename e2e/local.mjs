@@ -110,7 +110,7 @@ async function up() {
   replay();
   console.log('Local Supabase ready; production credentials never loaded.');
 }
-async function app() {
+async function app(syntheticR3 = false) {
   verifyContainers();
   assert.ok(existsSync(manifestPath), 'Migration replay incomplete');
   replay(); // Existing manifest must match before app startup, not merely exist.
@@ -128,6 +128,14 @@ async function app() {
     MODULE_ENFORCEMENT_BUSINESS_IDS: fixtures.tenants.map(t => t.id).join(','),
     SHARED_WORKFLOW_BUSINESS_IDS: fixtures.tenants.map(t => t.id).join(','),
     NODE_OPTIONS: `--require=${path.join(root, 'e2e/network-guard.cjs')}` };
+  // Dedicated controlled-provider command only. Never load a real API key or
+  // grant external egress. Ordinary `app` retains its provider-denied behavior.
+  if (syntheticR3) {
+    assert.equal(project, 'agjenti-e2e-local-recovery-3a-20261023');
+    env.OPENAI_API_KEY = 'synthetic-r3-local-only';
+    env.OPENAI_BASE_URL = 'http://127.0.0.1:55325/v1';
+    env.E2E_R3_PROVIDER = 'synthetic';
+  }
   const child = spawn(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'), 'dev', '--hostname', '127.0.0.1', '--port', '3103'], { cwd: dir, env, stdio: 'inherit' });
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
   await new Promise(resolve => child.on('exit', code => { process.exitCode = code ?? 1; resolve(); }));
@@ -137,6 +145,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     if (command === 'up') await up();
     else if (command === 'app') await app();
+    else if (command === 'app-r3') await app(true);
     else if (command === 'down') { verifyNetwork(); supabase(['stop', '--project-id', project]); console.log('Local stack stopped; data retained.'); }
     else if (command === 'status') { verifyContainers(); console.log('Local dependencies isolated and available.'); }
     else throw new Error('Use up | app | status | down');

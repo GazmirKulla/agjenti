@@ -12,6 +12,7 @@ import { emptyState, foldText, type ConversationStatePayload } from "@/lib/workf
 import { affirmative, extractExplicitFacts, invalidateOrderReview, isQuestion, migrateContext, resetOrder, setFact } from "@/lib/workflows/context";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
 import { extractCustomerDeclaredFacts } from "@/lib/workflows/customer-declared-facts";
+import { consumeCustomerQuestion, renderCustomerQuestion } from "@/lib/workflows/customer-question";
 import { chooseGuidance, explicitIntent, recentConversation, rememberTurn } from "@/lib/workflows/guidance";
 import { bookingAdapterState, currentProcessOwner, migrateConversationProcesses, restoreOrder, snapshotOrder, suspendProcesses, type ConversationRouting, type LocalProcessKind, type ProcessKind } from "@/lib/workflows/conversation-processes";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
@@ -187,6 +188,12 @@ export async function processConversationMessage(params: ConversationMessagePara
   // Always rebuild from the inbound history. Nested processors may have recorded
   // an intermediate reply; the coordinator owns the final pair, exactly once.
   if (result.presentedProducts?.length || result.presentedServices?.length) result.nextState = structuredClone(result.nextState);
+  if (result.conversationRouting?.reason !== "customer_question_answer") {
+    const rendered = renderCustomerQuestion(result.nextState, result.reply, params.businessId,
+      result.debug.source === "ai" && result.conversationRouting?.process === "information" && !result.handoff);
+    if (rendered !== result.reply) result.previousResponseId = null;
+    result.reply = rendered;
+  }
   recordReplyPresentation(result.nextState, params.businessId, result);
   rememberTurn(before, result.nextState, params.message, result.reply);
   if (result.conversationRouting) {
@@ -256,6 +263,17 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     if (state.processes) delete state.processes.pendingClarification;
     return { ...plainResult(state, "Biseda është në pritje të stafit. Kjo përgjigje nuk rifillon dhe nuk konfirmon kërkesën."),
       conversationRouting: { process: "support", action: "answer", source: "rules", reason: "clarification_staff_owned", reusedFields: [], missingFields: [] } };
+  }
+  if (params.state?.pendingCustomerQuestion) {
+    const state = migrateContext(params.state);
+    const consumed = consumeCustomerQuestion(state, { businessId: params.businessId, message: params.message,
+      deliveredReply: params.deliveredReply, test: params.mode === "test" });
+    params = { ...params, state };
+    if (consumed) {
+      await requireRuntimeModules(params.businessId, ["agents"]);
+      return { ...plainResult(state, consumed.reply), conversationRouting: { process: "information", action: consumed.accepted ? "answer" : "clarify",
+        source: "rules", reason: "customer_question_answer", reusedFields: [], missingFields: [] } };
+    }
   }
   if (!params.state?.processes && params.state?.visual && usesSharedCoordinator(params)) params = { ...params, state: await migrateState() };
   if (params.state?.conversationPaused || params.state?.processes?.pendingClarification || choice === "resume" || choice === "cancel"

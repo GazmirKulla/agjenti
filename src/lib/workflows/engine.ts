@@ -39,6 +39,9 @@ export type WorkflowStepDef = {
 };
 
 export type ConversationStatePayload = {
+  pendingCustomerQuestion?: import("./customer-question").PendingCustomerQuestion;
+  /** Bounded duplicate-input fingerprint, no copy of customer data. */
+  lastCustomerAnswerHash?: string;
   /** Single conversation's declared facts, not a reusable identity/profile. */
   customerDeclaredFacts?: import("./customer-declared-facts").CustomerDeclaredFacts;
   entityPresentation?: import("@/lib/products/entity-bridge").EntityPresentation;

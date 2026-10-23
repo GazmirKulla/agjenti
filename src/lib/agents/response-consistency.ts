@@ -2,6 +2,8 @@ import type { BusinessGrounding } from "./business-grounding";
 import type { CustomerContext } from "./customer-context";
 import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
 import type { ReferenceProduct } from "@/lib/products/entity-bridge";
+import { customerFactReference } from "./customer-fact-reference";
+import { isQuestion } from "@/lib/workflows/context";
 
 export type ConsistencyStatus = "valid" | "correctable" | "unsupported_critical_claim" | "contradiction" | "unverifiable" | "uncertain";
 export type ConsistencyFinding = { status: Exclude<ConsistencyStatus, "valid">; code: string };
@@ -145,19 +147,40 @@ export function validateResponse(text: string, evidence: Evidence): ConsistencyR
   }).join("\n");
 
   const user = normalize(evidence.message), answer = normalize(reply);
-  // Exact recall is backed only by R1's scoped projection, not historical prose.
-  const recalls: Record<string, RegExp> = {
-    name: /^(?:si quhem|cili eshte emri im|what is my name)[?!.]*$/,
-    phone: /^(?:cili eshte (?:telefoni|numri) im|what is my phone number)[?!.]*$/,
-    email: /^(?:cili eshte emaili im|what is my email)[?!.]*$/,
-    city: /^(?:cili eshte qyteti im|what is my city)[?!.]*$/,
-    address: /^(?:cila eshte adresa ime|what is my address)[?!.]*$/,
+  // Share R1's fact reference; never independently route the conversation or
+  // recover values from prior assistant prose. Keep verification scoped to the
+  // projected fields, rather than exposing the whole customer profile.
+  const reference = isQuestion(evidence.message) || /\b(?:dhashe|provided)\b/.test(user)
+    ? evidence.customer.reference ?? customerFactReference(evidence.message, evidence.state) : undefined;
+  const declaredLabels: Record<string, string> = { instagram_handle: "profilin në Instagram", business_type: "biznesin tënd", stated_needs: "pyetjet/nevojat" };
+  const personal = reference?.keys.map(key => ({ key, fact: evidence.customer.profile[key] ?? evidence.customer.declared[key] }))
+    .filter(item => item.fact?.authority === "customer_declared" && !item.fact.truncated) ?? [];
+  const denial = /\b(?:nuk ma ke|nuk me ke|nuk e di|nuk (?:quhesh|quheni|shet)|nuk (?:ke|keni) (?:dhene|thene|treguar)|haven't told|have not told|don't know|not provided)\b/.test(answer);
+  const containsFact = (key: string, value: string) => {
+    const expected = normalize(value).replace(/^@/, "");
+    if (new RegExp(`(?:^|[^a-z0-9_])${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9_])`).test(answer)) return true;
+    if (key !== "business_type" && key !== "stated_needs") return false;
+    // Bounded lexical paraphrases only (e.g. 'shitje rrobash online' / 'shet
+    // rroba online'). Not a semantic truth classifier for arbitrary descriptions.
+    const content = expected.split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !/^(shitje|shet|shes|ofroj|ofron|biznesi|eshte|online)$/.test(w));
+    const words = answer.split(/[^a-z0-9]+/);
+    return content.length > 0 && content.every(w => words.some(a => a.slice(0, 4) === w.slice(0, 4)))
+      && (!expected.includes("online") || words.includes("online")) && !/\b(?:nuk|not|never)\b/.test(answer);
   };
-  const recall = Object.keys(recalls).find(key => recalls[key].test(user));
-  const recalled = recall ? evidence.customer.profile[recall] : undefined;
-  if (recall && recalled?.authority === "customer_declared" && !recalled.truncated
-    && (!answer.includes(normalize(recalled.value)) || /\b(?:nuk ma ke|nuk e di|haven't told|have not told|don't know)\b/.test(answer))) {
-    add("contradiction", `known_customer_${recall}`); reply = `Ti ke deklaruar ${labels[recall].label.toLowerCase()}: ${recalled.value}.`;
+  const statements = personal.map(({ key, fact }) => `Ti ke deklaruar ${labels[key]?.label.toLowerCase() ?? declaredLabels[key]}: ${fact.value}.`);
+  if (personal.length && (denial || personal.some(({ key, fact }) => !containsFact(key, fact.value)))) {
+    add("contradiction", `known_customer_${personal[0].key}`);
+    reply = statements.join("\n");
+  }
+  if (reference && !personal.length && !uncertainty.test(answer)
+    && /\b(?:ti (?:quhesh|shet|ofron|ke)|quhesh|emri yt|your (?:name|business|instagram))\b/.test(answer)) {
+    add("unverifiable", "customer_fact_absent");
+    reply = "Nuk kam një deklarim të ruajtur për këtë të dhënë. Mund ta japësh ose ta sqarosh?";
+  }
+  if (reference?.relation === "sales_location") {
+    // A handle is a declaration, not account ownership or proof of a sales channel.
+    const safe = "Kanali i shitjes nuk është verifikuar nga këto deklarime. Profili në Instagram nuk provon se shet atje.";
+    if (!reply.includes(safe)) { add("unverifiable", "sales_channel_not_established"); reply = [...statements, safe].join("\n"); }
   }
   // Only free informational prose. Never suppress an executor's required prompt,
   // correction/review, invalid-field request or pending process clarification.

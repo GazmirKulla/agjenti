@@ -4,10 +4,12 @@ import { currentProcessOwner } from "@/lib/workflows/conversation-processes";
 import { customerDeclaredKeys, validDeclaredValue } from "@/lib/workflows/customer-declared-facts";
 import { validDate, validTime } from "@/lib/calendar/model";
 import type { BookingDraft } from "@/lib/calendar/agent";
+import { customerFactReference, type CustomerFactReference } from "./customer-fact-reference";
 
 type Domain = "order" | "service" | "booking" | "auxiliary";
 type ProjectedFact = { value: string; type: Fact["type"]; source: string; validated: true; truncated?: true; authority: "customer_declared" | "legacy_unverified" };
 export type CustomerContext = {
+  reference?: CustomerFactReference;
   profile: Record<string, ProjectedFact>;
   declared: Record<string, ProjectedFact>;
   /** Presence prevents re-asking without disclosing unrelated contact values. */
@@ -20,16 +22,7 @@ export type CustomerContext = {
 };
 const secrets = /(?:password|secret|token|credential|authorization|api_key|ssn)/i;
 const contact = /(?:phone|telefon|contact|email|address|adres|name|emri|customer_|recipient)/i;
-const recalls = /(?:cfare te kam thene|what (?:have i|did i) (?:tell|provide)|te dhenat e mia|my (?:details|information))/;
 const own = /\b(?:im|ime|tim|time|mia|mua|quhem|dhashe|dhene|thene|kam|marr|my|mine|provided)\b/;
-const profileQuestions: Record<string, RegExp> = {
-  name: /\b(?:quhem|emri|name)\b/, phone: /\b(?:telefon\w*|numri|phone)\b/,
-  email: /\bemail\b/, city: /\b(?:qytet\w*|city)\b/, address: /\b(?:adres\w*|address)\b/,
-};
-const declaredQuestions: Record<string, RegExp> = {
-  instagram_handle: /\binstagram\w*\b/, business_type: /\b(?:biznes\w*|business)\b/,
-  stated_needs: /\b(?:pyetje\w*|nevoj\w*|questions|needs)\b/,
-};
 function fact(value: Fact | undefined): ProjectedFact | undefined {
   if (!value || value.validated !== true || typeof value.value !== "string" || typeof value.source !== "string"
     || !["text", "number", "phone", "email"].includes(value.type) || !validValue(value.value, value.type)) return;
@@ -57,15 +50,16 @@ export function projectCustomerContext(input: ConversationStatePayload, message:
   const state = input.context ? input : migrateContext(input);
   const out: CustomerContext = { profile: {}, declared: {} };
   if (state.staffHandoff || state.visual?.status === "handoff" && !state.visual.advisory) return { ...out, diagnostic: "staff_owned" };
-  const text = foldText(message), recall = recalls.test(text), ownQuestion = own.test(text) || recall;
+  const text = foldText(message), reference = customerFactReference(message, state), ownQuestion = own.test(text) || Boolean(reference);
+  if (reference) out.reference = reference;
   out.suppliedProfileKeys = profileKeys.filter(key => Boolean(fact(state.context?.profile[key])));
   for (const key of profileKeys) {
     // Broad recall intentionally excludes contact/address; explicit own questions can include them.
-    if (!(key === "name" && recall || ownQuestion && profileQuestions[key].test(text))) continue;
+    if (!reference?.keys.includes(key)) continue;
     const f = fact(state.context?.profile[key]); if (f) out.profile[key] = f;
   }
   for (const key of customerDeclaredKeys) {
-    if (!(recall || ownQuestion && declaredQuestions[key].test(text))) continue;
+    if (!reference?.keys.includes(key)) continue;
     const raw = state.customerDeclaredFacts?.[key];
     const f = raw && validDeclaredValue(key, raw.value) ? fact(raw) : undefined;
     if (f) out.declared[key] = f;

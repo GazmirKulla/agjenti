@@ -165,12 +165,14 @@ describe("reply source diagnostics", () => {
   });
 });
 
-it("observes the provider request and usage without exposing raw unvalidated response prose", async () => {
+it("observes metadata and usage without exposing prompts, customer PII or unvalidated prose", async () => {
   const onTrace = vi.fn();
   const response = { id: "resp_trace", output_text: "  Reply  ", usage: { input_tokens: 12, output_tokens: 4 } };
   mocks.create.mockResolvedValue(response);
   await generateAgentReply({ ...params, onTrace });
-  expect(onTrace.mock.calls[0][0].data.request).toEqual(mocks.create.mock.calls[0][0]);
+  expect(onTrace.mock.calls[0][0].data).toEqual({ model: mocks.create.mock.calls[0][0].model, customerFactKeys: [] });
+  expect(JSON.stringify(onTrace.mock.calls)).not.toContain("Use tenant instructions");
+  expect(onTrace.mock.calls[0][0].data).not.toHaveProperty("request");
   expect(onTrace.mock.calls[1][0].data).toEqual({ id: response.id, usage: response.usage });
   expect(onTrace.mock.calls[2][0].data).toMatchObject({ result: "valid", changed: false });
 });
