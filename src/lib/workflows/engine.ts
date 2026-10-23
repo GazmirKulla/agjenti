@@ -39,6 +39,8 @@ export type WorkflowStepDef = {
 };
 
 export type ConversationStatePayload = {
+  /** Single conversation's declared facts, not a reusable identity/profile. */
+  customerDeclaredFacts?: import("./customer-declared-facts").CustomerDeclaredFacts;
   entityPresentation?: import("@/lib/products/entity-bridge").EntityPresentation;
   /** Staff ownership requested by the engine; transport commits the pause before acknowledgement. */
   staffHandoff?: boolean;

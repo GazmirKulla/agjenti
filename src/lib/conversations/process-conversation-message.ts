@@ -11,6 +11,7 @@ import { collectionInput, decisionForTurn, turnIntent, type CollectionTarget, ty
 import { emptyState, foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
 import { affirmative, extractExplicitFacts, invalidateOrderReview, isQuestion, migrateContext, resetOrder, setFact } from "@/lib/workflows/context";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
+import { extractCustomerDeclaredFacts } from "@/lib/workflows/customer-declared-facts";
 import { chooseGuidance, explicitIntent, recentConversation, rememberTurn } from "@/lib/workflows/guidance";
 import { bookingAdapterState, currentProcessOwner, migrateConversationProcesses, restoreOrder, snapshotOrder, suspendProcesses, type ConversationRouting, type LocalProcessKind, type ProcessKind } from "@/lib/workflows/conversation-processes";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
@@ -117,6 +118,7 @@ function explicitPhone(message: string) {
   return message.match(/(?:telefoni?\s*(?:im)?|numri\s+im|my\s+(?:phone|number))\s*(?:(?:është|eshte|is)\s*|[:=]\s*)(\+?[\d ().-]{7,24}\d)/i);
 }
 function explicitProfile(state: ConversationStatePayload, message: string, profileOnly = false) {
+  extractCustomerDeclaredFacts(state, message);
   extractExplicitFacts(state, message, profileOnly ? [] : state.context?.execution.linear?.steps ?? []);
   // Contact labels anchor the number to this customer's own statement, including mixed question/fact turns.
   const phone = explicitPhone(message);
@@ -514,6 +516,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     return processAgentTurn(params);
   }
   let state = await migrateState();
+  extractCustomerDeclaredFacts(state, params.message);
   const processes = state.processes!;
   const interrupted = interruptedProcess(state);
   const oldProfile = JSON.stringify(state.context!.profile);
@@ -720,6 +723,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     suspendProcesses(state, "service");
     delete processes.auxiliary; delete processes.informationOnly; delete state.conversationPaused;
     const adapter = migrateContext(emptyState()); adapter.schemaVersion = 3; adapter.processes = processes;
+    adapter.customerDeclaredFacts = structuredClone(state.customerDeclaredFacts);
     adapter.context!.execution.factOwner = "service";
     adapter.context!.profile = structuredClone(state.context!.profile); adapter.customer = structuredClone(state.customer); adapter.recentMessages = state.recentMessages;
     adapter.fields = structuredClone(old?.fields ?? {}); adapter.context!.order = structuredClone(old?.order ?? {});

@@ -229,6 +229,7 @@ export function migrateConversationProcesses(input: ConversationStatePayload | n
 
 export function bookingAdapterState(state: ConversationStatePayload) {
   const next = migrateContext(emptyState());
+  next.customerDeclaredFacts = structuredClone(state.customerDeclaredFacts);
   next.schemaVersion = 3;
   next.context!.profile = structuredClone(state.context!.profile);
   next.context!.execution.factOwner = "booking";

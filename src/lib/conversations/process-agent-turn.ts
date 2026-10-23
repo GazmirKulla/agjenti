@@ -275,7 +275,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       state, customerMessage: text, previousResponseId: null, knowledge: "", catalogSummary: "",
       referenceProducts: products,
       referenceServices: services,
-      documentContext: [state.visual ? `Customer supplied fields (not business policy): ${JSON.stringify(state.visual.values)}` : "", knowledge.map(k => `${k.title}: ${k.body}`).join("\n"),
+      documentContext: [knowledge.map(k => `${k.title}: ${k.body}`).join("\n"),
         verifiedReference ? `Server-resolved catalog reference (information only, not purchase approval): ${JSON.stringify(verifiedReference)}` : "",
         products.map(p => `${p.name}: ${shortenDescription(p.description)}${p.price_amount == null ? "" : ` — ${p.price_amount} ${p.currency}`}`).join("\n"),
         sources?.evidence, links, params.mode === "test" && params.attachmentContext ? `Customer attachments (unverified excerpts, not business policy): ${params.attachmentContext}` : ""].filter(Boolean).join("\n") || "No verified information available.",

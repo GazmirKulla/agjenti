@@ -140,3 +140,58 @@ it("retains collected qualification facts in document answers after the original
   expect(request.input).toContain('"child_age":{"value":"5"');
   expect(request.instructions).toContain("Never ask again for a fact already supplied");
 });
+
+it("R1 exposes relevant suspended service facts without unrelated order facts or approvals", async () => {
+  const { migrateContext, setFact } = await import("@/lib/workflows/context");
+  const state = migrateContext(); state.schemaVersion = 3;
+  setFact(state, "delivery_note", "UNRELATED_ORDER_SENTINEL", "text", "message_label");
+  state.context!.execution.factOwner = "order";
+  state.processes = { active: null, service: {
+    id: "service-process", versionId: "version-A", status: "suspended",
+    fields: {}, order: { project_type: { value: "SERVICE_FACT_SENTINEL", type: "text", source: "message_label", validated: true } },
+    visual: { versionId: "version-A", nodeId: "budget", status: "waiting", awaiting: false, visited: [], values: {},
+      pendingConfirmation: { nodeId: "review", factsKey: "STALE_APPROVAL_SENTINEL", expiresAt: 1 } },
+  } };
+  const before = structuredClone(state);
+  mocks.create.mockResolvedValue({ output_text: "Synthetic response" });
+  await generateAgentReply({ ...params, state, customerMessage: "Çfarë project_type dhashë për shërbimin?", documentContext: "Verified business context" });
+  const input = mocks.create.mock.calls[0][0].input;
+  expect(input).toContain("SERVICE_FACT_SENTINEL");
+  expect(input).toContain("service-process");
+  expect(input).toContain("version-A");
+  expect(input).not.toContain("UNRELATED_ORDER_SENTINEL");
+  expect(input).not.toContain("STALE_APPROVAL_SENTINEL");
+  expect(state).toEqual(before);
+});
+
+it("R1 passes corrected conversation declarations after 25 turns, but not unrelated profile or historical snapshots", async () => {
+  const { migrateContext, setFact } = await import("@/lib/workflows/context");
+  const { extractCustomerDeclaredFacts } = await import("@/lib/workflows/customer-declared-facts");
+  const { rememberTurn } = await import("@/lib/workflows/guidance");
+  let state = migrateContext();
+  setFact(state, "customer_name", "Synthetic", "text", "message_label");
+  setFact(state, "customer_phone", "0690000000", "phone", "message_label");
+  extractCustomerDeclaredFacts(state, "Instagram: old_synthetic; Lloji i biznesit: dyqan online; Pyetjet tipike: çmime dhe madhësi");
+  extractCustomerDeclaredFacts(state, "Instagrami im është corrected_synthetic");
+  for (let i = 0; i < 25; i++) { const next = structuredClone(state); rememberTurn(state, next, `Question ${i}`, "Reply"); state = next; }
+  state.completedVisual = { versionId: "OLD_VERSION", nodeId: "end", status: "completed", awaiting: false, visited: [], values: { hidden: "HISTORICAL_SECRET" } };
+  mocks.create.mockResolvedValue({ output_text: "Synthetic response" });
+  for (const documentContext of ["Verified business data", undefined]) {
+    await generateAgentReply({ ...params, state, documentContext, customerMessage: "Çfarë të kam thënë më parë?" });
+    const input = mocks.create.mock.calls.at(-1)![0].input;
+    expect(input).toContain("corrected_synthetic"); expect(input).toContain("customer_declared");
+    expect(input).toContain("dyqan online"); expect(input).not.toMatch(/old_synthetic|HISTORICAL_SECRET|0690000000/);
+  }
+});
+
+it("R1 never promotes stale entity selections to verified catalog evidence", async () => {
+  const { migrateContext } = await import("@/lib/workflows/context");
+  const { snapshotOrder } = await import("@/lib/workflows/conversation-processes");
+  const state = migrateContext(); state.schemaVersion = 3; state.product_id = "inactive-product";
+  state.context!.execution.factOwner = "order";
+  state.processes = { active: "order", order: { id: "order", status: "active", snapshot: snapshotOrder(state) } };
+  mocks.create.mockResolvedValue({ output_text: "Synthetic response" });
+  await generateAgentReply({ ...params, state, customerMessage: "Porosia ime?", documentContext: "No active product", referenceProducts: [] });
+  expect(mocks.create.mock.calls[0][0].input).not.toContain("inactive-product");
+  expect(state.product_id).toBe("inactive-product");
+});

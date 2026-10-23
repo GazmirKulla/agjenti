@@ -54,6 +54,27 @@ beforeEach(() => {
   mocks.booking.mockImplementation(async ({ state }) => { const next = structuredClone(state); next.fields.booking = { nonce: "booking-1", phase: "collect", serviceId: "service", date: "2026-10-15", expires: Date.now() + 60000 }; next.step_key = "booking_request"; return result(next, "Në çfarë ore?"); });
 });
 const turn = (message: string, state?: ConversationStatePayload) => processConversationMessage({ businessId: "business", message, state, hasPhoto: false, mode: "test" });
+describe("R1 conversation-only declarations", () => {
+  it("preserves declaration corrections across information, booking and order resume without process field contamination", async () => {
+    const start = order();
+    const declared = await turn("Instagram: synthetic_shop", start);
+    expect(declared.nextState.customerDeclaredFacts?.instagram_handle?.value).toBe("synthetic_shop");
+    const booking = await turn("Dua rezervim", declared.nextState);
+    const corrected = await turn("Instagrami im është corrected_shop", booking.nextState);
+    const resumed = await turn("Vazhdo porosinë", corrected.nextState);
+    expect(resumed.nextState.customerDeclaredFacts?.instagram_handle?.value).toBe("corrected_shop");
+    expect(resumed.nextState.context?.profile).not.toHaveProperty("instagram_handle");
+    expect(resumed.nextState.context?.order).not.toHaveProperty("instagram_handle");
+    expect(resumed.nextState.context?.execution.linear?.versionId).toBe("v1");
+    expect(resumed.nextState.context?.execution.orderConfirmed).not.toBe(true);
+  });
+  it("does not extract declarations or change ownership during staff handoff", async () => {
+    const state = order(); state.staffHandoff = true;
+    const result = await turn("Instagram: synthetic_shop", state);
+    expect(result.nextState.customerDeclaredFacts).toBeUndefined();
+    expect(result.nextState.staffHandoff).toBe(true); expect(mocks.agent).not.toHaveBeenCalled();
+  });
+});
 describe("W2 process ownership journeys", () => {
   it("preserves corrected phone and order facts across booking, information, and resume", async () => {
     const start = order(); setFact(start, "customer_phone", "0691111111", "phone", "message");

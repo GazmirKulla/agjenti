@@ -188,6 +188,7 @@ export function resetOrder(state: ConversationStatePayload): ConversationStatePa
     next.processes = state.processes;
     next.completedVisual = state.completedVisual;
     next.recentMessages = state.recentMessages;
+    next.customerDeclaredFacts = structuredClone(state.customerDeclaredFacts);
     next.entityPresentation = state.entityPresentation;
     next.conversationPaused = state.conversationPaused;
     return next;
@@ -208,6 +209,11 @@ export function extractExplicitFacts(state: ConversationStatePayload, message: s
                 labels[foldText(step.label)] = step.fieldKey ?? step.key;
         }
     let count = 0;
+    // Anchored own introduction only; no inference from bare names, questions,
+    // third-party descriptions or arbitrary prose. Corrections reuse setFact.
+    const introduction = message.trim().match(/^(?:quhem|emri im [eë]sht[eë])\s+([\p{L}][\p{L}'’-]*(?: [\p{L}][\p{L}'’-]*){0,3})[.!]?$/iu);
+    if (introduction && !/\b(?:dhe|dua|eshte|nuk|ose|apo|and|want|is|not|or)\b/.test(foldText(introduction[1]))
+        && setFact(state, "customer_name", introduction[1], "text", "message_self_introduction")) count++;
     for (const part of message.split(/[\n;,]+/)) {
         const match = part.trim().match(/^(.{1,80}?)\s*:\s*(.+)$/);
         if (!match)
