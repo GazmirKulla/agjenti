@@ -67,7 +67,8 @@ function currentProposal(params: AgentTurnParams): boolean {
     const owner = state && currentProcessOwner(state);
     if (state?.processes && !owner && !state.processes.pendingChoice && !state.processes.auxiliary)
         return false;
-    const cursor = owner === "actionFlow" ? state?.processes?.actionFlow?.visual : owner === "service" ? state?.processes?.service?.visual : undefined;
+    const cursor = owner === "order" ? state?.processes?.order?.snapshot.visual
+        : owner ? state?.processes?.[owner]?.visual : undefined;
     // Routing permission only. The runtime still validates expiry and the reviewed facts.
     if (cursor?.pendingConfirmation && cursor.pendingConfirmation.nodeId === cursor.nodeId) return true;
     const text = foldText(reply.content);

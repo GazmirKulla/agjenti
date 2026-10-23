@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
+import { isIsolatedExecution, refuseIsolatedEffect, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
 
 export type ExternalCatalogProduct = {
   id: string;
@@ -300,6 +300,7 @@ export async function submitExternalOrder(params: {
   attemptId: string;
   payload: Record<string, unknown>;
 }): Promise<ExternalOrderResult> {
+  assertBusinessEffectAllowed("provider.order");
   if (isIsolatedExecution()) refuseIsolatedEffect("order.create", "external_provider");
   const supabase = createServiceSupabase();
   let result: ExternalOrderResult;

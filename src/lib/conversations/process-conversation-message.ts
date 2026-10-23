@@ -21,6 +21,7 @@ import { combineProductPresentations, isBareCollectionValue, isEntityReference, 
 import { resolveCurrentProductReference, resolveCurrentServiceReference } from "@/lib/products/resolve-reference";
 import {
   IsolationViolation,
+  CollectionEffectDenied,
   isIsolatedExecution,
   recordExternalAction,
   snapshotExternalActions,
@@ -151,6 +152,9 @@ export async function processConversationMessage(params: ConversationMessagePara
     if (result.handoff) await requireRuntimeModules(params.businessId, ["staff"]);
   } catch (error) {
     if (error instanceof IsolationViolation) throw error;
+    if (error instanceof CollectionEffectDenied) {
+      error = new CapabilityEnforcementError("unverified", "Kjo rrjedhë lejon vetëm përgatitjen e kërkesës. Veprimi automatik nuk u krye; mund të kërkosh ndihmën e stafit.");
+    }
     if (!(error instanceof CapabilityEnforcementError)) throw error;
     params.onTrace?.({ stage: "workflow", label: "Runtime capability blocked", status: "skipped", data: {
       businessId: params.businessId, executionMode: isIsolatedExecution() ? "isolated" : "live",
@@ -166,6 +170,7 @@ export async function processConversationMessage(params: ConversationMessagePara
   params.onTrace?.({ stage: "workflow", label: "Conversation turn decision", data: result.turnDecision });
   if (result.handoff && !result.advisoryHandoff) {
     result.nextState.staffHandoff = true;
+    if (result.preparedRequest) result.preparedRequest.handoff = "requested";
     if (isIsolatedExecution()) {
       recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "test_state_only" });
     }

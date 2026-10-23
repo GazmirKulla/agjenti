@@ -232,10 +232,16 @@ export function extractExplicitFacts(state: ConversationStatePayload, message: s
     return count;
 }
 export function missingProfile(state: ConversationStatePayload) {
-    return (["name", "phone", "city", "address"] as const).filter(k => !state.context?.profile[k]);
+    const pin = state.visual?.collection;
+    const required: readonly ProfileKey[] = pin?.mode === "collection_only" && pin.domain === "order"
+        ? pin.profileFields : ["name", "phone", "city", "address"];
+    return required.filter(k => !state.context?.profile[k]);
 }
 export function profileSummary(state: ConversationStatePayload) {
-    return profileKeys.map(k => state.context?.profile[k]?.value).filter(Boolean).join(" · ");
+    const pin = state.visual?.collection;
+    const keys = pin?.mode === "collection_only" ? profileKeys.filter(k => pin.profileFields.includes(k)
+        || Object.hasOwn(state.visual?.values ?? {}, `customer_${k}`)) : profileKeys;
+    return keys.map(k => state.context?.profile[k]?.value).filter(Boolean).join(" · ");
 }
 export function skipKnownSteps(state: ConversationStatePayload, steps: WorkflowStepDef[]) {
     const context = state.context!;
@@ -262,15 +268,18 @@ export function sharedPrompt(state: ConversationStatePayload, steps: WorkflowSte
         // Navigation may re-display review without advancing the adapter.
         if (!freshOrderReview(state, false, steps)) requestOrderReview(state, steps);
         const terms = state.context?.execution.orderTerms;
-        return `Konfirmoni porosinë${productName ? ` për ${productName}` : ""} me këto të dhëna? ${profileSummary(state)}${steps.filter(step => !["customer", "confirm"].includes(step.kind)).flatMap(step => { const key = step.fieldKey ?? step.key, fact = getFact(state, key); return fact && !profileKey(key) ? [` · ${step.label ?? key}: ${fact.value}`] : []; }).join("")}${terms ? ` · Sasia: 1 · Totali: ${terms.unitAmount} ${terms.currency}` : ""}. Përgjigju me Po ose shkruaj korrigjimin.`;
+        const collectionOnly = state.visual?.collection?.mode === "collection_only";
+        return `${collectionOnly ? "Konfirmoni të dhënat e kërkesës" : "Konfirmoni porosinë"}${productName ? ` për ${productName}` : ""} me këto të dhëna? ${profileSummary(state)}${steps.filter(step => !["customer", "confirm"].includes(step.kind)).flatMap(step => { const key = step.fieldKey ?? step.key, fact = getFact(state, key); return fact && !profileKey(key) ? [` · ${step.label ?? key}: ${fact.value}`] : []; }).join("")}${terms && !collectionOnly ? ` · Sasia: 1 · Totali: ${terms.unitAmount} ${terms.currency}` : ""}.${collectionOnly ? " Nuk krijohet porosi nga ky konfirmim." : ""} Përgjigju me Po ose shkruaj korrigjimin.`;
     }
     if (state.step_key === "order_ready")
-        return "Porosia është gati për stafin. Ekipi do ta shqyrtojë dhe dërgojë.";
+        return state.visual?.collection?.mode === "collection_only"
+            ? "Të dhënat e kërkesës u konfirmuan. Nuk u krijua porosi dhe kërkesa nuk iu kalua automatikisht stafit."
+            : "Porosia është gati për stafin. Ekipi do ta shqyrtojë dhe dërgojë.";
     const step = steps.find(s => s.key === state.step_key);
     if (step?.kind === "customer") {
         if (state.context?.execution.profileConfirmation === "pending")
             return `Kemi këto të dhëna: ${profileSummary(state)}. A vlejnë për këtë porosi? Përgjigju me Po ose shkruaj korrigjimin.`;
-        const labels = { name: "emrin", phone: "telefonin", city: "qytetin", address: "adresën" };
+        const labels = { name: "emrin", phone: "telefonin", email: "emailin", city: "qytetin", address: "adresën" };
         return `Na jepni ${missingProfile(state).map(k => labels[k]).join(", ")}.`;
     }
     return step?.prompt || (step?.label ? `${step.label}${step.options?.length ? ` (${step.options.join(", ")})` : ""}?` : "Cilin produkt dëshironi?");

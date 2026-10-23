@@ -17,6 +17,7 @@ vi.mock("./store", () => ({ loadVisualVersion: mocks.load }));
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test-model" }));
 import { executeVisualTurn } from "./execute";
 import { starterVisualGraph, upgradeVisualGraph } from "./model";
+import { assertBusinessEffectAllowed, CollectionEffectDenied, isCollectionOnly } from "@/lib/runtime/execution-context";
 
 function node(id: string, kind: VisualNode["kind"], config: VisualNode["config"] = {}): VisualNode {
   return { id, kind, label: id, position: { x: 0, y: 0 }, config };
@@ -484,6 +485,31 @@ it.each(["Sa kushton?", "Çmimi"])("answers %s without running a status-only gra
 });
 
 const boundProductId = "aaaaaaaa-0000-4000-8000-000000000001";
+it.each([["digital", ["email"]], ["physical", ["name", "phone", "city", "address"]]] as const)("collection-only %s uses scoped requirements, not universal shipping", async (_kind, required) => {
+  mockBoundProduct();
+  const graph = boundGraph(node("size", "collect", { fieldKey: "size", prompt: "Madhësia?" }));
+  const v = { ...version(graph), collectionPolicy: { version: 1 as const, revision: 1, scopes: [{ versionId: "version-1", flowId: "bound", domain: "order" as const, mode: "collection_only" as const, profileFields: [...required] }] } };
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const p = { ...params(graph), visualPreview: v };
+  const first = await executeVisualTurn({ ...p, message: "Dua të porosis Puzzle", orderRequest: true }, legacy);
+  expect(first.reply).toBe("Madhësia?");
+  const next = await executeVisualTurn({ ...p, message: "M", state: first.nextState }, legacy);
+  expect(next.preparedRequest?.missingFields).toEqual(required.map(k => `customer_${k}`));
+  expect(next.preparedRequest?.transaction).toBe("not_executed_by_agent");
+  const state = next.nextState;
+  const values = { name: "Ana", phone: "0691234567", email: "ana@test.invalid", city: "Tiranë", address: "Rruga 1" };
+  for (const key of required) setFact(state, `customer_${key}`, values[key], key === "email" ? "email" : key === "phone" ? "phone" : "text", "customer");
+  const review = await executeVisualTurn({ ...p, message: "", state }, legacy);
+  expect(review.reply).toContain("Nuk krijohet porosi");
+  expect(review.reply).not.toContain("Totali:");
+  const confirmed = await executeVisualTurn({ ...p, message: "po", state: review.nextState }, legacy);
+  expect(confirmed.nextState.step_key).toBe("order_ready");
+  expect(confirmed.preparedRequest).toMatchObject({ review: "customer_confirmed", missingFields: [], handoff: "not_handed_off", transaction: "not_executed_by_agent" });
+  expect(confirmed.reply).toContain("Nuk u krijua porosi");
+  expect(legacy).not.toHaveBeenCalled();
+  const revised = structuredClone(v); revised.collectionPolicy.revision = 2;
+  await expect(executeVisualTurn({ ...p, visualPreview: revised, message: "M", state: first.nextState }, legacy)).rejects.toThrow("Politika");
+});
 function boundGraph(...nodes: VisualNode[]): VisualGraph {
   const base = linear(...nodes);
   return { ...base, version: 2, flows: [{ id: "bound", kind: "order", label: "Personalizim", entryNodeId: nodes[0].id, nodeIds: nodes.map(node => node.id), productIds: [boundProductId] }] };
@@ -491,6 +517,40 @@ function boundGraph(...nodes: VisualNode[]): VisualGraph {
 function mockBoundProduct() {
   mocks.entity.mockResolvedValue({ selected: { entity: { kind: "product", id: boundProductId, name: "Puzzle", productTypeId: "puzzle" }, binding: { flowId: "bound", entity: { kind: "product", id: boundProductId } } } });
 }
+it("collection-only rejects a reached action node before invoking its adapter", async () => {
+  mockBoundProduct();
+  const graph = boundGraph(node("details", "collect", { fieldKey: "details", prompt: "Details?" }),
+    node("effect", "action", { action: { actionKey: "business.provision", actionVersion: 1, inputs: { name: "details", email: "customer_email" } } }));
+  graph.edges = graph.edges.filter(e => e.source !== "effect");
+  graph.edges.push({ id: "allowed", source: "effect", target: "end", port: "yes" }, { id: "denied", source: "effect", target: "end", port: "no" });
+  const v: VisualVersion = { ...version(graph), collectionPolicy: { version: 1, revision: 1, scopes: [
+    { versionId: "version-1", flowId: "bound", domain: "order", mode: "collection_only", profileFields: [] },
+  ] } };
+  const legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const first = await executeVisualTurn({ ...params(graph), visualPreview: v, message: "Dua Puzzle", orderRequest: true }, legacy);
+  await expect(executeVisualTurn({ ...params(graph), visualPreview: v, state: first.nextState, message: "Synthetic" }, legacy)).rejects.toThrow(CollectionEffectDenied);
+  expect(legacy).not.toHaveBeenCalled();
+});
+it("passes the verified booking policy into the existing adapter and releases it afterward", async () => {
+  const base = linear(node("booking", "booking"));
+  const graph: VisualGraph = { ...base, version: 2, flows: [{ id: "reservation", kind: "booking", label: "Booking", entryNodeId: "booking", nodeIds: ["booking"], serviceIds: [boundProductId] }] };
+  const v: VisualVersion = { ...version(graph), collectionPolicy: { version: 1, revision: 1, scopes: [
+    { versionId: "version-1", flowId: "reservation", domain: "booking", mode: "collection_only", profileFields: [] },
+  ] } };
+  mocks.entity.mockResolvedValue({ selected: { entity: { kind: "service", id: boundProductId, name: "Consultation", bookingEnabled: true }, binding: { flowId: "reservation", entity: { kind: "service", id: boundProductId } } } });
+  const booking = vi.fn(async (state: ReturnType<typeof emptyState>) => {
+    expect(isCollectionOnly()).toBe(true);
+    expect(() => assertBusinessEffectAllowed("unknown_future_booking_action")).toThrow(CollectionEffectDenied);
+    const answer = response({ ...params(graph), state }, "Preferred date?");
+    answer.nextState.fields.booking = { nonce: "synthetic", phase: "collect", serviceId: boundProductId };
+    return answer;
+  });
+  const result = await executeVisualTurn({ ...params(graph), visualPreview: v, message: "Dua rezervim", bookingRequest: true, bookingTurn: booking }, async p => response(p));
+  expect(booking).toHaveBeenCalledOnce();
+  expect(result.nextState.visual?.collection?.domain).toBe("booking");
+  expect(result.preparedRequest?.missingFields).toEqual(["booking.date", "booking.time", "booking.name"]);
+  expect(isCollectionOnly()).toBe(false);
+});
 it("W2 extracts only fields owned by the selected flow, not a service's fields", async () => {
   mockBoundProduct();
   const graph = boundGraph(node("size", "collect", { fieldKey: "size", prompt: "Madhësia?" }));
@@ -568,6 +628,19 @@ it("a service binding can share visual product-selection steps without invoking 
   expect(result.reply).toBe("Çfarë të duhet?");
   expect(result.nextState.product_id).toBeNull();
   expect(legacy).not.toHaveBeenCalled(); expect(booking).not.toHaveBeenCalled();
+});
+it("collection-only service completion projects its facts, not a booking or implicit handoff", async () => {
+  const base = boundGraph(node("details", "collect", { fieldKey: "project_type", prompt: "Çfarë projekti?" }));
+  const graph = { ...base, version: 2 as const, flows: [{ id: "bound", kind: "custom" as const, label: "Kërkesa", entryNodeId: "details", nodeIds: ["details"], serviceIds: [boundProductId] }] };
+  const v = { ...version(graph), collectionPolicy: { version: 1 as const, revision: 1, scopes: [{ versionId: "version-1", flowId: "bound", domain: "service" as const, mode: "collection_only" as const, profileFields: [] }] } };
+  mocks.entity.mockResolvedValue({ selected: { entity: { kind: "service", id: boundProductId, name: "Konsultë" }, binding: { flowId: "bound", entity: { kind: "service", id: boundProductId } } } });
+  const booking = vi.fn(), legacy = vi.fn(async (p: LegacyParams) => response(p));
+  const p = { ...params(graph), visualPreview: v, bookingTurn: booking };
+  const first = await executeVisualTurn({ ...p, message: "Dua të vazhdoj me Konsultë" }, legacy);
+  const next = await executeVisualTurn({ ...p, message: "Website", state: first.nextState }, legacy);
+  expect(next.preparedRequest).toMatchObject({ domain: "service", collectedFields: { project_type: "Website" }, missingFields: [], review: "ready_for_review", handoff: "not_handed_off" });
+  expect(next.nextState.product_id).toBeNull(); expect(booking).not.toHaveBeenCalled();
+  expect(next.reply).toContain("nuk iu kalua automatikisht stafit");
 });
 it("revisits a visual answer from final review and invalidates the old confirmation", async () => {
   mockBoundProduct();

@@ -2,6 +2,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { normalizeVisualDraft, starterVisualGraph, validateVisualGraph } from "./model";
 import type { VisualVersion, VisualWorkspace } from "./types";
+import { parseCollectionPolicy } from "@/lib/runtime/collection-policy";
 
 function missingTable(error: { code?: string } | null) {
   return error && ["42P01", "PGRST205"].includes(error.code ?? "");
@@ -34,10 +35,11 @@ export async function loadVisualVersion(businessId: string, pinnedId?: string | 
     if (!data?.enabled || !data.published_version_id) return null;
     id = data.published_version_id;
   }
-  const { data, error } = await db.from("visual_workflow_versions").select("id,graph,created_at")
+  const { data, error } = await db.from("visual_workflow_versions").select("id,graph,created_at,businesses(agent_collection_policy)")
     .eq("business_id", businessId).eq("id", id).maybeSingle();
   if (error || !data) throw new Error("Versioni i rrjedhës nuk është i disponueshëm.");
   const { graph } = validateVisualGraph(data.graph);
   if (!graph) throw new Error("Rrjedha aktive nuk është e vlefshme.");
-  return { id: data.id, businessId, graph, createdAt: data.created_at };
+  const business = Array.isArray(data.businesses) ? data.businesses[0] : data.businesses;
+  return { id: data.id, businessId, graph, createdAt: data.created_at, collectionPolicy: parseCollectionPolicy(business?.agent_collection_policy) };
 }

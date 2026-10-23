@@ -1,6 +1,8 @@
 import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workflow";
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
-import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
+import { isIsolatedExecution, recordExternalAction, withCollectionPolicy, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
+import { collectionForNode, pinCollection, blocked } from "@/lib/runtime/collection-policy";
+import { preparedRequest } from "@/lib/conversations/prepared-request";
 import { chooseGuidance, clarification, invalidateConfirmation } from "../guidance";
 import { decidedFieldGuidance, informationalDecision } from "@/lib/conversations/turn-decision";
 import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
@@ -243,6 +245,10 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     base.visual=active;
   }
   if(base.context && !active && base.product_id && intent==="order") base=resetOrder(base);
+  const policy = collectionForNode(version, active?.nodeId ?? boundFlow?.entryNodeId ?? previous?.nodeId, previous?.collection);
+  if (active) pinCollection(active, policy);
+  if (base.visual) pinCollection(base.visual, policy);
+  return withCollectionPolicy(policy, async () => {
   let currentState=base;
   const extracted = await extractFacts();
   const sharedValues = () => currentState.context ? Object.fromEntries(version.graph.nodes.filter(n=>n.config.fieldKey).flatMap(n=> {
@@ -258,8 +264,9 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   if (reviewingOrder) {
     const review = advanceVisualOrderReview(base, params.orderRequest ? "" : params.message, params.hasPhoto, false, version.graph, selectedEntity!.entity.name);
     base = review.nextState;
-    base.visual = { ...previous!, status: review.complete ? "completed" : "waiting", awaiting: !review.complete };
+    base.visual = { ...previous!, collection: policy, status: review.complete ? "completed" : "waiting", awaiting: !review.complete };
     const result = simple(review.reply); result.nextState = base; result.productName = selectedEntity!.entity.name;
+    result.preparedRequest = preparedRequest(base, version, selectedEntity!.entity);
     result.visualWorkflow = { graph: version.graph, state: base.visual, traversedNodeIds: [], routing: { action: "continue", from: previous!.nodeId, to: previous!.nodeId, source: "rules" } };
     return result;
   }
@@ -281,6 +288,10 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: 0 },
   };
   for (let count = 0; count < 32; count++) {
+    // Cross-flow edges may not silently acquire or escape a restrictive policy.
+    const reached = collectionForNode(version, execution.state.nodeId, policy);
+    if ((reached?.mode === "collection_only" || policy?.mode === "collection_only") && reached?.flowId !== policy?.flowId) throw blocked();
+    pinCollection(execution.state, policy);
     // The pure runtime only changes a cloned cursor. Authorize the actual path
     // before persisting its fields or calling any read/write adapter.
     await guardNodes([...execution.traversedNodeIds, execution.state.nodeId]);
@@ -302,6 +313,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
       if(value) setFact(turn.nextState,node.config.fieldKey!,value,node.config.fieldType||"text",`visual:${node.id}`);
     }
     if (action.kind === "action") {
+      assertBusinessEffectAllowed("workflow.action");
       const node=version.graph.nodes.find(n=>n.id===action.nodeId)!;
       let outcome:"yes"|"no"="yes";
       try {
@@ -422,6 +434,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     if (action.message && action.kind !== "handoff") replies.push(action.message);
     if (action.kind === "end" && !replies.length) replies.push("Faleminderit. Të dhënat u plotësuan.");
     if (action.kind === "handoff") {
+      // Explicit graph handoff remains allowed: ownership/state only, no notification.
       turn.handoff = true; turn.advisoryHandoff = false; execution.state.advisory = false;
       if (isIsolatedExecution() || params.mode === "test") {
         recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "test_state_only" });
@@ -449,5 +462,12 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   } });
   turn.presentedProducts = combineProductPresentations(turn.reply, presentations);
   turn.presentedServices = combineProductPresentations(turn.reply, presentations.map(part => ({ reply: part.reply, presentedProducts: part.presentedServices })));
+  if (selectedEntity) turn.preparedRequest = preparedRequest(turn.nextState, version, selectedEntity.entity);
+  if (turn.preparedRequest?.domain === "service" && execution.action.kind === "end") {
+    turn.reply = turn.preparedRequest.validation === "valid"
+      ? "Të dhënat e kërkesës u përgatitën. Nuk u krijua rezervim ose porosi dhe kërkesa nuk iu kalua automatikisht stafit."
+      : "Kërkesa ka ende të dhëna të paplotësuara. Nuk u krye veprim biznesi; kërko ndihmën e stafit.";
+  }
   return turn;
+  });
 }

@@ -3,7 +3,7 @@ import { encryptSecret, decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { overlaps, type Booking } from "./model";
 import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
-import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
+import { isIsolatedExecution, refuseIsolatedEffect, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
 
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
@@ -32,6 +32,7 @@ export function googleAuthorizeUrl(state: string) {
   return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({ client_id, redirect_uri, response_type: "code", scope: GOOGLE_SCOPES.join(" "), state, access_type: "offline", prompt: "consent" })}`;
 }
 async function tokenRequest(body: Record<string, string>) {
+  assertBusinessEffectAllowed("google.token");
   if (isIsolatedExecution()) refuseIsolatedEffect("provider.token_refresh", "google_oauth");
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -89,6 +90,7 @@ export async function googleConnection(
   return data;
 }
 async function accessToken(connection: Connection) {
+  assertBusinessEffectAllowed("google.token");
   if (isIsolatedExecution()) refuseIsolatedEffect("provider.token_refresh", "google_access_token");
   if (!connection.connected || !connection.refresh_token_encrypted)
     throw new Error("Lidh përsëri Google Calendar.");
@@ -126,6 +128,7 @@ async function googleFetch(
   init: RequestInit = {},
   allowed: number[] = [],
 ) {
+  assertBusinessEffectAllowed("google.http");
   if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", `google:${path}`);
   const token = await accessToken(connection);
   const response = await fetch(
@@ -236,6 +239,7 @@ export function googleEventId(bookingId: string) {
   return `agjenti${bookingId.replaceAll("-", "")}`;
 }
 export async function syncBooking(businessId: string, bookingId: string) {
+  assertBusinessEffectAllowed("google.sync");
   if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "google_sync");
   await requireRuntimeModules(businessId, ["bookings", "services"]);
   const db = createServiceSupabase(),

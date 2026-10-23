@@ -2,6 +2,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import {
   currentExecution,
+  assertBusinessEffectAllowed,
   isIsolatedExecution,
   refuseIsolatedEffect,
 } from "@/lib/runtime/execution-context";
@@ -224,6 +225,7 @@ export type BookingEffectGuard = {
   revision: number;
 };
 export async function persistBooking(businessId: string, input: BookingInput, guard?: BookingEffectGuard) {
+  assertBusinessEffectAllowed("booking.create");
   if (isIsolatedExecution()) refuseIsolatedEffect("booking.create");
   await requireRuntimeModules(businessId, ["bookings", "services"]);
   if (

@@ -3,7 +3,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/tokens";
 import { parseProvisionInput } from "./catalog";
 import { requireActionAccess } from "./access";
-import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
+import { isIsolatedExecution, refuseIsolatedEffect, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
 export const invitationHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 export const validInvitationToken = (token: string) =>
@@ -23,6 +23,7 @@ export async function provisionBusiness(p: {
   conversationId?: string;
   guard?: import("@/lib/calendar/service").BookingEffectGuard;
 }): Promise<ProvisionResult> {
+  assertBusinessEffectAllowed("business.provision");
   if (isIsolatedExecution()) refuseIsolatedEffect("action.provision");
   const input = parseProvisionInput(p.input);
   await requireActionAccess(

@@ -15,6 +15,7 @@ import time
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--pg-bin', required=True)
 parser.add_argument('--baseline', action='store_true')
+parser.add_argument('--extra-sql', type=Path, help='Additional regression SQL, only in this fresh socket-only cluster')
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
 pg = Path(args.pg_bin)
@@ -85,6 +86,8 @@ try:
         run(cmd, input=preface + wrapped)
         applied += 1
     print(f'PASS fresh migration chain ({applied} files), PostgreSQL {sql("show server_version")}, Unix socket only: {work}', flush=True)
+    if args.extra_sql:
+        print(run(cmd + ['-f', str(args.extra_sql.resolve())]), flush=True)
 
     # Fixed IDs live only in this freshly initialized private cluster.
     b, actor, conn, c, other = [f'00000000-0000-4000-8000-{n:012d}' for n in range(9101, 9106)]
@@ -103,6 +106,24 @@ try:
 
     def call_resume(revision):
         return f"select public.resume_conversation_agent('{b}','{actor}','{c}',{revision});"
+
+    if args.extra_sql and not args.baseline:
+        policy_business = '00000000-0000-4000-8000-000000009195'
+        sql(f"insert into businesses(id,name,slug) values('{policy_business}','Policy concurrency synthetic','policy-concurrent'); insert into business_users(business_id,user_id,role) values('{policy_business}','{actor}','owner')")
+        policy_call = f"select public.save_agent_collection_policy('{policy_business}','{actor}',0,'[]');"
+        first = worker('begin; set local role service_role; ' + policy_call)
+        assert line(first) == '1'
+        second = subprocess.Popen(cmd + ['-c', "set application_name='collection-stale-writer'; set role service_role; " + policy_call], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        workers.append(second)
+        deadline = time.monotonic() + 5
+        while sql("select count(*) from pg_stat_activity where application_name='collection-stale-writer' and wait_event_type='Lock'") != '1':
+            assert time.monotonic() < deadline, 'Policy writer did not contend on row lock'
+            time.sleep(.02)
+        finish(first)
+        _, error = second.communicate(timeout=10)
+        assert second.returncode and 'stale_collection_policy' in error, error
+        assert sql(f"select agent_collection_policy->>'revision' from businesses where id='{policy_business}'") == '1'
+        print('PASS collection configuration: concurrent server writers serialize, stale CAS rejects without overwrite', flush=True)
 
     def snapshot():
         return sql(f"select json_build_array((select row_to_json(t) from conversations t where id='{c}'),(select row_to_json(t) from conversation_states t where conversation_id='{c}'),(select json_agg(t order by id) from workflow_inbound_queue t where business_id='{b}'))")

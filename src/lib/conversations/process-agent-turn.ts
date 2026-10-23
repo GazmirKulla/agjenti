@@ -31,6 +31,7 @@ import {
 } from "@/lib/workflows/engine";
 
 export type AgentTurnResult = {
+  preparedRequest?: import("./prepared-request").PreparedRequest;
   /** Authorized test entry points only; observation, never permission or behavioral proof. */
   configuration?: import("@/lib/agents/configuration-contract").TestConfigurationProvenance;
   turnDecision?: TurnDecision;

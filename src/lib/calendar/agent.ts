@@ -27,6 +27,7 @@ import {
   isIsolatedExecution,
   recordExternalAction,
   snapshotExternalActions,
+  isCollectionOnly,
 } from "@/lib/runtime/execution-context";
 import { runIsolated } from "@/lib/runtime/isolated-run";
 export type BookingDraft = {
@@ -39,6 +40,7 @@ export type BookingDraft = {
   nonce: string;
   expires: number;
   review?: { factsKey: string };
+  preparedConfirmation?: { factsKey: string };
   /** Only profile-seeded values follow later profile corrections; recipients may differ. */
   profileSeeds?: { name?: string; contact?: string };
 };
@@ -79,6 +81,7 @@ export async function processBookingTurn(params: {
     return runIsolated(() => processBookingTurn(params));
   }
   const simulate = isIsolatedExecution() || params.mode === "test";
+  const preferencesOnly = isCollectionOnly();
   const existingState = structuredClone(params.state ?? emptyState());
   if (!params.routed && existingState.product_id) return null;
   // Published visual rules own routing; booking cannot bypass a collect/confirm or handoff.
@@ -149,7 +152,7 @@ export async function processBookingTurn(params: {
       data: {
         mode: params.mode ?? "production",
         action: clear ? "request_finished" : "collect_or_review",
-        writesAllowed: !simulate,
+        writesAllowed: !simulate && !preferencesOnly,
       },
     });
     return attachBookingEffects({
@@ -188,6 +191,7 @@ export async function processBookingTurn(params: {
     draft.phase = "collect";
     draft.expires = Date.now() + 30 * 60000;
     delete draft.review;
+    delete draft.preparedConfirmation;
   }
   // A booking may be for somebody else. Profile memory only seeds missing data.
   if (
@@ -202,6 +206,10 @@ export async function processBookingTurn(params: {
         expires: Date.now() + 30 * 60000,
       };
       return reply("Le ta rishikojmë kërkesën. Cilin shërbim dëshiron?");
+    }
+    if (preferencesOnly) {
+      draft.preparedConfirmation = { factsKey: reviewKey() };
+      return reply(`Preferenca për ${service.name}, më ${draft.date} në ${draft.time}, për ${draft.name} u konfirmua nga ti. Disponueshmëria nuk është verifikuar; nuk u krijua rezervim dhe nuk u mbajt orar.`);
     }
     // Isolated rechecks synthetic availability without Google, tokens or writes.
     // Production persistence first reconciles the stable request key, then checks availability transactionally.
@@ -277,6 +285,7 @@ export async function processBookingTurn(params: {
       true,
     );
   if (!params.routed && !raw && !details.bookingIntent) return null;
+  delete draft.preparedConfirmation;
   if (details.serviceId && details.serviceId !== draft.serviceId) {
     draft.serviceId = details.serviceId;
     draft.time = undefined;
@@ -303,6 +312,13 @@ export async function processBookingTurn(params: {
       `Cilin shërbim dëshiron? ${activeServices.map((s) => `${s.name} (${s.duration_minutes} min)`).join(", ")}.`,
     );
   if (!draft.date) return reply(`Për çfarë date dëshiron ${service.name}?`);
+  if (preferencesOnly) {
+    if (!draft.time) return reply("Cilën orë preferon? Shkruaje në formatin 24-orësh. Disponueshmëria nuk është verifikuar.");
+    if (!draft.name || draft.name.trim().length < 2) return reply("Në emër të kujt ta përgatis kërkesën?");
+    draft.phase = "confirm";
+    draft.review = { factsKey: reviewKey() };
+    return reply(`Rishiko preferencën: ${service.name}, ${draft.date}, ${draft.time}, ${draft.name}. Konfirmon këto të dhëna? Nuk konfirmohet disponueshmëria dhe nuk krijohet rezervim.`);
+  }
   let slots;
   try {
     slots = await availableSlots(params.businessId, service.id, draft.date);

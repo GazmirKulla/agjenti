@@ -22,6 +22,7 @@ type VisualGraphBody = { name: string; nodes: VisualNode[]; edges: VisualEdge[] 
 export type VisualGraphV2 = VisualGraphBody & { version: 2; flows: VisualFlow[] };
 export type VisualGraph = (VisualGraphBody & { version: 1 }) | VisualGraphV2;
 export type VisualRunState = {
+  collection?: import("@/lib/runtime/collection-policy").CollectionPin;
   binding?: { flowId: string; entity: { kind: "product" | "service"; id: string } };
   branchPorts?: Record<string, "yes" | "no">;
   versionId: string;
@@ -52,7 +53,7 @@ export type VisualExecution = {
   fieldValidation?: VisualFieldValidation[];
   error?: string;
 };
-export type VisualVersion = { id: string; businessId: string; graph: VisualGraph; createdAt: string };
+export type VisualVersion = { id: string; businessId: string; graph: VisualGraph; createdAt: string; collectionPolicy?: import("@/lib/runtime/collection-policy").CollectionPolicy | null };
 export type VisualWorkspace = {
   graph: VisualGraph;
   revision: number;

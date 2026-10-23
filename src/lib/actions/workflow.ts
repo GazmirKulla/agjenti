@@ -3,7 +3,7 @@ import type { ActionBinding } from "./catalog";
 import { parseProvisionInput } from "./catalog";
 import { provisionBusiness } from "./provision";
 import type { BookingEffectGuard } from "@/lib/calendar/service";
-import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
+import { isIsolatedExecution, recordExternalAction, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
 export async function executeWorkflowAction(p: {
   businessId: string;
   versionId: string;
@@ -13,6 +13,7 @@ export async function executeWorkflowAction(p: {
   mode?: "production" | "test";
   guard?: BookingEffectGuard;
 }) {
+  assertBusinessEffectAllowed("workflow.action");
   const input = parseProvisionInput(
     Object.fromEntries(
       Object.entries(p.binding.inputs).map(([key, field]) => [

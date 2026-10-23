@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { emptyState } from "@/lib/workflows/engine";
 import { conversationControl } from "./conversation-control";
+import { migrateContext } from "@/lib/workflows/context";
+import { snapshotOrder } from "@/lib/workflows/conversation-processes";
 const state = (reply: string) => ({ ...emptyState(), product_id: "pdf", step_key: "collect_customer", recentMessages: [{ role: "assistant" as const, content: reply }] });
+it.each(["order", "booking"] as const)("uses the current %s graph confirmation independently of prompt language", owner => {
+    const s = migrateContext(state("Confirm A?"));
+    s.visual = { versionId: "A", nodeId: "review", status: "waiting", awaiting: true, values: {}, visited: [],
+        pendingConfirmation: { nodeId: "review", factsKey: "checked-by-runtime", expiresAt: Date.now() + 60000 } };
+    s.processes = { active: owner, promptOwner: owner,
+        ...(owner === "order" ? { order: { id: "p", status: "active" as const, snapshot: snapshotOrder(s) } }
+            : { booking: { id: "p", status: "active" as const, visual: s.visual } }) };
+    const input = { businessId: "business", message: "po", state: s, hasPhoto: false, mode: "production" as const };
+    expect(conversationControl({ ...input, deliveredReply: "Confirm A?" })).toBeNull();
+    expect(conversationControl({ ...input, deliveredReply: null })).not.toBeNull();
+    s.processes.promptOwner = null;
+    expect(conversationControl({ ...input, deliveredReply: "Confirm A?" })).not.toBeNull();
+});
 describe("conversation control before workflow execution", () => {
     it.each(["Ok", "Faleminderit", "Në rregull", "👍", "Po"])("does not turn %s after information into an order", message => {
         const before = state("Material PDF, 690 ALL. Porositeni në website.");

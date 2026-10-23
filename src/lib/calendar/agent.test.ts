@@ -6,6 +6,7 @@ vi.mock("@/lib/dashboard/modules/entitlements", async () => {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { migrateContext, setFact } from "@/lib/workflows/context";
 import { emptyState } from "@/lib/workflows/engine";
+import { withCollectionPolicy } from "@/lib/runtime/execution-context";
 const mocks = vi.hoisted(() => ({
   extract: vi.fn(),
   slots: vi.fn(),
@@ -86,6 +87,22 @@ beforeEach(() => {
   mocks.persist.mockResolvedValue({
     booking: { id:"booking-1",service_id:"service",service_name:"Prerje",customer_name:"Klienti",customer_contact:"",starts_at:"2026-10-15T07:00:00Z",status:"pending" },
     syncError: null,
+  });
+});
+it("prepares and confirms booking preferences without availability, holds or persistence", async () => {
+  await withCollectionPolicy({ businessId: "business", versionId: "v1", flowId: "booking", revision: 1, domain: "booking", mode: "collection_only", profileFields: [] }, async () => {
+    const first = await processBookingTurn({ businessId: "business", message: "dua takim", routed: true });
+    expect(first?.reply).toContain("Nuk konfirmohet disponueshmëria");
+    const next = await processBookingTurn({ businessId: "business", message: "konfirmoj", routed: true, state: first!.nextState });
+    expect(next?.reply).toContain("nuk u krijua rezervim");
+    expect(next?.nextState.fields.booking).toHaveProperty("preparedConfirmation");
+    const duplicate = await processBookingTurn({ businessId: "business", message: "konfirmoj", routed: true, state: next!.nextState });
+    expect(duplicate?.reply).toBe(next?.reply);
+    expect(mocks.slots).not.toHaveBeenCalled();
+    expect(mocks.persist).not.toHaveBeenCalled();
+    mocks.extract.mockResolvedValue({ bookingIntent: true, time: "10:00" });
+    const corrected = await processBookingTurn({ businessId: "business", message: "10:00", routed: true, state: next!.nextState });
+    expect(corrected?.nextState.fields.booking).not.toHaveProperty("preparedConfirmation");
   });
 });
 afterEach(() => vi.useRealTimers());

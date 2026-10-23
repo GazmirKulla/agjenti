@@ -1,4 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
 
 export type EnsureCustomerInput = {
 	businessId: string;
@@ -19,6 +20,7 @@ export type EnsureCustomerResult =
 export async function ensureCustomerForConversation(
 	input: EnsureCustomerInput,
 ): Promise<EnsureCustomerResult> {
+  assertBusinessEffectAllowed("customer.register");
 	const supabase = createServiceSupabase();
 	const { data: conversation, error: conversationError } = await supabase
 		.from("conversations")
