@@ -9,6 +9,7 @@ import { isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
 import type { AgentTurnResult } from "./process-agent-turn";
 import { InboundPersistenceError } from "./inbound-persistence-error";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
+import { fragmentKind, testInputBatch } from "./message-batch";
 export type WorkflowJob = {
     id: number;
     business_id: string;
@@ -16,6 +17,9 @@ export type WorkflowJob = {
     participant_id: string;
     payload: NormalizedIncomingMessage;
     status: string;
+    attempts?: number;
+    client_sequence?: number;
+    client_request_id?: string;
     lease_token: string;
     reply: string | null;
     conversation_id?: string | null;
@@ -35,7 +39,8 @@ export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage)
         throw new Error("Queue connection lookup failed");
     if (!connection)
         return false;
-    const { error: insertError } = await db.from("workflow_inbound_queue").upsert({ business_id: connection.business_id, channel: message.channel, connection_id: connection.id, participant_id: message.externalParticipantId, external_id: message.externalMessageId, payload: message }, { onConflict: "connection_id,external_id", ignoreDuplicates: true });
+    const payload = { ...message, fragmentKind: fragmentKind(message.text, message.attachments.length > 0) };
+    const { error: insertError } = await db.from("workflow_inbound_queue").upsert({ business_id: connection.business_id, channel: message.channel, connection_id: connection.id, participant_id: message.externalParticipantId, external_id: message.externalMessageId, payload }, { onConflict: "connection_id,external_id", ignoreDuplicates: true });
     if (insertError)
         throw new Error("Queue persistence failed");
     return true;
@@ -92,15 +97,21 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
     let attempts = 0;
     while (attempts < maxJobs && Date.now() - started < 45000) {
         // Transport safety applies to every tenant, independently of workflow rollout.
-        const { data, error } = testScope
-          ? await db.rpc("claim_workflow_transport", { p_businesses: [testScope.businessId], p_test_user: testScope.userId, p_test_stream: testScope.streamId })
-          : await db.rpc("claim_workflow_inbound_batch", { p_businesses: null });
+        // Explicit protocol opt-in: old deployments must not consume new batches.
+        // No fallback to the legacy claim if SQL has not been deployed yet.
+        const { data, error } = await db.rpc("claim_workflow_transport", {
+            p_businesses: testScope ? [testScope.businessId] : null,
+            p_test_user: testScope?.userId ?? null, p_test_stream: testScope?.streamId ?? null,
+            p_fragments: true,
+        });
         if (error)
             throw new Error("Queue claim failed");
         const job = data?.[0] as WorkflowJob | undefined;
         if (!job) {
-            if (testScope) break;
-            const { data: delay, error: waitError } = await db.rpc("workflow_inbound_batch_wait_ms");
+            const { data: delay, error: waitError } = testScope ? await db.rpc("workflow_fragment_wait_ms", {
+                p_businesses: testScope ? [testScope.businessId] : null,
+                p_test_user: testScope?.userId ?? null, p_test_stream: testScope?.streamId ?? null,
+            }) : await db.rpc("workflow_inbound_batch_wait_ms");
             if (waitError) throw new Error("Queue wakeup lookup failed");
             if (typeof delay !== "number" || delay <= 0) break;
             const wait = Math.min(delay, 3000);
@@ -115,15 +126,16 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
                 const { executeAgentTestTurn } = await import("@/lib/agents/test-chat/execute-turn");
                 const { data: prior, error: priorError } = await db.from("workflow_inbound_queue").select("result_ciphertext,status")
                   .eq("business_id", job.business_id).eq("operator_user_id", job.operator_user_id!).eq("test_stream_id", job.test_stream_id!)
-                  .lt("id", job.id).order("id", { ascending: false }).limit(1).maybeSingle();
+                  .is("batch_parent_id", null).lt("id", job.id).order("id", { ascending: false }).limit(1).maybeSingle();
                 if (priorError || prior && (prior.status !== "sent" || !prior.result_ciphertext)) throw new Error("Previous turn unavailable");
-                const input = { ...job.payload } as unknown as TestChatInput;
+                const batch = testInputBatch({ ...job.payload } as unknown as TestChatInput, job);
+                const input = batch.input;
                 if (prior) {
                     const previous = JSON.parse(decryptSecret(prior.result_ciphertext)) as TestChatResult;
                     if ("error" in previous) throw new Error("Previous turn failed");
                     input.session = previous.session;
                 }
-                const result = await executeAgentTestTurn(input, job.operator_user_id!);
+                const result = await executeAgentTestTurn(input, job.operator_user_id!, batch.count);
                 const { error } = await db.rpc("finish_test_transport", { p_id: job.id, p_token: job.lease_token, p_result: "error" in result ? null : encryptSecret(JSON.stringify(result)), p_error: "error" in result ? result.error : null });
                 if (error) throw new Error("Test result commit failed");
                 processed++;

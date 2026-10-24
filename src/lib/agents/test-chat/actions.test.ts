@@ -19,6 +19,7 @@ vi.mock("@/lib/setup/status", () => ({ loadSetupStatus: mocks.setup }));
 vi.mock("@/lib/setup/record-test", () => ({ recordSetupTest: mocks.record }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { simulateAgentTurn } from "./actions";
+import { executeAgentTestTurn } from "./execute-turn";
 import { readTestSession, sealTestSession, MAX_TEST_TURNS } from "./session";
 import { emptyState } from "@/lib/workflows/engine";
 import { sealAttachment } from "./attachments";
@@ -49,6 +50,18 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("test chat action", () => {
+  it("counts raw frozen messages without creating extra coordinator turns or trusting a client count", async () => {
+    const result=await executeAgentTestTurn({...input,message:'pse\nti psh\nmund ta kuptosh'},'user-a',3);
+    if('error' in result)throw Error(result.error);
+    expect(mocks.process).toHaveBeenCalledTimes(1);
+    expect(result.turns).toBe(3);
+    expect(readTestSession(result.session,'user-a','business-a').turns).toBe(3);
+    mocks.process.mockClear();
+    expect(await executeAgentTestTurn(input,'user-a',41)).toHaveProperty('error');
+    expect(mocks.process).not.toHaveBeenCalled();
+    const client=await simulateAgentTurn({...input,messageCount:20} as typeof input);
+    expect(client).toMatchObject({turns:1});
+  });
   it("does not return a candidate fact acknowledgement when sealing the new state fails", async () => {
     mocks.process.mockImplementationOnce(async () => {
       // Encryption exists at preflight but is unavailable at commit/seal time.

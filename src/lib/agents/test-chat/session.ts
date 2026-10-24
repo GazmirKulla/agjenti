@@ -67,13 +67,15 @@ export function sealTestSession(
   session: TestSession,
   state: ConversationStatePayload,
   previousResponseId: string | null,
+  messageCount = 1,
 ) {
+  if (!Number.isInteger(messageCount) || messageCount < 1 || messageCount > 20 || session.turns + messageCount > MAX_TEST_TURNS) throw new Error("Invalid test message count");
   return encryptSecret(
     JSON.stringify({
       ...session,
       state,
       previousResponseId,
-      turns: session.turns + 1,
+      turns: session.turns + messageCount,
       expiresAt: Date.now() + TTL,
     }),
   );

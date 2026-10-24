@@ -6,7 +6,7 @@ import { requireBusinessAccess } from "@/lib/tenant/access";
 import {
   type AgentTurnResult,
 } from "@/lib/conversations/process-agent-turn";
-import { readTestSession, sealTestSession } from "./session";
+import { readTestSession, sealTestSession, MAX_TEST_TURNS } from "./session";
 import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
 import { readAttachment } from "./attachments";
 import { collectTestConfiguration } from "./provenance";
@@ -45,6 +45,7 @@ function customerComplete(customer: {
 export async function executeAgentTestTurn(
   input: TestChatInput,
   userId: string,
+  messageCount = 1,
 ): Promise<TestChatResult> {
   try {
     if (
@@ -73,6 +74,9 @@ export async function executeAgentTestTurn(
         userId,
         access.business.id,
       );
+      // Internal queue count, never accepted from the browser. The existing
+      // 40-message limit and fork sequence count raw messages, not generations.
+      if (!Number.isInteger(messageCount) || messageCount < 1 || messageCount > 20 || session.turns + messageCount > MAX_TEST_TURNS) throw new Error("Kufiri i mesazheve të provës u tejkalua.");
     } catch (e) {
       return {
         error: e instanceof Error ? e.message : "Rifillo sesionin e provës.",
@@ -166,8 +170,9 @@ export async function executeAgentTestTurn(
         session,
         turn.nextState,
         turn.previousResponseId,
+        messageCount,
       ),
-      turns: session.turns + 1,
+      turns: session.turns + messageCount,
       autoReplyEnabled: access.business.auto_reply,
       trainingReceipt: issueTrainingReceipt(userId, access.business.id, text || "[Foto e simuluar]", turn.reply, turn.workflowId, turn.nextState.step_key),
     };

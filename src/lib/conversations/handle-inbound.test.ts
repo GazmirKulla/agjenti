@@ -228,7 +228,7 @@ describe.each(["instagram", "whatsapp"] as const)("%s policy reads through the r
   const claim = (...jobs: WorkflowJob[]) => {
     // PostgreSQL owns lease eligibility/retry limits; do not emulate that engine here.
     mocks.rpc.mockImplementation(async (name: string) => {
-      if (name === "claim_workflow_inbound_batch") return { data: jobs.length ? [jobs.shift()] : [], error: null };
+      if (name === "claim_workflow_transport") return { data: jobs.length ? [jobs.shift()] : [], error: null };
       if (name === "workflow_inbound_batch_wait_ms") return { data: 0, error: null };
       if (name === "begin_workflow_send" || name === "bind_workflow_inbound") return { data: true, error: null };
       if (["prepare_workflow_reply", "finish_workflow_send"].includes(name)) return { data: null, error: null };

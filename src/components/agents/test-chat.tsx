@@ -10,7 +10,7 @@ import { Icon } from "@/components/dashboard/icon";
 import { AudioRecorder, primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import { TrainingSession, type TrainingFeedback, type TrainingRequest } from "./training-session";
 import { ChatMessage, CopyMessage } from "./chat-message";
-import { newConversation, replaySession, readHistory, transcript, type TestConversation, type ChatEntry, type PendingTestTurn, reconcileTestConversation } from "./chat-history";
+import { newConversation, replaySession, readHistory, transcript, batchStartIndex, batchEntry, showsReply, type TestConversation, type ChatEntry, type PendingTestTurn, reconcileTestConversation } from "./chat-history";
 import "./test-chat.css";
 const reasons: Record<string, string> = {
   workflow_not_configured: "Produkti ka nevojë për një workflow.",
@@ -184,10 +184,11 @@ export function AgentTestChat({ slug, businessName, userId }: {
     setUploads(current => [...current, ...valid]);
   }
   function edit(index: number) {
-    const entry = messages[index]; clearComposer(); setDraft(entry.text); setPhoto(entry.photo); setRetained(entry.attachments); setEditing(index);
+    const entry = batchEntry(messages,index); clearComposer(); setDraft(entry.text); setPhoto(entry.photo); setRetained(entry.attachments); setEditing(batchStartIndex(messages,index));
     focusComposer();
   }
   async function send(index = editing ?? messages.length, original?: ChatEntry) {
+    if (original) { original = batchEntry(messages,index); index = batchStartIndex(messages,index); }
     const text = original?.text ?? draft.trim();
     const simulated = original?.photo ?? photo;
     const existing = original?.attachments ?? retained;
@@ -310,26 +311,28 @@ export function AgentTestChat({ slug, businessName, userId }: {
           {!messages.length && !pending && !chat.outbox?.length && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti dhe përmirësoje gjatë bisedës.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
           {(pendingIndex !== null ? messages.slice(0,pendingIndex) : messages).map((entry,index)=><div className="chat-exchange" key={entry.id}>
             <div className="agent-test-bubble customer"><p>{entry.text}</p>{entry.photo && <span className="chat-file-pill">Foto e simuluar</span>}{entry.attachments.map((a,i)=><span className="chat-file-pill" key={i}>{a.preview?.startsWith("blob:") ? <Image unoptimized width={80} height={80} src={a.preview} alt={a.name}/> : <Icon name="file" size={15}/>} {a.name}</span>)}</div>
-            <small className="chat-receipt">Përpunuar</small>
             <div className="chat-message-actions customer"><CopyMessage text={entry.text}/><button type="button" className="chat-icon" aria-label="Ndrysho mesazhin" title="Ndrysho mesazhin" disabled={busy || voice} onClick={()=>edit(index)}><Icon name="edit" size={16}/></button></div>
+            {showsReply(messages,index) && <>
+            {entry.batchId && <small className="chat-receipt">Përgjigje për {messages.filter(e=>e.batchId===entry.batchId).length} mesazhet e mësipërme</small>}
             <div className="agent-test-bubble agent"><span className="chat-agent-avatar"><Icon name="spark" size={19}/></span><ChatMessage text={entry.result.reply}/></div>
             <div className="chat-message-actions"><CopyMessage text={entry.result.reply}/><button className="chat-icon" type="button" title="Rigjenero përgjigjen" aria-label="Rigjenero përgjigjen" disabled={busy || voice} onClick={()=>void send(index,entry)}><Icon name="refresh" size={16}/></button>{canSpeak && <button className="chat-icon" type="button" title={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} aria-label={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} onClick={()=>speak(entry)}><Icon name={speaking===entry.id ? "stop" : "volume"} size={16}/></button>}{entry.result.trainingReceipt && <button type="button" className="chat-train" disabled={busy || voice} onClick={()=>{
-              const feedback={receipt:entry.result.trainingReceipt!,question:entry.text || "[Skedar]",response:entry.result.reply,workflowId:entry.result.workflowId,stepKey:entry.result.nextState.step_key??null}; setTrainingFeedback(feedback);setTrainingRequest(previous=>({key:(previous?.key??0)+1,feedback}));
+              const feedback={receipt:entry.result.trainingReceipt!,question:batchEntry(messages,index).text || "[Skedar]",response:entry.result.reply,workflowId:entry.result.workflowId,stepKey:entry.result.nextState.step_key??null}; setTrainingFeedback(feedback);setTrainingRequest(previous=>({key:(previous?.key??0)+1,feedback}));
             }}><Icon name="spark" size={14}/> Përmirëso</button>}</div>
+            </>}
           </div>)}
           {chat.outbox?.map(operation => <div className="chat-exchange" key={operation.id}>
             <div className="agent-test-bubble customer"><p>{operation.text || "[Skedar/foto prove]"}</p></div>
-            <small className="chat-receipt">{operation.status === "failed" ? "Nuk u përfundua" : operation.status === "uncertain" ? "Dërgim i pakonfirmuar" : operation.status === "processing" ? "Pranuar në provë" : operation.accepted ? "Në radhë" : "Duke dërguar"}</small>
-            {operation.status === "processing" && transportStatus[chat.id]?.processing.includes(operation.id) && !waitStopped && <div className="chat-typing" role="status" aria-label="Agjenti po përpunon përgjigjen"><i aria-hidden="true"/><i aria-hidden="true"/><i aria-hidden="true"/><span className="sr-only">Agjenti po përpunon përgjigjen</span></div>}
+            {operation.status !== "processing" && <small className="chat-receipt">{operation.status === "failed" ? "Nuk u përfundua" : operation.status === "uncertain" ? "Rezultati nuk u konfirmua" : operation.accepted ? "Në radhë" : "Po pranohet"}</small>}
             {operation.error && <p role="alert">Mesazhi nuk u përfundua. Hollësitë gjenden te Rrjedha.</p>}
-            {operation.status === "failed" && <button type="button" onClick={()=>void retryOperation(operation)}>Provo përsëri të njëjtën kërkesë</button>}
+            {operation.status === "failed" && (!operation.batchId || operation.batchId === operation.id) && <button type="button" onClick={()=>void retryOperation(operation)}>Provo përsëri të njëjtën kërkesë</button>}
           </div>)}
+          {!waitStopped && chat.outbox?.some(operation => operation.status === "processing" && transportStatus[chat.id]?.processing.includes(operation.id)) && <div className="chat-typing" role="status" aria-label="Agjenti po përpunon përgjigjen"><i aria-hidden="true"/><i aria-hidden="true"/><i aria-hidden="true"/><span className="sr-only">Agjenti po përpunon përgjigjen</span></div>}
           {waiting && !waitStopped && <button type="button" onClick={stop} title="Ndal vetëm pritjen këtu, jo punën në server">Ndalo pritjen</button>}
           {pending !== null && <div className="chat-exchange"><div className="agent-test-bubble customer"><p>{pending}</p></div><small className="chat-receipt">Po përgatitet lokalisht</small>{phase && !phase.startsWith("Agjenti") ? <p className="agent-test-thinking" role="status"><span className="chat-thinking-dot"/>{phase}</p> : <p role="status">Po përgatitet mesazhi lokalisht…</p>}</div>}
         </div>
         {showJump && <button className="chat-jump chat-icon" type="button" aria-label="Shko te mesazhi i fundit" onClick={()=>{setShowJump(false);chatLog.current?.scrollTo({top:chatLog.current.scrollHeight,behavior:"smooth"});}}><Icon name="down" size={18}/></button>}
         <form className="agent-test-composer" onSubmit={e=>{e.preventDefault();void send();}}>
-          {editing !== null && <div className="chat-edit-notice"><span>Po ndryshon mesazhin {editing+1}. Origjinali ruhet si bisedë më vete.</span><button type="button" className="chat-icon" aria-label="Anulo ndryshimin" disabled={busy} onClick={()=>clearComposer()}><Icon name="close" size={16}/></button></div>}
+          {editing !== null && <div className="chat-edit-notice"><span>{messages[editing]?.batchId ? `Po ndryshon grupin e ${messages.filter(e=>e.batchId===messages[editing].batchId).length} mesazheve.` : `Po ndryshon mesazhin ${editing+1}.`} Origjinali ruhet si bisedë më vete.</span><button type="button" className="chat-icon" aria-label="Anulo ndryshimin" disabled={busy} onClick={()=>clearComposer()}><Icon name="close" size={16}/></button></div>}
           {voice ? <AudioRecorder busy={voiceBusy} variant="assistant" purpose="request" onAnalyze={transcribe} onBack={()=>setVoice(false)}/> : <AssistantComposer
             id="agent-test-message" value={draft} onChange={setDraft} maxLength={2000} placeholder="Shkruaj një mesazh si klient…"
             busy={trainingBusy || voiceBusy} onSubmit={()=>void send()} onVoice={()=>{ primeVoiceCapture(); setVoice(true); }} onFiles={addFiles}

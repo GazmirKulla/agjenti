@@ -11,6 +11,9 @@ const t=f.tenants.find(t=>t.kind==='information');
 const counts=()=>sql(`select json_build_array((select count(*) from public.orders),(select count(*) from public.bookings),(select count(*) from public.customers),(select count(*) from public.messages));`);
 let server,before,slow=true;
 const providerParts=[];
+const generations=[];
+const fragmentTexts=['pse','ti psh','mund ta kuptosh','cfare po t them','kur t shkruaj mesazhe','tek e tek','?'];
+const continuationTexts=['po mundohem','te kuptoj','cfare po ndodh'];
 test.beforeAll(async()=>{
  expect(project).toBe('agjenti-e2e-local-messages-20261024');verifyContainers();before=counts();
  server=http.createServer(async(req,res)=>{
@@ -29,7 +32,9 @@ test.beforeAll(async()=>{
   if(format==='customer_facts')text='{"facts":[]}';
   else if(format==='workflow_guidance')text='{"action":"continue","target":null,"confidence":1,"evidence":""}';
   else {
-   const message=String(r.input).match(/^Customer message: ([^\n]*)/)?.[1]??'';
+   const message=String(r.input).match(/^Customer message: ([\s\S]*?)(?=\n(?:Current step:|Already supplied customer facts \(not business policy\):))/)?.[1]??'';
+   generations.push({message,input:String(r.input)});
+   if(message===fragmentTexts.join('\n'))await new Promise(resolve=>setTimeout(resolve,8000));
    if(message==='Cilat të dhëna të duhen?'){
     // Leave time for lifecycle checks, but stay below the real 25s AI timeout.
     if(slow)await new Promise(resolve=>setTimeout(resolve,18000));
@@ -41,6 +46,42 @@ test.beforeAll(async()=>{
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(55325,'127.0.0.1',resolve);});
 });
 function sealToken(){const iv=randomBytes(12),c=createCipheriv('aes-256-gcm',Buffer.from(f.encryptionKey,'hex'),iv);const data=Buffer.concat([c.update('synthetic-transport-local-only'),c.final()]);return ['v1',iv.toString('base64url'),c.getAuthTag().toString('base64url'),data.toString('base64url')].join('.');}
+test('Instagram signed ingress groups originals once and staff takeover suppresses the next generated reply',async({page,context})=>{
+ test.setTimeout(180000);
+ const conn=randomUUID(),cid=randomUUID(),account=`synthetic-transport-${randomUUID()}`,person=`synthetic-person-${randomUUID()}`;
+ const token=sealToken(),start=providerParts.length;
+ sql(`begin;insert into instagram_connections(id,business_id,ig_user_id,access_token_ciphertext,status) values(${quote(conn)},${quote(t.id)},${quote(account)},${quote(token)},'connected');
+ insert into conversations(id,business_id,channel,instagram_connection_id,instagram_participant_id,last_inbound_at,status,auto_reply) values(${quote(cid)},${quote(t.id)},'instagram',${quote(conn)},${quote(person)},now(),'active',true);commit;`);
+ const events=texts=>texts.map(text=>({sender:{id:person},recipient:{id:account},timestamp:Date.now(),message:{mid:`synthetic-${randomUUID()}`,text}}));
+ const post=async messaging=>{
+  const body=JSON.stringify({object:'instagram',entry:[{id:account,messaging}]});
+  return page.request.post('/api/webhooks/meta',{data:body,headers:{'Content-Type':'application/json','x-hub-signature-256':'sha256='+createHmac('sha256','synthetic-transport-webhook').update(body).digest('hex')}});
+ };
+ try {
+  await login(page,context);
+  const first=events(fragmentTexts);
+  expect((await post(first)).status()).toBe(200);
+  expect((await post(first)).status()).toBe(200); // duplicate webhook, same raw IDs
+  await expect.poll(()=>providerParts.length,{timeout:60000}).toBe(start+1);
+  await expect.poll(()=>sql(`select count(*) from workflow_inbound_queue where connection_id=${quote(conn)} and status='sent';`),{timeout:30000}).toBe('1');
+  const saved=JSON.parse(sql(`select json_agg(json_build_object('body',body,'external',external_message_id) order by created_at) from messages where conversation_id=${quote(cid)} and direction='inbound';`));
+  expect(saved.map(m=>m.body)).toEqual(fragmentTexts);
+  expect(saved.map(m=>m.external)).toEqual(first.map(e=>e.message.mid));
+  expect(sql(`select count(*) from workflow_inbound_queue where connection_id=${quote(conn)};`)).toBe('7');
+  const second=events(fragmentTexts),generationStart=generations.length;
+  expect((await post(second)).status()).toBe(200);
+  await expect.poll(()=>generations.slice(generationStart).map(g=>g.message),{timeout:30000}).toContain(fragmentTexts.join('\n'));
+  // Real existing ownership service/RPC, not a mocked boolean guard.
+  const takeover=await page.request.post(`/api/businesses/${t.id}/conversations/${cid}/messages`,{data:{requestId:randomUUID(),body:'Përgjigje sintetike nga stafi.'}});
+  expect(takeover.status()).toBe(202);
+  await expect.poll(()=>sql(`select count(*) from workflow_inbound_queue where connection_id=${quote(conn)} and status='ignored';`),{timeout:30000}).toBe('1');
+  await expect.poll(()=>providerParts.length,{timeout:30000}).toBe(start+2);
+  expect(providerParts.at(-1).text).toBe('Përgjigje sintetike nga stafi.');
+  expect(sql(`select count(*) from messages where conversation_id=${quote(cid)} and source='agent';`)).toBe('1');
+ } finally {
+  sql(`begin;delete from workflow_inbound_queue where connection_id=${quote(conn)};delete from conversations where id=${quote(cid)};delete from instagram_connections where id=${quote(conn)};commit;`);
+ }
+});
 for(const channel of ['instagram','whatsapp'])test(`Inbox ${channel}: three sends, reload, signed receipts, multipart and partial failure`,async({page,context})=>{
  test.setTimeout(240000); // Each independent SQL observation traverses the isolated Docker socket.
  const conn=randomUUID(),cid=randomUUID(),account=`synthetic-transport-${randomUUID()}`,person=`synthetic-person-${randomUUID()}`;
@@ -103,6 +144,45 @@ async function login(page,context){
 }
 const history=page=>page.evaluate(({user,slug})=>JSON.parse(sessionStorage.getItem(`agjenti:test-chat:v1:${user}:${slug}`)??'[]'),{user:t.userId,slug:t.slug});
 async function send(page,text){const input=page.locator('#agent-test-message');await expect(input).toBeEnabled();await input.fill(text);await page.getByRole('button',{name:'Dërgo mesazhin',exact:true}).click();await expect(input).toHaveValue('');}
+test('exact rapid fragments freeze once, new burst during generation waits, reload preserves IDs and one reply per group',async({page,context})=>{
+ test.setTimeout(180000);
+ await login(page,context);const start=generations.length;
+ for(const text of fragmentTexts)await send(page,text);
+ const pending=(await history(page))[0],ids=pending.outbox.map(o=>o.id);
+ expect(ids).toHaveLength(7);
+ await expect.poll(()=>generations.slice(start).map(g=>g.message),{timeout:45000}).toContain(fragmentTexts.join('\n'));
+ await expect(page.locator('.chat-typing')).toHaveCount(1);
+ for(const text of continuationTexts)await send(page,text);
+ const allIds=(await history(page))[0].outbox.map(o=>o.id);
+ await page.getByRole('button',{name:'Ndalo pritjen',exact:true}).click();
+ await expect(page.locator('.chat-typing')).toHaveCount(0);
+ await page.reload();
+ await expect.poll(async()=>((await history(page))[0]?.entries??[]).length,{timeout:60000}).toBe(10);
+ const completed=(await history(page))[0];
+ expect(completed.entries.map(e=>e.id)).toEqual(allIds);
+ expect(completed.entries.map(e=>e.text)).toEqual([...fragmentTexts,...continuationTexts]);
+ expect(completed.entries.at(-1).result.turns).toBe(10);
+ const calls=generations.slice(start);
+ expect(calls.map(g=>g.message)).toEqual([fragmentTexts.join('\n'),continuationTexts.join('\n')]);
+ expect(calls[1].input).toContain(JSON.stringify(fragmentTexts.join('\n')));
+ await expect(page.locator('.agent-test-bubble.customer')).toHaveCount(10);
+ await expect(page.locator('.agent-test-bubble.agent')).toHaveCount(2);
+ await expect(page.locator('.chat-typing')).toHaveCount(0);
+ await page.screenshot({path:path.join(work,'fragment-batch-desktop.png')});
+ await page.setViewportSize({width:390,height:844});
+ await page.getByRole('button',{name:'Dërgo mesazhin',exact:true}).scrollIntoViewIfNeeded();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ await page.screenshot({path:path.join(work,'fragment-batch-mobile.png')});
+ await send(page,'Sa kushton produkti?');
+ await expect.poll(async()=>((await history(page))[0]?.entries??[]).length,{timeout:30000}).toBe(11);
+ expect((await history(page))[0].entries[10].batchId).toBeUndefined();
+ // Editing/regeneration replays from before a whole group, not from its final state.
+ await page.getByRole('button',{name:'Ndrysho mesazhin',exact:true}).nth(8).click();
+ await expect(page.locator('#agent-test-message')).toHaveValue(continuationTexts.join('\n'));
+ await expect(page.getByText('Po ndryshon grupin e 3 mesazheve.',{exact:false})).toBeVisible();
+ await page.getByRole('button',{name:'Anulo ndryshimin',exact:true}).click();
+ expect(counts()).toBe(before);
+});
 test('three rapid messages → stop waiting → reload → ordered P0/P1/R4 recall, no customer writes',async({page,context})=>{
  await login(page,context);
  await send(page,'Cilat të dhëna të duhen?');
@@ -145,7 +225,9 @@ test('three rapid messages → stop waiting → reload → ordered P0/P1/R4 reca
  await expect(page.locator('.chat-typing')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Ndalo pritjen',exact:true})).toHaveCount(0);
  await expect(page.getByText('Nuk po konfirmojmë dot statusin.',{exact:false})).toHaveCount(0);
- expect(await page.locator('.chat-receipt').allTextContents()).toEqual(Array(3).fill('Përpunuar'));
+ // Completed turns do not repeat a technical receipt; the reply itself is the
+ // authoritative visual completion signal.
+ expect(await page.locator('.chat-receipt').allTextContents()).toEqual([]);
  await page.setViewportSize({width:1280,height:900});
  for(let i=0;i<11;i++){await send(page,`Informacion tjetër ${i}`);await expect.poll(async()=>((await history(page))[0]?.entries??[]).length).toBe(4+i);}
  await page.reload();await send(page,'Më kujto emrin, biznesin, Instagramin dhe pyetjet tipike.');

@@ -57,7 +57,14 @@ it("claims every tenant independently of the shared workflow pilot", async () =>
     vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
     m.rpc.mockResolvedValue({ data: [], error: null });
     await runWorkflowQueue();
-    expect(m.rpc).toHaveBeenCalledWith("claim_workflow_inbound_batch", { p_businesses: null });
+    expect(m.rpc).toHaveBeenCalledWith("claim_workflow_transport", { p_businesses: null, p_test_user: null, p_test_stream: null, p_fragments: true });
+});
+
+it("fails closed when the fragment-aware SQL protocol is unavailable", async () => {
+ m.rpc.mockResolvedValue({error:{message:'function unavailable'}});
+ await expect(runWorkflowQueue()).rejects.toThrow('Queue claim failed');
+ expect(m.rpc).toHaveBeenCalledOnce();
+ expect(m.handle).not.toHaveBeenCalled(); expect(m.send).not.toHaveBeenCalled();
 });
 
 it.each([true,false])("pauses only actual staff ownership, advisory=%s",async advisoryHandoff=>{
@@ -135,6 +142,22 @@ it("wakes after the quiet interval without consuming the job budget or replying 
   expect(await running).toBe(1);
   expect(m.handle).toHaveBeenCalledOnce();
   expect(m.send).toHaveBeenCalledOnce();
+ } finally { vi.useRealTimers(); }
+});
+
+it("private quiet-window wakeups are scoped and never dispatch a live handler", async () => {
+ vi.useFakeTimers();
+ try {
+  m.rpc.mockResolvedValueOnce({data:[],error:null}).mockResolvedValueOnce({data:3000,error:null})
+   .mockResolvedValueOnce({data:[],error:null}).mockResolvedValueOnce({data:0,error:null});
+  const scope={businessId:business,userId:'owner',streamId:'private-stream'};
+  const running=runWorkflowQueue(1,scope);
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(await running).toBe(0);
+  expect(m.rpc).toHaveBeenCalledWith('workflow_fragment_wait_ms',{p_businesses:[business],p_test_user:'owner',p_test_stream:'private-stream'});
+  expect(m.rpc).toHaveBeenCalledWith('claim_workflow_transport',{p_businesses:[business],p_test_user:'owner',p_test_stream:'private-stream',p_fragments:true});
+  expect(m.rpc).not.toHaveBeenCalledWith('claim_workflow_inbound_batch',expect.anything());
+  expect(m.handle).not.toHaveBeenCalled(); expect(m.send).not.toHaveBeenCalled();
  } finally { vi.useRealTimers(); }
 });
 
