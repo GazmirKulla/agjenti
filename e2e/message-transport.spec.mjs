@@ -31,7 +31,8 @@ test.beforeAll(async()=>{
   else {
    const message=String(r.input).match(/^Customer message: ([^\n]*)/)?.[1]??'';
    if(message==='Cilat të dhëna të duhen?'){
-    if(slow)await new Promise(resolve=>setTimeout(resolve,10000));
+    // Leave time for lifecycle checks, but stay below the real 25s AI timeout.
+    if(slow)await new Promise(resolve=>setTimeout(resolve,18000));
     text='[[ask_customer:name,business_type,instagram_handle,stated_needs]]';
    }else text=/kujto|quhem/i.test(message)?'Nuk e di emrin. Nuk më ke dhënë asnjë të dhënë.':'Informacion sintetik, pa veprime biznesi.';
   }
@@ -101,17 +102,37 @@ async function login(page,context){
  await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${t.slug}`);await page.goto(`/b/${t.slug}/agents/test`);
 }
 const history=page=>page.evaluate(({user,slug})=>JSON.parse(sessionStorage.getItem(`agjenti:test-chat:v1:${user}:${slug}`)??'[]'),{user:t.userId,slug:t.slug});
-async function send(page,text){const input=page.locator('#agent-test-message');await expect(input).toBeEnabled();await input.fill(text);await input.press('Enter');await expect(input).toHaveValue('');}
+async function send(page,text){const input=page.locator('#agent-test-message');await expect(input).toBeEnabled();await input.fill(text);await page.getByRole('button',{name:'Dërgo mesazhin',exact:true}).click();await expect(input).toHaveValue('');}
 test('three rapid messages → stop waiting → reload → ordered P0/P1/R4 recall, no customer writes',async({page,context})=>{
  await login(page,context);
  await send(page,'Cilat të dhëna të duhen?');
- await expect(page.getByText('AI po përpunon · provë lokale',{exact:true})).toBeVisible({timeout:45000});
+ await expect(page.getByRole('status',{name:'Agjenti po përpunon përgjigjen'})).toBeVisible({timeout:45000});
+ await expect(page.locator('.chat-typing i')).toHaveCount(3);
+ const stream=(await history(page))[0].id;
+ const realJobs=await (await page.request.get(`/api/agent-test/turns?slug=${t.slug}&stream=${stream}`)).json();
+ expect(realJobs.jobs[0].status).toBe('processing');
+ expect(await page.locator('.chat-typing i').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('chat-typing-dot');
+ await page.screenshot({path:path.join(work,'messaging-ux-processing-desktop.png')});
  await send(page,'Drita\nShitje librash online\nsynthetic_books\nçmimet dhe madhësitë');
+ await page.setViewportSize({width:390,height:844});
  await send(page,'Rikujto emrin, biznesin, Instagramin dhe pyetjet tipike.');
+ await expect(page.locator('.chat-typing')).toBeVisible();
+ await page.emulateMedia({reducedMotion:'reduce'});
+ expect(await page.locator('.chat-typing i').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('none');
+ await page.screenshot({path:path.join(work,'messaging-ux-processing-mobile.png')});
  const pending=(await history(page))[0];expect(pending.outbox).toHaveLength(3);const ids=pending.outbox.map(o=>o.id);
  await page.getByRole('button',{name:'Ndalo pritjen',exact:true}).click();
+ await expect(page.locator('.chat-typing')).toHaveCount(0);
+ await expect(page.getByText('U ndal vetëm pritja këtu.',{exact:false})).toBeVisible();
  await expect(page.getByText('Duke pritur përgjigjen e AI-së…',{exact:true})).toHaveCount(0);
+ await page.route('**/api/agent-test/turns?*',route=>route.request().method()==='GET'?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic status timeout'})}):route.continue());
  await page.reload();await expect(page.locator('#agent-test-message')).toBeEnabled();
+ await expect(page.getByText('Nuk po konfirmojmë dot statusin.',{exact:false})).toBeVisible();
+ // Persisted processing must not masquerade as a fresh observation after reload.
+ await expect(page.locator('.chat-typing')).toHaveCount(0);
+ expect((await history(page))[0].outbox.map(o=>o.id)).toEqual(ids);
+ await page.unroute('**/api/agent-test/turns?*');
+ await expect(page.locator('.chat-typing')).toBeVisible();
  await expect.poll(async()=>((await history(page))[0]?.entries??[]).length,{timeout:90000}).toBe(3);
  let saved=(await history(page))[0];expect(saved.entries.map(e=>e.id)).toEqual(ids);expect(saved.outbox).toHaveLength(0);
  const last=saved.entries.at(-1).result;
@@ -121,7 +142,11 @@ test('three rapid messages → stop waiting → reload → ordered P0/P1/R4 reca
  const jobs=JSON.parse(sql(`select json_agg(json_build_object('id',client_request_id,'sequence',client_sequence,'status',status) order by client_sequence) from public.workflow_inbound_queue where test_stream_id=${quote(pending.id)};`));
  expect(jobs.map(j=>j.id)).toEqual(ids);expect(jobs.map(j=>j.status)).toEqual(['sent','sent','sent']);
  await expect(page.getByText('Duke pritur përgjigjen e AI-së…',{exact:true})).toHaveCount(0);
- expect(await page.locator('.chat-receipt').allTextContents()).toEqual(Array(3).fill('Përpunuar · provë lokale'));
+ await expect(page.locator('.chat-typing')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Ndalo pritjen',exact:true})).toHaveCount(0);
+ await expect(page.getByText('Nuk po konfirmojmë dot statusin.',{exact:false})).toHaveCount(0);
+ expect(await page.locator('.chat-receipt').allTextContents()).toEqual(Array(3).fill('Përpunuar'));
+ await page.setViewportSize({width:1280,height:900});
  for(let i=0;i<11;i++){await send(page,`Informacion tjetër ${i}`);await expect.poll(async()=>((await history(page))[0]?.entries??[]).length).toBe(4+i);}
  await page.reload();await send(page,'Më kujto emrin, biznesin, Instagramin dhe pyetjet tipike.');
  await expect.poll(async()=>((await history(page))[0]?.entries??[]).length).toBe(15);
@@ -144,6 +169,12 @@ test('lost POST response reconciles one identity, explicit failed enqueue retry,
   await route.continue();
  });
  await send(page,'Si quhem une?');await expect(page.getByRole('button',{name:'Provo përsëri të njëjtën kërkesë',exact:true})).toBeVisible();
+ await expect(page.locator('.chat-typing')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Ndalo pritjen',exact:true})).toHaveCount(0);
+ await expect(page.getByText('Synthetic temporary failure',{exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Rrjedha',exact:true}).click();
+ await expect(page.getByLabel('Detajet e provës')).toContainText('Synthetic temporary failure');
+ await page.getByRole('button',{name:'Rrjedha',exact:true}).click();
  await expect(page.getByRole('button',{name:'Bisedë e re',exact:true})).toBeEnabled();
  const id=(await history(page))[0].outbox[0].id;
  await send(page,'Më kujto emrin.');
