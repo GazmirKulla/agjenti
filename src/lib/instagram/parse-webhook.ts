@@ -174,6 +174,7 @@ export function changeValueToMessagingEvent(
 		recipient: recipient ? { id: asStringId(recipient.id) || undefined } : undefined,
 		timestamp: parseTimestamp(value.timestamp),
 		message,
+		reaction: isRecord(value.reaction) ? value.reaction : undefined,
 		postback,
 		referral: isRecord(value.referral) ? value.referral : undefined,
 	};
@@ -234,7 +235,7 @@ function normalizeMessagingEvent(
 	event: InstagramWebhookMessagingEvent,
 ): { message?: NormalizedIncomingMessage; ignored?: IgnoredInstagramEvent } {
 	const hasInbound = Boolean(event.message || event.postback);
-	if (event.reaction && !hasInbound) {
+	if (event.reaction) {
 		return { ignored: ignore("reaction", event.reaction.mid) };
 	}
 	if (event.read && !hasInbound) {

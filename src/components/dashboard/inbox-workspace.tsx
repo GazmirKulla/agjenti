@@ -118,7 +118,7 @@ export async function InboxWorkspace({
     db
       .from("messages")
       .select(
-        "id,direction,source,body,media,created_at,delivery_status,delivery_error,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)",
+        "id,direction,source,body,media,created_at,delivery_status,delivery_error,external_message_id,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)",
       )
       .eq("business_id", businessId)
       .eq("conversation_id", selected)

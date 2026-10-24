@@ -8,6 +8,7 @@ import type { NormalizedAttachment } from "@/lib/instagram/types";
 import { Icon } from "@/components/dashboard/icon";
 import Link from "next/link";
 import { useReplyOutbox } from "@/components/agents/reply-outbox";
+import { MessageReactions, useMessageReactions } from "@/components/agents/message-reactions";
 import { IntegrationActivity, type IntegrationActivityLog } from "@/components/dashboard/integration-activity";
 type Message = {
   id: string;
@@ -19,6 +20,7 @@ type Message = {
   delivery_status: string | null;
   delivery_error: string | null;
   transport_request_id?: string | null;
+  external_message_id?: string | null;
   message_transport_parts?: { id: string; part_index: number; part_count: number; body: string; status: string }[];
 };
 export function ThreadClient(props: {
@@ -44,6 +46,7 @@ export function ThreadClient(props: {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const outbox = useReplyOutbox(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/messages`, `agjenti:reply:${props.userId}:${props.businessId}:${props.conversationId}`, () => router.refresh());
+  const reactions = useMessageReactions(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/reactions`, `agjenti:reaction:${props.userId}:${props.businessId}:${props.conversationId}`);
   async function request(path: string, body?: object) {
     if (pending) return;
     setPending(true);
@@ -166,6 +169,8 @@ export function ThreadClient(props: {
           {t("Fshi bisedën")}</button>
       </div>
       <div className="chat-messages" ref={messageList}>
+        {reactions.error && <p role="alert">{t(reactions.error)} <button type="button" onClick={() => void reactions.refresh()}>{t("Rifresko")}</button></p>}
+        {reactions.unresolved && !reactions.posting && <p role="status">{t("Reaction pret rakordim.")} <button type="button" onClick={() => void reactions.retryUnresolved()}>{t("Riprovo të njëjtën kërkesë")}</button></p>}
         {props.messages.length === 200 && (
           <p className="muted-copy text-center">{t("200 mesazhet më të fundit")}</p>
         )}
@@ -230,6 +235,7 @@ export function ThreadClient(props: {
                 <p className="text-danger text-xs mt-1">{t(m.delivery_error)}</p>
               )}
               {m.transport_request_id && outbox.operations.some(o => o.requestId === m.transport_request_id && o.canRetry) && <button type="button" onClick={()=>void outbox.retry(m.transport_request_id!)}>Provo përsëri të njëjtin dërgim</button>}
+              <MessageReactions messageId={m.id} channel={props.channel ?? "instagram"} eligible={m.direction === "inbound" && m.source === "customer" && Boolean(m.external_message_id)} parts={m.message_transport_parts} controller={reactions} />
             </div>
           ))
         ) : (

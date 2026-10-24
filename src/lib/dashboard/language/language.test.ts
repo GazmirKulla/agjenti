@@ -10,6 +10,7 @@ import { organizeWorkspace } from "@/lib/dashboard/navigation/workspace";
 
 vi.mock("@/components/dashboard/integration-card.module.css", () => ({ default: {} }));
 vi.mock("@/components/dashboard/workspace-navigation.module.css", () => ({ default: {} }));
+vi.mock("@/components/agents/message-reactions.module.css", () => ({ default: {} }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 function render(language: "sq" | "en", child: React.ReactNode) {
   return renderToStaticMarkup(h(DashboardLanguageProvider, { language, children: child }));

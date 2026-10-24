@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ enqueue: vi.fn(), run: vi.fn(), after: vi.fn(), handle: vi.fn(), receipts: vi.fn() }));
+const m = vi.hoisted(() => ({ enqueue: vi.fn(), run: vi.fn(), after: vi.fn(), handle: vi.fn(), receipts: vi.fn(), reactions: vi.fn() }));
+vi.mock("@/lib/conversations/provider-reactions", async original => ({ ...await original<typeof import("@/lib/conversations/provider-reactions")>(), persistProviderReactions: m.reactions }));
 vi.mock("@/lib/conversations/provider-receipts", async original => ({ ...await original<typeof import("@/lib/conversations/provider-receipts")>(), persistProviderReceipts: m.receipts }));
 vi.mock("@/lib/conversations/workflow-queue", () => ({ enqueueWorkflowMessage: m.enqueue, runWorkflowQueue: m.run }));
 vi.mock("@/lib/conversations/handle-inbound", () => ({ handleInboundMessage: m.handle }));
@@ -54,4 +55,16 @@ it.each(["instagram", "whatsapp_business_account"])("validates %s receipt signat
  expect(m.enqueue).not.toHaveBeenCalled();expect(m.handle).not.toHaveBeenCalled();
  m.receipts.mockRejectedValueOnce(new Error("synthetic DB outage"));
  expect((await POST(signed(secret))).status).toBe(503);
+});
+
+it.each(["instagram", "whatsapp_business_account"])("%s reactions require a valid signature and never wake the AI queue",async object=>{
+ const body=JSON.stringify(object==="instagram"?{object,entry:[{id:"account",messaging:[{sender:{id:"customer"},recipient:{id:"account"},timestamp:Date.now(),reaction:{mid:"part",action:"react",emoji:"👍"}}]}]}
+ :{object,entry:[{changes:[{field:"messages",value:{metadata:{phone_number_id:"account"},messages:[{id:"event",from:"customer",type:"reaction",timestamp:Math.floor(Date.now()/1000),reaction:{message_id:"part",emoji:"👍"}}]}}]}]});
+ const request=(secret:string)=>new Request("https://app.test/api/webhooks/meta",{method:"POST",body,headers:{"x-hub-signature-256":"sha256="+createHmac("sha256",secret).update(body).digest("hex")}});
+ expect((await POST(request("wrong"))).status).toBe(401);expect(m.reactions).not.toHaveBeenCalled();
+ const secret=object==="instagram"?"ig-secret":"meta-secret";
+ expect((await POST(request(secret))).status).toBe(200);
+ expect(m.reactions).toHaveBeenCalledWith([expect.objectContaining({messageId:"part",participantId:"customer",emoji:"👍"})]);
+ expect(m.enqueue).not.toHaveBeenCalled();expect(m.after).not.toHaveBeenCalled();expect(m.handle).not.toHaveBeenCalled();
+ m.reactions.mockRejectedValueOnce(new Error("synthetic outage"));expect((await POST(request(secret))).status).toBe(503);
 });

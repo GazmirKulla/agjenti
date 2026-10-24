@@ -13,6 +13,7 @@ export function parseWhatsAppWebhook(payload: unknown): NormalizedIncomingMessag
     if (!phoneId || !/^\d+$/.test(phoneId)) continue;
     for (const message of rows(value.messages)) {
       const id = text(message.id), from = text(message.from), type = text(message.type);
+      if (type === "reaction") continue; // Never an AI turn or workflow confirmation.
       const timestamp = new Date(Number(message.timestamp) * 1000);
       if (!id || !from || !/^\d+$/.test(from) || !Number.isFinite(timestamp.getTime()) || timestamp.getTime() > Date.now() + 60_000) continue;
       const content = object(message[type ?? ""]);
