@@ -9,7 +9,7 @@ describe("server-only AI reaction contract", () => {
     expect(migration).not.toContain("create table");
     expect(migration).toContain("ai_reactions_enabled boolean not null default false");
   });
-  it("keeps the decision inert when manual ownership exists", () => {
-    expect(decideAiReaction({ channel: "instagram", text: "Faleminderit", autoReplyEnabled: true, humanTakeover: false, manualEmoji: "👍" }).kind).toBe("none");
+  it("keeps the decision inert when manual ownership exists", async () => {
+    expect((await decideAiReaction({ channel: "instagram", text: "Faleminderit", autoReplyEnabled: true, humanTakeover: false, manualEmoji: "👍" })).kind).toBe("none");
   });
 });

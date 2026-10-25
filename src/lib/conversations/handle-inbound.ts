@@ -16,6 +16,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 import { suspendProcesses } from "@/lib/workflows/conversation-processes";
 import { runAiReaction } from "./ai-reaction-runtime";
+import { hasUnfinishedWork } from "./ai-reaction-decision";
 import {
   emptyState,
   promptForStep,
@@ -430,6 +431,9 @@ export async function handleInboundMessage(
       }
     }
   }
+  // Capture pre-turn evidence before the coordinator may update/suspend state.
+  const reactionHistory = history.messages.map(message => ({ ...message }));
+  const reactionPendingWork = hasUnfinishedWork(inboundState);
   const turn = await processConversationMessage({
     onTrace: event => {
       if (event.label === "Conversation coordinator completed") console.info("[inbound] coordinator", {
@@ -459,6 +463,7 @@ export async function handleInboundMessage(
       try {
         await runAiReaction({businessId,conversationId,messageId:reactionMessageId,text:message.text,
           channel:message.channel,accountId:String(accountId),participantId:message.externalParticipantId,
+          context:{history:reactionHistory,preparedReply:turn.reply,pendingWork:reactionPendingWork || hasUnfinishedWork(state)},
           autoReplyEnabled:Boolean(autoOn),humanTakeover:false,jobId:job.id,leaseToken:job.lease_token});
       } catch { /* Normal prepared reply remains authoritative and sendable. */ }
     }

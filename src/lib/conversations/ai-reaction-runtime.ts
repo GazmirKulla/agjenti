@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { sendManualReaction, type ReactionResult } from "./provider-reactions";
-import { decideAiReaction } from "./ai-reaction-decision";
+import { decideAiReaction, type AiReactionContext, type AiReactionDecision } from "./ai-reaction-decision";
 import { channelAdapter, type MessagingChannel } from "./channel";
 import { isIsolatedExecution } from "@/lib/runtime/execution-context";
 
@@ -10,17 +10,28 @@ export async function runAiReaction(input: {
   businessId: string; conversationId: string; messageId: string; text: string | null;
   channel: MessagingChannel; accountId: string; participantId: string;
   autoReplyEnabled: boolean; humanTakeover: boolean; manualEmoji?: string | null;
+  context: AiReactionContext;
   jobId: number; leaseToken: string;
-}): Promise<{ decision: ReturnType<typeof decideAiReaction>; result?: ReactionResult }> {
+}): Promise<{ decision: AiReactionDecision; result?: ReactionResult }> {
   const none = (reason: string) => ({ decision: { kind: "none" as const, reason } });
   if (isIsolatedExecution()) return none("isolated_execution");
-  const decision = decideAiReaction(input);
-  if (decision.kind !== "reaction") return { decision };
+  if (!input.autoReplyEnabled || input.humanTakeover || input.manualEmoji != null) return none("ownership_guard");
   try {
     const db = createServiceSupabase();
     // Optional feature absence/read failure must not break normal message replies.
     const policy = await db.from("businesses").select("ai_reactions_enabled").eq("id", input.businessId).maybeSingle();
     if (policy.error || policy.data?.ai_reactions_enabled !== true) return none("ai_reactions_disabled_or_unavailable");
+    // Conversation jobs are already serialized by the inbound queue. Count even
+    // failed/uncertain attempts to keep this secondary, never a repeated retry.
+    const recent = await db.from("message_reaction_operations")
+      .select("id,message_reactions!inner(messages!inner(conversation_id))")
+      .eq("business_id", input.businessId).eq("actor_kind", "ai")
+      .eq("message_reactions.messages.conversation_id", input.conversationId)
+      .gte("started_at", new Date(Date.now() - 15 * 60_000).toISOString()).limit(1);
+    if (recent.error || !recent.data) return none("frequency_check_unavailable");
+    if (recent.data.length) return none("conversation_cooldown");
+    const decision = await decideAiReaction(input);
+    if (decision.kind !== "reaction") return { decision };
     const hash=createHash('sha256').update(`agjenti:ai-reaction:v1:${input.businessId}:${input.messageId}`).digest('hex');
     const requestId=`${hash.slice(0,8)}-${hash.slice(8,12)}-8${hash.slice(13,16)}-a${hash.slice(17,20)}-${hash.slice(20,32)}`;
     const reservation = await db.rpc("reserve_ai_message_reaction", {

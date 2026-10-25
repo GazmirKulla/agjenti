@@ -1,5 +1,5 @@
 // Actual disposable Auth/PostgREST/Postgres + actual TS runtime/provider adapter.
-// Only Meta HTTP is synthetic. Never reads repo .env or external credentials.
+// Model and Meta HTTP are synthetic. Never reads repo .env or external credentials.
 import { beforeAll, afterAll, afterEach, describe, expect, test, vi } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
@@ -15,7 +15,7 @@ import { createIsolatedExecution, runWithExecution } from '../src/lib/runtime/ex
 
 let db, own, foreign, fixtures, keys, owner, outsider;
 const originalFetch=globalThis.fetch;
-let calls=[], outcome='sent', beforeAck;
+let calls=[], modelCalls=[], outcome='sent', beforeAck;
 const businesses=[];
 const ok=async promise=>{const result=await promise;expect(result.error, result.error?.message).toBeNull();return result.data;};
 const rpc=(name,args)=>ok(db.rpc(name,args));
@@ -24,9 +24,16 @@ beforeAll(async()=>{
  keys=localKeys();fixtures=JSON.parse(readFileSync(path.join(work,'fixtures.json'),'utf8'));
  [owner,outsider]=fixtures.tenants;
  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL',keys.api);vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY',keys.service);vi.stubEnv('TOKEN_ENCRYPTION_KEY',fixtures.encryptionKey);
+ vi.stubEnv('OPENAI_API_KEY','synthetic-context-local-only');vi.stubEnv('OPENAI_BASE_URL','http://127.0.0.1:55325/v1');
  vi.stubGlobal('fetch',async(input,init)=>{
   const url=new URL(typeof input==='string'||input instanceof URL?input:input.url);
   if(url.origin===keys.api)return originalFetch(input,init);
+  if(url.href==='http://127.0.0.1:55325/v1/responses'&&new Headers(init?.headers).get('Authorization')==='Bearer synthetic-context-local-only'){
+   const request=JSON.parse(init.body),context=JSON.parse(request.input);modelCalls.push(context);
+   expect(request.text.format.name).toBe('ai_reaction_context');expect(request.store).toBe(false);
+   const text=JSON.stringify({classification:'positive_closure',unresolvedWork:false,emoji:'😊',confidence:.99,evidence:context.currentMessage});
+   return Response.json({id:'synthetic-context',object:'response',status:'completed',output:[{type:'message',role:'assistant',content:[{type:'output_text',text,annotations:[]}]}]});
+  }
   if(!['graph.instagram.com','graph.facebook.com'].includes(url.hostname)||url.protocol!=='https:'||
    !/^\/v\d+\.\d+\/synthetic-transport-[a-f0-9-]+\/messages$/.test(url.pathname)||
    new Headers(init?.headers).get('Authorization')!=='Bearer synthetic-transport-local-only'||init?.method!=='POST')throw Error('E2E_EXTERNAL_DENIED');
@@ -42,7 +49,7 @@ beforeAll(async()=>{
  await ok(foreign.auth.signInWithPassword({email:outsider.email,password:fixtures.password}));
 });
 afterEach(async()=>{
- beforeAck=undefined;outcome='sent';calls=[];
+ beforeAck=undefined;outcome='sent';calls=[];modelCalls=[];
  for(const id of businesses.splice(0))await ok(db.from('businesses').delete().eq('id',id));
 });
 afterAll(async()=>{await own?.auth.signOut();await foreign?.auth.signOut();vi.unstubAllEnvs();vi.unstubAllGlobals();});
@@ -57,7 +64,8 @@ async function fixture(channel='instagram',optIn=true){
  await ok(db.from('messages').insert({id:m,business_id:b,conversation_id:c,[`${channel}_connection_id`]:conn,external_message_id:external,direction:'inbound',source:'customer',body:'Faleminderit'}));
  await ok(db.from('conversation_states').insert({business_id:b,conversation_id:c,collected:{syntheticFact:'preserved'},revision:7}));
  const q=await ok(db.from('workflow_inbound_queue').insert({business_id:b,channel,connection_id:conn,participant_id:person,external_id:external,payload:{channel,externalMessageId:external},conversation_id:c,status:'prepared',reply:'Normal prepared reply',lease_token:lease,leased_until:new Date(Date.now()+180000).toISOString()}).select('id').single());
- const input={businessId:b,conversationId:c,messageId:m,text:'Faleminderit',channel,accountId:account,participantId:person,autoReplyEnabled:true,humanTakeover:false,jobId:q.id,leaseToken:lease};
+ const context={history:[{role:'user',content:'Ku është dyqani?'},{role:'assistant',content:'Adresa është Rruga Test 1.'}],preparedReply:'Me kënaqësi!',pendingWork:false};
+ const input={businessId:b,conversationId:c,messageId:m,text:'Faleminderit',channel,accountId:account,participantId:person,autoReplyEnabled:true,humanTakeover:false,jobId:q.id,leaseToken:lease,context};
  const args={p_business:b,p_conversation:c,p_message:m,p_request:randomUUID(),p_emoji:'😊',p_job:q.id,p_lease:lease};
  return {b,c,m,conn,account,person,external,input,args,
   reserve:()=>rpc('reserve_ai_message_reaction',args),
@@ -83,7 +91,7 @@ for(const channel of ['instagram','whatsapp'])describe(channel,()=>{
  });
  test('default OFF is inert; inherited ON sends exactly once using provider ID; UI reload and RLS',async()=>{
   const f=await fixture(channel,false);
-  await runAiReaction(f.input);expect(calls).toHaveLength(0);
+  await runAiReaction(f.input);expect(calls).toHaveLength(0);expect(modelCalls).toHaveLength(0);
   await ok(db.from('businesses').update({ai_reactions_enabled:true}).eq('id',f.b));
   const results=await Promise.all(Array.from({length:5},()=>runAiReaction(f.input)));
   expect(calls).toHaveLength(1);expect(results.filter(r=>r.result?.status==='sent')).toHaveLength(1);
@@ -155,6 +163,27 @@ test('manual removal tombstone cannot be resurrected by a new AI request',async(
  await rpc('finish_message_reaction',{p_request:request,p_token:manual.token,p_status:'sent',p_external:null,p_error:null});
  expect((await f.reserve()).claimed).toBe(false);await runAiReaction(f.input);expect(calls).toHaveLength(0);
  expect((await f.read())[0].emoji).toBe('');
+});
+test('contextual cooldown uses real tenant/conversation joins, includes failed attempts and expires',async()=>{
+ const f=await fixture(),other=await fixture();
+ outcome='failed';expect((await runAiReaction(f.input)).result?.status).toBe('failed');expect(modelCalls).toHaveLength(1);
+ const nextMessage=randomUUID(),external=`synthetic-next-${randomUUID()}`;
+ await ok(db.from('messages').insert({id:nextMessage,business_id:f.b,conversation_id:f.c,instagram_connection_id:f.conn,external_message_id:external,direction:'inbound',source:'customer',body:'Je i madh, rrofsh'}));
+ await ok(db.from('workflow_inbound_queue').update({external_id:external,payload:{channel:'instagram',externalMessageId:external}}).eq('id',f.input.jobId));
+ const next={...f.input,messageId:nextMessage,text:'Je i madh, rrofsh'};
+ expect((await runAiReaction(next)).decision.reason).toBe('conversation_cooldown');expect(calls).toHaveLength(1);expect(modelCalls).toHaveLength(1);
+ outcome='sent';expect((await runAiReaction(other.input)).result?.status).toBe('sent');expect(calls).toHaveLength(2);
+ await ok(db.from('message_reaction_operations').update({started_at:new Date(Date.now()-16*60_000).toISOString()}).eq('business_id',f.b));
+ expect((await runAiReaction(next)).result?.status).toBe('sent');expect(calls).toHaveLength(3);
+ expect(modelCalls.at(-1)).toMatchObject({currentMessage:next.text,history:f.input.context.history,preparedReply:f.input.context.preparedReply});
+});
+test('another conversation in the same tenant is not throttled by an unrelated AI reaction',async()=>{
+ const f=await fixture();expect((await runAiReaction(f.input)).result?.status).toBe('sent');
+ const conversation=randomUUID(),message=randomUUID(),person=`synthetic-other-${randomUUID()}`,external=`synthetic-other-${randomUUID()}`,lease=randomUUID();
+ await ok(db.from('conversations').insert({id:conversation,business_id:f.b,channel:'instagram',instagram_connection_id:f.conn,instagram_participant_id:person,status:'active',auto_reply:true,last_inbound_at:new Date().toISOString()}));
+ await ok(db.from('messages').insert({id:message,business_id:f.b,conversation_id:conversation,instagram_connection_id:f.conn,external_message_id:external,direction:'inbound',source:'customer',body:'Je i madh, rrofsh'}));
+ const q=await ok(db.from('workflow_inbound_queue').insert({business_id:f.b,channel:'instagram',connection_id:f.conn,participant_id:person,external_id:external,payload:{channel:'instagram',externalMessageId:external},conversation_id:conversation,status:'prepared',reply:'Me kënaqësi!',lease_token:lease,leased_until:new Date(Date.now()+180000).toISOString()}).select('id').single());
+ expect((await runAiReaction({...f.input,conversationId:conversation,messageId:message,participantId:person,text:'Je i madh, rrofsh',jobId:q.id,leaseToken:lease})).result?.status).toBe('sent');expect(calls).toHaveLength(2);
 });
 test('a real concurrent takeover transaction fences begin without waiting or dispatching',async()=>{
  const f=await fixture(),r=await f.reserve();

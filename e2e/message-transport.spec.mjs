@@ -37,6 +37,12 @@ test.beforeAll(async()=>{
   let text;
   if(format==='customer_facts')text='{"facts":[]}';
   else if(format==='workflow_guidance')text='{"action":"continue","target":null,"confidence":1,"evidence":""}';
+  else if(format==='ai_reaction_context'){
+   const context=JSON.parse(r.input);
+   // Synthetic judgement only; production sends the actual bounded exchange.
+   const closed=context.history.some(m=>m.role==='assistant'&&m.content==='Adresa është Rruga Test 1.');
+   text=JSON.stringify({classification:closed?'positive_closure':'ambiguous',unresolvedWork:!closed,emoji:closed?'😊':null,confidence:.99,evidence:context.currentMessage});
+  }
   else {
    const message=String(r.input).match(/^Customer message: ([\s\S]*?)(?=\n(?:Current step:|Already supplied customer facts \(not business policy\):))/)?.[1]??'';
    generations.push({message,input:String(r.input)});
@@ -57,7 +63,10 @@ for (const channel of ['instagram','whatsapp']) test(`automatic ${channel} react
  const original=sql(`select ai_reactions_enabled from businesses where id=${quote(t.id)};`);
  sql(`begin; update businesses set ai_reactions_enabled=true where id=${quote(t.id)};
   ${channel==='instagram'?`insert into instagram_connections(id,business_id,ig_user_id,access_token_ciphertext,status) values(${quote(conn)},${quote(t.id)},${quote(account)},${quote(sealToken())},'connected');`:`insert into whatsapp_connections(id,business_id,phone_number_id,waba_id,access_token_ciphertext,status) values(${quote(conn)},${quote(t.id)},${quote(account)},'synthetic-waba',${quote(sealToken())},'connected');`}
-  insert into conversations(id,business_id,channel,${channel}_connection_id,${channel}_participant_id,last_inbound_at,status,auto_reply) values(${quote(cid)},${quote(t.id)},${quote(channel)},${quote(conn)},${quote(person)},now(),'active',true);commit;`);
+  insert into conversations(id,business_id,channel,${channel}_connection_id,${channel}_participant_id,last_inbound_at,status,auto_reply) values(${quote(cid)},${quote(t.id)},${quote(channel)},${quote(conn)},${quote(person)},now(),'active',true);
+  insert into messages(business_id,conversation_id,${channel}_connection_id,direction,source,body,delivery_status,created_at) values
+   (${quote(t.id)},${quote(cid)},${quote(conn)},'inbound','customer','Ku është dyqani?','sent',now()-interval '2 minutes'),
+   (${quote(t.id)},${quote(cid)},${quote(conn)},'outbound','agent','Adresa është Rruga Test 1.','sent',now()-interval '1 minute');commit;`);
  const post=(messageId=external)=>{
   const body=JSON.stringify(channel==='instagram'?{object:'instagram',entry:[{id:account,messaging:[{sender:{id:person},recipient:{id:account},timestamp:Date.now(),message:{mid:messageId,text:'Faleminderit'}}]}]}:
    {object:'whatsapp_business_account',entry:[{changes:[{field:'messages',value:{metadata:{phone_number_id:account},messages:[{id:messageId,from:person,timestamp:String(Math.floor(Date.now()/1000)),type:'text',text:{body:'Faleminderit'}}]}}]}]});
@@ -69,11 +78,11 @@ for (const channel of ['instagram','whatsapp']) test(`automatic ${channel} react
   const diagnostics=sql(`select json_build_object('operations',(select json_agg(json_build_object('status',o.status,'error',o.error,'started',o.send_started_at)) from message_reaction_operations o join message_reactions r on r.id=o.reaction_id where r.connection_id=${quote(conn)}),'state',(select collected from conversation_states where conversation_id=${quote(cid)}));`);
   expect(providerReactions.filter(r=>r.target===external),diagnostics).toHaveLength(1);
   expect(sql(`select collected->>'conversationPaused' from conversation_states where conversation_id=${quote(cid)};`)).toBe('true');
-  expect(sql(`select count(*) from messages where conversation_id=${quote(cid)};`)).toBe('2');
+  expect(sql(`select count(*) from messages where conversation_id=${quote(cid)};`)).toBe('4');
   await page.goto(`/b/${t.slug}/inbox/${cid}`);
-  const customer=page.locator('.chat-message.inbound');
+  const customer=page.locator('.chat-message.inbound').filter({hasText:'Faleminderit'}).first();
   await expect(customer.getByText('😊 · Biznesi',{exact:true})).toBeVisible();
-  await expect(page.locator('.chat-message.outbound')).toHaveCount(1);
+  await expect(page.locator('.chat-message.outbound')).toHaveCount(2);
   await page.reload();await expect(customer.getByText('😊 · Biznesi',{exact:true})).toBeVisible();
   await page.screenshot({path:path.join(work,`automatic-reactions-${channel}-desktop.png`)});
   await page.setViewportSize({width:390,height:844});await customer.scrollIntoViewIfNeeded();
@@ -94,8 +103,8 @@ for (const channel of ['instagram','whatsapp']) test(`automatic ${channel} react
   await expect.poll(()=>sql(`select status from workflow_inbound_queue where connection_id=${quote(conn)} and external_id=${quote(pausedMessage)};`)).toBe('ignored');
   expect(providerReactions.filter(r=>r.target===pausedMessage)).toHaveLength(0);
   expect(sql(`select status='paused' and auto_reply=false from conversations where id=${quote(cid)};`)).toBe('t');
-  expect(sql(`select count(*) from messages where conversation_id=${quote(cid)} and source='agent';`)).toBe('1');
-  await page.reload();await expect(page.locator('.chat-message.inbound').first().getByText('👍 · Biznesi',{exact:true})).toBeVisible();
+  expect(sql(`select count(*) from messages where conversation_id=${quote(cid)} and source='agent';`)).toBe('2');
+  await page.reload();await expect(customer.getByText('👍 · Biznesi',{exact:true})).toBeVisible();
   await page.screenshot({path:path.join(work,`automatic-reactions-${channel}-manual-staff-mobile.png`)});
  } finally {
   sql(`begin;update businesses set ai_reactions_enabled=${original==='t'?'true':'false'} where id=${quote(t.id)};delete from workflow_inbound_queue where connection_id=${quote(conn)};delete from conversations where id=${quote(cid)};delete from ${channel}_connections where id=${quote(conn)};commit;`);

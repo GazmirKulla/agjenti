@@ -595,13 +595,15 @@ it("pauses a visual handoff before sending and preserves its collected state", a
   expect(mocks.aiReaction).not.toHaveBeenCalled();
 });
 it("optional AI reaction failure cannot undo or retry the prepared normal reply", async () => {
+  savedState = { ...emptyState(), recentMessages: [{ role: "user", content: "Ku është dyqani?" }, { role: "assistant", content: "Rruga Test 1." }] };
   mocks.aiReaction.mockImplementation(async () => {
     expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_reply: "Përgjigje nga pipeline" }));
     throw new Error("Synthetic reaction unavailable");
   });
   const job = queuedJob();
   await expect(handleInboundMessage({ ...message, text: "Faleminderit" }, job)).resolves.toBeUndefined();
-  expect(mocks.aiReaction).toHaveBeenCalledWith(expect.objectContaining({ messageId: "inbound-a", jobId: job.id, leaseToken: job.lease_token }));
+  expect(mocks.aiReaction).toHaveBeenCalledWith(expect.objectContaining({ messageId: "inbound-a", jobId: job.id, leaseToken: job.lease_token,
+    context: { history: savedState.recentMessages, preparedReply: "Përgjigje nga pipeline", pendingWork: false } }));
   expect(job.status).toBe("prepared");
   expect(job.reply).toBe("Përgjigje nga pipeline");
   expect(mocks.process).toHaveBeenCalledOnce();
