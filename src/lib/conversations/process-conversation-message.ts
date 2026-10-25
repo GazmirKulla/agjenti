@@ -371,6 +371,13 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
       params = { ...params, state, message: "" };
     }
   }
+  // Explicit conversation-local facts may be corrected while a task is paused.
+  // Route that turn read-only; never let the declaration consume a pending field
+  // or serve as resume/confirmation permission. Staff ownership was checked above.
+  if (params.state?.conversationPaused && intent === "undetermined" && !choice) {
+    const declared = structuredClone(params.state);
+    if (extractCustomerDeclaredFacts(declared, params.message)) params = { ...params, state: declared, informationRequest: true };
+  }
   const controlled = conversationControl(params);
   if (controlled) return controlled;
   params = resumeConversation(params);

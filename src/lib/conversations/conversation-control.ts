@@ -91,7 +91,7 @@ export function conversationControl(params: AgentTurnParams): AgentTurnResult | 
     const pause = deferral(params.message);
     const short = shortReply(params.message) && !params.hasPhoto && !params.hasAttachments;
     if (params.state?.processes?.informationOnly && !pause && !short) return null;
-    if (!pause && !short && !(params.state?.conversationPaused && !isQuestion(params.message) && !explicitContinuation(params.message)))
+    if (!pause && !short && !(params.state?.conversationPaused && !params.informationRequest && turnIntent(params.message) !== "information" && !isQuestion(params.message) && !explicitContinuation(params.message)))
         return null;
     if (!pause && short && currentProposal(params) && (affirmative(params.message) || /^(jo|no)[.!\s]*$/.test(foldText(params.message))))
         return null;

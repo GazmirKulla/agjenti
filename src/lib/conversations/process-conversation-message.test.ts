@@ -21,6 +21,9 @@ vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: mocks.versio
 vi.mock("@/lib/workflows/guidance", async original => ({ ...await original<object>(), chooseGuidance: mocks.guidance }));
 import { processConversationMessage } from "./process-conversation-message";
 import { CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
+import { projectCustomerContext } from "@/lib/agents/customer-context";
+import { validateResponse } from "@/lib/agents/response-consistency";
+import { readTestSession, sealTestSession } from "@/lib/agents/test-chat/session";
 function result(state: ConversationStatePayload, reply = "Vazhdo"): AgentTurnResult {
   return { reply, nextState: structuredClone(state), previousResponseId: null, workflowId: "linear-version-1", productName: "Produkt", workflowProgress: [], debug: { model: "test", source: "fallback", fallbackReason: null, agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: 0 } };
 }
@@ -107,6 +110,57 @@ describe("R3 server-owned customer question boundary", () => {
   });
 });
 describe("R1 conversation-only declarations", () => {
+  it("Nora natural declarations survive sealed-session reload and R3 rejects the superseded Instagram", async () => {
+    vi.stubEnv("TOKEN_ENCRYPTION_KEY", "11".repeat(32));
+    let state = (await turn("Quhem Nora Testi")).nextState;
+    state = (await turn("Kam një dyqan lulesh online.", state)).nextState;
+    state = (await turn("Instagramin e kam @lule_prova.", state)).nextState;
+    expect(state.context?.profile.name.value).toBe("Nora Testi");
+    expect(state.customerDeclaredFacts?.business_type?.value).toBe("dyqan lulesh online");
+    expect(state.customerDeclaredFacts?.instagram_handle?.value).toBe("@lule_prova");
+    state = (await turn("Sa kushton shërbimi?", state)).nextState;
+    state = (await turn("Faleminderit", state)).nextState;
+    state = (await turn("Korrigjim: Instagrami im është @lule_prova_re.", state)).nextState;
+    const sealed = sealTestSession(readTestSession(null, "owner", "business"), state, null);
+    expect(() => readTestSession(sealed, "another-owner", "business")).toThrow();
+    expect(() => readTestSession(sealed, "owner", "another-business")).toThrow();
+    state = readTestSession(sealed, "owner", "business").state;
+    const message = "Më kujto emrin, biznesin dhe Instagramin.";
+    const projection = projectCustomerContext(state, message);
+    expect(projection.profile.name.value).toBe("Nora Testi");
+    expect(projection.declared.instagram_handle.value).toBe("@lule_prova_re");
+    const validated = validateResponse("Emri yt: Nora Testi. Biznesi yt: dyqan lulesh online. Instagrami yt: @lule_prova.",
+      { state, message, customer: projection, products: [], services: [], informational: true });
+    expect(validated.changed).toBe(true);
+    expect(validated.reply).toContain("@lule_prova_re");
+    expect(validated.reply).not.toContain("@lule_prova.");
+    expect(state.context?.profile.phone).toBeUndefined(); expect(state.context?.profile.address).toBeUndefined();
+    expect(state.customer.phone).toBeNull(); expect(state.customer.address).toBeNull();
+    expect(projectCustomerContext(state, "Si quhem unë?").declared).toEqual({});
+  });
+  it("P1 recall after acknowledgement stays informational without resuming a saved order", async () => {
+    const start = order();
+    const declared = await turn("Instagram: lule_prova", start);
+    const paused = await turn("Faleminderit", declared.nextState);
+    const recalled = await turn("Më kujto emrin dhe Instagramin.", paused.nextState);
+    expect(recalled.conversationRouting?.process).toBe("information");
+    expect(recalled.conversationRouting?.reason).not.toBe("resume_requires_intent");
+    expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ message: "Më kujto emrin dhe Instagramin." }));
+    expect(recalled.nextState.context?.profile.name.value).toBe("Ana");
+    expect(recalled.nextState.customerDeclaredFacts?.instagram_handle?.value).toBe("lule_prova");
+    expect(recalled.nextState.processes?.order?.snapshot).toEqual(paused.nextState.processes?.order?.snapshot);
+    expect(recalled.nextState.processes?.order?.status).toBe("suspended");
+  });
+  it("accepts an explicit Instagram correction while paused without consuming a process field", async () => {
+    const declared = await turn("Instagram: lule_prova", order());
+    const paused = await turn("Faleminderit", declared.nextState);
+    const corrected = await turn("Instagrami im është lule_prova_re", paused.nextState);
+    expect(corrected.nextState.customerDeclaredFacts?.instagram_handle?.value).toBe("lule_prova_re");
+    expect(corrected.nextState.processes?.order?.snapshot).toEqual(paused.nextState.processes?.order?.snapshot);
+    expect(corrected.nextState.processes?.order?.status).toBe("suspended");
+    expect(corrected.nextState.context?.order).toEqual(paused.nextState.context?.order);
+    expect(corrected.nextState.context?.execution.orderConfirmed).not.toBe(true);
+  });
   it("preserves declaration corrections across information, booking and order resume without process field contamination", async () => {
     const start = order();
     const declared = await turn("Instagram: synthetic_shop", start);

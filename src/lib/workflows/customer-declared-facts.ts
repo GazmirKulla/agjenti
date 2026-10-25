@@ -17,10 +17,12 @@ export function validDeclaredValue(key: CustomerDeclaredKey, value: unknown): va
 /** Explicit own statements only, not free-form summaries or LLM-inferred facts.
  * Commas are retained in stated needs; newline/semicolon delimit statements. */
 export function extractCustomerDeclaredFacts(state: ConversationStatePayload, message: string) {
-  if (state.staffHandoff || state.conversationPaused || state.visual?.status === "handoff") return 0;
+  // A paused process is not staff ownership or a prohibition on explicit facts.
+  // These declarations never resume that process or populate its fields.
+  if (state.staffHandoff || state.visual?.status === "handoff") return 0;
   let count = 0;
   for (const part of message.split(/[;\n]/)) {
-    const raw = part.trim();
+    const raw = part.trim().replace(/^(?:korrigjim|correction)\s*:\s*/i, "");
     const label = raw.match(/^([^:]{1,70}):\s*(.+)$/);
     let key: CustomerDeclaredKey | undefined, value: string | undefined;
     if (label) {
@@ -36,8 +38,19 @@ export function extractCustomerDeclaredFacts(state: ConversationStatePayload, me
         const prefix = foldText(statement[1]);
         key = prefix.includes("instagram") ? "instagram_handle" : prefix.includes("biznes") ? "business_type" : "stated_needs";
         value = statement[2].trim();
+      } else {
+        // Anchored first-person declarations only, never hypotheses, third-party
+        // descriptions or an inference from a bare business/product name.
+        const handle = raw.match(/^instagramin\s+e\s+kam\s+(.+)$/i);
+        const business = raw.match(/^(?:un[eë]\s+)?kam\s+(?:nj[eë]\s+)?((?:dyqan|biznes)\b.+)$/i);
+        const sales = raw.match(/^(?:un[eë]\s+)?shes\s+(.+)$/i);
+        if (handle) { key = "instagram_handle"; value = handle[1].trim(); }
+        else if (business || sales) { key = "business_type"; value = (business ?? sales)![1].trim(); }
       }
     }
+    // Sentence punctuation is not part of an Instagram handle or descriptor.
+    // Do not strip '?' (a question), interior dots or punctuation in stated needs.
+    if (key && key !== "stated_needs") value = value?.replace(/[.!]$/, "").trim();
     if (!key || !value || !validDeclaredValue(key, value)) continue;
     state.customerDeclaredFacts ??= {};
     state.customerDeclaredFacts[key] = { value, type: "text", source: "customer_declaration", validated: true };

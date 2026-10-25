@@ -63,6 +63,23 @@ describe("R1 customer-declared facts", () => {
   });
 });
 describe("R1 owned context projection", () => {
+  it.each([
+    ["Kam një dyqan lulesh online.", "business_type", "dyqan lulesh online"],
+    ["Unë shes lule online.", "business_type", "lule online"],
+    ["Instagrami im është @lule_prova.", "instagram_handle", "@lule_prova"],
+    ["Instagramin e kam @lule_prova.", "instagram_handle", "@lule_prova"],
+    ["Korrigjim: Instagrami im është @lule_prova_re.", "instagram_handle", "@lule_prova_re"],
+  ])("accepts an explicit natural declaration without inventing contacts: %s", (message, key, value) => {
+    const state = migrateContext();
+    expect(extractCustomerDeclaredFacts(state, message)).toBe(1);
+    expect(state.customerDeclaredFacts?.[key as "business_type" | "instagram_handle"]?.value).toBe(value);
+    expect(state.context).toEqual({ profile: {}, order: {}, execution: {} });
+  });
+  it.each(["Nëse kam një dyqan lulesh online", "Nuk shes lule online", "A shes lule online?", "Ajo ka një dyqan lulesh online", "Instagramin e kam @lule_prova?", "Korrigjim: Instagrami i saj është @lule_prova"])("does not turn hypotheses, questions or third-party facts into declarations: %s", message => {
+    const state = migrateContext();
+    expect(extractCustomerDeclaredFacts(state, message)).toBe(0);
+    expect(state.customerDeclaredFacts).toBeUndefined();
+  });
   it("keeps v1/v2/v3 readable without upgrading or mutating persisted input", () => {
     const legacy = { fields: {}, customer: { name: "Legacy", phone: null, city: null, address: null } };
     const before = structuredClone(legacy);
