@@ -191,9 +191,17 @@ test('three rapid messages → stop waiting → reload → ordered P0/P1/R4 reca
  const stream=(await history(page))[0].id;
  const realJobs=await (await page.request.get(`/api/agent-test/turns?slug=${t.slug}&stream=${stream}`)).json();
  expect(realJobs.jobs[0].status).toBe('processing');
+ // No Playwright auto-wait masking a composer blocked until generation ends.
+ const activeComposer=page.locator('#agent-test-message');
+ await expect(activeComposer).toBeEnabled({timeout:500});
+ await activeComposer.fill('Drita\nShitje librash online\nsynthetic_books\nçmimet dhe madhësitë');
+ await expect(page.getByRole('button',{name:'Dërgo mesazhin',exact:true})).toBeEnabled({timeout:500});
+ expect((await history(page))[0].entries).toHaveLength(0);
  expect(await page.locator('.chat-typing i').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('chat-typing-dot');
  await page.screenshot({path:path.join(work,'messaging-ux-processing-desktop.png')});
- await send(page,'Drita\nShitje librash online\nsynthetic_books\nçmimet dhe madhësitë');
+ await activeComposer.press('Enter');
+ await expect(activeComposer).toHaveValue('');
+ expect((await history(page))[0].outbox).toHaveLength(2);
  await page.setViewportSize({width:390,height:844});
  await send(page,'Rikujto emrin, biznesin, Instagramin dhe pyetjet tipike.');
  await expect(page.locator('.chat-typing')).toBeVisible();
