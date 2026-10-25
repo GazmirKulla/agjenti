@@ -30,7 +30,8 @@ globalThis.fetch = (input, init) => {
   // blocked; no product code or external network path is replaced/enabled.
   if (process.env.E2E_TRANSPORT_PROVIDER === 'synthetic' && process.env.E2E_R3_PROVIDER === 'synthetic' &&
     url.protocol === 'https:' && ['graph.instagram.com', 'graph.facebook.com'].includes(url.hostname) &&
-    /^\/v\d+\.\d+\/synthetic-transport-[a-f0-9-]+\/messages$/.test(url.pathname) &&
+    (/^\/v\d+\.\d+\/synthetic-transport-[a-f0-9-]+\/messages$/.test(url.pathname) ||
+      url.hostname === 'graph.facebook.com' && /^\/v\d+\.\d+\/999000000000001\/messages$/.test(url.pathname)) &&
     new Headers(init?.headers).get('Authorization') === 'Bearer synthetic-transport-local-only' && init?.method === 'POST') {
     return originalFetch(`http://127.0.0.1:55325/meta/${url.hostname === 'graph.instagram.com' ? 'instagram' : 'whatsapp'}`, init);
   }

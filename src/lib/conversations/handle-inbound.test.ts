@@ -6,11 +6,13 @@ const mocks = vi.hoisted(() => ({
   whatsappSend: vi.fn(),
   profile: vi.fn(),
   rpc: vi.fn(),
+  aiReaction: vi.fn(),
 }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({ from: mocks.from, rpc: mocks.rpc }),
 }));
 vi.mock("./process-conversation-message", () => ({ processConversationMessage: mocks.process }));
+vi.mock("./ai-reaction-runtime",()=>({runAiReaction:mocks.aiReaction}));
 vi.mock("@/lib/crypto/tokens", () => ({
   decryptSecret: () => "fake-meta-token",
 }));
@@ -82,6 +84,7 @@ beforeEach(() => {
   originalStatus = "active";
   conversationLookups = [];
   mocks.rpc.mockResolvedValue({ data: true, error: null });
+  mocks.aiReaction.mockResolvedValue({decision:{kind:'none',reason:'synthetic_disabled'}});
   mocks.process.mockResolvedValue({
     reply: "Përgjigje nga pipeline",
     nextState: { ...emptyState(), step_key: "collect_size" },
@@ -589,6 +592,19 @@ it("pauses a visual handoff before sending and preserves its collected state", a
   await handleInboundMessage(message, queuedJob());
   expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_handoff: true, p_state: nextState }));
   expect(mocks.send).not.toHaveBeenCalled();
+  expect(mocks.aiReaction).not.toHaveBeenCalled();
+});
+it("optional AI reaction failure cannot undo or retry the prepared normal reply", async () => {
+  mocks.aiReaction.mockImplementation(async () => {
+    expect(mocks.rpc).toHaveBeenCalledWith("prepare_workflow_reply", expect.objectContaining({ p_reply: "Përgjigje nga pipeline" }));
+    throw new Error("Synthetic reaction unavailable");
+  });
+  const job = queuedJob();
+  await expect(handleInboundMessage({ ...message, text: "Faleminderit" }, job)).resolves.toBeUndefined();
+  expect(mocks.aiReaction).toHaveBeenCalledWith(expect.objectContaining({ messageId: "inbound-a", jobId: job.id, leaseToken: job.lease_token }));
+  expect(job.status).toBe("prepared");
+  expect(job.reply).toBe("Përgjigje nga pipeline");
+  expect(mocks.process).toHaveBeenCalledOnce();
 });
 it("allows an explicitly resumed handoff to start a new run without erasing collected data", async () => {
   savedState = { ...emptyState(), visual: { versionId: "v1", nodeId: "staff", status: "handoff", awaiting: false, visited: ["staff"], values: { email: "demo@example.test" } } };

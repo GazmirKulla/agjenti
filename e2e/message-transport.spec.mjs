@@ -11,6 +11,7 @@ const t=f.tenants.find(t=>t.kind==='information');
 const counts=()=>sql(`select json_build_array((select count(*) from public.orders),(select count(*) from public.bookings),(select count(*) from public.customers),(select count(*) from public.messages));`);
 let server,before,slow=true;
 const providerParts=[];
+const providerReactions=[];
 const generations=[];
 const fragmentTexts=['pse','ti psh','mund ta kuptosh','cfare po t them','kur t shkruaj mesazhe','tek e tek','?'];
 const continuationTexts=['po mundohem','te kuptoj','cfare po ndodh'];
@@ -19,6 +20,11 @@ test.beforeAll(async()=>{
  server=http.createServer(async(req,res)=>{
   if(req.method==='POST'&&['/meta/instagram','/meta/whatsapp'].includes(req.url)&&req.headers.authorization==='Bearer synthetic-transport-local-only'){
    let raw='';for await(const p of req)raw+=p;const payload=JSON.parse(raw),text=payload.message?.text??payload.text?.body;
+   if (payload.sender_action==='react' || payload.sender_action==='unreact' || payload.type==='reaction') {
+    const reaction={id:`synthetic-reaction-${randomUUID()}`,target:payload.payload?.message_id??payload.reaction?.message_id,payload};
+    providerReactions.push(reaction);res.setHeader('Content-Type','application/json');
+    res.end(JSON.stringify(req.url.endsWith('instagram')?{recipient_id:payload.recipient.id}:{messages:[{id:reaction.id}]}));return;
+   }
    const part={id:`synthetic-${randomUUID()}`,text,channel:req.url.split('/').at(-1)};providerParts.push(part);
    await new Promise(resolve=>setTimeout(resolve,1500));
    res.setHeader('Content-Type','application/json');
@@ -46,6 +52,55 @@ test.beforeAll(async()=>{
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(55325,'127.0.0.1',resolve);});
 });
 function sealToken(){const iv=randomBytes(12),c=createCipheriv('aes-256-gcm',Buffer.from(f.encryptionKey,'hex'),iv);const data=Buffer.concat([c.update('synthetic-transport-local-only'),c.final()]);return ['v1',iv.toString('base64url'),c.getAuthTag().toString('base64url'),data.toString('base64url')].join('.');}
+for (const channel of ['instagram','whatsapp']) test(`automatic ${channel} reaction: signed ingress, normal reply, reload, manual ownership and staff takeover`,async({page,context})=>{
+ const conn=randomUUID(),cid=randomUUID(),external=`synthetic-in-${randomUUID()}`,account=channel==='whatsapp'?'999000000000001':`synthetic-transport-${randomUUID()}`,person=channel==='whatsapp'?'355000000000':`synthetic-person-${randomUUID()}`;
+ const original=sql(`select ai_reactions_enabled from businesses where id=${quote(t.id)};`);
+ sql(`begin; update businesses set ai_reactions_enabled=true where id=${quote(t.id)};
+  ${channel==='instagram'?`insert into instagram_connections(id,business_id,ig_user_id,access_token_ciphertext,status) values(${quote(conn)},${quote(t.id)},${quote(account)},${quote(sealToken())},'connected');`:`insert into whatsapp_connections(id,business_id,phone_number_id,waba_id,access_token_ciphertext,status) values(${quote(conn)},${quote(t.id)},${quote(account)},'synthetic-waba',${quote(sealToken())},'connected');`}
+  insert into conversations(id,business_id,channel,${channel}_connection_id,${channel}_participant_id,last_inbound_at,status,auto_reply) values(${quote(cid)},${quote(t.id)},${quote(channel)},${quote(conn)},${quote(person)},now(),'active',true);commit;`);
+ const post=(messageId=external)=>{
+  const body=JSON.stringify(channel==='instagram'?{object:'instagram',entry:[{id:account,messaging:[{sender:{id:person},recipient:{id:account},timestamp:Date.now(),message:{mid:messageId,text:'Faleminderit'}}]}]}:
+   {object:'whatsapp_business_account',entry:[{changes:[{field:'messages',value:{metadata:{phone_number_id:account},messages:[{id:messageId,from:person,timestamp:String(Math.floor(Date.now()/1000)),type:'text',text:{body:'Faleminderit'}}]}}]}]});
+  return page.request.post('/api/webhooks/meta',{data:body,headers:{'Content-Type':'application/json','x-hub-signature-256':'sha256='+createHmac('sha256','synthetic-transport-webhook').update(body).digest('hex')}});
+ };
+ try {
+  await login(page,context);expect((await post()).status()).toBe(200);expect((await post()).status()).toBe(200);
+  await expect.poll(()=>sql(`select count(*) from workflow_inbound_queue where connection_id=${quote(conn)} and status='sent';`),{timeout:60000}).toBe('1');
+  const diagnostics=sql(`select json_build_object('operations',(select json_agg(json_build_object('status',o.status,'error',o.error,'started',o.send_started_at)) from message_reaction_operations o join message_reactions r on r.id=o.reaction_id where r.connection_id=${quote(conn)}),'state',(select collected from conversation_states where conversation_id=${quote(cid)}));`);
+  expect(providerReactions.filter(r=>r.target===external),diagnostics).toHaveLength(1);
+  expect(sql(`select collected->>'conversationPaused' from conversation_states where conversation_id=${quote(cid)};`)).toBe('true');
+  expect(sql(`select count(*) from messages where conversation_id=${quote(cid)};`)).toBe('2');
+  await page.goto(`/b/${t.slug}/inbox/${cid}`);
+  const customer=page.locator('.chat-message.inbound');
+  await expect(customer.getByText('😊 · Biznesi',{exact:true})).toBeVisible();
+  await expect(page.locator('.chat-message.outbound')).toHaveCount(1);
+  await page.reload();await expect(customer.getByText('😊 · Biznesi',{exact:true})).toBeVisible();
+  await page.screenshot({path:path.join(work,`automatic-reactions-${channel}-desktop.png`)});
+  await page.setViewportSize({width:390,height:844});await customer.scrollIntoViewIfNeeded();
+  await page.screenshot({path:path.join(work,`automatic-reactions-${channel}-mobile.png`)});
+  await customer.getByRole('button',{name:'😊 · Biznesi',exact:true}).click();
+  await customer.getByRole('button',{name:'Reago 👍',exact:true}).click();
+  await expect(customer.getByText('👍 · Biznesi',{exact:true})).toBeVisible();
+  expect((await post()).status()).toBe(200);
+  expect(providerReactions.filter(r=>r.target===external)).toHaveLength(2); // one AI + one explicit human change
+  expect(sql(`select count(*) from message_reaction_operations where business_id=${quote(t.id)} and actor_kind='ai' and reaction_id in(select id from message_reactions where connection_id=${quote(conn)});`)).toBe('1');
+  await page.reload();await expect(customer.getByText('👍 · Biznesi',{exact:true})).toBeVisible();
+  // Real UI/manual-reply ownership, not a fabricated conversationPaused flag.
+  await page.getByLabel('Shkruaj një mesazh',{exact:true}).fill('Përgjigje sintetike nga stafi.');
+  await page.getByRole('button',{name:'Dërgo',exact:true}).click();
+  await expect.poll(()=>sql(`select count(*) from messages where conversation_id=${quote(cid)} and source='staff';`)).toBe('1');
+  const pausedMessage=`synthetic-in-${randomUUID()}`;
+  expect((await post(pausedMessage)).status()).toBe(200);
+  await expect.poll(()=>sql(`select status from workflow_inbound_queue where connection_id=${quote(conn)} and external_id=${quote(pausedMessage)};`)).toBe('ignored');
+  expect(providerReactions.filter(r=>r.target===pausedMessage)).toHaveLength(0);
+  expect(sql(`select status='paused' and auto_reply=false from conversations where id=${quote(cid)};`)).toBe('t');
+  expect(sql(`select count(*) from messages where conversation_id=${quote(cid)} and source='agent';`)).toBe('1');
+  await page.reload();await expect(page.locator('.chat-message.inbound').first().getByText('👍 · Biznesi',{exact:true})).toBeVisible();
+  await page.screenshot({path:path.join(work,`automatic-reactions-${channel}-manual-staff-mobile.png`)});
+ } finally {
+  sql(`begin;update businesses set ai_reactions_enabled=${original==='t'?'true':'false'} where id=${quote(t.id)};delete from workflow_inbound_queue where connection_id=${quote(conn)};delete from conversations where id=${quote(cid)};delete from ${channel}_connections where id=${quote(conn)};commit;`);
+ }
+});
 test('Instagram signed ingress groups originals once and staff takeover suppresses the next generated reply',async({page,context})=>{
  test.setTimeout(180000);
  const conn=randomUUID(),cid=randomUUID(),account=`synthetic-transport-${randomUUID()}`,person=`synthetic-person-${randomUUID()}`;

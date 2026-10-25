@@ -15,6 +15,7 @@ import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 import { suspendProcesses } from "@/lib/workflows/conversation-processes";
+import { runAiReaction } from "./ai-reaction-runtime";
 import {
   emptyState,
   promptForStep,
@@ -277,6 +278,7 @@ export async function handleInboundMessage(
   }
 
   const correlationId = job ? `workflow-job:${job.id}` : randomUUID();
+  let reactionMessageId: string | null = null;
   let persistenceStage: InboundPersistenceError["stage"] = "message_insert";
   try {
     for (const original of batch.originals) {
@@ -306,9 +308,11 @@ export async function handleInboundMessage(
           .eq("direction", "inbound").eq("source", "customer").maybeSingle();
         if (error) throw error;
         if (!existing?.id) throw new Error("Inbound duplicate not verified");
+        reactionMessageId = existing.id;
       } else {
         if (messageInsertError) throw messageInsertError;
         if (!insertedMessage?.id) throw new Error("Inbound insert not confirmed");
+        reactionMessageId = insertedMessage.id;
       }
     }
     if (!job) {
@@ -335,6 +339,8 @@ export async function handleInboundMessage(
   const conversationStatus = createdFresh ? "active" : open?.status;
   const convAuto = createdFresh ? business?.auto_reply : open?.auto_reply;
   const autoOn = convAuto ?? business?.auto_reply ?? false;
+  // AI reactions are an acknowledgement side-effect only. Test/isolated
+  // execution never reaches this production inbound path.
   if (!autoOn || conversationStatus !== "active") {
     console.log("[inbound] skip auto-reply", {
       autoOn,
@@ -447,6 +453,15 @@ export async function handleInboundMessage(
   const generated = { reply: turn.reply, responseId: turn.previousResponseId };
   if(job) {
     await prepareWorkflowReply(job,conversationId,stateRow?.revision??0,turn);
+    // Persist the normal reply first. Optional acknowledgements never replace it
+    // or turn a reaction persistence/provider failure into a message retry.
+    if (reactionMessageId && autoOn && conversationStatus==='active' && !(turn.handoff && !turn.advisoryHandoff) && !isIsolatedExecution()) {
+      try {
+        await runAiReaction({businessId,conversationId,messageId:reactionMessageId,text:message.text,
+          channel:message.channel,accountId:String(accountId),participantId:message.externalParticipantId,
+          autoReplyEnabled:Boolean(autoOn),humanTakeover:false,jobId:job.id,leaseToken:job.lease_token});
+      } catch { /* Normal prepared reply remains authoritative and sendable. */ }
+    }
     return;
   }
   if (!await canAct()) return;
