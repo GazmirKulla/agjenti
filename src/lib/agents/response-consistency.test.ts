@@ -142,3 +142,13 @@ describe("R3 bounded critical claims (synthetic outputs, not real model certific
     expect(validateResponse("x".repeat(20001), fixture()).status).toBe("uncertain");
   });
 });
+
+it.each([false, true])("preserves account explanations with empty or unrelated process facts: %s", withFacts => {
+  const e = fixture("A përgjigjeni nga Instagrami im?");
+  e.state = migrateContext();
+  if (withFacts) setFact(e.state, "size", "XL", "text", "message_label");
+  e.customer = projectCustomerContext(e.state, e.message);
+  const reply = "Përgjigjet dërgohen nga profili yt në Instagram pasi e lidh nga paneli dhe aktivizon përgjigjet automatike.";
+  expect(validateResponse(reply, e).reply).toBe(reply);
+  expect(validateResponse(reply, e).changed).toBe(false);
+});

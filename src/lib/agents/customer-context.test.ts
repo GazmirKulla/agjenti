@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectCustomerContext, redactUnrequestedContact } from "./customer-context";
+import { projectCustomerContext, projectCustomerNeeds, redactUnrequestedContact } from "./customer-context";
 import { extractExplicitFacts, migrateContext, resetOrder, setFact, type Fact } from "@/lib/workflows/context";
 import { extractCustomerDeclaredFacts } from "@/lib/workflows/customer-declared-facts";
 import { rememberTurn } from "@/lib/workflows/guidance";
@@ -148,4 +148,15 @@ describe("R1 owned context projection", () => {
     out = projectCustomerContext(state, "Cili është telefoni im?"); expect(out.profile.phone.value).toBe("0690000000");
     state.staffHandoff = true; expect(projectCustomerContext(state, "Telefoni im?")).toEqual({ profile: {}, declared: {}, diagnostic: "staff_owned" });
   });
+});
+
+it("keeps declared needs available after history truncation without exposing contact or handles", () => {
+  const state = migrateContext();
+  extractCustomerDeclaredFacts(state, "Lloji i biznesit: dyqan veshjesh; Pyetjet tipike: masat dhe produktet; Instagram: private_shop");
+  setFact(state, "customer_email", "private@example.test", "email", "message_label");
+  state.recentMessages = [];
+  const out = projectCustomerNeeds(JSON.parse(JSON.stringify(state)));
+  expect(out.business_type.value).toBe("dyqan veshjesh");
+  expect(out.stated_needs.value).toBe("masat dhe produktet");
+  expect(JSON.stringify(out)).not.toMatch(/private_shop|private@example/);
 });

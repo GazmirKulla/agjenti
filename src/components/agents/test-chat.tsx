@@ -1,4 +1,5 @@
 "use client";
+import { blockedByFailedTurn, needsTestChatPolling, TestChatPolling } from "./test-chat-polling";
 import { TestConfiguration } from "./test-configuration";
 import { AssistantComposer } from "@/components/business-assistant/composer";
 import { MessageRoutingView } from "@/components/workflows/message-routing";
@@ -65,7 +66,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
   const last = messages.at(-1)?.result ?? null;
   const preparing = pending !== null || trainingBusy || voiceBusy;
   const busy = preparing || Boolean(chat.outbox?.length);
-  const waiting = chat.outbox?.some(o => o.status === "queued" || o.status === "processing") ?? false;
+  const waiting = needsTestChatPolling(chat);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
   const storageKey = `agjenti:test-chat:v1:${userId}:${slug}${configurationDraft ? `:draft:${configurationDraft}` : ""}`;
@@ -97,15 +98,19 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
   useEffect(() => {
     if (!ready) return;
     let disposed = false, running = false;
+    const polling = new TestChatPolling();
+    const abort = new AbortController();
     async function sync() {
-      if (disposed || running) return;
+      if (disposed || running || document.hidden || !navigator.onLine) return;
       running = true;
       let stream: string | undefined;
       try {
-        for (const current of chatsRef.current.filter(c => c.outbox?.length)) {
+        polling.retain(chatsRef.current.map(c => c.id));
+        for (const current of chatsRef.current) {
+          if (!polling.due(current, Date.now())) continue;
           stream = current.id;
           const url = `/api/agent-test/turns?slug=${encodeURIComponent(slug)}`;
-          const response = await fetch(`${url}&stream=${current.id}`, { cache: "no-store", signal: AbortSignal.timeout(15000) });
+          const response = await fetch(`${url}&stream=${current.id}`, { cache: "no-store", signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]) });
           const body = await response.json();
           if (!response.ok) throw new Error(body.error || "Statusi nuk u ngarkua.");
           if (disposed) return;
@@ -114,9 +119,10 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
           setChats(all => all.map(c => c.id === current.id ? reconcileTestConversation(c,jobs) : c));
           // One enqueue at a time; processing happens serially in the server
           // queue. Reconcile first when the enqueue response was lost.
-          const next = current.outbox?.find(o => !o.accepted && !jobs.some((j: { requestId: string }) => j.requestId === o.id));
-          if (!next || next.status !== "queued") continue;
-          const posted = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
+          const reconciled = reconcileTestConversation(current, jobs);
+          const next = reconciled.outbox?.find(o => !o.accepted && !jobs.some((j: { requestId: string }) => j.requestId === o.id));
+          if (!next || next.status !== "queued" || blockedByFailedTurn(reconciled, next)) continue;
+          const posted = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]),
             body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: { ...(configurationDraft ? { configurationDraft } : {}), message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
           const result = await posted.json();
           if (disposed) return;
@@ -130,9 +136,10 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
       } finally { running = false; }
     }
     const interval = window.setInterval(() => void sync(), 1000);
-    const reconnect = () => void sync();
+    const reconnect = () => { polling.reconnect(); void sync(); };
     window.addEventListener("online", reconnect);
-    return () => { disposed = true; clearInterval(interval); window.removeEventListener("online", reconnect); };
+    document.addEventListener("visibilitychange", reconnect);
+    return () => { disposed = true; abort.abort(); clearInterval(interval); window.removeEventListener("online", reconnect); document.removeEventListener("visibilitychange", reconnect); };
   }, [ready, slug, configurationDraft]);
   async function retryOperation(operation: PendingTestTurn) {
     try {
@@ -304,7 +311,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
       </aside>}
       <div className="agent-test-conversation">
         {storageNotice && <p role="status">{storageNotice}</p>}
-        {Boolean(chat.outbox?.length) && transportStatus[chat.id] === null && <p role="status">Nuk po konfirmojmë dot statusin. Po kontrollojmë lidhjen; mos i dërgo sërish mesazhet.</p>}
+        {waiting && transportStatus[chat.id] === null && <p role="status">Nuk po konfirmojmë dot statusin. Po kontrollojmë lidhjen; mos i dërgo sërish mesazhet.</p>}
         {waiting && waitStopped && <p role="status">U ndal vetëm pritja këtu. Agjenti mund të vazhdojë; përgjigjja do të shfaqet kur të jetë gati.</p>}
         {last && <TestConfiguration configuration={last.configuration} slug={slug} agentConfigured={last.debug.agentConfigured} />}
         <div className="agent-test-log" ref={chatLog} role="log" aria-label="Biseda e provës" aria-live="polite" onScroll={e=>{ const el=e.currentTarget; setShowJump(el.scrollHeight-el.scrollTop-el.clientHeight>120); }}>
@@ -322,9 +329,10 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
           </div>)}
           {chat.outbox?.map(operation => <div className="chat-exchange" key={operation.id}>
             <div className="agent-test-bubble customer"><p>{operation.text || "[Skedar/foto prove]"}</p></div>
-            {operation.status !== "processing" && <small className="chat-receipt">{operation.status === "failed" ? "Nuk u përfundua" : operation.status === "uncertain" ? "Rezultati nuk u konfirmua" : operation.accepted ? "Në radhë" : "Po pranohet"}</small>}
+            {blockedByFailedTurn(chat, operation) && <p role="status">Ky mesazh pret zgjidhjen e mesazhit të mëparshëm që dështoi. Riprovo mesazhin e parë ose nis një bisedë të re.</p>}
+            {!blockedByFailedTurn(chat, operation) && operation.status !== "processing" && <small className="chat-receipt">{operation.status === "failed" ? "Nuk u përfundua" : operation.status === "uncertain" ? "Rezultati nuk u konfirmua" : operation.accepted ? "Në radhë" : "Po pranohet"}</small>}
             {operation.error && <p role="alert">Mesazhi nuk u përfundua. Hollësitë gjenden te Rrjedha.</p>}
-            {operation.status === "failed" && (!operation.batchId || operation.batchId === operation.id) && <button type="button" onClick={()=>void retryOperation(operation)}>Provo përsëri të njëjtën kërkesë</button>}
+            {operation.status === "failed" && !blockedByFailedTurn(chat, operation) && (!operation.batchId || operation.batchId === operation.id) && <button type="button" onClick={()=>void retryOperation(operation)}>Provo përsëri të njëjtën kërkesë</button>}
           </div>)}
           {!waitStopped && chat.outbox?.some(operation => operation.status === "processing" && transportStatus[chat.id]?.processing.includes(operation.id)) && <div className="chat-typing" role="status" aria-label="Agjenti po përpunon përgjigjen"><i aria-hidden="true"/><i aria-hidden="true"/><i aria-hidden="true"/><span className="sr-only">Agjenti po përpunon përgjigjen</span></div>}
           {waiting && !waitStopped && <button type="button" onClick={stop} title="Ndal vetëm pritjen këtu, jo punën në server">Ndalo pritjen</button>}

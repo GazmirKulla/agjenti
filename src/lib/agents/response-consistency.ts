@@ -282,14 +282,16 @@ export function validateResponse(text: string, evidence: Evidence): ConsistencyR
       reply = [...statements, ...unavailableStatements, `Për kërkesën aktuale ke deklaruar: ${fields.map(([key, f]) => `${key}: ${f.value}`).join("; ")}.`].join("\n");
     }
   }
-  if ((!reference || reference.process) && process) {
+  if ((!reference || reference.process) && process && Object.keys(process.fields).length > 0) {
     const fields = Object.entries(process.fields).filter(([, f]) => f.authority === "customer_declared" && !f.truncated);
     const keyIn = (text: string, key: string) => new RegExp(`(?:^|[^a-z0-9_])${normalize(key).replace(/_/g, "[_ ]")}(?:$|[^a-z0-9_])`).test(text);
     reply = reply.split(/(?<=[.!?])\s+|\n+/).map(sentence => {
       const normalized = normalize(sentence);
       if (normalized.endsWith("?") || uncertainty.test(normalized) || /^(?:nese|sikur|if|suppose)\b/.test(normalized)) return sentence;
       const named = fields.filter(([key]) => keyIn(normalized, key));
-      const assertsOwn = /\b(?:ti (?:ke|je)|ke deklaruar|yt|jote|juaj|your|you (?:have|are))\b/.test(normalized);
+      // Possessives alone describe usage ("your account"), not a stored
+      // process fact. Validate named fields and explicit factual assertions.
+      const assertsOwn = /\b(?:ti (?:ke|je)|ke deklaruar|you (?:have|are|declared))\b/.test(normalized);
       if (!named.length && !assertsOwn) return sentence;
       const relevant = named.length ? named : fields;
       // A key/value assertion must carry THAT field's current value, not a

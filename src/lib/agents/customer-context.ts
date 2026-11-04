@@ -159,3 +159,16 @@ export function redactUnrequestedContact(text: string, state: ConversationStateP
   }
   return text;
 }
+
+/** Conversational needs are context, never requested identity or business policy.
+ * Keep them separate from the narrow projection used to verify personal recall. */
+export function projectCustomerNeeds(state: ConversationStatePayload) {
+  if (state.staffHandoff) return {};
+  const out: Record<string, ProjectedFact> = {};
+  for (const key of ["business_type", "stated_needs"] as const) {
+    const raw = state.customerDeclaredFacts?.[key];
+    const value = raw && validDeclaredValue(key, raw.value) ? fact(raw) : undefined;
+    if (value?.authority === "customer_declared" && !value.truncated) out[key] = value;
+  }
+  return out;
+}

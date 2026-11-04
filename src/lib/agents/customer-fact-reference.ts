@@ -29,12 +29,22 @@ export function customerFactReference(message: string, state?: ConversationState
   const businessSummary = !foreign && /(?:kam (?:treguar|thene)|i (?:told|said))/.test(text) && /\b(?:biznes\w*|business)\b/.test(text);
   if (businessSummary) return { keys: ["business_type", "stated_needs"], recall: true };
   if (broad && !process && !foreign) return { keys: ["name", "instagram_handle", "business_type", "stated_needs"], ...flags };
+  // A possessive identifies whose account/address is discussed, not a request
+  // to retrieve its value. Require a retrieval shape before projecting PII.
+  // Explicit recall and short field references remain supported across domains.
+  const retrieval = recall || process
+    || /^(?:po )?(?:ku|where)[?!.\s]*$/.test(text.trim())
+    || /\b(?:si (?:e )?(?:kam|kisha) emrin|si quhem|cfare shes|what do i sell)\b/.test(text)
+    || /\b(?:dhashe|dhene|thene|treguar|provided|told|remember)\b/.test(text)
+    || /^(?:po )?(?:a quhem|(?:cili|cila|cilat|cfare)(?: eshte| jane)? (?:profili|profilin|instagram\w*|emr\w*|telefon\w*|numri|email\w*|qytet\w*|adres\w*|(?:lloj )?biznes\w*|pyetj\w*|nevoj\w*)|ku (?:shes|shisja)|(?:what|which)(?: is| are| was| were)? my (?:name|phone|email|city|address|instagram|business|needs)|where (?:do|did) i sell)\b/.test(text.trim())
+    || own && words.length <= 5 && words.every(word => /^(?:po|im|ime|tim|time|my|mine|ne|on|the|profili|profilin|instagram\w*|emr\w*|name|telefon\w*|phone|numri|email\w*|qytet\w*|city|adres\w*|address|biznes\w*|business|pyetj\w*|nevoj\w*|questions|needs)$/.test(word));
+  if (!retrieval) return undefined;
   const sales = words.some(w => /^(shes|shet|shisja|shitje|sell|selling)$/.test(w));
   const keys: CustomerFactKey[] = [];
   if (own && !foreign) {
     if (has("quhem", "name") || words.some(w => w.startsWith("emr"))) keys.push("name");
     if (has("phone", "numri") || words.some(w => w.startsWith("telefon"))) keys.push("phone");
-    if (has("email")) keys.push("email");
+    if (words.some(w => /^email(?:i|in)?$/.test(w))) keys.push("email");
     if (has("city") || words.some(w => w.startsWith("qytet"))) keys.push("city");
     if (has("address") || words.some(w => w.startsWith("adres"))) keys.push("address");
     if (words.some(w => w.startsWith("instagram"))) keys.push("instagram_handle");

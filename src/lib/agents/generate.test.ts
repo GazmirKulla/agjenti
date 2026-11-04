@@ -300,3 +300,14 @@ it("R1 never promotes stale entity selections to verified catalog evidence", asy
   expect(mocks.create.mock.calls[0][0].input).not.toContain("inactive-product");
   expect(state.product_id).toBe("inactive-product");
 });
+
+it("repairs duplicate questions once using original evidence without rejected history", async () => {
+  const question = { field: "stated_needs", text: "Çfarë dëshiron të përmirësosh?", purpose: "understand_need" };
+  mocks.create.mockResolvedValueOnce({ id: "bad", output_text: JSON.stringify({ answer: "Çfarë të duhet?", question }) })
+    .mockResolvedValueOnce({ id: "good", output_text: JSON.stringify({ answer: "Mund të ndihmojmë me kërkesat e klientëve.", question }) });
+  const result = await generateAgentReply(params);
+  expect(result.customerQuestion).toEqual(question);
+  expect(result.reply).not.toContain("?");
+  expect(mocks.create).toHaveBeenCalledTimes(2);
+  expect(mocks.create.mock.calls[1][0].previous_response_id).toBeUndefined();
+});

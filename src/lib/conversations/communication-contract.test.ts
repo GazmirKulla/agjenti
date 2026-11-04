@@ -7,6 +7,8 @@ describe("model communication authority", () => {
       .toEqual({ answer: "I can explain how it works.", question: { field: "business_type", text: "What kind of business do you run?", purpose: "understand_need" } });
   });
   it.each([
+    { answer: "What do you need?", question: { field: "stated_needs", text: "Which need matters most?", purpose: "understand_need" } },
+    { answer: "Name? Email?", question: null },
     { answer: "Done", question: null, action: "business.provision" },
     { answer: "[[ask_customer:name]]", question: null },
     { answer: "Hello", question: { field: "password", text: "Password?", purpose: "current_request" } },

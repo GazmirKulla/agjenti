@@ -606,10 +606,15 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     : undefined;
   const continuingAction = (currentProcessOwner(state) === "actionFlow" || interrupted === "actionFlow") && !namedAction && !ordinaryQuestion
     && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
+  // A how-to-start inquiry may enter collection, but never a direct action or
+  // confirmation. Existing tasks, pauses and informational detours keep ownership.
+  const inquiryFlows = ordinaryQuestion && !params.informationRequest && !savedAction
+    && !processes.informationOnly && !state.conversationPaused
+    ? actionFlows.filter(f => actionVersion?.graph.nodes.find(n => n.id === f.entryNodeId)?.kind === "collect") : [];
   if (
     !namedAction &&
     !continuingAction &&
-    !ordinaryQuestion &&
+    (!ordinaryQuestion || inquiryFlows.length > 0) &&
     actionFlows.length &&
     !processes.active &&
     !["order", "support"].includes(explicitIntent(params.message)) &&
@@ -619,16 +624,17 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
       message: params.message,
       state,
       targets: [],
-      routes: actionFlows.map((f) => ({
+      routes: (ordinaryQuestion ? inquiryFlows : actionFlows).map((f) => ({
         id: f.id,
         label: f.label,
         kind: "custom",
       })),
       allowOrder: false,
       allowSupport: false,
+      allowProcessInquiry: ordinaryQuestion,
     });
     if (selected.action === "route")
-      namedAction = actionFlows.find((f) => f.id === selected.target);
+      namedAction = (ordinaryQuestion ? inquiryFlows : actionFlows).find((f) => f.id === selected.target);
   }
   if (actionVersion && (continuingAction || namedAction)) {
     const resumeNamed = Boolean(savedAction && namedAction?.nodeIds.includes(savedAction.visual.nodeId));
@@ -655,7 +661,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     scope.process = "actionFlow";
     const answer = await processAgentTurn({
       ...params,
-      message: resumeNamed ? "" : params.message,
+      message: resumeNamed || ordinaryQuestion ? "" : params.message,
       state: adapter,
       entityVersion: actionVersion,
       actionFlowRequest: true,

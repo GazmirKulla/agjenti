@@ -1426,6 +1426,43 @@ describe("C1/C2 authoritative turn ownership", () => {
     } finally { catalog.mockRestore(); }
   });
 
+  it.each(["Si mund të regjistrohem?", "How can I start the application?"])("routes a start inquiry only into collection: %s", async message => {
+    const { version } = await actionState(); await realVisualExecutor();
+    mocks.guidance.mockResolvedValue({ action: "route", target: "flow_registration", source: "ai" });
+    const start = await turn(message, emptyState());
+    expect(start.nextState.processes?.actionFlow?.visual).toMatchObject({ nodeId: "registration_name", awaiting: true });
+    expect(start.nextState.processes?.actionFlow?.visual.values).toEqual({});
+    expect(start.externalActions).toBeUndefined();
+    expect(mocks.guidance).toHaveBeenCalledWith(expect.objectContaining({ allowProcessInquiry: true }));
+    expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ message: "", entityVersion: version }));
+  });
+
+  it("completes registration after an information detour without treating the detour as a field", async () => {
+    await actionState(); await realVisualExecutor();
+    mocks.guidance.mockResolvedValueOnce({ action: "route", target: "flow_registration", source: "ai" });
+    const start = await turn("Si mund të regjistrohem?", emptyState());
+    const named = await turn("Studio sintetik", start.nextState);
+    expect(named.nextState.processes?.actionFlow?.visual.nodeId).toBe("registration_email");
+    const information = await turn("A përgjigjeni nga Instagrami im?", named.nextState);
+    expect(information.nextState.processes?.actionFlow?.visual.values.biz_registration).toBe("Studio sintetik");
+    expect(information.externalActions).toBeUndefined();
+    const email = await turn("owner@example.test", information.nextState);
+    expect(email.nextState.processes?.actionFlow?.visual.nodeId).toBe("registration_confirm");
+    expect(email.externalActions).toBeUndefined();
+    const completed = await turn("po", email.nextState);
+    expect(completed.externalActions?.filter(a => a.kind === "action.provision")).toEqual([expect.objectContaining({ disposition: "SIMULATED" })]);
+    expect(completed.nextState.processes?.actionFlow).toBeUndefined();
+  });
+
+  it("does not let an inquiry route directly to an action", async () => {
+    const { version } = await actionState();
+    version.graph.flows!.find(f => f.id === "flow_registration")!.entryNodeId = "registration_action";
+    mocks.guidance.mockResolvedValue({ action: "route", target: "flow_registration", source: "ai" });
+    const answer = await turn("Si mund të regjistrohem?", emptyState());
+    expect(answer.nextState.processes?.actionFlow).toBeUndefined();
+    expect(answer.externalActions).toBeUndefined();
+  });
+
   it("executes the real action once in isolation and ignores a duplicate confirmation", async () => {
     const { state } = await actionState(); await realVisualExecutor();
     const answer = await turn("po", state);

@@ -45,6 +45,10 @@ export function parseCommunicationDraft(value: unknown): CommunicationDraft | nu
   }
   const answer = value.answer.trim();
   if (!answer || answer.length + (question?.text.length ?? 0) + 2 > 1200) return null;
+  // A second question hidden in answer would have no collection ownership.
+  // Reject it rather than silently delivering an untracked questionnaire.
+  const answerQuestions = (answer.replace(/https?:\/\/[^\s]+/g, "").match(/\?/g) ?? []).length;
+  if (answerQuestions + (question ? 1 : 0) > 1) return null;
   return { answer, question };
 }
 
