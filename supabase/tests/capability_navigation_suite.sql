@@ -17,3 +17,6 @@ create database capability_navigation_w4_test template postgres;
 \echo PASS catalog actor authorization
 \ir catalog_activation_readiness.sql
 \echo PASS catalog activation readiness
+
+\ir shared_business_operations.sql
+\echo PASS shared operations and owner attention

@@ -64,6 +64,11 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("W4 order submission boundary", () => {
+  it("fences owner approval against the state read inside submission, before any dispatch", async () => {
+    await expect(submitConfirmedOrder({ ...args, expectedRevision: revision - 1 })).rejects.toMatchObject({ code: "stale_state" });
+    expect(m.rpc).not.toHaveBeenCalled();
+    expect(m.submit).not.toHaveBeenCalled();
+  });
   it("refuses a catalog-only order even with fresh confirmation, before RPC or external dispatch", async () => {
     delete state.context!.execution.linear;
     state.step_key = "order_confirm";

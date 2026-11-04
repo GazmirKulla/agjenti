@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { authenticatedReadClient } from "@/lib/auth/read-client";
 import { requireBusinessAccess } from "@/lib/tenant/access";
 import { BriefingError } from "./briefing";
@@ -12,9 +13,27 @@ export async function loadAttention(slug: string, request?: Request): Promise<At
   const { db, user } = identity;
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) throw new BriefingError(403);
-  const businessId = access.business.id;
-  const base = `/b/${encodeURIComponent(access.business.slug)}`;
+  const snapshot = await readAttentionEvidence(db, { businessId: access.business.id, userId: user.id, slug: access.business.slug });
+  const membership = await db.rpc("current_user_module_allowed", { p_business: access.business.id, p_module: "inbox" });
+  if (membership.error) throw new BriefingError(503);
+  if (membership.data !== true) throw new BriefingError(403);
+  return snapshot;
+}
+/** Internal source reader, shared with the authenticated route and scheduled monitor.
+ * Callers establish the scope; every private source is also filtered by owner. */
+export async function readAttentionEvidence(db: SupabaseClient, scope: { businessId: string; userId: string; slug: string }): Promise<AttentionSnapshot> {
+  const businessId = scope.businessId, user = { id: scope.userId };
+  const base = `/b/${encodeURIComponent(scope.slug)}`;
   const sources: { name: string; read: () => Promise<AttentionItem[]> }[] = [
+    { name: "Planet me hapa", read: async () => {
+      const result = await db.from("business_operation_plans").select("id,title,state").eq("business_id", businessId).eq("user_id", user.id)
+        .in("state", ["pending", "blocked"]).order("updated_at", { ascending: false }).limit(20);
+      if (result.error) throw result.error;
+      return (result.data ?? []).map(plan => ({ id: `operation-plan:${plan.id}`, kind: "operation_plan" as const, title: plan.title,
+        detail: `Plani ${plan.id}: ${plan.state === "blocked" ? "kërkon kontroll të hapit të ndërprerë" : "pret konfirmimin tënd"}.`,
+        href: `${base}/activity`, action: "Shiko punët" }));
+    } },
+
     { name: "Planet e tua", read: async () => {
       const result = await db.from("assistant_conversations")
         .select("id,title,plan_revision").eq("business_id", businessId).eq("owner_user_id", user.id)
@@ -66,10 +85,6 @@ export async function loadAttention(slug: string, request?: Request): Promise<At
     } },
   ];
   const results = await Promise.allSettled(sources.map(source => source.read()));
-  // Recheck membership before returning even a partially successful snapshot.
-  const membership = await db.rpc("current_user_module_allowed", { p_business: businessId, p_module: "inbox" });
-  if (membership.error) throw new BriefingError(503);
-  if (membership.data !== true) throw new BriefingError(403);
   return { items: results.flatMap(result => result.status === "fulfilled" ? result.value : []),
     unavailable: results.flatMap((result, index) => result.status === "rejected" ? [sources[index].name] : []),
     checkedAt: new Date().toISOString() };

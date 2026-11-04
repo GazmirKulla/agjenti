@@ -18,6 +18,7 @@ import { entityWorkflowHref } from "@/components/workflows/entity-flow-link";
 import { ProductBusinessWorkflow } from "./business-workflow";
 
 const STATUS_LABEL: Record<string, string> = {
+  archived: "I arkivuar",
   active: "Aktiv në katalog",
   draft: "Draft",
   unlinked: "I palidhur",
@@ -229,6 +230,7 @@ export function ProductCatalog({
           >
             <option value="all">Të gjitha</option>
             <option value="active">Aktive</option>
+            <option value="archived">Të arkivuara</option>
             <option value="draft">Draft</option>
             <option value="unlinked">Të palidhura</option>
             <option value="imports">Katalog i jashtëm</option>

@@ -30,7 +30,7 @@ export function ConfirmationDialog({ preview, busy, canConfirm, recovered, error
       <details><summary>Shiko detajet</summary>{children ?? fields}</details></>}
     {notice ?? (preview.notice && <p className="confirmation-notice">{preview.notice}</p>)}
     {recovered ? <p>Propozim i rikthyer. Rishqyrtoje në bisedë për një konfirmim të ri.</p>
-      : <p className="confirmation-notice">Asgjë nuk është ruajtur ende. Konfirmimi vlen për 10 minuta.</p>}
+      : <p className="confirmation-notice">Konfirmimi vlen për ndryshimet e paraqitura, për 10 minuta.</p>}
     {error && <p role="alert" className="assistant-error">{error}</p>}
     <footer><button type="button" className="assistant-secondary" disabled={busy} onClick={onClose}>Anulo</button>
       {canConfirm && <button type="button" className="assistant-primary" disabled={busy} onClick={onConfirm}>{busy ? "Po ruhet…" : "Konfirmo"}</button>}

@@ -1,10 +1,13 @@
 "use server";
+import { prepareCalendarConfiguration, saveCalendarConfiguration } from "./configuration";
+import { isDeepStrictEqual } from "node:util";
 import { revalidatePath } from "next/cache";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import {
   localInstant,
+  defaultSettings,
   parseSettings,
   uuid,
   type CalendarSettings,
@@ -38,14 +41,13 @@ export async function saveCalendarSettings(slug: string, form: FormData) {
       ) as CalendarSettings["confirmation_mode"],
       agent_booking_enabled: form.get("agentBooking") === "on",
     });
-    await createServiceSupabase()
-      .from("business_calendar_settings")
-      .upsert({
-        business_id: id,
-        ...settings,
-        updated_at: new Date().toISOString(),
-      })
-      .throwOnError();
+    const user = await getSessionUser();
+    if (!user) throw Error("Sesioni ka skaduar.");
+    const proposal = await prepareCalendarConfiguration(id, settings);
+    const expected = form.get("expectedSettings");
+    if (typeof expected !== "string" || !isDeepStrictEqual(parseSettings(JSON.parse(expected)), parseSettings(proposal.before ?? defaultSettings)))
+      throw Error("Orari ndryshoi. Rifresko faqen përpara ruajtjes.");
+    await saveCalendarConfiguration(id, user.id, proposal);
     refresh(slug);
     return { success: "Orari u ruajt." };
   } catch (err) {

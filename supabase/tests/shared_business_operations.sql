@@ -1,0 +1,82 @@
+-- Synthetic fixtures; real role checks and RPCs in the disposable local cluster.
+begin;
+do $$ begin
+ if current_database() not like '%\_w4\_test' escape '\' or inet_server_addr() is not null then raise exception 'isolated local database required'; end if;
+end $$;
+do $$
+declare b uuid:=gen_random_uuid(); other_b uuid:=gen_random_uuid(); u uuid:=gen_random_uuid(); outsider uuid:=gen_random_uuid();
+ p uuid:=gen_random_uuid(); used uuid:=gen_random_uuid(); agent uuid:=gen_random_uuid(); run uuid:=gen_random_uuid();
+ stamp timestamptz; old_stamp timestamptz; current_agent jsonb; result jsonb; denied boolean;
+begin
+ insert into auth.users(id) values(u),(outsider);
+ insert into public.businesses(id,name,slug) values(b,'Operations test',b::text),(other_b,'Foreign operations',other_b::text);
+ insert into public.business_users(business_id,user_id,role) values(b,u,'owner'),(other_b,outsider,'owner');
+ insert into public.products(id,business_id,name,is_active) values(p,b,'Disposable',false),(used,b,'Referenced',false);
+ select updated_at into stamp from public.products where id=p;
+ denied:=false;
+ begin perform public.product_lifecycle(b,outsider,p,stamp,'delete'); exception when others then denied:=sqlerrm='unauthorized'; end;
+ if not denied then raise exception 'foreign actor accepted'; end if;
+ perform public.product_lifecycle(b,u,p,stamp,'archive');
+ if not exists(select 1 from public.products where id=p and archived_at is not null and not is_active) then raise exception 'archive failed'; end if;
+ denied:=false;
+ begin update public.products set is_active=true where id=p; exception when check_violation then denied:=true; end;
+ if not denied then raise exception 'archived product activated'; end if;
+ denied:=false;
+ begin perform public.product_lifecycle(b,u,p,stamp,'delete'); exception when others then denied:=sqlerrm='stale_product'; end;
+ if not denied then raise exception 'stale confirmation accepted'; end if;
+ select updated_at into stamp from public.products where id=p;
+ perform public.product_lifecycle(b,u,p,stamp,'restore');
+ select updated_at into stamp from public.products where id=p;
+ if not exists(select 1 from public.products where id=p and archived_at is null and not is_active) then raise exception 'restore activated product'; end if;
+ -- Protect historical JSON references, not just relational foreign keys.
+ insert into public.conversations(id,business_id) values(gen_random_uuid(),b) returning id into run;
+ insert into public.conversation_states(conversation_id,business_id,collected) values(run,b,jsonb_build_object('product_id',used));
+ select updated_at into old_stamp from public.products where id=used;
+ denied:=false;
+ begin perform public.product_lifecycle(b,u,used,old_stamp,'delete'); exception when others then denied:=sqlerrm='product_has_history'; end;
+ if not denied then raise exception 'history was deleted'; end if;
+ -- A stale member of a batch rolls back the entire operation.
+ denied:=false;
+ begin perform public.configure_product_batch(b,u,array[p,used],jsonb_build_object(p,stamp,used,'2000-01-01T00:00:00Z'),'{"is_active":false}'); exception when others then denied:=sqlerrm='stale_product'; end;
+ if not denied or (select updated_at from public.products where id=p)<>stamp then raise exception 'partial batch mutation'; end if;
+ perform public.configure_product_batch(b,u,array[p,used],jsonb_build_object(p,stamp,used,old_stamp),'{"is_active":false}');
+ perform public.save_managed_agent(b,u,agent,null,array[]::uuid[],'{"name":"Agent","instructions":"Hello","is_active":true}');
+ select to_jsonb(a) into current_agent from public.ai_agents a where id=agent;
+ denied:=false;
+ begin perform public.save_managed_agent(b,u,gen_random_uuid(),null,array[agent],'{"name":"Too many","instructions":"Hello","is_active":true}'); exception when others then denied:=sqlerrm='agent_limit_reached'; end;
+ if not denied or not (select is_active from public.ai_agents where id=agent) then raise exception 'failed switch deactivated old agent'; end if;
+ perform public.save_managed_agent(b,u,agent,current_agent,array[agent],'{"name":"Renamed","instructions":"Hello","is_active":false}');
+ perform public.save_calendar_configuration(b,u,null,'{"timezone":"Europe/Tirane","hours":[],"closed_dates":[],"confirmation_mode":"manual","agent_booking_enabled":false}');
+ denied:=false;
+ begin perform public.save_calendar_configuration(b,u,null,'{"timezone":"UTC","hours":[],"closed_dates":[],"confirmation_mode":"manual","agent_booking_enabled":false}'); exception when others then denied:=sqlerrm='stale_calendar'; end;
+ if not denied then raise exception 'stale calendar accepted'; end if;
+ run:=gen_random_uuid();
+ result:=public.claim_business_operation(run,b,u,'product.archive');
+ if result->>'execute'<>'true' then raise exception 'first claim denied'; end if;
+ result:=public.claim_business_operation(run,b,u,'product.archive');
+ if result->>'execute'<>'false' or result->>'state'<>'running' then raise exception 'duplicate claim accepted'; end if;
+ update public.business_operation_receipts set state='completed',result='{"message":"Done","path":"products"}' where id=run;
+ result:=public.claim_business_operation(run,b,u,'product.archive');
+ if result->>'execute'<>'false' or result#>>'{result,message}'<>'Done' then raise exception 'receipt replay failed'; end if;
+ if has_function_privilege('authenticated','public.product_lifecycle(uuid,uuid,uuid,timestamptz,text)','execute') or has_table_privilege('authenticated','public.business_operation_receipts','insert') then raise exception 'client can forge mutation'; end if;
+ -- Notifications are opt-in, silent for unchanged evidence, and permission-bound.
+ if public.record_attention_check(b,u,'[]')<>0 then raise exception 'unsubscribed monitor wrote'; end if;
+ perform public.configure_attention(b,u,true,false);
+ result:=jsonb_build_array(jsonb_build_object('id','booking:sync','title','Sync failed','detail','One booking','href','/b/test/bookings'));
+ if public.record_attention_check(b,u,result)<>1 or public.record_attention_check(b,u,result)<>0 then raise exception 'notification dedup failed'; end if;
+ perform public.record_attention_check(b,u,'[]');
+ if public.record_attention_check(b,u,result)<>1 then raise exception 'recurrence was lost'; end if;
+ denied:=false;
+ begin perform public.configure_attention(b,u,false,false); exception when others then denied:=sqlerrm='stale_preference'; end;
+ if not denied then raise exception 'stale preference accepted'; end if;
+ insert into public.business_operation_plans(id,business_id,user_id,title,fingerprint,steps) values(gen_random_uuid(),b,u,'Owner plan','test','[]');
+ perform set_config('request.jwt.claim.sub',outsider::text,true);
+ set local role authenticated;
+ if exists(select 1 from public.business_operation_plans where business_id=b) or exists(select 1 from public.business_attention_events where business_id=b) or exists(select 1 from public.business_operation_receipts where business_id=b) then raise exception 'private owner history exposed'; end if;
+ reset role;
+ delete from public.business_users where business_id=b and user_id=u;
+ if public.record_attention_check(b,u,result||jsonb_build_array(jsonb_build_object('id','new','title','New','detail','New','href','/')))<>0 then raise exception 'revoked member notified'; end if;
+ if has_function_privilege('authenticated','public.configure_attention(uuid,uuid,boolean,boolean)','execute') or has_table_privilege('authenticated','public.business_operation_plans','insert') then raise exception 'client can forge plan or preference'; end if;
+ raise notice 'PASS lifecycle/history, stale batch rollback, agent limits/switch rollback, settings CAS, operation deduplication and ACL';
+end $$;
+rollback;

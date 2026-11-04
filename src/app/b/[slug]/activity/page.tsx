@@ -3,16 +3,20 @@ import { PageHeading } from "@/components/dashboard/ui";
 import { IntegrationActivity } from "@/components/dashboard/integration-activity";
 import { requireEnabledModule } from "@/lib/dashboard/modules/permissions";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { OperationActivity } from "@/components/dashboard/operation-activity";
+import { manualCommandActor } from "@/lib/actions/command-actor";
 
 export default async function ActivityPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { access, profile } = await requireEnabledModule(slug, "inbox");
+  const actor = await manualCommandActor(slug);
   const { data, error } = await createServiceSupabase().from("integration_logs")
     .select("id,target,status,error,created_at").eq("business_id", access.business.id)
     .order("created_at", { ascending: false }).limit(8);
   if (error) throw new Error("Nuk u ngarkua aktiviteti i integrimit.");
   return <>
-    <PageHeading title="Aktiviteti i integrimeve" description="Regjistrimet e lidhjeve me kanalet; kjo nuk është një pasqyrë e plotë e operacioneve." />
+    <PageHeading title="Aktiviteti" description="Punët me asistentin, njoftimet e ndjekjes dhe regjistrimet e lidhjeve me kanalet." />
+    <OperationActivity actor={actor} />
     <section className="panel section-pad">
       <h2>Aktiviteti i integrimit të biznesit</h2>
       <p className="muted-copy">Deri në 8 regjistrimet më të fundit, të njëjtat që shfaqen edhe te Bisedat.</p>

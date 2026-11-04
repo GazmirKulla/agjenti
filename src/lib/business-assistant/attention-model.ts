@@ -1,7 +1,7 @@
 /** Descriptive evidence only. Suggestions never carry an execution ticket. */
 export type AttentionItem = {
   id: string;
-  kind: "conversation" | "workflow" | "handoff" | "booking_sync";
+  kind: "conversation" | "workflow" | "handoff" | "booking_sync" | "operation_plan";
   title: string;
   detail: string;
   href: string;

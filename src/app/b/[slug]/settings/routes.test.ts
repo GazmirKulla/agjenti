@@ -25,7 +25,7 @@ it.each([
   ["account", AccountRedirect, "profile"],
   ["billing", BillingRedirect, "billing"],
   ["actions", ActionsRedirect, "actions"],
-  ["migo", AssistantRedirect, "assistant"],
+  ["migo", AssistantRedirect, "profile"],
 ] as const)("preserves %s deep links after checking the canonical tenant", async (_, page, target) => {
   await expect(page({ params: Promise.resolve({ slug: "old-alias" }) })).rejects.toThrow(`redirect:/b/canonical-a/settings/${target}`);
   expect(access.business).toHaveBeenCalledWith("signed-in-user", "old-alias");
@@ -55,6 +55,6 @@ it("makes only supported destinations primary and retains optional modules in ma
 });
 it("has one distinct route per settings section", () => {
   const routes = settingsGroups.flatMap(group => group.items.map(item => item.path));
-  expect(routes).toEqual(["profile", "preferences", "business", "billing", "assistant", "modules", "actions", "advanced"]);
+  expect(routes).toEqual(["profile", "preferences", "business", "billing", "modules", "actions", "advanced"]);
   expect(new Set(routes).size).toBe(routes.length);
 });

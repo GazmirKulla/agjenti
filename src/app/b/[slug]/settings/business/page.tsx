@@ -1,5 +1,6 @@
-import { loadSetupStatus } from "@/lib/setup/status";
 import { setupGateMessage } from "@/lib/setup/model";
+import { loadSetupStatus } from "@/lib/setup/status";
+import { setBusinessAutoReply } from "@/lib/agents/auto-reply";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { BusinessProfile } from "@/components/dashboard/business-profile";
 import { PageHeading } from "@/components/dashboard/ui";
@@ -26,26 +27,8 @@ export default async function SettingsPage({
     if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
-    if (formData.get("auto_reply") === "on" && !acc.business.auto_reply) {
-      const blocked = setupGateMessage(await loadSetupStatus(acc.business.id));
-      if (blocked) return { error: blocked };
-    }
-    const db = createServiceSupabase();
-    if (formData.get("auto_reply") === "on" && !acc.business.auto_reply) {
-      const { error } = await db.rpc("launch_business", {
-        p_business_id: acc.business.id,
-        p_automatic: true,
-      });
-      if (error)
-        return {
-          error: "Konfigurimi ndryshoi. Kontrollo hapat nga Dashboard.",
-        };
-    }
-    await db
-      .from("businesses")
-      .update({ auto_reply: formData.get("auto_reply") === "on" })
-      .eq("id", acc.business.id)
-      .throwOnError();
+    try { await setBusinessAutoReply(acc.business.id, formData.get("auto_reply") === "on", acc.business.auto_reply); }
+    catch (error) { return { error: (error as Error).message }; }
     revalidatePath(`/b/${slug}`, "layout");
     return { success: "Cilësimet e biznesit u ruajtën." };
   }

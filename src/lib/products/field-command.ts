@@ -1,0 +1,72 @@
+
+import { visualSelection, saveProductsWithVisualFlow } from "./visual-selection";
+import type { CommandActor } from "@/lib/actions/command-actor";
+import { createServiceSupabase } from "@/lib/supabase/service";
+import { productCatalogColumns, type ProductRow } from "./catalog";
+import { publishedProductBindings } from "./workflow-binding";
+import { publishedBusinessWorkflow, type BusinessWorkflow } from "@/lib/workflows/visual/business-workflow";
+import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
+import { requireCatalogActivation } from "./activation";
+
+export type CatalogField = "workflow_id" | "product_type_id" | "is_active";
+type Change = { id: string; field: CatalogField; value: string | boolean | null; updatedAt: string };
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function updateCatalogField(actor: CommandActor, change: Change): Promise<{ error?: string; success?: string; product?: ProductRow }> {
+  const user = { id: actor.userId }, access = { business: actor.business };
+  let selectedVisual;
+  try { selectedVisual = change?.field === "workflow_id" ? visualSelection(change.value) : null; }
+  catch { return { error: "Zgjedhja e rrjedhës nuk është e vlefshme." }; }
+  if (!change || !uuid.test(change.id ?? "") || !["is_active", "workflow_id", "product_type_id"].includes(change.field) ||
+    typeof change.updatedAt !== "string" || change.updatedAt.length > 50 || !Number.isFinite(Date.parse(change.updatedAt)) ||
+    (change.field === "is_active" ? typeof change.value !== "boolean" : change.value !== null && (typeof change.value !== "string" || !uuid.test(change.value) && !selectedVisual))) return { error: "Zgjedhja nuk është e vlefshme. Rifresko listën." };
+  const db = createServiceSupabase();
+  const businessId = access.business.id;
+  const current = await db.from("products").select(productCatalogColumns).eq("business_id", businessId).eq("id", change.id).maybeSingle();
+  if (current.error || !current.data) return { error: "Produkti nuk u gjet në këtë biznes. Rifresko listën." };
+  const row = current.data as ProductRow;
+  if (row.updated_at !== change.updatedAt) return { error: "Produkti ndryshoi ndërkohë. Rifresko listën dhe provo përsëri." };
+  if (selectedVisual) {
+    const result = await saveProductsWithVisualFlow(businessId, user.id, selectedVisual, "bind", [{ id: row.id, expected_updated_at: change.updatedAt }]);
+    if (result.error) return result;
+    // Reload through the page after the acknowledged draft assignment.
+    return result;
+  }
+  // A status toggle must advance the revision even within one clock millisecond.
+  const updatedAt = change.field === "is_active" ? new Date(Math.max(Date.now(), Date.parse(change.updatedAt) + 1)).toISOString() : new Date().toISOString();
+  const changes: Record<string, unknown> = { [change.field]: change.value, updated_at: updatedAt };
+  const next = { ...row, ...changes } as ProductRow;
+  let visual: ProductRow["visual_workflow"];
+  let businessWorkflow: BusinessWorkflow | null = null;
+  try {
+    businessWorkflow = await publishedBusinessWorkflow(businessId);
+    visual = (await publishedProductBindings(businessId)).get(next.id);
+  }
+  catch { /* Workflow metadata is not a prerequisite for catalog availability. */ }
+  const demoted = next.is_active && !next.product_type_id && change.field !== "is_active";
+  if (demoted) changes.is_active = next.is_active = false;
+  if (next.is_active) {
+    try { await requireCatalogActivation(businessId, [next]); }
+    catch (error) { return { error: error instanceof Error ? error.message : "Nuk u verifikua katalogu." }; }
+  }
+  // Validate only references being changed, or all references for activation.
+  if (next.product_type_id && change.field === "product_type_id" && !next.is_active) {
+    const type = await db.from("product_types").select("id").eq("id", next.product_type_id).eq("is_active", true).maybeSingle();
+    if (type.error || !type.data) return { error: "Lloji nuk është aktiv. Zgjidh një lloj tjetër." };
+  }
+  if (next.workflow_id && (change.field === "workflow_id" || next.is_active)) {
+    try { if (change.field === "workflow_id") await requireRuntimeModules(businessId, capabilityModules(["order.prepare"])); }
+    catch { return { error: "Kontrollo modulet e porosive para lidhjes së workflow-t." }; }
+    const workflow = await db.from("workflows").select("id").eq("business_id", businessId).eq("id", next.workflow_id).maybeSingle();
+    if (workflow.error || !workflow.data) return { error: "Workflow-i nuk u gjet në këtë biznes. Zgjidh një tjetër." };
+  }
+  if (change.field === "is_active" && row.is_active === change.value)
+    return { product: { ...row, visual_workflow: visual ?? null, business_workflow: businessWorkflow }, success: "Statusi i produktit është tashmë siç u kërkua." };
+  let write = db.from("products").update(changes).eq("business_id", businessId).eq("id", change.id).eq("updated_at", change.updatedAt);
+  // Timestamp precision can collide; also fence the status transition itself.
+  if (change.field === "is_active") write = write.eq("is_active", row.is_active);
+  const saved = await write.select(productCatalogColumns).maybeSingle();
+  if (saved.error) return { error: "Ndryshimi nuk u ruajt. Provo përsëri." };
+  if (!saved.data) return { error: "Produkti ndryshoi ndërkohë. Rifresko listën dhe provo përsëri." };
+  return { product: { ...saved.data, visual_workflow: visual ?? null, business_workflow: businessWorkflow } as ProductRow, success: demoted ? "U ruajt. Produkti kaloi në draft sepse lidhja u hoq." : "U ruajt." };
+}

@@ -1,3 +1,4 @@
+import { prepareManagedAgent, saveManagedAgent } from "@/lib/agents/manage";
 import { ActionForm } from "@/components/dashboard/action-form";
 import Link from "next/link";
 import { PageHeading } from "@/components/dashboard/ui";
@@ -36,7 +37,7 @@ export default async function AgentsPage({
   const [{ data: agents, error: loadError }, limit] = await Promise.all([
     db
       .from("ai_agents")
-      .select("id,name,instructions,is_active")
+      .select("id,name,instructions,is_active,updated_at")
       .eq("business_id", access.business.id),
     loadAgentLimit(access.business.id),
   ]);
@@ -49,68 +50,13 @@ export default async function AgentsPage({
     if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
-    const supabase = createServiceSupabase();
-    const id = String(formData.get("id") ?? "");
-    const name = String(formData.get("name") ?? "Agjent");
-    const instructions = String(formData.get("instructions") ?? "");
-    const isActive = formData.get("is_active") === "on";
-    if (!name.trim() || !instructions.trim())
-      return { error: "Vendos emrin dhe udhëzimet e agjentit." };
-    if (id) {
-      const { data: existing } = await supabase
-        .from("ai_agents")
-        .select("id")
-        .eq("id", id)
-        .eq("business_id", acc.business.id)
-        .maybeSingle();
-      if (!existing) return { error: "Agjenti nuk u gjet në këtë biznes." };
-    } else {
-      const [{ count }, agentLimit] = await Promise.all([
-        supabase
-          .from("ai_agents")
-          .select("id", { count: "exact", head: true })
-          .eq("business_id", acc.business.id),
-        loadAgentLimit(acc.business.id),
-      ]);
-      if ((count ?? 0) >= agentLimit.maxAgents) {
-        return {
-          error: agentLimit.allowMultiple
-            ? "Ky biznes mund të ketë deri në dy agjentë."
-            : "Ky biznes lejon vetëm një agjent. Kontakto administratorin për dy agjentë.",
-        };
-      }
-    }
-    if (isActive) {
-      await supabase
-        .from("ai_agents")
-        .update({ is_active: false })
-        .eq("business_id", acc.business.id)
-        .throwOnError();
-    }
-    if (id) {
-      await supabase
-        .from("ai_agents")
-        .update({ name, instructions, is_active: isActive, updated_at: new Date().toISOString() })
-        .eq("id", id)
-        .eq("business_id", acc.business.id)
-        .throwOnError();
-    } else {
-      const { error } = await supabase.from("ai_agents").insert({
-        business_id: acc.business.id,
-        name,
-        instructions,
-        is_active: isActive,
-      });
-      if (error) {
-        if (error.message?.includes("agent_limit_reached")) {
-          return {
-            error:
-              "U arrit limiti i agjentëve për këtë biznes. Kontakto administratorin nëse të duhen dy.",
-          };
-        }
-        return { error: "Agjenti nuk u krijua. Provo përsëri." };
-      }
-    }
+    try {
+      const id = String(formData.get("id") ?? "");
+      const proposal = await prepareManagedAgent(acc.business.id, { ...(id ? { id } : {}),
+        name: String(formData.get("name") ?? ""), instructions: String(formData.get("instructions") ?? ""), is_active: formData.get("is_active") === "on" });
+      if (id && proposal.before?.updated_at !== formData.get("updated_at")) return { error: "Agjenti ndryshoi. Rifresko faqen përpara ruajtjes." };
+      await saveManagedAgent(acc.business.id, session.id, proposal);
+    } catch (error) { return { error: (error as Error).message }; }
     revalidatePath(`/b/${slug}`, "layout");
   }
 
@@ -119,6 +65,7 @@ export default async function AgentsPage({
     name: string;
     instructions: string;
     is_active: boolean;
+    updated_at: string;
   }) => (
     <ActionForm action={save} className="panel section-pad grid gap-5">
       <div className="section-title">
@@ -128,6 +75,7 @@ export default async function AgentsPage({
         </span>
       </div>
       {a && <input type="hidden" name="id" value={a.id} />}
+      {a && <input type="hidden" name="updated_at" value={a.updated_at} />}
       <label className="form-label">
         Emri i agjentit
         <input

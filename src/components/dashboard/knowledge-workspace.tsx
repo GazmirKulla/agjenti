@@ -1,3 +1,4 @@
+import { createKnowledgeEntry } from "@/lib/knowledge/commands";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading } from "@/components/dashboard/ui";
@@ -93,22 +94,9 @@ export async function KnowledgeWorkspace({
     if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
-    if (
-      !String(formData.get("title") || "").trim() ||
-      !String(formData.get("body") || "").trim()
-    )
-      return { error: "Vendos titullin dhe përmbajtjen e njohurisë." };
-    await createServiceSupabase()
-      .from("knowledge_entries")
-      .insert({
-        business_id: acc.business.id,
-        title: String(formData.get("title") ?? "").trim(),
-        body: String(formData.get("body") ?? "").trim(),
-        intent_key: services
-          ? "service"
-          : String(formData.get("intent_key") ?? "").trim() || null,
-      })
-      .throwOnError();
+    if (services) formData.set("intent_key", "service");
+    const result = await createKnowledgeEntry({ userId: session.id, business: acc.business }, formData);
+    if (result.error) return result;
     revalidatePath(`/b/${slug}`, "layout");
   }
 

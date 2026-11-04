@@ -533,6 +533,7 @@ export function CalendarWorkspace({
                 action={saveCalendarSettings.bind(null, slug)}
                 onSuccess={refresh}
               >
+                <input type="hidden" name="expectedSettings" value={JSON.stringify(data.settings)} />
                 <div className="calendar-form-grid">
                   <label>
                     Zona kohore

@@ -50,7 +50,7 @@ function isReceipt(value: unknown): value is SubmissionReceipt {
 }
 
 /** Server-owned state only: the POST body cannot supply prices, product IDs or intent keys. */
-export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string }): Promise<SubmissionReceipt> {
+export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string; expectedRevision?: number }): Promise<SubmissionReceipt> {
   assertBusinessEffectAllowed("order.create");
   if (isIsolatedExecution()) refuseIsolatedEffect("order.create");
   const db = createServiceSupabase();
@@ -63,6 +63,7 @@ export async function submitConfirmedOrder(input: { businessId: string; conversa
   const { data: row, error: stateError } = await db.from("conversation_states").select("collected,revision,cart,status")
     .eq("conversation_id", conversationId).eq("business_id", businessId).maybeSingle();
   if (stateError) fail("read_failed");
+  if (input.expectedRevision !== undefined && row?.revision !== input.expectedRevision) fail("stale_state");
   const stored = migrateContext(row?.collected as ConversationStatePayload | undefined);
   // Capture the server's receipt before restoreOrder expires approvals. Replaying a
   // known receipt is read-only even after expiry; it NEVER grants another dispatch.

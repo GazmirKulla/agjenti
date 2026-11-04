@@ -11,7 +11,7 @@ beforeEach(() => {
   m.from.mockImplementation((table:string) => {
     const filters:[string,unknown][]=[];m.reads.push({table,filters});
     const result=()=>({data:m.data[table]??null,count:0,error: m.fail===table ? {message:"unavailable"}:null});
-    const q={select:()=>q,eq:(key:string,value:unknown)=>{filters.push([key,value]);return q;},is:()=>q,gt:()=>q,order:()=>q,limit:()=>q,or:()=>q,
+    const q={select:()=>q,eq:(key:string,value:unknown)=>{filters.push([key,value]);return q;},in:()=>q,is:()=>q,gt:()=>q,order:()=>q,limit:()=>q,or:()=>q,
       maybeSingle:async()=>result(),single:async()=>result(),then:(resolve:(r:unknown)=>unknown)=>Promise.resolve(result()).then(resolve)};
     return q;
   });

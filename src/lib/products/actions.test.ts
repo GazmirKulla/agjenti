@@ -37,7 +37,7 @@ beforeEach(() => {
   m.rpc.mockResolvedValue({ data: 1, error: null });
   m.bindings.mockResolvedValue(new Map());
   rows = [
-    { id, product_type_id: "type", workflow_id: "workflow", price_amount: 25, currency: "EUR" },
+    { id, updated_at: "2026-11-04T01:00:00Z", product_type_id: "type", workflow_id: "workflow", price_amount: 25, currency: "EUR" },
   ];
   m.user.mockResolvedValue({ id: "user" });
   m.access.mockResolvedValue({ business: { id: "business" } });
@@ -74,18 +74,18 @@ it("bulk activates verified visual assignments while retaining tenant-scoped sel
   rows[0].workflow_id = null;
   m.bindings.mockResolvedValue(new Map([[id, { versionId: "v", flowId: "order", name: "Porositë" }]]));
   expect((await bulkConfigureProducts("test", payload)).success).toBeTruthy();
-  expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }));
+  expect(m.rpc).toHaveBeenCalledWith("configure_product_batch", expect.objectContaining({ p_business: "business", p_user: "user", p_ids: [id], p_expected: { [id]: "2026-11-04T01:00:00Z" }, p_changes: expect.objectContaining({ is_active: true }) }));
   expect(m.or).not.toHaveBeenCalled();
 });
 it("activates the catalog without requiring a published visual assignment", async () => {
   rows[0].workflow_id = null;
   expect((await bulkConfigureProducts("test", payload)).success).toBeTruthy();
-  expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }));
+  expect(m.rpc).toHaveBeenCalledWith("configure_product_batch", expect.objectContaining({ p_business: "business", p_user: "user", p_ids: [id], p_expected: { [id]: "2026-11-04T01:00:00Z" }, p_changes: expect.objectContaining({ is_active: true }) }));
 });
 it("edits an active product linked to a published visual flow without demanding a linear definition", async () => {
   m.bindings.mockResolvedValue(new Map([[id, { versionId: "v", flowId: "order", name: "Porositë" }]]));
   const form = new FormData();
-  Object.entries({ name: "Puzzle", currency: "EUR", price: "25", product_type_id: "00000000-0000-4000-8000-000000000003", product_id: id, is_active: "on" }).forEach(([key,value])=>form.set(key,value));
+  Object.entries({ name: "Puzzle", currency: "EUR", price: "25", product_type_id: "00000000-0000-4000-8000-000000000003", product_id: id, updated_at: "2026-11-04T00:00:00Z", is_active: "on" }).forEach(([key,value])=>form.set(key,value));
   expect((await updateProduct("test", form)).success).toBeTruthy();
   expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ workflow_id: null, is_active: true }));
 });
@@ -109,9 +109,9 @@ describe("catalog writes", () => {
     rows[0].workflow_id = null;
     businessWorkflow.mockResolvedValue({ name: "Rrjedha e workflow 1", active: true, status: "Aktiv" });
     expect(await bulkConfigureProducts("test", payload)).toHaveProperty("success");
-    expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }));
+    expect(m.rpc).toHaveBeenCalledWith("configure_product_batch", expect.objectContaining({ p_business: "business", p_user: "user", p_ids: [id], p_expected: { [id]: "2026-11-04T01:00:00Z" }, p_changes: expect.objectContaining({ is_active: true }) }));
     expect(m.or).not.toHaveBeenCalled();
-    expect(m.rpc).not.toHaveBeenCalled();
+    expect(m.rpc).not.toHaveBeenCalledWith("save_products_with_visual_flow", expect.anything());
   });
   it.each(["create", "update", "import", "bind"] as const)("saves %s with its visual draft binding in one transaction", async (mode) => {
     const form = new FormData();
@@ -161,14 +161,8 @@ describe("catalog writes", () => {
         })
       ).success,
     ).toBeTruthy();
-    expect(m.update).toHaveBeenCalledTimes(1);
-    expect(m.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        is_active: true,
-        product_type_id: "type",
-        workflow_id: "workflow",
-      }),
-    );
+    expect(m.update).not.toHaveBeenCalled();
+    expect(m.rpc).toHaveBeenCalledExactlyOnceWith("configure_product_batch", expect.objectContaining({ p_business: "business", p_ids: [id], p_changes: { is_active: true, product_type_id: "type", workflow_id: "workflow" } }));
   });
   it("allows incomplete drafts but blocks incomplete active products", async () => {
     const form = new FormData();
@@ -183,6 +177,7 @@ describe("catalog writes", () => {
       expect.objectContaining({ is_active: false, price_amount: null }),
     );
     form.set("product_id", id);
+    form.set("updated_at", "2026-11-04T00:00:00Z");
     expect((await updateProduct("test", form)).success).toBeTruthy();
   });
 });

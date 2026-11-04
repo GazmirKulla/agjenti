@@ -4,6 +4,7 @@ import { readAutomationIntent, type AutomationIntent } from "./automation-intent
 import { localInstant, validDate, validTime, uuid } from "@/lib/calendar/model";
 
 export const actions = [
+  "operation", "operation_plan", "operation_resume",
   "automation_plan",
   "orderflow_load",
   "orderflow_read",
@@ -57,10 +58,11 @@ export class AssistantError extends Error {
   constructor(message: string, public publication?: import("@/lib/workflows/visual/publication-types").PublicationReadiness) { super(message); }
 }
 export const fields: Record<string, string[]> = {
+  operation: ["key", "input"],
   orderflow: ["name", "steps", "scope", "product_ids"],
   linear: ["definition", "scope", "workflow_id"],
   workflow: ["operations", "version_id"],
-  search: ["kind", "query"],
+  search: ["kind", "query", "offset", "customer_id", "status"],
   product: ["name", "description", "sku", "price_amount", "currency"],
   service: [
     "name",
@@ -92,6 +94,7 @@ export function moduleFor(action: Action) {
   return (
     (
       {
+        operation: "settings",
         linear: "workflows",
         workflow: "workflows",
         orderflow: "workflows",
@@ -123,14 +126,14 @@ export function readProposal(input: unknown): Proposal {
     throw new AssistantError("Përgjigjja e asistentit nuk është e vlefshme.");
   if(p.choices!==undefined&&(!Array.isArray(p.choices)||p.choices.length>4||p.choices.some(c=>typeof c!=="string"||!c.trim()||c.length>160))) throw new AssistantError("Zgjedhje të pavlefshme.");
   if (p.action === "product_import" && (p.id !== null || p.changes.length > 1)) throw new AssistantError("Importi përdor vetëm CSV-në ngarkuar.");
-  const allowed = p.action === "product_import" ? ["fields"] : fields[p.action.split("_")[0]] ?? [];
+  const allowed = p.action === "operation_plan" ? ["steps"] : p.action === "operation_resume" ? ["plan_id"] : p.action === "product_import" ? ["fields"] : fields[p.action.split("_")[0]] ?? [];
   const seen = new Set<string>();
   for (const change of p.changes) {
     if (
       !change ||
       !allowed.includes(change.field) ||
       typeof change.value !== "string" ||
-      change.value.length > (["workflow_draft", "linear_draft"].includes(p.action) || p.action.startsWith("orderflow_") ? 24000 : 8000) ||
+      change.value.length > (["operation", "operation_plan", "workflow_draft", "linear_draft"].includes(p.action) || p.action.startsWith("orderflow_") ? 24000 : 8000) ||
       seen.has(change.field)
     )
       throw new AssistantError("Asistenti propozoi një fushë të pavlefshme.");

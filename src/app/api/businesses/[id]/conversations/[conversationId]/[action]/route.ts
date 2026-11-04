@@ -1,5 +1,4 @@
-import { loadSetupStatus } from "@/lib/setup/status";
-import { isReady } from "@/lib/setup/model";
+import { resumeConversation, stopConversation } from "@/lib/conversations/control";
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -50,35 +49,8 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
   if (action === "resume") {
-    const setup = await loadSetupStatus(businessId);
-    if (!setup.connected || (!setup.launched && !isReady(setup)))
-      return NextResponse.json(
-        { error: "Lidh Instagram-in ose WhatsApp-in dhe përfundo konfigurimin nga Dashboard." },
-        { status: 409 },
-      );
-    const { data: snapshot, error: readError } = await service
-      .from("conversation_states").select("revision")
-      .eq("conversation_id", conversationId).eq("business_id", businessId).maybeSingle();
-    if (readError) return NextResponse.json({ error: "Gjendja nuk u verifikua. Provo përsëri." }, { status: 500 });
-    if (!snapshot) return NextResponse.json({ error: "Gjendja e bisedës nuk u gjet në këtë biznes." }, { status: 404 });
-    if (!Number.isInteger(snapshot.revision)) return NextResponse.json({ error: "Gjendja e bisedës nuk është e vlefshme." }, { status: 409 });
-    try {
-      const { data: revision, error } = await service.rpc("resume_conversation_agent", {
-        p_business: businessId, p_user: user.id, p_conversation: conversationId, p_revision: snapshot.revision,
-      });
-      if (error) {
-        const conflict = error.code === "55P03" || error.code === "40P01" || ["stale_state", "state_missing", "state_invalid", "queue_transition_conflict", "delivery_unverified"].includes(error.message);
-        const status = error.message === "unauthorized" ? 403 : error.message === "invalid_conversation" ? 404 : conflict ? 409 : 500;
-        return NextResponse.json({ error: error.message === "delivery_unverified"
-          ? "Një dërgim është ende në proces ose i paverifikuar. Verifiko rezultatin para rifillimit."
-          : conflict ? "Biseda ndryshoi ose po përpunohet. Rifresko dhe provo përsëri."
-          : "Agjenti nuk u rifillua. Kontrollo qasjen dhe provo përsëri." }, { status });
-      }
-      if (revision !== snapshot.revision + 1) return NextResponse.json({ error: "Rifillimi nuk u konfirmua. Rifresko gjendjen para një prove tjetër." }, { status: 500 });
-      return NextResponse.json({ ok: true });
-    } catch {
-      return NextResponse.json({ error: "Rezultati i rifillimit nuk u konfirmua. Rifresko gjendjen; mos e përsërit automatikisht." }, { status: 500 });
-    }
+    const result = await resumeConversation(businessId, user.id, conversationId);
+    return NextResponse.json("error" in result ? { error: result.error } : { ok: true }, { status: result.status });
   }
 
   if (action === "delete") {
@@ -136,29 +108,7 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
 
-  const states: Record<string, { status: string; auto_reply: boolean }> = {
-    pause: { status: "paused", auto_reply: false },
-    complete: { status: "completed", auto_reply: false },
-  };
-  const state = Object.hasOwn(states, action) ? states[action] : undefined;
-  if (!state)
-    return NextResponse.json({ error: "Veprim i panjohur." }, { status: 404 });
-  const { data, error } = await service
-    .from("conversations")
-    .update({ ...state, updated_at: new Date().toISOString() })
-    .eq("id", conversationId)
-    .eq("business_id", businessId)
-    .select("id")
-    .maybeSingle();
-  if (error)
-    return NextResponse.json(
-      { error: "Statusi i bisedës nuk u ndryshua. Provo përsëri." },
-      { status: 500 },
-    );
-  if (!data)
-    return NextResponse.json(
-      { error: "Biseda nuk u gjet në këtë biznes." },
-      { status: 404 },
-    );
-  return NextResponse.json({ ok: true });
+  if (action !== "pause" && action !== "complete") return NextResponse.json({ error: "Veprim i panjohur." }, { status: 404 });
+  const result = await stopConversation(businessId, conversationId, action);
+  return NextResponse.json("error" in result ? { error: result.error } : { ok: true }, { status: result.status });
 }

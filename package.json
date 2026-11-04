@@ -5,10 +5,11 @@
   "packageManager": "yarn@1.22.22",
   "scripts": {
     "dev": "next dev --turbopack --port 3003",
-    "build": "next build",
+    "build": "yarn test:capabilities && next build",
     "start": "next start --port 3003",
     "lint": "eslint",
     "test": "vitest run",
+    "test:capabilities": "vitest run src/lib/actions/operations/coverage.test.ts",
     "e2e:up": "node e2e/local.mjs up && node e2e/fixtures.mjs",
     "e2e:transport": "node e2e/transport.mjs",
     "e2e:app": "node e2e/local.mjs app",

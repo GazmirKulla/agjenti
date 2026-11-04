@@ -103,6 +103,24 @@ try:
         values('{c}','{b}','person','{conn}','instagram','paused',false);
       insert into conversation_states(conversation_id,business_id,collected,revision)
         values('{c}','{b}','{{"staffHandoff":true,"fields":{{"size":"M"}},"visual":{{"versionId":"pinned-A","status":"collecting"}}}}',0);""")
+    if not args.baseline:
+        operation_id = '00000000-0000-4000-8000-000000009199'
+        first = worker(f"begin; select public.claim_business_operation('{operation_id}','{b}','{actor}','product.archive');")
+        assert json.loads(line(first))['execute'] is True
+        second = worker(f"begin; select pg_backend_pid(); select public.claim_business_operation('{operation_id}','{b}','{actor}','product.archive');")
+        second_pid = int(line(second))
+        deadline = time.monotonic() + 10
+        while sql(f"select wait_event_type from pg_stat_activity where pid={second_pid}") != 'Lock':
+            assert time.monotonic() < deadline, 'Duplicate operation did not wait for the first receipt'
+            time.sleep(0.05)
+        first.stdin.write(f"update public.business_operation_receipts set state='completed',result='{{\"message\":\"done\",\"path\":\"products\"}}' where id='{operation_id}';\n")
+        first.stdin.flush()
+        finish(first)
+        replay = json.loads(line(second))
+        assert replay['execute'] is False and replay['state'] == 'completed' and replay['result']['message'] == 'done'
+        finish(second)
+        assert sql(f"select count(*) from public.business_operation_receipts where id='{operation_id}'") == '1'
+        print('PASS concurrent owner confirmations: one claim executes; waiting duplicate replays the committed receipt', flush=True)
     def make_job(name, conversation=None):
         assigned = f"'{conversation}'" if conversation else 'null'
         return json.loads(sql(f"""insert into workflow_inbound_queue(business_id,connection_id,participant_id,external_id,payload,channel,status,lease_token,leased_until,conversation_id)

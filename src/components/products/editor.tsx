@@ -1,11 +1,11 @@
 "use client";
+import { OperationButton } from "@/components/dashboard/operation-button";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ProductFields } from "@/components/dashboard/product-fields";
 import {
   createProduct,
   updateProduct,
-  deleteProduct,
 } from "@/lib/products/actions";
 import { applyTypeSuggestion } from "@/lib/product-types/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
@@ -218,31 +218,10 @@ export function ProductEditor({
                 </button>
               </ActionForm>
             )}
-            <button
-              className="btn btn-ghost product-delete"
-              disabled={pending}
-              type="button"
-              onClick={() => {
-                if (!window.confirm(`Ta fshijmë produktin “${product.name}”?`))
-                  return;
-                const d = new FormData();
-                d.set("product_id", product.id);
-                start(async () => {
-                  try {
-                    const r = await deleteProduct(slug, d);
-                    if (r.error) setError(r.error);
-                    else {
-                      router.push(`/b/${slug}/products`);
-                      router.refresh();
-                    }
-                  } catch {
-                    setError("Produkti nuk u fshi.");
-                  }
-                });
-              }}
-            >
-              Fshi produktin
-            </button>
+            <OperationButton slug={slug} operation={product.archived_at ? "product.restore" : "product.archive"} input={{ id: product.id }}>
+              {product.archived_at ? "Rikthe si draft" : "Arkivo produktin"}
+            </OperationButton>
+            <OperationButton slug={slug} operation="product.delete" input={{ id: product.id }} redirectTo={`/b/${slug}/products`}>Fshi produktin</OperationButton>
           </section>
           <ProductTips />
         </div>
