@@ -1,3 +1,4 @@
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { renderProcessCommunication } from "@/lib/conversations/process-communication";
 import { workflowExecutionPolicy } from "../execution-policy";
 import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workflow";
@@ -168,7 +169,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
   const continuingStatus = params.orderStatusRequest && previous?.status === "waiting" && Boolean(statusFlow || currentNode?.kind === "order_status");
   const informationFlow = version.graph.version === 2 ? version.graph.flows.find(flow => flow.kind === "information" && flow.nodeIds.includes(previous?.nodeId ?? "")) : undefined;
   const continuingInformation = params.informationRequest && !params.orderStatusRequest && previous?.status === "waiting" && Boolean(informationFlow) && !statusFlow;
-  const correctionRequest = /\b(ndrysho\w*|korrigjo\w*|ktheh\w*|pas|mbrapa|change|correct|instead|back)\b/.test(params.message.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase());
+  const correctionRequest = messageUnderstanding(params.message).correction;
   // A correction may select a field within the decided process, not a new
   // order/booking flow. Legacy callers without a decision retain their routing.
   const correctingFlow = params.turnDecision?.kind === "correction" && version.graph.version === 2
@@ -236,7 +237,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     revisiting = guidance.action === "revisit";
     const node = version.graph.nodes.find(n=>n.id===destination)!;
     const processEntry = version.graph.version === 2 && version.graph.flows.some(flow => flow.entryNodeId === destination);
-    const explicitCorrection = /\b(ndrysho\w*|korrigjo\w*|ktheh\w*|change|correct|instead)\b/.test(params.message.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase());
+    const explicitCorrection = messageUnderstanding(params.message).correction;
     const forceRecollection = revisiting || (guidance.action === "route" && (!processEntry || explicitCorrection));
     if (forceRecollection && node.kind === "collect") active.forceCollect=destination;
     if (revisiting || (forceRecollection && ["collect","confirm"].includes(node.kind))) {

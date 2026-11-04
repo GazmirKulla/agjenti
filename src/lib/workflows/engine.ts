@@ -1,3 +1,4 @@
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { historicalStepPrompt } from "./compatibility-prompts";
 export const PUZZLE_STEPS = [
   { key: "collect_theme", kind: "text" as const, label: "Personazhi" },
@@ -113,19 +114,13 @@ export function nextStepKey(
   return steps[idx + 1]?.key ?? "order_ready";
 }
 
-function isAffirmative(text: string): boolean {
-  const t = foldText(text);
-  return /^(po|ok|okay|yes|yep|jo\s*problem|ne\s*rregull|ne rregull|konfirmoj|konfirmo|dakord|sure|po ju lutem|po faleminderit)[\s!.]*$/i.test(
-    t,
-  );
-}
+function isAffirmative(text: string): boolean { return messageUnderstanding(text).act === "accept"; }
 
 /** Extract customer fields from one free-text message when possible. */
-export function parseCustomerMessage(text: string): {
-  name: string | null;
-  phone: string | null;
-  city: string | null;
-  address: string | null;
+export function parseCustomerMessage(text: string): { name: string | null; phone: string | null; city: string | null; address: string | null } {
+  const result = { name: null, phone: null, city: null, address: null } as { name: string | null; phone: string | null; city: string | null; address: string | null };
+  for (const f of messageUnderstanding(text).facts) if (Object.hasOwn(result, f.key)) result[f.key as keyof typeof result] = f.value;
+  return result;
 } {
   const raw = text.trim();
   const empty = { name: null, phone: null, city: null, address: null };

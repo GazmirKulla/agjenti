@@ -1,3 +1,4 @@
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { foldText } from "../engine";
 import { matchingCatalogNames } from "@/lib/products/match-name";
@@ -9,11 +10,7 @@ import { runtimeModules, requireRuntimeModules, moduleEnforcementEnabled } from 
 
 export type VisualEntity = { kind: "product" | "service"; id: string; name: string; productTypeId?: string | null; bookingEnabled?: boolean; price_amount?: number | null; currency?: string | null };
 export type VisualEntitySelection = { entity: VisualEntity; binding: NonNullable<VisualRunState["binding"]> };
-export function isEntityInformationRequest(message: string) {
-  const text = foldText(message);
-  return /\b(sa kushton|cmim\w*|price|how much|informacion\w*|information|me thuaj|dua te di)\b/.test(text)
-    && !/\b(porosit\w*|rezervo\w*|book|buy|vazhdo\w*|rifillo\w*)\b|\bdua\b.*\b(porosi\w*|rezervim\w*)\b/.test(text);
-}
+export function isEntityInformationRequest(message: string) { return messageUnderstanding(message).intent === "information"; }
 /** Production resolves active entries; isolated preview also permits inactive entries explicitly bound in the graph. */
 export async function resolveVisualEntity(businessId: string, graph: VisualGraph, message: string, saved?: VisualRunState["binding"], preview = false, reference?: { state?: ConversationStatePayload | null; selectedProductId?: string; selectedServiceId?: string; deliveredReply?: string | null; draftPreview?: boolean }): Promise<{ selected?: VisualEntitySelection; mentioned?: VisualEntity; choices?: VisualEntity[]; available?: VisualEntity[]; clarification?: string }> {
   // An explicit draft must also recognize unbound products so execution can fail

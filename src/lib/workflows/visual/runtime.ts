@@ -1,3 +1,4 @@
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { isQuestion, validValue, profileKey } from "../context";
 import { foldText } from "../engine";
 import type { VisualExecution, VisualFieldValidation, VisualGraph, VisualIntent, VisualRunState } from "./types";
@@ -90,9 +91,9 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     if(!wasAwaiting||consumed) { record("not_consumed", !wasAwaiting ? "prompt_not_yet_presented" : "input_already_consumed"); return result('prompt',n.id,communication()); }
     const text=p.message.trim();
     if(n.kind==='confirm'){
-      const t=foldText(text);
-      const yes=/^(po|ok|okay|yes|dakord|konfirmoj|e konfirmoj|ne rregull|sure|po ju lutem)[\s.!]*$/.test(t);
-      const no=/^(jo|no|nuk e konfirmoj|ndrysho|korrigjo)[\s.!]*$/.test(t);
+      const meaning=messageUnderstanding(p.message);
+      const yes=meaning.act==='accept';
+      const no=meaning.act==='decline';
       if(!yes&&!no)return result('prompt',n.id,communication(true));
       state.confirmedConfirmation = { ...state.pendingConfirmation!, answer: yes ? "po" : "jo" };
       delete state.pendingConfirmation;

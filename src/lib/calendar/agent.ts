@@ -1,3 +1,4 @@
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
@@ -54,7 +55,7 @@ export function bookingReviewKey(businessId: string, draft: BookingDraft, versio
       terms.settings.timezone, terms.settings.confirmation_mode] : null]);
 }
 export function explicitBookingConfirmation(message: string) {
-  return /^(po|po konfirmoj|konfirmoj|yes|confirm)[.!]?$/i.test(message.trim());
+  return messageUnderstanding(message).act === "accept";
 }
 function attachBookingEffects<T extends AgentTurnResult>(result: T): T {
   const actions = snapshotExternalActions();
@@ -89,9 +90,7 @@ export async function processBookingTurn(params: {
   const raw = existingState.fields.booking as BookingDraft | undefined;
   if (
     !params.routed && !raw &&
-    !/rezerv|takim|appointment|booking|termin|orare?\s+(?:te|të)\s+lir/i.test(
-      foldText(params.message),
-    )
+    !messageUnderstanding(params.message).bookingMention
   )
     return null;
   const profile = await loadDashboardProfile(params.businessId);

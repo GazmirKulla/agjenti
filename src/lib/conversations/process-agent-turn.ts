@@ -1,3 +1,5 @@
+import { hasMessageUnderstanding, withMessageUnderstanding } from "./understanding/context";
+import { interpretMessage } from "./understanding/interpret";
 import { defaultCommunicationPolicy, parseCommunicationPolicy } from "@/lib/agents/communication-policy";
 import { linearCollectionCommunication } from "@/lib/workflows/linear-communication";
 import { conversationControl, resumeConversation } from "./conversation-control";
@@ -134,6 +136,10 @@ export type AgentTurnParams = {
   previousResponseId?: string | null;
 };
 export async function processAgentTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
+  if (params.message.trim() && !hasMessageUnderstanding(params.message)) {
+    const meaning = await interpretMessage(params.message, params.state);
+    return withMessageUnderstanding(params.message, meaning, () => processAgentTurn(params));
+  }
   const controlled = conversationControl(params);
   if (controlled) return controlled;
   params = resumeConversation(params);

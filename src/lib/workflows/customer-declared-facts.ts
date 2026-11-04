@@ -1,5 +1,6 @@
-import { isQuestion, type Fact } from "./context";
-import { foldText, type ConversationStatePayload } from "./engine";
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
+import { type Fact } from "./context";
+import { type ConversationStatePayload } from "./engine";
 
 /** Conversation-local only. Never hydrate from / copy to conversation_profiles,
  * never use as business configuration, entity identity or execution permission. */
@@ -9,8 +10,6 @@ export type CustomerDeclaredFacts = Partial<Record<CustomerDeclaredKey, Fact>>;
 
 export function validDeclaredValue(key: CustomerDeclaredKey, value: unknown): value is string {
   if (typeof value !== "string" || !value.trim() || value.length > 300 || /[\n\r\x00-\x1f]/.test(value)) return false;
-  if (key !== "stated_needs" && isQuestion(value)) return false;
-  if (/^(?:ignore\b|ignoro\b|anulo\b|leje\b|vazhdo\b|rezervo\b|porosit\b|http|www|po$|jo$|ok$)/.test(foldText(value))) return false;
   return key !== "instagram_handle" || /^@?[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,28}[A-Za-z0-9_])?$/.test(value);
 }
 
@@ -21,39 +20,10 @@ export function extractCustomerDeclaredFacts(state: ConversationStatePayload, me
   // These declarations never resume that process or populate its fields.
   if (state.staffHandoff || state.visual?.status === "handoff") return 0;
   let count = 0;
-  for (const part of message.split(/[;\n]/)) {
-    const raw = part.trim().replace(/^(?:korrigjim|correction)\s*:\s*/i, "");
-    const label = raw.match(/^([^:]{1,70}):\s*(.+)$/);
-    let key: CustomerDeclaredKey | undefined, value: string | undefined;
-    if (label) {
-      const name = foldText(label[1]);
-      if (/^(instagram|instagram profile|profili (?:im )?ne instagram)$/.test(name)) key = "instagram_handle";
-      if (/^(business type|lloji i biznesit|biznesi im)$/.test(name)) key = "business_type";
-      if (/^(common questions|pyetjet (?:tipike|e zakonshme)|nevojat e mia)$/.test(name)) key = "stated_needs";
-      value = label[2].trim();
-    } else {
-      // Preserve the original value; folding is used only to recognize the label.
-      const statement = raw.match(/^(profili im n[eë] instagram|instagrami im|biznesi im|lloji i biznesit tim|pyetjet q[eë] marr m[eë] shpesh|nevojat e mia)\s+(?:[eë]sht[eë]|jan[eë])\s+(.+)$/i);
-      if (statement) {
-        const prefix = foldText(statement[1]);
-        key = prefix.includes("instagram") ? "instagram_handle" : prefix.includes("biznes") ? "business_type" : "stated_needs";
-        value = statement[2].trim();
-      } else {
-        // Anchored first-person declarations only, never hypotheses, third-party
-        // descriptions or an inference from a bare business/product name.
-        const handle = raw.match(/^instagramin\s+e\s+kam\s+(.+)$/i);
-        const business = raw.match(/^(?:un[eë]\s+)?kam\s+(?:nj[eë]\s+)?((?:dyqan|biznes)\b.+)$/i);
-        const sales = raw.match(/^(?:un[eë]\s+)?shes\s+(.+)$/i);
-        if (handle) { key = "instagram_handle"; value = handle[1].trim(); }
-        else if (business || sales) { key = "business_type"; value = (business ?? sales)![1].trim(); }
-      }
-    }
-    // Sentence punctuation is not part of an Instagram handle or descriptor.
-    // Do not strip '?' (a question), interior dots or punctuation in stated needs.
-    if (key && key !== "stated_needs") value = value?.replace(/[.!]$/, "").trim();
-    if (!key || !value || !validDeclaredValue(key, value)) continue;
+  for (const candidate of messageUnderstanding(message).facts) {
+    if (!customerDeclaredKeys.includes(candidate.key as CustomerDeclaredKey) || !validDeclaredValue(candidate.key as CustomerDeclaredKey, candidate.value)) continue;
     state.customerDeclaredFacts ??= {};
-    state.customerDeclaredFacts[key] = { value, type: "text", source: "customer_declaration", validated: true };
+    state.customerDeclaredFacts[candidate.key as CustomerDeclaredKey] = { value: candidate.value, type: "text", source: "customer_declaration", validated: true };
     count++;
   }
   return count;

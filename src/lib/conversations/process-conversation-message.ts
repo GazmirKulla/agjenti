@@ -1,3 +1,6 @@
+import { messageUnderstanding } from "./understanding/context";
+import { hasMessageUnderstanding, withMessageUnderstanding } from "./understanding/context";
+import { interpretMessage } from "./understanding/interpret";
 import { availableProcessOffers, consumeProcessOffer } from "./process-offer";
 import { composeProcessQuestion } from "./compose-process-question";
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "./handoff";
@@ -42,15 +45,15 @@ export type ConversationMessageParams = AgentTurnParams & {
   canAct?: () => Promise<boolean>;
 };
 type Route = Pick<ConversationRouting, "process" | "source"> & { clarification?: string };
-const namedConfirmation = (message: string): ProcessKind | null => { const match = foldText(message).match(/^(?:po )?(?:e )?konfirmoj (porosine|rezervimin)[.!\s]*$/); return match ? match[1] === "porosine" ? "order" : "booking" : null; };
-const contactChannel = (message: string) => /^(?:whatsapp|telefon|phone|instagram)[.!\s]*$/.test(foldText(message));
-const contactFollowUp = (message: string, state: ConversationStatePayload) => (state.visual?.status === "handoff" || state.processes?.lastDecision?.process === "support")
-  && (contactChannel(message) || (!state.processes?.lastDecision || state.processes.lastDecision.process === "support")
-    && /^(?:ku|si|ne cilin numer|cili numer|where|how)[?!.\s]*$/.test(foldText(message)));
-const bookingRequest = (text: string) => /\b(rezerv\w*|takim\w*|appointment|booking|termin|orar\w* (?:te )?lir\w*)\b/.test(text);
-const informationalQuestion = (text: string) => /\b(sa kushton|cmimi|price|ku ndodhe|ku jeni|kur hap|orar(?:i)? (?:i punes|punes)|si pagu|pagesa|sa zgjat|what.*cost|how much)\b/.test(text);
-const resumeOrder = (text: string) => /\b(vazhdo\w*|ktheh\w*|rifill\w*|resume)\b.*\b(porosi\w*|order)\b/.test(text);
-const newRequest = (text: string, kind: ProcessKind) => kind === "order" ? /\b(porosi (?:te |nje )?re|porosi tjeter|new order|another order)\b/.test(text) : /\b(rezervim (?:te |nje )?ri|rezervim tjeter|takim tjeter|new booking|another booking)\b/.test(text);
+const namedConfirmation = (message: string): ProcessKind | null => {
+  const m = messageUnderstanding(message); return m.act === "accept" && (m.process === "order" || m.process === "booking") ? m.process : null;
+};
+const contactChannel = (message: string) => messageUnderstanding(message).staffContact;
+const contactFollowUp = (message: string, state: ConversationStatePayload) => Boolean((state.visual?.status === "handoff" || state.processes?.lastDecision?.process === "support") && messageUnderstanding(message).staffContact);
+const bookingRequest = (message: string) => messageUnderstanding(message).bookingMention;
+const informationalQuestion = (message: string) => messageUnderstanding(message).intent === "information";
+const resumeOrder = (message: string) => messageUnderstanding(message).navigation === "resume" && messageUnderstanding(message).process === "order";
+const newRequest = (message: string, kind: ProcessKind) => messageUnderstanding(message).navigation === "new" && messageUnderstanding(message).process === kind;
 
 // An answer to a pending field may follow an informational detour. This is not
 // prompt ownership: short approvals still pass the delivery/freshness gate first.
@@ -67,20 +70,19 @@ async function routeMessage(message: string, state: ConversationStatePayload): P
   if (confirmation) return { process: confirmation, source: "rules" };
   if (contactFollowUp(message, state) || isStaffContactRequest(message) && intent !== "order") return { process: "support", source: "rules" };
   // Managing an already persisted appointment remains a staff action.
-  if (/\b(ndrysho\w*|anulo\w*|cancel|reschedule)\b/.test(text) && bookingRequest(text) && /\b(ekzistues\w*|konfirmuar|mepar\w*|existing|confirmed)\b/.test(text)) return { process: "support", source: "rules" };
-  const order = meaning === "order" || resumeOrder(text) || /^(porosia|porosine|order)[.!\s]*$/.test(text);
+  const meaningOfMessage = messageUnderstanding(message);
+  if (meaningOfMessage.existingBookingChange) return { process: "support", source: "rules" };
+  const order = meaning === "order" || resumeOrder(message);
   if (meaning === "information") return { process: "information", source: "rules" };
-  if (informationalQuestion(text) && !order && !/\b(dua|kerkoj|rezervo|book|want|vazhdo|rifillo)\b/.test(text)) return { process: "information", source: "rules" };
-  const booking = bookingRequest(text) && !/\b(nuk dua|s dua|do not want)\b/.test(text);
-  const bookingAction = booking && /\b(dua|kerkoj|rezervo\w*|book|want|vazhdo\w*|rifillo\w*)\b/.test(text);
-  if (isQuestion(message) && !order && !bookingAction && intent !== "support" && !/\b(ndrysho\w*|korrigjo\w*)\b/.test(text)) return { process: "information", source: "rules" };
+  const booking = meaning === "booking";
+  if (meaningOfMessage.question && !order && !booking && intent !== "support" && !meaningOfMessage.correction) return { process: "information", source: "rules" };
   if (order && booking) return { process: "clarify", source: "rules" };
   if (order) return { process: "order", source: "rules" };
   if (booking) return { process: "booking", source: "rules" };
   if (intent === "support") return { process: "support", source: "rules" };
   if (state.processes?.informationOnly) return { process: "information", source: "rules" };
-  if (isQuestion(message) && !/\b(ndrysho\w*|korrigjo\w*)\b/.test(text)) return { process: "information", source: "rules" };
-  if (affirmative(message) || /^(jo|no)[.!\s]*$/.test(text)) return { process: state.processes!.auxiliary?.process ?? state.processes!.active ?? "information", source: "rules" };
+  if (isQuestion(message) && !messageUnderstanding(message).correction) return { process: "information", source: "rules" };
+  if (affirmative(message) || messageUnderstanding(message).act === "decline") return { process: state.processes!.auxiliary?.process ?? state.processes!.active ?? "information", source: "rules" };
   const interrupted = interruptedProcess(state);
   const active = state.processes!.active ?? (interrupted === "order" || interrupted === "booking" ? interrupted : null);
   const auxiliary = state.processes!.auxiliary;
@@ -117,7 +119,8 @@ function entityClarification(state: ConversationStatePayload, reply: string): Ag
   return { ...plainResult(state, reply), conversationRouting: { process: "clarify", action: "clarify", source: "rules", reason: reply, reusedFields: [], missingFields: [] } };
 }
 function explicitPhone(message: string) {
-  return message.match(/(?:telefoni?\s*(?:im)?|numri\s+im|my\s+(?:phone|number))\s*(?:(?:është|eshte|is)\s*|[:=]\s*)(\+?[\d ().-]{7,24}\d)/i);
+  const phone = messageUnderstanding(message).facts.find(f => f.key === "phone");
+  return phone ? [phone.evidence, phone.value] : null;
 }
 function explicitProfile(state: ConversationStatePayload, message: string, profileOnly = false) {
   extractCustomerDeclaredFacts(state, message);
@@ -147,6 +150,10 @@ function attachTurnEffects(result: AgentTurnResult): AgentTurnResult {
 
 /** One message coordinator for Instagram, isolated chat and graph previews. Adapters own persistence/send. */
 export async function processConversationMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
+  if (params.message.trim() && !hasMessageUnderstanding(params.message)) {
+    const meaning = await interpretMessage(params.message, params.state);
+    return withMessageUnderstanding(params.message, meaning, () => processConversationMessage(params));
+  }
   if (params.configurationPreview && (params.mode !== "test" || params.configurationPreview.businessId !== params.businessId)) throw Error("invalid_configuration_preview");
   params = lockIsolatedParams(params);
   if (isolatedTurn(params) && !isIsolatedExecution()) {
@@ -397,7 +404,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
   // The same explicit resume contract applies to saved custom/service flows.
   // Resolve their names against pinned definitions, never a newly published graph.
   if (!clarificationResume && (params.state?.conversationPaused || params.state?.processes?.informationOnly)
-    && !choice && !isQuestion(params.message) && /\b(vazhdo\w*|rifillo\w*|resume)\b/.test(foldText(params.message))) {
+    && !choice && !isQuestion(params.message) && messageUnderstanding(params.message).navigation === "resume") {
     const matches: LocalProcessKind[] = [];
     for (const kind of ["actionFlow", "service"] as const) {
       const task = params.state.processes?.[kind];
@@ -405,7 +412,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
       const version = params.visualPreview ?? await loadVisualVersion(params.businessId, task.versionId);
       if (version?.id !== task.versionId || version.graph.version !== 2) continue;
       const flow = version.graph.flows.find(f => f.nodeIds.includes(task.visual.nodeId));
-      const namedFlow = flow?.label && foldText(params.message).includes(foldText(flow.label));
+      const namedFlow = flow && messageUnderstanding(params.message).process === kind;
       const entity = kind === "service" && !namedFlow ? await resolveVisualEntity(params.businessId, version.graph, params.message, undefined, params.mode === "test", { state: params.state, deliveredReply: params.deliveredReply }) : undefined;
       if (namedFlow || entity?.mentioned && entity.mentioned.id === task.visual.binding?.entity.id && entity.mentioned.kind === task.visual.binding?.entity.kind && entity.selected)
         matches.push(kind);
@@ -591,7 +598,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
   if (selectedPending && (!graphVersion || graphVersion.id !== pendingSelection!.versionId))
     return entityClarification(state, "Versioni i kërkesës së mëparshme nuk është më i disponueshëm. Shkruaj sërish shërbimin që dëshiron të vazhdosh.");
   const entityMessage = processes.pendingChoice?.kind === "replace" && affirmative(params.message) ? processes.pendingChoice.message : params.message;
-  const ordinaryQuestion = Boolean(params.informationRequest) || turnIntent(entityMessage) === "information" || Boolean(processes.informationOnly && !explicitContinuation(entityMessage) && !bookingRequest(foldText(entityMessage))) || turnIntent(entityMessage) !== "order" && (isEntityInformationRequest(entityMessage) || isQuestion(entityMessage) && !/\b(dua|kerkoj|rezervo|book|want|vazhdo|rifillo)\b/.test(foldText(entityMessage)));
+  const ordinaryQuestion = Boolean(params.informationRequest) || turnIntent(entityMessage) === "information" || Boolean(processes.informationOnly && !explicitContinuation(entityMessage) && !bookingRequest(foldText(entityMessage))) || turnIntent(entityMessage) !== "order" && (isEntityInformationRequest(entityMessage) || isQuestion(entityMessage) && messageUnderstanding(entityMessage).intent === "information");
   if (ordinaryQuestion && graphVersion && scope.entity?.status !== "resolved") {
     const information = await resolveVisualEntity(params.businessId, graphVersion.graph, entityMessage, undefined, params.mode === "test", { state, deliveredReply: params.deliveredReply });
     if (information.clarification || information.choices?.length) {
@@ -624,9 +631,6 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
       : [];
   let namedAction = params.requestedActionFlow ? actionFlows.find(f => f.id === params.requestedActionFlow) : clarificationResume === "actionFlow"
     ? actionFlows.find(f => f.nodeIds.includes(savedAction!.visual.nodeId))
-    : !ordinaryQuestion ? actionFlows.find((f) =>
-        foldText(params.message).includes(foldText(f.label)),
-      )
     : undefined;
   const continuingAction = (currentProcessOwner(state) === "actionFlow" || interrupted === "actionFlow") && !namedAction && !ordinaryQuestion
     && !["order", "support"].includes(explicitIntent(params.message)) && !bookingRequest(foldText(params.message));
@@ -775,7 +779,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     if (affirmative(params.message) && processes.service && !processes.service.promptCurrent) return entityClarification(state, "Cilën kërkesë dëshiron të konfirmosh? Shkruaj shërbimin që dëshiron të vazhdosh.");
     const old = processes.service?.status !== "completed" && processes.service?.visual.binding?.entity.id === selectedEntity.entity.id && processes.service.visual.binding.entity.kind === selectedEntity.entity.kind ? processes.service : undefined;
     const resume = old?.status === "suspended" && (interrupted !== "service" || foldText(params.message).includes(foldText(selectedEntity.entity.name))
-      || /^(?:vazhdo|rifillo|resume)[.!?\s]*$/.test(foldText(params.message)));
+      || messageUnderstanding(params.message).navigation === "resume");
     suspendProcesses(state, "service");
     delete processes.auxiliary; delete processes.informationOnly; delete state.conversationPaused;
     const adapter = migrateContext(emptyState()); adapter.schemaVersion = 3; adapter.processes = processes;
@@ -860,7 +864,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
       if (pending.process === "order") { delete processes.order; state = resetOrder(state); }
       else delete processes.booking;
       delete processes.pendingChoice;
-    } else if (/^(jo|no)[.!\s]*$/.test(foldText(message))) {
+    } else if (messageUnderstanding(message).act === "decline") {
       replacementDeclined = true;
       route = { process: pending.process!, source: "rules" };
       message = pending.process === "order" ? "Vazhdo porosinë" : "Vazhdo rezervimin";

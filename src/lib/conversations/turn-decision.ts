@@ -1,9 +1,9 @@
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
 import { currentProcessOwner, type ConversationRouting, type LocalProcessKind } from "@/lib/workflows/conversation-processes";
-import { explicitIntent, type GuidanceTarget } from "@/lib/workflows/guidance";
+import { type GuidanceTarget } from "@/lib/workflows/guidance";
 import { validValue, type FieldType } from "@/lib/workflows/context";
 import { positiveEntityText } from "@/lib/products/entity-bridge";
-import { customerFactReference } from "@/lib/agents/customer-fact-reference";
 
 export type TurnEntity =
   | { status: "none" }
@@ -31,21 +31,7 @@ export type TurnDecision = DecisionContext & (
 
 /** Intent, not entity matching. An explicit desire in a question remains an
  * action request; a how-to/price question alone never grants one. */
-export function turnIntent(message: string): TurnIntent {
-  const text = foldText(message);
-  if (explicitIntent(message) === "support") return "support";
-  const positive = text.replace(/\b(?:nuk dua|s dua|do not want|don t want)\b.*?(?=[,;.!]|\b(?:dua|kerkoj|want)\b|$)/g, " ");
-  if (/\b(?:dua|deshiroj|kerkoj|want)\b.*\b(?:porosi\w*|blej|buy|order)\b|\b(?:vazhdo\w*|rifillo\w*|resume)\b.*\b(?:porosi\w*|order)\b/.test(positive)) return "order";
-  if (/\b(?:dua|deshiroj|kerkoj|want|vazhdo\w*|rifillo\w*)\b.*\b(?:rezerv\w*|takim\w*|booking|appointment)\b|^(?:rezervo\w*|book)\b/.test(positive)) return "booking";
-  const recall = customerFactReference(message);
-  if (recall?.recall || recall?.process) return "information";
-  if (explicitIntent(message) === "order") return "order";
-  if (/\b(?:me trego|me thuaj|dua te di|informacion\w*|information|show me|tell me|sa kushton|how much|cmim\w*|price)\b/.test(text)) return "information";
-  // A request to continue with a service is distinct from asking about it or
-  // booking it. Catalog resolution must still establish a supported binding.
-  if (/\b(?:dua|deshiroj|kerkoj|want)\b.*\b(?:sherbim\w*|service)\b|\b(?:vazhdo\w*|rifillo\w*|continue|resume)\b.*\b(?:me|with|sherbim\w*|service)\b/.test(positive)) return "service";
-  return "undetermined";
-}
+export function turnIntent(message: string): TurnIntent { return messageUnderstanding(message).intent; }
 
 /** Only a declared typed literal or exact choice may override punctuation.
  * Free prose, confirmations and entity references are never normalized here. */
@@ -70,15 +56,14 @@ export function decisionForTurn(input: {
     versionId: input.versionId ?? state?.visual?.versionId ?? state?.context?.execution.linear?.versionId ?? null,
     executor: input.executor,
   };
-  const text = foldText(input.message);
   if (state?.staffHandoff || state?.visual?.status === "handoff" && !state.visual.advisory) return { ...context, kind: "blocked", reason: "staff_owned" };
   if (routing?.action === "clarify" || routing?.process === "clarify") return { ...context, kind: "clarification", reason: context.entity.status === "unresolved" ? "entity" : "process" };
   if (routing?.reason === "clarification_stale") return { ...context, kind: "clarification", reason: "stale_choice" };
-  if (routing?.reason === "clarification_cancel" || text === "leje fare") return { ...context, kind: "cancel" };
+  if (routing?.reason === "clarification_cancel" || messageUnderstanding(input.message).navigation === "cancel") return { ...context, kind: "cancel" };
   if (routing?.action === "resume") return { ...context, kind: "resume" };
   if (context.intent === "support" || routing?.process === "support") return { ...context, kind: "handoff" };
   const correction = positiveEntityText(input.message);
-  if (correction.correction && correction.text || /\b(?:ndrysho\w*|korrigjo\w*|ktheh\w*|change|correct|instead|back)\b/.test(text)) return { ...context, kind: "correction" };
+  if (correction.correction && correction.text || messageUnderstanding(input.message).correction) return { ...context, kind: "correction" };
   if (input.process && context.intent !== "information") {
     if (routing?.action === "start") return { ...context, kind: "new_process" };
     if (input.field && context.intent === "undetermined") return { ...context, kind: "field_answer", field: input.field };

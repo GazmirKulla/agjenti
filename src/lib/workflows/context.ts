@@ -1,3 +1,4 @@
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { emptyState, foldText, type ConversationStatePayload, type WorkflowStepDef } from "./engine";
 export const profileKeys = ["name", "phone", "email", "city", "address"] as const;
 export type ProfileKey = typeof profileKeys[number];
@@ -193,47 +194,18 @@ export function resetOrder(state: ConversationStatePayload): ConversationStatePa
     next.conversationPaused = state.conversationPaused;
     return next;
 }
-export function isQuestion(message: string) {
-    return /\?/.test(message) || /^(sa kushton|sa eshte|a mund|si |ku |kur |pse\b|cfare\b|cili\b|cilen\b|cilat\b|what |where |how |why\b|which\b)/.test(foldText(message).trim());
-}
-export function affirmative(message: string) {
-    return /^(po|yes|ok|okay|dakord|konfirmoj|e konfirmoj|ne rregull|po ju lutem)[\s.!]*$/.test(foldText(message));
-}
-/** Only explicit labels are extracted without an active question. No guesses from comma order. */
+export function isQuestion(message: string) { return messageUnderstanding(message).question; }
+export function affirmative(message: string) { return messageUnderstanding(message).act === "accept"; }
+/** Only evidence-backed semantic field candidates reach deterministic validation. */
 export function extractExplicitFacts(state: ConversationStatePayload, message: string, steps: WorkflowStepDef[] = []) {
-    const labels: Record<string, string> = { emri: "customer_name", name: "customer_name", tel: "customer_phone", telefon: "customer_phone", telefoni: "customer_phone", phone: "customer_phone", email: "customer_email", qyteti: "customer_city", city: "customer_city", adresa: "customer_address", address: "customer_address" };
-    for (const step of steps)
-        if (!["confirm", "customer", "photo"].includes(step.kind)) {
-            labels[foldText(step.key)] = step.fieldKey ?? step.key;
-            if (step.label)
-                labels[foldText(step.label)] = step.fieldKey ?? step.key;
-        }
     let count = 0;
-    // Anchored own introduction only; no inference from bare names, questions,
-    // third-party descriptions or arbitrary prose. Corrections reuse setFact.
-    const introduction = message.trim().match(/^(?:quhem|emri im [eë]sht[eë])\s+([\p{L}][\p{L}'’-]*(?: [\p{L}][\p{L}'’-]*){0,3})[.!]?$/iu);
-    if (introduction && !/\b(?:dhe|dua|eshte|nuk|ose|apo|and|want|is|not|or)\b/.test(foldText(introduction[1]))
-        && setFact(state, "customer_name", introduction[1], "text", "message_self_introduction")) count++;
-    for (const part of message.split(/[\n;,]+/)) {
-        const match = part.trim().match(/^(.{1,80}?)\s*:\s*(.+)$/);
-        if (!match)
-            continue;
-        const key = labels[foldText(match[1])];
-        if (!key)
-            continue;
+    for (const candidate of messageUnderstanding(message).facts) {
+        const key = profileKeys.includes(candidate.key as ProfileKey) ? `customer_${candidate.key}` : candidate.key;
         const step = steps.find(s => (s.fieldKey ?? s.key) === key);
+        if (!profileKey(key) && !step) continue;
         const type = key === "customer_phone" ? "phone" : key === "customer_email" ? "email" : step?.fieldType ?? "text";
-        // A labelled contact value may precede a separate sentence. Bound typed
-        // values without splitting dots inside emails or formatted phone numbers.
-        const raw = match[2].trim();
-        const value = type === "phone" ? raw.match(/^(\+?[\d\s().-]*\d)(?:[.!?](?=\s|$)|$)/)?.[1] ?? raw
-            : type === "email" ? raw.match(/^([^\s@]+@[^\s@]+\.[^\s@]+?)(?:[.!?](?=\s|$)|$)/)?.[1] ?? raw : raw;
-        if (isQuestion(value))
-            continue;
-        if (step?.options?.length && !step.options.some(v => foldText(v) === foldText(value)))
-            continue;
-        if (setFact(state, key, value, type, "message_label"))
-            count++;
+        if (step?.options?.length && !step.options.some(v => foldText(v) === foldText(candidate.value))) continue;
+        if (setFact(state, key, candidate.value, type, "message_evidence")) count++;
     }
     return count;
 }
@@ -329,7 +301,7 @@ export function advanceSharedOrder(input: ConversationStatePayload, message: str
     const step = steps.find(s => s.key === beforeKey);
     if (step && !justSelected) {
         let complete = false;
-        if (step.kind !== "customer" && step.required === false && /^(kalo|skip|nuk dua)$/i.test(message.trim())) {
+        if (step.kind !== "customer" && step.required === false && messageUnderstanding(message).navigation === "skip") {
             state.fields[step.key] = "skipped";
             state.step_key = steps[steps.indexOf(step) + 1]?.key ?? "order_confirm";
             skipKnownSteps(state, steps);
