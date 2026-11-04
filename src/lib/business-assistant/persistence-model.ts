@@ -38,6 +38,12 @@ export function hasRecoverableWork(plan: RecoverablePlan | null | undefined) {
   return Boolean(plan && (plan.actionPlan || plan.preview || plan.visualDraft || plan.linearDraft || plan.orderDraft));
 }
 
+/** Clarifications may preserve a draft, but an explicitly new objective must not
+ * inherit its old request, target, or decisions. Previous snapshots stay in history. */
+export function retainedPlanForReply(prior: RecoverablePlan | undefined, reply: { saved?: boolean; token?: string; actionPlan?: unknown; preview?: unknown; replacePlan?: boolean }) {
+  return !reply.replacePlan && !reply.saved && !reply.token && !reply.actionPlan && !reply.preview && hasRecoverableWork(prior) ? prior : undefined;
+}
+
 /** A whitelist at the envelope boundary plus recursive secret-key rejection.
  * Display text is untrusted user/model content, never evidence of execution. */
 export function safePlanSnapshot(input: RecoverablePlan): RecoverablePlan {

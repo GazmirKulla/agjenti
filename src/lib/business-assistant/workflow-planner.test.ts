@@ -150,3 +150,12 @@ it("returns a structured partial explanation from clarify and does not issue a t
   expect(m.prepare).not.toHaveBeenCalled();
   expect(m.response.mock.calls[0][0].text.format.schema.required).toContain("automation");
 });
+
+it("marks a clarification about a new objective so persistence drops the old active plan", async () => {
+  m.response.mockResolvedValue({ output_text: JSON.stringify({ action: "clarify", id: null, message: "Cilin takim?", changes: [], choices: [], automation: null, planRelation: "new" }) });
+  const result = await planRequest(access, "Dua të ndryshoj një takim", [], { page: "home", entryPoint: "home" }, undefined, [], undefined, {
+    version: 1, request: "Old objective", preview: { title: "Old", fields: [] },
+  });
+  expect(result).toMatchObject({ clarifying: true, replacePlan: true });
+  expect(result.token).toBeUndefined();
+});

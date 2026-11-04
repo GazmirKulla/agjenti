@@ -9,7 +9,7 @@ import { loadSelectedContext, openTicket, type Access, type PlanResult } from ".
 import { parseUIContext, type AssistantUIContext } from "./context";
 import { loadLinearContext } from "./linear-service";
 import { loadOrderFlows } from "./orderflow-service";
-import { safePlanSnapshot, modelHistory, hasRecoverableWork, type PlanningPreferences, type RecoverablePlan, type ConversationView, type StoredConversation, type StoredMessage, type StoredPlan } from "./persistence-model";
+import { safePlanSnapshot, modelHistory, retainedPlanForReply, type PlanningPreferences, type RecoverablePlan, type ConversationView, type StoredConversation, type StoredMessage, type StoredPlan } from "./persistence-model";
 
 export class PersistenceError extends Error {
   constructor(message: string, public status = 503) { super(message); }
@@ -157,7 +157,7 @@ export async function persistedTurn(
     const data = await run(history, view.plan?.snapshot, view.plan?.preferences ?? {});
     const ticket = data.token ? openTicket(data.token, access) : undefined;
     const targetKind = ticket?.action.split("_")[0];
-    const retained = !data.saved && !ticket && !data.actionPlan && !data.preview && hasRecoverableWork(view.plan?.snapshot) ? view.plan?.snapshot : undefined;
+    const retained = retainedPlanForReply(view.plan?.snapshot, data);
     const snapshot = data.briefing ? undefined : safePlanSnapshot({
       ...retained, version: 1, request: retained?.request ?? input.content, context: data.recoveryContext ?? context, message: data.message,
       ...(data.actionPlan ? { actionPlan: data.actionPlan } : {}),
@@ -184,7 +184,8 @@ export async function persistedTurn(
     if (persistence.conversation.revision !== finished.revision)
       return { message: "Biseda ndryshoi në një dritare tjetër. U rikthye gjendja më e re; rishqyrto çdo propozim.", recovered: true, persistence };
     // Never persist or return an internal outcome envelope as client-supplied input.
-    const { outcome: _outcome, recoveryContext: _context, ...result } = data;
+    const { outcome: _outcome, recoveryContext: _context, replacePlan: _replacePlan, ...result } = data;
+    void _replacePlan;
     void _outcome;
     void _context;
     return { ...result, persistence };

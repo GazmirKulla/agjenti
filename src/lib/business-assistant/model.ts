@@ -37,6 +37,7 @@ export const actions = [
 ] as const;
 export type Action = (typeof actions)[number];
 export type Proposal = {
+  planRelation?: "continue" | "new" | null;
   automation?: AutomationIntent;
   /** Set by the server from the current owner request, never parsed from model output. */
   requestedText?: string;
@@ -115,6 +116,7 @@ export function readProposal(input: unknown): Proposal {
       "Kërkesa nuk u kuptua. Provo ta shkruash më qartë.",
     );
   const p = input as Proposal;
+  if (p.planRelation != null && !["continue", "new"].includes(p.planRelation)) throw new AssistantError("Lidhja me planin nuk është e vlefshme.");
   if (
     !actions.includes(p.action) ||
     typeof p.message !== "string" ||

@@ -1,3 +1,4 @@
+import { OperationError } from "@/lib/actions/operations/error";
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   user: vi.fn(),
@@ -10,6 +11,13 @@ const m = vi.hoisted(() => ({
   revalidate: vi.fn(),
   simulate: vi.fn(),
   briefing: vi.fn(),
+  prior: undefined as unknown,
+  reassess: vi.fn(),
+}));
+vi.mock("@/lib/business-assistant/persistence", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/business-assistant/persistence")>(),
+  reassessPlan: m.reassess,
+  persistedTurn: async (_access: unknown, _body: unknown, _input: unknown, run: (history: unknown[], prior: unknown, preferences: object) => unknown) => run([], m.prior, {}),
 }));
 vi.mock("@/lib/business-assistant/briefing", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/business-assistant/briefing")>(), loadBriefing: m.briefing,
@@ -37,6 +45,7 @@ import { POST } from "./route";
 import { AssistantError } from "@/lib/business-assistant/model";
 beforeEach(() => {
   vi.clearAllMocks();
+  m.prior = undefined;
   m.user.mockResolvedValue({ id: "user" });
   m.access.mockResolvedValue({
     business: { id: "business", catalog_source: "internal" },
@@ -233,4 +242,20 @@ it("rejects empty requests and malformed attachment collections", async () => {
     expect((await POST(req({mode:"plan",...body}))).status).toBe(400);
   }
   expect(m.plan).not.toHaveBeenCalled();
+});
+
+it("returns actionable batch validation errors instead of a generic retry", async () => {
+  m.plan.mockRejectedValue(new OperationError("Lista e plotë nuk u verifikua."));
+  const response = await POST(req({ mode: "plan", text: "Fshi të gjitha produktet" }));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "Lista e plotë nuk u verifikua." });
+});
+
+it("a clear catalog command replaces the unrelated old objective before stale-plan checks", async () => {
+  m.prior = { version: 1, request: "Configure agent", target: { kind: "agent", id: "old" } };
+  m.reassess.mockResolvedValue({ recovery: { verified: false, message: "Old target changed" } });
+  const response = await POST(req({ mode: "plan", text: "Fshi të gjitha produktet e listuara", conversationId: "conversation", context: { page: "products", entryPoint: "contextual" } }));
+  expect(response.status).toBe(200);
+  expect(m.reassess).not.toHaveBeenCalled();
+  expect(m.plan).toHaveBeenCalledWith(expect.any(Object), "Fshi të gjitha produktet e listuara", [], { page: "products", entryPoint: "contextual" }, undefined, [], undefined, undefined, {});
 });

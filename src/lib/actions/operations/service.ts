@@ -1,3 +1,5 @@
+import { prepareProductRemoval, executeProductRemoval, type RemovalRow } from "@/lib/products/removal";
+import { OperationError } from "./error";
 import { saveBusinessService } from "@/lib/services/commands";
 import { saveKnowledgeEntry, createKnowledgeEntry } from "@/lib/knowledge/commands";
 import { serviceColumns, parseService } from "@/lib/services/model";
@@ -42,10 +44,20 @@ export async function prepareOperation(businessId: string, userId: string, key: 
   const { key: operation, input } = parseOperation(key, raw);
   let snapshot: Record<string, unknown> = {};
   let subject = actor.business.name;
-  if (operation.startsWith("product.") && operation !== "product.field" && actor.business.catalog_source === "external") throw Error("Ky katalog menaxhohet nga burimi i jashtëm.");
+  if (operation.startsWith("product.") && operation !== "product.field" && actor.business.catalog_source === "external") throw new OperationError("Ky katalog menaxhohet nga burimi i jashtëm.");
+  if (operation === "product.remove") {
+    const batch = await prepareProductRemoval(businessId, userId, input);
+    return { version: 1, key: operation, input: { scope: "ids", ids: batch.rows.map(row => row.id) },
+      snapshot: { rows: batch.rows }, requestId: randomUUID(), preview: batch.preview };
+  }
   if (["product.delete", "product.archive", "product.restore", "product.edit", "product.field"].includes(operation)) {
     snapshot = await record(businessId, "products", input.id, productCatalogColumns);
     subject = String(snapshot.name);
+    if (operation === "product.delete") {
+      const batch = await prepareProductRemoval(businessId, userId, { scope: "ids", ids: [input.id] });
+      if (batch.rows[0].operation === "archive") throw new OperationError("Produkti ka histori të lidhur dhe nuk mund të fshihet. Përgatit arkivimin për shqyrtim.");
+      if (Date.parse(batch.rows[0].updated_at) !== Date.parse(String(snapshot.updated_at))) throw new OperationError("Produkti ndryshoi gjatë përgatitjes. Rishqyrtoje.");
+    }
     if (["product.edit", "product.field"].includes(operation) && snapshot.archived_at) throw Error("Rikthe fillimisht produktin e arkivuar.");
     if (operation === "product.field" && !["workflow_id", "product_type_id", "is_active"].includes(String(input.field))) throw Error("Fushë e pavlefshme e produktit.");
   } else if (operation === "knowledge.save") {
@@ -130,7 +142,8 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
   const { key, input } = parseOperation(prepared.key, prepared.input);
   const before = prepared.snapshot;
   const db = createServiceSupabase();
-  if (key.startsWith("product.") && key !== "product.field" && actor.business.catalog_source === "external") throw Error("Ky katalog menaxhohet nga burimi i jashtëm.");
+  if (key.startsWith("product.") && key !== "product.field" && actor.business.catalog_source === "external") throw new OperationError("Ky katalog menaxhohet nga burimi i jashtëm.");
+  if (key === "product.remove") return executeProductRemoval(businessId, userId, before.rows as RemovalRow[]);
   if (key === "product.delete" || key === "product.archive" || key === "product.restore") return changeProductLifecycle({ businessId, userId, id: String(input.id), expected: String(before.updated_at), operation: key.split(".")[1] as "delete" | "archive" | "restore" });
   if (key === "product.create") checked(await createProduct(actor, productForm(input)));
   else if (key === "knowledge.save") {

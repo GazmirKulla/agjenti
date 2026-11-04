@@ -38,3 +38,16 @@ it("rejects changed plans or revoked access before dispatching any step", async 
   await expect(executeOperationPlan("business", "owner", plan)).rejects.toThrow("Revoked");
   expect(m.execute).not.toHaveBeenCalled();
 });
+
+it("rejects overlapping product batches before preparing conflicting snapshots", () => {
+  expect(() => parsePlan([{ key: "product.remove", input: { scope: "all" } }, { key: "product.edit", input: { id: "1" } }])).toThrow("vetëm");
+  for (const steps of [
+    [{ key: "product.remove", input: { scope: "ids", ids: ["1", "2"] } }, { key: "product.edit", input: { id: "2" } }],
+    [{ key: "product.edit", input: { id: "2" } }, { key: "product.remove", input: { scope: "ids", ids: ["1", "2"] } }],
+  ]) expect(() => parsePlan(steps)).toThrow("Bashko");
+});
+
+it("does not expose unexpected executor errors in a public plan failure", async () => {
+  m.execute.mockRejectedValue(Error("private-provider-secret"));
+  await expect(executeOperationPlan("business", "owner", plan)).rejects.not.toThrow("private-provider-secret");
+});

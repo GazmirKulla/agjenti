@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { hasRecoverableWork, modelHistory, modelPlanContext, planningPreferences, safePlanSnapshot, type RecoverablePlan, type StoredMessage } from "./persistence-model";
+import { hasRecoverableWork, retainedPlanForReply, modelHistory, modelPlanContext, planningPreferences, safePlanSnapshot, type RecoverablePlan, type StoredMessage } from "./persistence-model";
 
 it("persists only the recovery envelope, never nested tickets or authorization", () => {
   const raw = { version: 1, request: "Plan", token: "live-ticket", pendingToken: "secret", saved: true,
@@ -34,4 +34,12 @@ it("model history is bounded, preserves order and distinguishes backend outcomes
   expect(history[0].content).toBe("23");
   expect(history.at(-1)?.content).toContain("jo leje për veprim të ri");
   expect(history.some(m => m.content === "not a result")).toBe(false);
+});
+
+it("replaces an unrelated objective while preserving drafts for actual continuations", () => {
+  const prior: RecoverablePlan = { version: 1, request: "Configure agent", preview: { title: "Old", fields: [] } };
+  expect(retainedPlanForReply(prior, {})).toBe(prior);
+  expect(retainedPlanForReply(prior, { replacePlan: true })).toBeUndefined();
+  expect(retainedPlanForReply(prior, { token: "new-review" })).toBeUndefined();
+  expect(retainedPlanForReply(prior, { saved: true })).toBeUndefined();
 });

@@ -1,3 +1,5 @@
+import { OperationError } from "@/lib/actions/operations/error";
+import { readCatalogRemovalRequest } from "@/lib/business-assistant/catalog-request";
 import { after } from "next/server";
 import { deliverMobileNotifications } from "@/lib/mobile/notifications";
 import { getRequestUser, permittedWrite, bearerToken } from "@/lib/auth/request";
@@ -149,6 +151,9 @@ export async function POST(request: Request) {
     }, async (history, prior, preferences) => {
       // Stored context is historical data. Selection/revision conflicts are never silently retargeted.
       let effectiveContext = context;
+      // A complete current command starts its own review; an unrelated stale draft
+      // must not prevent preparing it or silently substitute its old selection.
+      if (!materials.length && readCatalogRemovalRequest(body.text.trim(), context, history)) { prior = undefined; preferences = {}; }
       if (prior) {
         const checked = await reassessPlan(access, { revision: 0, snapshot: prior, preferences: {} });
         if (!checked.recovery.verified) throw new PersistenceError(`${checked.recovery.message} Fillo një bisedë të re për një objektiv tjetër.`, 409);
@@ -175,11 +180,11 @@ export async function POST(request: Request) {
       {
         ...(error instanceof AssistantError && error.publication ? { publication: error.publication } : {}),
         error:
-          error instanceof AssistantError || error instanceof PersistenceError
+          error instanceof AssistantError || error instanceof OperationError || error instanceof PersistenceError
             ? error.message
             : "Veprimi nuk përfundoi. Provo përsëri pas pak.",
       },
-      error instanceof BriefingError ? error.status : error instanceof PersistenceError ? error.status : error instanceof AssistantError ? 400 : 500,
+      error instanceof BriefingError ? error.status : error instanceof PersistenceError ? error.status : error instanceof AssistantError || error instanceof OperationError ? 400 : 500,
     );
   }
 }
