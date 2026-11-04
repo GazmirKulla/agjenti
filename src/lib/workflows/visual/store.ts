@@ -1,6 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { loadBusinessProcess } from "@/lib/discovery/load-process";
-import { normalizeVisualDraft, starterVisualGraph, validateVisualGraph } from "./model";
+import { normalizeVisualDraft, emptyVisualGraph, validateVisualGraph } from "./model";
 import type { VisualVersion, VisualWorkspace } from "./types";
 import { parseCollectionPolicy } from "@/lib/runtime/collection-policy";
 
@@ -17,7 +16,7 @@ export async function loadVisualWorkspace(businessId: string): Promise<VisualWor
   const published = data?.published_version_id ? await loadVisualVersion(businessId, data.published_version_id) : null;
   return {
     hasUnpublishedChanges: Boolean(published && JSON.stringify(graph) !== JSON.stringify(published.graph)),
-    graph: graph ?? starterVisualGraph((await loadBusinessProcess(businessId)).process),
+    graph: graph ?? emptyVisualGraph(),
     revision: data?.revision ?? 0, publishedVersionId: data?.published_version_id ?? null,
     enabled: data?.enabled ?? false, available: !error, generated: !data,
   };

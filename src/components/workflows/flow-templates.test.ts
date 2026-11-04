@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { starterVisualGraph, validateVisualGraph } from "@/lib/workflows/visual/model";
+import { emptyVisualGraph, starterVisualGraph, validateVisualGraph } from "@/lib/workflows/visual/model";
 import { addFlowTemplate } from "./flow-templates";
 import { workflowHubSelection } from "./hub-selection";
 
 describe("manual flow templates", () => {
+  it.each(["information", "order", "support", "booking", "order_status", "business_provision", "custom"] as const)("creates only the chosen %s flow for a new business", template => {
+    const empty = emptyVisualGraph();
+    expect(validateVisualGraph(empty).graph).toBeUndefined();
+    const { graph, flow } = addFlowTemplate(empty, template, "chosen");
+    expect(graph.flows).toEqual([flow]);
+    expect(validateVisualGraph(graph).errors).toEqual([]);
+    expect(empty).toMatchObject({ flows: [] });
+  });
   it("adds a real order-status action without changing the existing workflow", () => {
     const original = starterVisualGraph(), before = structuredClone(original);
     const { graph, flow } = addFlowTemplate(original, "order_status", "status-first");

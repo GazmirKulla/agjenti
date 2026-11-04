@@ -23,6 +23,18 @@ beforeEach(() => {
 });
 
 describe("visual workflow storage reads", () => {
+  it("leaves a new business without flows or an active workflow", async () => {
+    fixtures.visual_workflows = { data: null, error: null };
+    const workspace = await loadVisualWorkspace("new-business");
+    expect(workspace).toMatchObject({ generated: true, revision: 0, enabled: false, publishedVersionId: null, graph: { version: 2, flows: [] } });
+    expect(await loadVisualVersion("new-business")).toBeNull();
+    expect(m.process).not.toHaveBeenCalled();
+  });
+  it("preserves an existing saved workflow", async () => {
+    const workspace = await loadVisualWorkspace("business-a");
+    expect(workspace).toMatchObject({ generated: false, revision: 3, enabled: true });
+    expect(workspace.graph.nodes.map(node => node.id)).toEqual(starterVisualGraph().nodes.map(node => node.id));
+  });
   it("pins a conversation to a version using both tenant and version filters", async () => {
     const version = await loadVisualVersion("business-a", "v1");
     expect(version).toMatchObject({ id: "v1", businessId: "business-a" });
@@ -52,7 +64,7 @@ describe("visual workflow storage reads", () => {
     expect(await loadVisualVersion("business-a")).toBeNull();
     const workspace = await loadVisualWorkspace("business-a");
     expect(workspace).toMatchObject({ revision: 0, enabled: false, available: false, generated: true });
-    expect(m.process).toHaveBeenCalledWith("business-a");
+    expect(m.process).not.toHaveBeenCalled();
   });
   it("refuses invalid stored drafts and invalid published graphs", async () => {
     fixtures.visual_workflows.data = { draft: {} };

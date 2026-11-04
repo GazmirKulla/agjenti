@@ -261,6 +261,20 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
 
   const flowBindings = selectedFlow && (!selected || !["start", "end"].includes(selected.kind)) && <FlowBindings key={selectedFlow.id} flow={selectedFlow} flows={definition.flows} catalog={bindingCatalog} disabled={locked} focus={bindingFocus} onOpenFlow={openFlow} onChange={patch => edit({ ...definition, flows: definition.flows.map(flow => flow.id === selectedFlow.id ? { ...flow, ...patch } : flow) })} />;
 
+  if (workspace.generated && !definition.flows.length && !dirty && !recovery) {
+    return <section className="panel section-pad" aria-label="Pa workflow">
+      <h2>Ende nuk ke workflow</h2>
+      <p className="muted-copy">Workflow është opsional. Agjenti mund të përgjigjet nga njohuritë dhe konfigurimi i biznesit pa të. Krijo një vetëm nëse dëshiron një proces me hapa të përcaktuar.</p>
+      <label className="form-label">Krijo workflow
+        <select className="field" aria-label="Krijo workflow" value="" disabled={locked || !workspace.available || !recoveryChecked} onChange={event => openProcess(event.target.value as FlowTemplate, true)}>
+          <option value="" disabled>Zgjidh llojin e rrjedhës</option>
+          {(["information", "order", "order_status", "booking", "support", "business_provision", "custom"] as const).filter(kind => kind !== "booking" || bookingEnabled).map(kind => <option key={kind} value={kind}>{flowTemplateLabels[kind]}</option>)}
+        </select>
+      </label>
+      {!workspace.available && <p role="status">Krijimi i workflow-t nuk është i disponueshëm për momentin.</p>}
+    </section>;
+  }
+
   return <section className="vf-editor" aria-label="Editor i rrjedhës">
     <header className="vf-header">
       <div className="vf-heading"><span className="vf-heading-icon"><Icon name="workflows" size={21} /></span><div><div className="vf-eyebrow">WORKFLOW <span className={`vf-status ${workspace.enabled ? "is-live" : ""}`}><i />{workspace.enabled ? "Aktive" : "Draft"}</span></div><input aria-label="Emri i rrjedhës" value={graph.name} maxLength={120} disabled={locked} onChange={e => edit({ ...graph, name: e.target.value })} /></div></div>

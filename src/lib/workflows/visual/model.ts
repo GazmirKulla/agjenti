@@ -91,6 +91,14 @@ export function validateVisualGraph(raw: unknown): { graph?: VisualGraph; errors
   if(!graph.nodes.some(n=>n.kind==='end'||n.kind==='handoff')) errors.push({message:"Shto një përfundim ose kalim te stafi."});
   return errors.length?{errors}:{graph,errors};
 }
+/** Unsaved editor scaffold: no business process is selected automatically. */
+export function emptyVisualGraph(): VisualGraph {
+  return { version: 2, name: "Rrjedha e klientit", flows: [], nodes: [
+    { id: "start", kind: "start", label: "Mesazh i ri", position: { x: 20, y: 60 }, config: {} },
+    { id: "end", kind: "end", label: "Përfundim", position: { x: 300, y: 60 }, config: {} },
+  ], edges: [{ id: "start_end", source: "start", target: "end", port: "next" }] };
+}
+
 export function starterVisualGraph(process?: BusinessProcess | null): VisualGraph {
   return {version:1,name:process?.name?.slice(0,120)||"Rrjedha e klientit",nodes:[
     {id:'start',kind:'start',label:'Mesazh i ri',position:{x:20,y:60},config:{}},
