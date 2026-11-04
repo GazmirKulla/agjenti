@@ -42,7 +42,7 @@ export function WorkflowHub({ graph, trace, state, routing, message, bookingEnab
   const bookingVisible = bookingEnabled || flows.some(flow => flow.kind === "booking") || !!state?.processes?.booking;
   const cards = [
     ...flows.map(flow => ({ flow, kind: flow.kind, label: flow.label })),
-    ...processes.filter(item => !flows.some(flow => flow.kind === item.kind) && (item.kind !== "booking" || bookingVisible)).map(item => ({ flow: undefined, kind: item.kind, label: processLabels[item.kind] })),
+    ...processes.filter(item => !definition && !flows.some(flow => flow.kind === item.kind) && (item.kind !== "booking" || bookingVisible)).map(item => ({ flow: undefined, kind: item.kind, label: processLabels[item.kind] })),
   ];
   const columns = [cards.filter((_, index) => index % 2 === 0), cards.filter((_, index) => index % 2 === 1)];
   const orbitHeight = Math.max(445, Math.max(...columns.map(column => column.length)) * 160 + 140);

@@ -4,6 +4,29 @@ import { starterVisualGraph, upgradeVisualGraph, validateVisualGraph } from "./m
 import { removeVisualFlow } from "./remove-flow";
 
 describe("removing a draft flow", () => {
+  it("removes the legacy order process and bypasses its hub condition", () => {
+    const original = starterVisualGraph();
+    const before = structuredClone(original);
+    const result = removeVisualFlow(original, "product");
+    expect(result.error).toBeUndefined();
+    expect(result.graph?.nodes.map(node => node.id)).not.toEqual(expect.arrayContaining(["product", "order"]));
+    expect(result.graph?.edges).toContainEqual({ id: "e3", source: "support", target: "knowledge", port: "no" });
+    expect(result.graph?.flows.map(flow => flow.id)).toEqual(["handoff", "knowledge"]);
+    expect(validateVisualGraph(result.graph).errors).toEqual([]);
+    expect(original).toEqual(before);
+  });
+  it("does not rewrite routing owned by another process", () => {
+    const graph = upgradeVisualGraph(starterVisualGraph());
+    graph.flows.find(flow => flow.id === "knowledge")!.nodeIds.push("order");
+    expect(removeVisualFlow(graph, "product").error).toContain("Dëshiron të porosisë?");
+  });
+  it("removes all steps of a multi-step process together", () => {
+    const added = addFlowTemplate(starterVisualGraph(), "business_provision", "registration");
+    const result = removeVisualFlow(added.graph, added.flow.id);
+    expect(result.removedNodeCount).toBe(6);
+    expect(validateVisualGraph(result.graph).errors).toEqual([]);
+    expect(result.graph).toEqual(upgradeVisualGraph(starterVisualGraph()));
+  });
   it("removes an accidental information flow and its end without changing other flows or the input", () => {
     const original = upgradeVisualGraph(starterVisualGraph());
     const added = addFlowTemplate(original, "information", "extra");

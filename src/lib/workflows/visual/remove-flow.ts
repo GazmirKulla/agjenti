@@ -27,6 +27,25 @@ export function removeVisualFlow(graph: VisualGraph, flowId: string) {
       }
     }
   }
+  // Ungrouped routing conditions belong to the hub, not another process.
+  // When one branch disappears, bypass that condition through its surviving
+  // branch. Never rewrite a condition owned by a different flow.
+  let bypassed = true;
+  while (bypassed) {
+    bypassed = false;
+    for (const node of next.nodes) {
+      if (node.kind !== "condition" || removable.has(node.id) || owned.has(node.id) || otherOwned.has(node.id)) continue;
+      const outgoing = next.edges.filter(edge => edge.source === node.id);
+      const removed = outgoing.filter(edge => removable.has(edge.target));
+      const surviving = outgoing.filter(edge => !removable.has(edge.target));
+      if (outgoing.length !== 2 || removed.length !== 1 || surviving.length !== 1 || surviving[0].target === node.id) continue;
+      const target = surviving[0].target;
+      if (next.edges.some(edge => edge.target === node.id && edge.source === target)) continue;
+      next.edges = next.edges.map(edge => edge.target === node.id && !removable.has(edge.source) ? { ...edge, target } : edge);
+      removable.add(node.id);
+      bypassed = true;
+    }
+  }
   const incoming = next.edges.filter(edge => !removable.has(edge.source) && removable.has(edge.target));
   if (incoming.length) {
     const labels = [...new Set(incoming.map(edge => nodes.get(edge.source)?.label ?? edge.source))];

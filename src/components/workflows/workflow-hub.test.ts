@@ -6,6 +6,7 @@ import { migrateConversationProcesses } from "@/lib/workflows/conversation-proce
 import type { ConversationRouting } from "@/lib/workflows/conversation-processes";
 import { setFact } from "@/lib/workflows/context";
 import { WorkflowHub, WorkflowContextPanel, WorkflowFlowChooser } from "./workflow-hub";
+import { removeVisualFlow } from "@/lib/workflows/visual/remove-flow";
 import { workflowHubSelection } from "./hub-selection";
 
 describe("message workflow presentation", () => {
@@ -16,8 +17,15 @@ describe("message workflow presentation", () => {
     const initial = renderToStaticMarkup(createElement(WorkflowHub, { graph }));
     expect(initial).not.toContain("Shto rrjedhën: Rezervim");
     const enabled = renderToStaticMarkup(createElement(WorkflowHub, { graph, bookingEnabled: true }));
-    expect(enabled).toContain("Shto rrjedhën: Rezervim");
+    expect(enabled).not.toContain("Shto rrjedhën: Rezervim");
     expect(graph).toEqual(before);
+  });
+  it("does not reintroduce a removed order flow as a placeholder card", () => {
+    const removed = removeVisualFlow(starterVisualGraph(), "product");
+    expect(removed.graph).toBeDefined();
+    const html = renderToStaticMarkup(createElement(WorkflowHub, { graph: removed.graph, onOpen: () => undefined }));
+    expect(html).not.toContain("is-order");
+    expect(html).toContain("Përgjigju nga njohuritë");
   });
   it("shows an actual booking decision even when no visual trace was returned", () => {
     const state = migrateConversationProcesses(null, () => "test");
