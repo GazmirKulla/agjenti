@@ -24,6 +24,7 @@ export type BrowserRecord = {
 export function RecordBrowser({
   records,
   serverPage,
+  hideSearch = false,
   columns,
   placeholder = "Kërko…",
   emptyTitle = "Nuk ka të dhëna",
@@ -39,7 +40,9 @@ export function RecordBrowser({
     total: number;
     search: string;
     path: string;
+    filters?: Record<string, string>;
   };
+  hideSearch?: boolean;
   records: BrowserRecord[];
   columns?: string[];
   placeholder?: string;
@@ -71,7 +74,7 @@ export function RecordBrowser({
     ? matches
     : matches.slice(safePage * 10, safePage * 10 + 10);
   function pageHref(page: number) {
-    return `${serverPage!.path}?${new URLSearchParams({ page: String(page), q: serverPage!.search })}`;
+    return `${serverPage!.path}?${new URLSearchParams({ ...serverPage!.filters, page: String(page), q: serverPage!.search })}`;
   }
   const active = rows.find((r) => r.id === selected) ?? rows[0];
 
@@ -110,7 +113,7 @@ export function RecordBrowser({
             </button>
           )}
         </div>
-        {serverPage ? (
+        {hideSearch ? null : serverPage ? (
           <form
             action={serverPage.path}
             className="record-search"

@@ -2,7 +2,7 @@ import { moduleRegistry } from "../modules/registry";
 import type { DashboardProfile, ModuleId } from "../modules/types";
 
 export type NavItem = {
-  id: ModuleId | "chat-lab" | "pricing" | "actions";
+  id: ModuleId | "chat-lab" | "pricing" | "actions" | "users";
   path: string;
   label: string;
   icon: string;
@@ -33,6 +33,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
     return [
       { id: "dashboard", path: "", label: "Kreu", icon: "dashboard" },
       { id: "customers", path: "businesses", label: "Bizneset", icon: "businesses" },
+    { id: "users", path: "users", label: "Përdoruesit", icon: "customers" },
       { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
       { id: "pricing", path: "pricing", label: "Çmimet", icon: "billing" },
     { id: "actions", path: "actions", label: "Modulet dhe aftësitë", icon: "spark" },
@@ -42,6 +43,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
   return [
     { id: "dashboard", path: "", label: "Dashboard", icon: "dashboard" },
     { id: "customers", path: "businesses", label: "Bizneset", icon: "businesses" },
+    { id: "users", path: "users", label: "Përdoruesit", icon: "customers" },
     { id: "products", path: "product-types", label: "Llojet", icon: "products" },
     { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
     { id: "pricing", path: "pricing", label: "Çmimet", icon: "billing" },
