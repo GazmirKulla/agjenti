@@ -16,9 +16,9 @@ export function LandingHeader() {
         aria-label="Navigimi kryesor"
       >
         {[
-          ["#", "Kryefaqja"],
+          ["#shiko-agjentin", "Çfarë bën Agjenti"],
           ["#si-funksionon", "Si funksionon"],
-          ["#bizneset", "Për kë është"],
+          ["#mobile-web", "Mobile & Web"],
           ["#pyetje", "Pyetje të shpeshta"],
         ].map(([href, label]) => (
           <a href={href} key={label} onClick={() => setOpen(false)}>

@@ -6,6 +6,7 @@ import {
   DemoInbox,
   ProductDemo,
 } from "@/components/landing/landing-interactive";
+import { LandingHero } from "@/components/landing/landing-hero";
 import "./landing.css";
 const start = "/login?mode=signup";
 const categories = [
@@ -26,146 +27,7 @@ export default function HomePage() {
       <div className="lp-hero-background">
         <LandingHeader />
         <main id="permbajtja">
-          <section className="lp-hero lp-container">
-            <div className="lp-hero-copy">
-              <span className="lp-eyebrow">
-                <Icon name="agents" size={15} />
-                AI për bizneset në Instagram
-              </span>
-              <h1>
-                Shndërro bisedat
-                <br />
-                në <span>Instagram</span>
-                <br />
-                <span>në klientë realë</span>
-              </h1>
-              <p>
-                Agjenti AI i përgjigjet klientëve tuaj, kupton produktet tuaja,
-                mbledh të dhënat e porosisë dhe ju ndihmon të shisni më shumë —
-                24/7.
-              </p>
-              <div className="lp-hero-actions">
-                <Link className="lp-button" href={start}>
-                  Fillo tani <Icon name="arrow" />
-                </Link>
-                <a className="lp-button secondary" href="#si-funksionon">
-                  <span className="lp-play">▷</span>Shiko si funksionon
-                </a>
-              </div>
-              <div className="lp-trust">
-                <span className="lp-trust-icons">
-                  <span>
-                    <Icon name="instagram" />
-                  </span>
-                  <span>
-                    <Icon name="agents" />
-                  </span>
-                  <span>
-                    <Icon name="orders" />
-                  </span>
-                </span>
-                <span>
-                  Nga mesazhi i parë te porosia.
-                  <br />
-                  <strong>
-                    Më pak punë manuale, më shumë kohë për biznesin.
-                  </strong>
-                </span>
-              </div>
-            </div>
-            <div
-              className="lp-hero-visual"
-              aria-label="Shembull i panelit dhe bisedës në Instagram"
-            >
-              <div className="lp-desktop-preview">
-                <div className="lp-preview-sidebar">
-                  <span className="lp-logo mini">
-                    <BrandLogo size={22} />
-                  </span>
-                  <div className="lp-store">
-                    <Icon name="instagram" size={14} />
-                    Zana Store <span>⌄</span>
-                  </div>
-                  {[
-                    ["dashboard", "Dashboard"],
-                    ["inbox", "Inbox"],
-                    ["products", "Produkte"],
-                    ["orders", "Porosi"],
-                    ["customers", "Klientë"],
-                    ["agents", "Agjenti AI"],
-                    ["knowledge", "Njohuria"],
-                    ["settings", "Cilësimet"],
-                  ].map(([icon, label]) => (
-                    <div
-                      key={icon}
-                      className={`lp-preview-nav ${icon === "inbox" ? "active" : ""}`}
-                    >
-                      <Icon name={icon} size={14} />
-                      {label}
-                      {icon === "inbox" && <b>3</b>}
-                    </div>
-                  ))}
-                </div>
-                <div className="lp-preview-main">
-                  <div className="lp-preview-search">
-                    <Icon name="search" size={12} />
-                    Kërko biseda…
-                  </div>
-                  <h3>Bisedat</h3>
-                  <DemoInbox compact />
-                </div>
-              </div>
-              <div className="lp-phone">
-                <div className="lp-phone-notch" />
-                <div className="lp-phone-status">
-                  <span>9:41</span>
-                  <span>••• ▰</span>
-                </div>
-                <div className="lp-phone-contact">
-                  <span>‹</span>
-                  <span className="lp-avatar rose">EM</span>
-                  <span>
-                    <strong>elira.m</strong>
-                    <small>Instagram</small>
-                  </span>
-                  <Icon name="inbox" size={18} />
-                </div>
-                <div className="lp-phone-chat">
-                  <span className="lp-chat-time">Sot, 10:24</span>
-                  <p className="lp-bubble">Sa kushton puzzle A3?</p>
-                  <p className="lp-bubble ai">
-                    Përshëndetje! 😊
-                    <br />
-                    Puzzle A3 kushton 2,500 Lekë. Mund ta personalizojmë me
-                    foton dhe tekstin tënd.
-                  </p>
-                  <div className="lp-chat-product">
-                    <span className="lp-puzzle-art">♡</span>
-                    <span>
-                      <strong>Puzzle A3</strong>
-                      <small>2,500 Lekë</small>
-                    </span>
-                  </div>
-                  <p className="lp-bubble">
-                    Po, dua të porosis. Si funksionon?
-                  </p>
-                </div>
-                <div className="lp-phone-compose">
-                  <span>
-                    <Icon name="agents" size={15} />
-                  </span>
-                  Shkruaj një mesazh…<b>⊕</b>
-                </div>
-                <div className="lp-phone-home" />
-              </div>
-              <span className="lp-instagram-float">
-                <Icon name="instagram" size={42} />
-              </span>
-              <span className="lp-visual-caption">
-                Pamje ilustruese e produktit
-              </span>
-            </div>
-          </section>
+          <LandingHero />
           <section
             className="lp-steps lp-container"
             id="si-funksionon"
@@ -177,9 +39,9 @@ export default function HomePage() {
                 <Icon name="instagram" size={30} />
               </span>
               <span>
-                <h2>Lidhu me Instagramin</h2>
+                <h2>Lidh kanalin e komunikimit</h2>
                 <p>
-                  Lidh llogarinë profesionale
+                  Lidh Instagram ose WhatsApp
                   <br />
                   të biznesit tënd.
                 </p>
@@ -192,11 +54,11 @@ export default function HomePage() {
                 <Icon name="products" size={35} />
               </span>
               <span>
-                <h2>Shto produktet</h2>
+                <h2>Shto informacionin</h2>
                 <p>
-                  Shto produktet, çmimet
+                  Shto produktet, shërbimet
                   <br />
-                  dhe hapat e porosisë.
+                  dhe udhëzimet e biznesit.
                 </p>
               </span>
               <Icon name="arrow" />
@@ -211,7 +73,7 @@ export default function HomePage() {
                 <p>
                   AI përgjigjet, mbledh të dhënat
                   <br />
-                  dhe ndihmon me porositë.
+                  për porosi e rezervime.
                 </p>
               </span>
             </div>
