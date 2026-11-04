@@ -1,4 +1,4 @@
-import { createServerSupabase } from "@/lib/supabase/server";
+import { authenticatedReadClient } from "@/lib/auth/read-client";
 import { requireBusinessAccess } from "@/lib/tenant/access";
 import { reportingRange, type Briefing, type BriefingPeriod, type MetricId, type Reading } from "./briefing-model";
 
@@ -10,11 +10,11 @@ type Permission = "allowed" | "disabled" | "unavailable";
 
 /** No business writes or provider calls. All metric reads use the user's JWT/RLS.
  * Existing access resolution is reused for canonical and historical slugs. */
-export async function loadBriefing(slug: string, period: BriefingPeriod, now = new Date()): Promise<Briefing> {
-  const db = await createServerSupabase();
-  const auth = await db.auth.getUser();
-  if (auth.error || !auth.data.user) throw new BriefingError(401);
-  const access = await requireBusinessAccess(auth.data.user.id, slug);
+export async function loadBriefing(slug: string, period: BriefingPeriod, now = new Date(), request?: Request): Promise<Briefing> {
+  const identity = await authenticatedReadClient(request);
+  if (!identity) throw new BriefingError(401);
+  const { db, user } = identity;
+  const access = await requireBusinessAccess(user.id, slug);
   if (!access) throw new BriefingError(403);
   const id = access.business.id;
   async function configuration() {

@@ -127,7 +127,7 @@ export async function POST(request: Request) {
     const briefingPeriod = briefingQuestion(body.text);
     if (briefingPeriod && !body.attachments?.length && !body.links?.length) {
       const answer = async () => {
-        const briefing = await loadBriefing(slug, briefingPeriod);
+        const briefing = await loadBriefing(slug, briefingPeriod, undefined, request);
         return { briefing, message: briefingAnswer(briefing, dashboardLanguage(body.language)) };
       };
       // Explicit user questions may join the existing history. Automatic Home reads use GET

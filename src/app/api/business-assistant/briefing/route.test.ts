@@ -11,7 +11,7 @@ it("validates period before querying and forbids caching private summaries", asy
   expect(mock.load).not.toHaveBeenCalled();
   mock.load.mockResolvedValue({ businessId: "verified" });
   const r = await GET(new Request("http://localhost/api/business-assistant/briefing?slug=test&period=yesterday"));
-  expect(mock.load).toHaveBeenCalledWith("test", "yesterday");
+  expect(mock.load).toHaveBeenCalledWith("test", "yesterday", undefined, expect.any(Request));
   expect(r.headers.get("cache-control")).toBe("private, no-store");
   expect(await r.json()).toEqual({ businessId: "verified" });
 });

@@ -1,4 +1,4 @@
-import { createServerSupabase } from "@/lib/supabase/server";
+import { authenticatedReadClient } from "@/lib/auth/read-client";
 import { requireBusinessAccess } from "@/lib/tenant/access";
 import { BriefingError } from "./briefing";
 import { hasRecoverableWork } from "./persistence-model";
@@ -6,11 +6,10 @@ import { workflowNeedsAttention, type AttentionItem, type AttentionSnapshot } fr
 
 /** Each source is read through the current user's RLS, scoped again by business.
  * No task/status copies, provider calls or business writes are made by a refresh. */
-export async function loadAttention(slug: string): Promise<AttentionSnapshot> {
-  const db = await createServerSupabase();
-  const { data: auth, error: authError } = await db.auth.getUser();
-  if (authError || !auth.user) throw new BriefingError(401);
-  const user = auth.user;
+export async function loadAttention(slug: string, request?: Request): Promise<AttentionSnapshot> {
+  const identity = await authenticatedReadClient(request);
+  if (!identity) throw new BriefingError(401);
+  const { db, user } = identity;
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) throw new BriefingError(403);
   const businessId = access.business.id;
