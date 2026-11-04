@@ -44,10 +44,13 @@ await context.routeWebSocket('**/*',r=>new URL(r.url()).origin==='ws://localhost
 await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(t.email);await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(f.password);await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${t.slug}`);await page.goto(`/b/${t.slug}/agents/test`);
 async function send(message){const input=page.locator('#agent-test-message');await input.fill(message);const{result}=await readServerAction(page,()=>input.press('Enter'));expect(result.error).toBeUndefined();const turn=result.turn??result,state=decode(result.session);await expect(page.getByText(turn.reply,{exact:true}).last()).toBeVisible();evidence.push({turn:evidence.length+1,source:turn.debug.source,reason:turn.debug.fallbackReason,route:turn.conversationRouting?.process,declaredKeys:Object.keys(state.customerDeclaredFacts??{}),profileKeys:Object.keys(state.context?.profile??{}),workflow:turn.configuration?.workflow});expect(state.processes?.order).toBeUndefined();expect(state.processes?.booking).toBeUndefined();return{state,turn};}
 await send('Përshëndetje');await send('Çfarë ofron Agjenti.app?');
-const question=await send('Cilat të dhëna të duhen?');expect(question.state.pendingCustomerQuestion?.fields).toEqual(['name','business_type','instagram_handle','stated_needs']);expect(question.turn.reply).not.toContain('[[ask_customer:');
+const question=await send('Cilat të dhëna të duhen?');expect(question.state.pendingCustomerQuestion?.fields).toEqual(['name']);expect(question.turn.reply).not.toContain('[[ask_customer:');
 roundtrip(question.state,question.turn.reply);
-// Original preceding prose unavailable: server-rendered question is the declared substitute.
-let current=await send(capture.message);
+// Current conversations ask one question. Volunteered sibling facts use labels;
+// old raw positional checkpoints remain covered in customer-question-incident.test.ts.
+const captureMessage = ['original','A'].includes(capture.id)
+  ? `Emri: Miqail\nLloji i biznesit: ${capture.business}\nInstagram: filiz_studio_\nPyetjet tipike: ${capture.needs}` : capture.message;
+let current=await send(captureMessage);
 if(capture.partial){
   expect(current.state.context.profile.name.value).toBe('Miqail');
   expect(current.state.customerDeclaredFacts.business_type.value).toBe(capture.business);

@@ -13,7 +13,7 @@ export function collectTestConfiguration(previewId?: string) {
     if (event.stage === "context" && event.label === "Customer agent configuration loaded") {
       const a = event.data?.agentConfiguration as AgentConfigurationRead | undefined;
       if (!a) return;
-      agents.push({ agentId: a.agentId, agentName: a.agentName, active: a.active,
+      agents.push({ configurationMode: a.configurationMode, configurationRevision: a.configurationRevision, agentId: a.agentId, agentName: a.agentName, active: a.active,
         instructionHash: a.instructionHash, readAt: a.readAt, instructionSource: a.instructionSource,
         fallbackReason: a.fallbackReason, generationRequested: false, fallbackInstructionsUsed: null });
     }

@@ -1,3 +1,4 @@
+import { loadCommunicationDraft } from "@/lib/agents/communication-configuration";
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 import { loadSetupStatus } from "@/lib/setup/status";
 import { recordSetupTest } from "@/lib/setup/record-test";
@@ -63,6 +64,11 @@ export async function executeAgentTestTurn(
         error: e instanceof Error ? e.message : "Rifillo sesionin e provës.",
       };
     }
+    const configurationPreview = input.configurationDraft ? await loadCommunicationDraft(access.business.id, input.configurationDraft) : undefined;
+    const previewKey = configurationPreview ? `${configurationPreview.agentId}:${configurationPreview.updatedAt}` : undefined;
+    if (session.turns > 0 && session.configurationPreviewKey !== previewKey)
+      return { error: "Konfigurimi i provës ka ndryshuar. Nis një bisedë të re." };
+    session.configurationPreviewKey = previewKey;
     // Fail before incurring an AI call if session encryption is not configured.
     if (!process.env.TOKEN_ENCRYPTION_KEY?.trim())
       return {
@@ -91,6 +97,7 @@ export async function executeAgentTestTurn(
     const provenance = collectTestConfiguration();
     const turn = await processConversationMessage({
       onTrace: provenance.onTrace,
+      ...(configurationPreview ? { configurationPreview } : {}),
       mode: "test",
       businessId: access.business.id,
       message: text || (attachments.length ? "Çfarë mund të më thuash për skedarin që dërgova?" : text),
@@ -102,7 +109,7 @@ export async function executeAgentTestTurn(
     });
 
     const configAligned = Boolean(
-      setup?.available &&
+      !configurationPreview && setup?.available &&
       setupSignature &&
       setup.signature === setupSignature &&
       turn.debug.agentConfigured,

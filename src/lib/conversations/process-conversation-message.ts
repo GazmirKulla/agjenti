@@ -1,7 +1,7 @@
+import { composeProcessQuestion } from "./compose-process-question";
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "./handoff";
 import { CapabilityEnforcementError, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { clarificationChoice, clarificationTarget, conversationControl, explicitContinuation, resumeClarificationPrompt, resumeConversation } from "./conversation-control";
-import { usesSharedCoordinator } from "./coordinator-policy";
 import { randomUUID } from "node:crypto";
 import { processBookingTurn, type BookingDraft } from "@/lib/calendar/agent";
 import type { BookingEffectGuard } from "@/lib/calendar/service";
@@ -146,6 +146,7 @@ function attachTurnEffects(result: AgentTurnResult): AgentTurnResult {
 
 /** One message coordinator for Instagram, isolated chat and graph previews. Adapters own persistence/send. */
 export async function processConversationMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
+  if (params.configurationPreview && (params.mode !== "test" || params.configurationPreview.businessId !== params.businessId)) throw Error("invalid_configuration_preview");
   params = lockIsolatedParams(params);
   if (isolatedTurn(params) && !isIsolatedExecution()) {
     return runIsolated(() => processConversationMessage(params));
@@ -185,15 +186,28 @@ export async function processConversationMessage(params: ConversationMessagePara
   if (isIsolatedExecution() && result.nextState.step_key === "order_ready" && params.state?.step_key !== "order_ready") {
     recordExternalAction({ kind: "order.create", disposition: "SIMULATED", detail: "not_submitted" });
   }
+  if (result.processCommunication?.kind === "collect" && !result.handoff) {
+    const composed = await composeProcessQuestion({ ...params, state: result.nextState }, result.processCommunication);
+    result.reply = composed.reply;
+    result.previousResponseId = null;
+    result.debug.source = composed.source;
+    result.debug.fallbackReason = composed.reason;
+    result.debug.agentConfigured = composed.configured || result.debug.agentConfigured;
+  }
+  delete result.processCommunication;
   // Always rebuild from the inbound history. Nested processors may have recorded
   // an intermediate reply; the coordinator owns the final pair, exactly once.
   if (result.presentedProducts?.length || result.presentedServices?.length) result.nextState = structuredClone(result.nextState);
-  if (result.conversationRouting?.reason !== "customer_question_answer") {
+  if (result.conversationRouting?.reason !== "customer_question_answer" || result.debug.source === "ai") {
     const rendered = renderCustomerQuestion(result.nextState, result.reply, params.businessId,
-      result.debug.source === "ai" && result.conversationRouting?.process === "information" && !result.handoff);
+      result.debug.source === "ai" && result.conversationRouting?.process === "information" && !result.handoff, Date.now(), result.customerQuestion);
     if (rendered !== result.reply) result.previousResponseId = null;
     result.reply = rendered;
   }
+  result.communication = { version: 1, source: result.debug.source === "ai" ? "model" : result.debug.fallbackReason ? "fallback" : "protected",
+    questionField: result.nextState.pendingCustomerQuestion?.fields[0] ?? null, decisionKind: result.turnDecision.kind };
+  delete result.customerQuestion; // A proposal is internal; only the delivered checkpoint is authoritative.
+  params.onTrace?.({ stage: "ai", label: "Communication contract finalized", data: { ...result.communication, outcomes: result.executionResults?.map(({ operation, status }) => ({ operation, status })) ?? [] } });
   recordReplyPresentation(result.nextState, params.businessId, result);
   rememberTurn(before, result.nextState, params.message, result.reply);
   if (result.conversationRouting) {
@@ -202,7 +216,7 @@ export async function processConversationMessage(params: ConversationMessagePara
   }
   // Operational metadata only: never copy messages, profile values or lease tokens.
   params.onTrace?.({ stage: "workflow", label: "Conversation coordinator completed", data: {
-    coordinator: params.linearPreview ? "linear_preview" : usesSharedCoordinator(params) ? "shared_v3" : "legacy",
+    coordinator: params.linearPreview ? "linear_preview" : "shared_v3",
     businessId: params.businessId, executionMode: isIsolatedExecution() ? "isolated" : "live",
     channel: params.source ?? (params.mode === "test" ? "admin_chat_lab" : "instagram"),
     revision: params.bookingGuard?.revision ?? null,
@@ -271,11 +285,20 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     params = { ...params, state };
     if (consumed) {
       await requireRuntimeModules(params.businessId, ["agents"]);
-      return { ...plainResult(state, consumed.reply), conversationRouting: { process: "information", action: consumed.accepted ? "answer" : "clarify",
-        source: "rules", reason: "customer_question_answer", reusedFields: [], missingFields: [] } };
+      const routing: ConversationRouting = { process: "information", action: consumed.accepted ? "answer" : "clarify",
+        source: "rules", reason: "customer_question_answer", reusedFields: [], missingFields: [] };
+      if (consumed.accepted && !state.pendingCustomerQuestion) {
+        scope.routing = routing;
+        const answer = await processLegacyAgentTurn({ ...params, state: structuredClone(state),
+          informational: "The customer answered your previous question. Their validated answer is already saved in the conversation context. Continue naturally using it and verified business information; explain a relevant benefit or answer their question. Do not repeat the question, recite a form, or automatically collect the next field. Ask at most one useful follow-up only if needed. This is informational conversation, not consent to register, order or book; do not perform or claim any action." });
+        answer.nextState = state;
+        answer.conversationRouting = routing;
+        return answer;
+      }
+      return { ...plainResult(state, consumed.reply), conversationRouting: routing };
     }
   }
-  if (!params.state?.processes && params.state?.visual && usesSharedCoordinator(params)) params = { ...params, state: await migrateState() };
+  if (!params.state?.processes && params.state?.visual) params = { ...params, state: await migrateState() };
   if (params.state?.conversationPaused || params.state?.processes?.pendingClarification || choice === "resume" || choice === "cancel"
     || choice && params.state?.processes?.lastDecision?.reason.startsWith("clarification_")) {
     let state = await migrateState();
@@ -517,28 +540,6 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     }
     if (clarificationResume) answer.conversationRouting = { process: "order", action: "resume", source: "rules", reason: "clarification_resume", reusedFields: [], missingFields: [] };
     return answer;
-  }
-  if (!usesSharedCoordinator(params)) {
-    // Keep non-pilot conversations on legacy until explicitly enrolled.
-    if (isStaffContactRequest(params.message) && explicitIntent(params.message) !== "order") {
-      const state = structuredClone(params.state ?? emptyState());
-      const result = await processLegacyAgentTurn({ ...params, state, informational: staffContactInstructions });
-      result.nextState = state; result.handoff = true; result.advisoryHandoff = true;
-      return result;
-    }
-    if (explicitIntent(params.message) === "support") {
-      const version = await loadVisualVersion(params.businessId, params.state?.visual?.versionId);
-      if (!version) return { ...plainResult(structuredClone(params.state ?? emptyState()), staffHandoffReply(params.mode === "test")), handoff: true, advisoryHandoff: false };
-      return processAgentTurn({ ...params, supportRequest: true });
-    }
-    const booking = await processBookingTurn(params);
-    if (booking) {
-      // Non-pilot legacy booking still owns its classifier during compatibility.
-      // Record its executor explicitly rather than misreporting coordinator-only.
-      dispatch({ ...params, bookingRequest: true }, "booking");
-      return booking;
-    }
-    return processAgentTurn(params);
   }
   let state = await migrateState();
   extractCustomerDeclaredFacts(state, params.message);

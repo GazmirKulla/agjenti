@@ -1,3 +1,4 @@
+import { communicationResponse } from './communication-response.mjs';
 // Failure confirmation through actual UI/Auth/API/coordinator. Only model output
 // is synthetic. Run with isolated app-r3 and WITHOUT a separate r3-provider.
 import http from 'node:http';
@@ -46,6 +47,7 @@ test.beforeAll(async()=>{
         const key=message?.match(/^Çfarë ([a-z_]+) dhashë\?$/)?.[1];
         text=key&&projection?.process?.fields?.[key]?`${key}: ${projection.process.fields[key].value}.`:responses.get(message)??'Si mund të të ndihmoj?';
       }
+    text=communicationResponse(r,text);
       calls++;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({id:`r4-synthetic-${calls}`,object:'response',status:'completed',
         output:[{type:'message',role:'assistant',content:[{type:'output_text',text,annotations:[]}]}]}));
     }catch{res.writeHead(400);res.end();}

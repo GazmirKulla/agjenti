@@ -4,10 +4,42 @@ import { migrateContext, setFact } from "./context";
 import { rememberTurn } from "./guidance";
 const fields: QuestionField[] = ["name", "business_type", "instagram_handle", "stated_needs"];
 const original = "Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj";
+it("records only the delivered structured question and requires its delivery before consumption", () => {
+  const state = migrateContext(); state.schemaVersion = 3;
+  const reply = renderCustomerQuestion(state, "Të ndihmoj me pyetjet e klientëve.", "tenant", true, 1000,
+    { field: "business_type", text: "Çfarë biznesi ke?", purpose: "understand_need" });
+  expect(state.pendingCustomerQuestion?.fields).toEqual(["business_type"]);
+  expect(reply).not.toContain("Emri:");
+  state.recentMessages = [{ role: "assistant", content: reply }];
+  expect(consumeCustomerQuestion(state, { businessId: "tenant", message: "Shitje librash", test: false, deliveredReply: "Something else", now: 2000 })).toBeNull();
+  expect(state.customerDeclaredFacts).toBeUndefined();
+});
+it("never asks a known structured fact again or adds qualification during another process", () => {
+  const state = migrateContext(); setFact(state, "customer_name", "Ana", "text", "message_label");
+  const proposal = { field: "name" as const, text: "Si të quajnë?", purpose: "understand_need" as const };
+  expect(renderCustomerQuestion(state, "Përshëndetje", "tenant", true, 1000, proposal)).toBe("Përshëndetje");
+  expect(state.pendingCustomerQuestion).toBeUndefined();
+  state.conversationPaused = true;
+  expect(renderCustomerQuestion(state, "Përshëndetje", "tenant", true, 1000, { ...proposal, field: "business_type" })).toBe("Përshëndetje");
+});
+it("accepts explicitly volunteered sibling facts after one question without collecting every missing field", () => {
+  const state = migrateContext(); state.schemaVersion = 3;
+  const reply = renderCustomerQuestion(state, "Përshëndetje", "tenant", true, 1000,
+    { field: "name", text: "Si të quajnë?", purpose: "current_request" });
+  state.recentMessages = [{ role: "assistant", content: reply }];
+  const result = consumeCustomerQuestion(state, { businessId: "tenant", message: "Emri: Ana; Instagram: ana_studio; Lloji i biznesit: Studio", test: true, now: 2000 });
+  expect(result?.accepted).toBe(3);
+  expect(state.context?.profile.name?.value).toBe("Ana");
+  expect(state.customerDeclaredFacts?.instagram_handle?.value).toBe("ana_studio");
+  expect(state.pendingCustomerQuestion).toBeUndefined();
+});
 function setup(keys = fields) {
   const state = migrateContext(); state.schemaVersion = 3;
   const reply = renderCustomerQuestion(state, `[[ask_customer:${keys.join(",")}]]`, "tenant", true, 1000);
-  state.recentMessages = [{ role: "assistant", content: reply }];
+  // Persisted multi-field prompts from before the conversational rollout.
+  if (keys.length > 1) state.pendingCustomerQuestion = { kind: "customer_facts", businessId: "tenant",
+    fields: keys, prompt: "Shkruaj nga një përgjigje në çdo rresht, në këtë rend (ose përdor etiketat):\nEmri:\nLloji i biznesit:\nInstagram:\nPyetjet tipike:", expiresAt: 901000 };
+  state.recentMessages = [{ role: "assistant", content: state.pendingCustomerQuestion?.prompt ?? reply }];
   return state;
 }
 function answer(state: ReturnType<typeof setup>, message: string, now = 2000) {
@@ -144,5 +176,35 @@ describe("F1 server-owned bounded question (not arbitrary assistant prose)", () 
       expect(renderCustomerQuestion(state,"[[ask_customer:password]]","tenant",true)).not.toContain("ask_customer");expect(state.pendingCustomerQuestion).toBeUndefined();
       setFact(state,"customer_name","Elira","text","message_label");renderCustomerQuestion(state,"[[ask_customer:name,instagram_handle]]","tenant",true);
       expect(state.pendingCustomerQuestion?.fields).toEqual(["instagram_handle"]);expect(migrateContext(JSON.parse(JSON.stringify(state))).pendingCustomerQuestion).toEqual(state.pendingCustomerQuestion);}
+  });
+});
+
+
+describe("natural single customer questions", () => {
+  it("renders only one requested field and does not queue the others", () => {
+    const state = migrateContext();
+    const reply = renderCustomerQuestion(state, "Mund të përgjigjem për produktet. [[ask_customer:business_type,name,instagram_handle]]", "tenant", true, 1000);
+    expect(reply).toBe("Mund të përgjigjem për produktet. Çfarë biznesi ke?");
+    expect(state.pendingCustomerQuestion?.fields).toEqual(["business_type"]);
+    state.recentMessages = [{ role: "assistant", content: reply }];
+    expect(answer(state, "Kafene")?.accepted).toBe(1);
+    expect(state.customerDeclaredFacts?.business_type?.value).toBe("Kafene");
+    expect(state.pendingCustomerQuestion).toBeUndefined();
+  });
+  it("accepts a plain Instagram username after the specific question", () => {
+    const state = setup(["instagram_handle"]);
+    expect(answer(state, "studiolera")?.accepted).toBe(1);
+    expect(state.customerDeclaredFacts?.instagram_handle?.value).toBe("studiolera");
+  });
+  it("clarifies an invalid answer naturally and accepts the correction without labels", () => {
+    const state = setup(["instagram_handle"]);
+    expect(answer(state, "not-valid")?.reply).toBe("Nuk e kuptova saktë. Cili është profili i biznesit tënd në Instagram?");
+    expect(answer(state, "studioelira")?.accepted).toBe(1);
+  });
+  it("lets an informational question interrupt without storing it as the business", () => {
+    const state = setup(["business_type"]);
+    expect(answer(state, "Si funksionon?")).toBeNull();
+    expect(state.customerDeclaredFacts).toBeUndefined();
+    expect(state.pendingCustomerQuestion).toBeUndefined();
   });
 });

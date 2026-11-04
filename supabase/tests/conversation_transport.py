@@ -146,6 +146,25 @@ try:
         assert second.returncode and 'stale_collection_policy' in error, error
         assert sql(f"select agent_collection_policy->>'revision' from businesses where id='{policy_business}'") == '1'
         print('PASS collection configuration: concurrent server writers serialize, stale CAS rejects without overwrite', flush=True)
+        if args.extra_sql.name == 'agent_communication.sql':
+            agent_id = '00000000-0000-4000-8000-000000009196'
+            sql(f"insert into ai_agents(id,business_id,name,instructions,is_active) values('{agent_id}','{policy_business}','Synthetic agent','Published',true)")
+            stamp = sql(f"select updated_at from ai_agents where id='{agent_id}'")
+            values = f"jsonb_build_object('instructions','Draft A','communication',(select communication from ai_agents where id='{agent_id}'))"
+            agent_call = f"select public.save_agent_communication('{policy_business}','{actor}','{agent_id}','{stamp}','draft',{values});"
+            first = worker('begin; set local role service_role; ' + agent_call)
+            assert json.loads(line(first))['published'] is False
+            second = subprocess.Popen(cmd + ['-c', "set application_name='communication-stale-writer'; set role service_role; " + agent_call.replace('Draft A', 'Draft B')], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+            workers.append(second)
+            deadline = time.monotonic() + 5
+            while sql("select count(*) from pg_stat_activity where application_name='communication-stale-writer' and wait_event_type='Lock'") != '1':
+                assert time.monotonic() < deadline, 'Communication writer did not contend on row lock'
+                time.sleep(.02)
+            finish(first)
+            _, error = second.communicate(timeout=10)
+            assert second.returncode and 'stale_agent' in error, error
+            assert sql(f"select instructions||':'||(configuration_draft->>'instructions') from ai_agents where id='{agent_id}'") == 'Published:Draft A'
+            print('PASS communication configuration: concurrent drafts serialize, stale writer rejected, published instructions preserved', flush=True)
 
     def snapshot():
         return sql(f"select json_build_array((select row_to_json(t) from conversations t where id='{c}'),(select row_to_json(t) from conversation_states t where conversation_id='{c}'),(select json_agg(t order by id) from workflow_inbound_queue t where business_id='{b}'))")

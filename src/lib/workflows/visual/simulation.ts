@@ -43,7 +43,7 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
       result.executionCount++;
       result.inputMessages.unshift("");
       result.traversedNodeIds.push(...prompt.traversedNodeIds);
-      responseEvidence.push(JSON.stringify([prompt.action.kind, prompt.action.nodeId, prompt.action.message]));
+      responseEvidence.push(JSON.stringify([prompt.action.kind, prompt.action.nodeId, prompt.action.communication]));
       if (prompt.action.kind !== "prompt" || prompt.action.nodeId !== s.nodeId) throw new Error("confirmation_prompt_missing");
       state = prompt.state;
     }
@@ -54,7 +54,7 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
       result.traversedNodeIds.push(...last.traversedNodeIds);
       result.selectedBranches = { ...state.branchPorts };
       // Compare actual prompt content for regression, but never return it to the caller/UI.
-      responseEvidence.push(JSON.stringify([last.action.kind, last.action.nodeId, last.action.message]));
+      responseEvidence.push(JSON.stringify([last.action.kind, last.action.nodeId, last.action.communication]));
       if (externalActions.has(last.action.kind)) {
         result.attemptedActions.push({ kind: last.action.kind, nodeId: last.action.nodeId, disposition: "not_executed" });
         result.result = "UNVERIFIED";
@@ -99,11 +99,11 @@ function blockedScenario(code: string, message: string, result: SimulationStatus
 }
 
 export function simulationBinding(report: SimulationReport): SimulationBinding {
-  return { version: 1, proposalId: report.proposalId, baseRevision: report.baseRevision, candidateGraphHash: report.candidateGraphHash };
+  return { version: 2, proposalId: report.proposalId, baseRevision: report.baseRevision, candidateGraphHash: report.candidateGraphHash };
 }
-export function matchesSimulationBinding(binding: SimulationBinding, proposalId: string, revision: number, raw: unknown): boolean {
+export function matchesSimulationBinding(binding: Omit<SimulationBinding, "version"> & { version: number }, proposalId: string, revision: number, raw: unknown): boolean {
   const graph = normalizeVisualDraft(raw);
-  return !!graph && binding.version === 1 && binding.proposalId === proposalId && binding.baseRevision === revision && binding.candidateGraphHash === visualGraphHash(graph);
+  return !!graph && binding.version === 2 && binding.proposalId === proposalId && binding.baseRevision === revision && binding.candidateGraphHash === visualGraphHash(graph);
 }
 
 /** Synchronous, bounded, isolated execution against the SAME deterministic runtime used in production/Chat Lab. */
@@ -113,7 +113,7 @@ export function simulateWorkflowProposal(input: {
 }): SimulationReport {
   const started = performance.now();
   const graph = normalizeVisualDraft(input.candidate);
-  const report: SimulationReport = { version: 1, engine: "visual-runtime-v1", proposalId: input.proposalId, baseRevision: input.baseRevision,
+  const report: SimulationReport = { version: 2, engine: "visual-runtime-v2", proposalId: input.proposalId, baseRevision: input.baseRevision,
     candidateGraphHash: visualGraphHash(graph ?? input.candidate), baselineGraphHash: visualGraphHash(input.before),
     scenarios: [], validationFindings: [], durationMs: 0, result: "BLOCKED", canPublish: false };
   const validation = validateVisualGraph(input.candidate);

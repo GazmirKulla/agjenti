@@ -1,0 +1,51 @@
+-- Synthetic fixtures, rolled back. This test refuses remote databases.
+begin;
+do $$ begin if inet_server_addr() is not null then raise exception 'local socket required'; end if; end $$;
+do $$
+declare b uuid:=gen_random_uuid(); foreign_b uuid:=gen_random_uuid(); u uuid:=gen_random_uuid(); outsider uuid:=gen_random_uuid(); a uuid:=gen_random_uuid(); stamp timestamptz; policy jsonb; result jsonb; denied boolean; signature text;
+begin
+ insert into auth.users(id) values(u),(outsider);
+ insert into public.businesses(id,name,slug) values(b,'Communication test',b::text),(foreign_b,'Other test',foreign_b::text);
+ insert into public.business_users(business_id,user_id,role) values(b,u,'owner'),(foreign_b,outsider,'owner');
+ insert into public.ai_agents(id,business_id,name,instructions,is_active) values(a,b,'Test agent','Original instructions',true);
+ select updated_at,communication into stamp,policy from public.ai_agents where id=a;
+ signature:=public.business_setup_status(b)->>'signature';
+ if (select count(*) from public.agent_configuration_versions where agent_id=a)<>1 then raise exception 'missing initial history'; end if;
+ denied:=false;
+ begin perform public.save_agent_communication(b,outsider,a,stamp,'discard'); exception when others then denied:=sqlerrm='unauthorized'; end;
+ if not denied then raise exception 'foreign actor accepted'; end if;
+ denied:=false;
+ begin perform public.save_agent_communication(foreign_b,outsider,a,stamp,'discard'); exception when others then denied:=sqlerrm='agent_not_found'; end;
+ if not denied then raise exception 'foreign agent accepted'; end if;
+ denied:=false;
+ begin perform public.save_agent_communication(b,u,a,stamp,'draft',jsonb_build_object('instructions','x','communication',policy||'{"skipConfirmation":true}')); exception when others then denied:=sqlerrm='invalid_agent_draft'; end;
+ if not denied then raise exception 'unsupported authority accepted'; end if;
+ perform public.save_agent_communication(b,u,a,stamp,'draft',jsonb_build_object('instructions','Draft instructions','communication',policy||'{"tone":"formal"}'));
+ if (select instructions from public.ai_agents where id=a)<>'Original instructions' or (select configuration_revision from public.ai_agents where id=a)<>1 then raise exception 'draft affected live'; end if;
+ if public.business_setup_status(b)->>'signature' is distinct from signature then raise exception 'draft invalidated live test'; end if;
+ denied:=false;
+ begin perform public.save_agent_communication(b,u,a,stamp,'publish'); exception when others then denied:=sqlerrm='stale_agent'; end;
+ if not denied then raise exception 'stale publication accepted'; end if;
+ select updated_at into stamp from public.ai_agents where id=a;
+ result:=public.save_agent_communication(b,u,a,stamp,'publish');
+ if result->>'published'<>'true' or result->>'revision'<>'2' or (select instructions from public.ai_agents where id=a)<>'Draft instructions' then raise exception 'publication failed'; end if;
+ if (select count(*) from public.agent_configuration_versions where agent_id=a)<>2 then raise exception 'history missing publication'; end if;
+ if public.business_setup_status(b)->>'signature' is not distinct from signature then raise exception 'publication did not invalidate live test'; end if;
+ select updated_at into stamp from public.ai_agents where id=a;
+ perform public.save_agent_communication(b,u,a,stamp,'restore','{"revision":1}');
+ if (select instructions from public.ai_agents where id=a)<>'Draft instructions' or (select configuration_draft->>'instructions' from public.ai_agents where id=a)<>'Original instructions' then raise exception 'restore must be draft only'; end if;
+ -- An old integration edit is audited; its live change invalidates the draft.
+ update public.ai_agents set instructions='Concurrent edit',updated_at=clock_timestamp() where id=a;
+ select updated_at into stamp from public.ai_agents where id=a;
+ denied:=false;
+ begin perform public.save_agent_communication(b,u,a,stamp,'publish'); exception when others then denied:=sqlerrm='stale_agent_draft'; end;
+ if not denied then raise exception 'stale draft overwrote active configuration'; end if;
+ perform public.save_agent_communication(b,u,a,stamp,'discard');
+ if (select instructions from public.ai_agents where id=a)<>'Concurrent edit' then raise exception 'discard changed live'; end if;
+ signature:=public.business_setup_status(b)->>'signature';
+ update public.ai_agents set communication=communication||'{"emoji":"none"}' where id=a;
+ if public.business_setup_status(b)->>'signature' is not distinct from signature then raise exception 'policy-only publication did not invalidate live test'; end if;
+ if has_function_privilege('authenticated','public.save_agent_communication(uuid,uuid,uuid,timestamptz,text,jsonb)','EXECUTE') then raise exception 'unsafe direct RPC access'; end if;
+ raise notice 'PASS communication draft/publish/restore/conflict/tenant boundaries';
+end $$;
+rollback;

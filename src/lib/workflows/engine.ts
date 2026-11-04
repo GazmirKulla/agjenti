@@ -1,3 +1,4 @@
+import { historicalStepPrompt } from "./compatibility-prompts";
 export const PUZZLE_STEPS = [
   { key: "collect_theme", kind: "text" as const, label: "Personazhi" },
   { key: "awaiting_confirm", kind: "confirm" as const, label: "Konfirmim" },
@@ -277,40 +278,13 @@ export function applyInboundToState(
 }
 
 export function promptForStep(stepKey: string | null | undefined): string {
-  switch (stepKey) {
-    case "choose_product":
-      return "Cilin produkt dëshironi?";
-    case "collect_theme":
-      return "Cilin personazh ose temë doni në produkt?";
-    case "awaiting_confirm":
-      return "A e konfirmoni këtë zgjedhje?";
-    case "awaiting_photo":
-      return "Na dërgoni foton që do të përdorim.";
-    case "collect_size":
-      return "Çfarë madhësie doni?";
-    case "collect_pieces":
-      return "Sa copëza doni?";
-    case "collect_age":
-      return "Sa vjeç është fëmija?";
-    case "collect_tray":
-      return "A doni tabaka?";
-    case "collect_color":
-      return "Çfarë ngjyre doni?";
-    case "collect_customer":
-      return "Na jepni emrin, telefonin, qytetin dhe adresën.";
-    case "confirm_product":
-      return "A e konfirmoni porosinë e këtij produkti?";
-    case "order_ready":
-      return "Porosia është gati. Stafi ose agjenti mund ta konfirmojë.";
-    default:
-      return "Si mund t'ju ndihmoj?";
-  }
+  return historicalStepPrompt(stepKey) ?? "Si mund t'ju ndihmoj?";
 }
 
 export function stepLabel(step: WorkflowStepDef): string {
   if (step.label?.trim()) return step.label.trim();
-  const fromPrompt = promptForStep(step.key);
-  if (fromPrompt !== "Si mund t'ju ndihmoj?") return fromPrompt;
+  const fromPrompt = historicalStepPrompt(step.key);
+  if (fromPrompt !== null) return fromPrompt;
   return step.key.replace(/_/g, " ");
 }
 

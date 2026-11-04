@@ -1,6 +1,8 @@
 const actionAccess = vi.hoisted(()=>vi.fn());
 vi.mock("@/lib/actions/access",()=>({requireActionAccess:actionAccess}));
 import { beforeEach, expect, it, vi } from "vitest";
+vi.mock("@/lib/actions/operations/access", () => ({ operationActor: async () => ({ userId: "user", business: { id: "business", name: "Test business", catalog_source: "internal" } }) }));
+import { defaultCommunicationPolicy } from "@/lib/agents/communication-policy";
 const m = vi.hoisted(() => ({
   from: vi.fn(),
   slots: vi.fn(),
@@ -72,11 +74,8 @@ beforeEach(() => {
 });
 it("C1: persists inactive instructions without implying effectiveness or activation", async () => {
   const before = { id, name: "Synthetic agent", instructions: "Old", is_active: false, updated_at: "v1" };
-  m.responses.push({ data: before });
-  const plan = await prepareProposal({ ...access, modules: ["agents"] }, {
-    action: "agent_update", id, message: "Change greeting", changes: [{ field: "instructions", value: "New greeting" }],
-  }, "Europe/Tirane");
-  expect(plan.preview?.notice).toContain("joaktiv");
+  // Compatibility: this ticket was already reviewed before the cutover.
+  const plan = { token: ticket({ action: "agent_update", before, values: { instructions: "New greeting" } }) };
   m.responses.push({ data: { id } }, { data: [{ ...before, instructions: "New greeting" }] });
   const result = await executeTicket({ ...access, modules: ["agents"] }, plan.token!);
   expect(result).toMatchObject({ configurationEffect: { saved: true, effective: false, status: "inactive", behaviorVerified: false } });
@@ -86,9 +85,7 @@ it("C1: persists inactive instructions without implying effectiveness or activat
 });
 it.each(["effective", "superseded", "unverified"] as const)("C1: returns server-observed %s after an acknowledged update", async status => {
   const before = { id, name: "Synthetic", instructions: "Old", is_active: true, updated_at: "v1" };
-  m.responses.push({ data: before });
-  const plan = await prepareProposal({ ...access, modules: ["agents"] }, { action: "agent_update", id, message: "", changes: [{ field: "instructions", value: "New" }] }, "UTC");
-  expect(plan.preview?.notice).toContain("nuk garantojnë tekst identik");
+  const plan = { token: ticket({ action: "agent_update", before, values: { instructions: "New" } }) };
   m.responses.push({ data: { id } }, status === "unverified" ? { error: { code: "failed" } } : { data: [{ ...before, instructions: status === "superseded" ? "Newer" : "New" }] });
   expect(await executeTicket({ ...access, modules: ["agents"] }, plan.token!)).toMatchObject({ configurationEffect: { status, saved: true, behaviorVerified: false, effective: status === "unverified" ? null : status === "effective" } });
 });
@@ -396,44 +393,19 @@ it("rejects records changed while the model was composing a proposal", async () 
   ).rejects.toThrow("gjatë analizës");
 });
 
-it("routes instruction edits through confirmation with tenant and content version checks", async () => {
-  const agentAccess = { ...access, modules: ["agents"] };
-  const before = {
-    id,
-    name: "Shitjet",
-    instructions: "Udhëzimet e vjetra",
-    updated_at: "v1",
-  };
+it("normalizes old agent_update proposals into the same reviewed draft operation used by the manual UI", async () => {
+  const before = { id, name: "Shitjet", instructions: "Udhëzimet e vjetra", updated_at: "v1", communication: defaultCommunicationPolicy, configuration_revision: 1, configuration_draft: null };
   m.responses.push({ data: before });
-  const result = await prepareProposal(
-    agentAccess,
-    {
-      action: "agent_update",
-      id,
-      message: "Kontrollo",
-      changes: [{ field: "instructions", value: "Përgjigju shkurt." }],
-    },
-    "Europe/Tirane",
-  );
+  const result = await prepareProposal({ ...access, modules: ["agents"] }, {
+    action: "agent_update", id, message: "Kontrollo", changes: [{ field: "instructions", value: "Përgjigju shkurt." }],
+  }, "Europe/Tirane");
   expect(result.preview?.subject).toBe("Shitjet");
+  const prepared = openTicket(result.token!, { ...access, modules: ["agents"] });
+  expect(prepared.action).toBe("operation");
+  expect(prepared.values.operation).toMatchObject({ key: "agent.communication", input: { id, mode: "draft" }, snapshot: { values: { instructions: "Përgjigju shkurt." } } });
   expect(m.queries).toHaveLength(1);
-  m.responses.push({ data: { id } });
-  expect(await executeTicket(agentAccess, result.token!)).toHaveProperty(
-    "path",
-    "agents",
-  );
-  expect(m.queries[1].table).toBe("ai_agents");
-  expect(m.queries[1].calls).toContainEqual([
-    "eq",
-    ["business_id", "business"],
-  ]);
-  expect(m.queries[1].calls).toContainEqual([
-    "eq",
-    ["instructions", before.instructions],
-  ]);
-  await expect(
-    executeTicket({ ...agentAccess, modules: [] }, result.token!),
-  ).rejects.toThrow();
+  expect(m.queries[0].calls).toContainEqual(["eq", ["business_id", "business"]]);
+  expect(m.queries[0].calls.some(([name]) => name === "update")).toBe(false);
 });
 it('loads a selected entity directly with tenant ownership, independently of initial list limits', async()=>{
   const {loadSelectedContext}=await import('./service');

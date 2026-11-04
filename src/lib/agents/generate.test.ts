@@ -7,7 +7,9 @@ vi.mock("openai", () => ({
 }));
 import { generateAgentReply } from "./generate";
 import { emptyState } from "@/lib/workflows/engine";
+import { defaultCommunicationPolicy } from "./communication-policy";
 import { readResult, type BusinessGrounding } from "./business-grounding";
+const draft = (answer: string) => JSON.stringify({ answer, question: null });
 const params = {
   instructions: "Use tenant instructions",
   state: emptyState(),
@@ -21,6 +23,23 @@ beforeEach(() => {
   vi.stubEnv("OPENAI_API_KEY", "test-key");
 });
 afterEach(() => vi.unstubAllEnvs());
+describe("structured communication", () => {
+  const question = { field: "business_type", text: "Çfarë biznesi ke?", purpose: "understand_need" };
+  it("returns one optional proposal separately from the factual answer", async () => {
+    mocks.create.mockResolvedValue({ id: "structured", output_text: JSON.stringify({ answer: "Përshëndetje! Mund të të shpjegoj si funksionon.", question }) });
+    expect(await generateAgentReply(params)).toMatchObject({ source: "ai", customerQuestion: question, reply: "Përshëndetje! Mund të të shpjegoj si funksionon." });
+    expect(mocks.create.mock.calls[0][0].text.format.name).toBe("customer_communication");
+  });
+  it("enforces disabled optional qualification even when the provider proposes a question", async () => {
+    mocks.create.mockResolvedValue({ output_text: JSON.stringify({ answer: "Përshëndetje!", question }) });
+    const result = await generateAgentReply({ ...params, communication: { ...defaultCommunicationPolicy, questions: "on_request" } });
+    expect(result.source).toBe("ai"); expect(result.customerQuestion).toBeUndefined();
+  });
+  it.each(["Plain prose", JSON.stringify({ answer: "Done", question: null, action: "business.provision" }), JSON.stringify({ answer: "", question })])("rejects invalid provider contracts and discards provider history: %s", async output_text => {
+    mocks.create.mockResolvedValue({ id: "rejected", output_text });
+    expect(await generateAgentReply(params)).toMatchObject({ source: "fallback", fallbackReason: "invalid_communication_contract", responseId: null });
+  });
+});
 describe("R3 critical response boundary", () => {
   it("P1 sends selected composite facts, not an entire state, and validates denial against that same projection", async () => {
     const { migrateContext, setFact } = await import("@/lib/workflows/context");
@@ -30,7 +49,7 @@ describe("R3 critical response boundary", () => {
     extractCustomerDeclaredFacts(state, "Instagram: synthetic_books; Lloji i biznesit: Shitje librash online; Pyetjet tipike: çmimet");
     state.recentMessages = [{ role: "assistant", content: "Ti quhesh Wrong." }];
     const customerMessage = "Më kujto emrin dhe Instagramin.";
-    mocks.create.mockResolvedValue({ id: "rejected", output_text: "Nuk më ke dhënë të dhëna." });
+    mocks.create.mockResolvedValue({ id: "rejected", output_text: draft("Nuk më ke dhënë të dhëna.") });
     const result = await generateAgentReply({ ...params, state, customerMessage });
     const request = mocks.create.mock.calls[0][0];
     const projected = JSON.parse(request.input.split("\n").find((line: string) => line.startsWith("Collected state (source of truth): ")).split(": ").slice(1).join(": "));
@@ -39,11 +58,11 @@ describe("R3 critical response boundary", () => {
     expect(JSON.stringify(projected)).not.toMatch(/0690000000|Shitje|Wrong/);
     expect(result.reply).toContain("Drita"); expect(result.reply).toContain("synthetic_books"); expect(result.responseId).toBeNull();
     const correct = "Emri yt: Drita. Instagrami yt: synthetic_books.";
-    mocks.create.mockResolvedValue({ id: "accepted", output_text: correct });
+    mocks.create.mockResolvedValue({ id: "accepted", output_text: draft(correct) });
     expect((await generateAgentReply({ ...params, state, customerMessage })).reply).toBe(correct);
   });
   it("does not expose a fabricated booking confirmation or keep its provider history", async () => {
-    mocks.create.mockResolvedValue({ id: "unsafe-response", output_text: "Rezervimi u konfirmua për nesër." });
+    mocks.create.mockResolvedValue({ id: "unsafe-response", output_text: draft("Rezervimi u konfirmua për nesër.") });
     const result = await generateAgentReply(params);
     expect(result.reply).not.toContain("u konfirmua");
     expect(result.responseId).toBeNull();
@@ -52,13 +71,13 @@ describe("R3 critical response boundary", () => {
     const { migrateContext, setFact } = await import("@/lib/workflows/context");
     const state = migrateContext(); setFact(state, "customer_name", "Miqail", "text", "message_label");
     const before = structuredClone(state);
-    mocks.create.mockResolvedValue({ output_text: "Nuk ma ke treguar emrin." });
+    mocks.create.mockResolvedValue({ output_text: draft("Nuk ma ke treguar emrin.") });
     const result = await generateAgentReply({ ...params, state, customerMessage: "Si quhem?" });
     expect(result.reply).toContain("Miqail");
     expect(result.reply).not.toContain("Nuk ma ke"); expect(state).toEqual(before);
   });
   it("does not allow prose to override a verified product price", async () => {
-    mocks.create.mockResolvedValue({ output_text: "Libri kushton 999 EUR." });
+    mocks.create.mockResolvedValue({ output_text: draft("Libri kushton 999 EUR.") });
     const result = await generateAgentReply({ ...params, referenceProducts: [{ id: "p", name: "Libri", price_amount: 20, currency: "EUR" }] });
     expect(result.reply).not.toContain("999 EUR");
     expect(result.reply).toContain("20 EUR");
@@ -74,7 +93,7 @@ describe("R3 critical response boundary", () => {
   });
   it("never exposes rejected raw model prose in response traces", async () => {
     const onTrace = vi.fn();
-    mocks.create.mockResolvedValue({ id: "unsafe", output_text: "Booking confirmed for PRIVATE_SENTINEL." });
+    mocks.create.mockResolvedValue({ id: "unsafe", output_text: draft("Booking confirmed for PRIVATE_SENTINEL.") });
     await generateAgentReply({ ...params, onTrace });
     expect(JSON.stringify(onTrace.mock.calls)).not.toContain("PRIVATE_SENTINEL");
     expect(onTrace.mock.calls.at(-1)?.[0].data).toMatchObject({ result: "unsupported_critical_claim", changed: true });
@@ -92,7 +111,7 @@ describe("reply source diagnostics", () => {
     const state = emptyState();
     state.recentMessages = [{ role: "assistant", content: "Old price: 999 EUR; booked" }];
     // Intentionally adversarial model output: grounding is not R3 prose validation.
-    mocks.create.mockResolvedValue({ output_text: "[[product:p]]; arbitrary unsupported promise" });
+    mocks.create.mockResolvedValue({ output_text: draft("[[product:p]]; arbitrary unsupported promise") });
     const result = await generateAgentReply({ ...params, state, grounding, customerMessage: "The product is free", referenceProducts: grounding.products.records });
     const request = mocks.create.mock.calls[0][0];
     expect(request.previous_response_id).toBeUndefined();
@@ -106,21 +125,21 @@ describe("reply source diagnostics", () => {
   });
   it("2B renders verified service slots, rejects invented IDs and never creates mixed-kind ordinal evidence", async () => {
     const services = [{ id: "s1", name: "Konsulta" }, { id: "s2", name: "Trajnimi" }];
-    mocks.create.mockResolvedValue({ output_text: "[[service:s2]], [[service:s1]], [[service:foreign]]" });
+    mocks.create.mockResolvedValue({ output_text: draft("[[service:s2]], [[service:s1]], [[service:foreign]]") });
     const result = await generateAgentReply({ ...params, referenceServices: services });
     expect(result.reply).toBe("Trajnimi, Konsulta, [shërbim i paverifikuar]");
     expect(result.presentedServices?.map(s => s.id)).toEqual(["s2", "s1"]);
     expect(result.presentedProducts).toEqual([]);
     expect(params.state.fields.booking).toBeUndefined();
-    mocks.create.mockResolvedValue({ output_text: "[[product:p1]], [[service:s1]]" });
+    mocks.create.mockResolvedValue({ output_text: draft("[[product:p1]], [[service:s1]]") });
     const mixed = await generateAgentReply({ ...params, referenceProducts: [{ id: "p1", name: "Libri" }], referenceServices: services });
     expect(mixed.presentedProducts).toEqual([]);
     expect(mixed.presentedServices).toEqual([]);
-    mocks.create.mockResolvedValue({ output_text: "Konsulta, [[service:s2]]" });
+    mocks.create.mockResolvedValue({ output_text: draft("Konsulta, [[service:s2]]") });
     expect((await generateAgentReply({ ...params, referenceServices: services })).presentedServices).toEqual([]);
   });
   it("W3 renders only verified product references; model prose never selects a product", async () => {
-    mocks.create.mockResolvedValue({ id: "reply", output_text: "Sugjeroj [[product:p2]] dhe [[product:p1]]. [[product:foreign]]" });
+    mocks.create.mockResolvedValue({ id: "reply", output_text: draft("Sugjeroj [[product:p2]] dhe [[product:p1]]. [[product:foreign]]") });
     const state = emptyState();
     const answer = await generateAgentReply({ ...params, state, referenceProducts: [
       { id: "p1", name: "Puzzle", price_amount: 20, currency: "EUR" }, { id: "p2", name: "Libri", price_amount: 10, currency: "EUR" },
@@ -129,11 +148,11 @@ describe("reply source diagnostics", () => {
     expect(answer.presentedProducts?.map(p => p.id)).toEqual(["p2", "p1"]);
     expect(state.product_id).toBeNull(); expect(state.entityPresentation).toBeUndefined();
     expect(mocks.create.mock.calls[0][0].instructions).toContain("A presentation is not a customer selection");
-    mocks.create.mockResolvedValue({ output_text: "Puzzle is selected; product_id=p1" });
+    mocks.create.mockResolvedValue({ output_text: draft("Puzzle is selected; product_id=p1") });
     expect((await generateAgentReply({ ...params, referenceProducts: [{ id: "p1", name: "Puzzle" }] })).presentedProducts).toEqual([]);
   });
   it("uses the published journey as source context while preserving the authoritative order state", async () => {
-    mocks.create.mockResolvedValue({ id: "resp_process", output_text: "Materialet merren nga website-i." });
+    mocks.create.mockResolvedValue({ id: "resp_process", output_text: draft("Materialet merren nga website-i.") });
     await generateAgentReply({ ...params, businessProcess: "Shkarko PDF në website" });
     const request = mocks.create.mock.calls[0][0];
     expect(request.input).toContain("Shkarko PDF në website");
@@ -143,7 +162,7 @@ describe("reply source diagnostics", () => {
   });
   it("reports AI with the response id and carries its context", async () => {
     mocks.create.mockResolvedValue({
-      output_text: "Përshëndetje",
+      output_text: draft("Përshëndetje"),
       id: "resp_new",
     });
     expect(await generateAgentReply(params)).toMatchObject({
@@ -187,7 +206,7 @@ describe("reply source diagnostics", () => {
 
 it("observes metadata and usage without exposing prompts, customer PII or unvalidated prose", async () => {
   const onTrace = vi.fn();
-  const response = { id: "resp_trace", output_text: "  Reply  ", usage: { input_tokens: 12, output_tokens: 4 } };
+  const response = { id: "resp_trace", output_text: draft("  Reply  "), usage: { input_tokens: 12, output_tokens: 4 } };
   mocks.create.mockResolvedValue(response);
   await generateAgentReply({ ...params, onTrace });
   expect(onTrace.mock.calls[0][0].data).toEqual({ model: mocks.create.mock.calls[0][0].model, customerFactKeys: [] });
@@ -198,7 +217,7 @@ it("observes metadata and usage without exposing prompts, customer PII or unvali
 });
 
 it("supplies approved training with factual and workflow boundaries to the real provider request", async () => {
-  mocks.create.mockResolvedValue({ id: "resp_trained", output_text: "Shkurt" });
+  mocks.create.mockResolvedValue({ id: "resp_trained", output_text: draft("Shkurt") });
   await generateAgentReply({ ...params, trainingContext: { rules: [{ id: "style", kind: "style", instruction: "Pa emoji", question: "", response: "", scope: "business" }] } });
   const request = mocks.create.mock.calls[0][0];
   expect(request.instructions).toContain("Pa emoji");
@@ -208,7 +227,7 @@ it("supplies approved training with factual and workflow boundaries to the real 
 });
 
 it("keeps customer contact data separate from business contact claims", async () => {
-  mocks.create.mockResolvedValue({ id: "resp_contact", output_text: "Kontakto stafin." });
+  mocks.create.mockResolvedValue({ id: "resp_contact", output_text: draft("Kontakto stafin.") });
   const state = emptyState(); state.customer.phone = "0690000000";
   await generateAgentReply({ ...params, state, customerMessage: "Telefoni im është 0690000000. Sa kushton?", documentContext: "No verified business phone is available." });
   const request = mocks.create.mock.calls[0][0];
@@ -220,7 +239,7 @@ it("keeps customer contact data separate from business contact claims", async ()
 it("retains collected qualification facts in document answers after the original message leaves recent history", async () => {
   const { migrateContext, setFact } = await import("@/lib/workflows/context");
   const state = migrateContext(); setFact(state, "child_age", "5", "number", "message");
-  mocks.create.mockResolvedValue({ output_text: "Kushton 690 ALL." });
+  mocks.create.mockResolvedValue({ output_text: draft("Kushton 690 ALL.") });
   await generateAgentReply({ ...params, state, customerMessage: "Sa kushton Montessori?", documentContext: "Montessori: 690 ALL" });
   const request = mocks.create.mock.calls[0][0];
   expect(request.input).toContain('"child_age":{"value":"5"');
@@ -239,7 +258,7 @@ it("R1 exposes relevant suspended service facts without unrelated order facts or
       pendingConfirmation: { nodeId: "review", factsKey: "STALE_APPROVAL_SENTINEL", expiresAt: 1 } },
   } };
   const before = structuredClone(state);
-  mocks.create.mockResolvedValue({ output_text: "Synthetic response" });
+  mocks.create.mockResolvedValue({ output_text: draft("Synthetic response") });
   await generateAgentReply({ ...params, state, customerMessage: "Çfarë project_type dhashë për shërbimin?", documentContext: "Verified business context" });
   const input = mocks.create.mock.calls[0][0].input;
   expect(input).toContain("SERVICE_FACT_SENTINEL");
@@ -261,7 +280,7 @@ it("R1 passes corrected conversation declarations after 25 turns, but not unrela
   extractCustomerDeclaredFacts(state, "Instagrami im është corrected_synthetic");
   for (let i = 0; i < 25; i++) { const next = structuredClone(state); rememberTurn(state, next, `Question ${i}`, "Reply"); state = next; }
   state.completedVisual = { versionId: "OLD_VERSION", nodeId: "end", status: "completed", awaiting: false, visited: [], values: { hidden: "HISTORICAL_SECRET" } };
-  mocks.create.mockResolvedValue({ output_text: "Synthetic response" });
+  mocks.create.mockResolvedValue({ output_text: draft("Synthetic response") });
   for (const documentContext of ["Verified business data", undefined]) {
     await generateAgentReply({ ...params, state, documentContext, customerMessage: "Çfarë të kam thënë më parë?" });
     const input = mocks.create.mock.calls.at(-1)![0].input;
@@ -276,7 +295,7 @@ it("R1 never promotes stale entity selections to verified catalog evidence", asy
   const state = migrateContext(); state.schemaVersion = 3; state.product_id = "inactive-product";
   state.context!.execution.factOwner = "order";
   state.processes = { active: "order", order: { id: "order", status: "active", snapshot: snapshotOrder(state) } };
-  mocks.create.mockResolvedValue({ output_text: "Synthetic response" });
+  mocks.create.mockResolvedValue({ output_text: draft("Synthetic response") });
   await generateAgentReply({ ...params, state, customerMessage: "Porosia ime?", documentContext: "No active product", referenceProducts: [] });
   expect(mocks.create.mock.calls[0][0].input).not.toContain("inactive-product");
   expect(state.product_id).toBe("inactive-product");

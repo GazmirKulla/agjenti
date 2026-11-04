@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   process: vi.fn(),
   send: vi.fn(),
+  draft: vi.fn(),
 }));
+vi.mock("@/lib/agents/communication-configuration", () => ({ loadCommunicationDraft: mocks.draft }));
 vi.mock("@/lib/tenant/access", () => ({
   getSessionUser: mocks.user,
   requireBusinessAccess: mocks.access,
@@ -50,6 +52,25 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("test chat action", () => {
+  it("binds draft tests to the authenticated tenant and saved revision, never certifying the live agent", async () => {
+    const preview = { businessId: "business-a", agentId: "draft-a", updatedAt: "revision-a", revision: 1 };
+    mocks.draft.mockResolvedValue(preview);
+    const first = await executeAgentTestTurn({ ...input, configurationDraft: "draft-a" }, "user-a");
+    if ("error" in first) throw Error(first.error);
+    expect(mocks.draft).toHaveBeenCalledWith("business-a", "draft-a");
+    expect(mocks.process).toHaveBeenCalledWith(expect.objectContaining({ mode: "test", configurationPreview: preview }));
+    expect(first.setupTestPassed).toBe(false); expect(mocks.record).not.toHaveBeenCalled();
+    mocks.process.mockClear();
+    expect(await executeAgentTestTurn({ ...input, session: first.session }, "user-a")).toHaveProperty("error");
+    mocks.draft.mockResolvedValue({ ...preview, updatedAt: "revision-b" });
+    expect(await executeAgentTestTurn({ ...input, session: first.session, configurationDraft: "draft-a" }, "user-a")).toHaveProperty("error");
+    expect(mocks.process).not.toHaveBeenCalled();
+  });
+  it("does not read any draft before authenticating tenant access", async () => {
+    mocks.access.mockResolvedValue(null);
+    expect(await executeAgentTestTurn({ ...input, configurationDraft: "foreign" }, "user-a")).toHaveProperty("error");
+    expect(mocks.draft).not.toHaveBeenCalled(); expect(mocks.process).not.toHaveBeenCalled();
+  });
   it("counts raw frozen messages without creating extra coordinator turns or trusting a client count", async () => {
     const result=await executeAgentTestTurn({...input,message:'pse\nti psh\nmund ta kuptosh'},'user-a',3);
     if('error' in result)throw Error(result.error);

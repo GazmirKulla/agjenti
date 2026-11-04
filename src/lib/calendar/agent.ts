@@ -225,10 +225,10 @@ export async function processBookingTurn(params: {
     }
     if (simulate) {
       recordExternalAction({ kind: "booking.create", disposition: "SIMULATED", detail: "not_persisted" });
-      return reply(
+      return { ...reply(
         `Provë: kërkesa për ${service.name}, më ${draft.date} në ${draft.time}, për ${draft.name} është gati. Nuk u krijua rezervim real.`,
         true,
-      );
+      ), executionResults: [{ operation: "booking.create", status: "simulated" }] };
     }
     if (!params.conversationKey)
       return reply("Për ta përfunduar rezervimin, kontakto biznesin.");
@@ -257,7 +257,7 @@ export async function processBookingTurn(params: {
       const review = saved.status === "pending" ? " Biznesi duhet ta miratojë; takimi ende nuk është konfirmuar." : "";
       const reconciliation = changed ? " Kërkesa ishte ruajtur më parë me këto të dhëna; ndryshimet e fundit nuk u aplikuan. Për ndryshimin, kontakto stafin." : "";
       const sync = result.syncError ? " Përditësimi i kalendarit pret verifikimin e stafit." : "";
-      return reply(`${status}: ${summary}.${review}${reconciliation}${sync}`, true);
+      return { ...reply(`${status}: ${summary}.${review}${reconciliation}${sync}`, true), executionResults: [{ operation: "booking.create", status: "succeeded", reference: saved.id }] };
     } catch (err) {
       if (err instanceof IsolationViolation) throw err;
       const message = err instanceof Error ? err.message : "Rezervimi nuk u ruajt.";
@@ -267,7 +267,7 @@ export async function processBookingTurn(params: {
         return reply(`${message} Zgjidh një orë tjetër.`);
       }
       // A timeout can occur after commit: retain the nonce and confirmation so retries reconcile.
-      return reply(`${message} Provo sërish konfirmimin ose kontakto stafin.`);
+      return { ...reply(`${message} Provo sërish konfirmimin ose kontakto stafin.`), executionResults: [{ operation: "booking.create", status: "unconfirmed" }] };
     }
   }
   // A bare yes after an expired/interrupted prompt only requests a fresh review.

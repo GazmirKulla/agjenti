@@ -1,3 +1,5 @@
+import { defaultCommunicationPolicy, parseCommunicationPolicy } from "@/lib/agents/communication-policy";
+import { linearCollectionCommunication } from "@/lib/workflows/linear-communication";
 import { conversationControl, resumeConversation } from "./conversation-control";
 import { agentConfigurationColumns, configurationRead } from "@/lib/agents/configuration";
 import { decidedFieldGuidance, informationalDecision, type TurnDecision } from "./turn-decision";
@@ -32,6 +34,10 @@ import {
 } from "@/lib/workflows/engine";
 
 export type AgentTurnResult = {
+  executionResults?: import("./execution-receipt").ExecutionReceipt[];
+  processCommunication?: import("./process-communication").ProcessCommunication;
+  customerQuestion?: import("./communication-contract").CustomerQuestionProposal;
+  communication?: import("./communication-contract").CommunicationReceipt;
   preparedRequest?: import("./prepared-request").PreparedRequest;
   /** Authorized test entry points only; observation, never permission or behavioral proof. */
   configuration?: import("@/lib/agents/configuration-contract").TestConfigurationProvenance;
@@ -82,6 +88,7 @@ function matchesSku(sku: string | null | undefined, message: string) {
  * Caller is responsible for authorization and, for real turns, persistence/send.
  */
 export type AgentTurnParams = {
+  configurationPreview?: import("@/lib/agents/communication-configuration").AgentConfigurationPreview;
   /** Internal coordinator contract, never client-controlled or authorization. */
   turnDecision?: TurnDecision;
   /** Coordinator-resolved hint, revalidated against the active tenant catalog by adapters. Never a customer API input. */
@@ -151,6 +158,7 @@ async function processTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
   return executeVisualTurn(params, processLegacyAgentTurn);
 }
 export async function processLegacyAgentTurn(params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }): Promise<AgentTurnResult> {
+  if (params.configurationPreview && (params.mode !== "test" || params.configurationPreview.businessId !== params.businessId)) throw Error("invalid_configuration_preview");
   if (informationalDecision(params.turnDecision) && params.informational === undefined)
     params = { ...params, informational: "Answer only the informational request. Preserve the selected entity and unfinished processes; do not start or confirm an action." };
   // Only the validated visual product-node adapter may opt into its built-in
@@ -198,9 +206,12 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   const products = businessRead.products.records;
   if (moduleEnforcementEnabled(params.businessId) && params.state?.product_id && params.informational === undefined && !products.some(p => p.id === params.state!.product_id))
     throw new CapabilityEnforcementError("binding_unavailable", "Produkti i këtij procesi nuk është më aktiv në këtë biznes. Progresi yt është ruajtur.");
-  const agent = agentResult.data;
+  const agent = params.configurationPreview ? { id: params.configurationPreview.agentId, name: params.configurationPreview.name,
+    instructions: params.configurationPreview.instructions, communication: params.configurationPreview.communication,
+    configuration_revision: params.configurationPreview.revision, is_active: false } : agentResult.data;
+  const communication = agent?.communication ? parseCommunicationPolicy(agent.communication) : defaultCommunicationPolicy;
   trace?.({ stage: "context", label: "Customer agent configuration loaded", data: {
-    agentConfiguration: configurationRead(agent),
+    agentConfiguration: { ...configurationRead(agent), configurationMode: params.configurationPreview ? "draft" : "published", configurationRevision: agent?.configuration_revision ?? null },
   } });
   function trainingFor(workflowId: string | null, stepKey: string | null | undefined) {
     const context = selectTrainingContext(trainingMemories, workflowId, stepKey, params.message, params.trainingVisualScope);
@@ -252,6 +263,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       reply: sources.clarification, source: "fallback" as const, fallbackReason: "catalog_clarification",
       presentedProducts: undefined, presentedServices: undefined,
     } : await generateAgentReply({
+      communication,
       grounding, businessProcess, trainingContext, ...(trace ? { onTrace: trace } : {}),
       instructions: (agent?.instructions || "Answer in the customer's language.") +
         (params.informational ? `\nBusiness owner's reply guidance: ${params.informational}` : ""),
@@ -265,7 +277,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       documentFallback: sources?.clarification || "Për këtë informacion, ju lutem kontaktoni ekipin.",
     });
     const missingLinks = sources?.documents.filter(d => !generated.reply.includes(d.url)).map(d => `${d.title}: ${d.url}`).join("\n");
-    return { reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""), presentedProducts: generated.presentedProducts, presentedServices: generated.presentedServices, nextState: state,
+    return { customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""), presentedProducts: generated.presentedProducts, presentedServices: generated.presentedServices, nextState: state,
       previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
       debug: { model: agentModel(), source: generated.source, fallbackReason: generated.fallbackReason,
         agentConfigured: Boolean(agent?.instructions), knowledgeCount: knowledge.length, productCount: products.length,
@@ -276,6 +288,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     trace?.({ stage: "workflow", label: "Service information; workflow not advanced", data: { state, workflowId: null, steps: [] } });
     const trainingContext = trainingFor(null, null);
     const generated = await generateAgentReply({
+      communication,
     grounding,
     businessProcess,
       trainingContext,
@@ -291,7 +304,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       documentFallback: `${service.entry.title}: ${service.entry.body || "Për hollësi kontakto biznesin."}`,
     });
     return {
-      reply: generated.reply,
+      customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply,
       nextState: state,
       previousResponseId: null,
       workflowId: null,
@@ -345,6 +358,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
           fallbackReason: "catalog_clarification",
         }
       : await generateAgentReply({
+      communication,
           grounding,
           businessProcess,
           trainingContext,
@@ -365,7 +379,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       .map((d) => `${d.title}: ${d.url}`)
       .join("\n");
     return {
-      reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""),
+      customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""),
       nextState: state,
       previousResponseId: null,
       workflowId: currentWorkflow,
@@ -555,6 +569,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   } });
   const trainingContext = trainingFor(workflowId, state.step_key);
   const generated = navigationReply ? {reply:navigationReply,responseId:params.previousResponseId??null,source:"fallback" as const,fallbackReason:"navigation_clarification"} : state.context && !informationalTurn && !isQuestion(text) ? { reply: sharedPrompt(state, steps, productName ?? undefined), responseId: null, source: "fallback" as const, fallbackReason: "shared_workflow_prompt" } : await generateAgentReply({
+      communication,
     grounding,
     businessProcess,
     trainingContext,
@@ -578,7 +593,8 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     workflowProgress,
   });
   return {
-    reply: generated.reply,
+    ...(generated.fallbackReason === "shared_workflow_prompt" ? { processCommunication: linearCollectionCommunication(state, steps, generated.reply) } : {}),
+    customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply,
     presentedProducts: "presentedProducts" in generated ? generated.presentedProducts : undefined,
     nextState: state,
     previousResponseId: generated.responseId,

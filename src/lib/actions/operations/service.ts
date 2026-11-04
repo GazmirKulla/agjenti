@@ -1,3 +1,4 @@
+import { prepareCommunicationConfiguration, saveCommunicationConfiguration } from "@/lib/agents/communication-configuration";
 import { prepareProductRemoval, executeProductRemoval, type RemovalRow } from "@/lib/products/removal";
 import { OperationError } from "./error";
 import { saveBusinessService } from "@/lib/services/commands";
@@ -80,7 +81,10 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     if (rows.some(row => row.archived_at)) throw Error("Grupi përmban produkte të arkivuara. Riktheji përpara konfigurimit.");
     snapshot = { rows }; subject = rows.map(row => String(row.name)).join(", ");
   } else if (operation === "calendar.settings") snapshot = await prepareCalendarConfiguration(businessId, input);
-  else if (operation === "agent.manage") {
+  else if (operation === "agent.communication") {
+    snapshot = await prepareCommunicationConfiguration(businessId, input);
+    subject = String((snapshot.before as Record<string, unknown>).name);
+  } else if (operation === "agent.manage") {
     snapshot = await prepareManagedAgent(businessId, input);
     subject = String((snapshot.values as Record<string, unknown>).name);
   } else if (operation === "booking.sync") snapshot = await record(businessId, "bookings", input.id, "id,customer_name,revision,sync_status");
@@ -114,6 +118,13 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     notice: operation === "product.delete" ? "Fshirja është përfundimtare. Produktet me histori ose lidhje ruhen përmes arkivimit."
       : operation === "agent.manage" && (snapshot.values as Record<string, unknown>).is_active ? `Agjenti aktiv zëvendësohet. Aktualisht: ${(snapshot.activeNames as string[]).join(", ") || "asnjë"}.`
       : operation === "product.restore" ? "Produkti rikthehet si draft joaktiv." : undefined };
+  if (operation === "agent.communication") {
+    const current = snapshot.before as Record<string, unknown>;
+    const proposed = snapshot.preview as Record<string, unknown> | null;
+    preview.fields = proposed ? Object.entries(proposed).filter(([key]) => key !== "baseRevision").map(([key, value]) => ({ label: fieldLabel(key), before: previewValue(current[key]), after: previewValue(value) })) : preview.fields;
+    preview.notice = input.mode === "publish" ? "Publikon draftin e shfaqur për përgjigjet e reja. Nuk aktivizon një agjent joaktiv dhe nuk lejon veprime të reja."
+      : "Ky veprim nuk ndryshon përgjigjet live. Publikimi kërkohet veçmas.";
+  }
   if (!preview.fields.length) preview.fields.push({ label: "Veprimi", before: "—", after: preview.title });
   return { version: 1, key: operation, input, snapshot, requestId: randomUUID(), preview };
 }
@@ -171,6 +182,7 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
       productTypeId: (input.productTypeId as string | null) ?? null, workflowId: (input.workflowId as string | null) ?? null,
       expected: Object.fromEntries(rows.map(row => [String(row.id), String(row.updated_at)])) }));
   } else if (key === "calendar.settings") return saveCalendarConfiguration(businessId, userId, before as Awaited<ReturnType<typeof prepareCalendarConfiguration>>);
+  else if (key === "agent.communication") return saveCommunicationConfiguration(businessId, userId, before as Awaited<ReturnType<typeof prepareCommunicationConfiguration>>);
   else if (key === "agent.manage") return saveManagedAgent(businessId, userId, before as Awaited<ReturnType<typeof prepareManagedAgent>>);
   else if (key === "booking.sync") {
     const current = await record(businessId, "bookings", input.id, "id,revision");

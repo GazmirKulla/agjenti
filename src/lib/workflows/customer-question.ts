@@ -1,3 +1,4 @@
+import type { CustomerQuestionProposal } from "@/lib/conversations/communication-contract";
 import { createHash } from "node:crypto";
 import { foldText, type ConversationStatePayload } from "./engine";
 import { setFact, isQuestion } from "./context";
@@ -10,11 +11,11 @@ export type PendingCustomerQuestion = {
   prompt: string; expiresAt: number; labelsOnly?: true; clarificationAttempts?: number;
 };
 const clarificationHeader = "Për të shmangur ngatërrimin, shkruaj me etiketa:";
-const unclearReply = "Përgjigjja mbetet e paqartë. Mund ta japësh një të dhënë me etiketën e saj ose të vazhdosh me një pyetje tjetër.";
+const unclearReply = "Nuk arrita ta kuptoj saktë. Mund ta thuash ndryshe ose të vazhdojmë me pyetjen tënde.";
 const labels: Record<QuestionField, string> = { name: "Emri", business_type: "Lloji i biznesit", instagram_handle: "Instagram", stated_needs: "Pyetjet tipike" };
 const allowed = (key: string): key is QuestionField => key === "name" || customerDeclaredKeys.includes(key as CustomerDeclaredKey);
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
-export const customerQuestionInstruction = "When a relevant informational conversation needs the customer's own name, business type, Instagram profile or common questions, request only missing fields using ONE [[ask_customer:name,business_type,instagram_handle,stated_needs]] slot (choose a subset in the intended order). Do not write an untracked multi-field question. This slot is a request to the server, never authority to store facts or execute actions. Do not use it during a business process or for unrelated qualification.";
+export const customerQuestionInstruction = "Return the customer_communication object. Put the answer to the customer's current question in answer, using verified business information. Put at most ONE optional follow-up in question, with its field, natural text and purpose; otherwise question is null. Never embed collection questions in answer and never output ask_customer slots. A greeting or a question about how the service works is not a request to register or complete a questionnaire. Never make an explanation conditional on providing personal or business details. Choose only a missing fact useful to this conversation: understand the business or its need before requesting identity or contact details. Do not systematically collect every field. Offer registration when the customer expresses interest in trying or starting; its required fields and confirmation belong to the existing process. The question is only a language proposal, never authority to store facts or execute actions. During a business process or unrelated qualification, question must be null.";
 
 function free(state: ConversationStatePayload) {
   return !state.staffHandoff && !state.conversationPaused && state.visual?.status !== "handoff" && !state.visual?.awaiting
@@ -23,7 +24,15 @@ function free(state: ConversationStatePayload) {
       const p = state.processes?.[k]; return p && ("status" in p ? p.status === "active" || p.status === "suspended" : p.visual.status !== "completed");
     });
 }
+const questions: Record<QuestionField, string> = {
+  name: "Si të quajnë?",
+  business_type: "Çfarë biznesi ke?",
+  instagram_handle: "Cili është profili i biznesit tënd në Instagram?",
+  stated_needs: "Çfarë të pyesin më shpesh klientët?",
+};
 function prompt(fields: QuestionField[], labelled = false) {
+  if (fields.length === 1) return `${labelled ? "Nuk e kuptova saktë. " : ""}${questions[fields[0]]}`;
+  // Previously delivered multi-field checkpoints remain readable during rollout.
   return `${labelled ? "Për të shmangur ngatërrimin, shkruaj me etiketa" : "Shkruaj nga një përgjigje në çdo rresht, në këtë rend (ose përdor etiketat)"}:\n${fields.map(k => `${labels[k]}:`).join("\n")}`;
 }
 function known(state: ConversationStatePayload, key: QuestionField) { return key === "name" ? state.context?.profile.name : state.customerDeclaredFacts?.[key]; }
@@ -32,8 +41,17 @@ function known(state: ConversationStatePayload, key: QuestionField) { return key
  * Only allowlisted model slot proposals are rendered by the SERVER. Never scan
  * old prose or trust a client-provided question. Transport delivery is checked on
  * consumption (or the authenticated sealed test session). No extra facts store. */
-export function renderCustomerQuestion(state: ConversationStatePayload, reply: string, businessId: string, eligible: boolean, now = Date.now()) {
+export function renderCustomerQuestion(state: ConversationStatePayload, reply: string, businessId: string, eligible: boolean, now = Date.now(), proposal?: CustomerQuestionProposal) {
   delete state.pendingCustomerQuestion;
+  if (proposal) {
+    if (!eligible || !free(state) || !allowed(proposal.field) || known(state, proposal.field)) return reply;
+    const rendered = [reply.trim(), proposal.text].filter(Boolean).join("\n\n");
+    if (rendered.length > 1200) return reply;
+    state.pendingCustomerQuestion = { kind: "customer_facts", businessId, fields: [proposal.field], prompt: rendered, expiresAt: now + 15 * 60000 };
+    return rendered;
+  }
+  // Compatibility for already-created test fixtures and persisted old replies.
+  // New model output uses the structured proposal above.
   const slots = [...reply.matchAll(/\[\[ask_customer:([^\]]*)\]\]/g)];
   if (!slots.length) return reply;
   const fields = slots[0][1].split(",").map(k => k.trim());
@@ -41,10 +59,10 @@ export function renderCustomerQuestion(state: ConversationStatePayload, reply: s
     || fields.some(k => !allowed(k)) || new Set(fields).size !== fields.length) {
     return reply.replace(/\[\[ask_customer:[^\]]*\]\]/g, "").trim() || "Çfarë informacioni dëshiron?";
   }
-  const missing = (fields as QuestionField[]).filter(k => !known(state, k));
+  const missing = (fields as QuestionField[]).filter(k => !known(state, k)).slice(0, 1);
   if (!missing.length) return reply.replace(slots[0][0], "Këto të dhëna i ke dhënë tashmë.");
   const rendered = reply.replace(slots[0][0], prompt(missing));
-  if (rendered.length > 1200) return reply.replace(slots[0][0], "Mund t’i japësh të dhënat me etiketa.");
+  if (rendered.length > 1200) return reply.replace(slots[0][0], "");
   state.pendingCustomerQuestion = { kind: "customer_facts", businessId, fields: missing, prompt: rendered, expiresAt: now + 15 * 60000 };
   return rendered;
 }
@@ -100,9 +118,20 @@ export function consumeCustomerQuestion(state: ConversationStatePayload, input: 
     return { reply: attempts < 2 ? q.prompt : unclearReply, accepted: 0,
       fields: q.fields.map(key => ({ key, status: "missing" })) };
   }
-  const keys = [...new Set([...q.fields, ...Object.keys(labels).filter(k => known(state, k as QuestionField))])] as QuestionField[];
-  const parsed = parseFieldCandidates(input.message, keys.map(definition), {
-    positionalKeys: q.labelsOnly ? undefined : q.fields, knownHeader: clarificationHeader,
+  // The delivered question owns unlabelled answers. Explicit labels may also
+  // volunteer other supported facts; do not discard them merely because we
+  // asked one question. Positional interpretation remains limited to q.fields.
+  const keys = [...new Set([...q.fields, ...Object.keys(labels)])] as QuestionField[];
+  const parsed = parseFieldCandidates(input.message, keys.map(key => {
+    const field = definition(key);
+    // A delivered single question supplies the context that labels supplied in
+    // the old form. Keep format validation, without requiring a business prefix
+    // or punctuation in a valid Instagram username.
+    if (q.fields.length === 1 && q.fields[0] === key)
+      field.validate = value => semanticValue(key, value, true);
+    return field;
+  }), {
+    positionalKeys: q.labelsOnly && q.fields.length > 1 ? undefined : q.fields, knownHeader: clarificationHeader,
   });
   const accepted: QuestionField[] = [];
   for (const [index, field] of parsed.fields.entries()) {
@@ -125,7 +154,7 @@ export function consumeCustomerQuestion(state: ConversationStatePayload, input: 
   const reply = notice + (remaining.length
     ? attempts >= 2 ? unclearReply
       : prompt(remaining, !accepted.length || parsed.fields.some(f => f.status === "invalid" || f.status === "ambiguous"))
-    : "Faleminderit për deklarimet. Kjo nuk krijon regjistrim, porosi apo rezervim.");
+    : "Faleminderit, e kuptova.");
   if (remaining.length && attempts < 2) state.pendingCustomerQuestion = { ...q, fields: remaining, prompt: reply,
     clarificationAttempts: attempts, labelsOnly: !accepted.length || parsed.fields.some(f => f.status === "invalid" || f.status === "ambiguous") ? true : undefined };
   return { reply, accepted: accepted.length, fields: parsed.fields };

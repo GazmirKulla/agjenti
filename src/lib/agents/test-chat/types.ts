@@ -1,6 +1,7 @@
 import type { AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 
 export type TestChatInput = {
+  configurationDraft?: string;
   slug: string;
   message: string;
   hasMedia?: boolean;

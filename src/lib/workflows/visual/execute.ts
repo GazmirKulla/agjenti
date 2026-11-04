@@ -1,3 +1,4 @@
+import { renderProcessCommunication } from "@/lib/conversations/process-communication";
 import { workflowExecutionPolicy } from "../execution-policy";
 import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workflow";
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
@@ -281,6 +282,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     message: params.message, hasPhoto: params.hasPhoto, intent, ...((extracted || revisiting || guidance.action === "route" || params.bookingNavigation || (params.orderRequest && currentNode?.kind !== "product"))?{inputAvailable:false}:{}) });
   const traversed = [...execution.traversedNodeIds];
   const replies: string[] = [];
+  const executionResults: NonNullable<AgentTurnResult["executionResults"]> = [];
   let productCalled = false, bookingCalled = false, orderStatusCalled = false, finished = false;
   let turn: AgentTurnResult = {
     reply: "", nextState: base, previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
@@ -295,7 +297,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     // The pure runtime only changes a cloned cursor. Authorize the actual path
     // before persisting its fields or calling any read/write adapter.
     await guardNodes([...execution.traversedNodeIds, execution.state.nodeId]);
-    const action = execution.action;
+    const action = { ...execution.action, message: renderProcessCommunication(execution.action.communication) };
     // An information reply cannot implicitly start/resume an order or booking
     // merely because a configured edge crosses into that process.
     if (params.informationRequest && (action.kind === "product" || action.kind === "booking")) {
@@ -321,8 +323,10 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
         if(!node.config.action)throw new Error("Veprimi nuk është konfiguruar.");
         const output=await executeWorkflowAction({businessId:params.businessId,versionId:version.id,nodeId:node.id,binding:node.config.action,values:execution.state.values,mode:isIsolatedExecution()?"test":params.mode,guard:params.actionGuard});
         execution.state.actionResults={...execution.state.actionResults,[node.id]:output};
+        executionResults.push({ operation: "business.provision", status: isIsolatedExecution() || params.mode === "test" ? "simulated" : "succeeded", reference: output.businessId });
       } catch {
         outcome="no";
+        executionResults.push({ operation: "business.provision", status: "unconfirmed" });
         execution.state.actionResults={...execution.state.actionResults,[node.id]:{error:"Veprimi nuk u konfirmua. Kontrollo të dhënat, lejet ose kërko ndihmën e stafit."}};
       }
       execution=advance({graph:version.graph,versionId:version.id,state:execution.state,message:"",hasPhoto:false,intent,inputAvailable:false,actionOutcome:outcome});
@@ -351,6 +355,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
         finished = true; break;
       }
       turn = booking; currentState = turn.nextState;
+      executionResults.push(...(booking.executionResults ?? []));
       replies.push(turn.reply);
       if (turn.nextState.fields.booking) { finished = true; break; }
       execution = advance({ graph: version.graph, versionId: version.id, state: execution.state,
@@ -430,7 +435,10 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     }
     // Keep required collection pending, but never append it to an unrelated answer.
     if (informationalInterruption) { finished = true; break; }
-    if(action.kind==="prompt") recordPrompt(turn.nextState,action.nodeId);
+    if(action.kind==="prompt") {
+      recordPrompt(turn.nextState,action.nodeId);
+      if (action.communication?.kind === "collect" && !replies.length) turn.processCommunication = action.communication;
+    }
     if (action.message && action.kind !== "handoff") replies.push(action.message);
     if (action.kind === "end" && !replies.length) replies.push("Faleminderit. Të dhënat u plotësuan.");
     if (action.kind === "handoff") {
@@ -445,6 +453,7 @@ export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Le
     break;
   }
   if (!finished) throw new Error("workflow_execution_limit");
+  if (executionResults.length) turn.executionResults = executionResults;
   turn.nextState.visual = execution.state;
   if (execution.state.status === "completed" || execution.state.status === "handoff") turn.nextState.completedVisual = structuredClone(execution.state);
   turn.reply = replies.join("\n\n");

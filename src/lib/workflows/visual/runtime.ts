@@ -20,9 +20,9 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
   const fieldValidation: VisualFieldValidation[] = [];
   const skipped=new Set<string>();
   let consumed=p.inputAvailable===false;
-  const result=(kind:VisualExecution['action']['kind'],nodeId:string,message?:string):VisualExecution=>({state,action:{kind,nodeId,message},traversedNodeIds,inputConsumed:consumed,fieldValidation});
+  const result=(kind:VisualExecution['action']['kind'],nodeId:string,communication?:VisualExecution["action"]["communication"]):VisualExecution=>({state,action:{kind,nodeId,communication},traversedNodeIds,inputConsumed:consumed,fieldValidation});
   if(state.versionId!==p.versionId)throw new Error('workflow_version_mismatch');
-  if(state.status==='handoff')return result('handoff',state.nodeId,'Kërkesa juaj është në pritje të ekipit.');
+  if(state.status==='handoff')return result('handoff',state.nodeId,{kind:'staff_waiting'});
   if(state.status==='completed')return result('end',state.nodeId);
   const advance=(port:'next'|'yes'|'no')=>{const edge=p.graph.edges.find(e=>e.source===state.nodeId&&e.port===port);if(!edge)throw new Error('workflow_missing_edge');state.nodeId=edge.target;state.awaiting=false;state.status='running';};
   for(let i=0;i<65;i++){
@@ -36,11 +36,11 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       state.branchPorts = { ...state.branchPorts, [n.id]: yes ? 'yes' : 'no' };
       advance(yes?'yes':'no');continue;
     }
-    if(n.kind==='handoff'){state.status='handoff';state.awaiting=false;return result('handoff',n.id,n.config.prompt||'Po ia kaloj kërkesën tuaj ekipit.');}
-    if(n.kind==='end'){state.status='completed';state.awaiting=false;return result('end',n.id,n.config.prompt);}
+    if(n.kind==='handoff'){state.status='handoff';state.awaiting=false;return result('handoff',n.id,n.config.prompt?{kind:'configured',text:n.config.prompt}:undefined);}
+    if(n.kind==='end'){state.status='completed';state.awaiting=false;return result('end',n.id,n.config.prompt?{kind:'configured',text:n.config.prompt}:undefined);}
     if(n.kind==='knowledge'){
       advance('next');
-      return result('knowledge',n.id,n.config.prompt);
+      return result('knowledge',n.id,n.config.prompt?{kind:'configured',text:n.config.prompt}:undefined);
     }
     if(n.kind==='action'){
       if(state.awaiting&&p.actionOutcome){state.branchPorts={...state.branchPorts,[n.id]:p.actionOutcome};advance(p.actionOutcome);p={...p,actionOutcome:undefined};continue;}
@@ -66,6 +66,9 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
     }
     const boundProfile=p.sharedValues&&n.config.fieldKey?profileKey(n.config.fieldKey):null;
     const fieldType=boundProfile==='phone'?'phone':boundProfile==='email'?'email':boundProfile?'text':n.config.fieldType||'text';
+    const communication = (invalid = false): VisualExecution["action"]["communication"] => n.kind === "confirm"
+      ? { kind: "confirm", text: n.config.prompt ?? "", retry: invalid }
+      : { kind: "collect", field: n.config.fieldKey!, label: n.label, format: fieldType, guidance: n.config.prompt ?? "", invalid };
     const record = (status: VisualFieldValidation["status"], reasonCode: VisualFieldValidation["reasonCode"]) => {
       if (n.kind === "collect") fieldValidation.push({ nodeId: n.id, fieldKey: n.config.fieldKey!, fieldType, status, reasonCode });
     };
@@ -81,26 +84,26 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       if (!wasAwaiting || !receipt || receipt.nodeId !== n.id || receipt.factsKey !== factsKey || !Number.isFinite(receipt.expiresAt) || receipt.expiresAt <= Date.now()) {
         state.pendingConfirmation = { nodeId: n.id, factsKey, expiresAt: Date.now() + 30 * 60000 };
         delete state.confirmedConfirmation;
-        return result('prompt',n.id,n.config.prompt);
+        return result('prompt',n.id,communication());
       }
     }
-    if(!wasAwaiting||consumed) { record("not_consumed", !wasAwaiting ? "prompt_not_yet_presented" : "input_already_consumed"); return result('prompt',n.id,n.config.prompt); }
+    if(!wasAwaiting||consumed) { record("not_consumed", !wasAwaiting ? "prompt_not_yet_presented" : "input_already_consumed"); return result('prompt',n.id,communication()); }
     const text=p.message.trim();
     if(n.kind==='confirm'){
       const t=foldText(text);
       const yes=/^(po|ok|okay|yes|dakord|konfirmoj|e konfirmoj|ne rregull|sure|po ju lutem)[\s.!]*$/.test(t);
       const no=/^(jo|no|nuk e konfirmoj|ndrysho|korrigjo)[\s.!]*$/.test(t);
-      if(!yes&&!no)return result('prompt',n.id,`${n.config.prompt} Përgjigju me Po ose Jo.`);
+      if(!yes&&!no)return result('prompt',n.id,communication(true));
       state.confirmedConfirmation = { ...state.pendingConfirmation!, answer: yes ? "po" : "jo" };
       delete state.pendingConfirmation;
       state.values[n.id]=yes?'po':'jo';state.branchPorts={...state.branchPorts,[n.id]:yes?'yes':'no'};consumed=true;advance(yes?'yes':'no');
       if(!yes && p.sharedValues && p.graph.nodes.find(node=>node.id===state.nodeId)?.kind==='collect') state.forceCollect=state.nodeId;
       continue;
     }
-    if(isQuestion(text)) { record("not_consumed", "question"); return result('prompt',n.id,n.config.prompt); }
+    if(isQuestion(text)) { record("not_consumed", "question"); return result('prompt',n.id,communication()); }
     const type=fieldType;
     const valid=type==='photo'?p.hasPhoto:type==='email'?/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text):type==='phone'?/^\+?[\d\s().-]{7,24}$/.test(text)&&text.replace(/\D/g,'').length>=7:type==='number'?/^\d+(?:[.,]\d+)?$/.test(text):Boolean(text)&&text.length<=2000;
-    if(!valid) { record("invalid", "invalid_value"); return result('prompt',n.id,`${n.config.prompt} ${type==='email'?'Vendos një email të vlefshëm.':type==='photo'?'Dërgo një foto.':type==='number'?'Vendos një numër.':type==='phone'?'Vendos një numër telefoni të vlefshëm.':''}`.trim()); }
+    if(!valid) { record("invalid", "invalid_value"); return result('prompt',n.id,communication(true)); }
     record("accepted", "validated_input");
     state.values[n.config.fieldKey!]=type==='photo'?'photo_received':text.slice(0,2000);delete state.forceCollect;consumed=true;advance('next');
   }

@@ -24,7 +24,7 @@ export function testInputBatch(input: TestChatInput, job: WorkflowJob): { input:
   if (!Array.isArray(parts) || !parts.length || parts.length > 20) throw new Error("Invalid test batch");
   const ids = new Set<string>();
   for (const [index, part] of parts.entries()) {
-    if (!part || part.slug !== input.slug || typeof part.message !== "string" || part.hasMedia || part.attachments?.length
+    if (!part || part.configurationDraft !== input.configurationDraft || part.slug !== input.slug || typeof part.message !== "string" || part.hasMedia || part.attachments?.length
       || typeof part.requestId !== "string" || ids.has(part.requestId) || part.sequence !== job.client_sequence! + index
       || index === 0 && part.requestId !== job.client_request_id) throw new Error("Invalid test batch identity");
     ids.add(part.requestId);

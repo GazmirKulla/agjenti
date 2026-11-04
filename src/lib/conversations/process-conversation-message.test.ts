@@ -72,23 +72,40 @@ describe("R3 server-owned customer question boundary", () => {
     mocks.info.mockImplementation(async ({ state }) => ({ ...result(state, "[[ask_customer:name,business_type,instagram_handle,stated_needs]]"),
       previousResponseId: "unrendered-provider-response", debug: { ...result(state).debug, source: "ai" } }));
     const question = await turn("Cilat të dhëna të duhen?", migrateContext());
-    expect(question.nextState.pendingCustomerQuestion?.fields).toEqual(["name", "business_type", "instagram_handle", "stated_needs"]);
+    expect(question.nextState.pendingCustomerQuestion?.fields).toEqual(["name"]);
     expect(question.previousResponseId).toBeNull();
     expect(question.nextState.recentMessages?.at(-1)?.content).toBe(question.reply);
     return question;
   }
-  it("consumes the original response exactly once without a second extractor or process dispatch", async () => {
+  it("saves the answer once and continues with an informational reply without process dispatch", async () => {
     const question = await ask(), before = structuredClone(question.nextState);
     vi.clearAllMocks();
-    const answer = await turn("Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj", question.nextState);
+    mocks.info.mockImplementation(async ({ state }) => result(state, "Miqail, mund të të shpjegoj si përgjigjet agjenti në Instagram."));
+    const answer = await turn("Miqail", question.nextState);
     expect(question.nextState).toEqual(before);
     expect(answer.nextState.context?.profile.name?.value).toBe("Miqail");
-    expect(answer.nextState.customerDeclaredFacts?.business_type?.value).toBe("Shitje rrobash online");
+    expect(answer.nextState.customerDeclaredFacts?.business_type).toBeUndefined();
     expect(answer.nextState.pendingCustomerQuestion).toBeUndefined();
     expect(answer.conversationRouting?.reason).toBe("customer_question_answer");
-    expect(answer.turnDecision?.executor).toBe("coordinator");
+    expect(answer.turnDecision?.executor).toBe("legacy_information");
     expect(answer.nextState.recentMessages).toHaveLength(4);
-    expect(mocks.extract).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.info).not.toHaveBeenCalled(); expect(mocks.booking).not.toHaveBeenCalled();
+    expect(mocks.extract).not.toHaveBeenCalled(); expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.booking).not.toHaveBeenCalled();
+    expect(mocks.info).toHaveBeenCalledTimes(1);
+    expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ state: expect.objectContaining({
+      context: expect.objectContaining({ profile: expect.objectContaining({ name: expect.objectContaining({ value: "Miqail" }) }) }),
+    }), informational: expect.stringContaining("not consent to register") }));
+    expect(answer.reply).toContain("mund të të shpjegoj");
+  });
+  it("renders and tracks a useful follow-up after an accepted answer", async () => {
+    const question = await ask();
+    mocks.info.mockImplementation(async ({ state }) => ({ ...result(state, "Për ta lidhur me biznesin tënd: [[ask_customer:business_type,instagram_handle]]"),
+      previousResponseId: "unrendered-followup", debug: { ...result(state).debug, source: "ai" } }));
+    const answer = await turn("Elira", question.nextState);
+    expect(answer.reply).toBe("Për ta lidhur me biznesin tënd: Çfarë biznesi ke?");
+    expect(answer.nextState.pendingCustomerQuestion?.fields).toEqual(["business_type"]);
+    expect(answer.nextState.context?.profile.name?.value).toBe("Elira");
+    expect(answer.previousResponseId).toBeNull();
+    expect(answer.nextState.recentMessages?.at(-1)?.content).toBe(answer.reply);
   });
   it("staff takeover cannot consume a pending customer answer", async () => {
     const question = await ask(); question.nextState.staffHandoff = true;
@@ -714,12 +731,12 @@ it("does not invoke a booking capability removed from a v2 definition", async ()
   expect(next.conversationRouting?.process).toBe("information");
   expect(next.nextState.processes?.order?.status).toBe("active");
 });
-it("keeps pre-pilot production booking behavior behind the single entry point", async () => {
+it("routes source-less production calls through the same coordinator", async () => {
   vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
   await processConversationMessage({ businessId: "business", message: "Dua rezervim", hasPhoto: false, state: emptyState(), mode: "production" });
   const [bookingParams] = mocks.booking.mock.calls[0] ?? [];
   expect(bookingParams).toEqual(expect.objectContaining({ businessId: "business", message: "Dua rezervim", mode: "production" }));
-  expect(bookingParams.routed).toBeUndefined();
+  expect(bookingParams.routed).toBe(true);
 });
 it.each(["instagram", "whatsapp"] as const)("routes %s through business conversation handling without a pilot flag", async source => {
   vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");

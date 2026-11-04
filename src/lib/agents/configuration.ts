@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import type { AgentConfigurationEffect, AgentConfigurationRead } from "./configuration-contract";
 
-export const agentConfigurationColumns = "id,name,instructions,is_active,updated_at";
+export const agentConfigurationColumns = "id,name,instructions,is_active,updated_at,communication,configuration_revision";
 export const instructionHash = (instructions: string) => createHash("sha256").update(instructions).digest("hex");
 
 export function configurationRead(agent: { id?: string; name?: string; instructions: string; is_active?: boolean } | null): AgentConfigurationRead {

@@ -20,8 +20,8 @@ const reasons: Record<string, string> = {
 };
 const initialChat: TestConversation = { id: "initial", title: "Bisedë e re", entries: [], updatedAt: 0 };
 type Upload = { id: string; file: File; preview?: string };
-export function AgentTestChat({ slug, businessName, userId }: {
-  slug: string; businessName: string; userId: string;
+export function AgentTestChat({ slug, businessName, userId, configurationDraft }: {
+  slug: string; businessName: string; userId: string; configurationDraft?: string;
 }) {
   const [chats, setChats] = useState<TestConversation[]>([initialChat]);
   const [activeId, setActiveId] = useState("initial");
@@ -68,7 +68,7 @@ export function AgentTestChat({ slug, businessName, userId }: {
   const waiting = chat.outbox?.some(o => o.status === "queued" || o.status === "processing") ?? false;
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
-  const storageKey = `agjenti:test-chat:v1:${userId}:${slug}`;
+  const storageKey = `agjenti:test-chat:v1:${userId}:${slug}${configurationDraft ? `:draft:${configurationDraft}` : ""}`;
   useEffect(() => {
     try { const saved = readHistory(sessionStorage.getItem(storageKey)); if (saved.length) { setChats(saved); setActiveId(saved[0].id); } }
     catch { setStorageNotice("Historiku ruhet vetëm gjatë kësaj vizite; ruajtja e shfletuesit nuk është e disponueshme."); }
@@ -117,7 +117,7 @@ export function AgentTestChat({ slug, businessName, userId }: {
           const next = current.outbox?.find(o => !o.accepted && !jobs.some((j: { requestId: string }) => j.requestId === o.id));
           if (!next || next.status !== "queued") continue;
           const posted = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
-            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: { message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
+            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: { ...(configurationDraft ? { configurationDraft } : {}), message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
           const result = await posted.json();
           if (disposed) return;
           setChats(all => all.map(c => c.id !== current.id ? c : { ...c, outbox: c.outbox?.map(o => o.id !== next.id ? o : { ...o, accepted: posted.ok, status: posted.ok ? "queued" : "failed", error: result.error }) }));
@@ -133,11 +133,11 @@ export function AgentTestChat({ slug, businessName, userId }: {
     const reconnect = () => void sync();
     window.addEventListener("online", reconnect);
     return () => { disposed = true; clearInterval(interval); window.removeEventListener("online", reconnect); };
-  }, [ready, slug]);
+  }, [ready, slug, configurationDraft]);
   async function retryOperation(operation: PendingTestTurn) {
     try {
       const response = await fetch(`/api/agent-test/turns?slug=${encodeURIComponent(slug)}`, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
-        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: { message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
+        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: { ...(configurationDraft ? { configurationDraft } : {}), message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
       setChats(all => all.map(c => c.id !== chat.id ? c : { ...c, outbox: c.outbox?.map(o => o.id === operation.id ? { ...o, accepted: true, status: "queued", error: undefined } : o) }));

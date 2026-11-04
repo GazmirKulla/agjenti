@@ -7,6 +7,7 @@ const PURPOSE = "agjenti-agent-test-v1";
 const TTL = 60 * 60 * 1000;
 export const MAX_TEST_TURNS = 40;
 type TestSession = {
+  configurationPreviewKey?: string;
   /** Entire explicit visual preview session is bound to this graph, even between processes. */
   visualPreviewId?: string;
   attachments?: { name: string; kind: "image" | "document"; text: string }[];

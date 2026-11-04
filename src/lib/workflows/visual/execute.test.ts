@@ -806,4 +806,5 @@ it("completes the registration process in simulation with a labelled link and no
  expect(output.reply).toContain("Ta përgatis");
  output=await executeVisualTurn({...params(graph),actionFlowRequest:true,state:output.nextState,message:"po"},legacy);
  expect(output.reply).toContain("SIMULIM");expect(output.reply).not.toContain("{{actions");expect(output.nextState.visual?.status).toBe("completed");expect(legacy).not.toHaveBeenCalled();
+ expect(output.executionResults).toContainEqual(expect.objectContaining({operation:"business.provision",status:"simulated"}));
 });

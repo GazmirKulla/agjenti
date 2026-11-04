@@ -4,7 +4,6 @@ import { inboundBatch } from "./message-batch";
 import { randomUUID } from "node:crypto";
 import { InboundPersistenceError } from "./inbound-persistence-error";
 import { hydrateProfile } from "./profile";
-import { usesSharedCoordinator } from "./coordinator-policy";
 import { prepareWorkflowReply, type WorkflowJob } from "./workflow-queue";
 import { processConversationMessage } from "./process-conversation-message";
 import { decryptSecret } from "@/lib/crypto/tokens";
@@ -361,11 +360,10 @@ export async function handleInboundMessage(
   // A paused handoff returns above. Reaching this point with its saved state means
   // staff explicitly resumed the conversation; start a new run without erasing data.
   let inboundState = structuredClone((stateRow?.collected as ConversationStatePayload | null) ?? emptyState());
-  const shared = usesSharedCoordinator({ businessId, source: message.channel, state: inboundState });
   // Direct processor calls can test production routing, but live state commits
   // and sends for shared conversations must always pass through the durable queue.
-  if (shared && !job) throw new Error("workflow_queue_required");
-  if(job && (shared || inboundState.context)) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState,message.channel);
+  if (!job) throw new Error("workflow_queue_required");
+  if(job) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState,message.channel);
   // Persisted inbox history also includes customers and staff who spoke while AI
   // was paused. Never replay those messages as workflow commands or field values.
   const [{ data: historyRows, error: historyError }, { data: lastOutbound, error: outboundError }] = await Promise.all([

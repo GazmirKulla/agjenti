@@ -1,3 +1,5 @@
+import { CommunicationEditor, type CommunicationEditorAgent } from "@/components/agents/communication-editor";
+import { prepareCommunicationConfiguration, saveCommunicationConfiguration, communicationConfigurationColumns } from "@/lib/agents/communication-configuration";
 import { prepareManagedAgent, saveManagedAgent } from "@/lib/agents/manage";
 import { ActionForm } from "@/components/dashboard/action-form";
 import Link from "next/link";
@@ -37,11 +39,33 @@ export default async function AgentsPage({
   const [{ data: agents, error: loadError }, limit] = await Promise.all([
     db
       .from("ai_agents")
-      .select("id,name,instructions,is_active,updated_at")
+      .select(communicationConfigurationColumns)
       .eq("business_id", access.business.id),
     loadAgentLimit(access.business.id),
   ]);
   if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
+  const history = await db.from("agent_configuration_versions").select("agent_id,revision").eq("business_id", access.business.id).order("revision", { ascending: false }).limit(100);
+  if (history.error) throw new Error("Versionet e konfigurimit nuk u ngarkuan.");
+  async function configure(formData: FormData) {
+    "use server";
+    const session = await getSessionUser();
+    if (!session) return { error: "Sesioni ka skaduar." };
+    const current = await requireBusinessAccess(session.id, slug);
+    if (!current) return { error: "Nuk ke qasje në këtë biznes." };
+    try {
+      const mode = String(formData.get("mode") ?? "");
+      const input = { id: String(formData.get("id") ?? ""), mode,
+        ...(mode === "draft" ? { instructions: String(formData.get("instructions") ?? ""), communication: {
+          version: 1, ...Object.fromEntries(["language", "tone", "length", "questions", "emoji"].map(key => [key, String(formData.get(key) ?? "")])) } } : {}),
+        ...(mode === "restore" ? { revision: Number(formData.get("revision")) } : {}),
+      };
+      const proposal = await prepareCommunicationConfiguration(current.business.id, input);
+      if (proposal.before.updated_at !== formData.get("updated_at")) return { error: "Konfigurimi ndryshoi. Rifresko përpara ruajtjes." };
+      const result = await saveCommunicationConfiguration(current.business.id, session.id, proposal);
+      revalidatePath(`/b/${slug}`, "layout");
+      return { success: result.message };
+    } catch (error) { return { error: (error as Error).message }; }
+  }
   const canCreate = (agents?.length ?? 0) < limit.maxAgents;
 
   async function save(formData: FormData) {
@@ -85,7 +109,7 @@ export default async function AgentsPage({
           required
         />
       </label>
-      <div className="grid gap-2">
+      {a ? <input type="hidden" name="instructions" value={a.instructions} /> : <div className="grid gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="form-label mb-0">
             Udhëzimet për Agjentin (Prompt)
@@ -94,7 +118,6 @@ export default async function AgentsPage({
         <textarea
           name="instructions"
           defaultValue={
-            a?.instructions ||
             "Përgjigju në gjuhën e klientit. Përdor çmimet nga katalogu dhe mos shpik informacion. Kërko vetëm të dhënat për hapin aktual të workflow-t."
           }
           rows={12}
@@ -104,7 +127,7 @@ export default async function AgentsPage({
         <p className="muted-copy">
           Shkruaji udhëzimet këtu ose kërkoja Agjentit t’i përditësojë me tekst ose audio.
         </p>
-      </div>
+      </div>}
       <label className="toggle-label">
         <span>
           Agjenti aktiv
@@ -148,7 +171,10 @@ export default async function AgentsPage({
       <div className="configuration-layout">
         <div className="space-y-5">
           {(agents ?? []).map((a) => (
-            <div key={a.id}>{agentForm(a)}</div>
+            <div key={a.id} className="grid gap-4">
+              <CommunicationEditor agent={a as CommunicationEditorAgent} slug={slug} versions={(history.data ?? []).filter(v => v.agent_id === a.id).map(v => v.revision)} action={configure} />
+              <details><summary>Emri dhe aktivizimi</summary>{agentForm(a)}</details>
+            </div>
           ))}
           {canCreate ? (
             <details className="panel section-pad" open={!agents?.length}>

@@ -12,7 +12,6 @@ vi.mock("@/lib/agents/generate", () => ({ generateAgentReply: mocks.generate, ag
 vi.mock("@/lib/catalogs/retrieval", () => ({ retrieveBusinessSources: mocks.retrieve }));
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 import { processLegacyAgentTurn } from "@/lib/conversations/process-agent-turn";
-import { usesSharedCoordinator } from "@/lib/conversations/coordinator-policy";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 
 const context = { query: "Industrial pumps catalog", requirements: {}, pending: "market", turns: 0 };
@@ -40,10 +39,6 @@ beforeEach(() => {
   mocks.generate.mockResolvedValue({ reply: "Tell me more about your request.", responseId: null, source: "ai", fallbackReason: null });
 });
 afterEach(() => vi.unstubAllEnvs());
-
-it.each(["instagram", "whatsapp"] as const)("catalog qualification reaches the shared coordinator on %s without a pilot flag", source => {
-  expect(usesSharedCoordinator({ businessId: "audit-tenant", source, mode: "production" })).toBe(true);
-});
 
 it("preserves a required catalog clarification on successful model availability", async () => {
   const answer = await processLegacyAgentTurn({ businessId: "audit-tenant", message: "Industrial pumps catalog", hasPhoto: false, informational: "Answer the informational request." });

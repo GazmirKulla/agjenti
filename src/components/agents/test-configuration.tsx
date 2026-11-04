@@ -19,6 +19,7 @@ export function TestConfiguration({ configuration, slug, agentConfigured }: {
       <p>Vëzhgim i këtij turni, jo status live pas rifreskimit. Sjellja e kërkuar nuk është verifikuar automatikisht.</p>
       {!configuration?.agents.length ? <p>Identiteti/versioni i udhëzimeve nuk është i disponueshëm për këtë përgjigje.</p> : configuration.agents.map((agent, index) => <dl key={index}>
         <div><dt>Agjenti</dt><dd>{agent.agentName ?? "Pa agjent aktiv"}{agent.agentId && <small>{agent.agentId}</small>}</dd></div>
+        <div><dt>Konfigurimi</dt><dd>{agent.configurationMode === "draft" ? "Draft i papublikuar" : "Version i publikuar"}{agent.configurationRevision != null ? ` · ${agent.configurationRevision}` : ""}</dd></div>
         <div><dt>Statusi gjatë leximit</dt><dd>{agent.active === true ? "Aktiv" : agent.active === false ? "Joaktiv" : "I padisponueshëm"}</dd></div>
         <div><dt>Versioni i udhëzimeve</dt><dd><code title={agent.instructionHash ?? undefined}>{agent.instructionHash?.slice(0, 12) ?? "I padisponueshëm"}</code></dd></div>
         <div><dt>Udhëzime bazë</dt><dd>{agent.fallbackInstructionsUsed === true ? "Po · mungojnë udhëzimet aktive" : agent.fallbackInstructionsUsed === false ? "Jo" : "Nuk u dërgua kërkesë gjenerimi"}</dd></div>

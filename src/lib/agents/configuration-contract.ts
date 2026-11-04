@@ -12,6 +12,8 @@ export type AgentConfigurationEffect = {
 };
 
 export type AgentConfigurationRead = {
+  configurationMode?: "draft" | "published";
+  configurationRevision?: number | null;
   agentId: string | null;
   agentName: string | null;
   active: boolean | null;

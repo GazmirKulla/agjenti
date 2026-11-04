@@ -99,6 +99,7 @@ describe("isolated automatic simulation", () => {
   it("binds reports to proposal, normalized graph and base revision", () => {
     const graph = collectGraph(), report = run(graph), binding = simulationBinding(report);
     expect(matchesSimulationBinding(binding, "proposal-a", 3, graph)).toBe(true);
+    expect(matchesSimulationBinding({ ...binding, version: 1 }, "proposal-a", 3, graph)).toBe(false);
     expect(matchesSimulationBinding(binding, "proposal-b", 3, graph)).toBe(false);
     expect(matchesSimulationBinding(binding, "proposal-a", 4, graph)).toBe(false);
     const changed = structuredClone(graph); changed.nodes[1].config.prompt = "Changed";

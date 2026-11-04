@@ -47,7 +47,7 @@ export type VisualFieldValidation = {
 };
 export type VisualExecution = {
   state: VisualRunState;
-  action: { kind: "action" | "knowledge" | "order_status" | "product" | "booking" | "prompt" | "handoff" | "end"; nodeId: string; message?: string };
+  action: { kind: "action" | "knowledge" | "order_status" | "product" | "booking" | "prompt" | "handoff" | "end"; nodeId: string; communication?: import("@/lib/conversations/process-communication").ProcessCommunication };
   traversedNodeIds: string[];
   inputConsumed: boolean;
   fieldValidation?: VisualFieldValidation[];

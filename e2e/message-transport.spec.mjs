@@ -1,3 +1,4 @@
+import { communicationResponse } from './communication-response.mjs';
 // Actual browser → HTTP queue → SQL → coordinator/executor. Model only is synthetic.
 import http from 'node:http';
 import {readFileSync} from 'node:fs';
@@ -27,7 +28,8 @@ test.beforeAll(async()=>{
    }
    const part={id:`synthetic-${randomUUID()}`,text,channel:req.url.split('/').at(-1)};providerParts.push(part);
    await new Promise(resolve=>setTimeout(resolve,1500));
-   res.setHeader('Content-Type','application/json');
+     text=communicationResponse(r,text);
+  res.setHeader('Content-Type','application/json');
    if(text.includes('[synthetic-reject]') || text.includes('[synthetic-retry]') && providerParts.filter(p=>p.text===text&&p.channel===part.channel).length===1){res.writeHead(400);res.end(JSON.stringify({error:{code:100,message:'Synthetic rejection'}}));return;}
    res.end(JSON.stringify(part.channel==='instagram'?{message_id:part.id}:{messages:[{id:part.id}]}));return;
   }
@@ -258,7 +260,7 @@ test('three rapid messages → stop waiting → reload → ordered P0/P1/R4 reca
  // No Playwright auto-wait masking a composer blocked until generation ends.
  const activeComposer=page.locator('#agent-test-message');
  await expect(activeComposer).toBeEnabled({timeout:500});
- await activeComposer.fill('Drita\nShitje librash online\nsynthetic_books\nçmimet dhe madhësitë');
+ await activeComposer.fill('Emri: Drita\nLloji i biznesit: Shitje librash online\nInstagram: synthetic_books\nPyetjet tipike: çmimet dhe madhësitë');
  await expect(page.getByRole('button',{name:'Dërgo mesazhin',exact:true})).toBeEnabled({timeout:500});
  expect((await history(page))[0].entries).toHaveLength(0);
  expect(await page.locator('.chat-typing i').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('chat-typing-dot');

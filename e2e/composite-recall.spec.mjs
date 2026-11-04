@@ -1,3 +1,4 @@
+import { communicationResponse } from './communication-response.mjs';
 // Real local UI/Auth/actions/sealed sessions + SQL; deterministic model only.
 // Uses the existing app-r3 loopback transport. No separate provider process.
 import http from 'node:http';
@@ -41,6 +42,7 @@ test.beforeAll(async()=>{
           :'Informacion sintetik, pa veprime biznesi.';
         modelEvidence.set(message,{projection,generated:text});
       }
+    text=communicationResponse(r,text);
       res.setHeader('Content-Type','application/json');res.end(JSON.stringify({id:'p1-synthetic',object:'response',status:'completed',
         output:[{type:'message',role:'assistant',content:[{type:'output_text',text,annotations:[]}]}]}));
     }catch{res.writeHead(400);res.end();}

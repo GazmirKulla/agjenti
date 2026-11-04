@@ -1,3 +1,4 @@
+import { communicationResponse } from './communication-response.mjs';
 // Controlled OpenAI wire-format fixture, NOT a real LLM or business provider.
 // No requests/prompts/PII are logged or persisted. Used only by `app-r3`.
 import http from 'node:http';
@@ -28,6 +29,7 @@ const server = http.createServer(async (req, res) => {
         : lower.includes('ofron agjenti') ? 'Agjenti.app ofron automatizim AI.'
         : 'Përgjigje sintetike për verifikim, jo këshillë biznesi.';
     }
+    text=communicationResponse(request,text);
     calls++;
     res.setHeader('Content-Type','application/json');
     res.end(JSON.stringify({id:`synthetic-r3-${calls}`,object:'response',model:'synthetic',status:'completed',output:[{type:'message',role:'assistant',content:[{type:'output_text',text,annotations:[]}]}]}));

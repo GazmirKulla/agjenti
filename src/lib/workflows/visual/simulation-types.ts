@@ -1,7 +1,7 @@
 /** Client-safe evidence contract. No prompts, credentials or real customer data. */
 export type SimulationStatus = "PASS" | "FAIL" | "BLOCKED" | "UNVERIFIED";
 export type SimulationBinding = {
-  version: 1;
+  version: 2;
   proposalId: string;
   baseRevision: number;
   candidateGraphHash: string;
@@ -27,7 +27,7 @@ export type ScenarioResult = {
   result: SimulationStatus;
 };
 export type SimulationReport = SimulationBinding & {
-  engine: "visual-runtime-v1";
+  engine: "visual-runtime-v2";
   baselineGraphHash: string;
   scenarios: ScenarioResult[];
   validationFindings: SimulationFinding[];
