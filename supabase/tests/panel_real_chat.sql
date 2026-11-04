@@ -1,0 +1,53 @@
+-- Synthetic, rollback-only scenario: same action and ownership RPCs as production.
+begin;
+do $$
+declare b uuid:=gen_random_uuid(); actor uuid:=gen_random_uuid(); recipient uuid:=gen_random_uuid(); stranger uuid:=gen_random_uuid(); stream uuid:=gen_random_uuid(); request uuid:=gen_random_uuid(); c uuid; v uuid:=gen_random_uuid(); j workflow_inbound_queue; r jsonb; again jsonb; denied boolean; slug text;
+begin
+ insert into auth.users(id,email,email_confirmed_at) values(actor,'panel-owner@test.invalid',now()),(recipient,'panel-recipient@test.invalid',now()),(stranger,'panel-stranger@test.invalid',now());
+ insert into businesses(id,name,slug) values(b,'Panel source','panel-'||b::text);
+ insert into business_users(business_id,user_id,role) values(b,actor,'owner'),(b,stranger,'staff');
+ assert not can_use_panel_chat(b,stranger);
+ denied:=false; begin perform create_panel_chat(b,stranger,stream); exception when others then denied:=sqlerrm='panel_forbidden'; end; assert denied;
+ c:=create_panel_chat(b,actor,stream);
+ assert c=create_panel_chat(b,actor,stream);
+ assert (select count(*) from conversations where business_id=b)=1;
+ r:=enqueue_panel_chat(b,actor,stream,request,0,'po',repeat('a',64));
+ assert r=enqueue_panel_chat(b,actor,stream,request,0,'po',repeat('a',64));
+ assert not exists(select 1 from claim_workflow_transport(array[b],null,null,true));
+ assert not exists(select 1 from claim_workflow_transport(array[b],actor,stream,true));
+ denied:=false; begin perform enqueue_panel_chat(b,actor,stream,request,0,'changed',repeat('b',64)); exception when others then denied:=sqlerrm='panel_request_conflict'; end; assert denied;
+ denied:=false; begin perform enqueue_panel_chat(b,actor,stream,gen_random_uuid(),2,'skipped',repeat('b',64)); exception when others then denied:=sqlerrm='panel_sequence_conflict'; end; assert denied;
+ select * into j from claim_panel_chat(b,actor,stream);
+ assert j.id is not null;
+ assert not exists(select 1 from claim_panel_chat(b,actor,stream));
+ insert into visual_workflows(business_id,draft,enabled) values(b,'{"version":1,"name":"Panel signup","nodes":[],"edges":[]}',true);
+ insert into visual_workflow_versions(id,business_id,graph) values(v,b,'{"version":1,"name":"Panel signup","nodes":[{"id":"create","kind":"action","config":{"action":{"actionKey":"business.provision"}}}],"edges":[]}');
+ insert into business_actions(business_id,action_key,enabled) values(b,'business.provision',true);
+ denied:=false; begin perform provision_business_invitation(b,null,'panel-test','{"name":"Panel target","email":"panel-recipient@test.invalid"}',repeat('c',64),'encrypted',v,'create',c,jsonb_build_object('jobId',j.id,'leaseToken',j.lease_token,'revision',0)); exception when others then denied:=sqlerrm='unauthorized'; end; assert denied, 'Operator privilege must not grant automation permission';
+ insert into business_action_settings(business_id,action_key,automation_allowed) values(b,'business.provision',true);
+ r:=provision_business_invitation(b,null,'panel-test','{"name":"Panel target","email":"panel-recipient@test.invalid"}',repeat('c',64),'encrypted',v,'create',c,jsonb_build_object('jobId',j.id,'leaseToken',j.lease_token,'revision',0));
+ again:=provision_business_invitation(b,null,'panel-test','{"name":"Panel target","email":"panel-recipient@test.invalid"}',repeat('d',64),'different',v,'create',c,jsonb_build_object('jobId',j.id,'leaseToken',j.lease_token,'revision',0));
+ assert r=again;
+ assert (select count(*) from business_invitations where source_business_id=b)=1;
+ assert not exists(select 1 from business_users where business_id=(r->>'business_id')::uuid);
+ denied:=false; begin perform accept_business_invitation(repeat('c',64),stranger); exception when others then denied:=sqlerrm='recipient_mismatch'; end; assert denied;
+ slug:=accept_business_invitation(repeat('c',64),recipient);
+ assert slug is not null;
+ assert exists(select 1 from business_users where business_id=(r->>'business_id')::uuid and user_id=recipient and role='owner');
+ -- Membership is checked again at the effect and commit boundaries.
+ delete from business_users where business_id=b and user_id=actor;
+ denied:=false; begin perform finish_panel_chat(j.id,j.lease_token,0,'{}',null,'done',null,'encrypted',false); exception when others then denied:=sqlerrm='ownership_lost'; end; assert denied;
+ insert into business_users(business_id,user_id,role) values(b,actor,'owner');
+ denied:=false; begin perform finish_panel_chat(j.id,j.lease_token,7,'{}',null,'done',null,'encrypted',false); exception when others then denied:=sqlerrm='stale_state'; end; assert denied;
+ assert (select count(*) from messages where conversation_id=c)=0;
+ perform finish_panel_chat(j.id,j.lease_token,0,'{"fields":{},"customer":{}}',null,'Ownership invitation',null,'encrypted-result',false);
+ assert (select revision from conversation_states where conversation_id=c)=1;
+ assert (select status from workflow_inbound_queue where id=j.id)='sent';
+ assert (select count(*) from messages where conversation_id=c)=2;
+ denied:=false; begin perform finish_panel_chat(j.id,j.lease_token,0,'{}',null,'duplicate',null,'encrypted',false); exception when others then denied:=sqlerrm='lease_lost'; end; assert denied;
+ assert (select count(*) from messages where conversation_id=c)=2;
+ assert not has_function_privilege('authenticated','public.create_panel_chat(uuid,uuid,uuid)','execute');
+ assert not has_function_privilege('anon','public.enqueue_panel_chat(uuid,uuid,uuid,uuid,integer,text,text)','execute');
+end $$;
+rollback;
+select 'PASS panel real actions: authorization, external isolation, retry, ownership acceptance and atomic receipts';

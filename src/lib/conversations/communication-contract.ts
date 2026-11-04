@@ -9,13 +9,15 @@ export type CustomerQuestionProposal = {
   purpose: "current_request" | "understand_need";
 };
 export type CommunicationDraft = {
+  processOffer?: { flowId: string; text: string } | null;
   answer: string;
   question: CustomerQuestionProposal | null;
 };
 
 export const communicationSchema = {
-  type: "object", additionalProperties: false, required: ["answer", "question"],
+  type: "object", additionalProperties: false, required: ["answer", "question", "processOffer"],
   properties: {
+    processOffer: { anyOf: [{ type: "null" }, { type: "object", additionalProperties: false, required: ["flowId", "text"], properties: { flowId: { type: "string" }, text: { type: "string" } } }] },
     answer: { type: "string" },
     question: { anyOf: [
       { type: "null" },
@@ -29,7 +31,7 @@ export const communicationSchema = {
 
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 export function parseCommunicationDraft(value: unknown): CommunicationDraft | null {
-  if (!record(value) || Object.keys(value).some(k => k !== "answer" && k !== "question")
+  if (!record(value) || Object.keys(value).some(k => k !== "answer" && k !== "question" && k !== "processOffer")
     || typeof value.answer !== "string" || value.answer.length > 1200 || !Object.hasOwn(value, "question")
     || /\[\[ask_customer:/.test(value.answer)) return null;
   let question: CustomerQuestionProposal | null = null;
@@ -43,13 +45,21 @@ export function parseCommunicationDraft(value: unknown): CommunicationDraft | nu
       || (q.text.match(/\?/g)?.length ?? 0) !== 1 || !q.text.trim().endsWith("?")) return null;
     question = { field: q.field as CustomerQuestionField, text: q.text.trim(), purpose: q.purpose as CustomerQuestionProposal["purpose"] };
   }
+  let processOffer: CommunicationDraft["processOffer"];
+  if (value.processOffer != null) {
+    const o = value.processOffer;
+    if (!record(o) || Object.keys(o).some(k => !["flowId", "text"].includes(k)) || typeof o.flowId !== "string" || !o.flowId || o.flowId.length > 120
+      || typeof o.text !== "string" || o.text.length > 240 || !o.text.trim().endsWith("?") || (o.text.match(/\?/g)?.length ?? 0) !== 1
+      || /[\n\r\[\]<>]|https?:\/\/|www\./i.test(o.text) || question) return null;
+    processOffer = { flowId: o.flowId, text: o.text.trim() };
+  }
   const answer = value.answer.trim();
-  if (!answer || answer.length + (question?.text.length ?? 0) + 2 > 1200) return null;
+  if (!answer || answer.length + (question?.text.length ?? processOffer?.text.length ?? 0) + 2 > 1200) return null;
   // A second question hidden in answer would have no collection ownership.
   // Reject it rather than silently delivering an untracked questionnaire.
   const answerQuestions = (answer.replace(/https?:\/\/[^\s]+/g, "").match(/\?/g) ?? []).length;
-  if (answerQuestions + (question ? 1 : 0) > 1) return null;
-  return { answer, question };
+  if (answerQuestions + (question || processOffer ? 1 : 0) > 1) return null;
+  return { answer, question, ...(processOffer ? { processOffer } : {}) };
 }
 
 export type CommunicationReceipt = {

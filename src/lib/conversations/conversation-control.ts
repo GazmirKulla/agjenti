@@ -40,6 +40,7 @@ export function offerResumeClarification(state: ConversationStatePayload) {
     const candidates = (["order", "booking", "service", "actionFlow"] as const).map(process => clarificationTarget(state, process)).filter(target => target !== null);
     const owner = currentProcessOwner(state) ?? processes.active ?? processes.lastDecision?.suspended;
     const target = candidates.find(target => target.process === owner) ?? (candidates.length === 1 ? candidates[0] : null);
+    if (!candidates.length) return;
     processes.pendingClarification = { kind: "resume_process", target, expiresAt: Date.now() + 15 * 60 * 1000 };
 }
 export function shortReply(message: string): boolean {
@@ -97,8 +98,11 @@ export function conversationControl(params: AgentTurnParams): AgentTurnResult | 
         return null;
     const state = structuredClone(params.state ?? emptyState());
     const suspended = currentProcessOwner(state) ?? state.processes?.active ?? state.processes?.lastDecision?.suspended;
-    const unclear = !pause && Boolean(state.processes?.pendingClarification || state.conversationPaused && !short);
-    state.conversationPaused = true;
+    const unclear = !pause && Boolean(state.processes?.pendingClarification?.target || state.conversationPaused && !short && state.processes && (["order", "booking", "service", "actionFlow"] as const).some(kind => clarificationTarget(state, kind)));
+    const hasTask = Boolean(state.processes && (["order", "booking", "service", "actionFlow"] as const).some(kind => clarificationTarget(state, kind)))
+      || Boolean(!state.processes && state.product_id && state.step_key && state.step_key !== "order_ready");
+    if (pause || hasTask) state.conversationPaused = true;
+    else delete state.conversationPaused;
     if (state.processes) {
         delete state.processes.pendingChoice;
     }

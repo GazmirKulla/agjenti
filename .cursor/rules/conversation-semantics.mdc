@@ -1,0 +1,8 @@
+---
+description: Mandatory project rule against hardcoded interpretation of customer language
+alwaysApply: true
+---
+
+Read and follow the root AGENTS.md, especially “Rregull i detyrueshëm: kuptimi i bisedës nuk shkruhet si lista frazash”, before every development task and review.
+
+Do not infer customer intent, consent, refusal, navigation, correction or conversational meaning from hardcoded words, regexes or translated phrase lists. Do not relocate such lists to configuration or prompts. Use contextual structured semantic interpretation; keep authorization and state validation deterministic on the server. A clarification does not erase a pending process. On model failure, preserve state and fail closed without lexical fallbacks.

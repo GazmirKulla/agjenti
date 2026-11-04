@@ -3,7 +3,8 @@ import type { TestAttachment } from "@/lib/agents/test-chat/attachments";
 export type ChatTurn = Exclude<TestChatResult, { error: string }>;
 export type ChatEntry = { id: string; batchId?: string; text: string; photo: boolean; attachments: (TestAttachment & { preview?: string })[]; result: ChatTurn };
 export type PendingTestTurn = { id: string; batchId?: string; sequence: number; text: string; photo: boolean; attachments: ChatEntry["attachments"]; session: string | null; accepted?: boolean; status: "queued" | "processing" | "failed" | "uncertain"; error?: string };
-export type TestConversation = { id: string; title: string; entries: ChatEntry[]; updatedAt: number; outbox?: PendingTestTurn[] };
+export type TestConversation = {
+  mode?: "test" | "real"; id: string; title: string; entries: ChatEntry[]; updatedAt: number; outbox?: PendingTestTurn[] };
 export type TestTransportJob = { requestId: string; batchId?: string; sequence: number; status: string; error?: string; result?: ChatTurn | null };
 /** Reconcile by operation identity and contiguous sequence, never response arrival order. */
 export function reconcileTestConversation(chat: TestConversation, jobs: TestTransportJob[]): TestConversation {

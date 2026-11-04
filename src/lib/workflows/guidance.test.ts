@@ -19,7 +19,7 @@ it("uses bounded recent conversation for ambiguous references and accepts only s
  expect(await chooseGuidance({...input,state})).toMatchObject({action:"revisit",target:"size",source:"ai"});
  expect(JSON.parse(m.create.mock.calls[0][0].input).history).toEqual(state.recentMessages);
  m.create.mockResolvedValue({output_text:JSON.stringify({action:"revisit",target:"order_ready",confidence:1,evidence:input.message})});
- expect(await chooseGuidance(input)).toMatchObject({action:"continue"});
+ expect(await chooseGuidance(input)).toMatchObject({action:"clarify"});
 });
 it.each([
  {action:"order",target:null,confidence:1,evidence:input.message},
@@ -28,9 +28,10 @@ it.each([
  {action:"complete",target:"order_ready",confidence:1,evidence:input.message},
 ])("rejects an unsupported or ungrounded navigation: %j",async value=>{
  m.create.mockResolvedValue({output_text:JSON.stringify(value)});
- expect(await chooseGuidance(input)).toMatchObject({action:"continue"});
+ expect(await chooseGuidance(input)).toMatchObject({action:"clarify"});
 });
-it("backtracks deterministically and clarifies ambiguous corrections on provider failure",async()=>{
+it("backtracks from semantic interpretation and clarifies on provider failure",async()=>{
+ m.create.mockResolvedValue({output_text:JSON.stringify({action:"revisit",target:"size",confidence:.99,evidence:"Kthehu pas"})});
  expect(await chooseGuidance({...input,message:"Kthehu pas"})).toMatchObject({action:"revisit",target:"size"});
  m.create.mockRejectedValue(new Error("offline"));
  expect(await chooseGuidance({...input,message:"Dua të ndryshoj diçka"})).toMatchObject({action:"clarify"});
@@ -54,7 +55,7 @@ it("can select an unvisited task from all configured routes",async()=>{
 it("never selects a route absent from the current business workflow",async()=>{
  const message="Dua të bëj pagesën";
  m.create.mockResolvedValue({output_text:JSON.stringify({action:"route",target:"charge-card",confidence:1,evidence:message})});
- expect(await chooseGuidance({...input,message,routes:[{id:"photo",label:"Foto",kind:"collect"}]})).toMatchObject({action:"continue"});
+ expect(await chooseGuidance({...input,message,routes:[{id:"photo",label:"Foto",kind:"collect"}]})).toMatchObject({action:"clarify"});
 });
 it("asks which order flow when several products flows are configured instead of choosing an arbitrary one",async()=>{
  vi.stubEnv("OPENAI_API_KEY","");

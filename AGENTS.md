@@ -1,5 +1,18 @@
 # Udhëzime të përhershme për Agjenti.app
 
+## Rregull i detyrueshëm: kuptimi i bisedës nuk shkruhet si lista frazash
+- Lexo këtë seksion përpara çdo planifikimi, prompt-i zhvillimi, implementimi dhe review në këtë projekt. Zbatohet edhe për agjentët e deleguar.
+- NDALOHEN regex-et, listat e fjalëve/frazave, `includes`, `startsWith` dhe degëzimet sipas gjuhës që interpretojnë qëllimin, pranimin/refuzimin, vazhdimin, anulimin, korrigjimin, pyetjet ose kuptimin e përgjigjes së klientit. Mos shto një frazë për të rregulluar një shembull bisede.
+- Mos i zhvendos këto lista në JSON, konfigurim, prompt, helper ose një modul të ri për ta anashkaluar rregullin. Zgjidhja duhet të interpretojë kuptimin në kontekst, në çdo gjuhë, për çdo lloj biznesi.
+- Interpretimi semantik prodhon një rezultat të strukturuar me referencë te propozimi/hapi përkatës dhe evidencë nga mesazhi. Serveri validon skemën, identitetet dhe përputhjen me gjendjen aktuale. Rezultati i AI-së nuk është autorizim për efekt real.
+- Kodi përcakton rregullat deterministe: autorizimin, izolimin mes bizneseve, versionet, skadimin, idempotencën, gjendjen, fushat e detyrueshme dhe formatet si email, numër, UUID. Këto kontrolle nuk hiqen për t'ia deleguar sigurinë modelit.
+- Pyetja sqaruese nuk anulon vetvetiu propozimin apo procesin. Pranimi duhet t'i referohet objektit të duhur; paqartësia kërkon sqarim dhe nuk autorizon veprime.
+- Sjellja dhe njohuritë e një biznesi ruhen në konfigurimin e tij; motori nuk përmban përjashtime për Agjenti.app apo emra biznesesh.
+- Tekstet e UI-së, gabimet e kontrolluara dhe etiketat e konfigurueshme lejohen. Mos i përdor tekstet e shfaqura si kontratë për të interpretuar përgjigjen e ardhshme.
+- Në mungesë/dështim të modelit, mos përdor fjalor frazash si fallback. Ruaj progresin, shfaq dështimin e kontrolluar ose kërko sqarim; mos konfirmo veprime.
+- Testet verifikojnë parafrazime, gjuhë të ndryshme, mohime, pyetje ndërmjetëse, referenca të paqarta dhe propozime të skaduara. Shembujt gjuhësorë lejohen si të dhëna testimi, jo si logjikë runtime.
+- Para dorëzimit kërko heuristika gjuhësore në të gjithë rrjedhën e prekur. Nëse mbeten të vjetra, identifikoji shprehimisht; mos pretendo se janë hequr të gjitha.
+
 Zbatohen në të gjithë këtë repository. Lexoji para planifikimit dhe ndryshimit të kodit. Ky skedar është burimi i rregullave të bashkëpunimit; kërkesat e drejtpërdrejta të përdoruesit kanë përparësi.
 
 ## Qëllimi dhe scope-i

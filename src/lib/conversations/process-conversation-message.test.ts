@@ -443,14 +443,12 @@ describe("W1 pending clarification and turn ownership", () => {
     expect(mocks.agent).not.toHaveBeenCalled(); expect(mocks.extract).not.toHaveBeenCalled();
   });
 
-  it("dismisses a clarification with no resumable task without inventing a cancellation", async () => {
-    const clarification = await ask(emptyState());
-    const dismissed = await turn("leje fare", clarification.nextState);
-    expect(dismissed.conversationRouting?.reason).toBe("clarification_cancel");
-    expect(dismissed.nextState.processes?.pendingClarification).toBeUndefined();
-    expect(dismissed.nextState.processes?.order).toBeUndefined();
-    expect((await turn("materialet", dismissed.nextState)).conversationRouting?.process).toBe("information");
-    expect(mocks.agent).not.toHaveBeenCalled();
+  it("does not invent a resume clarification when no task exists", async () => {
+    const reply = await turn("okay", emptyState());
+    expect(reply.nextState.conversationPaused).not.toBe(true);
+    expect(reply.nextState.processes?.pendingClarification).toBeUndefined();
+    expect(reply.nextState.processes?.order).toBeUndefined();
+    expect((await turn("materialet", reply.nextState)).conversationRouting?.process).toBe("information");
   });
 
   it("shares clarification control with the scoped linear preview without routing external capabilities", async () => {

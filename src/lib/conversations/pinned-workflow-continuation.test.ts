@@ -1,3 +1,8 @@
+// Executor regressions supply semantic navigation explicitly; model behavior
+// is tested at the guidance boundary, not replaced by runtime phrase rules.
+const navigation = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/workflows/guidance", async original => ({ ...await original<object>(), chooseGuidance: navigation }));
+beforeEach(() => navigation.mockReset().mockResolvedValue({ action: "continue", target: null, source: "ai" }));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { AgentTurnResult } from "./process-agent-turn";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
@@ -154,6 +159,7 @@ it.each(["correct", "phone_phrase", "staff", "module", "cancelled"])("post-confi
   if (scenario === "cancelled") { delete state.processes.order; state.conversationPaused = true; }
   if (scenario === "module") mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "products", "services", "knowledge"] });
   const before = structuredClone(state);
+  navigation.mockResolvedValueOnce({ action: "answer", target: null, source: "ai" });
   const answer = await turn(scenario === "phone_phrase" ? "Telefoni im është +355699876543" : "telefoni: +355699876543", state);
   expect(state).toEqual(before);
   expect(answer.nextState.visual?.versionId).toBe("A");
@@ -468,6 +474,7 @@ it("2B retail inflection selects the named product, then resumes the same order 
 });
 
 it("2B an adapter cannot reinterpret an order field correction as a booking route", async () => {
+ navigation.mockResolvedValueOnce({ action: "clarify", target: null, source: "ai" });
   const state = order(), message = "Ndrysho Rezervim";
   const decision = decisionForTurn({ message, state, executor: "workflow", process: "order" });
   expect(decision.kind).toBe("correction");

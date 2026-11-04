@@ -1,3 +1,4 @@
+import { availableProcessOffers, consumeProcessOffer } from "./process-offer";
 import { composeProcessQuestion } from "./compose-process-question";
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "./handoff";
 import { CapabilityEnforcementError, requireRuntimeModules } from "@/lib/capabilities/enforcement";
@@ -204,6 +205,19 @@ export async function processConversationMessage(params: ConversationMessagePara
     if (rendered !== result.reply) result.previousResponseId = null;
     result.reply = rendered;
   }
+  if (result.processOffer && result.debug.source === "ai" && !result.handoff && !result.nextState.pendingCustomerQuestion
+    && !result.nextState.conversationPaused && !result.nextState.processes?.informationOnly && !currentProcessOwner(result.nextState)) {
+    const version = params.visualPreview ?? await loadVisualVersion(params.businessId);
+    const offered = availableProcessOffers(version).find(o => o.flowId === result.processOffer!.flowId);
+    if (offered && !result.reply.includes("?") && result.reply.length + result.processOffer.text.length + 2 <= 1200) {
+      result.reply += `\n\n${result.processOffer.text}`;
+      result.nextState.processes ??= { active: null, promptOwner: null };
+      result.nextState.processes.pendingProcessOffer = { businessId: params.businessId, versionId: offered.versionId,
+        flowId: offered.flowId, prompt: result.reply, expiresAt: Date.now() + 15 * 60_000 };
+      result.previousResponseId = null;
+    }
+  }
+  delete result.processOffer;
   result.communication = { version: 1, source: result.debug.source === "ai" ? "model" : result.debug.fallbackReason ? "fallback" : "protected",
     questionField: result.nextState.pendingCustomerQuestion?.fields[0] ?? null, decisionKind: result.turnDecision.kind };
   delete result.customerQuestion; // A proposal is internal; only the delivered checkpoint is authoritative.
@@ -277,6 +291,16 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     if (state.processes) delete state.processes.pendingClarification;
     return { ...plainResult(state, "Biseda është në pritje të stafit. Kjo përgjigje nuk rifillon dhe nuk konfirmon kërkesën."),
       conversationRouting: { process: "support", action: "answer", source: "rules", reason: "clarification_staff_owned", reusedFields: [], missingFields: [] } };
+  }
+  if (params.state?.processes?.pendingProcessOffer) {
+    const state = structuredClone(params.state);
+    const version = params.visualPreview ?? await loadVisualVersion(params.businessId);
+    const flowId = await consumeProcessOffer({ ...params, state }, version);
+    params = { ...params, state, ...(flowId ? { requestedActionFlow: flowId, message: "", entityVersion: version } : {}) };
+  }
+  if (!params.state?.conversationPaused && !params.state?.processes?.informationOnly && !params.state?.processes?.active
+    && !params.state?.processes?.actionFlow && !params.state?.processes?.service && !params.state?.processes?.order && !params.state?.processes?.booking && !params.requestedActionFlow) {
+    params = { ...params, processOffers: availableProcessOffers(params.visualPreview ?? await loadVisualVersion(params.businessId)) };
   }
   if (params.state?.pendingCustomerQuestion) {
     const state = migrateContext(params.state);
@@ -401,7 +425,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
     const declared = structuredClone(params.state);
     if (extractCustomerDeclaredFacts(declared, params.message)) params = { ...params, state: declared, informationRequest: true };
   }
-  const controlled = conversationControl(params);
+  const controlled = params.requestedActionFlow ? null : conversationControl(params);
   if (controlled) return controlled;
   params = resumeConversation(params);
   const owner = params.state && currentProcessOwner(params.state);
@@ -598,7 +622,7 @@ async function processMessage(params: ConversationMessageParams, scope: Decision
             ),
         )
       : [];
-  let namedAction = clarificationResume === "actionFlow"
+  let namedAction = params.requestedActionFlow ? actionFlows.find(f => f.id === params.requestedActionFlow) : clarificationResume === "actionFlow"
     ? actionFlows.find(f => f.nodeIds.includes(savedAction!.visual.nodeId))
     : !ordinaryQuestion ? actionFlows.find((f) =>
         foldText(params.message).includes(foldText(f.label)),

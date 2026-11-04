@@ -34,6 +34,7 @@ import {
 } from "@/lib/workflows/engine";
 
 export type AgentTurnResult = {
+  processOffer?: { flowId: string; text: string };
   executionResults?: import("./execution-receipt").ExecutionReceipt[];
   processCommunication?: import("./process-communication").ProcessCommunication;
   customerQuestion?: import("./communication-contract").CustomerQuestionProposal;
@@ -120,9 +121,12 @@ export type AgentTurnParams = {
   entityVersion?: import("@/lib/workflows/visual/types").VisualVersion | null;
   onTrace?: TraceObserver;
   actionFlowRequest?: boolean;
+  /** Server-resolved navigation options, never effect permission. */
+  processOffers?: { flowId: string; label: string; versionId: string }[];
+  requestedActionFlow?: string;
   actionGuard?: import("@/lib/calendar/service").BookingEffectGuard;
   mode?: "production" | "test";
-  source?: "instagram" | "whatsapp" | "admin_chat_lab";
+  source?: "instagram" | "whatsapp" | "admin_chat_lab" | "panel";
   businessId: string;
   message: string;
   hasPhoto: boolean;
@@ -263,6 +267,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       reply: sources.clarification, source: "fallback" as const, fallbackReason: "catalog_clarification",
       presentedProducts: undefined, presentedServices: undefined,
     } : await generateAgentReply({
+      processOffers: params.processOffers,
       communication,
       grounding, businessProcess, trainingContext, ...(trace ? { onTrace: trace } : {}),
       instructions: (agent?.instructions || "Answer in the customer's language.") +
@@ -277,7 +282,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       documentFallback: sources?.clarification || "Për këtë informacion, ju lutem kontaktoni ekipin.",
     });
     const missingLinks = sources?.documents.filter(d => !generated.reply.includes(d.url)).map(d => `${d.title}: ${d.url}`).join("\n");
-    return { customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""), presentedProducts: generated.presentedProducts, presentedServices: generated.presentedServices, nextState: state,
+    return { processOffer: "processOffer" in generated ? generated.processOffer : undefined, customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""), presentedProducts: generated.presentedProducts, presentedServices: generated.presentedServices, nextState: state,
       previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
       debug: { model: agentModel(), source: generated.source, fallbackReason: generated.fallbackReason,
         agentConfigured: Boolean(agent?.instructions), knowledgeCount: knowledge.length, productCount: products.length,
@@ -288,6 +293,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     trace?.({ stage: "workflow", label: "Service information; workflow not advanced", data: { state, workflowId: null, steps: [] } });
     const trainingContext = trainingFor(null, null);
     const generated = await generateAgentReply({
+      processOffers: params.processOffers,
       communication,
     grounding,
     businessProcess,
@@ -304,7 +310,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       documentFallback: `${service.entry.title}: ${service.entry.body || "Për hollësi kontakto biznesin."}`,
     });
     return {
-      customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply,
+      processOffer: "processOffer" in generated ? generated.processOffer : undefined, customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply,
       nextState: state,
       previousResponseId: null,
       workflowId: null,
@@ -358,6 +364,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
           fallbackReason: "catalog_clarification",
         }
       : await generateAgentReply({
+      processOffers: params.processOffers,
       communication,
           grounding,
           businessProcess,
@@ -379,7 +386,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       .map((d) => `${d.title}: ${d.url}`)
       .join("\n");
     return {
-      customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""),
+      processOffer: "processOffer" in generated ? generated.processOffer : undefined, customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply + (missingLinks ? `\n${missingLinks}` : ""),
       nextState: state,
       previousResponseId: null,
       workflowId: currentWorkflow,
@@ -569,6 +576,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   } });
   const trainingContext = trainingFor(workflowId, state.step_key);
   const generated = navigationReply ? {reply:navigationReply,responseId:params.previousResponseId??null,source:"fallback" as const,fallbackReason:"navigation_clarification"} : state.context && !informationalTurn && !isQuestion(text) ? { reply: sharedPrompt(state, steps, productName ?? undefined), responseId: null, source: "fallback" as const, fallbackReason: "shared_workflow_prompt" } : await generateAgentReply({
+      processOffers: params.processOffers,
       communication,
     grounding,
     businessProcess,
@@ -594,7 +602,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   });
   return {
     ...(generated.fallbackReason === "shared_workflow_prompt" ? { processCommunication: linearCollectionCommunication(state, steps, generated.reply) } : {}),
-    customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply,
+    processOffer: "processOffer" in generated ? generated.processOffer : undefined, customerQuestion: "customerQuestion" in generated ? generated.customerQuestion : undefined, reply: generated.reply,
     presentedProducts: "presentedProducts" in generated ? generated.presentedProducts : undefined,
     nextState: state,
     previousResponseId: generated.responseId,

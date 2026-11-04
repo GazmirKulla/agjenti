@@ -1,3 +1,8 @@
+// Executor regressions supply semantic navigation explicitly; model behavior
+// is tested at the guidance boundary, not replaced by runtime phrase rules.
+const navigation = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/workflows/guidance", async original => ({ ...await original<object>(), chooseGuidance: navigation }));
+beforeEach(() => navigation.mockReset().mockResolvedValue({ action: "continue", target: null, source: "ai" }));
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
@@ -251,6 +256,7 @@ it("shares a collected phone with the product engine without requesting it twice
 });
 
 it("leaves the staff branch when the customer has spoken to staff and now wants to order",async()=>{
+ navigation.mockResolvedValueOnce({"action": "order", "target": "product", "source": "ai"});
  const state={...emptyState(),customer:{name:"Ana",phone:"+355691234567",city:null,address:null},visual:{...waiting("handoff"),status:"handoff" as const,awaiting:false,advisory:true,values:{email:"ana@example.com"}}};
  const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Cilin produkt dëshironi?"));
  const turn=await executeVisualTurn({...params(),state,message:"ok ne rregull, fola ne telefon me stafin, dua te porosis produkt"},legacy);
@@ -259,6 +265,7 @@ it("leaves the staff branch when the customer has spoken to staff and now wants 
  expect(legacy).toHaveBeenCalledOnce();
 });
 it("returns to a collected step while retaining values and reopens confirmation",async()=>{
+ navigation.mockResolvedValueOnce({"action": "revisit", "target": "name", "source": "ai"});
  const graph=linear(node("name","collect",{fieldKey:"name",prompt:"Emri?"}),node("email","collect",{fieldKey:"email",prompt:"Email?",fieldType:"email"}));
  const state={...emptyState(),visual:{...waiting("email"),visited:["start","name","email"],values:{name:"Ana"}}};
  const legacy=vi.fn(async(p:LegacyParams)=>response(p));
@@ -270,6 +277,7 @@ it("returns to a collected step while retaining values and reopens confirmation"
  expect(state.visual.values.name).toBe("Ana");
 });
 it("answers a question mid-collection without advancing or collecting the question",async()=>{
+ navigation.mockResolvedValueOnce({"action": "answer", "target": null, "source": "ai"});
  const graph=linear(node("name","collect",{fieldKey:"name",prompt:"Emri?"}),node("email","collect",{fieldKey:"email",prompt:"Email?",fieldType:"email"}));
  const state={...emptyState(),visual:{...waiting("email"),values:{name:"Ana"}}};
  const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Dorëzimi zgjat 2 ditë."));
@@ -286,12 +294,14 @@ it("requests real staff ownership at a handoff node",async()=>{
  expect(turn.nextState.visual).toMatchObject({status:"handoff",advisory:false});
 });
 it("resumes a suspended product without treating the resume request as a field value",async()=>{
+ navigation.mockResolvedValueOnce({"action": "order", "target": "product", "source": "ai"});
  const state={...emptyState(),product_id:"product-a",step_key:"collect_size",fields:{color:"blue"},visual:{...waiting("handoff"),status:"handoff" as const,awaiting:false,advisory:true}};
  const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Madhësia?"));
  await executeVisualTurn({...params(),state,message:"Fola me stafin, dua të porosis"},legacy);
  expect(legacy.mock.calls[0][0]).toMatchObject({message:"Fola me stafin, dua të porosis",orderRequest:true,state:{product_id:"product-a",step_key:"collect_size",fields:{color:"blue"}}});
 });
 it("revisits a completed product subflow without starting an empty order",async()=>{
+ navigation.mockResolvedValueOnce({"action": "revisit", "target": "product", "source": "ai"});
  const state={...emptyState(),product_id:"product-a",step_key:"order_ready",fields:{size:"M"},visual:{...waiting("end"),status:"completed" as const,awaiting:false,visited:["start","product","end"]}};
  const legacy=vi.fn(async(p:LegacyParams)=>({...response(p,"Adresa?"),nextState:{...p.state!,step_key:"customer"}}));
  const turn=await executeVisualTurn({...params(),state,message:"Kthehu pas"},legacy);
@@ -299,6 +309,7 @@ it("revisits a completed product subflow without starting an empty order",async(
  expect(turn.nextState.visual).toMatchObject({nodeId:"product",status:"waiting"});
 });
 it("uses a newly published version for a new order while preserving the old version for corrections",async()=>{
+ navigation.mockResolvedValueOnce({"action": "order", "target": "product", "source": "ai"});
  const state={...emptyState(),visual:{...waiting("end","old"),status:"completed" as const,awaiting:false,visited:["start","product","end"]}};
  mocks.load.mockResolvedValueOnce(version(starterVisualGraph(),"old")).mockResolvedValueOnce(version(starterVisualGraph(),"new"));
  const turn=await executeVisualTurn({...params(),visualPreview:undefined,state,message:"Dua të porosis"},async p=>response(p,"Cilin produkt?"));
@@ -307,6 +318,7 @@ it("uses a newly published version for a new order while preserving the old vers
 });
 
 it("routes WhatsApp to ordering directly even when a saved field still points to staff and no order condition exists",async()=>{
+ navigation.mockResolvedValueOnce({"action": "order", "target": "product", "source": "ai"});
  const graph:VisualGraph={version:1,name:"Channel",nodes:[node("start","start"),node("channel","condition",{condition:"field_equals",fieldKey:"channel",value:"whatsapp"}),node("staff","handoff",{prompt:"Numri WhatsApp"}),node("product","product"),node("end","end")],edges:[{id:"s",source:"start",target:"channel",port:"next"},{id:"y",source:"channel",target:"staff",port:"yes"},{id:"n",source:"channel",target:"product",port:"no"},{id:"p",source:"product",target:"end",port:"next"}]};
  const state={...emptyState(),visual:{...waiting("staff"),status:"handoff" as const,awaiting:false,visited:["start","channel","staff"],values:{channel:"whatsapp",email:"ana@example.com"}}};
  const legacy=vi.fn(async(p:LegacyParams)=>response(p,"Cilin produkt dëshironi?"));
@@ -392,6 +404,7 @@ it.each(["order", "booking"] as const)("reuses a known phone at the %s flow entr
 });
 
 it("opens a published information flow during a pinned linear order", async () => {
+ navigation.mockResolvedValueOnce({"action": "answer", "target": null, "source": "ai"});
   const base = linear(node("topic", "collect", { fieldKey: "topic", prompt: "Cila temë?" }), node("info", "knowledge"));
   const graph: VisualGraph = { ...base, version: 2, flows: [{ id: "info-flow", kind: "information", label: "Informacion", entryNodeId: "topic", nodeIds: ["topic", "info"] }] };
   mocks.load.mockResolvedValue(version(graph));
@@ -412,6 +425,7 @@ it("answers once when an informational question reaches knowledge followed by co
 });
 
 it.each(["Dua të flas me stafin.", "Telefoni im është 0690000000; dua të flas me stafin."])("uses only the declared v2 support entry for %s", async message => {
+ navigation.mockResolvedValueOnce({action:"support",target:"handoff",source:"ai"});
   const graph = upgradeVisualGraph(starterVisualGraph());
   expect(graph.nodes.some(node => node.kind === "condition" && node.config.condition === "intent_support")).toBe(true);
   expect(graph.flows.find(flow => flow.kind === "support")?.entryNodeId).toBe("handoff");
@@ -419,7 +433,7 @@ it.each(["Dua të flas me stafin.", "Telefoni im është 0690000000; dua të fla
   const state = migrateContext(); setFact(state, "customer_phone", "0690000000", "phone", "message");
   const result = await executeVisualTurn({ ...params(graph), message, state }, legacy);
   expect(result.reply).toBe("Në këtë provë, biseda do t’i kalohej stafit dhe përgjigjet automatike do të ndaleshin.");
-  expect(result.visualWorkflow?.routing).toMatchObject({ action: "support", source: "rules", to: "handoff" });
+  expect(result.visualWorkflow?.routing).toMatchObject({ action: "support", source: "ai", to: "handoff" });
   expect(result.nextState.visual?.status).toBe("handoff");
   expect(result.nextState.customer.phone).toBe("0690000000");
   expect(legacy).not.toHaveBeenCalled();
@@ -651,6 +665,7 @@ it("revisits a visual answer from final review and invalidates the old confirmat
   const first = await executeVisualTurn({ ...params(graph), state, message: "Puzzle" }, async p => response(p));
   const review = await executeVisualTurn({ ...params(graph), state: first.nextState, message: "M" }, async p => response(p));
   expect(review.nextState.context?.execution.awaitingOrderConfirmation).toBe(true);
+  navigation.mockResolvedValueOnce({ action: "revisit", target: "size", source: "ai" });
   const corrected = await executeVisualTurn({ ...params(graph), state: review.nextState, message: "Ndrysho madhësinë" }, async p => response(p));
   expect(corrected.reply).toBe("Madhësia?");
   expect(corrected.nextState.visual?.nodeId).toBe("size");

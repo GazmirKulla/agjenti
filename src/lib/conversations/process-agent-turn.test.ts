@@ -1,3 +1,8 @@
+// Executor regressions supply semantic navigation explicitly; model behavior
+// is tested at the guidance boundary, not replaced by runtime phrase rules.
+const navigation = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/workflows/guidance", async original => ({ ...await original<object>(), chooseGuidance: navigation }));
+beforeEach(() => navigation.mockReset().mockResolvedValue({ action: "continue", target: null, source: "ai" }));
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
@@ -108,10 +113,12 @@ it.each(["Pse ju duhet adresa", "Çfarë adrese kërkoni", "Why do you need my a
   try {
     const state = migrateContext({ ...emptyState(), product_id: "product-a", step_key: "collect_customer", customer: { name: "Ana", phone: "+355691234567", city: null, address: null } });
     state.context!.execution.linear = { id: "workflow-a", versionId: "linear-a", name: "Porosia", steps: [{ key: "collect_customer", kind: "customer" }] };
+    navigation.mockResolvedValueOnce({ action: "clarify", target: null, source: "ai" });
     const next = await processConversationMessage({ businessId: "business-a", mode: "test", state, message, hasPhoto: false });
     expect(next.nextState.customer).toEqual(state.customer);
     expect(next.nextState.step_key).toBe("collect_customer");
     expect(next.conversationRouting?.process).toBe(message.startsWith("Dua") ? "clarify" : "information");
+    navigation.mockReset().mockResolvedValue({ action: "continue", target: null, source: "ai" });
     const answer = await processConversationMessage({ businessId: "business-a", mode: "test", state: next.nextState, message: "Tiranë", hasPhoto: false });
     expect(answer.nextState.customer.city).toBe("Tiranë");
     expect(answer.nextState.customer.address).toBeNull();
@@ -381,7 +388,7 @@ describe("W3 presentation-to-order journeys", () => {
     expect(staff.reply).toContain("pritje të stafit");
     const paused = await turn("i dyti", { ...info.nextState, conversationPaused: true });
     expect(paused.nextState.product_id).toBeNull();
-    expect(paused.conversationRouting?.reason).toBe("resume_requires_intent");
+    expect(paused.nextState.processes?.pendingClarification).toBeUndefined();
   });
 });
 
@@ -727,6 +734,7 @@ it("preserves a sealed legacy order when shared context is enabled after reassig
 });
 
 it("returns to the previous product step and preserves collected customer and order data", async()=>{
+ navigation.mockResolvedValueOnce({"action": "revisit", "target": "collect_size", "source": "ai"});
  const state={...emptyState(),product_id:"product-a",step_key:"awaiting_photo",fields:{collect_size:"M"},customer:{name:"Ana",phone:"+355691234567",city:"Tiranë",address:"Rruga A"}};
  const back=await processAgentTurn({businessId:"business-a",state,message:"Kthehu pas",hasPhoto:false});
  expect(back.nextState.step_key).toBe("collect_size");
@@ -738,6 +746,7 @@ it("returns to the previous product step and preserves collected customer and or
  expect(corrected.nextState.recentMessages?.map(m=>m.role)).toEqual(["user","assistant","user","assistant"]);
 });
 it("does not record an informational question as a product answer",async()=>{
+ navigation.mockResolvedValueOnce({"action": "answer", "target": null, "source": "ai"});
  const state={...emptyState(),product_id:"product-a",step_key:"collect_size",fields:{},customer:{name:"Ana",phone:null,city:null,address:null}};
  const next=await processAgentTurn({businessId:"business-a",state,message:"Sa kushton dërgesa?",hasPhoto:false});
  expect(next.nextState.step_key).toBe("collect_size");
@@ -746,6 +755,7 @@ it("does not record an informational question as a product answer",async()=>{
  expect(mocks.generate.mock.calls.at(-1)?.[0].instructions).toContain("informational question");
 });
 it("reopens a known shared field, retains other facts and invalidates final approval",async()=>{
+ navigation.mockResolvedValueOnce({"action": "revisit", "target": "size", "source": "ai"});
  const {migrateContext,setFact}=await import("@/lib/workflows/context");
  const state=migrateContext({...emptyState(),product_id:"product-a",step_key:"order_ready"});
  state.context!.execution.linear={id:"workflow-a",versionId:"v1",name:"Order",steps:[{key:"size",kind:"choice",label:"Madhësia"},{key:"customer",kind:"customer",label:"Adresa"}]};
@@ -790,14 +800,17 @@ it("routes every message through staff, ordering and back while preserving a liv
  graph.nodes.find(n=>n.id==="support")!.config={condition:"field_equals",fieldKey:"channel",value:"whatsapp"};
  const visualPreview={id:"v1",businessId:"business-a",graph,createdAt:"2026-10-10T00:00:00Z"};
  const state={...emptyState(),visual:{versionId:"v1",nodeId:"handoff",status:"handoff" as const,awaiting:false,visited:["start","support","handoff"],values:{channel:"whatsapp"}}};
+ navigation.mockResolvedValueOnce({ action:"order",target:"product",source:"ai" });
  const resume=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state,message:"Ok fola në WhatsApp dhe dua të porosis produkt",hasPhoto:false});
  expect(resume.nextState.visual?.nodeId).toBe("product");
  expect(resume.nextState.step_key).toBe("choose_product");
  const product=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state:resume.nextState,message:"Bluzë",hasPhoto:false});
  expect(product.nextState.step_key).toBe("collect_size");
+ navigation.mockResolvedValueOnce({ action:"support",target:"handoff",source:"ai" });
  const staff=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state:product.nextState,message:"Dua të flas me stafin",hasPhoto:false});
  expect(staff.nextState.visual?.status).toBe("handoff");
  expect(staff.advisoryHandoff).toBe(false);
+ navigation.mockResolvedValueOnce({ action:"order",target:"product",source:"ai" });
  const back=await processAgentTurn({businessId:"business-a",mode:"test",visualPreview,state:staff.nextState,message:"Fola me stafin, tani dua të porosis",hasPhoto:false});
  expect(back.nextState.product_id).toBe("product-a");
  expect(back.nextState.step_key).toBe("collect_size");

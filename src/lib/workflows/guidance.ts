@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { agentModel } from "@/lib/agents/generate";
-import { affirmative, invalidateOrderReview, isQuestion } from "./context";
+import { invalidateOrderReview } from "./context";
 import { foldText, type ConversationStatePayload } from "./engine";
 
 export type ConversationMessage = { role: "user" | "assistant"; content: string };
@@ -43,29 +43,13 @@ export async function chooseGuidance(input: {
   targets: GuidanceTarget[]; routes?: GuidanceTarget[]; allowOrder?: boolean; allowSupport?: boolean; allowAnswer?: boolean; allowProcessInquiry?: boolean;
 }): Promise<Guidance> {
   const result = (action: Guidance["action"], target: string | null = null, source: Guidance["source"] = "rules"): Guidance => ({action,target,source});
-  const text = foldText(input.message).trim();
-  const back = /^(?:kthehu|kthehem|kthehemi|kthem|kthim)(?: nje hap)? (?:pas|mbrapa)[.!\s]*$|^(?:go )?back[.!\s]*$/.test(text);
-  if (back) return input.targets.length ? result("revisit", input.targets.at(-1)!.id) : result("clarify");
-  const selectable = [...new Map([...(input.routes ?? []), ...input.targets, ...(input.current ? [input.current] : [])].map(t=>[t.id,t])).values()];
-  const correction = /\b(ndrysho\w*|korrigjo\w*|ktheh\w*|change|correct|instead)\b/.test(text);
-  if (correction) {
-    const matches = selectable.filter(t => [t.label,t.fieldKey].some(label => {
-      const tokens = foldText(label ?? "").split(/[^a-z0-9]+/).filter(t => t.length >= 4);
-      return tokens.some(token => text.includes(token.length>=6?token.slice(0,5):token));
-    }));
-    if (matches.length === 1) return result(input.targets.some(t=>t.id===matches[0].id) || input.current?.id===matches[0].id ? "revisit" : "route", matches[0].id);
-  }
-  const intent = explicitIntent(input.message);
-  const entries = (kind: string) => (input.routes ?? []).filter(t=>t.kind===kind);
+  // No lexical routing shortcuts. A missing/invalid interpretation cannot
+  // advance the workflow or silently accept a field/confirmation.
+  if (!input.message.trim()) return result("continue");
+  const entries = (kind: string) => (input.routes ?? []).filter(t => t.kind === kind);
   const orderTargets = entries("product");
   const supportTargets = entries("support_entry").length ? entries("support_entry") : entries("handoff");
-  if (input.allowOrder && intent === "order" && (!input.routes || orderTargets.length === 1)) return result("order",orderTargets[0]?.id ?? null);
-  if (input.allowSupport && intent === "support" && (!input.routes || supportTargets.length === 1)) return result("support",supportTargets[0]?.id ?? null);
-  if (intent === "support" && !input.allowSupport && input.allowAnswer !== false) return result("answer");
-  if (input.allowAnswer !== false && isQuestion(input.message) && !correction && !input.allowProcessInquiry) return result("answer");
-  if (!text || affirmative(text) || /^(jo|no|\d+|[a-z]{1,3})[.!\s]*$/.test(text)) return result("continue");
-  const terminal = ["handoff","completed"].includes(input.state.visual?.status ?? "");
-  const fallback = terminal || correction || (input.allowOrder && intent === "order") || (input.allowSupport && intent === "support") ? result("clarify") : result("continue");
+  const fallback = result("clarify");
   if (!process.env.OPENAI_API_KEY?.trim()) return fallback;
   try {
     const response = await new OpenAI({apiKey:process.env.OPENAI_API_KEY,timeout:8000,maxRetries:0}).responses.create({

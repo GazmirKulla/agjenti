@@ -514,3 +514,6 @@ html[data-resolved="dark"] .agent-test-step.is-current .agent-test-step-mark {
 .chat-history-row > input { width: 100%; min-width: 0; padding: 9px 5px; border: 1px solid var(--accent); border-radius: 6px; color: var(--ink); background: var(--paper-2); font-size: 12px; }
 .chat-history-row .chat-icon { width: 26px; }
 .chat-file-pill img { border-radius: 6px; object-fit: cover; }
+
+.real-chat-active { border-color: #f59e0b !important; color: #fbbf24 !important; }
+.real-chat-note { border-left: 3px solid #f59e0b; }

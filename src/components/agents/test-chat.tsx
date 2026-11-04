@@ -62,9 +62,11 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
   const controller = useRef<AbortController | null>(null);
   const objectUrls = useRef(new Set<string>());
   const chat = chats.find(c => c.id === activeId) ?? chats[0];
+  const real = chat.mode === "real";
+  const [changingMode, setChangingMode] = useState(false);
   const messages = chat.entries;
   const last = messages.at(-1)?.result ?? null;
-  const preparing = pending !== null || trainingBusy || voiceBusy;
+  const preparing = pending !== null || trainingBusy || voiceBusy || changingMode;
   const busy = preparing || Boolean(chat.outbox?.length);
   const waiting = needsTestChatPolling(chat);
   const chatsRef = useRef(chats);
@@ -109,7 +111,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
         for (const current of chatsRef.current) {
           if (!polling.due(current, Date.now())) continue;
           stream = current.id;
-          const url = `/api/agent-test/turns?slug=${encodeURIComponent(slug)}`;
+          const url = `/api/${current.mode === "real" ? "agent-real" : "agent-test"}/turns?slug=${encodeURIComponent(slug)}`;
           const response = await fetch(`${url}&stream=${current.id}`, { cache: "no-store", signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]) });
           const body = await response.json();
           if (!response.ok) throw new Error(body.error || "Statusi nuk u ngarkua.");
@@ -123,7 +125,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
           const next = reconciled.outbox?.find(o => !o.accepted && !jobs.some((j: { requestId: string }) => j.requestId === o.id));
           if (!next || next.status !== "queued" || blockedByFailedTurn(reconciled, next)) continue;
           const posted = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]),
-            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: { ...(configurationDraft ? { configurationDraft } : {}), message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
+            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: current.mode === "real" ? { message: next.text } : { ...(configurationDraft ? { configurationDraft } : {}), message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
           const result = await posted.json();
           if (disposed) return;
           setChats(all => all.map(c => c.id !== current.id ? c : { ...c, outbox: c.outbox?.map(o => o.id !== next.id ? o : { ...o, accepted: posted.ok, status: posted.ok ? "queued" : "failed", error: result.error }) }));
@@ -143,8 +145,8 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
   }, [ready, slug, configurationDraft]);
   async function retryOperation(operation: PendingTestTurn) {
     try {
-      const response = await fetch(`/api/agent-test/turns?slug=${encodeURIComponent(slug)}`, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
-        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: { ...(configurationDraft ? { configurationDraft } : {}), message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
+      const response = await fetch(`/api/${real ? "agent-real" : "agent-test"}/turns?slug=${encodeURIComponent(slug)}`, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: real ? { message: operation.text } : { ...(configurationDraft ? { configurationDraft } : {}), message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
       setChats(all => all.map(c => c.id !== chat.id ? c : { ...c, outbox: c.outbox?.map(o => o.id === operation.id ? { ...o, accepted: true, status: "queued", error: undefined } : o) }));
@@ -159,8 +161,21 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
   function stop() {
     setWaitStopped(true);
   }
-  function reset() {
-    const next = newConversation();
+  async function reset(mode: "test" | "real" = real ? "real" : "test") {
+    if (mode === "real" && !real && !window.confirm("Real chat përdor konfigurimin e publikuar dhe mund të krijojë biznese, ftesa dhe rezervime reale pas konfirmimit në bisedë. Do të hapet një bisedë e re. Vazhdo?")) return;
+    const next = { ...newConversation(), mode };
+    if (mode === "real") {
+      setChangingMode(true);
+      try {
+        const response = await fetch(`/api/agent-real/turns?slug=${encodeURIComponent(slug)}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
+          body: JSON.stringify({ start: true, confirmRealActions: true, streamId: next.id }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Biseda reale nuk u hap.");
+      } catch (error) { setError(error instanceof Error ? error.message : "Biseda reale nuk u hap."); return; }
+      finally { setChangingMode(false); }
+    }
     const all = [next, ...chats.filter(x => x.entries.length || x.outbox?.length)];
     if (all.slice(8).some(c => c.outbox?.length)) { setError("Ruajmë bisedat në proces. Fshi një bisedë të përfunduar për të hapur një të re."); return; }
     clearComposer(); setTrainingFeedback(null); setTrainingRequest(null); setWaitStopped(false);
@@ -179,6 +194,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
     setRenaming(null);
   }
   function addFiles(files: File[]) {
+    if (real) { setError("Real chat pranon tekst dhe audio të kthyer në tekst. Skedarët mund t’i provosh në mënyrën Provë."); return; }
     if (pending !== null || trainingBusy || voiceBusy) return;
     const valid: Upload[] = [];
     for (const file of files) {
@@ -191,10 +207,12 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
     setUploads(current => [...current, ...valid]);
   }
   function edit(index: number) {
+    if (real) return;
     const entry = batchEntry(messages,index); clearComposer(); setDraft(entry.text); setPhoto(entry.photo); setRetained(entry.attachments); setEditing(batchStartIndex(messages,index));
     focusComposer();
   }
   async function send(index = editing ?? messages.length, original?: ChatEntry) {
+    if (real && (original || editing !== null || photo || uploads.length || retained.length)) return;
     if (original) { original = batchEntry(messages,index); index = batchStartIndex(messages,index); }
     const text = original?.text ?? draft.trim();
     const simulated = original?.photo ?? photo;
@@ -220,7 +238,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
         if (!response.ok || !body.attachment) throw new Error(body.error || "Skedari nuk u ngarkua.");
         attachments.push({ ...body.attachment, preview: upload.preview });
       }
-      const links = [...new Set((text.match(/https?:\/\/[^\s<>"']+/g) ?? []).map(url => url.replace(/[.,;!?)}\]]+$/, "")))].filter(url => !attachments.some(a => a.name === url));
+      const links = real ? [] : [...new Set((text.match(/https?:\/\/[^\s<>"']+/g) ?? []).map(url => url.replace(/[.,;!?)}\]]+$/, "")))].filter(url => !attachments.some(a => a.name === url));
       if (attachments.length + links.length > 3) throw new Error("Shto deri në 3 skedarë ose linke për mesazh.");
       for (const url of links) {
         setPhase("Po lexojmë linkun…");
@@ -286,23 +304,28 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
   }
   return <section className={`agent-test chat-workspace ${expanded ? "is-expanded" : ""}`}>
     <header className="chat-header">
-      <div><span className="agent-test-label"><span /> AGJENTI YT · PROVË</span><h2>{businessName}</h2></div>
+      <div><span className="agent-test-label"><span /> AGJENTI YT · {real ? "REAL" : "PROVË"}</span><h2>{businessName}</h2></div>
       <nav aria-label="Veprimet e bisedës">
+        <button className={`chat-toolbar-button ${real ? "real-chat-active" : ""}`} type="button" role="switch" aria-checked={real}
+          disabled={preparing || busy || Boolean(configurationDraft)} title={configurationDraft ? "Real chat përdor vetëm konfigurimin e publikuar." : "Hap një bisedë të re në mënyrën e zgjedhur"}
+          onClick={() => void reset(real ? "test" : "real")}>Real chat <span aria-hidden="true">{real ? "●" : "○"}</span></button>
         <button className="chat-icon" type="button" title="Historiku" aria-label="Historiku i bisedave" aria-expanded={showHistory} onClick={() => setShowHistory(v=>!v)}><Icon name="history" /></button>
         <button className="chat-icon" type="button" title="Eksporto bisedën" aria-label="Eksporto bisedën" disabled={!messages.length || busy} onClick={download}><Icon name="download" /></button>
         <button className="chat-icon" type="button" title="Zgjero / zvogëlo" aria-label="Zgjero bisedën" aria-pressed={expanded} onClick={()=>setExpanded(v=>!v)}><Icon name="expand" /></button>
         <button className="chat-toolbar-button" type="button" aria-expanded={showDetails} aria-controls="agent-test-diagnostics" onClick={()=>setShowDetails(v=>!v)}><Icon name="workflows" size={17}/> Rrjedha</button>
-        <button className="chat-toolbar-button primary" type="button" disabled={preparing || voice} onClick={reset}><Icon name="plus" size={17}/> Bisedë e re</button>
+        <button className="chat-toolbar-button primary" type="button" disabled={preparing || voice} onClick={() => void reset()}><Icon name="plus" size={17}/> Bisedë e re</button>
       </nav>
     </header>
-    <div className="chat-safety-note">Provë private · Statuset janë vetëm të kësaj prove. Nuk dërgon mesazhe në Instagram/WhatsApp dhe nuk krijon porosi reale.</div>
+    <div className={`chat-safety-note ${real ? "real-chat-note" : ""}`}>{real
+      ? "Bisedë reale · Konfigurimi i publikuar. Veprimet e lejuara dhe të konfirmuara ruhen realisht. Përgjigjet mbeten në këtë panel; nuk dërgohen në Instagram/WhatsApp."
+      : "Provë private · Statuset janë vetëm të kësaj prove. Nuk dërgon mesazhe në Instagram/WhatsApp dhe nuk krijon porosi reale."}</div>
     {last?.setupTestPassed && <p className="chat-status" role="status">✓ Prova u ruajt. <Link href={`/b/${slug}`}>Kthehu te Dashboard →</Link></p>}
     <div className={`chat-body ${showHistory ? "with-history" : ""} ${showDetails ? "with-details" : ""}`}>
       {showHistory && <aside className="chat-history" aria-label="Historiku">
         <h3>Bisedat e tua</h3><input aria-label="Kërko bisedat" placeholder="Kërko bisedat…" value={search} onChange={e=>setSearch(e.target.value)}/>
         <p>8 bisedat e fundit në këtë skedë të shfletuesit.</p>
         {chats.filter(c => (c.title + c.entries.map(e=>e.text+e.result.reply).join(" ")).toLocaleLowerCase().includes(search.toLocaleLowerCase())).map(c => <div className={`chat-history-row ${c.id===chat.id ? "active" : ""}`} key={c.id}>
-          {renaming?.id === c.id ? <input autoFocus aria-label="Emri i bisedës" maxLength={80} value={renaming.title} onChange={e=>setRenaming({...renaming,title:e.target.value})} onBlur={saveTitle} onKeyDown={e=>{if(e.key==="Enter")saveTitle();if(e.key==="Escape")setRenaming(null);}}/> : <button disabled={preparing || voice} onClick={()=>selectChat(c.id)} type="button" aria-current={c.id===chat.id ? "true" : undefined}><span>{c.title}</span><small>{c.entries.length} mesazhe</small></button>}
+          {renaming?.id === c.id ? <input autoFocus aria-label="Emri i bisedës" maxLength={80} value={renaming.title} onChange={e=>setRenaming({...renaming,title:e.target.value})} onBlur={saveTitle} onKeyDown={e=>{if(e.key==="Enter")saveTitle();if(e.key==="Escape")setRenaming(null);}}/> : <button disabled={preparing || voice} onClick={()=>selectChat(c.id)} type="button" aria-current={c.id===chat.id ? "true" : undefined}><span>{c.mode === "real" ? "REAL · " : ""}{c.title}</span><small>{c.entries.length} mesazhe</small></button>}
           <button className="chat-icon" type="button" title="Riemërto bisedën" aria-label={`Riemërto ${c.title}`} disabled={busy || voice} onClick={()=>setRenaming({id:c.id,title:c.title})}><Icon name="edit" size={14}/></button>
           <button className="chat-icon" type="button" title="Fshi bisedën" aria-label={`Fshi ${c.title}`} disabled={busy || voice} onClick={()=>{
             const next=chats.filter(x=>x.id!==c.id); const fallback=next.length ? next : [newConversation()]; setChats(fallback); if(c.id===activeId) { clearComposer(); setActiveId(fallback[0].id); setTrainingFeedback(null); setTrainingRequest(null); window.speechSynthesis?.cancel(); setSpeaking(null); }
@@ -318,11 +341,11 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
           {!messages.length && !pending && !chat.outbox?.length && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti dhe përmirësoje gjatë bisedës.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
           {(pendingIndex !== null ? messages.slice(0,pendingIndex) : messages).map((entry,index)=><div className="chat-exchange" key={entry.id}>
             <div className="agent-test-bubble customer"><p>{entry.text}</p>{entry.photo && <span className="chat-file-pill">Foto e simuluar</span>}{entry.attachments.map((a,i)=><span className="chat-file-pill" key={i}>{a.preview?.startsWith("blob:") ? <Image unoptimized width={80} height={80} src={a.preview} alt={a.name}/> : <Icon name="file" size={15}/>} {a.name}</span>)}</div>
-            <div className="chat-message-actions customer"><CopyMessage text={entry.text}/><button type="button" className="chat-icon" aria-label="Ndrysho mesazhin" title="Ndrysho mesazhin" disabled={busy || voice} onClick={()=>edit(index)}><Icon name="edit" size={16}/></button></div>
+            <div className="chat-message-actions customer"><CopyMessage text={entry.text}/><button type="button" className="chat-icon" aria-label="Ndrysho mesazhin" title="Ndrysho mesazhin" disabled={real || busy || voice} onClick={()=>edit(index)}><Icon name="edit" size={16}/></button></div>
             {showsReply(messages,index) && <>
             {entry.batchId && <small className="chat-receipt">Përgjigje për {messages.filter(e=>e.batchId===entry.batchId).length} mesazhet e mësipërme</small>}
             <div className="agent-test-bubble agent"><span className="chat-agent-avatar"><Icon name="spark" size={19}/></span><ChatMessage text={entry.result.reply}/></div>
-            <div className="chat-message-actions"><CopyMessage text={entry.result.reply}/><button className="chat-icon" type="button" title="Rigjenero përgjigjen" aria-label="Rigjenero përgjigjen" disabled={busy || voice} onClick={()=>void send(index,entry)}><Icon name="refresh" size={16}/></button>{canSpeak && <button className="chat-icon" type="button" title={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} aria-label={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} onClick={()=>speak(entry)}><Icon name={speaking===entry.id ? "stop" : "volume"} size={16}/></button>}{entry.result.trainingReceipt && <button type="button" className="chat-train" disabled={busy || voice} onClick={()=>{
+            <div className="chat-message-actions"><CopyMessage text={entry.result.reply}/><button className="chat-icon" type="button" title="Rigjenero përgjigjen" aria-label="Rigjenero përgjigjen" disabled={real || busy || voice} onClick={()=>void send(index,entry)}><Icon name="refresh" size={16}/></button>{canSpeak && <button className="chat-icon" type="button" title={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} aria-label={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} onClick={()=>speak(entry)}><Icon name={speaking===entry.id ? "stop" : "volume"} size={16}/></button>}{entry.result.trainingReceipt && <button type="button" className="chat-train" disabled={busy || voice} onClick={()=>{
               const feedback={receipt:entry.result.trainingReceipt!,question:batchEntry(messages,index).text || "[Skedar]",response:entry.result.reply,workflowId:entry.result.workflowId,stepKey:entry.result.nextState.step_key??null}; setTrainingFeedback(feedback);setTrainingRequest(previous=>({key:(previous?.key??0)+1,feedback}));
             }}><Icon name="spark" size={14}/> Përmirëso</button>}</div>
             </>}
@@ -348,9 +371,9 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft }
             items={[...uploads.map(u=>({id:u.id,name:u.file.name,preview:u.preview})), ...retained.map((a,i)=>({id:`retained-${i}`,name:a.name}))]}
             onRemove={id=>{if(id.startsWith("retained-")) setRetained(current=>current.filter((_,i)=>`retained-${i}`!==id)); else setUploads(current=>current.filter(u=>{if(u.id!==id)return true;if(u.preview){URL.revokeObjectURL(u.preview);objectUrls.current.delete(u.preview);}return false;}));}}
           />}
-          <div className="chat-composer-tools"><label className="agent-test-photo"><input type="checkbox" checked={photo} disabled={busy || voice} onChange={e=>setPhoto(e.target.checked)}/> Simulo foto</label><span className="chat-character-count">{draft.length ? `${draft.length}/2000` : ""}</span></div>
+          <div className="chat-composer-tools">{!real && <label className="agent-test-photo"><input type="checkbox" checked={photo} disabled={busy || voice} onChange={e=>setPhoto(e.target.checked)}/> Simulo foto</label>}<span className="chat-character-count">{draft.length ? `${draft.length}/2000` : ""}</span></div>
           {error && <p className="agent-test-error" role="alert">{error} <button type="button" disabled={busy} onClick={()=>void send(retry.current?.index ?? editing ?? messages.length, retry.current?.original)}>Provo përsëri</button></p>}
-          <p className="agent-test-disclaimer">Enter për dërgim · Shift + Enter për rresht të ri · Foto, PDF, TXT, MD, CSV, JSON · 3 skedarë, 3 MB secili. Skedarët dhe audioja përpunohen nga AI; përdor të dhëna prove.</p>
+          <p className="agent-test-disclaimer">{real ? "Tekst dhe audio · Për të korrigjuar të dhënat, shkruaj një mesazh të ri. Fshirja nga historiku nuk anulon veprimet reale." : "Enter për dërgim · Shift + Enter për rresht të ri · Foto, PDF, TXT, MD, CSV, JSON · 3 skedarë, 3 MB secili. Skedarët dhe audioja përpunohen nga AI; përdor të dhëna prove."}</p>
         </form>
       </div>
         {showDetails && <aside id="agent-test-diagnostics" className="agent-test-debug" aria-label="Detajet e provës">
