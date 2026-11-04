@@ -12,8 +12,8 @@ import {
 import { usePathname } from "next/navigation";
 import { useMaterialDraft } from "./materials";
 import { BusinessAssistant } from "./panel";
-import { useAssistantAppearance } from "./personal-assistant";
-import type { AssistantAppearance } from "./appearance";
+import { defaultPersonalAssistantName } from "@/lib/business-assistant/identity";
+import { clearLegacyAssistantAppearance } from "./appearance";
 import { Icon } from "@/components/dashboard/icon";
 import { contextualAction } from "./presentation";
 import {
@@ -49,8 +49,7 @@ type Workspace = ReturnType<typeof useMaterialDraft> & {
   modules: string[];
   external: boolean;
   name: string;
-  appearance: AssistantAppearance;
-  saveAppearance: (value: AssistantAppearance) => string | null;
+  assistantName: string;
   launch: (text?: string) => void;
   requestKey: number;
   userId: string;
@@ -79,7 +78,7 @@ export function AssistantWorkspaceProvider({
   userName?: string;
 }) {
   const materialDraft = useMaterialDraft();
-  const { appearance, save: saveAppearance } = useAssistantAppearance(userId, slug);
+  useEffect(() => { clearLegacyAssistantAppearance(); }, []);
   const pathname = usePathname();
   const sendRef = useRef<(() => void) | null>(null);
   const resetRef = useRef<(() => void) | null>(null);
@@ -137,7 +136,7 @@ export function AssistantWorkspaceProvider({
         modules,
         external,
         name,
-        appearance, saveAppearance,
+        assistantName: defaultPersonalAssistantName,
         launch,
         requestKey,
         userId, userName, historyOpen, setHistoryOpen, resetRef,
@@ -181,10 +180,8 @@ export function AssistantWorkspaceSurface() {
       requestKey={w.requestKey}
       sendRef={w.sendRef}
       slug={w.slug}
-      agentName={w.appearance.name}
+      agentName={w.assistantName}
       businessName={w.name}
-      appearance={w.appearance}
-      saveAppearance={w.saveAppearance}
       modules={w.modules}
       open={w.open}
       onOpen={() => w.setOpen(true)}
@@ -203,10 +200,10 @@ export function AssistantWorkspaceSurface() {
 export function AssistantEntry() {
   const w = useAssistantWorkspace();
   if (!w) return null;
-  const action = contextualAction(w.context, w.appearance.name, w.modules);
+  const action = contextualAction(w.context, w.assistantName, w.modules);
   if (!action) return null;
   return (
-    <section className="assistant-context-entry" aria-label={`${w.appearance.name} · ${contextLabel(w.context)}`}>
+    <section className="assistant-context-entry" aria-label={`${w.assistantName} · ${contextLabel(w.context)}`}>
       <button type="button" onClick={() => w.launch()} aria-haspopup="dialog">
         <Icon name="spark" size={18} />{action}<span aria-hidden="true">↗</span>
       </button>

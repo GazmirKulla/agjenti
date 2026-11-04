@@ -34,9 +34,10 @@ it("uses authoritative membership and fresh profile, ignoring forged form identi
   expect(m.save.mock.calls[0][1].p_profile.enabledModules).not.toContain("orders");
   expect(m.revalidate).toHaveBeenCalledWith("/b/canonical", "layout");
 });
-it("does not accept a direct request enabling a dependent module alone", async () => {
+it("allows showing bookings without requiring the services menu", async () => {
   const form = new FormData(); form.set("module_bookings", "on");
-  expect(await saveModules("shop", form)).toHaveProperty("error"); expect(m.save).not.toHaveBeenCalled();
+  expect(await saveModules("shop", form)).toHaveProperty("success");
+  expect(m.save.mock.calls[0][1].p_profile.hiddenModules).toContain("services");
 });
 
 it("rejects a forged selection for a module denied by the platform", async () => {

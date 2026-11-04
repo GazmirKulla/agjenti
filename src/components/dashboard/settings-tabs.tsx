@@ -11,7 +11,7 @@ import { Icon } from "@/components/dashboard/icon";
 const TABS = [
   { id: "profile", label: "Profili", icon: "businesses" },
   { id: "data", label: "Të dhënat", icon: null },
-  { id: "modules", label: "Modulet", icon: null },
+  { id: "modules", label: "Paneli", icon: null },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];

@@ -79,7 +79,6 @@ test('all settings sections use real content, legacy URLs and manual modules rem
     ['Preferencat', 'preferences', 'Gjuha / Language'],
     ['Profili i biznesit', 'business', 'Të dhënat e biznesit'],
     ['Paketa dhe përdorimi', 'billing', 'Kapaciteti i agjentit'],
-    ['Asistenti yt', 'assistant', 'Asistenti yt, në stilin tënd.'],
     ['Modulet', 'modules', 'Modulet e hapësirës'],
     ['Aftësitë e biznesit', 'actions', 'Modulet e hapësirës'],
     ['Mjete të avancuara', 'advanced', 'Mjete të avancuara'],
@@ -142,7 +141,6 @@ test('mobile menu contains profile, nested Escape restores focus and settings re
   await page.setViewportSize({ width: 320, height: 740 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   for (const [label, route] of [
-    ['Profili i biznesit', 'business'], ['Paketa dhe përdorimi', 'billing'], ['Asistenti yt', 'assistant'],
     ['Modulet', 'modules'], ['Aftësitë e biznesit', 'actions'], ['Mjete të avancuara', 'advanced'],
   ]) {
     await page.getByText('Seksionet e cilësimeve', { exact: true }).click();

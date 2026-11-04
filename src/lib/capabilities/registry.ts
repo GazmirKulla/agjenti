@@ -113,7 +113,7 @@ export const capabilityRegistry: Record<string, CapabilityDefinition> = {
     description: "Ndalon përgjigjet automatike dhe ia kalon bisedën stafit.",
     category: "staff",
     inputSchema: { conversationId: "string", reason: "string?" },
-    requiredModules: ["staff"],
+    requiredModules: ["inbox"],
     requiredIntegrations: [],
     risk: "write",
     approvalPolicy: "none",

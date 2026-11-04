@@ -37,21 +37,21 @@ it("ignores a forged staff checkbox instead of granting access", async () => {
   await saveBusinessActionSettings("shop", form);
   expect(m.rpc).toHaveBeenCalledWith("save_business_action_settings", expect.objectContaining({ p_staff: false }));
 });
-it("lets only the administrator change module policies using the existing policy RPC", async () => {
+it("lets only the administrator change exceptional action policies using the existing policy RPC", async () => {
   const form = new FormData(); form.set("scope", "business"); form.set("target", "business");
-  form.set("action_key", "module.products"); form.set("enabled", "false");
+  form.set("action_key", "business.provision"); form.set("enabled", "false");
   m.admin.mockResolvedValue(false);
   expect(await saveActionPolicy(form)).toHaveProperty("error"); expect(m.rpc).not.toHaveBeenCalled();
   m.admin.mockResolvedValue(true);
   expect(await saveActionPolicy(form)).toHaveProperty("success");
-  expect(m.rpc).toHaveBeenCalledWith("save_action_policy", expect.objectContaining({ p_user: "owner", p_action: "module.products", p_enabled: false }));
+  expect(m.rpc).toHaveBeenCalledWith("save_action_policy", expect.objectContaining({ p_user: "owner", p_action: "business.provision", p_enabled: false }));
   m.rpc.mockClear(); form.set("action_key", "module.unknown");
   expect(await saveActionPolicy(form)).toHaveProperty("error"); expect(m.rpc).not.toHaveBeenCalled();
 });
 it.each([true, false])("saves package checkboxes as explicit permissions: %s", async checked => {
   const form = new FormData();
   form.set("scope", "plan"); form.set("target", "starter");
-  form.set("action_key", "module.products"); form.set("checkbox_mode", "true");
+  form.set("action_key", "business.provision"); form.set("checkbox_mode", "true");
   if (checked) form.set("enabled", "true");
   expect(await saveActionPolicy(form)).toHaveProperty("success");
   expect(m.rpc).toHaveBeenCalledWith("save_action_policy", expect.objectContaining({ p_enabled: checked, p_scope: "plan", p_target: "starter" }));

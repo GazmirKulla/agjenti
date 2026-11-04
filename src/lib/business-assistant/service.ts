@@ -1,3 +1,4 @@
+import { workflowPlanningContract } from "@/lib/workflows/execution-policy";
 import { requireActionAccess } from "@/lib/actions/access";
 import { observeAgentEffect, requireAgentConfigurationAccess } from "@/lib/agents/configuration";
 import { configurationEffectMessage, type AgentConfigurationEffect } from "@/lib/agents/configuration-contract";
@@ -14,7 +15,7 @@ import { automationIntentSchema } from "./automation-intent";
 import { automationInstructions, buildAutomationProposal, automationMessage, type AutomationProposal } from "./automation-proposal";
 import { summarizeWorkflowChanges } from "./semantic-summary";
 import { toActionPlan, actionPlanInstructions, type ActionPlan } from "./action-plan";
-const workflowInstructions = `${automationInstructions} ${baseWorkflowInstructions} ${actionPlanInstructions} agent_update saves general model guidance, not a deterministic response template. Never promise an exact response solely from saving instructions. Explain this limitation for exact-message requests; creating or publishing a supported workflow response is a separate explicit approval, not part of agent_update.`;
+const workflowInstructions = `${workflowPlanningContract} ${automationInstructions} ${baseWorkflowInstructions} ${actionPlanInstructions} agent_update saves general model guidance, not a deterministic response template. Never promise an exact response solely from saving instructions. Explain this limitation for exact-message requests; creating or publishing a supported workflow response is a separate explicit approval, not part of agent_update.`;
 import type { WorkflowCard } from "./workflow";
 import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
 import type { PublicationApproval } from "@/lib/workflows/visual/publication-types";

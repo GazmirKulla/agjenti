@@ -65,8 +65,6 @@ try:
          f"update public.products set is_active=true where id='{product}'", "product_unavailable"),
         ("workflow", f"select public.save_visual_workflow('{b}','{actor}',1,null,'disable')",
          f"select public.save_visual_workflow('{b}','{actor}',2,null,'enable')", "workflow_not_ready"),
-        ("module", f"select public.save_business_modules('{b}','{actor}','{{\"version\":1,\"source\":\"manual\",\"enabledModules\":[\"products\",\"workflows\"]}}')",
-         f"select public.save_business_modules('{b}','{actor}','{{\"version\":1,\"source\":\"manual\",\"enabledModules\":[\"products\",\"orders\",\"workflows\"]}}')", "module_disabled"),
     ]:
         revoker = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, text=True, bufsize=1)

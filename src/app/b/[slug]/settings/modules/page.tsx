@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import { ModulesSettingsPanel } from "@/components/dashboard/modules-settings";
 
 export default async function ModulesPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -9,6 +9,6 @@ export default async function ModulesPage({ params }: { params: Promise<{ slug: 
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
-  const profile = await loadDashboardProfile(access.business.id);
+  const profile = await loadNavigationProfile(access.business.id);
   return <ModulesSettingsPanel slug={access.business.slug} businessId={access.business.id} profile={profile}/>;
 }

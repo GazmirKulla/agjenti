@@ -68,7 +68,7 @@ it("renders package controls and the complete manual invitation entry point", as
     business = renderToStaticMarkup(
       await BusinessPage({ params: Promise.resolve({ slug: "agjenti" }) }),
     );
-  expect(admin).toContain("Modulet dhe aftësitë");
+  expect(admin).toContain("Aftësitë e veçanta");
   expect(admin).toContain('name="plan_free"');
   expect(admin).toContain("enterprise");
   expect(admin).toContain('type="checkbox"');
@@ -78,7 +78,7 @@ it("renders package controls and the complete manual invitation entry point", as
   expect(business).toContain("Përgatit biznesin");
   expect(business).toContain("Ende nuk ka ftesa");
   expect(business).not.toContain("Lejo stafin");
-  expect(business).toContain("I lejuar · joaktiv në hapësirë");
+  expect(business).toContain("I disponueshëm");
   const dir = process.env.ACTION_UI_PREVIEW_DIR;
   if (dir) {
     mkdirSync(dir, { recursive: true });
@@ -98,7 +98,7 @@ it("keeps denied capabilities visible without exposing the invitation form", asy
   expect(business).not.toContain('name="email"');
   expect(business).not.toContain('name="automation_allowed"');
   expect(business).toContain("/admin/businesses/source/permissions");
-  expect(business).toContain("Modulet e hapësirës");
+  expect(business).toContain("Funksionet e biznesit");
 });
 
 it("loads global policies independently and scopes exceptions to one business", async () => {
@@ -112,14 +112,14 @@ it("loads global policies independently and scopes exceptions to one business", 
   expect(html).toContain("Sipas paketës");
 });
 
-it("selects one module while keeping every module reachable with an icon", async () => {
+it("shows only exceptional capabilities in platform policy settings", async () => {
   fixture();
   const html = renderToStaticMarkup(await AdminPage({ searchParams: Promise.resolve({ module: "business.provision" }) }));
   expect(html).toContain('aria-current="page"');
   expect(html).toContain('name="action_key" value="business.provision"');
   expect(html).not.toContain('name="action_key" value="module.products"');
-  expect(html).toContain('/admin/actions?module=module.products');
+  expect(html).not.toContain('/admin/actions?module=module.products');
   expect(html.match(/<svg/g)?.length).toBeGreaterThanOrEqual(Object.keys(policyCatalog).length);
   const fallback = renderToStaticMarkup(await AdminPage({ searchParams: Promise.resolve({ module: "unknown" }) }));
-  expect(fallback).toContain('name="action_key" value="module.products"');
+  expect(fallback).toContain('name="action_key" value="business.provision"');
 });

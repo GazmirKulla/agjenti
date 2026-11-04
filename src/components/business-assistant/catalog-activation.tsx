@@ -2,6 +2,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { CapabilityAssessment } from "@/lib/capabilities/registry";
 import type { CapabilityActivationResult } from "@/lib/business-assistant/activation-contract";
+import { ConfirmationDialog } from "./confirmation-dialog";
 import { productMoney } from "@/lib/products/catalog";
 import { activationFeedback, uncertainActivation, type ActivationFeedback } from "./presentation";
 
@@ -25,7 +26,7 @@ export function CapabilityActivationDialog({ slug, businessName, capability, onC
   const [result, setResult] = useState<CapabilityActivationResult | null>(null);
   const [selected, setSelected] = useState("");
   const [reviewedName, setReviewedName] = useState("");
-  const [approved, setApproved] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState<"inspect" | "confirm" | null>("inspect");
   const [error, setError] = useState("");
   const url = `/api/business-assistant/capability-activation?slug=${encodeURIComponent(slug)}`;
@@ -50,7 +51,7 @@ export function CapabilityActivationDialog({ slug, businessName, capability, onC
   }, [url, capability]);
   async function confirm() {
     const option = result?.options?.find(option => option.id === selected);
-    if (lock.current || !approved || !option?.token || result?.status !== "available") return;
+    if (lock.current || !confirmOpen || !option?.token || result?.status !== "available") return;
     lock.current = true; setBusy("confirm"); setError(""); setReviewedName(option.name);
     try {
       const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" },
@@ -58,12 +59,12 @@ export function CapabilityActivationDialog({ slug, businessName, capability, onC
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rezultati nuk u konfirmua. Rihap kontrollin para riprovimit.");
       if (!mounted.current) return;
-      setResult(data); setSelected(""); setApproved(false);
+      setResult(data); setSelected(""); setConfirmOpen(false);
     } catch (error) {
       if (mounted.current) {
         setError(error instanceof Error && !(error instanceof TypeError || error instanceof SyntaxError) ? error.message : "Rezultati nuk u konfirmua. Rihap kontrollin para riprovimit.");
         // Discard the reviewed ticket on any failure; never retry a mutation blindly.
-        setResult({ status: "unverified", changed: null, message: uncertainActivation }); setSelected(""); setApproved(false);
+        setResult({ status: "unverified", changed: null, message: uncertainActivation }); setSelected(""); setConfirmOpen(false);
       }
     } finally { lock.current = false; if (mounted.current) setBusy(null); }
   }
@@ -81,7 +82,7 @@ export function CapabilityActivationDialog({ slug, businessName, capability, onC
   const selectedOption = result?.options?.find(option => option.id === selected);
   return <section ref={surface} tabIndex={-1} role="region" className="catalog-activation-dialog" aria-labelledby={titleId}
     aria-busy={Boolean(busy)} onKeyDown={event => {
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
+      if (event.key === "Escape" && !(event.target as HTMLElement).closest("dialog")) { event.preventDefault(); event.stopPropagation(); close(); }
     }}>
     <h3 id={titleId}>{catalog ? "Bëje katalogun të kërkueshëm" : "Aktivizo njohurinë për përgjigje"}</h3>
     <p className="activation-business">Biznesi: <strong>{businessName}</strong></p>
@@ -98,7 +99,7 @@ export function CapabilityActivationDialog({ slug, businessName, capability, onC
       <legend>{catalog ? "Produkti që do të bëhet i kërkueshëm" : "Njohuria që do të përdoret në përgjigje"}</legend>
       {result.options.map(option => <label className="catalog-activation-option" key={option.id}>
         <input type="radio" name={titleId} value={option.id} checked={selected === option.id} disabled={!option.token}
-          onChange={() => { setSelected(option.id); setApproved(false); }} />
+          onChange={() => { setSelected(option.id); setConfirmOpen(false); }} />
         <span><strong>{option.name}</strong>{catalog ? <span>{productMoney(option.price ?? null, option.currency ?? "")}</span> :
           <span className="activation-knowledge-body">{option.detail}</span>}{option.blocker && <small>{option.blocker}</small>}</span>
       </label>)}
@@ -106,14 +107,16 @@ export function CapabilityActivationDialog({ slug, businessName, capability, onC
     </fieldset> : null}
     {selectedOption && <p className="activation-target">Do të aktivizohet: <strong>{selectedOption.name}</strong> · {businessName}</p>}
     {!selectedOption && reviewedName && <p className="activation-target">Rekordi i shqyrtuar: <strong>{reviewedName}</strong> · {businessName}</p>}
-    {result?.status === "available" && <label className="catalog-activation-consent">
-      <input type="checkbox" checked={approved} disabled={Boolean(busy) || !selected} onChange={event => setApproved(event.target.checked)} />
-      {catalog ? "Miratoj që produkti i zgjedhur të bëhet i kërkueshëm për klientët." : "Miratoj që njohuria e zgjedhur të përdoret në përgjigjet për klientët."}
-    </label>}
     <div className="action-plan-actions">
-      {result?.status === "available" && <button type="button" className="action-plan-primary" disabled={Boolean(busy) || !approved || !selectedOption?.token} onClick={() => void confirm()}>Konfirmo aktivizimin</button>}
+      {result?.status === "available" && <button type="button" className="action-plan-primary" disabled={Boolean(busy) || !selectedOption?.token} onClick={() => setConfirmOpen(true)}>Shqyrto aktivizimin</button>}
       <button type="button" disabled={busy === "confirm"} onClick={close}>{result?.status === "available" || busy === "inspect" ? "Anulo dhe kthehu te plani" : "Kthehu te plani"}</button>
     </div>
     {result?.status === "available" && <p className="action-plan-note">Miratimi vlen 10 minuta. Nëse të dhënat ose lejet ndryshojnë, duhet një kontroll dhe konfirmim i ri.</p>}
+    {confirmOpen && selectedOption?.token && <ConfirmationDialog
+      preview={{ title: catalog ? "Aktivizo produktin" : "Aktivizo njohurinë", subject: `${selectedOption.name} · ${businessName}`,
+        fields: [{ label: "Përdorimi nga agjenti", before: "Joaktiv", after: catalog ? "I kërkueshëm për klientët" : "I përdorshëm në përgjigje" }],
+        notice: catalog ? undefined : selectedOption.detail }}
+      busy={busy === "confirm"} canConfirm recovered={false} error={error}
+      onConfirm={() => void confirm()} onClose={() => setConfirmOpen(false)} />}
   </section>;
 }

@@ -16,7 +16,7 @@ it("keeps separate actionable diagnostics for setup, disabled modules and unsupp
   expect(blocked).toHaveLength(3);
   expect(blocked.every(s => s.result === "BLOCKED" && s.executionCount === 0 && !s.traversedNodeIds.length)).toBe(true);
   expect(blocked[0].validationFindings[0]).toMatchObject({ capabilityKey: "product.search", reasonCode: "missing_requirements", missingRequirements: ["active_products"], affectedNodeIds: ["product"], remediation: expect.stringContaining("katalog") });
-  expect(blocked[1].validationFindings[0].remediation).toContain("modulin orders");
+  expect(blocked[1].validationFindings[0].remediation).toContain("Verifiko qasjen te orders");
   expect(blocked[2].validationFindings[0].remediation).toContain("Nuk do të ekzekutohet");
   expect(report.canPublish).toBe(false);
   for (const s of report.scenarios.filter(s => ["BLOCKED", "UNVERIFIED"].includes(s.result))) {

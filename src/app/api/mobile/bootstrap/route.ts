@@ -1,6 +1,6 @@
 import { getRequestUser } from "@/lib/auth/request";
 import { listMemberships } from "@/lib/tenant/access";
-import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import {
   moduleRegistry,
   navigationOrder,
@@ -17,12 +17,12 @@ export async function GET(request: Request) {
     const membership = await listMemberships(user.id);
     const businesses = await Promise.all(
       membership.businesses.map(async (business) => {
-        const profile = await loadDashboardProfile(business.id);
+        const profile = await loadNavigationProfile(business.id);
         return {
           ...business,
           modules: profile.enabledModules,
           navigation: navigationOrder
-            .filter((id) => profile.enabledModules.includes(id))
+            .filter((id) => profile.navigationItems.includes(id))
             .map((id) => ({
               id,
               label: moduleRegistry[id].label,

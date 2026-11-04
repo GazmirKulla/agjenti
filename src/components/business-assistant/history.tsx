@@ -92,7 +92,7 @@ export function useAssistantHistory(userId: string, slug: string) {
       generation.current++; current.current = null; setView(null); setHistory([]); setWarning(""); setLoading(false); setRestoration(n => n + 1);
       try { localStorage.removeItem(selectedKey); } catch {}
     },
-    selectThread(thread: StoredConversation) { return load(thread.id); },
+    selectThread(thread: Pick<StoredConversation, "id">) { return load(thread.id); },
     async refreshThreads() {
       const g = generation.current;
       setListLoading(true);

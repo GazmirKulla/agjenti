@@ -13,7 +13,7 @@ export async function saveBusinessService(slug: string, form: FormData) {
     if (!access) throw new Error("Nuk ke qasje në këtë biznes.");
     const profile = await loadDashboardProfile(access.business.id);
     if (!profile.enabledModules.includes("services"))
-      throw new Error("Aktivizo Shërbimet te Cilësimet → Modulet.");
+      throw new Error("Nuk u verifikua qasja te shërbimet. Rifresko faqen dhe provo përsëri.");
     const id = String(form.get("id") ?? ""),
       updatedAt = String(form.get("updatedAt") ?? "");
     if (!id) await requireActionAccess(access.business.id,user!.id,"service.create");

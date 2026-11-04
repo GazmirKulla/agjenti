@@ -1,7 +1,5 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 import { requireBusinessAccess } from "@/lib/tenant/access";
-import { parseDashboardProfile } from "@/lib/dashboard/profile/service";
-import { legacyDashboardProfile } from "@/lib/dashboard/profile/legacy";
 import { reportingRange, type Briefing, type BriefingPeriod, type MetricId, type Reading } from "./briefing-model";
 
 export class BriefingError extends Error {
@@ -27,11 +25,9 @@ export async function loadBriefing(slug: string, period: BriefingPeriod, now = n
     return data;
   }
   const business = await configuration();
-  const profile = parseDashboardProfile(business.dashboard_profile) ?? legacyDashboardProfile;
   const base = `/b/${encodeURIComponent(business.slug)}`;
   async function permissions(): Promise<Record<string, Permission>> {
     return Object.fromEntries(await Promise.all(modules.map(async module => {
-      if (!profile.enabledModules.includes(module)) return [module, "disabled"];
       try {
         const r = await db.rpc("current_user_module_allowed", { p_business: id, p_module: module });
         return [module, r.error || typeof r.data !== "boolean" ? "unavailable" : r.data ? "allowed" : "disabled"];

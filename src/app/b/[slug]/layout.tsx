@@ -11,7 +11,7 @@ import {
 import { AppShell } from "@/components/dashboard/shell";
 import { getAppSettings } from "@/lib/platform/settings";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
-import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import { loadBillingUsage } from "@/lib/billing/service";
 import { BillingUsageNotice } from "@/components/dashboard/billing-usage-notice";
 export default async function BusinessLayout({
@@ -30,7 +30,7 @@ export default async function BusinessLayout({
   if (!business) redirect("/auth/continue");
   const [settings, dashboardProfile, billingUsage] = await Promise.all([
     getAppSettings(),
-    loadDashboardProfile(business.id),
+    loadNavigationProfile(business.id),
     loadBillingUsage(business.id),
   ]);
   const navigationItems = buildNavigationItems(dashboardProfile, "desktop");

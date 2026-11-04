@@ -5,7 +5,6 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadAllowedModules } from "./entitlements";
 import { loadDashboardProfile } from "../profile/service";
 import { rebuildProfileFromModules } from "../profile/generate";
-import { canEnableModule } from "./dependencies";
 import { moduleRegistry, toggleableModules } from "./registry";
 import type { ModuleId } from "./types";
 
@@ -21,23 +20,21 @@ export async function saveModules(slug: string, formData: FormData) {
     const selected = toggleableModules.filter(id => formData.get(`module_${id}`) === "on");
     const allowed = new Set(permitted);
     if (selected.some(id => !allowed.has(id)))
-      return { error: "Një modul nuk lejohet nga administratori. Rifresko faqen." };
+      return { error: "Qasja te një seksion nuk u verifikua. Rifresko faqen." };
     const enabled = new Set<ModuleId>([
       ...profile.enabledModules.filter(id => moduleRegistry[id].core), ...selected,
     ]);
-    for (const id of selected) {
-      const check = canEnableModule(id, enabled);
-      if (!check.ok) return { error: check.reason };
-    }
+    const preferences = { ...rebuildProfileFromModules([...enabled], profile.signals),
+      enabledModules: [...enabled], hiddenModules: toggleableModules.filter(id => !selected.includes(id)) };
     const { error } = await createServiceSupabase().rpc("save_business_modules", {
       p_business: access.business.id,
       p_user: user.id,
-      p_profile: rebuildProfileFromModules([...enabled], profile.signals),
+      p_profile: preferences,
     });
-    if (error) return { error: "Modulet nuk u ruajtën. Vetëm pronari ose administratori mund t’i ndryshojë; kontrollo edhe lejet aktuale." };
+    if (error) return { error: "Pamja nuk u ruajt. Vetëm pronari ose administratori mund ta ndryshojë; kontrollo edhe lejet aktuale." };
     revalidatePath(`/b/${access.business.slug}`, "layout");
-    return { success: "Modulet e hapësirës u përditësuan." };
+    return { success: "Seksionet e panelit u përditësuan. Aftësitë e asistentit nuk ndryshuan." };
   } catch {
-    return { error: "Modulet nuk u ruajtën. Rifresko faqen dhe provo përsëri." };
+    return { error: "Pamja nuk u ruajt. Rifresko faqen dhe provo përsëri." };
   }
 }

@@ -59,7 +59,7 @@ export default async function WorkflowsPage({
     const acc = await requireBusinessAccess(session.id, slug);
     if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
     try { await requireRuntimeModules(acc.business.id, capabilityModules(["order.prepare"])); }
-    catch { return { error: "Aktivizo modulet Produkte, Porosi dhe Workflow para krijimit të procesit." }; }
+    catch { return { error: "Nuk u verifikua qasja për krijimin e procesit. Provo përsëri." }; }
     const name = String(formData.get("name") ?? "").trim() || "E thjeshtë";
     const supabase = createServiceSupabase();
     const { data: wf } = await supabase

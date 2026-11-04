@@ -13,6 +13,13 @@ begin
  end;
  raise exception 'Expected denial %, statement succeeded: %',expected,statement;
 end $$;
+create function pg_temp.expect_success(statement text) returns void language plpgsql as $$
+begin
+ begin
+  execute statement;
+  raise exception 'rollback test success' using errcode='P9999';
+ exception when sqlstate 'P9999' then null; end;
+end $$;
 create temp table readiness_fixture as select gen_random_uuid() b,gen_random_uuid() other_b,gen_random_uuid() u,gen_random_uuid() outsider,
  gen_random_uuid() p,gen_random_uuid() inactive,gen_random_uuid() foreign_p,gen_random_uuid() c,
  null::jsonb state,null::jsonb graph,null::uuid foreign_version;
@@ -125,21 +132,21 @@ end $$;
 set local role service_role;
 do $$ declare f record; catalog jsonb; begin
  select * into f from pg_temp.readiness_fixture;
- perform pg_temp.expect_error(format('select public.save_visual_workflow(%L,%L,6,%L,''publish'')',f.b,f.u,f.graph),'module_disabled');
- perform pg_temp.expect_error(format('select public.save_visual_workflow(%L,%L,6,null,''enable'')',f.b,f.u),'module_disabled');
+ perform pg_temp.expect_success(format('select public.save_visual_workflow(%L,%L,6,%L,''publish'')',f.b,f.u,f.graph));
+ perform pg_temp.expect_success(format('select public.save_visual_workflow(%L,%L,6,null,''enable'')',f.b,f.u));
  -- Flow-kind alone requires Orders, even without a product node.
  catalog:=jsonb_set(f.graph,'{nodes,1,kind}','"knowledge"');
- perform pg_temp.expect_error(format('select public.save_visual_workflow(%L,%L,6,%L,''publish'')',f.b,f.u,catalog),'module_disabled');
- perform pg_temp.denied_order(f.state,'module_disabled');
+ perform pg_temp.expect_success(format('select public.save_visual_workflow(%L,%L,6,%L,''publish'')',f.b,f.u,catalog));
+ perform pg_temp.allowed_order(f.state);
  -- Order-status reads require Orders too, but not active catalog records.
- perform pg_temp.expect_error(format('select public.save_visual_workflow(%L,%L,6,%L,''publish'')',f.b,f.u,
-  jsonb_set(jsonb_set(catalog,'{nodes,1,kind}','"order_status"'),'{flows,0,kind}','"information"')),'module_disabled');
+ perform pg_temp.expect_success(format('select public.save_visual_workflow(%L,%L,6,%L,''publish'')',f.b,f.u,
+  jsonb_set(jsonb_set(catalog,'{nodes,1,kind}','"order_status"'),'{flows,0,kind}','"information"')));
  -- Catalog-only information is not order preparation.
  catalog:=jsonb_set(catalog,'{flows,0,kind}','"information"');
  perform public.save_visual_workflow(f.b,f.u,6,catalog,'publish');
  perform public.save_visual_workflow(f.b,f.u,7,null,'disable');
  -- Re-enabling an old order version must revalidate current readiness.
- raise notice 'PASS Orders OFF blocks order nodes/flows/submission; catalog-only publication remains valid';
+ raise notice 'PASS legacy module overrides do not block publication or confirmed orders';
 end $$;
 reset role;
 do $$ declare f record; begin
@@ -150,8 +157,14 @@ end $$;
 set local role service_role;
 do $$ declare f record; begin
  select * into f from pg_temp.readiness_fixture;
- perform pg_temp.expect_error(format('select public.save_visual_workflow(%L,%L,8,%L,''publish'')',f.b,f.u,f.graph),'module_disabled');
- perform pg_temp.denied_order(f.state,'module_disabled');
+ -- Hiding Orders cannot bypass the deliberately disabled workflow.
+ perform pg_temp.denied_order(f.state,'workflow_not_ready');
+ -- With a published, enabled process the hidden menu must not block execution.
+ begin
+  perform public.save_visual_workflow(f.b,f.u,8,f.graph,'publish');
+  perform pg_temp.allowed_order(f.state);
+  raise exception 'rollback hidden-navigation publication' using errcode='P9999';
+ exception when sqlstate 'P9999' then null; end;
 end $$;
 reset role;
 -- Re-activation rechecks current modules and product state, not historical readiness.
@@ -165,8 +178,8 @@ end $$;
 set local role service_role;
 do $$ declare f record; begin
  select * into f from pg_temp.readiness_fixture;
- perform pg_temp.expect_error(format('select public.save_visual_workflow(%L,%L,10,null,''enable'')',f.b,f.u),'module_disabled');
- if (select revision from public.visual_workflows where business_id=f.b)<>10 then raise exception 'Rejected enable changed revision'; end if;
+ perform pg_temp.expect_success(format('select public.save_visual_workflow(%L,%L,10,null,''enable'')',f.b,f.u));
+ if (select revision from public.visual_workflows where business_id=f.b)<>10 then raise exception 'Rolled-back enable changed revision'; end if;
 end $$;
 reset role;
 do $$ declare f record; begin
@@ -191,7 +204,7 @@ end $$;
 set local role service_role;
 do $$ declare f record; info jsonb; begin
  select * into f from pg_temp.readiness_fixture;
- perform pg_temp.expect_error(format('select public.save_visual_workflow(%L,%L,10,%L,''publish'')',f.b,f.u,f.graph),'module_disabled');
+ perform pg_temp.expect_success(format('select public.save_visual_workflow(%L,%L,10,%L,''publish'')',f.b,f.u,f.graph));
  info:=jsonb_set(jsonb_set(jsonb_set(f.graph,'{nodes,1,kind}','"knowledge"'),'{flows,0,kind}','"information"'),'{flows,0,productIds}','[]');
  perform public.save_visual_workflow(f.b,f.u,10,info,'publish');
  raise notice 'PASS reactivation, product/module revocation, missing active catalog and unrelated information publication';

@@ -36,7 +36,7 @@ export async function ModulePlaceholderPage({
           description="Ky modul është i aktivizuar për hapësirën tënde. Funksionaliteti i plotë do të shtochet gradualisht; navigimi dhe paneli janë tashmë të përshtatur."
         />
         <p className="muted-copy mt-4">
-          <Icon name={mod.icon} size={18} /> Menaxho modulet te Cilësimet.
+          <Icon name={mod.icon} size={18} /> Personalizo panelin te Cilësimet.
         </p>
       </section>
     </>

@@ -17,7 +17,7 @@ async function access(slug: string) {
   if (!result) throw new Error("Nuk ke qasje në këtë biznes.");
   const profile = await loadDashboardProfile(result.business.id);
   if (!profile.enabledModules.includes("bookings"))
-    throw new Error("Aktivizo Rezervimet te Cilësimet → Modulet.");
+    throw new Error("Nuk u verifikua qasja te rezervimet. Rifresko faqen dhe provo përsëri.");
   return result.business.id;
 }
 function refresh(slug: string) {

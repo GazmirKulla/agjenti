@@ -4,13 +4,14 @@ import "./mobile.css";
 import "./assistant-workspace.css";
 import { businessGoals } from "./presentation";
 import { AgentEffectObservation, AgentInstructionNotice } from "./agent-configuration";
+import { AssistantAttention } from "./attention";
+import { ConfirmationDialog } from "./confirmation-dialog";
 import { DailyBriefing } from "./daily-briefing";
 import { briefingQuestion } from "@/lib/business-assistant/briefing-model";
 import { useDashboardLanguage } from "@/components/dashboard/language";
 import { AssistantHistory, useAssistantHistory } from "./history";
 import { hasRecoverableWork, type ConversationView } from "@/lib/business-assistant/persistence-model";
-import { AssistantAppearanceDialog, PersonalAssistantAvatar, PersonalAssistantWidget } from "./personal-assistant";
-import type { AssistantAppearance } from "./appearance";
+import { PersonalAssistantAvatar, PersonalAssistantWidget } from "./personal-assistant";
 import { createPortal } from "react-dom";
 import { ProductCsvImport } from "@/components/dashboard/product-csv-import";
 import type { ImportSource } from "@/lib/products/import-model";
@@ -94,8 +95,6 @@ export function BusinessAssistant({
   slug,
   agentName,
   businessName,
-  appearance,
-  saveAppearance,
   open,
   onClose,
   onOpen,
@@ -129,8 +128,6 @@ export function BusinessAssistant({
   slug: string;
   agentName: string;
   businessName: string;
-  appearance: AssistantAppearance;
-  saveAppearance: (value: AssistantAppearance) => string | null;
   open: boolean;
   onClose: () => void;
   onOpen: () => void;
@@ -152,13 +149,11 @@ export function BusinessAssistant({
   const returnFocus = useRef<HTMLElement | null>(null);
   const wasVisible = useRef(false);
   const [workOpen, setWorkOpen] = useState(false);
-  const workBack = useRef<HTMLButtonElement>(null);
   const workTrigger = useRef<HTMLButtonElement>(null);
   const composerRegion = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const locked = useRef(false);
   const [busy, setBusy] = useState<"plan" | "confirm" | "audio" | null>(null);
-  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [launcherTarget, setLauncherTarget] = useState<HTMLElement | null>(null);
   useEffect(() => { setLauncherTarget(document.getElementById("personal-assistant-slot")); }, []);
   const archive = useAssistantHistory(userId, slug);
@@ -281,9 +276,6 @@ export function BusinessAssistant({
       } else end.current?.scrollIntoView({ block: "nearest", behavior });
     }
   }, [history, result, visible, outgoing, busy]);
-  useEffect(() => {
-    if (mobile && workOpen && result?.preview) workBack.current?.focus();
-  }, [mobile, workOpen, result?.preview]);
   function returnToConversation() {
     setWorkOpen(false);
     requestAnimationFrame(() => workTrigger.current?.focus());
@@ -361,7 +353,7 @@ export function BusinessAssistant({
         text: input,
         history: pin ? workflowRequestHistory(pin.history) : lastContext.current === contextKey ? history.slice(-6) : [],
         context: effectiveContext,
-        assistantName: appearance.name,
+        assistantName: agentName,
         ...(lastContext.current === contextKey && (result?.workflow?.proposed || result?.editableFlow || result?.linear) && result.token ? { pendingToken: result.token } : {}),
       });
       if (generation !== requestGeneration.current) return;
@@ -377,6 +369,7 @@ export function BusinessAssistant({
         { role: "assistant", content: data.message || "Kontrollo propozimin." },
       ]);
       setResult(data.briefing ? result : data);
+      if (!data.briefing) setWorkOpen(Boolean(data.preview && data.token));
       if (data.briefing) { setRequestContext(requestContext); setRequestLabel(requestLabel); }
       if (!data.briefing) setRecovered(Boolean(data.recovered));
       sendAttempt.current = null;
@@ -407,6 +400,31 @@ export function BusinessAssistant({
       sendRef.current = null;
     };
   });
+  async function closeProposal() {
+    if (locked.current) return;
+    const generation = requestGeneration.current;
+    locked.current = true;
+    archive.inFlight.current = true;
+    setBusy("confirm");
+    setError("");
+    try {
+      if (archive.view?.plan) await archive.closePlan();
+      else setHistory(previous => [...previous, { role: "assistant", content: "Propozimi u mbyll pa u zbatuar." }]);
+      if (generation !== requestGeneration.current) return;
+      setWorkOpen(false);
+      workflowRequest.current = null;
+      setRequestContext(null);
+      setResult(null);
+      setRecovered(false);
+      requestAnimationFrame(() => composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
+    } catch (error) {
+      if (generation === requestGeneration.current) setError((error as Error).message);
+    } finally {
+      locked.current = false;
+      archive.inFlight.current = false;
+      setBusy(null);
+    }
+  }
   async function confirm() {
     if (locked.current || !result?.token) return;
     locked.current = true;
@@ -485,14 +503,13 @@ export function BusinessAssistant({
   return (
     <>
       {launcherTarget && createPortal(
-        <PersonalAssistantWidget appearance={appearance} hidden={visible && !inline} busy={Boolean(busy)}
-          awaitingApproval={Boolean(result?.preview && result.token && !result.saved)}
-          onOpen={() => { onOpen(); if (inline) composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(); }} onSettings={() => setAppearanceOpen(true)} />,
+        <PersonalAssistantWidget hidden={visible && !inline}
+          onOpen={() => { onOpen(); if (inline) composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(); }} />,
         launcherTarget,
       )}
       <dialog
         ref={dialog}
-        className={`business-assistant assistant-workspace-panel ${historyOpen ? "history-open" : ""} ${inline ? "assistant-inline-home" : ""} ${context.page === "home" ? "is-home" : ""} ${expanded ? "is-expanded" : ""} ${mode === "audio" ? "is-voice" : ""} ${result?.preview ? "has-work-detail" : ""} ${workOpen && result?.preview ? "is-work-open" : ""}`}
+        className={`business-assistant assistant-workspace-panel ${historyOpen ? "history-open" : ""} ${inline ? "assistant-inline-home" : ""} ${context.page === "home" ? "is-home" : ""} ${expanded ? "is-expanded" : ""} ${mode === "audio" ? "is-voice" : ""}`}
         style={
           {
             "--assistant-panel-width": `${panelWidth}px`,
@@ -516,15 +533,14 @@ export function BusinessAssistant({
         }}
       >
         <header className="assistant-heading" hidden={inline && mobile}>
-          {!inline && <PersonalAssistantAvatar avatar={appearance.avatar} />}
+          {!inline && <PersonalAssistantAvatar />}
           <div>
-            <h2 id="business-assistant-title">{appearance.name} <span className="assistant-identity-role">— Asistenti yt</span></h2>
+            <h2 id="business-assistant-title">{agentName} <span className="assistant-identity-role">— Asistenti yt</span></h2>
             <p>
               Për biznesin {businessName}
             </p>
           </div>
           <button type="button" className="personal-assistant-settings" onClick={onHistoryOpen} aria-label="Historiku i asistentit" aria-expanded={historyOpen} aria-controls="assistant-history"><Icon name="history" size={17} /></button>
-          {!inline && <button type="button" className="personal-assistant-settings" onClick={() => setAppearanceOpen(true)} aria-label="Personalizo asistentin"><Icon name="settings" size={17} /></button>}
           {mobile && (
             <button
               type="button"
@@ -560,21 +576,25 @@ export function BusinessAssistant({
         <div className={`assistant-body ${!history.length && !result && !error ? "is-empty" : ""}`} aria-busy={Boolean(busy)}>
           <div className="assistant-context-status" aria-label="Konteksti i kërkesës" role="status">
             <span>{businessName} · {contextLabel(context)}{selectionLabel ? ` · ${selectionLabel}` : context.entityId ? ` · Elementi ${context.entityId.slice(0, 8)}` : ""}</span>
-            {!!history.length && lastContext.current !== assistantContextKey(slug, context) && <p>Faqja ose zgjedhja ndryshoi. {appearance.name} përdor historikun e autorizuar të kësaj bisede dhe kontekstin e faqes; objektivi i një plani të hapur nuk ndryshon nga navigimi.</p>}
+            {!!history.length && lastContext.current !== assistantContextKey(slug, context) && <p>Faqja ose zgjedhja ndryshoi. {agentName} përdor historikun e autorizuar të kësaj bisede dhe kontekstin e faqes; objektivi i një plani të hapur nuk ndryshon nga navigimi.</p>}
             {workflowRequest.current?.scope === assistantContextKey(slug, context) && <p>Kërkesa në vazhdim mbetet te rrjedha/nyja fillestare{requestLabel ? `: ${requestLabel}` : ""}. Për një zgjedhje tjetër, nis bisedë të re.</p>}
-            {context.workflowSelection?.dirty && <p>Ka ndryshime të paruajtura në editor. Ruaji ose anuloji atje përpara se të aplikosh një ndryshim me {appearance.name}.</p>}
+            {context.workflowSelection?.dirty && <p>Ka ndryshime të paruajtura në editor. Ruaji ose anuloji atje përpara se të aplikosh një ndryshim me {agentName}.</p>}
             {(result?.preview || result?.actionPlan) && requestContext && assistantContextKey(slug, requestContext) !== assistantContextKey(slug, context) && <p>Propozimi i hapur i përket: {contextLabel(requestContext)}{requestLabel ? ` · ${requestLabel}` : ""}. Navigimi nuk e ndryshon objektivin e tij.</p>}
           </div>
           {archive.loading && <p role="status">Po ngarkohet biseda…</p>}
           {archive.warning && <p role="alert">{archive.warning}</p>}
           {archive.view?.conversation.pending_request && !busy && <p role="status">Ka një kërkesë pa përgjigje të konfirmuar. Mund të jetë në përpunim ose e ndërprerë; asnjë veprim nuk përsëritet automatikisht.</p>}
           {recovered && <div className="assistant-recovery" role="status"><strong>Plan i rikthyer — jo autorizim për ekzekutim</strong><p>{archive.view?.recovery?.message || "Gatishmëria e mëparshme është historike. Rishqyrto përpara çdo veprimi."}</p>
-            <button type="button" disabled={Boolean(busy)} onClick={() => { setText(`Rishqyrto planin e ruajtur dhe përgatit propozim të ri, pa ekzekutuar ose publikuar: ${archive.view?.plan?.snapshot.request ?? ""}`); composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(); }}>Rishqyrto me {appearance.name}</button></div>}
+            <button type="button" disabled={Boolean(busy)} onClick={() => { setText(`Rishqyrto planin e ruajtur dhe përgatit propozim të ri, pa ekzekutuar ose publikuar: ${archive.view?.plan?.snapshot.request ?? ""}`); composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(); }}>Rishqyrto me {agentName}</button></div>}
           {archive.view?.before && <button type="button" disabled={Boolean(busy)} onClick={() => void archive.olderMessages()}>Mesazhe më të vjetra</button>}
+          <AssistantAttention key={`attention:${userId}:${slug}`} slug={slug} active={visible && mode === "text" && !historyOpen && !busy} onResume={id => {
+            if (locked.current) return;
+            reset(); void archive.selectThread({ id }); onOpen();
+          }} />
           <DailyBriefing key={`${userId}:${slug}`} slug={slug} active={inline && mode === "text" && !historyOpen} />
           {mode === "text" && !history.length && !result && (
             <div className="assistant-welcome">
-              {inline && <p className="mobile-assistant-eyebrow">{appearance.name} — Asistenti yt</p>}
+              {inline && <p className="mobile-assistant-eyebrow">{agentName} — Asistenti yt</p>}
               <Greeting>{inline ? `Përshëndetje${userName?.trim() ? `, ${userName.trim().split(/\s+/)[0]}` : ""}.` : "Çfarë dëshiron të ndryshosh?"}{inline && <><br/><span>Çfarë bëjmë sot?</span></>}</Greeting>
               <p>
                 {inline ? "Jam këtu për të të ndihmuar me biznesin. Pyet ose kërko një ndryshim." : "Menaxho produktet, shërbimet, njohuritë dhe takimet me një kërkesë."}
@@ -661,16 +681,18 @@ export function BusinessAssistant({
             setMode("text"); setText(value);
             requestAnimationFrame(() => composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
           }} />}
-          {result?.workflow && <WorkflowCard key={JSON.stringify(result.workflow)} data={result.workflow} slug={slug} pending={Boolean(result.token)} onRequest={value => { setMode("text"); setText(value); }} />}
+          {result?.workflow && <details className="assistant-process-details"><summary>Shiko procesin dhe provat</summary><WorkflowCard key={JSON.stringify(result.workflow)} data={result.workflow} slug={slug} pending={Boolean(result.token)} onRequest={value => { setMode("text"); setText(value); }} /></details>}
           {result?.linear && <LinearWorkflowCard data={result.linear} slug={slug} pending={Boolean(result.token)} onRequest={value=>{setMode("text");setText(value);}} />}
           {result?.preview && (
             <button ref={workTrigger} type="button" className="assistant-work-trigger"
-              aria-controls="assistant-work-detail" aria-expanded={!mobile || workOpen}
-              onClick={() => { setWorkOpen(true); if (!mobile) workBack.current?.focus(); }}>
+              aria-controls="assistant-work-detail" aria-expanded={workOpen}
+              onClick={() => { setWorkOpen(true); }}>
               <span><strong>{result.preview.title}</strong><small>{recovered ? "Plan i rikthyer · kërkon rishqyrtim" : "Në pritje të konfirmimit"}</small></span>
               <span>Shiko ndryshimin →</span>
             </button>
           )}
+          {(result?.preview || recovered && archive.view?.plan) && <button type="button" className="assistant-secondary"
+            disabled={Boolean(busy) || archive.loading} onClick={() => void closeProposal()}>Mbyll propozimin pa e zbatuar</button>}
           {result?.saved && (
             <div className="assistant-success" role="status">
               <Icon name="check" size={22} />
@@ -714,96 +736,23 @@ export function BusinessAssistant({
             </button>
           </div>
           {mode === "text" ? (
-            <AssistantComposer {...materialProps} id="business-assistant-input" label={`Shkruaji ${appearance.name}`} value={text} busy={Boolean(busy) || archive.loading} multiline
-              onChange={(value) => { setText(value); if (result?.token && !result.workflow && !result.editableFlow && !result.linear) setResult(null); }}
+            <AssistantComposer {...materialProps} id="business-assistant-input" label={`Shkruaji ${agentName}`} value={text} busy={Boolean(busy) || archive.loading} multiline
+              onChange={setText}
               onSubmit={() => void analyze()} onVoice={() => { primeVoiceCapture(); setMode("audio"); }} />
           ) : (
             visible && <AudioRecorder variant="assistant" purpose="request" busy={Boolean(busy)} onAnalyze={transcribe} onBack={() => setMode("text")} analyzeLabel="Ktheje në tekst" />
           )}
         </div>
-        {result?.preview && (
-          <aside id="assistant-work-detail" className="assistant-work-detail" aria-label="Pamja e ndryshimit">
-            <header className="assistant-work-heading">
-              <button ref={workBack} type="button" onClick={() => {
-                if (mobile) returnToConversation();
-                else composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
-              }}>← Biseda</button>
-              <span>{recovered ? "Kërkon rishqyrtim të ri" : "Në pritje të konfirmimit"}</span>
-            </header>
-          {result?.preview && (
-            <section
-              className="assistant-preview"
-              aria-label="Ndryshimet për konfirmim"
-            >
-              <div className="assistant-preview-heading">
-                <span>
-                  GATI PËR KONTROLL
-                  {requestContext ? ` · ${contextLabel(requestContext)}` : ""}
-                </span>
-                <h3>{result.preview.title}</h3>
-                {result.preview.subject && (
-                  <p className="assistant-subject">{result.preview.subject}</p>
-                )}
-              </div>
-              {result.workflow?.semanticSummary && result.workflow.proposed ? <WorkflowChangeReview before={result.workflow.workspace.graph} after={result.workflow.proposed} summary={result.workflow.semanticSummary} simulation={result.workflow.simulation} /> : <dl>
-                {result.preview.fields.map((field, i) => (
-                  <div key={i}>
-                    <dt>{field.label}</dt>
-                    <dd>
-                      {field.before !== "—" && (
-                        <span className="assistant-before">{field.before}</span>
-                      )}
-                      <span className="assistant-after">{field.after}</span>
-                    </dd>
-                  </div>
-                ))}
-              </dl>}
-              {result.preview.notice && (
-                result.preview.agentConfiguration ? <AgentInstructionNotice preview={result.preview} slug={slug} /> : <p className="assistant-notice">{result.preview.notice}</p>
-              )}
-              <p className="assistant-notice">
-                {recovered ? `Ky është propozimi historik, jo leje për veprim. Rishqyrtoje me ${appearance.name} për një konfirmim të ri.` : "Asgjë nuk është ruajtur ende. Konfirmimi vlen për 10 minuta."}
-              </p>
-              <div className="assistant-preview-actions">
-                {result.token && <button
-                  type="button"
-                  className="assistant-primary"
-                  onClick={confirm}
-                  disabled={Boolean(busy)}
-                >
-                  {busy === "confirm" ? "Po ruhet…" : result.workflow ? result.preview.title : "Konfirmo ndryshimin"}
-                </button>}
-                <button
-                  type="button"
-                  className="assistant-secondary"
-                  disabled={Boolean(busy)}
-                  onClick={async () => {
-                    if (locked.current) return;
-                    const generation = requestGeneration.current;
-                    locked.current = true; archive.inFlight.current = true;
-                    try {
-                      if (archive.view?.plan) await archive.closePlan();
-                      else setHistory(prev => [...prev, { role: "assistant", content: "Propozimi u anulua; asgjë nuk u ruajt." }]);
-                    if (generation !== requestGeneration.current) return;
-                    setWorkOpen(false);
-                    requestAnimationFrame(() => composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
-                    workflowRequest.current = null;
-                    setRequestContext(null);
-                    setResult(null);
-                    } catch (e) { setError((e as Error).message); }
-                    finally { locked.current = false; archive.inFlight.current = false; }
-                  }}
-                >
-                  Anulo
-                </button>
-              </div>
-            </section>
-          )}
-
-            {error && <p className="assistant-error" role="alert">{error}</p>}
-          </aside>
-        )}
-      <AssistantHistory open={historyOpen} mobile={mobile} assistantName={appearance.name} businessName={businessName}
+        {visible && workOpen && result?.preview && <ConfirmationDialog
+          preview={result.preview} busy={Boolean(busy)} canConfirm={Boolean(result.token)}
+          notice={result.preview.agentConfiguration ? <AgentInstructionNotice preview={result.preview} slug={slug} /> : undefined}
+          recovered={recovered} error={error} onConfirm={() => void confirm()}
+          onClose={() => { setWorkOpen(false); workTrigger.current?.focus(); }}>
+          {result.workflow?.semanticSummary && result.workflow.proposed
+            ? <WorkflowChangeReview before={result.workflow.workspace.graph} after={result.workflow.proposed}
+                summary={result.workflow.semanticSummary} simulation={result.workflow.simulation} /> : undefined}
+        </ConfirmationDialog>}
+      <AssistantHistory open={historyOpen} mobile={mobile} assistantName={agentName} businessName={businessName}
         selectedId={archive.view?.conversation.id} threads={archive.threads} busy={Boolean(busy) || archive.loading}
         loading={archive.loading || archive.listLoading} warning={archive.warning} onClose={onHistoryClose}
         onSelect={thread => {
@@ -814,7 +763,6 @@ export function BusinessAssistant({
         onRename={archive.rename} onDelete={archive.remove}
         onMore={archive.next ? () => void archive.moreThreads() : undefined} />
       </dialog>
-      {appearanceOpen && <AssistantAppearanceDialog appearance={appearance} onSave={saveAppearance} onClose={() => setAppearanceOpen(false)} />}
     </>
   );
 }

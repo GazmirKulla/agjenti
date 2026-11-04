@@ -70,8 +70,13 @@ begin
   if not blocked then raise exception 'Foreign product accepted'; end if;
   update conversation_states set collected=state where conversation_id=c;
   update businesses set dashboard_profile=jsonb_set(dashboard_profile,'{enabledModules}','["products"]') where id=b;
-  blocked:=false; begin perform submit_confirmed_order(b,actor,c,7,state,state,false); exception when others then blocked:=sqlerrm='module_disabled'; end;
-  if not blocked then raise exception 'Explicit module deactivation bypassed'; end if;
+  -- Hiding menus must not block a valid, confirmed submission. Roll back this
+  -- successful attempt so subsequent negative cases still test a fresh order.
+  begin
+    r:=submit_confirmed_order(b,actor,c,7,state,state,false);
+    if r->>'dispatch' is distinct from 'true' then raise exception 'Navigation blocked submission'; end if;
+    raise exception 'rollback test success' using errcode='P9999';
+  exception when sqlstate 'P9999' then null; end;
   update businesses set dashboard_profile=jsonb_set(dashboard_profile,'{enabledModules}','["products","orders","workflows"]') where id=b;
   delete from business_users where business_id=b and user_id=actor;
   blocked:=false; begin perform submit_confirmed_order(b,actor,c,7,state,state,false); exception when others then blocked:=sqlerrm='unauthorized'; end;

@@ -26,7 +26,7 @@ function authorize(access: Access, write = false) {
     !access.modules.includes("products")
   )
     throw new AssistantError(
-      "Aktivizo modulet Workflow dhe Produkte për rrjedhat e porosive.",
+      "Nuk u verifikua qasja te proceset dhe produktet e biznesit.",
     );
   if (write && access.catalogSource === "external")
     throw new AssistantError(

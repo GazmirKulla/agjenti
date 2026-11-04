@@ -24,7 +24,7 @@ const requirements: Record<string, string> = {
   action_catalog_unavailable: "Verifiko disponueshmërinë e katalogut të veprimeve në server.",
   capability_assessment: "Riprovo vlerësimin pasi të verifikohen qasja dhe konfigurimi i biznesit.",
 };
-const moduleKeys = new Set(["products", "orders", "workflows", "knowledge", "bookings", "services", "staff"]);
+const moduleKeys = new Set(["products", "orders", "workflows", "knowledge", "bookings", "services", "staff", "inbox"]);
 const remediations: Record<string, string> = {
   unauthorized: "Rihyr dhe kërko qasje në biznesin përkatës; mos përdor miratim nga një tenant tjetër.",
   stale_revision: "Rifresko draftin dhe gjenero përsëri propozimin, simulimin dhe miratimin.",
@@ -61,7 +61,7 @@ export function capabilityFinding(capability: CapabilityAssessment, graph?: Visu
     capabilityKey: key, reasonCode: /^[a-z_]{1,80}$/.test(capability.reasonCode) ? capability.reasonCode : "assessment_unavailable",
     missingRequirements: [...new Set(missing)], affectedNodeIds: affected,
     remediation: unsupported ? "Hiqe veprimin e pambështetur ose zgjidh një capability me ekzekutues ekzistues. Nuk do të ekzekutohet." :
-      missing.length ? [...new Set(missing.map(r => requirements[r] ?? (r.startsWith("module:") ? `Aktivizo modulin ${r.slice(7)} nëse lejohet nga paketa dhe roli yt.` : "Rishiko konfigurimin me administratorin.")))].join(" ") :
+      missing.length ? [...new Set(missing.map(r => requirements[r] ?? (r.startsWith("module:") ? `Verifiko qasjen te ${r.slice(7)} dhe lidhjen me biznesin; shfaqja në menu nuk ndryshon lejet.` : "Rishiko konfigurimin me administratorin.")))].join(" ") :
         "Sqaro kërkesën ose përsërit vlerësimin; ky rezultat nuk autorizon veprime.",
   });
 }

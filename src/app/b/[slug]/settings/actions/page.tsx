@@ -1,7 +1,6 @@
 import { ModuleDescription } from "@/components/dashboard/module-description";
 import "@/components/dashboard/actions.css";
 import Link from "next/link";
-import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { loadAllowedModules } from "@/lib/dashboard/modules/entitlements";
 import { moduleRegistry, toggleableModules } from "@/lib/dashboard/modules/registry";
 import { redirect } from "next/navigation";
@@ -56,7 +55,6 @@ export default async function BusinessActionsPage({
   const configure = access.admin || member.data?.role === "owner",
     canProvision =
       permissions.find((p) => p.key === "business.provision")?.data === true;
-  const profile = await loadDashboardProfile(id);
   const allowedModules = new Set(await loadAllowedModules(id));
   const invitations = canProvision
     ? await db
@@ -71,7 +69,7 @@ export default async function BusinessActionsPage({
       <PageHeading
         eyebrow={access.business.name}
         title="Aftësitë e biznesit"
-        description="Administratori përcakton modulet dhe aftësitë e lejuara për këtë biznes. Përdori nga hapësira jote."
+        description="Funksionet standarde janë të disponueshme pa aktivizim. Aftësitë e veçanta dhe veprimet respektojnë lejet e tua."
       />
       <div className="grid gap-6">
         {Object.entries(actionCatalog).filter(([key]) => key === "business.provision").map(([key, a]) => {
@@ -193,21 +191,20 @@ export default async function BusinessActionsPage({
           </section>
         )}
         <section className="detail-block">
-          <h2>Modulet e hapësirës</h2>
-          <p>Leja e administratorit dhe aktivizimi në hapësirë janë dy gjendje të veçanta.</p>
+          <h2>Funksionet e biznesit</h2>
+          <p>Përdori drejtpërdrejt. Seksionet shfaqen në panel sipas përdorimit dhe preferencave të tua.</p>
           <div className="capability-grid">
             {toggleableModules.map(moduleId => {
               const mod = moduleRegistry[moduleId];
               const available = allowedModules.has(moduleId);
-              const active = available && profile.enabledModules.includes(moduleId);
               return <article className="capability-card" key={moduleId}>
                 <h3>{mod.label}</h3><ModuleDescription moduleId={moduleId} />
-                <p className="muted-copy">{!available ? "Nuk lejohet nga administratori" : active ? "I lejuar · aktiv në hapësirë" : "I lejuar · joaktiv në hapësirë"}</p>
-                {active && <Link className="soft-link" href={`/b/${slug}/${mod.path}`}>Hap {mod.label} →</Link>}
+                <p className="muted-copy">{available ? "I disponueshëm" : "Qasja nuk është e disponueshme"}</p>
+                {available && <Link className="soft-link" href={`/b/${slug}/${mod.path}`}>Hap {mod.label} →</Link>}
               </article>;
             })}
           </div>
-          <Link className="btn btn-ghost" href={`/b/${slug}/settings/modules`}>Menaxho aktivizimin e moduleve</Link>
+          <Link className="btn btn-ghost" href={`/b/${slug}/settings/modules`}>Personalizo seksionet e panelit</Link>
         </section>
       </div>
     </>

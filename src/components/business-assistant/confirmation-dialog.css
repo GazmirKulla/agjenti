@@ -1,0 +1,9 @@
+.assistant-confirmation{box-sizing:border-box;font-family:system-ui,sans-serif;width:min(520px,calc(100vw - 32px));max-height:85dvh;overflow:auto;border:1px solid #e2e8f0;border-radius:20px;padding:24px;background:#fff;color:#172b3a;box-shadow:0 24px 80px #10243833}
+.assistant-confirmation::backdrop{background:#10243866;backdrop-filter:blur(3px)}
+.assistant-confirmation h2{font-size:1.25rem;line-height:1.4;margin:0 0 12px}
+.assistant-confirmation p{line-height:1.6;margin:12px 0}.confirmation-subject{font-weight:600}
+.assistant-confirmation dl{display:grid;gap:12px;margin:20px 0}.assistant-confirmation dt{font-size:.8rem;color:#526777}.assistant-confirmation dd{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.confirmation-before{color:#61717d;text-decoration:line-through}.confirmation-notice{font-size:.85rem;color:#526777}
+.assistant-confirmation summary{cursor:pointer;font-weight:600;padding:10px 0}.assistant-confirmation footer{display:flex;justify-content:flex-end;gap:10px;margin-top:24px;position:sticky;bottom:-24px;background:white;padding:12px 0}
+.assistant-confirmation button:focus-visible,.assistant-confirmation summary:focus-visible{outline:3px solid #008575;outline-offset:3px}
+.assistant-confirmation button{padding:10px 18px;border-radius:10px;border:1px solid #dbe5e9;font:inherit;cursor:pointer}.assistant-confirmation .assistant-primary{background:#086c62;color:white;border-color:#086c62}.assistant-confirmation .assistant-secondary{background:#fff;color:#243e4d}.assistant-confirmation button:disabled{opacity:.6;cursor:wait}

@@ -67,7 +67,7 @@ export function DailyBriefing({ slug, active }: { slug: string; active: boolean 
       <details className="briefing-definitions"><summary>{t("Çfarë përfshin kjo pamje?")}</summary>
         <p>{t("Numërohen regjistrimet sipas kohës së ruajtjes, deri në kontrollin e fundit. Porositë përfshijnë të gjitha statuset; rezervimet sipas krijimit, jo datës së takimit.")}</p>
         <p>{t("Handoff-et janë gjendja aktuale, jo provë se klienti ende pret. Dështimet janë vetëm ato të regjistruara në log-et e integrimeve, jo monitorim i plotë i platformës.")}</p>
-        <p>{t("Modulet joaktive nuk shfaqen. Leads, të ardhurat dhe trendet nuk përfshihen.")}</p>
+        <p>{t("Shfaqen vetëm burimet ku ke qasje. Leads, të ardhurat dhe trendet nuk përfshihen.")}</p>
       </details>
       <p className="briefing-freshness">{t("Kontrolluar në")} <time dateTime={data.generatedAt}>{new Date(data.generatedAt).toLocaleString(language === "en" ? "en-GB" : "sq-AL", {
         ...(data.range ? { timeZone: data.timezone } : {}), hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit",

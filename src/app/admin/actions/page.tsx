@@ -27,10 +27,10 @@ export default async function ActionsPage({ searchParams }: { searchParams?: Pro
     return moduleId ? moduleRegistry[moduleId].icon : key === "business.provision" ? "businesses" : key === "product.create" ? "products" : "briefcase";
   };
   return (<>
-    <PageHeading eyebrow="Platforma" title="Modulet dhe aftësitë" description="Shiko çfarë bën secili modul dhe zgjidh paketat ku përfshihet." />
+    <PageHeading eyebrow="Platforma" title="Aftësitë e veçanta" description="Konfiguro aftësitë që kërkojnë leje të veçantë dhe paketat ku përfshihen." />
     <div className="policy-browser">
-      <nav className="policy-module-list" aria-label="Modulet dhe aftësitë">
-        <h2>Modulet dhe aftësitë</h2>
+      <nav className="policy-module-list" aria-label="Aftësitë e veçanta">
+        <h2>Aftësitë e veçanta</h2>
         {entries.map(([key, definition]) => (
           <Link key={key} href={`/admin/actions?module=${encodeURIComponent(key)}`} scroll={false}
             className="policy-module-link" aria-current={selected === key ? "page" : undefined}>

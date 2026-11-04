@@ -1,44 +1,47 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const read = vi.hoisted(() => vi.fn());
-const allowed = vi.hoisted(() => vi.fn());
-vi.mock("../modules/entitlements", () => ({ loadAllowedModules: allowed }));
+const m = vi.hoisted(() => ({ read: vi.fn(), allowed: vi.fn(), rpc: vi.fn() }));
+vi.mock("../modules/entitlements", () => ({ loadAllowedModules: m.allowed }));
 import { MODULE_IDS } from "../modules/types";
-vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: () => {
-  const q = { select: () => q, eq: () => q, maybeSingle: read }; return q;
+vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: m.rpc, from: () => {
+  const q = { select: () => q, eq: () => q, maybeSingle: m.read }; return q;
 } }) }));
-import { loadDashboardProfile } from "./service";
+import { loadDashboardProfile, loadNavigationProfile } from "./service";
 import { rebuildProfileFromModules } from "./generate";
-beforeEach(() => { read.mockReset(); allowed.mockResolvedValue([...MODULE_IDS]); });
-it.each([null, {}, { version: 1, source: "legacy", enabledModules: ["products"] }])("requires an explicit module profile for enforced tenants: %j", async dashboard_profile => {
-  read.mockResolvedValue({ data: { dashboard_profile }, error: null });
-  await expect(loadDashboardProfile("tenant", { requireExplicit: true })).rejects.toThrow("Konfirmo modulet");
-  await expect(loadDashboardProfile("tenant")).resolves.toHaveProperty("source", "legacy");
+beforeEach(() => { vi.clearAllMocks(); m.allowed.mockResolvedValue([...MODULE_IDS]); m.rpc.mockResolvedValue({ data: [], error: null }); });
+it.each([null, {}, { version: 1, source: "legacy", enabledModules: ["products"] }])("standard capabilities do not require activation: %j", async dashboard_profile => {
+  m.read.mockResolvedValue({ data: { dashboard_profile }, error: null });
+  expect((await loadDashboardProfile("tenant", { requireExplicit: true })).enabledModules).toEqual([...MODULE_IDS]);
 });
-it("does not fall back to permissive legacy modules on a missing column for enrolled tenants", async () => {
-  read.mockResolvedValue({ data: null, error: { code: "42703" } });
-  await expect(loadDashboardProfile("tenant", { requireExplicit: true })).rejects.toThrow();
-  await expect(loadDashboardProfile("tenant")).resolves.toHaveProperty("source", "legacy");
+it("does not hide database failures as an empty workspace", async () => {
+  m.read.mockResolvedValue({ data: null, error: { code: "unavailable" } });
+  await expect(loadDashboardProfile("tenant")).rejects.toThrow();
 });
-it("reads explicit current modules without restoring disabled dependencies", async () => {
-  read.mockResolvedValue({ data: { dashboard_profile: rebuildProfileFromModules(["products", "workflows"]) }, error: null });
-  const profile = await loadDashboardProfile("tenant", { requireExplicit: true });
-  expect(profile.enabledModules).toContain("products"); expect(profile.enabledModules).not.toContain("orders");
+it("hidden menus never remove capabilities", async () => {
+  const stored = { ...rebuildProfileFromModules(["products"]), hiddenModules: ["services"] };
+  m.read.mockResolvedValue({ data: { dashboard_profile: stored }, error: null });
+  m.rpc.mockResolvedValue({ data: ["services"], error: null });
+  const profile = await loadNavigationProfile("tenant");
+  expect(profile.enabledModules).toContain("services");
+  expect(profile.navigationItems).not.toContain("services");
+  expect(stored.enabledModules).not.toContain("services");
 });
-
-it("removes denied modules and dependent routes without modifying stored preferences", async () => {
-  const stored = rebuildProfileFromModules(["products", "orders", "services", "bookings", "calendar", "workflows"]);
-  read.mockResolvedValue({ data: { dashboard_profile: stored }, error: null });
-  allowed.mockResolvedValue(MODULE_IDS.filter(id => id !== "services" && id !== "products"));
-  const effective = await loadDashboardProfile("tenant");
-  for (const id of ["products", "orders", "services", "bookings", "calendar"]) {
-    expect(effective.enabledModules).not.toContain(id);
-    expect(effective.navigationItems).not.toContain(id);
-  }
-  expect(stored.enabledModules).toContain("products");
-  expect(effective.enabledModules).toContain("workflows");
+it("reveals the service section from persisted usage without changing preferences", async () => {
+  const stored = rebuildProfileFromModules([]);
+  m.read.mockResolvedValue({ data: { dashboard_profile: stored }, error: null });
+  expect((await loadNavigationProfile("tenant")).navigationItems).not.toContain("services");
+  m.rpc.mockResolvedValue({ data: ["services"], error: null });
+  expect((await loadNavigationProfile("tenant")).navigationItems).toContain("services");
+  expect(m.rpc).toHaveBeenCalledWith("business_used_modules", { p_business: "tenant" });
+  expect(stored.enabledModules).not.toContain("services");
 });
-it("fails closed when platform permissions cannot be read", async () => {
-  read.mockResolvedValue({ data: { dashboard_profile: null }, error: null });
-  allowed.mockRejectedValue(new Error("unavailable"));
+it("lets the owner show bookings while hiding the services menu", async () => {
+  m.read.mockResolvedValue({ data: { dashboard_profile: { version: 1, source: "manual", enabledModules: ["bookings"], hiddenModules: ["services"] } }, error: null });
+  const profile = await loadNavigationProfile("tenant");
+  expect(profile.navigationItems).toContain("bookings");
+  expect(profile.navigationItems).not.toContain("services");
+});
+it("fails closed when server capabilities cannot be read", async () => {
+  m.read.mockResolvedValue({ data: { dashboard_profile: null }, error: null });
+  m.allowed.mockRejectedValue(new Error("unavailable"));
   await expect(loadDashboardProfile("tenant")).rejects.toThrow("unavailable");
 });

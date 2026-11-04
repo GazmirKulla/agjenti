@@ -1,10 +1,11 @@
-import { loadAllowedModules } from "@/lib/dashboard/modules/entitlements";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { loadAllowedModules } from "@/lib/dashboard/modules/entitlements";
 import { getCapability, type CapabilityAvailability } from "./registry";
 import type { ReadinessFinding } from "./diagnostics";
 
 /** Explicit per-business rollout. Never derive this switch from a client request. */
 export function moduleEnforcementEnabled(businessId: string): boolean {
+  // Legacy readiness rollout only. This no longer chooses module permissions.
   return (process.env.MODULE_ENFORCEMENT_BUSINESS_IDS ?? "").split(",").map(id => id.trim()).filter(Boolean).includes(businessId);
 }
 
@@ -14,10 +15,10 @@ export class CapabilityEnforcementError extends Error {
 
 export async function runtimeModules(businessId: string): Promise<string[] | null> {
   try {
-    // Platform revocations always apply. Keep the existing staged rollout of
-    // workspace-selection enforcement for businesses that have not enrolled.
+    // Both readers now resolve the same server capability list. The legacy path
+    // avoids a presentation-profile read; neither enforces navigation choices.
     if (!moduleEnforcementEnabled(businessId)) return await loadAllowedModules(businessId);
-    return (await loadDashboardProfile(businessId, { requireExplicit: true })).enabledModules;
+    return (await loadDashboardProfile(businessId)).enabledModules;
   }
   catch { throw new CapabilityEnforcementError("unverified", "Nuk u verifikuan modulet e biznesit. Provo përsëri; progresi yt është ruajtur."); }
 }

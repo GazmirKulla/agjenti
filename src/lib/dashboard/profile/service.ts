@@ -11,6 +11,7 @@ import {
   rebuildProfileFromModules,
 } from "./generate";
 import { legacyDashboardProfile } from "./legacy";
+import { moduleRegistry, navigationOrder } from "../modules/registry";
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
@@ -84,7 +85,8 @@ export function parseDashboardProfile(value: unknown): DashboardProfile | null {
       raw.signals && typeof raw.signals === "object"
         ? (raw.signals as DashboardSignals)
         : undefined;
-    return rebuildProfileFromModules(enabledModules, signals);
+    return { ...presentationProfile(enabledModules, signals), source: raw.source,
+      hiddenModules: asStringArray(raw.hiddenModules).filter(isModuleId) };
   }
   return null;
 }
@@ -107,7 +109,6 @@ export async function loadDashboardProfile(
     throw new Error("Nuk u ngarkua profili i panelit.");
   }
   const profile = parseDashboardProfile(data?.dashboard_profile);
-  if (options?.requireExplicit && (!profile || profile.source === "legacy")) throw new Error("Konfirmo modulet e biznesit para aktivizimit të kontrolleve.");
   return applyModuleEntitlements(businessId, profile ?? legacyDashboardProfile);
 }
 
@@ -116,7 +117,8 @@ export async function saveDashboardProfile(
   profile: DashboardProfile,
 ): Promise<DashboardProfile> {
   const db = createServiceSupabase();
-  const permittedProfile = await applyModuleEntitlements(businessId, profile);
+  // Persist presentation preferences, never the expanded capability list.
+  const permittedProfile = profile;
   await db
     .from("businesses")
     .update({ dashboard_profile: permittedProfile, updated_at: new Date().toISOString() })
@@ -138,7 +140,32 @@ export async function persistGeneratedProfile(
 
 async function applyModuleEntitlements(businessId: string, profile: DashboardProfile) {
   const allowed = new Set(await loadAllowedModules(businessId));
-  const filtered = profile.enabledModules.filter(id => allowed.has(id));
-  if (filtered.length === profile.enabledModules.length) return profile;
-  return { ...rebuildProfileFromModules(filtered, profile.signals), source: profile.source };
+  return { ...profile, enabledModules: [...allowed],
+    navigationItems: profile.navigationItems.filter(id => allowed.has(id)),
+    mobileNavigationItems: profile.mobileNavigationItems.filter(id => allowed.has(id)) };
+}
+
+/** Navigation is presentation only. Successful writes become visible through usage,
+ * without mutating business settings or granting any additional permissions. */
+export async function loadNavigationProfile(businessId: string): Promise<DashboardProfile> {
+  const profile = await loadDashboardProfile(businessId);
+  const { data, error } = await createServiceSupabase().rpc("business_used_modules", { p_business: businessId });
+  if (error || !Array.isArray(data)) throw new Error("Nuk u ngarkua navigimi i biznesit.");
+  const hidden = new Set(profile.hiddenModules ?? []);
+  const visible = [...new Set([...profile.navigationItems, ...data.filter(isModuleId)])]
+    .filter(id => profile.enabledModules.includes(id) && !hidden.has(id));
+  // No dependency between showing two navigation links: execution validates its
+  // own prerequisites. The builder is used only for ordering/widgets here.
+  const presentation = presentationProfile(visible, profile.signals);
+  return { ...presentation, source: profile.source, hiddenModules: profile.hiddenModules,
+    enabledModules: profile.enabledModules,
+    navigationItems: navigationOrder.filter(id => visible.includes(id) || moduleRegistry[id].core),
+    mobileNavigationItems: presentation.mobileNavigationItems.filter(id => !hidden.has(id)) };
+}
+
+function presentationProfile(visible: ModuleId[], signals?: DashboardSignals): DashboardProfile {
+  const ordered = navigationOrder.filter(id => visible.includes(id) || moduleRegistry[id].core);
+  return { ...rebuildProfileFromModules(visible, signals), navigationItems: ordered,
+    mobileNavigationItems: ordered.filter(id => moduleRegistry[id].mobilePriority !== undefined)
+      .sort((a, b) => moduleRegistry[a].mobilePriority! - moduleRegistry[b].mobilePriority!).slice(0, 4) };
 }

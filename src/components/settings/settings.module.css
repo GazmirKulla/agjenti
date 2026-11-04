@@ -22,11 +22,6 @@
 .section p { color: var(--ink-muted); font-size: 14px; margin-bottom: 20px; line-height: 1.6; }
 .links { display: grid; gap: 8px; }
 .links a { padding: 12px 0; color: var(--accent); border-bottom: 1px solid var(--line); }
-.appearance { max-width: 560px; }
-.appearance :global(.personal-assistant-name) { display: grid; gap: 8px; }
-.appearance input:not([type=radio]) { padding: 12px; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; color: var(--ink); }
-.appearance fieldset { margin-block: 24px; }
-.appearance footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
 @media(max-width:1000px) { .body { grid-template-columns: 160px minmax(0,1fr); gap: 20px; } }
 @media(max-width:760px) {
   .heading { gap: 12px; padding-bottom: 16px; }.heading h1 { font-size: 24px; }.heading a { flex-shrink: 0; font-size: 12px; }

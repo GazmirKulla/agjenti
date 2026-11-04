@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth/request", () => ({ getRequestUser: mocks.user }));
 vi.mock("@/lib/tenant/access", () => ({ listMemberships: mocks.memberships }));
 vi.mock("@/lib/dashboard/profile/service", () => ({
-  loadDashboardProfile: mocks.profile,
+  loadNavigationProfile: mocks.profile,
 }));
 import { GET } from "./route";
 beforeEach(() => {
@@ -16,7 +16,7 @@ beforeEach(() => {
   mocks.memberships.mockResolvedValue({
     businesses: [{ id: "b1", slug: "one", name: "One" }],
   });
-  mocks.profile.mockResolvedValue({ enabledModules: ["products", "settings"] });
+  mocks.profile.mockResolvedValue({ enabledModules: ["products", "settings"], navigationItems: ["products", "settings"] });
 });
 it("requires a verified user before enumerating businesses", async () => {
   mocks.user.mockResolvedValue(null);

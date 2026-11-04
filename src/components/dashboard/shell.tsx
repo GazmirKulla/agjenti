@@ -288,7 +288,7 @@ export function AppShell({
                 <span className="nav-label">{admin ? item.label : t(item.label)}</span>
               </Link>
             );
-          }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} assistantName={assistant?.appearance.name} iconsOnly={iconRail} onNavigate={() => { setOpen(false); if (mobile) assistant?.setOpen(false); }} />}
+          }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} assistantName={assistant?.assistantName} iconsOnly={iconRail} onNavigate={() => { setOpen(false); if (mobile) assistant?.setOpen(false); }} />}
         </nav>
         <footer className="dashboard-sidebar-footer">
           {!admin ? <ProfilePopover key={pathname} base={base} name={userName || email || name} email={email} compact={iconRail} onNavigate={() => { setOpen(false); assistant?.setOpen(false); }} /> : <Link

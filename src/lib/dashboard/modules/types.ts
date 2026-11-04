@@ -71,6 +71,8 @@ export type DashboardProfile = {
   version: 1;
   source: "generated" | "manual" | "legacy";
   enabledModules: ModuleId[];
+  /** User navigation preferences, never authorization. */
+  hiddenModules?: ModuleId[];
   navigationItems: ModuleId[];
   mobileNavigationItems: ModuleId[];
   widgets: DashboardWidget[];

@@ -115,7 +115,7 @@ describe("R1 conversation-only declarations", () => {
     let state = (await turn("Quhem Nora Testi")).nextState;
     state = (await turn("Kam një dyqan lulesh online.", state)).nextState;
     state = (await turn("Instagramin e kam @lule_prova.", state)).nextState;
-    expect(state.context?.profile.name.value).toBe("Nora Testi");
+    expect(state.context?.profile.name?.value).toBe("Nora Testi");
     expect(state.customerDeclaredFacts?.business_type?.value).toBe("dyqan lulesh online");
     expect(state.customerDeclaredFacts?.instagram_handle?.value).toBe("@lule_prova");
     state = (await turn("Sa kushton shërbimi?", state)).nextState;
@@ -146,7 +146,7 @@ describe("R1 conversation-only declarations", () => {
     expect(recalled.conversationRouting?.process).toBe("information");
     expect(recalled.conversationRouting?.reason).not.toBe("resume_requires_intent");
     expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ message: "Më kujto emrin dhe Instagramin." }));
-    expect(recalled.nextState.context?.profile.name.value).toBe("Ana");
+    expect(recalled.nextState.context?.profile.name?.value).toBe("Ana");
     expect(recalled.nextState.customerDeclaredFacts?.instagram_handle?.value).toBe("lule_prova");
     expect(recalled.nextState.processes?.order?.snapshot).toEqual(paused.nextState.processes?.order?.snapshot);
     expect(recalled.nextState.processes?.order?.status).toBe("suspended");

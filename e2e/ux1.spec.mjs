@@ -240,23 +240,19 @@ test('knowledge context follows the displayed record and clears when creating a 
   expect(requests[1].context.entityId).toBeUndefined();
 });
 
-test('name persists after reload, is sent to the existing API and is isolated with history by user/business', async ({ page, context }) => {
+test('fixed name is sent to the existing API and history stays isolated by user/business', async ({ page, context }) => {
   const requests = [];
   await page.route('**/api/business-assistant?*', route => {
     requests.push(route.request().postDataJSON());
     return route.fulfill({ json: { message: 'Histori private sintetike për retail.' } });
   });
   await login(page);
-  await widget(page).getByRole('button', { name: 'Personalizo asistentin' }).click();
-  const settings = page.getByRole('dialog', { name: 'Asistenti yt, në stilin tënd.' });
-  await settings.getByLabel('Emri i asistentit').fill('Luna');
-  await settings.getByRole('button', { name: 'Ruaj pamjen', exact: true }).click();
   await page.reload();
-  await expect(widget(page)).toContainText('Luna');
-  await expect(chat(page)).toContainText('Luna — Asistenti yt');
+  await expect(widget(page)).toContainText('Asistenti AI');
+  await expect(chat(page)).toContainText('Asistenti AI — Asistenti yt');
   await send(page, 'Bisedë vetëm për retail');
   await expect(chat(page)).toContainText('Histori private sintetike për retail.');
-  expect(requests[0].assistantName).toBe('Luna');
+  expect(requests[0].assistantName).toBe('Asistenti AI');
   await page.goto(`/b/${appointment.slug}`);
   await expect(page).toHaveURL(`http://localhost:3103/b/${retail.slug}`); // no membership: existing server guard
   await context.clearCookies(); // switch authenticated synthetic owners; keep localStorage

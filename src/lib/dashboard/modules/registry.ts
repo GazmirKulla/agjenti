@@ -166,7 +166,7 @@ export const moduleDependencies: Record<ModuleId, ModuleDependencyRule> = {
   orders: { requiresAny: ["products"] },
   bookings: { requires: ["services"] },
   calendar: { requiresAny: ["bookings"] },
-  staff: { optionalFor: ["services", "bookings"] },
+  staff: { independent: true },
   catalogs: { independent: true },
   leads: { independent: true },
   customers: { independent: true },

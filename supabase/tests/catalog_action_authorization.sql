@@ -15,6 +15,17 @@ begin
 exception when raise_exception then return sqlerrm;
 end $$;
 
+-- Probe successful writes inside a subtransaction so policy cases stay independent.
+create function pg_temp.probe_catalog_write(b uuid,u uuid,rev integer,mode text,items jsonb) returns text language plpgsql as $$
+declare result text;
+begin
+ begin
+  result:=pg_temp.try_catalog_write(b,u,rev,mode,items);
+  if result='allowed' then raise exception 'rollback successful probe' using errcode='P9998'; end if;
+  return result;
+ exception when sqlstate 'P9998' then return 'allowed'; end;
+end $$;
+
 do $$
 declare
  b uuid:=gen_random_uuid(); other_b uuid:=gen_random_uuid(); u uuid:=gen_random_uuid();
@@ -31,32 +42,31 @@ begin
  perform public.save_visual_workflow(other_b,outsider,0,g,'draft');
  items:=jsonb_build_array(jsonb_build_object('name','Synthetic catalog product','external_id','synthetic-import','price_amount',10,'currency','EUR','product_type_id',t,'is_active',false));
 
- -- This is the original regression: valid tenant/member/modules, but the action
- -- itself is disabled. Both modes MUST reject before changing product or draft.
+ -- Standard create/import ignore historical package gates; actor permissions remain.
  update public.platform_actions set enabled=false where key='product.create';
  foreach mode in array array['create','import'] loop
   execute 'set local role service_role';
-  result:=pg_temp.try_catalog_write(b,u,(select revision from public.visual_workflows where business_id=b),mode,items);
+  result:=pg_temp.probe_catalog_write(b,u,(select revision from public.visual_workflows where business_id=b),mode,items);
   execute 'reset role';
-  if result<>'action_denied' then failures:=array_append(failures,mode||' returned '||result); end if;
+  if result<>'allowed' then failures:=array_append(failures,mode||' returned '||result); end if;
  end loop;
- if cardinality(failures)>0 then raise exception 'product.create bypass: %',array_to_string(failures,', '); end if;
- raise notice 'PASS: disabled global product.create rejects create and import';
+ if cardinality(failures)>0 then raise exception 'standard product.create blocked: %',array_to_string(failures,', '); end if;
+ raise notice 'PASS: historical global product.create flag does not block standard create/import';
  update public.platform_actions set enabled=true where key='product.create';
 
- -- Keep plan, tenant override and staff policy checks of the previous wrapper.
+ -- Historical package/tenant gates are ignored; staff permissions are enforced.
  for mode in select unnest(array['create','import']) loop
   update public.plan_actions set enabled=false where action_key='product.create';
   execute 'set local role service_role';
-  result:=pg_temp.try_catalog_write(b,u,1,mode,items);
+  result:=pg_temp.probe_catalog_write(b,u,1,mode,items);
   execute 'reset role';
-  if result<>'action_denied' then raise exception 'plan policy bypass: %',result; end if;
+  if result<>'allowed' then raise exception 'historical plan blocked standard create: %',result; end if;
   update public.plan_actions set enabled=true where action_key='product.create';
   insert into public.business_actions(business_id,action_key,enabled) values(b,'product.create',false);
   execute 'set local role service_role';
-  result:=pg_temp.try_catalog_write(b,u,1,mode,items);
+  result:=pg_temp.probe_catalog_write(b,u,1,mode,items);
   execute 'reset role';
-  if result<>'action_denied' then raise exception 'tenant policy bypass: %',result; end if;
+  if result<>'allowed' then raise exception 'historical tenant policy blocked standard create: %',result; end if;
   delete from public.business_actions where business_id=b and action_key='product.create';
   insert into public.business_action_settings(business_id,action_key,staff_allowed) values(b,'product.create',false);
   execute 'set local role service_role';
@@ -76,7 +86,7 @@ begin
  if result<>'unauthorized' then raise exception 'revoked membership bypass: %',result; end if;
  if exists(select 1 from public.products where business_id=b) or (select revision from public.visual_workflows where business_id=b)<>1
   then raise exception 'denial changed products or draft'; end if;
- raise notice 'PASS: plan, tenant policy, staff permission, cross-tenant and revoked membership; no writes on denial';
+ raise notice 'PASS: standard package/tenant independence, staff permission, cross-tenant and revoked membership; no writes on denial';
 
  -- Authorized create can activate discovery before any published workflow.
  items:=jsonb_set(items,'{0,is_active}','true');
@@ -96,7 +106,7 @@ begin
  -- Import upsert must retain its action guard too, not only new-row inserts.
  select to_jsonb(w) into before_graph from public.visual_workflows w where business_id=b;
  select jsonb_agg(to_jsonb(product) order by product.id) into before_products from public.products product where business_id=b;
- update public.platform_actions set enabled=false where key='product.create';
+ insert into public.business_action_settings(business_id,action_key,owner_allowed) values(b,'product.create',false);
  execute 'set local role service_role';
  result:=pg_temp.try_catalog_write(b,u,3,'import',jsonb_set(items,'{0,name}','"Must not change"'));
  execute 'reset role';

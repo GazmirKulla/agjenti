@@ -1,3 +1,4 @@
+import { workflowExecutionPolicy } from "../execution-policy";
 import { executeWorkflowAction, renderActionMessage } from "@/lib/actions/workflow";
 import { isStaffContactRequest, staffContactInstructions, staffHandoffReply } from "@/lib/conversations/handoff";
 import { isIsolatedExecution, recordExternalAction, withCollectionPolicy, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
@@ -26,12 +27,11 @@ type Legacy = (params: AgentTurnParams & { informational?: string; requireConfig
 export async function executeVisualTurn(params: AgentTurnParams, legacyReply: Legacy): Promise<AgentTurnResult> {
   if (informationalDecision(params.turnDecision)) params = { ...params, informationRequest: true, orderRequest: false, bookingRequest: false };
   if (params.visualPreview && (params.mode !== "test" || params.visualPreview.businessId !== params.businessId)) throw new Error("invalid_workflow_preview");
-  let previous = params.state?.visual;
-  if (previous?.status === "completed" && params.entityVersion !== undefined && params.entityVersion?.id !== previous.versionId) previous = undefined;
-  // Publishing the visual layer must not interrupt an existing linear product order.
-  if (!params.visualPreview && !params.informationRequest && !params.supportRequest && !params.bookingRequest && !params.orderStatusRequest && !previous && params.state?.product_id && params.state.step_key !== "order_ready") return legacyReply({ ...params, trainingVisualScope: undefined });
+  const selection = workflowExecutionPolicy(params);
+  if (selection.kind === "legacy_continuation") return legacyReply({ ...params, trainingVisualScope: undefined });
+  let previous = selection.previous;
   let active = previous && previous.status !== "completed" ? previous : null;
-  const loadedVersion = params.visualPreview ?? (params.entityVersion !== undefined ? params.entityVersion : await loadVisualVersion(params.businessId, previous?.versionId));
+  const loadedVersion = selection.selected !== undefined ? selection.selected : await loadVisualVersion(params.businessId, selection.pinnedId);
   if (!loadedVersion) {
     if (active) throw new Error("missing_workflow_version");
     return legacyReply({ ...params, trainingVisualScope: undefined });

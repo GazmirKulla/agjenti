@@ -1,29 +1,27 @@
-import { describe, expect, it } from "vitest";
-import { appearanceStorageKey, assistantActivity, defaultAppearance, parseAppearance } from "./appearance";
+import { afterEach, expect, it, vi } from "vitest";
+import { clearLegacyAssistantAppearance } from "./appearance";
 
-describe("personal assistant appearance", () => {
-  it.each([null, "bad JSON", "null", "[]", "42", '{"name":" ","avatar":"https://untrusted.test/avatar"}'])("safely reads invalid storage: %s", raw => {
-    expect(parseAppearance(raw)).toEqual(defaultAppearance);
+afterEach(() => vi.unstubAllGlobals());
+
+it("removes retired customization for every user/business and preserves unrelated storage", () => {
+  const values = new Map([
+    ["agjenti:personal-assistant:v1:u1:shop", "Luna"],
+    ["agjenti:personal-assistant:v1:u2:shop", "Migo"],
+    ["agjenti-theme", "dark"],
+    ["assistant-history", "conversation"],
+  ]);
+  vi.stubGlobal("localStorage", {
+    get length() { return values.size; },
+    key: (index: number) => [...values.keys()][index] ?? null,
+    removeItem: (key: string) => values.delete(key),
   });
-  it("accepts only cosmetic preferences and bounds the displayed name", () => {
-    expect(parseAppearance(JSON.stringify({ name: "  Luna  ", avatar: "mint", token: "not-identity", busy: true }))).toEqual({ name: "Luna", avatar: "mint" });
-    expect(parseAppearance(JSON.stringify({ name: "x".repeat(100), avatar: "lilac" })).name).toHaveLength(32);
-  });
-  it("namespaces preferences by both authenticated user and business without separator collisions", () => {
-    const keys = [appearanceStorageKey("u1", "b1"), appearanceStorageKey("u2", "b1"), appearanceStorageKey("u1", "b2"), appearanceStorageKey("u:b", "c"), appearanceStorageKey("u", "b:c")];
-    expect(new Set(keys).size).toBe(keys.length);
-  });
+  clearLegacyAssistantAppearance();
+  expect([...values.keys()]).toEqual(["agjenti-theme", "assistant-history"]);
+  clearLegacyAssistantAppearance();
+  expect(values.size).toBe(2);
 });
 
-describe("existing conversation activity projection", () => {
-  it.each([
-    [true, false, false, "available"],
-    [true, true, false, "working"],
-    [true, false, true, "approval"],
-    [true, true, true, "working"],
-    [false, false, false, "offline"],
-    [false, true, true, "offline"],
-  ] as const)("online=%s busy=%s awaiting=%s → %s", (online, busy, awaiting, kind) => {
-    expect(assistantActivity(online, busy, awaiting).kind).toBe(kind);
-  });
+it("does not prevent the assistant from loading when browser storage is disabled", () => {
+  vi.stubGlobal("localStorage", { get length() { throw new Error("Storage denied"); } });
+  expect(() => clearLegacyAssistantAppearance()).not.toThrow();
 });

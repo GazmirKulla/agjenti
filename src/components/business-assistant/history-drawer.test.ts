@@ -4,17 +4,12 @@ import { expect, it, vi } from "vitest";
 import { AssistantHistoryDrawer } from "./history-drawer";
 import { WorkspaceNavigation } from "@/components/dashboard/workspace-navigation";
 import { organizeWorkspace } from "@/lib/dashboard/navigation/workspace";
-import { defaultAppearance, parseAppearance } from "./appearance";
 vi.mock("./history-drawer.css", () => ({}));
 vi.mock("@/components/dashboard/workspace-navigation.module.css", () => ({ default: {} }));
 
 const props = { open: true, mobile: false, assistantName: "Aria", businessName: "Dyqani",
   busy: false, loading: false, warning: "", onClose: vi.fn(), onNew: vi.fn(), onSelect: vi.fn(),
   onRename: vi.fn(), onDelete: vi.fn(), threads: [] };
-it("uses a generic default and preserves independently selected display names", () => {
-  expect(defaultAppearance.name).toBe("Asistenti AI");
-  for (const name of ["Migo", "Aria"]) expect(parseAppearance(JSON.stringify({ name, avatar: "mint" })).name).toBe(name);
-});
 it("renders private history within the workspace, with no second modal on desktop", () => {
   const html = renderToStaticMarkup(h(AssistantHistoryDrawer, props));
   expect(html).toContain('role="complementary"');
