@@ -20,8 +20,8 @@ begin
  select * into j from claim_panel_chat(b,actor,stream);
  assert j.id is not null;
  assert not exists(select 1 from claim_panel_chat(b,actor,stream));
- insert into visual_workflows(business_id,draft,enabled) values(b,'{"version":1,"name":"Panel signup","nodes":[],"edges":[]}',true);
  insert into visual_workflow_versions(id,business_id,graph) values(v,b,'{"version":1,"name":"Panel signup","nodes":[{"id":"create","kind":"action","config":{"action":{"actionKey":"business.provision"}}}],"edges":[]}');
+ insert into visual_workflows(business_id,draft,enabled,published_version_id) values(b,'{"version":1,"name":"Panel signup","nodes":[],"edges":[]}',true,v);
  insert into business_actions(business_id,action_key,enabled) values(b,'business.provision',true);
  denied:=false; begin perform provision_business_invitation(b,null,'panel-test','{"name":"Panel target","email":"panel-recipient@test.invalid"}',repeat('c',64),'encrypted',v,'create',c,jsonb_build_object('jobId',j.id,'leaseToken',j.lease_token,'revision',0)); exception when others then denied:=sqlerrm='unauthorized'; end; assert denied, 'Operator privilege must not grant automation permission';
  insert into business_action_settings(business_id,action_key,automation_allowed) values(b,'business.provision',true);
