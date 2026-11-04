@@ -77,3 +77,17 @@ live.each([
   for (const key of expected) expect(review.capabilityKeys).toContain(key);
   if (!expected.length) expect(review.capabilityKeys.filter(key => ["inventory.check", "back_in_stock.notify", "schedule.trigger"].includes(key))).toEqual([]);
 });
+
+live.each([
+  ["Ndrysho workflow-n që të përdorë emailin ekzistues dhe ruaje draftin.", "Ruaj draftin e ndryshuar", "authoring"],
+  ["Update the workflow to reuse the existing email and save the draft.", "Save the edited workflow", "authoring"],
+  ["The customer-facing workflow must save a new workflow for every customer.", "Save a new workflow during each customer conversation", "runtime"],
+])("distinguishes authoring from runtime without a capability-name blacklist: %s", async (request, description, scope) => {
+  const result = await reviewWorkflowSemantics(request, undefined, [{ description, capabilityKeys: ["workflow.save"] }]);
+  if (scope === "authoring") {
+    expect(result.authoringBehaviorIndexes).toEqual([0]);
+    expect(result.capabilityKeys).not.toContain("workflow.save");
+  } else {
+    expect(result.authoringBehaviorIndexes).toEqual([]);
+  }
+});

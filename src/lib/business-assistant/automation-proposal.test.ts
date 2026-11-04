@@ -124,3 +124,27 @@ it("accepts only bounded intent and ignores model-supplied approval/readiness", 
   expect(value).not.toHaveProperty("canSaveDraft");
   expect(() => readAutomationIntent({ requestedBehaviors: "invalid" })).toThrow();
 });
+
+it("does not block a valid draft on an owner-authoring key or a missing runtime permission", async () => {
+  const data = input([]);
+  data.intent.requestedBehaviors = [
+    { description: "Ruaj ndryshimin", capabilityKeys: ["workflow.save"] },
+    { description: "Krijo ftesën pas konfirmimit", capabilityKeys: ["business.provision"] },
+  ];
+  const snapshot = structuredClone(data.intent);
+  vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ authoringBehaviorIndexes: [0], capabilityKeys: [], evidence: [] });
+  assess.mockResolvedValue([{ capabilityKey: "business.provision", status: "needs_setup", missingRequirements: ["business_provision_automation_permission"] }]);
+  const result = await buildAutomationProposal(data);
+  expect(result).toMatchObject({ canSaveDraft: true, readiness: "needs_setup", unsupportedActions: [] });
+  expect(result.requiredCapabilities.map(c => c.capabilityKey)).toEqual(["business.provision"]);
+  expect(data.intent).toEqual(snapshot);
+});
+it("still rejects workflow.save when the requested workflow itself must execute it", async () => {
+  const data = input(["workflow.save"]);
+  vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ authoringBehaviorIndexes: [], capabilityKeys: ["workflow.save"], evidence: [] });
+  expect(await buildAutomationProposal(data)).toMatchObject({ canSaveDraft: false, unsupportedActions: ["workflow.save"] });
+});
+it("does not discard runtime requirements when semantic classification fails", async () => {
+  vi.mocked(reviewWorkflowSemantics).mockRejectedValueOnce(new Error("invalid evidence"));
+  expect(await buildAutomationProposal(input(["workflow.save"]))).toMatchObject({ canSaveDraft: false });
+});

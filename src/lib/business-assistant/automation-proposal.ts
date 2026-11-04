@@ -63,13 +63,15 @@ type ProposalInput = { businessId: string; userId: string; request: string; inte
 );
 
 export async function buildAutomationProposal(input: ProposalInput): Promise<AutomationProposal> {
-  const behaviors = [...(input.intent?.requestedBehaviors ?? [{ description: input.request.slice(0, 500), capabilityKeys: [] }])];
+  const behaviors = (input.intent?.requestedBehaviors ?? [{ description: input.request.slice(0, 500), capabilityKeys: [] }]).map(b => ({ ...b, capabilityKeys: [...b.capabilityKeys] }));
   const workflow = input.mode === "plan" ? undefined : input;
   const enforced = Boolean(workflow) && moduleEnforcementEnabled(input.businessId);
   let semanticUnavailable = false;
   let semanticKeys: string[] = [];
   let semanticEvidence: WorkflowSemanticReview["evidence"] = [];
-  try { const review = await reviewWorkflowSemantics(input.request, workflow?.after); semanticKeys = review.capabilityKeys; semanticEvidence = review.evidence; }
+  try { const review = await reviewWorkflowSemantics(input.request, workflow?.after, behaviors);
+    for (const index of review.authoringBehaviorIndexes ?? []) behaviors[index].capabilityKeys = [];
+    semanticKeys = review.capabilityKeys; semanticEvidence = review.evidence; }
   catch { semanticUnavailable = true; }
   const inferred = [...new Set([...semanticKeys, ...(workflow ? graphCapabilities(workflow.before, workflow.after) : []), ...(enforced && workflow ? graphRequirements(workflow.after).capabilityKeys : [])])];
   for (const key of inferred) if (!behaviors.some(b => b.capabilityKeys.includes(key))) behaviors.push({ description: getCapability(key)?.description ?? `Aftësi e kërkuar: ${key}`, capabilityKeys: [key] });
@@ -126,7 +128,7 @@ export function automationMessage(proposal: AutomationProposal): string {
     ...(proposal.unsupportedActions.length ? proposal.requiredCapabilities.filter(c => c.status === "ready" || c.status === "needs_setup").map(c => `Mund të propozohet veçmas (${labels[c.status]}): ${getCapability(c.capabilityKey)!.description}`) : []),
     ...proposal.clarificationQuestions,
     ...proposal.validationFindings.filter(f => f.severity === "error").map(f => f.message),
-    ...(proposal.missingRequirements.length ? [`Konfigurime që mungojnë: ${proposal.missingRequirements.join(", ")}.`] : []),
+    ...(proposal.missingRequirements.length ? [`Konfigurime që mungojnë për aktivizim (jo leje për ruajtjen e draftit): ${proposal.missingRequirements.join(", ")}.`] : []),
   ].join("\n");
 }
 
@@ -143,4 +145,4 @@ export async function recheckAutomation(businessId: string, userId: string, prop
   }
 }
 
-export const automationInstructions = `For workflow_draft, automation_plan and automation questions return automation with every requested behavior, required capabilityKeys, assumptions and clarificationQuestions. For other actions use automation=null. Readiness is computed by the server, never invent it. Include unsupported behaviors even when proposing a supported subset. product.search and product.recommend concern catalog data only, never live inventory. inventory.check, back_in_stock.notify, schedule.trigger and arbitrary external integrations are unsupported. Never encode them as knowledge prompts, collect fields, labels, new node kinds or custom conditions. If any behavior is unsupported, explain the complete automation cannot run and ask the owner to explicitly request only the supported subset; never infer consent from history. Ambiguous scope must produce clarificationQuestions and no changes. No scripts, tools or credentials in graph configuration. Existing patch operations and draft/publish rules remain unchanged.`;
+export const automationInstructions = `For workflow_draft, automation_plan and automation questions return automation with every requested CUSTOMER-RUNTIME behavior, required capabilityKeys, assumptions and clarificationQuestions. Editing, saving or publishing the configuration by the owner is an authoring operation, not a runtime capability; do not invent capability keys for it. Describe a pure configuration edit with an empty capabilityKeys array. If the requested workflow itself must edit configurations during customer conversations, assess that runtime behavior honestly as unsupported. For other actions use automation=null. Readiness is computed by the server, never invent it. Include unsupported behaviors even when proposing a supported subset. product.search and product.recommend concern catalog data only, never live inventory. inventory.check, back_in_stock.notify, schedule.trigger and arbitrary external integrations are unsupported. Never encode them as knowledge prompts, collect fields, labels, new node kinds or custom conditions. If any behavior is unsupported, explain the complete automation cannot run and ask the owner to explicitly request only the supported subset; never infer consent from history. Ambiguous scope must produce clarificationQuestions and no changes. No scripts, tools or credentials in graph configuration. Existing patch operations and draft/publish rules remain unchanged.`;

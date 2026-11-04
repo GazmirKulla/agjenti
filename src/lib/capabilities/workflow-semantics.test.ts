@@ -11,13 +11,13 @@ it.each([
   ["Voglio sapere cosa significa inventario, non verificarlo", []],
   ["Préviens le client quand le produit redevient disponible", ["back_in_stock.notify"]],
 ])("uses structured contextual observations, including negation: %s", async (request, keys) => {
-  create.mockResolvedValue({ output_text: JSON.stringify({ evidence: keys.map(capabilityKey => ({ capabilityKey, sourceId: "request", quote: request })) }) });
+  create.mockResolvedValue({ output_text: JSON.stringify({ behaviors: [], evidence: keys.map(capabilityKey => ({ scope: "runtime", capabilityKey, sourceId: "request", quote: request })) }) });
   expect((await reviewWorkflowSemantics(request)).capabilityKeys).toEqual(keys);
   expect(create).toHaveBeenCalledTimes(1);
 });
 it("rejects invented sources, ungrounded quotes and malformed output", async () => {
-  for (const evidence of [null, [{ sourceId: "node:foreign", quote: "x", capabilityKey: "inventory.check" }], [{ sourceId: "request", quote: "invented", capabilityKey: "inventory.check" }]]) {
-    create.mockResolvedValue({ output_text: JSON.stringify({ evidence }) });
+  for (const evidence of [null, [{ scope: "runtime", sourceId: "node:foreign", quote: "x", capabilityKey: "inventory.check" }], [{ scope: "runtime", sourceId: "request", quote: "invented", capabilityKey: "inventory.check" }]]) {
+    create.mockResolvedValue({ output_text: JSON.stringify({ behaviors: [], evidence }) });
     await expect(reviewWorkflowSemantics("Hello", emptyVisualGraph())).rejects.toThrow();
   }
 });
@@ -28,4 +28,25 @@ it("fails closed when the model is missing or unavailable, with no phrase fallba
   process.env.OPENAI_API_KEY = "test-only";
   create.mockRejectedValue(new Error("provider unavailable"));
   await expect(reviewWorkflowSemantics("Check inventory")).rejects.toThrow();
+});
+
+it("separates owner authoring from runtime requirements using referenced evidence", async () => {
+  const request = "Ruaje ndryshimin e workflow-t; klienti duhet vetëm të kalojë te stafi.";
+  const behaviors = [{ description: "Ruaj workflow-n", capabilityKeys: ["workflow.save"] }, { description: "Kalo te stafi", capabilityKeys: ["staff.handoff"] }];
+  create.mockResolvedValue({ output_text: JSON.stringify({ behaviors: [
+    { index: 0, scope: "authoring", quote: "Ruaj workflow-n" }, { index: 1, scope: "runtime", quote: "Kalo te stafi" },
+  ], evidence: [{ scope: "authoring", sourceId: "request", quote: "Ruaje ndryshimin e workflow-t", capabilityKey: "workflow.save" }] }) });
+  expect(await reviewWorkflowSemantics(request, undefined, behaviors)).toMatchObject({ authoringBehaviorIndexes: [0], capabilityKeys: [] });
+});
+it("does not allow a candidate's operational claims to be dismissed as owner edits", async () => {
+  const graph = emptyVisualGraph(); graph.nodes[1].config.prompt = "Save a workflow for each customer";
+  create.mockResolvedValue({ output_text: JSON.stringify({ behaviors: [], evidence: [{ scope: "authoring", sourceId: "node:end", quote: "Save a workflow", capabilityKey: "workflow.save" }] }) });
+  await expect(reviewWorkflowSemantics("", graph)).rejects.toThrow("evidence");
+});
+it("rejects missing, out-of-range or ungrounded behavior classifications", async () => {
+  const behaviors = [{ description: "Save draft", capabilityKeys: ["workflow.save"] }];
+  for (const scopes of [[], [{ index: 8, scope: "authoring", quote: "Save draft" }], [{ index: 0, scope: "authoring", quote: "Invented" }]]) {
+    create.mockResolvedValue({ output_text: JSON.stringify({ behaviors: scopes, evidence: [] }) });
+    await expect(reviewWorkflowSemantics("Save draft", undefined, behaviors)).rejects.toThrow();
+  }
 });
