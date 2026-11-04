@@ -1,5 +1,5 @@
 import type { CapabilityAssessment } from "./registry";
-import { nodeCapabilityKeys, flowCapabilityKeys, unsupportedRequestKeys } from "./graph";
+import { nodeCapabilityKeys, flowCapabilityKeys } from "./graph";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
 
 export type ReadinessFinding = {
@@ -26,6 +26,9 @@ const requirements: Record<string, string> = {
 };
 const moduleKeys = new Set(["products", "orders", "workflows", "knowledge", "bookings", "services", "staff", "inbox"]);
 const remediations: Record<string, string> = {
+  semantic_review_unavailable: "Kërko rivlerësimin nga asistenti kur shërbimi AI të jetë i disponueshëm. Versioni aktiv mbetet i pandryshuar.",
+  publication_limits: "Lexo kufijtë e provës dhe mirato publikimin vetëm nëse konfigurimi përputhet me qëllimin tënd. Mund ta provosh më parë në bisedën e provës.",
+  limitations_changed: "Kërko rishqyrtim të publikimit për versionin aktual.",
   unauthorized: "Rihyr dhe kërko qasje në biznesin përkatës; mos përdor miratim nga një tenant tjetër.",
   stale_revision: "Rifresko draftin dhe gjenero përsëri propozimin, simulimin dhe miratimin.",
   snapshot_changed: "Rifresko draftin/versionin e publikuar dhe përsërit shqyrtimin.",
@@ -54,7 +57,7 @@ export function capabilityFinding(capability: CapabilityAssessment, graph?: Visu
   const missing = (capability.missingRequirements ?? []).map(r => Object.hasOwn(requirements, r) || r.startsWith("module:") && moduleKeys.has(r.slice(7)) ? r : "configuration_review_required");
   const unsupported = capability.status === "unsupported";
   const affected = graph ? [...new Set([
-    ...graph.nodes.filter(n => nodeCapabilityKeys(n).includes(key) || unsupportedRequestKeys(`${n.label} ${n.config.prompt ?? ""} ${n.config.fieldKey ?? ""} ${n.config.value ?? ""}`).includes(key)).map(n => n.id),
+    ...graph.nodes.filter(n => nodeCapabilityKeys(n).includes(key)).map(n => n.id),
     ...(graph.version === 2 ? graph.flows.filter(f => flowCapabilityKeys(f).includes(key)).flatMap(f => f.nodeIds) : []),
   ])] : [];
   return readinessFinding(unsupported ? "unsupported_capability" : "capability_not_ready", `${key} → ${missing.join(", ") || (unsupported ? "Aftësi e pambështetur" : "Kërkohet verifikim")}`, {

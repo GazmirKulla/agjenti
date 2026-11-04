@@ -8,6 +8,24 @@ import type { SimulationReport } from "./simulation-types";
 import type { PublicationApproval, PublicationReadiness } from "./publication-types";
 import { capabilityFinding, readinessFinding } from "@/lib/capabilities/diagnostics";
 
+/** Known limits of the local simulator may be reviewed, never relabelled PASS.
+ * Unknown missing evidence, failures and incomplete runs remain blocking. */
+export function reviewableSimulationLimitations(simulation: SimulationReport): string[] | null {
+  if (simulation.result !== "UNVERIFIED" || !simulation.scenarios.length) return null;
+  const limitations: string[] = [];
+  for (const scenario of simulation.scenarios) {
+    if (scenario.result === "PASS" && scenario.executionCount > 0) continue;
+    if (scenario.result !== "UNVERIFIED" || !scenario.validationFindings.length) return null;
+    const hub = scenario.scenarioId === "hub_unverified" && scenario.category === "coverage"
+      && scenario.validationFindings.every(f => f.code === "hub_unverified");
+    const external = scenario.executionCount > 0 && scenario.attemptedActions.length > 0
+      && scenario.validationFindings.every(f => f.code === "external_action_not_executed" || f.code === "baseline_unverified");
+    if (!hub && !external) return null;
+    limitations.push(...scenario.validationFindings.map(f => `${scenario.scenarioId}:${f.code}:${f.nodeId ?? ""}`));
+  }
+  return limitations.length ? [...new Set(limitations)].sort() : null;
+}
+
 /** Server policy, not an authorization API. Evidence and identities MUST be loaded on the server. */
 export function evaluatePublicationPolicy(p: {
   mode: PublicationReadiness["mode"]; businessId: string; userId: string; authorized: boolean;
@@ -55,11 +73,18 @@ export function evaluatePublicationPolicy(p: {
   if (!simulation || !p.proposalId || !matchesSimulationBinding(simulation, p.proposalId, p.revision, graph))
     return block("stale_proposal", "simulation_mismatch", "Simulimi nuk i përket këtij grafi ose revisioni. Përgatite propozimin përsëri.");
   const critical = simulation.scenarios.filter(s => s.critical);
-  result.findings.push(...critical.filter(s => s.result !== "PASS").flatMap(s => s.validationFindings.map(f => readinessFinding(f.code, f.message, f))));
+  const diagnostics = critical.filter(s => s.result !== "PASS").flatMap(s => s.validationFindings);
+  result.findings.push(...new Map(diagnostics.map(f => [`${f.code}:${f.nodeId ?? ""}:${f.capabilityKey ?? ""}`, readinessFinding(f.code, f.message, f)])).values());
   if (simulation.result === "FAIL" || critical.some(s => s.result === "FAIL")) return block("simulation_failed", "simulation_failed", "Simulimi dështoi. Kontrollo skenarët dhe hapat e shënuar.", "FAIL");
   if (simulation.result === "BLOCKED" || critical.some(s => s.result === "BLOCKED")) return block("blocked", "simulation_blocked", "Simulimi është i bllokuar. Plotëso kërkesat përpara publikimit.");
-  if (!critical.length || simulation.result !== "PASS" || !simulation.canPublish || critical.some(s => s.result !== "PASS" || s.executionCount < 1))
-    return block("unverified_external_action", "simulation_unverified", "Simulimi nuk provoi të gjithë skenarët kritikë. Veprimet e jashtme ose të paverifikuara nuk lejojnë publikim nga asistenti.", "UNVERIFIED");
+  const limitations = reviewableSimulationLimitations(simulation);
+  if (!limitations && (!critical.length || simulation.result !== "PASS" || !simulation.canPublish || critical.some(s => s.result !== "PASS" || s.executionCount < 1)))
+    return block("unverified_external_action", "simulation_unverified", "Prova është e paplotë ose mungon evidenca e ekzekutimit. Publikimi nuk lejohet.", "UNVERIFIED");
+  if (limitations) {
+    result.result = "UNVERIFIED";
+    result.limitations = limitations;
+    result.findings.push(readinessFinding("publication_limits", "Struktura dhe konfigurimi u kontrolluan. Simulimi nuk provoi përzgjedhjen nga AI, përgjigjet apo rezultatet e shërbimeve reale. Miratimi publikon këtë konfigurim me këta kufij; nuk është garanci e sjelljes. Provoje në bisedën e provës."));
+  }
   if (!p.confirming) {
     result.status = "approval_required"; result.canRequestApproval = true;
     result.findings.push({ code: "approval_required", message: "Gati për publikim sipas kontrolleve lokale. Kërkohet miratimi yt; ende nuk është publikuar." }); return result;
@@ -68,5 +93,7 @@ export function evaluatePublicationPolicy(p: {
   if (!a || a.businessId !== p.businessId || a.userId !== p.userId || !p.requestId || a.requestId !== p.requestId || !Number.isFinite(a.expires) || a.expires <= Date.now() ||
       a.publishedVersionId !== (p.publishedVersionId ?? null) || !matchesSimulationBinding(a, p.proposalId, p.revision, graph))
     return block("stale_proposal", "approval_mismatch", "Miratimi ka skaduar ose nuk i përket këtij propozimi, grafi dhe biznesi. Përgatite përsëri.");
+  if (limitations && JSON.stringify(a.acknowledgedLimitations) !== JSON.stringify(limitations))
+    return block("stale_proposal", "limitations_changed", "Kufijtë e provës nuk janë miratuar ose kanë ndryshuar. Rishqyrto publikimin.");
   result.canPublish = true; return result;
 }

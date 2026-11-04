@@ -3,6 +3,7 @@ import {
   validateVisualGraph,
   nodeLabels,
   upgradeVisualGraph,
+  emptyVisualGraph,
 } from "@/lib/workflows/visual/model";
 import type {
   VisualGraph,
@@ -11,6 +12,7 @@ import type {
   VisualWorkspace,
   VisualFlow,
 } from "@/lib/workflows/visual/types";
+import { removeVisualFlow } from "@/lib/workflows/visual/remove-flow";
 import { AssistantError, type Preview } from "./model";
 import type { VisualBindingCatalog } from "@/lib/workflows/visual/bindings";
 import type { SemanticChangeSummary } from "./semantic-summary";
@@ -28,6 +30,8 @@ export type WorkflowCard = {
 };
 export type Operation =
   | { op: "upgrade" }
+  | { op: "reset"; name: string; evidence: string }
+  | { op: "remove_process"; id: string }
   | { op: "put_flow"; flow: VisualFlow }
   | { op: "remove_flow"; id: string }
   | { op: "rename"; name: string }
@@ -36,44 +40,61 @@ export type Operation =
   | { op: "put_edge"; edge: VisualEdge }
   | { op: "remove_edge"; id: string };
 
-/** Apply only explicit operations; never replace unrelated parts of a graph. */
+/** Invalid model-authored edits may be repaired before any ticket or write exists. */
+export class WorkflowProposalError extends AssistantError {}
+
+/** Apply explicit operations to a copy; replacement is always visible in the preview. */
 export function applyWorkflowOperations(
   before: VisualGraph,
   input: string,
+  request?: string,
 ): VisualGraph {
   let operations: Operation[];
   try {
     operations = JSON.parse(input);
   } catch {
-    throw new AssistantError("Ndryshimet e rrjedhës nuk u kuptuan.");
+    throw new WorkflowProposalError("Ndryshimet e rrjedhës nuk u kuptuan.");
   }
   if (
     !Array.isArray(operations) ||
     !operations.length ||
     operations.length > 96
   )
-    throw new AssistantError(
+    throw new WorkflowProposalError(
       "Kërko deri në 96 ndryshime të rrjedhës njëherësh.",
     );
   let graph = structuredClone(before);
+  let resetScaffold = false;
   for (const operation of operations) {
     if (!operation || typeof operation !== "object")
-      throw new AssistantError("Veprim i pavlefshëm në rrjedhë.");
-    const allowed: Record<string, string[]> = { upgrade: ["op"], rename: ["op", "name"], put_node: ["op", "node"], put_edge: ["op", "edge"], put_flow: ["op", "flow"], remove_node: ["op", "id"], remove_edge: ["op", "id"], remove_flow: ["op", "id"] };
+      throw new WorkflowProposalError("Veprim i pavlefshëm në rrjedhë.");
+    const allowed: Record<string, string[]> = { upgrade: ["op"], reset: ["op", "name", "evidence"], remove_process: ["op", "id"], rename: ["op", "name"], put_node: ["op", "node"], put_edge: ["op", "edge"], put_flow: ["op", "flow"], remove_node: ["op", "id"], remove_edge: ["op", "id"], remove_flow: ["op", "id"] };
     if (!Object.hasOwn(allowed, operation.op) || Object.keys(operation).some(key => !allowed[operation.op].includes(key)))
-      throw new AssistantError("Ky veprim nuk mbështetet për rrjedhën.");
+      throw new WorkflowProposalError("Ky veprim nuk mbështetet për rrjedhën.");
     if (operation.op === "put_node" && operation.node && (Object.keys(operation.node).some(key => !["id", "kind", "label", "position", "config"].includes(key)) || Object.keys(operation.node.config ?? {}).some(key => !["action", "prompt", "fieldKey", "fieldType", "condition", "value"].includes(key))))
-      throw new AssistantError("Konfigurimi përmban një veprim që nuk mbështetet.");
+      throw new WorkflowProposalError("Konfigurimi përmban një veprim që nuk mbështetet.");
     if (operation.op === "put_edge" && operation.edge && Object.keys(operation.edge).some(key => !["id", "source", "target", "port"].includes(key)))
-      throw new AssistantError("Lidhja përmban konfigurim që nuk mbështetet.");
+      throw new WorkflowProposalError("Lidhja përmban konfigurim që nuk mbështetet.");
     if (operation.op === "put_flow" && operation.flow && Object.keys(operation.flow).some(key => !["id", "label", "kind", "entryNodeId", "nodeIds", "productIds", "serviceIds"].includes(key)))
-      throw new AssistantError("Procesi përmban konfigurim që nuk mbështetet.");
+      throw new WorkflowProposalError("Procesi përmban konfigurim që nuk mbështetet.");
     switch (operation.op) {
+      case "reset":
+        if (operation !== operations[0] || typeof operation.name !== "string" || !operation.name.trim() || operation.name.length > 120 || typeof operation.evidence !== "string" || !operation.evidence.trim() || !request?.includes(operation.evidence))
+          throw new WorkflowProposalError("Rindërtimi kërkon referencë të saktë te kërkesa aktuale dhe duhet të jetë veprimi i parë.");
+        graph = { ...emptyVisualGraph(), name: operation.name };
+        resetScaffold = true;
+        break;
+      case "remove_process": {
+        const result = removeVisualFlow(graph, operation.id);
+        if (!result.graph) throw new WorkflowProposalError(result.error);
+        graph = result.graph;
+        break;
+      }
       case "upgrade":
         graph = upgradeVisualGraph(graph);
         break;
       case "put_flow": {
-        if (!operation.flow?.id) throw new AssistantError("Mungon procesi i rrjedhës.");
+        if (!operation.flow?.id) throw new WorkflowProposalError("Mungon procesi i rrjedhës.");
         graph = upgradeVisualGraph(graph);
         const index = graph.flows.findIndex(flow => flow.id === operation.flow.id);
         if (index < 0) graph.flows.push(operation.flow);
@@ -85,7 +106,7 @@ export function applyWorkflowOperations(
         break;
       }
       case "remove_flow": {
-        if (graph.version !== 2 || !graph.flows.some(flow => flow.id === operation.id)) throw new AssistantError("Procesi nuk ekziston.");
+        if (graph.version !== 2 || !graph.flows.some(flow => flow.id === operation.id)) throw new WorkflowProposalError("Procesi nuk ekziston.");
         graph.flows = graph.flows.filter(flow => flow.id !== operation.id);
         break;
       }
@@ -94,7 +115,7 @@ export function applyWorkflowOperations(
         break;
       case "put_node": {
         if (!operation.node?.id)
-          throw new AssistantError("Mungon hapi i rrjedhës.");
+          throw new WorkflowProposalError("Mungon hapi i rrjedhës.");
         const index = graph.nodes.findIndex((n) => n.id === operation.node.id);
         if (index < 0) graph.nodes.push(operation.node);
         else graph.nodes[index] = operation.node;
@@ -103,7 +124,7 @@ export function applyWorkflowOperations(
       case "remove_node": {
         const node = graph.nodes.find((n) => n.id === operation.id);
         if (!node || node.kind === "start")
-          throw new AssistantError(
+          throw new WorkflowProposalError(
             "Hapi nuk ekziston ose është fillimi i rrjedhës.",
           );
         graph.nodes = graph.nodes.filter((n) => n.id !== operation.id);
@@ -115,7 +136,7 @@ export function applyWorkflowOperations(
       }
       case "put_edge": {
         if (!operation.edge?.id)
-          throw new AssistantError("Mungon lidhja e rrjedhës.");
+          throw new WorkflowProposalError("Mungon lidhja e rrjedhës.");
         // One outgoing edge per port; replacing it does not touch other branches.
         graph.edges = graph.edges.filter(
           (e) =>
@@ -130,16 +151,23 @@ export function applyWorkflowOperations(
       }
       case "remove_edge":
         if (!graph.edges.some((e) => e.id === operation.id))
-          throw new AssistantError("Lidhja nuk ekziston.");
+          throw new WorkflowProposalError("Lidhja nuk ekziston.");
         graph.edges = graph.edges.filter((e) => e.id !== operation.id);
         break;
       default:
-        throw new AssistantError("Ky veprim nuk mbështetet për rrjedhën.");
+        throw new WorkflowProposalError("Ky veprim nuk mbështetet për rrjedhën.");
     }
   }
+  // reset supplies a neutral start/end scaffold. If the owner-selected new
+  // entry is terminal, its unused, untouched scaffold end is not a process.
+  // Never prune an existing business node or a node explicitly authored here.
+  if (resetScaffold && !operations.some(op => op.op === "put_node" && op.node.id === "end")
+      && !graph.edges.some(edge => edge.source === "end" || edge.target === "end")
+      && !(graph.version === 2 && graph.flows.some(flow => flow.nodeIds.includes("end"))))
+    graph.nodes = graph.nodes.filter(node => node.id !== "end");
   const normalized = normalizeVisualDraft(graph);
   if (!normalized)
-    throw new AssistantError("Ndryshimet prodhojnë një rrjedhë të pavlefshme.");
+    throw new WorkflowProposalError("Ndryshimet prodhojnë një rrjedhë të pavlefshme.");
   return normalized;
 }
 export function workflowProblems(graph: VisualGraph) {

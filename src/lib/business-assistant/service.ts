@@ -20,8 +20,10 @@ import { automationIntentSchema } from "./automation-intent";
 import { automationInstructions, buildAutomationProposal, automationMessage, type AutomationProposal } from "./automation-proposal";
 import { summarizeWorkflowChanges } from "./semantic-summary";
 import { toActionPlan, actionPlanInstructions, type ActionPlan } from "./action-plan";
-const workflowInstructions = `${workflowPlanningContract} ${automationInstructions} ${baseWorkflowInstructions} ${actionPlanInstructions} For customer-agent behavior changes use operation agent.communication mode draft; publish only on explicit request. The draft does not affect live replies. agent_update is legacy vocabulary normalized to a communication draft; it cannot publish new changes. Never promise an exact response solely from saving instructions. Explain this limitation for exact-message requests; creating or publishing a supported workflow response is a separate explicit approval, not part of agent_update.`;
-import type { WorkflowCard } from "./workflow";
+const workflowInstructions = `${workflowPlanningContract} ${automationInstructions} ${baseWorkflowInstructions} ${actionPlanInstructions} Explicit requests to create, suggest a concrete workflow, edit, remove a workflow process, or rebuild a workflow take precedence over generic automation planning: use workflow_load then workflow_draft. A suggestion is an unconfirmed candidate for review, not permission to save. For customer-agent behavior changes use operation agent.communication mode draft; publish only on explicit request. The draft does not affect live replies. agent_update is legacy vocabulary normalized to a communication draft; it cannot publish new changes. Never promise an exact response solely from saving instructions. Explain this limitation for exact-message requests; creating or publishing a supported workflow response is a separate explicit approval, not part of agent_update.`;
+import { applyWorkflowOperations, workflowProblems, WorkflowProposalError, type WorkflowCard } from "./workflow";
+import { emptyVisualGraph, nodeLabels, outputPorts, validateVisualGraph } from "@/lib/workflows/visual/model";
+import type { VisualNodeKind } from "@/lib/workflows/visual/types";
 import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
 import type { PublicationApproval } from "@/lib/workflows/visual/publication-types";
 import { parseUIContext, type AssistantUIContext } from "./context";
@@ -250,6 +252,11 @@ export async function planRequest(
     catch (error) { throw new AssistantError((error as Error).message); }
   }
   context.ownerOperations = assistantOperationCatalog();
+  context.workflowAuthoring = {
+    resetGraph: emptyVisualGraph(),
+    nodePorts: Object.fromEntries((Object.keys(nodeLabels) as VisualNodeKind[]).map(kind => [kind, outputPorts(kind)])),
+    resetBehavior: "reset produces exactly resetGraph with your requested name. Add only desired nodes and flows. Do not remove old nodes after reset; they are already gone. Preserve the start-to-end scaffold for the hub unless deliberately replacing it. Every new process needs put_flow. Terminal handoff/end nodes have NO outgoing edges.",
+  };
   context.capabilityDefinitions = Object.values(capabilityRegistry).map(({ key, description }) => ({ key, description }));
   try {
     const capabilityAssessments = await assessBusinessCapabilities(access.businessId, { userId: access.userId });
@@ -365,12 +372,19 @@ export async function planRequest(
     timeout: 25_000,
     maxRetries: 0,
   });
-  for (let attempt = 0; attempt < 3; attempt++) {
+  let workflowRepairs = 0;
+  const repairWorkflow = (diagnostic: string, rejected: unknown) => {
+    if (workflowRepairs >= 2) throw new AssistantError("Nuk arrita të përgatis një ndryshim të vlefshëm pas korrigjimit automatik. Asgjë nuk u ruajt. Mund të vazhdojmë nga i njëjti propozim duke sqaruar rezultatin e dëshiruar.");
+    workflowRepairs++;
+    context.workflowRepair = { diagnostic, rejected, instruction: "Correct this proposal against the original loaded graph; do not execute it." };
+  };
+  for (let attempt = 0; attempt < 5; attempt++) {
     const flowId = validatedContext?.workflowSelection?.flowId;
     const loadedGraph = (context.workflow as WorkflowCard | undefined)?.workspace.graph;
     if (flowId && loadedGraph && (loadedGraph.version !== 2 || !loadedGraph.flows.some(flow => flow.id === flowId)))
       throw new AssistantError("Rrjedha e zgjedhur nuk ekziston më. Zgjidhe përsëri në editor.");
     let proposal: Proposal;
+    let rawProposal: unknown;
     try {
       const response = await client.responses.create({
         model: agentModel(),
@@ -386,7 +400,7 @@ export async function planRequest(
           history,
           request: text,
           materials: materials.map(m => /\.csv$/i.test(m.name) ? { ...m, text: m.text.slice(0, 2000), note: "CSV excerpt for routing only. product_import reads the complete file and compares the full catalog." } : m),
-          attemptsRemaining: 2 - attempt,
+          attemptsRemaining: 4 - attempt,
         }),
         text: {
           format: {
@@ -399,14 +413,15 @@ export async function planRequest(
               required: ["action", "id", "message", "changes", "choices", "automation", "planRelation"],
               properties: {
                 planRelation: { type: ["string", "null"], enum: ["continue", "new", null] },
-                automation: automationIntentSchema,
+                automation: context.workflowRepair ? { ...automationIntentSchema, type: "object" } : automationIntentSchema,
                 choices: {type:"array",items:{type:"string"}},
                 action: { type: "string", enum: actions.filter(action =>
+                  (!context.workflowRepair || action === "workflow_draft" || action === "clarify") &&
                   !["product_create", "product_update", "service_create", "service_update", "knowledge_create", "knowledge_update", "agent_update"].includes(action) &&
                   !(action.startsWith("linear_") && !sharedWorkflowEnabled(access.businessId)) &&
                   !(action === "orderflow_load" && context.orderflows) &&
                   !(action === "workflow_load" && context.workflow) &&
-                  !(attempt === 2 && ["search","workflow_load","orderflow_load","linear_load"].includes(action))) },
+                  !(attempt >= 4 && ["search","workflow_load","orderflow_load","linear_load"].includes(action))) },
                 id: { type: ["string", "null"] },
                 message: { type: "string" },
                 changes: {
@@ -426,9 +441,14 @@ export async function planRequest(
           },
         },
       });
-      proposal = readProposal(JSON.parse(response.output_text));
+      rawProposal = JSON.parse(response.output_text);
+      proposal = readProposal(rawProposal);
       proposal.requestedText = text;
     } catch (e) {
+      if (rawProposal && typeof rawProposal === "object" && (rawProposal as { action?: unknown }).action === "workflow_draft" && e instanceof AssistantError) {
+        repairWorkflow(e.message, rawProposal);
+        continue;
+      }
       if (e instanceof AssistantError) throw e;
       throw new AssistantError(
         "Kërkesa nuk u analizua. Provo përsëri ose jep më shumë hollësi.",
@@ -492,11 +512,31 @@ export async function planRequest(
     if (proposal.action.startsWith("workflow_")) {
       assertEnabled(access, proposal.action);
       if (!["workflow_load", "workflow_read", "workflow_catalog"].includes(proposal.action) && validatedContext?.workflowSelection?.dirty) throw new AssistantError("Ke ndryshime të paruajtura në editor. Ruaji para se Agjenti të ndryshojë rrjedhën.");
-      if (proposal.action === "workflow_draft" && !proposal.automation)
-        throw new AssistantError("Mungon shpjegimi i strukturuar i ndryshimit. Përgatite kërkesën përsëri.");
       if (proposal.action === "workflow_load" || (!context.workflow && !["workflow_read", "workflow_catalog"].includes(proposal.action))) {
         context.workflow = await loadAssistantWorkflow(access);
         continue;
+      }
+      if (proposal.action === "workflow_draft") {
+        if (!proposal.automation) {
+          repairWorkflow("workflow_draft requires a non-null automation object with requestedBehaviors, assumptions and clarificationQuestions.", proposal);
+          continue;
+        }
+        try {
+          const base = (context.workflow as WorkflowCard).workspace.graph;
+          const candidate = applyWorkflowOperations(base, proposal.changes.find(change => change.field === "operations")?.value ?? "", text);
+          const problems = workflowProblems(candidate);
+          // An intentionally empty reset is a draft, never publishable. All actual
+          // processes must have valid wiring before offering the owner's review.
+          const emptyReset = candidate.version === 2 && !candidate.flows.length && (() => { const ops = JSON.parse(proposal.changes.find(change => change.field === "operations")?.value ?? "[]"); return ops.length === 1 && ops[0].op === "reset"; })();
+          if (problems.length && !emptyReset) {
+            repairWorkflow("Correct the reported node IDs and ports. Rewrite the full operations against the original graph, not the invalid candidate. Remove unreachable unused nodes or reconnect them; do not repeat the same invalid patch.", { proposal, candidate, validation: validateVisualGraph(candidate).errors });
+            continue;
+          }
+        } catch (error) {
+          if (!(error instanceof WorkflowProposalError)) throw error;
+          repairWorkflow(error.message, proposal);
+          continue;
+        }
       }
       if ((pendingWorkflow || recoveredPlan?.visualDraft) && proposal.action === "workflow_publish") throw new AssistantError("Ruaj propozimin si draft përpara publikimit.");
       return finish(await prepareWorkflow(access, proposal, (context.workflow as WorkflowCard | undefined)?.workspace.revision, pendingWorkflow?.values.graph ?? recoveredPlan?.visualDraft?.graph));

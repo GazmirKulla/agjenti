@@ -1,3 +1,4 @@
+import { reviewWorkflowSemantics } from "@/lib/capabilities/workflow-semantics";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ profile: vi.fn(), from: vi.fn(), rpc: vi.fn(), workspace: vi.fn(), version: vi.fn(), user: vi.fn(), access: vi.fn() }));
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
@@ -43,6 +44,7 @@ function query(table: string) {
   return q;
 }
 beforeEach(() => {
+  vi.mocked(reviewWorkflowSemantics).mockReset();
   vi.clearAllMocks(); vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "tenant-a");
   membership = true; active = true; count = 1; filters = []; connection = null;
   m.profile.mockResolvedValue({ source: "manual", enabledModules: ["products", "orders", "workflows"] });
@@ -166,6 +168,7 @@ it("distinguishes an unavailable optional integration from missing local configu
   expect(await assess()).toEqual([expect.objectContaining({ availability: "missing_configuration" })]);
 });
 it.each([undefined, "confirmation"])("blocks unsupported graph claims for manual/AI confirmation %s", async confirmation => {
+  vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ capabilityKeys: ["inventory.check", "back_in_stock.notify"], evidence: [] });
   const candidate = graph(); candidate.nodes[1].config.prompt = "Check inventory and notify when back in stock";
   const result = await writeVisualWorkflow("tenant-a", "actor", 2, candidate, "publish", confirmation);
   expect(result.publication?.findings[0].code).toBe("unsupported"); expect(m.rpc).not.toHaveBeenCalled();

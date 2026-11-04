@@ -192,3 +192,31 @@ it("accepts main catalog inspection only as a read with no target or operations"
   expect(() => readProposal({ ...read, id: "00000000-0000-4000-8000-000000000001" })).toThrow();
   expect(() => readProposal({ ...read, changes: [{ field: "operations", value: "[]" }] })).toThrow();
 });
+
+describe("assistant whole-process management", () => {
+  it("removes the order process as one operation while retaining information and support", () => {
+    const before = starterVisualGraph(), snapshot = structuredClone(before);
+    const after = applyWorkflowOperations(before, JSON.stringify([{ op: "remove_process", id: "product" }]));
+    expect(validateVisualGraph(after).errors).toEqual([]);
+    expect(after.version === 2 && after.flows.map(f => f.id)).toEqual(["handoff", "knowledge"]);
+    expect(after.nodes.some(n => n.id === "order" || n.id === "product")).toBe(false);
+    expect(before).toEqual(snapshot);
+  });
+  it.each(["Rindërtoje plotësisht për mbështetje", "Replace the whole workflow with support", "Ricrea tutto il flusso per assistenza"])("prepares a reviewable full replacement: %s", request => {
+    const before = starterVisualGraph();
+    const operations = [
+      { op: "reset", name: "Mbështetje", evidence: request },
+      { op: "put_node", node: { id: "help", kind: "handoff", label: "Stafi", position: { x: 20, y: 200 }, config: {} } },
+      { op: "put_flow", flow: { id: "support", label: "Ndihmë", kind: "support", entryNodeId: "help", nodeIds: ["help"] } },
+    ];
+    const after = applyWorkflowOperations(before, JSON.stringify(operations), request);
+    expect(validateVisualGraph(after).errors).toEqual([]);
+    expect(after.nodes.some(n => n.kind === "product")).toBe(false);
+    expect(workflowPreview(before, after).fields.some(f => f.label === "Hap i hequr")).toBe(true);
+    expect(before).toEqual(starterVisualGraph());
+  });
+  it("rejects replacement evidence from another message and a reset after edits", () => {
+    expect(() => applyWorkflowOperations(starterVisualGraph(), JSON.stringify([{ op: "reset", name: "New", evidence: "Replace everything" }]), "Change only the label")).toThrow("referencë");
+    expect(() => applyWorkflowOperations(starterVisualGraph(), JSON.stringify([{ op: "rename", name: "New" }, { op: "reset", name: "New", evidence: "Replace" }]), "Replace")).toThrow("i parë");
+  });
+});

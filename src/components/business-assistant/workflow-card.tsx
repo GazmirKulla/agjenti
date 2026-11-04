@@ -168,12 +168,12 @@ export function WorkflowCard({
     tab === "published" && published
       ? published
       : (proposed ?? workspace.graph);
-  const problems = workflowProblems(graph);
+  const problems = workspace.generated && !proposed ? [] : workflowProblems(graph);
   return (
     <section className="assistant-flow-card" aria-label="Rrjedha e Agjentit">
       <header>
         <small>RRJEDHA E BIZNESIT</small>
-        <h3>{graph.name}</h3>
+        <h3>{workspace.generated && !proposed ? "Workflow opsional" : graph.name}</h3>
         <p>
           {tab === "published"
             ? workspace.enabled
@@ -182,11 +182,11 @@ export function WorkflowCard({
             : proposed
               ? "Propozim · ende i paruajtur"
               : workspace.generated
-                ? "Sugjerim fillestar · i paruajtur"
+                ? "Pa workflow · krijimi është opsional"
                 : "Draft i ruajtur"}
         </p>
       </header>
-      <div
+      {(!workspace.generated || proposed || published) && <div
         className="assistant-flow-tabs"
         role="group"
         aria-label="Versioni i rrjedhës"
@@ -207,14 +207,14 @@ export function WorkflowCard({
             I publikuar
           </button>
         )}
-      </div>
+      </div>}
       {!workspace.available && (
         <p role="status">
           Kjo është rrjedhë e sugjeruar. Ruajtja dhe publikimi presin
           konfigurimin nga administratori.
         </p>
       )}
-      {data.semanticSummary && tab === "draft" ? proposed ? <p>{data.semanticSummary.changes.length} ndryshime të propozuara. Hap “Shiko ndryshimin” për shpjegimin Para/Pas dhe diagramin. Baza: revisioni {data.semanticSummary.baseRevision}.</p> : <WorkflowChangeReview before={workspace.graph} after={workspace.graph} summary={data.semanticSummary} /> : <FlowSteps graph={graph} />}
+      {data.semanticSummary && tab === "draft" ? proposed ? <p>{data.semanticSummary.changes.length} ndryshime të propozuara. Hap “Shiko ndryshimin” për shpjegimin Para/Pas dhe diagramin. Baza: revisioni {data.semanticSummary.baseRevision}.</p> : <WorkflowChangeReview before={workspace.graph} after={workspace.graph} summary={data.semanticSummary} />  : workspace.generated && !proposed ? <p>Përshkruaj çfarë dëshiron të bëjë agjenti. Mund të përgatisim një propozim bashkë; krijimi dhe publikimi kërkojnë miratimin tënd.</p> : <FlowSteps graph={graph} />}
       {data.simulation && !proposed && tab === "draft" && <WorkflowSimulationReview report={data.simulation} />}
       {data.publication && tab === "draft" && <PublicationReadinessView publication={data.publication} />}
       {problems.length > 0 ? (
@@ -227,7 +227,7 @@ export function WorkflowCard({
           </ul>
         </details>
       ) : (
-        !data.semanticSummary?.blocked && <WorkflowTrial key={JSON.stringify(graph)} graph={graph} slug={slug} />
+        (!workspace.generated || proposed) && !data.semanticSummary?.blocked && <WorkflowTrial key={JSON.stringify(graph)} graph={graph} slug={slug} />
       )}
       {Boolean(data.versions?.length) && (
         <details>
@@ -256,8 +256,14 @@ export function WorkflowCard({
         </details>
       )}
       <footer>
+        {!pending && <button type="button" className="assistant-secondary" onClick={() => onRequest(workspace.generated
+          ? "Më sugjero dhe përgatit një workflow sipas njohurive dhe aftësive të biznesit. Shpjego supozimet; mos e publiko."
+          : "Dua ta rindërtoj plotësisht workflow-n. Më propozo një version sipas biznesit dhe më trego çfarë zëvendësohet para ruajtjes.")}>
+          {workspace.generated ? "Sugjero workflow…" : "Rindërto me asistentin…"}
+        </button>}
+        {!pending && data.publication && !data.publication.canRequestApproval && !data.publication.canPublish && <button type="button" className="assistant-secondary" onClick={() => onRequest("Shpjego pengesat e publikimit të draftit aktual dhe përgatit korrigjimet që mbështeten, duke ruajtur qëllimin e workflow-t.")}>Ndihmë me publikimin…</button>}
         <Link href={`/b/${slug}/workflows`}>Hap editorin →</Link>
-        {!pending && !proposed && tab === "draft" && (
+        {!pending && !proposed && !workspace.generated && tab === "draft" && (
           <button
             type="button"
             className="assistant-secondary"
@@ -266,7 +272,7 @@ export function WorkflowCard({
                 "Publiko dhe aktivizo draftin aktual të rrjedhës së biznesit.",
               )
             }
-            disabled={!workspace.available || problems.length > 0 || data.semanticSummary?.blocked || (data.simulation && !data.simulation.canPublish)}
+            disabled={!workspace.available || workspace.generated || problems.length > 0 || data.semanticSummary?.blocked}
           >
             Publiko draftin…
           </button>

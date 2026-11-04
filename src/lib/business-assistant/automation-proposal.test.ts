@@ -1,3 +1,4 @@
+import { reviewWorkflowSemantics } from "@/lib/capabilities/workflow-semantics";
 import { beforeEach, expect, it, vi } from "vitest";
 const assess = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/capabilities/assessment", () => ({ assessBusinessCapabilities: assess }));
@@ -14,16 +15,18 @@ function input(keys = ["product.search"]) {
     intent: { requestedBehaviors: [{ description: "Kërko produktin", capabilityKeys: keys }], assumptions: [], clarificationQuestions: [] } as AutomationIntent,
     before, after: applyWorkflowOperations(before, JSON.stringify(operations)), operations };
 }
-beforeEach(() => { assess.mockReset(); assess.mockResolvedValue(ready); });
+beforeEach(() => {
+  vi.mocked(reviewWorkflowSemantics).mockReset(); assess.mockReset(); assess.mockResolvedValue(ready); });
 it("creates a supported proposal with server-owned revision/readiness without changing the base", async () => {
   const data = input(); const old = structuredClone(data.before);
   const result = await buildAutomationProposal(data);
   expect(result).toMatchObject({ version: 1, status: "proposed", readiness: "ready", baseRevision: 3, workflowVersionId: "v1", canSaveDraft: true, operations });
   expect(result.requestedBehaviors[0].readiness).toBe("ready");
   expect(data.before).toEqual(old);
-  expect(assess).toHaveBeenCalledWith("a", { userId: "owner" }, { keys: ["product.search"] });
+  expect(assess).toHaveBeenCalledWith("a", { userId: "owner" }, { keys: ["product.search"], candidate: data.after });
 });
 it("reports a mixed stock request even when the model omits its unsupported behaviors", async () => {
+  vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ capabilityKeys: ["inventory.check", "back_in_stock.notify"], evidence: [] });
   const result = await buildAutomationProposal({ ...input(["product.search", "product.recommend"]), request: "Check inventory. If unavailable recommend an alternative and notify when back in stock." });
   expect(result.unsupportedActions).toEqual(expect.arrayContaining(["inventory.check", "back_in_stock.notify"]));
   expect(result.requiredCapabilities.filter(c => c.status === "ready")).toHaveLength(2);
@@ -37,6 +40,7 @@ it("does not confuse scheduling a booking with scheduling a background automatio
   expect(result).toMatchObject({ readiness: "ready", canSaveDraft: true, unsupportedActions: [] });
 });
 it("blocks scheduled jobs even when the model omits that capability", async () => {
+  vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ capabilityKeys: ["schedule.trigger"], evidence: [] });
   const result = await buildAutomationProposal({ ...input(), request: "Schedule a notification every day" });
   expect(result.unsupportedActions).toContain("schedule.trigger"); expect(result.operations).toEqual([]);
 });
@@ -82,6 +86,7 @@ it("infers required booking capability from a changed node even if the model omi
   expect(result.validationFindings.some(f => f.code === "invalid_graph")).toBe(true);
 });
 it("blocks inventory claims disguised as a knowledge prompt", async () => {
+  vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ capabilityKeys: ["inventory.check", "back_in_stock.notify"], evidence: [] });
   const data = input(); const after = structuredClone(data.after);
   after.nodes.find(n => n.kind === "knowledge")!.config.prompt = "Check inventory and notify when back in stock";
   const result = await buildAutomationProposal({ ...data, after });
@@ -93,7 +98,7 @@ it("assesses a new action node even when the model omits its permission requirem
     config: { action: { actionKey: "business.provision", actionVersion: 1, inputs: { name: "business_name", email: "business_email" } } } });
   assess.mockResolvedValue([{ capabilityKey: "business.provision", status: "needs_setup", missingRequirements: ["business_provision_automation_permission"] }]);
   const proposal = await buildAutomationProposal(data);
-  expect(assess).toHaveBeenCalledWith("a", { userId: "owner" }, { keys: ["business.provision"] });
+  expect(assess).toHaveBeenCalledWith("a", { userId: "owner" }, { keys: ["business.provision"], candidate: data.after });
   expect(proposal).toMatchObject({ readiness: "needs_setup", missingRequirements: ["business_provision_automation_permission"] });
 });
 it("assesses existing nodes when a changed edge starts using them", async () => {

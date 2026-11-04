@@ -135,7 +135,7 @@ it("allows inheritance inspection with a dirty selected branch, without treating
 
 it("requires structured intent from the live planner before preparing draft mutations", async () => {
   m.response.mockResolvedValue({ output_text: JSON.stringify({ action: "workflow_draft", id: null, message: "Test", changes: [{ field: "operations", value: '[{"op":"rename","name":"Test"}]' }], automation: null }) });
-  await expect(planRequest(access, "Ndrysho", [], { page: "workflows", entryPoint: "contextual" })).rejects.toThrow("strukturuar");
+  await expect(planRequest(access, "Ndrysho", [], { page: "workflows", entryPoint: "contextual" })).rejects.toThrow("korrigjimit automatik");
   expect(m.prepare).not.toHaveBeenCalled();
 });
 
@@ -158,4 +158,30 @@ it("marks a clarification about a new objective so persistence drops the old act
   });
   expect(result).toMatchObject({ clarifying: true, replacePlan: true });
   expect(result.token).toBeUndefined();
+});
+
+it("repairs missing structured intent without asking the owner to repeat the request", async () => {
+  const changes = [{ field: "operations", value: JSON.stringify([{ op: "remove_process", id: "product" }]) }];
+  m.response.mockResolvedValueOnce({ output_text: JSON.stringify({ action: "workflow_draft", id: null, message: "Hiq", changes, automation: null }) })
+    .mockResolvedValueOnce(respond("workflow_draft", changes));
+  await planRequest(access, "Hiq pjesën e porosive, nuk kemi produkte", [], { page: "workflows", entryPoint: "contextual" });
+  expect(m.response).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(m.response.mock.calls[1][0].input).data.workflowRepair).toHaveProperty("diagnostic");
+  expect(m.prepare).toHaveBeenCalledTimes(1);
+  expect(m.prepare.mock.calls[0][1].requestedText).toBe("Hiq pjesën e porosive, nuk kemi produkte");
+});
+it("repairs broken wiring against the original graph, not the failed patch", async () => {
+  m.response.mockResolvedValueOnce(respond("workflow_draft", [{ field: "operations", value: '[{"op":"remove_node","id":"product"}]' }]))
+    .mockResolvedValueOnce(respond("workflow_draft", [{ field: "operations", value: '[{"op":"remove_process","id":"product"}]' }]));
+  await planRequest(access, "Remove orders", [], { page: "workflows", entryPoint: "contextual" });
+  const second = JSON.parse(m.response.mock.calls[1][0].input);
+  expect(second.data.workflow.workspace.graph.nodes.some((n: { id: string }) => n.id === "product")).toBe(true);
+  expect(m.prepare).toHaveBeenCalledTimes(1);
+});
+it("repairs malformed structured intent before producing a preview", async () => {
+  m.response.mockResolvedValueOnce({ output_text: JSON.stringify({ action: "workflow_draft", id: null, message: "Hiq", changes: [], automation: {} }) })
+    .mockResolvedValueOnce(respond("workflow_draft", [{ field: "operations", value: '[{"op":"remove_process","id":"product"}]' }]));
+  await planRequest(access, "Remove orders", [], { page: "workflows", entryPoint: "contextual" });
+  expect(m.response).toHaveBeenCalledTimes(2);
+  expect(m.prepare).toHaveBeenCalledTimes(1);
 });

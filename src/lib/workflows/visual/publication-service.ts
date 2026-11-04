@@ -1,3 +1,4 @@
+import { readinessFinding } from "@/lib/capabilities/diagnostics";
 import { buildAutomationProposal } from "@/lib/business-assistant/automation-proposal";
 import { loadWorkflowReadiness } from "../readiness";
 import { loadVisualVersion, loadVisualWorkspace } from "./store";
@@ -28,5 +29,10 @@ export async function reviewWorkflowPublication(p: {
     authorized: !unavailable, ownedVersion: !version || version.businessId === p.businessId,
     currentRevision: workspace.revision, currentDraft: workspace.graph, publishedVersionId: workspace.publishedVersionId,
     capabilities: automation.requiredCapabilities, assessmentUnavailable: unavailable, simulation, runtimeBlockers: runtime.blockers });
+  const semanticFailure = automation.validationFindings.find(f => f.code === "semantic_review_unavailable");
+  if (semanticFailure) {
+    publication.status = "blocked"; publication.canPublish = false; publication.canRequestApproval = false;
+    publication.findings = [readinessFinding(semanticFailure.code, semanticFailure.message)];
+  }
   return { publication, simulation, automation };
 }

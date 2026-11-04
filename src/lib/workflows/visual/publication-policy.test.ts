@@ -66,3 +66,18 @@ describe("shared publication policy", () => {
     expect(evaluatePublicationPolicy({ ...p, runtimeBlockers: ["Konfiguro rikuperimin."] })).toMatchObject({ status: "needs_setup", canPublish: false });
   });
 });
+
+it("offers explicit review of known simulator limits without claiming PASS, and binds their acknowledgement", async () => {
+  const { starterVisualGraph } = await import("./model");
+  const candidate = starterVisualGraph();
+  const simulation = simulateWorkflowProposal({ proposalId: "proposal", baseRevision: 4, candidate, before: candidate });
+  const p = { ...input(), candidate, currentDraft: candidate, simulation, confirming: false };
+  const review = evaluatePublicationPolicy(p);
+  expect(review).toMatchObject({ result: "UNVERIFIED", canPublish: false, canRequestApproval: true });
+  expect(review.limitations?.length).toBeGreaterThan(0);
+  const approval = { ...p.approval!, ...simulationBinding(simulation), acknowledgedLimitations: review.limitations };
+  expect(evaluatePublicationPolicy({ ...p, confirming: true, approval })).toMatchObject({ result: "UNVERIFIED", canPublish: true });
+  expect(evaluatePublicationPolicy({ ...p, confirming: true, approval: { ...approval, acknowledgedLimitations: [] } }).canPublish).toBe(false);
+  simulation.scenarios.push({ ...simulation.scenarios[0], scenarioId: "timeout", result: "UNVERIFIED", validationFindings: [{ code: "time_budget", message: "Incomplete" }] });
+  expect(evaluatePublicationPolicy({ ...p, confirming: true, approval }).canPublish).toBe(false);
+});

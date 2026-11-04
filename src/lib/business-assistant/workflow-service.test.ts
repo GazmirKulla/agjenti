@@ -1,3 +1,4 @@
+import { reviewWorkflowSemantics } from "@/lib/capabilities/workflow-semantics";
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   workspace: vi.fn(),
@@ -42,6 +43,7 @@ const proposal = (
   changes: Proposal["changes"] = [],
 ): Proposal => ({ action, id: null, message: "Kontrollo rrjedhën.", changes });
 beforeEach(() => {
+  vi.mocked(reviewWorkflowSemantics).mockReset();
   vi.clearAllMocks();
   m.assess.mockResolvedValue(["knowledge.answer", "product.search", "product.recommend", "order.prepare", "booking.create", "booking.availability.read", "order.status.read", "staff.handoff"].map(capabilityKey => ({ capabilityKey, status: "ready", reasonCode: "configured", missingRequirements: [] })));
   m.from.mockImplementation(() => {
@@ -75,6 +77,7 @@ it("reads both draft and published without issuing a ticket or writing", async (
 });
 
 it("returns unsupported behavior without a draft ticket or fabricated graph", async () => {
+  vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ capabilityKeys: ["inventory.check", "back_in_stock.notify"], evidence: [] });
   const p = proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Stock"}]' }]);
   p.requestedText = "Check inventory and notify the customer when back in stock";
   const result = await prepareWorkflow(access, p, 3);
@@ -200,15 +203,18 @@ it("runs simulation before draft confirmation, ties evidence to the candidate, a
   await executeTicket(access, result.token!);
   expect(m.rpc).toHaveBeenCalledWith("apply_assistant_visual_workflow", expect.objectContaining({ p_operation: "draft", p_business: "business-a", p_revision: 3 }));
 });
-it("shows unverified scenarios and allows draft save, but offers no publish approval", async () => {
+it("shows simulation limits and binds them to a separate publication approval", async () => {
   const draft = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"New draft"}]' }]), 3);
   expect(draft.workflow?.simulation?.result).toBe("UNVERIFIED"); expect(draft.token).toBeTruthy();
   expect(draft.preview?.notice).toContain("nuk do të thotë");
   const publish = await prepareWorkflow(access, proposal("workflow_publish"), 3);
-  expect(publish.token).toBeUndefined(); expect(publish.workflow?.simulation?.canPublish).toBe(false);
+  expect(publish.token).toBeTruthy(); expect(publish.workflow?.simulation?.canPublish).toBe(false);
+  expect(publish.workflow?.publication).toMatchObject({ result: "UNVERIFIED", canRequestApproval: true });
+  expect(openTicket(publish.token!, access).publicationApproval?.acknowledgedLimitations?.length).toBeGreaterThan(0);
   expect(m.rpc).not.toHaveBeenCalled();
 });
 it("shows blocked unsupported and unavailable assessments without claiming execution", async () => {
+  vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ capabilityKeys: ["inventory.check", "back_in_stock.notify"], evidence: [] });
   const unsupported = proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Draft"}]' }]);
   unsupported.requestedText = "Check inventory";
   const blocked = await prepareWorkflow(access, unsupported, 3);
@@ -247,7 +253,7 @@ it("reruns simulation for legacy publish tickets and cannot bypass it by omittin
   delete ticket.publicationApproval;
   ticket.values.graph = starterVisualGraph();
   m.workspace.mockResolvedValue({ graph: starterVisualGraph(), revision: 3, publishedVersionId: "version-a" });
-  await expect(executeTicket(access, encryptSecret(JSON.stringify(ticket)))).rejects.toMatchObject({ publication: { status: "unverified_external_action" } });
+  await expect(executeTicket(access, encryptSecret(JSON.stringify(ticket)))).rejects.toMatchObject({ publication: { status: "stale_proposal" } });
   expect(m.rpc).not.toHaveBeenCalled();
 });
 it("refuses approval and confirmation when actual runtime scenarios fail", async () => {
@@ -312,7 +318,7 @@ it("rejects a replay after the committed publication revision has advanced", asy
 });
 it("refreshes whole-graph capability readiness on every publication review", async () => {
   const initial = await prepareWorkflow(access, proposal("workflow_publish"), 3);
-  expect(initial.workflow?.publication?.status).toBe("unverified_external_action");
+  expect(initial.workflow?.publication?.status).toBe("approval_required");
   const assessments = await m.assess();
   m.assess.mockResolvedValue(assessments.map((c: { capabilityKey: string }) => c.capabilityKey === "knowledge.answer" ? { ...c, status: "needs_setup", missingRequirements: ["active_knowledge"] } : c));
   const changed = await prepareWorkflow(access, proposal("workflow_publish"), 3);
@@ -615,4 +621,50 @@ it("fails closed instead of claiming an empty catalog when counts cannot be read
   catalogCounts(0, { message: "Unavailable" });
   await expect(prepareWorkflow({ ...access, modules: ["workflows", "products"] }, proposal("workflow_catalog"))).rejects.toThrow("Gjendja e katalogut nuk u lexua");
   expect(m.rpc).not.toHaveBeenCalled();
+});
+
+it("creates, refines, saves and publishes a v2 workflow through separate bound confirmations", async () => {
+  const { emptyVisualGraph } = await import("@/lib/workflows/visual/model");
+  const { addFlowTemplate } = await import("@/components/workflows/flow-templates");
+  const initial = emptyVisualGraph();
+  const draft = addFlowTemplate(initial, "support", "help").graph;
+  let current = { graph: initial, revision: 0, publishedVersionId: null as string | null, enabled: false, available: true, generated: true };
+  m.workspace.mockImplementation(async () => structuredClone(current));
+  m.version.mockImplementation(async () => ({ graph: structuredClone(current.graph), businessId: access.businessId }));
+  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", access.businessId);
+  vi.stubEnv("CRON_SECRET", "synthetic-only");
+  const writes: string[] = [];
+  m.rpc.mockImplementation(async (name: string, args: { p_operation: string; p_graph: VisualGraph; p_revision: number }) => {
+    if (name === "workflow_runtime_readiness") return { data: { schemaVersion: 3, scheduled: true, lastSuccessAt: new Date().toISOString() }, error: null };
+    expect(name).toBe("apply_assistant_visual_workflow");
+    expect(args.p_revision).toBe(current.revision);
+    writes.push(args.p_operation);
+    current = { ...current, graph: args.p_graph, revision: current.revision + 1, generated: false,
+      ...(args.p_operation === "publish" ? { enabled: true, publishedVersionId: "published-synthetic" } : {}) };
+    return { data: current.revision, error: null };
+  });
+  try {
+    const create = proposal("workflow_draft", [{ field: "operations", value: JSON.stringify([
+      ...draft.nodes.filter(n => n.id === "help").map(node => ({ op: "put_node", node })),
+      { op: "put_flow", flow: draft.flows[0] },
+    ]) }]);
+    const prepared = await prepareWorkflow(access, create, 0);
+    expect(writes).toEqual([]);
+    const save = await executeTicket(access, prepared.token!);
+    expect(save).toMatchObject({ savedRevision: 1, workflow: { workspace: { enabled: false, revision: 1 } } });
+    const edit = await prepareWorkflow(access, proposal("workflow_draft", [{ field: "operations", value: '[{"op":"rename","name":"Ndihmë për klientin"}]' }]), 1);
+    await executeTicket(access, edit.token!);
+    const publish = await prepareWorkflow(access, proposal("workflow_publish"), 2);
+    expect(publish.workflow?.publication).toMatchObject({ result: "UNVERIFIED", canRequestApproval: true });
+    expect(current.enabled).toBe(false);
+    const ticket = openTicket(publish.token!, access);
+    const missingAcknowledgement = { ...ticket, publicationApproval: { ...ticket.publicationApproval!, acknowledgedLimitations: [] } };
+    await expect(executeTicket(access, encryptSecret(JSON.stringify(missingAcknowledgement)))).rejects.toThrow();
+    expect(current.enabled).toBe(false);
+    const published = await executeTicket(access, publish.token!);
+    expect(published).toMatchObject({ savedRevision: 3, workflow: { workspace: { enabled: true, revision: 3 } } });
+    expect(writes).toEqual(["draft", "draft", "publish"]);
+    await expect(executeTicket(access, publish.token!)).rejects.toThrow();
+    expect(writes).toHaveLength(3);
+  } finally { vi.unstubAllEnvs(); }
 });

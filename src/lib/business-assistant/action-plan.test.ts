@@ -1,3 +1,4 @@
+import { reviewWorkflowSemantics } from "@/lib/capabilities/workflow-semantics";
 vi.mock("@/lib/business-assistant/briefing-intent", () => ({ briefingQuestion: async () => null }));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ response: vi.fn(), profile: vi.fn(), from: vi.fn(), rpc: vi.fn(), user: vi.fn(), access: vi.fn(), write: vi.fn(), revalidate: vi.fn() }));
@@ -180,6 +181,7 @@ it("does not treat an unmapped behavior as ready", async () => {
 });
 
 it("retains the existing unsupported-request backstop even when omitted by the model", async () => {
+  vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ capabilityKeys: ["inventory.check", "back_in_stock.notify"], evidence: [] });
   respond(["product.search"]);
   const result = await plan("Check inventory and notify when back in stock");
   expect(result.steps.filter(s => s.readiness === "UNSUPPORTED").map(s => s.requiredCapability)).toEqual(expect.arrayContaining(["inventory.check", "back_in_stock.notify"]));

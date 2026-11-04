@@ -6,6 +6,8 @@ export type PublicationApproval = SimulationBinding & {
   requestId: string;
   expires: number;
   publishedVersionId: string | null;
+  /** Exact server-reported limitations shown in the publication confirmation. */
+  acknowledgedLimitations?: string[];
 };
 export type PublicationReadiness = {
   mode: "assistant_strict" | "manual_legacy";
@@ -15,6 +17,7 @@ export type PublicationReadiness = {
   canPublish: boolean;
   baseRevision: number;
   candidateGraphHash: string | null;
+  limitations?: string[];
   findings: import("@/lib/capabilities/diagnostics").ReadinessFinding[];
 };
 export type PublicationReceipt = {

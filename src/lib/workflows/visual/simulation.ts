@@ -35,7 +35,7 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
   const started = performance.now(), result = emptyResult(s), versionId = `simulation:${visualGraphHash(graph)}`;
   let state: VisualRunState | undefined = s.nodeId ? { nodeId: s.nodeId, versionId, status: "running", awaiting: !!s.awaiting, visited: [], values: structuredClone(s.values ?? {}) } : undefined;
   let message = s.message, photo = !!s.photo, last: VisualExecution | undefined;
-  let act: MessageUnderstanding["act"] = graph.nodes.find(n=>n.id===s.nodeId)?.kind !== "confirm" ? "answer" : s.expectation.port === "yes" ? "accept" : s.expectation.port === "no" ? "decline" : "uncertain";
+  let act: MessageUnderstanding["act"] = s.expectation.kind === "suspend" ? "uncertain" : graph.nodes.find(n=>n.id===s.nodeId)?.kind !== "confirm" ? "answer" : s.expectation.port === "yes" ? "accept" : s.expectation.port === "no" ? "decline" : "uncertain";
   const responseEvidence: string[] = [];
   try {
     if (s.awaiting && graph.nodes.find(n => n.id === s.nodeId)?.kind === "confirm") {
@@ -60,6 +60,12 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
       responseEvidence.push(JSON.stringify([last.action.kind, last.action.nodeId, last.action.communication]));
       if (externalActions.has(last.action.kind)) {
         result.attemptedActions.push({ kind: last.action.kind, nodeId: last.action.nodeId, disposition: "not_executed" });
+        if (s.expectation.kind === "branch" && (state.branchPorts?.[s.expectation.nodeId!] !== s.expectation.port || !last.traversedNodeIds.includes(s.expectation.target ?? ""))) {
+          result.result = "FAIL";
+          result.actualOutcome = "Dega e ekzekutuar nuk përputhet me lidhjen e pritur.";
+          result.validationFindings.push(readinessFinding("expectation_mismatch", result.actualOutcome));
+          break;
+        }
         result.result = "UNVERIFIED";
         result.actualOutcome = "Runtime arriti te një shërbim real; veprimi nuk u krye.";
         const node = graph.nodes.find(n => n.id === last!.action.nodeId)!;
@@ -121,7 +127,7 @@ export function simulateWorkflowProposal(input: {
     candidateGraphHash: visualGraphHash(graph ?? input.candidate), baselineGraphHash: visualGraphHash(input.before),
     scenarios: [], validationFindings: [], durationMs: 0, result: "BLOCKED", canPublish: false };
   const validation = validateVisualGraph(input.candidate);
-  const unknownConfiguration = input.candidate.nodes.some(n => Object.keys(n.config ?? {}).some(key => !["prompt", "fieldKey", "fieldType", "condition", "value"].includes(key)));
+  const unknownConfiguration = input.candidate.nodes.some(n => Object.keys(n.config ?? {}).some(key => !["action", "prompt", "fieldKey", "fieldType", "condition", "value"].includes(key)));
   if (!graph || !validation.graph || unknownConfiguration) {
     for (const [index, error] of validation.errors.entries()) {
       report.scenarios.push(blockedScenario(`invalid_graph:${index}`, error.message, "BLOCKED", error.nodeId));

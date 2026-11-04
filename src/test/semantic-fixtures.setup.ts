@@ -49,3 +49,9 @@ vi.mock("@/lib/agents/response-review", async original => ({
 vi.mock("@/lib/conversations/fragment-observation", () => ({
  interpretFragment: async (text: string) => lookup(fragments, text),
 }));
+
+// Workflow authoring tests isolate interpretation from server policy. Provider
+// contract tests unmock this boundary; semantic cases set explicit observations.
+vi.mock("@/lib/capabilities/workflow-semantics", () => ({
+  reviewWorkflowSemantics: vi.fn(async () => ({ capabilityKeys: [], evidence: [] })),
+}));

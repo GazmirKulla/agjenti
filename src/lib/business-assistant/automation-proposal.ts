@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { graphRequirements, nodeCapabilityKeys, flowCapabilityKeys, unsupportedRequestKeys } from "@/lib/capabilities/graph";
+import { graphRequirements, nodeCapabilityKeys, flowCapabilityKeys } from "@/lib/capabilities/graph";
 import { CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
 import { enforceWorkflowCapabilities } from "@/lib/capabilities/workflow";
 import { assessBusinessCapabilities } from "@/lib/capabilities/assessment";
@@ -13,6 +13,7 @@ import type { AutomationIntent } from "./automation-intent";
 import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
 export type AutomationProposal = {
   simulation?: SimulationBinding;
+  semanticEvidence?: WorkflowSemanticReview["evidence"];
   version: 1;
   proposalId: string;
   status: "proposed";
@@ -31,7 +32,7 @@ export type AutomationProposal = {
   canSaveDraft: boolean;
 };
 
-export { unsupportedRequestKeys } from "@/lib/capabilities/graph";
+import { reviewWorkflowSemantics, type WorkflowSemanticReview } from "@/lib/capabilities/workflow-semantics";
 
 function graphCapabilities(before: VisualGraph, after: VisualGraph): string[] {
   const keys: string[] = [];
@@ -47,13 +48,11 @@ function graphCapabilities(before: VisualGraph, after: VisualGraph): string[] {
     if (JSON.stringify(old) !== JSON.stringify(flow)) {
       flow.nodeIds.forEach(id => affected.add(id));
       keys.push(...flowCapabilityKeys(flow));
-      keys.push(...unsupportedRequestKeys(flow.label));
     }
   }
   for (const node of after.nodes) {
     if (!affected.has(node.id) && JSON.stringify(before.nodes.find(n => n.id === node.id)) === JSON.stringify(node)) continue;
     keys.push(...nodeCapabilityKeys(node));
-    keys.push(...unsupportedRequestKeys(`${node.label} ${node.config.prompt ?? ""} ${node.config.fieldKey ?? ""} ${node.config.value ?? ""}`));
   }
   return keys;
 }
@@ -67,12 +66,17 @@ export async function buildAutomationProposal(input: ProposalInput): Promise<Aut
   const behaviors = [...(input.intent?.requestedBehaviors ?? [{ description: input.request.slice(0, 500), capabilityKeys: [] }])];
   const workflow = input.mode === "plan" ? undefined : input;
   const enforced = Boolean(workflow) && moduleEnforcementEnabled(input.businessId);
-  const inferred = [...new Set([...unsupportedRequestKeys(input.request), ...(workflow ? graphCapabilities(workflow.before, workflow.after) : []), ...(enforced && workflow ? graphRequirements(workflow.after).capabilityKeys : [])])];
+  let semanticUnavailable = false;
+  let semanticKeys: string[] = [];
+  let semanticEvidence: WorkflowSemanticReview["evidence"] = [];
+  try { const review = await reviewWorkflowSemantics(input.request, workflow?.after); semanticKeys = review.capabilityKeys; semanticEvidence = review.evidence; }
+  catch { semanticUnavailable = true; }
+  const inferred = [...new Set([...semanticKeys, ...(workflow ? graphCapabilities(workflow.before, workflow.after) : []), ...(enforced && workflow ? graphRequirements(workflow.after).capabilityKeys : [])])];
   for (const key of inferred) if (!behaviors.some(b => b.capabilityKeys.includes(key))) behaviors.push({ description: getCapability(key)?.description ?? `Aftësi e kërkuar: ${key}`, capabilityKeys: [key] });
   let assessments: CapabilityAssessment[] = [];
-  let unavailable = false;
+  let unavailable = semanticUnavailable;
   const keys = [...new Set(behaviors.flatMap(b => b.capabilityKeys))];
-  try { assessments = await assessBusinessCapabilities(input.businessId, { userId: input.userId }, { keys, ...(enforced && workflow ? { candidate: workflow.after } : {}) }); }
+  try { assessments = await assessBusinessCapabilities(input.businessId, { userId: input.userId }, { keys, ...(workflow ? { candidate: workflow.after } : {}) }); }
   catch { unavailable = true; }
   let enforcementFailure: CapabilityEnforcementError | undefined;
   if (enforced && workflow && !unavailable) {
@@ -96,12 +100,14 @@ export async function buildAutomationProposal(input: ProposalInput): Promise<Aut
     clarificationQuestions.length || enforcementFailure?.code === "unverified" ? "needs_clarification" : enforcementFailure ? "needs_setup" : "ready");
   const validationFindings: AutomationProposal["validationFindings"] = workflow ? validateVisualGraph(workflow.after).errors.map(e => ({ code: "invalid_graph", message: e.message, severity: "warning" })) : [];
   if (unsupportedActions.length) validationFindings.push({ code: "unsupported_actions", message: "Këto veprime nuk kanë ekzekutim të mbështetur.", severity: "error" });
+  if (semanticUnavailable) validationFindings.push({ code: "semantic_review_unavailable", message: "Nuk u verifikua kuptimi i udhëzimeve. Propozimi ruhet në bisedë; asnjë ndryshim nuk u krye.", severity: "error" });
   if (unavailable) validationFindings.push({ code: "assessment_unavailable", message: "Gatishmëria nuk u verifikua.", severity: "error" });
   if (enforcementFailure) validationFindings.push({ code: enforcementFailure.code, message: enforcementFailure.message, severity: "error" });
   const missingRequirements = [...new Set(capabilities.flatMap(c => c.missingRequirements))];
   if (missingRequirements.length) validationFindings.push({ code: "needs_setup", message: "Nevojitet konfigurim para aktivizimit.", severity: "warning" });
   return {
     // A plan is not a workflow snapshot and cannot become a save/publication ticket.
+    semanticEvidence,
     version: 1, proposalId: randomUUID(), status: "proposed", readiness, baseRevision: workflow?.revision ?? 0, workflowVersionId: workflow?.publishedVersionId ?? null,
     requestedBehaviors: behaviors.map(b => ({ ...b, readiness: unavailable || clarificationQuestions.length && !b.capabilityKeys.length ? "needs_clarification" : b.capabilityKeys.reduce<CapabilityReadiness>((s, key) => {
       const next = capabilities.find(c => c.capabilityKey === key)!.status; return rank.indexOf(next) > rank.indexOf(s) ? next : s;
@@ -126,7 +132,7 @@ export function automationMessage(proposal: AutomationProposal): string {
 
 export async function recheckAutomation(businessId: string, userId: string, proposal?: AutomationProposal, candidate?: VisualGraph) {
   let current: CapabilityAssessment[];
-  try { current = await assessBusinessCapabilities(businessId, { userId }, proposal ? { keys: proposal.requiredCapabilities.map(c => c.capabilityKey), ...(moduleEnforcementEnabled(businessId) ? { candidate } : {}) } : undefined); }
+  try { current = await assessBusinessCapabilities(businessId, { userId }, proposal ? { keys: proposal.requiredCapabilities.map(c => c.capabilityKey), ...(candidate ? { candidate } : {}) } : undefined); }
   catch { throw new AssistantError("Nuk u verifikuan aftësitë dhe qasja në biznes. Përgatite propozimin përsëri."); }
   if (!proposal) return; // Legacy tickets still recheck authorization; their graph uses the existing validator.
   if (!proposal.canSaveDraft) throw new AssistantError("Propozimi kërkon sqarim para ruajtjes.");
