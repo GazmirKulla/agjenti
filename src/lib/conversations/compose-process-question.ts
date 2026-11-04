@@ -6,7 +6,7 @@ import { communicationPolicyInstructions, defaultCommunicationPolicy, parseCommu
 import { loadActiveTrainingMemories } from "@/lib/agents/training/load";
 import { selectTrainingContext, trainingPrompt } from "@/lib/agents/training/model";
 import { recentConversation } from "@/lib/workflows/guidance";
-import { emptyState } from "@/lib/workflows/engine";
+import { emptyState } from "@/lib/workflows/state";
 import { projectCustomerContext, redactUnrequestedContact } from "@/lib/agents/customer-context";
 import { renderProcessCommunication, type ProcessCommunication } from "./process-communication";
 import type { AgentTurnParams } from "./process-agent-turn";

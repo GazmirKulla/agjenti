@@ -25,17 +25,17 @@ it.each([
 it("rejects empty, oversized and wrong-leader batches", () => {
  for (const payloads of [[], Array(21).fill(first), [{ ...first, externalMessageId: "other" }]]) expect(() => inboundBatch(first, job(payloads))).toThrow();
 });
-it("recognizes unfinished discourse without treating the hint as operational consent", () => {
- expect(['pse','po mundohem','cfare po t them'].map(t=>fragmentKind(t))).toEqual(['fragment','fragment','fragment']);
- expect(['ti psh','mund ta kuptosh','tek e tek','te kuptoj'].map(t=>fragmentKind(t))).toEqual(Array(4).fill('continuation'));
- expect(fragmentKind('?')).toBe('close');
+it("recognizes unfinished discourse without treating the hint as operational consent", async () => {
+ expect(await Promise.all(['pse','po mundohem','cfare po t them'].map(t=>fragmentKind(t)))).toEqual(['fragment','fragment','fragment']);
+ expect(await Promise.all(['ti psh','mund ta kuptosh','tek e tek','te kuptoj'].map(t=>fragmentKind(t)))).toEqual(Array(4).fill('continuation'));
+ expect((await fragmentKind('?'))).toBe('close');
 });
-it.each(['po','jo','ok','konfirmoj','dua porosi','anulo rezervimin','Si quhem une','Miqail\nShitje rroba online\nfiliz_studio_\nSa kushton, a e keni kete masen','Emri: Miqail','Sa kushton produkti?','A mund te rezervoj','+355691234567'])('keeps P1 facts, recall, confirmation and complete questions separate: %s', text => {
- expect(fragmentKind(text)).toBe('separate');
+it.each(['po','jo','ok','konfirmoj','dua porosi','anulo rezervimin','Si quhem une','Miqail\nShitje rroba online\nfiliz_studio_\nSa kushton, a e keni kete masen','Emri: Miqail','Sa kushton produkti?','A mund te rezervoj','+355691234567'])('keeps P1 facts, recall, confirmation and complete questions separate: %s', async text => {
+ expect((await fragmentKind(text))).toBe('separate');
 });
-it("never batches attachments and does not open a window for a single field answer", () => {
- expect(fragmentKind('pse',true)).toBe('separate');
- expect(fragmentKind('Miqail')).toBe('continuation');
+it("never batches attachments and does not open a window for a single field answer", async () => {
+ expect((await fragmentKind('pse',true))).toBe('separate');
+ expect((await fragmentKind('Miqail'))).toBe('continuation');
 });
 it("supports WhatsApp originals without accepting a different account", () => {
  const wa = {...first,channel:'whatsapp' as const,contextMetadata:{whatsappPhoneNumberId:'phone'}};

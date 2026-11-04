@@ -26,15 +26,15 @@ describe("conversation control before workflow execution", () => {
         expect(result?.nextState.customer).toEqual(before.customer);
         expect(before.recentMessages).toHaveLength(1);
     });
-    it("allows an answer to a current specific proposal", () => {
-        expect(conversationControl({ businessId: "business", message: "Po", state: state("Ta vazhdojmë porosinë për Aktivitetet Montessori?"), mode: "test", hasPhoto: false })).toBeNull();
+    it("does not infer a process proposal from assistant prose", () => {
+        expect(conversationControl({ businessId: "business", message: "Po", state: state("Ta vazhdojmë porosinë për Aktivitetet Montessori?"), mode: "test", hasPhoto: false })).not.toBeNull();
     });
     it.each([undefined, null, "Pyetje tjetër"])("does not trust an unverified production prompt %s", deliveredReply => {
         expect(conversationControl({ businessId: "business", message: "Ok", state: state("Ta vazhdojmë porosinë për Montessori?"), deliveredReply, hasPhoto: false })?.reply).toBeTruthy();
     });
-    it("allows a delivered production proposal", () => {
+    it("delivery alone does not turn assistant prose into a process proposal", () => {
         const prompt = "Ta vazhdojmë porosinë për Montessori?";
-        expect(conversationControl({ businessId: "business", message: "Po", state: state(prompt), deliveredReply: prompt, hasPhoto: false })).toBeNull();
+        expect(conversationControl({ businessId: "business", message: "Po", state: state(prompt), deliveredReply: prompt, hasPhoto: false })).not.toBeNull();
     });
     it("does not consume a customer field with an acknowledgement", () => {
         expect(conversationControl({ businessId: "business", message: "Ok", state: state("Na jepni telefonin, qytetin, adresën."), mode: "test", hasPhoto: false })?.reply).toBeTruthy();
@@ -49,7 +49,9 @@ describe("conversation control before workflow execution", () => {
     it("preserves a yes/no field response and lets explicit orders and cancellation reach their existing engines", () => {
         for (const message of ["Dua ta porosis", "Anulo", "Sa kushton?"])
             expect(conversationControl({ businessId: "business", message, state: state("PDF"), mode: "test", hasPhoto: false })).toBeNull();
-        expect(conversationControl({ businessId: "business", message: "Jo", state: state("A dëshironi personalizim?"), mode: "test", hasPhoto: false })).toBeNull();
+        const choice = migrateContext(state("A dëshironi personalizim?"));
+        choice.context!.execution.linear = { id: "w", versionId: "v", name: "Choice", steps: [{ key: "collect_customer", kind: "choice", options: ["Yes", "No"] }] };
+        expect(conversationControl({ businessId: "business", message: "Jo", state: choice, mode: "test", hasPhoto: false })).toBeNull();
     });
     it("invalidates an old confirmation after an informational interruption", () => {
         const s = state("Ta konfirmojmë porosinë?");
@@ -63,8 +65,8 @@ it.each(["OK 👍", "ok\nfaleminderit", "👍", "❤️"])("handles acknowledgem
 it("does not accept a generic offer of more information as purchase consent", () => {
     expect(conversationControl({ businessId: "business", message: "Po", state: state("A dëshironi më shumë informacion?"), mode: "test", hasPhoto: false })?.nextState.step_key).toBe("collect_customer");
 });
-it("recognizes a specific proposal after a product description", () => {
-    expect(conversationControl({ businessId: "business", message: "Po", state: state("Materiali kushton 690 ALL. Ta vazhdojmë porosinë për Montessori?"), mode: "test", hasPhoto: false })).toBeNull();
+it("does not infer a process proposal after a product description", () => {
+    expect(conversationControl({ businessId: "business", message: "Po", state: state("Materiali kushton 690 ALL. Ta vazhdojmë porosinë për Montessori?"), mode: "test", hasPhoto: false })).not.toBeNull();
 });
 it("does not treat a choice between information and ordering as a yes/no proposal", () => {
     expect(conversationControl({ businessId: "business", message: "Po", state: state("Dëshiron informacion apo të vazhdojmë porosinë?"), mode: "test", hasPhoto: false })?.reply).toBeTruthy();

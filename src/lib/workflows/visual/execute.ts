@@ -12,7 +12,7 @@ import { extractMessageFacts, profileExtractionFields } from "../extract-facts";
 import { getFact, setFact, resetOrder, isQuestion, recordPrompt, migrateContext, sharedPrompt, setOrderTerms } from "../context";
 import { agentModel } from "@/lib/agents/generate";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
-import { emptyState } from "../engine";
+import { emptyState } from "../state";
 import { advanceVisualWorkflow, detectVisualIntent } from "./runtime";
 import { loadVisualVersion } from "./store";
 import { validateVisualGraph } from "./model";

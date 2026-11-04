@@ -28,6 +28,7 @@ it("keeps admin actions and pricing reachable on mobile", () => {
   expect(buildAdminNavigation("mobile").map((item) => item.path)).toEqual([
     "",
     "businesses",
+    "users",
     "conversations",
     "pricing",
     "actions",
@@ -39,6 +40,7 @@ it("includes onboarding map in admin desktop nav", () => {
   expect(buildAdminNavigation("desktop").map((item) => item.path)).toEqual([
     "",
     "businesses",
+    "users",
     "product-types",
     "conversations",
     "pricing",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { briefingAnswer, briefingQuestion, briefingSummary, reportingRange, type Briefing } from "./briefing-model";
+import { briefingAnswer, briefingSummary, reportingRange, type Briefing } from "./briefing-model";
 
 describe("reporting calendar", () => {
   it("uses business dates across UTC boundaries, yesterday and Monday-based current week", () => {
@@ -24,16 +24,7 @@ describe("reporting calendar", () => {
   it.each(["", "not/a-timezone"])("fails closed for invalid timezone %s", zone =>
     expect(() => reportingRange("today", zone, new Date())).toThrow());
 });
-describe("read-only questions", () => {
-  it.each([
-    ["Çfarë ndodhi sot në biznes?", "today"], ["Sa mesazhe morëm sot?", "today"],
-    ["Sa porosi kemi dje?", "yesterday"], ["Më jep përmbledhjen e javës.", "week"],
-    ["Show me the business summary for this week", "week"], ["How many orders yesterday?", "yesterday"],
-  ])("recognizes %s without a model", (text, period) => expect(briefingQuestion(text)).toBe(period));
-  it.each(["Krijo një porosi sot", "Sa porosi kemi sot dhe dje?", "Sa porosi sot dhe krijo një produkt", "Compare orders today", "Sa të ardhura kemi sot?"])(
-    "does not consume unsupported or mutating requests: %s", text => expect(briefingQuestion(text)).toBeNull(),
-  );
-});
+
 it("formats exact verified numbers, distinguishes zero/unavailable/disabled and does not invent trends", () => {
   const reading = { status: "available" as const, count: 0, checkedAt: "2026-10-20T12:00Z", href: "/b/test/inbox" };
   const data: Briefing = { businessId: "b", businessName: "Test", timezone: "UTC", generatedAt: reading.checkedAt, recordedBefore: reading.checkedAt,

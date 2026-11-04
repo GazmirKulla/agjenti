@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     // stream must not skip a locally failed/unaccepted preceding message.
     if (!prior && data.sequence !== session.turns) return NextResponse.json({ error: "Mungon mesazhi i mëparshëm." }, { status: 409 });
     const fingerprint = createHash("sha256").update(JSON.stringify({ input, stream: data.streamId, sequence: data.sequence })).digest("hex");
-    const payload = { ...input, fragmentKind: fragmentKind(input.message, input.hasMedia || Boolean(input.attachments?.length)) };
+    const payload = { ...input, fragmentKind: await fragmentKind(input.message, input.hasMedia || Boolean(input.attachments?.length)) };
     const { data: job, error } = await access.db.rpc("enqueue_transport_operation", { p_business: access.businessId, p_user: access.userId, p_request: data.requestId, p_kind: "test", p_scope: data.streamId, p_sequence: data.sequence, p_fingerprint: fingerprint, p_payload: payload });
     if (error) return NextResponse.json({ error: "Kërkesa nuk u pranua. Rifresko statusin; mos krijo identitet të ri për retry." }, { status: 409 });
     if (data.retry === true && job.batch_parent_id) return NextResponse.json({ error: "Riprovo kërkesën e parë të grupit, me të njëjtin identitet." }, { status: 409 });

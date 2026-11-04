@@ -15,7 +15,8 @@ import { persistedTurn, PersistenceError, reassessPlan } from "@/lib/business-as
 import { AssistantError } from "@/lib/business-assistant/model";
 import { readPersonalAssistantName } from "@/lib/business-assistant/identity";
 import { loadBriefing, BriefingError } from "@/lib/business-assistant/briefing";
-import { briefingQuestion, briefingAnswer } from "@/lib/business-assistant/briefing-model";
+import { briefingQuestion } from "@/lib/business-assistant/briefing-intent";
+import { briefingAnswer } from "@/lib/business-assistant/briefing-model";
 import { dashboardLanguage } from "@/lib/dashboard/language/core";
 import { revalidatePath } from "next/cache";
 export const runtime = "nodejs";
@@ -126,7 +127,7 @@ export async function POST(request: Request) {
         "Biseda është shumë e gjatë. Fillo një kërkesë të re.",
       );
     const context = parseUIContext(body.context);
-    const briefingPeriod = briefingQuestion(body.text);
+    const briefingPeriod = await briefingQuestion(body.text);
     if (briefingPeriod && !body.attachments?.length && !body.links?.length) {
       const answer = async () => {
         const briefing = await loadBriefing(slug, briefingPeriod, undefined, request);

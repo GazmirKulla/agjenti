@@ -1,5 +1,5 @@
 import { messageUnderstanding } from "@/lib/conversations/understanding/context";
-import { emptyState, foldText, type ConversationStatePayload, type WorkflowStepDef } from "./engine";
+import { emptyState, foldText, type ConversationStatePayload, type WorkflowStepDef } from "./state";
 export const profileKeys = ["name", "phone", "email", "city", "address"] as const;
 export type ProfileKey = typeof profileKeys[number];
 export type FieldType = "text" | "phone" | "email" | "number" | "photo";
@@ -199,7 +199,15 @@ export function affirmative(message: string) { return messageUnderstanding(messa
 /** Only evidence-backed semantic field candidates reach deterministic validation. */
 export function extractExplicitFacts(state: ConversationStatePayload, message: string, steps: WorkflowStepDef[] = []) {
     let count = 0;
-    for (const candidate of messageUnderstanding(message).facts) {
+    const meaning = messageUnderstanding(message);
+    for (const unresolved of meaning.unresolvedFields) {
+        const key = profileKeys.includes(unresolved.key as ProfileKey) ? `customer_${unresolved.key}` : unresolved.key;
+        const step = steps.find(s => (s.fieldKey ?? s.key) === key);
+        if (!profileKey(key) && !step) continue;
+        // An ambiguous correction revokes approval of the old value too.
+        setFact(state, key, "", key === "customer_phone" ? "phone" : key === "customer_email" ? "email" : step?.fieldType ?? "text", "message_evidence");
+    }
+    for (const candidate of meaning.facts) {
         const key = profileKeys.includes(candidate.key as ProfileKey) ? `customer_${candidate.key}` : candidate.key;
         const step = steps.find(s => (s.fieldKey ?? s.key) === key);
         if (!profileKey(key) && !step) continue;
@@ -273,7 +281,7 @@ export function advanceSharedOrder(input: ConversationStatePayload, message: str
     }
     const pendingInvalid = [...(ctx.execution.invalidFields ?? [])];
     let extracted = extractExplicitFacts(state, message, steps) + extractedByModel;
-    if (!extracted && pendingInvalid.length === 1 && message.trim() && !isQuestion(message) && !affirmative(message) && !message.includes(":")) {
+    if (!extracted && pendingInvalid.length === 1 && message.trim() && messageUnderstanding(message).act === "answer" && messageUnderstanding(message).navigation === "none" && !messageUnderstanding(message).unresolvedInput) {
         const key = pendingInvalid[0], step = steps.find(s => (s.fieldKey ?? s.key) === key);
         if (setFact(state, key, message, step?.fieldType ?? getFact(state, key)?.type ?? "text", "correction"))
             extracted++;
@@ -314,7 +322,7 @@ export function advanceSharedOrder(input: ConversationStatePayload, message: str
                 if (affirmative(message) || extracted)
                     ctx.execution.profileConfirmation = "confirmed";
             }
-            else if (!extracted && message.trim() && !isQuestion(message)) {
+            else if (!extracted && message.trim() && (messageUnderstanding(message).act === "answer" && messageUnderstanding(message).navigation === "none") && !isQuestion(message)) {
                 const key = missingProfile(state)[0];
                 if (key)
                     setFact(state, `customer_${key}`, message, "text", `step:${step.key}`);
@@ -329,7 +337,7 @@ export function advanceSharedOrder(input: ConversationStatePayload, message: str
         else if (step.kind === "photo") {
             complete = hasPhoto && setFact(state, step.fieldKey ?? step.key, "photo_received", "photo", `step:${step.key}`);
         }
-        else if (!extracted && message.trim()) {
+        else if (!extracted && message.trim() && (messageUnderstanding(message).act === "answer" && messageUnderstanding(message).navigation === "none")) {
             const allowed = !step.options?.length || step.options.some(v => foldText(v) === foldText(message));
             complete = allowed && setFact(state, step.fieldKey ?? step.key, message, step.fieldType ?? "text", `step:${step.key}`);
         }

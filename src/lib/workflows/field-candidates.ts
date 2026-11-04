@@ -1,5 +1,5 @@
 import { isQuestion, safeFieldKey, validValue, type FieldType } from "./context";
-import { foldText } from "./engine";
+import { foldText } from "./state";
 
 /** Server-supplied definitions, not model-selected persistence destinations.
  * Interpretation is pure: callers still own authorization, provenance and CAS. */

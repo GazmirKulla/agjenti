@@ -58,20 +58,6 @@ export function reportingRange(period: BriefingPeriod, timezone: string, now: Da
   return { from, to, startDate, endDate };
 }
 
-/** Narrow, read-only intent recognition. No provider call or mutation proposal.
- * Mixed requests and unsupported comparisons are left to the existing assistant. */
-export function briefingQuestion(text: string): BriefingPeriod | null {
-  const s = text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim().replace(/[?!.,]+$/g, "");
-  if (s.length > 220 || /\b(krijo|ndrysho|fshi|publiko|aktivizo|create|update|delete|publish|revenue|fitim|ardhura|krahaso|compare|trend)\b/.test(s)) return null;
-  if (!/^(cfare ndodhi|sa (mesazhe|porosi|kliente|rezervime)|me (jep|bej)|permbledh|what happened|how many|give me|show me|summarize|summary)\b/.test(s)) return null;
-  if (!/\b(biznes|mesazhe|porosi|kliente|rezervime|permbledhje[n]?|business|messages|orders|customers|bookings|summary)\b/.test(s)) return null;
-  const matches = [
-    /\b(sot|today)\b/.test(s) ? "today" : null,
-    /\b(dje|yesterday)\b/.test(s) ? "yesterday" : null,
-    /\b(javes|kete jave|this week|current week|weekly)\b/.test(s) ? "week" : null,
-  ].filter(Boolean);
-  return matches.length === 1 ? matches[0] as BriefingPeriod : null;
-}
 
 export function briefingSummary(data: Briefing, language: DashboardLanguage) {
   const t = translator(language);

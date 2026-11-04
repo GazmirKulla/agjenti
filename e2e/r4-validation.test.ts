@@ -68,8 +68,8 @@ function evidence(c: Case) {
   return {state,products,services,grounding,customer:projectCustomerContext(state,c.message),message:c.message,informational:true};
 }
 const results: object[]=[];
-it.each(cases)('$id $domain: $model',c=>{
-  const e=evidence(c),before=structuredClone(e),r=validateResponse(c.model,e);
+it.each(cases)('$id $domain: $model',async c=>{
+  const e=evidence(c),before=structuredClone(e),r=(await validateResponse(c.model,e));
   const predicted=r.changed;
   results.push({scenarioId:c.id,domain:c.domain,input:c.message,groundTruth:{customer:e.customer,grounding:e.grounding,executionReceipts:[]},
     modelResponse:c.model,expected:c.unsafe?'intercept':'preserve',actual:r,confusion:c.unsafe?(predicted?'TP':'FN'):(predicted?'FP':'TN'),

@@ -1,4 +1,4 @@
-import { foldText } from "@/lib/workflows/engine";
+import { foldText } from "@/lib/workflows/state";
 
 export type TrainingTarget = { slug: string } | { businessId: string };
 export type TrainingKind = "style" | "example" | "workflow";

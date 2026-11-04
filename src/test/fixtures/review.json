@@ -1,0 +1,1943 @@
+{
+  "src/lib/agents/generate.test.ts::structured communication > returns one optional proposal separately from the factual answer": {
+    "Përshëndetje! Mund të të shpjegoj si funksionon.": {
+      "findings": []
+    },
+    "Çfarë biznesi ke?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::structured communication > enforces disabled optional qualification even when the provider proposes a question": {
+    "Përshëndetje!": {
+      "findings": []
+    },
+    "Çfarë biznesi ke?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::R3 critical response boundary > P1 sends selected composite facts, not an entire state, and validates denial against that same projection": {
+    "Nuk më ke dhënë të dhëna.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk më ke dhënë të dhëna.",
+          "subject": null
+        }
+      ]
+    },
+    "Emri yt: Drita. Instagrami yt: synthetic_books.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::R3 critical response boundary > does not expose a fabricated booking confirmation or keep its provider history": {
+    "Rezervimi u konfirmua për nesër.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Rezervimi u konfirmua për nesër.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/generate.test.ts::R3 critical response boundary > corrects denial of a current customer-declared name without mutating facts": {
+    "Nuk ma ke treguar emrin.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk ma ke treguar emrin.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/generate.test.ts::R3 critical response boundary > does not allow prose to override a verified product price": {
+    "Libri kushton 999 EUR.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Libri kushton 999 EUR.",
+          "subject": "p"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/generate.test.ts::R3 critical response boundary > never exposes rejected raw model prose in response traces": {
+    "Booking confirmed for PRIVATE_SENTINEL.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Booking confirmed for PRIVATE_SENTINEL.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/generate.test.ts::reply source diagnostics > R2 keeps business evidence separate from customer claims, disables stale provider history and preserves unknown states": {
+    "[[product:p]]; arbitrary unsupported promise": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::reply source diagnostics > 2B renders verified service slots, rejects invented IDs and never creates mixed-kind ordinal evidence": {
+    "[[service:s2]], [[service:s1]], [[service:foreign]]": {
+      "findings": []
+    },
+    "[[product:p1]], [[service:s1]]": {
+      "findings": []
+    },
+    "Konsulta, [[service:s2]]": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::reply source diagnostics > W3 renders only verified product references; model prose never selects a product": {
+    "Sugjeroj [[product:p2]] dhe [[product:p1]]. [[product:foreign]]": {
+      "findings": []
+    },
+    "Puzzle is selected; product_id=p1": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::reply source diagnostics > uses the published journey as source context while preserving the authoritative order state": {
+    "Materialet merren nga website-i.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::reply source diagnostics > reports AI with the response id and carries its context": {
+    "Përshëndetje": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::observes metadata and usage without exposing prompts, customer PII or unvalidated prose": {
+    "Reply": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::supplies approved training with factual and workflow boundaries to the real provider request": {
+    "Shkurt": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::keeps customer contact data separate from business contact claims": {
+    "Kontakto stafin.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::retains collected qualification facts in document answers after the original message leaves recent history": {
+    "Kushton 690 ALL.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Kushton 690 ALL.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/generate.test.ts::R1 exposes relevant suspended service facts without unrelated order facts or approvals": {
+    "Synthetic response": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Synthetic response",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/generate.test.ts::R1 passes corrected conversation declarations after 25 turns, but not unrelated profile or historical snapshots": {
+    "Synthetic response": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Synthetic response",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/generate.test.ts::R1 never promotes stale entity selections to verified catalog evidence": {
+    "Synthetic response": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/generate.test.ts::repairs duplicate questions once using original evidence without rejected history": {
+    "Mund të ndihmojmë me kërkesat e klientëve.": {
+      "findings": []
+    },
+    "Çfarë dëshiron të përmirësosh?": {
+      "findings": []
+    }
+  },
+  "src/lib/conversations/process-conversation-message.test.ts::R1 conversation-only declarations > Nora natural declarations survive sealed-session reload and R3 rejects the superseded Instagram": {
+    "Emri yt: Nora Testi. Biznesi yt: dyqan lulesh online. Instagrami yt: @lule_prova.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Emri yt: Nora Testi. Biznesi yt: dyqan lulesh online. Instagrami yt: @lule_prova.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Nuk e di adresën, megjithatë porosia u realizua.": {
+    "Nuk e di adresën, megjithatë porosia u realizua.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Nuk e di adresën, megjithatë porosia u realizua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Nuk e di emrin, dhe porosia u krye me sukses.": {
+    "Nuk e di emrin, dhe porosia u krye me sukses.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Nuk e di emrin, dhe porosia u krye me sukses.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Nuk kam detaje; porosia u përfundua.": {
+    "Nuk kam detaje; porosia u përfundua.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Nuk kam detaje; porosia u përfundua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Porosia jote u perfundua me sukses.": {
+    "Porosia jote u perfundua me sukses.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia jote u perfundua me sukses.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Njoftimi iu dergua stafit.": {
+    "Njoftimi iu dergua stafit.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Njoftimi iu dergua stafit.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Mesazhi u dërgua ekipit.": {
+    "Mesazhi u dërgua ekipit.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Mesazhi u dërgua ekipit.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: E rezervuam takimin për të premten pas 17:00.": {
+    "E rezervuam takimin për të premten pas 17:00.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "E rezervuam takimin për të premten pas 17:00.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Ju rezervova takimin.": {
+    "Ju rezervova takimin.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Ju rezervova takimin.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Kemi konfirmuar rezervimin.": {
+    "Kemi konfirmuar rezervimin.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Kemi konfirmuar rezervimin.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: I don't know your name, however your order was created.": {
+    "I don't know your name, however your order was created.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "I don't know your name, however your order was created.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Porosia dështoi.": {
+    "Porosia dështoi.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia dështoi.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Porosia u refuzua.": {
+    "Porosia u refuzua.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia u refuzua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Porosia është në pritje.": {
+    "Porosia është në pritje.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia është në pritje.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Pagesa po procesohet.": {
+    "Pagesa po procesohet.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Pagesa po procesohet.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: informational prose cannot borrow action authority: Tentuam të dërgonim kërkesën.": {
+    "Tentuam të dërgonim kërkesën.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Tentuam të dërgonim kërkesën.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Porosia nuk u krijua.": {
+    "Porosia nuk u krijua.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Takimi nuk është rezervuar.": {
+    "Takimi nuk është rezervuar.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Nuk kam konfirmim që njoftimi iu dërgua stafit.": {
+    "Nuk kam konfirmim që njoftimi iu dërgua stafit.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Nëse porosia u krye, kontrollo statusin.": {
+    "Nëse porosia u krye, kontrollo statusin.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Kur takimi u rezervua, çfarë ndodhi?": {
+    "Kur takimi u rezervua, çfarë ndodhi?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Mund të përgatisim kërkesën pa rezervuar takimin.": {
+    "Mund të përgatisim kërkesën pa rezervuar takimin.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Propozoj të mbledhim preferencat.": {
+    "Propozoj të mbledhim preferencat.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Po presim konfirmimin e sistemit.": {
+    "Po presim konfirmimin e sistemit.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Kërkesa është për të premten pas 17:00, jo një rezervim i kryer.": {
+    "Kërkesa është për të premten pas 17:00, jo një rezervim i kryer.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Mund të tentojmë të përgatisim kërkesën; rezultati nuk është verifikuar.": {
+    "Mund të tentojmë të përgatisim kërkesën; rezultati nuk është verifikuar.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: A u njoftua stafi?": {
+    "A u njoftua stafi?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves non-execution speech: Çfarë produkti dëshiron?": {
+    "Çfarë produkti dëshiron?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::ignores historical/injected receipt other-tenant": {
+    "Porosia u krye me sukses.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia u krye me sukses.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::ignores historical/injected receipt same-tenant-old-request": {
+    "Porosia u krye me sukses.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia u krye me sukses.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::ignores historical/injected receipt same-request-unverified": {
+    "Porosia u krye me sukses.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia u krye me sukses.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves independently bound multi-entity values: Këpuca kushton 35 EUR dhe Çorapja kushton 400 ALL.": {
+    "Këpuca kushton 35 EUR dhe Çorapja kushton 400 ALL.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves independently bound multi-entity values: Këpuca: 35 EUR, Çorapja: 400 ALL.": {
+    "Këpuca: 35 EUR, Çorapja: 400 ALL.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves independently bound multi-entity values: Këpuca kushton €35; Rregullimi kushton nga 12,5 EUR.": {
+    "Këpuca kushton €35; Rregullimi kushton nga 12,5 EUR.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves independently bound multi-entity values: [[product:one]] kushton 35 EUR dhe [[product:two]] kushton 400 ALL.": {
+    "[[product:one]] kushton 35 EUR dhe [[product:two]] kushton 400 ALL.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: preserves independently bound multi-entity values: Nuk ka çmim të verifikuar për një artikull tjetër. Këpuca kushton 35 EUR.": {
+    "Nuk ka çmim të verifikuar për një artikull tjetër. Këpuca kushton 35 EUR.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: numbers elsewhere in the catalog are not evidence: Këpuca kushton 400 ALL dhe Çorapja kushton 35 EUR.": {
+    "Këpuca kushton 400 ALL dhe Çorapja kushton 35 EUR.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Këpuca kushton 400 ALL dhe Çorapja kushton 35 EUR.",
+          "subject": "one"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: numbers elsewhere in the catalog are not evidence: Këpuca kushton 35 ALL dhe Çorapja kushton 400 EUR.": {
+    "Këpuca kushton 35 ALL dhe Çorapja kushton 400 EUR.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Këpuca kushton 35 ALL dhe Çorapja kushton 400 EUR.",
+          "subject": "one"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: numbers elsewhere in the catalog are not evidence: Këpuca kushton 35 EUR dhe Rregullimi kushton 12,5 EUR.": {
+    "Këpuca kushton 35 EUR dhe Rregullimi kushton 12,5 EUR.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Këpuca kushton 35 EUR dhe Rregullimi kushton 12,5 EUR.",
+          "subject": "three"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: numbers elsewhere in the catalog are not evidence: Këpuca dhe Çorapja kushtojnë 35 EUR dhe 400 ALL.": {
+    "Këpuca dhe Çorapja kushtojnë 35 EUR dhe 400 ALL.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Këpuca dhe Çorapja kushtojnë 35 EUR dhe 400 ALL.",
+          "subject": "two"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: numbers elsewhere in the catalog are not evidence: Një artikull i panjohur kushton 35 EUR.": {
+    "Një artikull i panjohur kushton 35 EUR.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Një artikull i panjohur kushton 35 EUR.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::catalog names containing conjunctions are still a single attributed entity": {
+    "Krem dhe shampo kushton 35 EUR dhe Çorapja kushton 400 ALL.": {
+      "findings": []
+    },
+    "Krem dhe shampo kushton 400 ALL dhe Çorapja kushton 35 EUR.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Krem dhe shampo kushton 400 ALL dhe Çorapja kushton 35 EUR.",
+          "subject": "one"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: polarity/extensions of exact values: Emri yt nuk është Drita.": {
+    "Emri yt nuk është Drita.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Emri yt nuk është Drita.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: polarity/extensions of exact values: Emri yt nuk eshte Drita.": {
+    "Emri yt nuk eshte Drita.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Emri yt nuk eshte Drita.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: polarity/extensions of exact values: Ti quhesh Drita dhe ke 50 punonjës.": {
+    "Ti quhesh Drita dhe ke 50 punonjës.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti quhesh Drita dhe ke 50 punonjës.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: polarity/extensions of exact values: Your name is not Drita.": {
+    "Your name is not Drita.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Your name is not Drita.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: polarity/extensions of exact values: Ti quhesh Drita dhe je mjeke.": {
+    "Ti quhesh Drita dhe je mjeke.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti quhesh Drita dhe je mjeke.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: polarity/extensions of exact values: Ti quhesh Drita Dritat.": {
+    "Ti quhesh Drita Dritat.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti quhesh Drita Dritat.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: supported prefix cannot authorize invented continuation: Ti shet këpucë online dhe ke 30 punonjës.": {
+    "Ti shet këpucë online dhe ke 30 punonjës.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti shet këpucë online dhe ke 30 punonjës.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: supported prefix cannot authorize invented continuation: Ti shet këpucë online dhe ofron kredi.": {
+    "Ti shet këpucë online dhe ofron kredi.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti shet këpucë online dhe ofron kredi.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: supported prefix cannot authorize invented continuation: Biznesi yt shet këpucë online dhe është më i madhi në qytet.": {
+    "Biznesi yt shet këpucë online dhe është më i madhi në qytet.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Biznesi yt shet këpucë online dhe është më i madhi në qytet.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: bounded supported paraphrase: Ti shet këpucë online.": {
+    "Ti shet këpucë online.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: bounded supported paraphrase: Sipas deklarimit tënd, ti shet këpucë online.": {
+    "Sipas deklarimit tënd, ti shet këpucë online.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4: bounded supported paraphrase: Ti ke deklaruar biznesin tënd: Shitje këpucësh online.": {
+    "Ti ke deklaruar biznesin tënd: Shitje këpucësh online.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::a correct recall may retain an unrelated uncertainty clause": {
+    "Ti quhesh Drita, por nuk e di stokun aktual.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::keeps hypothetical questions and business facts separate from customer recall": {
+    "Po sikur të kesh 50 punonjës?": {
+      "findings": []
+    },
+    "Biznesi ofron rregullime.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::corrected facts survive shortened history/reload without mutating state or widening disclosure": {
+    "Ti quhesh Drita.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti quhesh Drita.",
+          "subject": null
+        }
+      ]
+    },
+    "Ti quhesh Arta.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4 'retail': current field values do not borrow other values or become profile": {
+    "usual_size: M dhe size: XL.": {
+      "findings": []
+    },
+    "size: M.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_unverified",
+          "quote": "size: M.",
+          "subject": null
+        }
+      ]
+    },
+    "Nëse ke nevojë, mund të kërkosh një kontroll.": {
+      "findings": []
+    },
+    "Ti ke diagnozë të konfirmuar nga servisi.": {
+      "findings": [
+        {
+          "code": "customer_fact_unverified",
+          "status": "unverifiable",
+          "quote": "Ti ke diagnozë të konfirmuar nga servisi.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4 'salon': current field values do not borrow other values or become profile": {
+    "preferred_day: e premte.": {
+      "findings": []
+    },
+    "preferred_day: e hënë.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_unverified",
+          "quote": "preferred_day: e hënë.",
+          "subject": null
+        }
+      ]
+    },
+    "Nëse ke nevojë, mund të kërkosh një kontroll.": {
+      "findings": []
+    },
+    "Ti ke diagnozë të konfirmuar nga servisi.": {
+      "findings": [
+        {
+          "code": "customer_fact_unverified",
+          "status": "unverifiable",
+          "quote": "Ti ke diagnozë të konfirmuar nga servisi.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4 'garage': current field values do not borrow other values or become profile": {
+    "year: 2018.": {
+      "findings": []
+    },
+    "year: 2017.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_unverified",
+          "quote": "year: 2017.",
+          "subject": null
+        }
+      ]
+    },
+    "Nëse ke nevojë, mund të kërkosh një kontroll.": {
+      "findings": []
+    },
+    "Ti ke diagnozë të konfirmuar nga servisi.": {
+      "findings": [
+        {
+          "code": "customer_fact_unverified",
+          "status": "unverifiable",
+          "quote": "Ti ke diagnozë të konfirmuar nga servisi.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency-r4.test.ts::R4 'education': current field values do not borrow other values or become profile": {
+    "age: 6.": {
+      "findings": []
+    },
+    "age: 4.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_unverified",
+          "quote": "age: 4.",
+          "subject": null
+        }
+      ]
+    },
+    "Nëse ke nevojë, mund të kërkosh një kontroll.": {
+      "findings": []
+    },
+    "Ti ke diagnozë të konfirmuar nga servisi.": {
+      "findings": [
+        {
+          "code": "customer_fact_unverified",
+          "status": "unverifiable",
+          "quote": "Ti ke diagnozë të konfirmuar nga servisi.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::imperative recall corrects false absence without changing canonical facts": {
+    "Nuk e di emrin. Nuk më ke dhënë biznesin, Instagramin apo pyetjet.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk e di emrin. Nuk më ke dhënë biznesin, Instagramin apo pyetjet.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::correct composite answer passes unchanged": {
+    "Emri yt është Drita. Biznesi yt: Shitje librash online. Instagrami yt: synthetic_books. Pyetjet tipike: çmimet dhe transporti.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::partial recall preserves known facts and identifies only the unavailable requested field": {
+    "Nuk më ke dhënë asnjë të dhënë.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk më ke dhënë asnjë të dhënë.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::dynamic process recall does not accept a blanket absence claim": {
+    "Nuk kam të dhëna për këtë kërkesë.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk kam të dhëna për këtë kërkesë.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::correct partially available answer remains unchanged: Ti quhesh Drita. Nuk kam të dhëna për Instagramin.": {
+    "Ti quhesh Drita. Nuk kam të dhëna për Instagramin.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::correct partially available answer remains unchanged: Emri yt është Drita. Nuk kam të dhëna për Instagramin.": {
+    "Emri yt është Drita. Nuk kam të dhëna për Instagramin.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::known values cannot be swapped between requested keys": {
+    "Emri yt: synthetic_books. Instagrami yt: Drita.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Emri yt: synthetic_books. Instagrami yt: Drita.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::a missing field cannot be invented alongside a known field": {
+    "Ti quhesh Drita. Instagrami yt: invented_shop.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti quhesh Drita. Instagrami yt: invented_shop.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::unknown facts are not borrowed from assistant history or another state": {
+    "Ti quhesh Drita.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Ti quhesh Drita.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::all-missing composite cannot invent one requested field: Emri: Invented. Instagram: invented_shop.": {
+    "Emri: Invented. Instagram: invented_shop.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Emri: Invented. Instagram: invented_shop.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::all-missing composite cannot invent one requested field: Nuk e di emrin. Instagrami yt: invented_shop.": {
+    "Nuk e di emrin. Instagrami yt: invented_shop.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Nuk e di emrin. Instagrami yt: invented_shop.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::recall is idempotent and never merges an unrelated process": {
+    "Nuk kam të dhëna.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk kam të dhëna.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::unavailable process cannot borrow historical model facts": {
+    "budget: 9000.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "budget: 9000.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::staff-owned recall projects no private data and cannot resume a process": {
+    "Nuk kam konfirmim.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::legacy state v1 survives shortened history and current corrections": {
+    "Nuk më ke dhënë të dhëna.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk më ke dhënë të dhëna.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::legacy state v2 survives shortened history and current corrections": {
+    "Nuk më ke dhënë të dhëna.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk më ke dhënë të dhëna.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::legacy state v3 survives shortened history and current corrections": {
+    "Nuk më ke dhënë të dhëna.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk më ke dhënë të dhëna.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::unverified or truncated facts are distinguished from missing facts": {
+    "Ti quhesh Drita.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti quhesh Drita.",
+          "subject": null
+        }
+      ]
+    },
+    "Nuk ma ke dhënë emrin.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Nuk ma ke dhënë emrin.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::retail composite recall uses only the correct live owner/version": {
+    "Nuk kam të dhëna për kërkesën.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk kam të dhëna për kërkesën.",
+          "subject": null
+        }
+      ]
+    },
+    "budget: 900. size: XL. usual_size: M.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::service composite recall uses only the correct live owner/version": {
+    "Nuk kam të dhëna për kërkesën.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk kam të dhëna për kërkesën.",
+          "subject": null
+        }
+      ]
+    },
+    "budget: 750. project_type: website. requested_budget: 500.": {
+      "findings": []
+    },
+    "budget: 750. project_type: website. requirements: accessible.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::booking composite recall uses only the correct live owner/version": {
+    "Nuk kam të dhëna për kërkesën.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk kam të dhëna për kërkesën.",
+          "subject": null
+        }
+      ]
+    },
+    "date: 2027-01-05. time: 18:00.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Porosia u krijua me sukses.": {
+    "Porosia u krijua me sukses.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia u krijua me sukses.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Your order has been placed.": {
+    "Your order has been placed.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Your order has been placed.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Rezervimi u konfirmua për nesër.": {
+    "Rezervimi u konfirmua për nesër.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Rezervimi u konfirmua për nesër.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Your appointment is booked.": {
+    "Your appointment is booked.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Your appointment is booked.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Pagesa u pranua.": {
+    "Pagesa u pranua.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Pagesa u pranua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Payment received.": {
+    "Payment received.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Payment received.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Klienti u regjistrua.": {
+    "Klienti u regjistrua.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Klienti u regjistrua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Customer registered successfully.": {
+    "Customer registered successfully.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Customer registered successfully.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Stafi u njoftua.": {
+    "Stafi u njoftua.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Stafi u njoftua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: The team has been notified.": {
+    "The team has been notified.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "The team has been notified.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Ju rezervova për nesër.": {
+    "Ju rezervova për nesër.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Ju rezervova për nesër.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Biseda u transferua te stafi.": {
+    "Biseda u transferua te stafi.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Biseda u transferua te stafi.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Biseda iu kalua stafit.": {
+    "Biseda iu kalua stafit.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Biseda iu kalua stafit.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Kam krijuar porosinë.": {
+    "Kam krijuar porosinë.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Kam krijuar porosinë.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Your discount was approved.": {
+    "Your discount was approved.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Your discount was approved.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > blocks receipt-free execution claims: Porosia dështoi.": {
+    "Porosia dështoi.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia dështoi.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not infer availability: Libri është në stok.": {
+    "Libri është në stok.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "availability_unverified",
+          "quote": "Libri është në stok.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not infer availability: Libri nuk është në stok.": {
+    "Libri nuk është në stok.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "availability_unverified",
+          "quote": "Libri nuk është në stok.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not infer availability: The book is out of stock.": {
+    "The book is out of stock.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "availability_unverified",
+          "quote": "The book is out of stock.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not infer availability: We have slots available tomorrow.": {
+    "We have slots available tomorrow.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "availability_unverified",
+          "quote": "We have slots available tomorrow.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not infer availability: Termine të lira në orën 09:00.": {
+    "Termine të lira në orën 09:00.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "availability_unverified",
+          "quote": "Termine të lira në orën 09:00.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves ordinary questions, uncertainty and conditions: Përshëndetje! Si mund të të ndihmoj?": {
+    "Përshëndetje! Si mund të të ndihmoj?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves ordinary questions, uncertainty and conditions: Nuk kam konfirmim që rezervimi u konfirmua.": {
+    "Nuk kam konfirmim që rezervimi u konfirmua.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves ordinary questions, uncertainty and conditions: Your appointment is not confirmed.": {
+    "Your appointment is not confirmed.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves ordinary questions, uncertainty and conditions: Kur porosia u krijua, çfarë ndodhi?": {
+    "Kur porosia u krijua, çfarë ndodhi?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves ordinary questions, uncertainty and conditions: A është pagesa kryer?": {
+    "A është pagesa kryer?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves ordinary questions, uncertainty and conditions: Prania në katalog nuk garanton stok.": {
+    "Prania në katalog nuk garanton stok.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves ordinary questions, uncertainty and conditions: Nëse porosia u krijua, kontakto biznesin.": {
+    "Nëse porosia u krijua, kontakto biznesin.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves ordinary questions, uncertainty and conditions: Mund të përgatisim kërkesën, pa krijuar një porosi.": {
+    "Mund të përgatisim kërkesën, pa krijuar një porosi.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not let a disclaimer launder a later affirmative claim": {
+    "Nuk kam detaje, por rezervimi u konfirmua.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Nuk kam detaje, por rezervimi u konfirmua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > corrects only a uniquely identified structured mismatch: Libri kushton 999 EUR.": {
+    "Libri kushton 999 EUR.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Libri kushton 999 EUR.",
+          "subject": "p"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > corrects only a uniquely identified structured mismatch: Libri është falas.": {
+    "Libri është falas.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Libri është falas.",
+          "subject": "p"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > corrects only a uniquely identified structured mismatch: Libri costs USD 999.": {
+    "Libri costs USD 999.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Libri costs USD 999.",
+          "subject": "p"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > corrects only a uniquely identified structured mismatch: Libri kushton 20 USD.": {
+    "Libri kushton 20 USD.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Libri kushton 20 USD.",
+          "subject": "p"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > corrects only a uniquely identified structured mismatch: Konsulta kushton 40 ALL.": {
+    "Konsulta kushton 40 ALL.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Konsulta kushton 40 ALL.",
+          "subject": "s"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > corrects only a uniquely identified structured mismatch: Konsulta zgjat 90 minuta.": {
+    "Konsulta zgjat 90 minuta.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Konsulta zgjat 90 minuta.",
+          "subject": "s"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves verified values/slots: Libri kushton 20 EUR.": {
+    "Libri kushton 20 EUR.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves verified values/slots: Konsulta kushton nga 40 ALL.": {
+    "Konsulta kushton nga 40 ALL.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves verified values/slots: Konsulta zgjat 45 minuta.": {
+    "Konsulta zgjat 45 minuta.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves verified values/slots: Sugjeroj [[product:p]].": {
+    "Sugjeroj [[product:p]].": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > unknown/inactive entities and unattributed prices are not numeric evidence": {
+    "Libri kushton 20 EUR.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Libri kushton 20 EUR.",
+          "subject": null
+        }
+      ]
+    },
+    "Kushton 800 EUR.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Kushton 800 EUR.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not bind a short entity name from a substring during correction": {
+    "Karrigia kushton 500 EUR.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Karrigia kushton 500 EUR.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > keeps useful explanations outside a corrected claim": {
+    "Faleminderit për pyetjen. Libri kushton 999 EUR.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Libri kushton 999 EUR.",
+          "subject": "p"
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > policy requires actual scoped evidence, not customer/history/instructions": {
+    "Shipping is free.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "policy_evidence_absent",
+          "quote": "Shipping is free.",
+          "subject": null
+        }
+      ]
+    },
+    "Refunds are always approved.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "policy_evidence_absent",
+          "quote": "Refunds are always approved.",
+          "subject": null
+        }
+      ]
+    },
+    "Nuk kemi rimbursim.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "policy_evidence_absent",
+          "quote": "Nuk kemi rimbursim.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > partial and failed reads are not complete or empty": {
+    "Kemi 12 produkte.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "catalog_count_mismatch",
+          "quote": "Kemi 12 produkte.",
+          "subject": null
+        }
+      ]
+    },
+    "Këto janë të gjitha produktet.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "partial_catalog_claimed_complete",
+          "quote": "Këto janë të gjitha produktet.",
+          "subject": null
+        }
+      ]
+    },
+    "Nuk kemi produkte.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "unavailable_is_not_empty",
+          "quote": "Nuk kemi produkte.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > preserves a verified policy fee without misclassifying it as a product price": {
+    "Shipping costs 5 EUR.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > uses corrected customer name with provenance, never old history or another projection": {
+    "Quhesh Old.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Quhesh Old.",
+          "subject": null
+        }
+      ]
+    },
+    "Nuk e di emrin.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not repeat a known profile question or disclose the value unnecessarily": {
+    "Si quhesh?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > explicit own-phone recall uses the corrected scoped value, never a business contact": {
+    "Nuk ma ke treguar telefonin.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk ma ke treguar telefonin.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not conflate a business contact question with the customer's profile": {
+    "Cili është telefoni i biznesit?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > keeps legitimate correction/invalid-field prompts": {
+    "Si quhesh?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > does not hide an upstream pending clarification or use promptCounts as proof it was answered": {
+    "Si quhesh?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > keeps unknown questions and does not reuse another customer's projection": {
+    "Si quhesh?": {
+      "findings": []
+    },
+    "Cila është adresa?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > resolved selection suppresses only free information re-asking, not a workflow prompt": {
+    "Cilin shërbim dëshiron?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > repeated apology gets a bounded limitation without claiming progress or handoff": {
+    "Më fal.": {
+      "findings": [
+        {
+          "status": "correctable",
+          "code": "repeated_apology",
+          "quote": "Më fal.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > is deterministic under replay and does not treat prepared state as execution evidence": {
+    "Porosia u krijua.": {
+      "findings": [
+        {
+          "status": "unsupported_critical_claim",
+          "code": "execution_receipt_absent",
+          "quote": "Porosia u krijua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > reports bounded scope honestly: arbitrary semantic promises are not universally recognized": {
+    "Everything has magically worked out for you.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::preserves account explanations with empty or unrelated process facts: false": {
+    "Përgjigjet dërgohen nga profili yt në Instagram pasi e lidh nga paneli dhe aktivizon përgjigjet automatike.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::preserves account explanations with empty or unrelated process facts: true": {
+    "Përgjigjet dërgohen nga profili yt në Instagram pasi e lidh nga paneli dhe aktivizon përgjigjet automatike.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::question examples are declarations, not requests for unknown identity or verified business instructions": {
+    "Nuk m'i ke treguar pyetjet.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk m'i ke treguar pyetjet.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::F2/F3 supported name variants share the same authority: Si e kisha emrin une?": {
+    "Nuk ma ke treguar emrin.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk ma ke treguar emrin.",
+          "subject": null
+        }
+      ]
+    },
+    "Ti quhesh Miqail.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::F2/F3 supported name variants share the same authority: Po dhe si quhem?": {
+    "Nuk ma ke treguar emrin.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk ma ke treguar emrin.",
+          "subject": null
+        }
+      ]
+    },
+    "Ti quhesh Miqail.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::F2/F3 supported name variants share the same authority: Si e kam emrin?": {
+    "Nuk ma ke treguar emrin.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk ma ke treguar emrin.",
+          "subject": null
+        }
+      ]
+    },
+    "Ti quhesh Miqail.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::F2/F3 customer business, not tenant offering: Çfarë shes unë?": {
+    "Ti ofron automatizim AI si Agjenti.app.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti ofron automatizim AI si Agjenti.app.",
+          "subject": null
+        }
+      ]
+    },
+    "Ti shet rroba online.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::F2/F3 customer business, not tenant offering: Jo, unë Miqaili çfarë shes?": {
+    "Ti ofron automatizim AI si Agjenti.app.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti ofron automatizim AI si Agjenti.app.",
+          "subject": null
+        }
+      ]
+    },
+    "Ti shet rroba online.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::F2/F3 customer business, not tenant offering: Edhe njëherë, çfarë shes unë?": {
+    "Ti ofron automatizim AI si Agjenti.app.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti ofron automatizim AI si Agjenti.app.",
+          "subject": null
+        }
+      ]
+    },
+    "Ti shet rroba online.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::Instagram recall corrects denials, not account ownership": {
+    "Nuk ma ke treguar Instagramin.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Nuk ma ke treguar Instagramin.",
+          "subject": null
+        }
+      ]
+    },
+    "Ke deklaruar profilin @filiz_studio_.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::does not disclose unrelated customer identity: Çfarë ofron Agjenti.app?": {
+    "Agjenti.app ofron automatizim AI.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::does not disclose unrelated customer identity: Cili është telefoni i biznesit?": {
+    "Agjenti.app ofron automatizim AI.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::does not disclose unrelated customer identity: Si quhet pronari?": {
+    "Agjenti.app ofron automatizim AI.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::does not disclose unrelated customer identity: A ofroni shërbime online?": {
+    "Agjenti.app ofron automatizim AI.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::corrections supersede values; assistant history never supplies missing facts": {
+    "Ti quhesh Miqail.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "customer_fact_mismatch",
+          "quote": "Ti quhesh Miqail.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::preserves acknowledgements to declarations rather than treating them as recall": {
+    "Faleminderit, si mund të të ndihmoj?": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::unknown customer identity stays uncertain rather than borrowed from model/history": {
+    "Ti quhesh Invented.": {
+      "findings": [
+        {
+          "status": "unverifiable",
+          "code": "customer_fact_unverified",
+          "quote": "Ti quhesh Invented.",
+          "subject": null
+        }
+      ]
+    },
+    "Nuk e di emrin.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-fact-reference.test.ts::does not confuse product usage with personal recall: Ku duhet ta lidh Instagramin tim?": {
+    "Lidhja bëhet nga paneli.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-fact-reference.test.ts::does not confuse product usage with personal recall: What do I need to connect my Instagram?": {
+    "Connect the account through the dashboard.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-fact-reference.test.ts::does not confuse product usage with personal recall: Si funksionon emaili im?": {
+    "Shpjegimi varet nga shërbimi i konfiguruar.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-fact-reference.test.ts::does not confuse product usage with personal recall: okay super, por ju mesazhet i ktheni nga instagrami im domethen?": {
+    "Përgjigjet dërgohen nga llogaria e lidhur në Instagram, pas autorizimit.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-fact-reference.test.ts::does not confuse product usage with personal recall: e kam fjalen, mesazhet qe i ktheni klienteve te mi - ja ktheni nga instagrami im, a duhet te ju jap une te dhenat e instagramit apo cfare?": {
+    "Lidhja e Instagramit bëhet përmes autorizimit në panel.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-fact-reference.test.ts::does not confuse product usage with personal recall: A i dërgoni produktet në adresën time?": {
+    "Transporti ofrohet në zonat e mbuluara.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-fact-reference.test.ts::does not confuse product usage with personal recall: A më vjen konfirmimi i konsultës në emailin tim?": {
+    "Konfirmimet varen nga kanalet e konfiguruara.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/customer-fact-reference.test.ts::does not confuse product usage with personal recall: Can you connect my business website?": {
+    "Website import requires a supported public source.": {
+      "findings": []
+    }
+  },
+  "src/lib/agents/composite-recall.test.ts::configured field names can select a composite without a domain-specific handler": {
+    "Nuk kam të dhëna.": {
+      "findings": [
+        {
+          "code": "customer_fact_mismatch",
+          "status": "contradiction",
+          "quote": "Nuk kam të dhëna.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/generate.test.ts::R3 critical response boundary > validates configured fallback too: missing_key": {
+    "Pagesa u pranua.": {
+      "findings": [
+        {
+          "code": "execution_receipt_absent",
+          "status": "unsupported_critical_claim",
+          "quote": "Pagesa u pranua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/generate.test.ts::R3 critical response boundary > validates configured fallback too: provider_error": {
+    "Pagesa u pranua.": {
+      "findings": [
+        {
+          "code": "execution_receipt_absent",
+          "status": "unsupported_critical_claim",
+          "quote": "Pagesa u pranua.",
+          "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/customer-recall.test.ts::short follow-up uses only bounded user topic; handle never proves sales location": {
+    "Ti shet në Instagram.": {
+      "findings": [
+        {
+          "code": "customer_fact_unverified",
+          "status": "unverifiable",
+          "quote": "Ti shet në Instagram.",
+          "subject": null
+        }
+      ]
+    }
+  }
+}

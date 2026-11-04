@@ -57,10 +57,10 @@ describe("inclusive onboarding", () => {
     const base = parseAnswers({ ...emptyAnswers, name: "Distribucion", businessType: "manufacturing",
       offeringTypes: ["standard"], useCases: ["orders"],
       audioReview: { analysisIds: ["11111111-1111-4111-8111-111111111111"] },
-      details: { ...emptyDetails, businessDescription: "Kemi disa katalogë për marka të ndryshme." },
+      details: { ...emptyDetails, businessDescription: "Kemi disa katalogë për marka të ndryshme.", catalogContext: "Katalogë sipas markave" },
     });
     expect(needsCatalogContext(base)).toBe(true);
-    expect(audioGuide(base).some(q => q.id === "catalogContext")).toBe(true);
+    expect(audioGuide(base).some(q => q.id === "catalogContext")).toBe(false); // Already extracted; do not ask again.
     expect(needsCatalogContext({ ...base, details: emptyDetails })).toBe(false);
     expect(() => parseAnswers({ ...base, audioReview: { ...base.audioReview, reviewed: true } }, true)).not.toThrow();
     const completed = parseAnswers({ ...base, details: { ...base.details, catalogContext: "Disa katalogë sipas markës." } });

@@ -1,3 +1,4 @@
+import { messageUnderstanding } from "./understanding/context";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import type { VisualVersion } from "@/lib/workflows/visual/types";
 import { extractExplicitFacts, freshOrderReview, invalidateOrderReview } from "@/lib/workflows/context";
@@ -19,7 +20,7 @@ export async function correctPreparedRequest(input: {
 }): Promise<{ state: ConversationStatePayload; reply: string; preparedRequest?: PreparedRequest; corrected: boolean } | undefined> {
   const { state, version, businessId, message } = input;
   const visual = state.visual, pin = visual?.collection;
-  if (visual?.status !== "completed" || pin?.mode !== "collection_only" || !/^.{1,80}?:\s*\S/.test(message)) return;
+  if (visual?.status !== "completed" || pin?.mode !== "collection_only" || !messageUnderstanding(message).correction) return;
   const reject = (reply: string, projection?: PreparedRequest) => ({ state, reply, preparedRequest: projection, corrected: false });
   const p = state.processes;
   if (state.staffHandoff || state.conversationPaused || !p || p.informationOnly || p.active || currentProcessOwner(state)
@@ -76,7 +77,7 @@ export async function correctPreparedRequest(input: {
   // apply a compound/invalid repair, or skip graph branches for a graph field.
   const probe = structuredClone(state);
   probe.context!.profile = {};
-  const accepted = !/[\n;,]/.test(message) && extractExplicitFacts(probe, message) === 1;
+  const accepted = messageUnderstanding(message).facts.length === 1 && extractExplicitFacts(probe, message) === 1;
   const fields = Object.keys(probe.context!.profile);
   if (!accepted || fields.length !== 1 || fields.some(key => !policy.profileFields.includes(key as typeof policy.profileFields[number]))
     || version.graph.nodes.some(n => n.config.fieldKey && fields.some(key => n.config.fieldKey === `customer_${key}`)))

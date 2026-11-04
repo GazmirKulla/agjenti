@@ -30,13 +30,13 @@ const catalog = (id: string, more: Partial<Catalog> = {}): Catalog => ({
   ...more,
 });
 describe("catalog source selection", () => {
-  it("matches complete catalog terms and aliases without matching codes inside words", () => {
+  it("matches canonical catalog terms without language dictionaries or codes inside words", () => {
     for (const [code, country] of [["UK", "Ukraine"], ["US", "Russia"], ["US", "Australia"]])
       expect(matches([code], country)).toBe(false);
     expect(matches(["UK"], "For UK customers")).toBe(true);
     expect(matches(["industrial pumps"], "industrial-pumps")).toBe(true);
-    expect(matches(["EN"], "anglisht")).toBe(true);
-    expect(matches(["Germany"], "gjermani")).toBe(true);
+    expect(matches(["EN"], "anglisht")).toBe(false);
+    expect(matches(["Germany"], "gjermani")).toBe(false);
     expect(matches([""], "UK")).toBe(false);
     expect(matches(["UK"], "")).toBe(false);
   });
@@ -55,8 +55,8 @@ describe("catalog source selection", () => {
       catalog("wrong", { metadata: { ...good.metadata, languages: ["IT"] } }),
     ];
     const result = rankCatalogs(rows, [], "industrial pumps", {
-      language: "anglisht",
-      market: "gjermani",
+      language: "EN", // Already normalized by the semantic requirements extractor.
+      market: "Germany",
       industry: "water",
     });
     expect(result.map((r) => r.catalog.id)).toEqual(["good"]);

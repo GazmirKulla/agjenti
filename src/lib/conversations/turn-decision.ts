@@ -1,5 +1,5 @@
 import { messageUnderstanding } from "@/lib/conversations/understanding/context";
-import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
+import { foldText, type ConversationStatePayload } from "@/lib/workflows/state";
 import { currentProcessOwner, type ConversationRouting, type LocalProcessKind } from "@/lib/workflows/conversation-processes";
 import { type GuidanceTarget } from "@/lib/workflows/guidance";
 import { validValue, type FieldType } from "@/lib/workflows/context";

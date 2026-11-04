@@ -1,7 +1,8 @@
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { channelAdapter } from "@/lib/conversations/channel";
 import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
+import { type ConversationStatePayload } from "@/lib/workflows/state";
 
 /** The inbound adapter supplies these values from the verified webhook, never customer text. */
 export type OrderCustomerIdentity = {
@@ -17,9 +18,7 @@ const lifetime = 15 * 60 * 1000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isOrderStatusRequest(message: string): boolean {
-  const text = foldText(message);
-  const order = /\b(porosi\w*|order\w*|pako\w*|package|parcel)\b/.test(text);
-  return order && /\b(status\w*|gjurm\w*|track\w*|ku (?:eshte|ndodhet|e kam|ka shkuar)|where|kur (?:vjen|mberrin|arrin|do (?:te )?vi\w*)|when.*(?:arrive|deliver)|a (?:ka|eshte|u) (?:ardh\w*|nis\w*|dergu\w*|mberri\w*)|kontrollo\w*|check|mb(?:e|a)rritur|delivery|shipping update|cfare po behet)\b/.test(text);
+  return messageUnderstanding(message).orderStatus;
 }
 
 export function readOrderStatusLookup(state?: ConversationStatePayload | null, includeExpired = false): OrderStatusLookup | undefined {
@@ -33,7 +32,8 @@ export function isOrderStatusFollowUp(message: string, state?: ConversationState
   // Expiry invalidates the old mapping, not ownership of the last question: a bare
   // number must refresh this list rather than fill a previously pending order field.
   if (!readOrderStatusLookup(state, true)) return false;
-  return /^(?:porosia\s*|order\s*|nr\.?\s*)?#?[a-f0-9-]{1,36}[.!\s]*$/i.test(foldText(message)) || /^(?:po|jo|yes|no|e para|e dyta|e treta|e katerta|e pesta|first|second|third|latest|e fundit)[.!\s]*$/.test(foldText(message));
+  const m = messageUnderstanding(message);
+  return m.statusReference !== null || m.orderStatus;
 }
 
 export function setOrderStatusLookup(state: ConversationStatePayload, lookup?: OrderStatusLookup) {
@@ -51,12 +51,10 @@ function references(orders: OrderSummary[]) {
 }
 function selectReference(message: string, lookup: OrderStatusLookup | undefined) {
   if (!lookup) return;
-  const text = foldText(message).replace(/[.!\s]+$/, "");
-  const ordinal = ["e para", "e dyta", "e treta", "e katerta", "e pesta"].indexOf(text);
-  const english = ["first", "second", "third"].indexOf(text);
-  const index = ordinal >= 0 ? ordinal : english >= 0 ? english : /^\d$/.test(text) ? Number(text) - 1 : ["latest", "e fundit"].includes(text) ? 0 : -1;
-  if (index >= 0) return lookup.references[index]?.id;
-  const token = text.replace(/^(?:porosia\s*|order\s*|nr\.?\s*)?#?/, "").replaceAll("-", "").toUpperCase();
+  const text = messageUnderstanding(message).statusReference;
+  if (!text) return;
+  if (/^[1-5]$/.test(text)) return lookup.references[Number(text)-1]?.id;
+  const token = text.replaceAll("-", "").toUpperCase();
   return lookup.references.find(item => item.reference === token || item.id.replaceAll("-", "").toUpperCase() === token)?.id;
 }
 function describe(order: OrderSummary, reference: string) {
@@ -116,9 +114,9 @@ export async function customerOrderStatus(params: { businessId: string; message:
     const orders = await ownOrders(params.businessId, params.identity);
     if (!orders) { setOrderStatusLookup(nextState); return reply("Nuk mund ta verifikoj llogarinë për kontrollin e porosisë. Kontakto stafin."); }
     if (!orders.length) { setOrderStatusLookup(nextState); return reply("Nuk gjeta porosi të regjistruara të lidhura me këtë llogari. Stafi mund ta kontrollojë kërkesën tënde."); }
-    const explicitReference = params.message.match(/#([a-f0-9-]{8,36})\b|\b([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\b/i);
-    const requestedReference = explicitReference?.[1] ?? explicitReference?.[2];
-    const selectedId = requestedReference ? selectReference(requestedReference, { references: references(orders), createdAt: Date.now() }) : selectReference(params.message, lookup);
+    const token = messageUnderstanding(params.message).statusReference;
+    const requestedReference = token && /^[a-f0-9-]{8,36}$/i.test(token) ? token : undefined;
+    const selectedId = selectReference(params.message, requestedReference ? { references: references(orders), createdAt: Date.now() } : lookup);
     const selected = selectedId ? orders.find(order => order.id === selectedId) : !lookup && !expiredLookup && !requestedReference && orders.length === 1 ? orders[0] : undefined;
     if (selected) {
       setOrderStatusLookup(nextState);

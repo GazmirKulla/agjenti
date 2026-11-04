@@ -1,4 +1,4 @@
-import { hasMessageUnderstanding, withMessageUnderstanding } from "./understanding/context";
+import { messageUnderstanding, hasMessageUnderstanding, withMessageUnderstanding } from "./understanding/context";
 import { interpretMessage } from "./understanding/interpret";
 import { defaultCommunicationPolicy, parseCommunicationPolicy } from "@/lib/agents/communication-policy";
 import { linearCollectionCommunication } from "@/lib/workflows/linear-communication";
@@ -79,9 +79,9 @@ export type AgentTurnResult = {
 function matchesSku(sku: string | null | undefined, message: string) {
   if (!sku?.trim()) return false;
   const key = foldText(sku).trim(),
-    query = foldText(message).trim();
+    query = foldText(messageUnderstanding(message).positiveEntityText).trim();
   if (query === key) return true;
-  if (key.length < 2) return query === `sku ${key}`;
+  if (key.length < 2) return false;
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(?:^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`).test(query);
 }
@@ -560,7 +560,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     const missing = steps.find(step => {
       if (step.required === false) return false;
       if (step.kind === "customer") return !state.customer.name || !state.customer.phone || !state.customer.city || !state.customer.address;
-      if (step.kind === "confirm") return !/^(po|ok|okay|yes|dakord|konfirmoj)[.!\s]*$/i.test(String(state.fields[step.key]??""));
+      if (step.kind === "confirm") return state.fields[step.key] !== "po";
       const value = state.context?.order[step.fieldKey??step.key]?.value ?? (step.fieldKey?.startsWith("customer_") ? state.context?.profile[step.fieldKey.slice(9) as import("@/lib/workflows/context").ProfileKey]?.value : undefined) ?? state.fields[step.key];
       return step.kind === "photo" ? value!==true && value!=="photo_received" : !value;
     });

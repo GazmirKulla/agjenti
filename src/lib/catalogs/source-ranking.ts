@@ -1,4 +1,4 @@
-import { foldText } from "@/lib/workflows/engine";
+import { foldText } from "@/lib/workflows/state";
 const ignored = new Set([
   "per",
   "nje",

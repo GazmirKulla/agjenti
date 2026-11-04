@@ -8,6 +8,7 @@ export default defineConfig({
   oxc: { jsx: { runtime: "automatic" } },
   test: {
     environment: "node",
+    setupFiles: ["src/test/semantic-fixtures.setup.ts"],
     include: ["src/**/*.test.ts"],
   },
   resolve: {

@@ -1,5 +1,6 @@
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { createHash, randomUUID } from "node:crypto";
-import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
+import { foldText, type ConversationStatePayload } from "@/lib/workflows/state";
 import { matchingCatalogNames } from "./match-name";
 import { validValue, type FieldType } from "@/lib/workflows/context";
 
@@ -87,37 +88,23 @@ export function combineProductPresentations(reply: string, parts: { reply: strin
 
 /** Negated names are not positive choices. Unparseable corrections fail closed. */
 export function positiveEntityText(message: string): { text: string; correction: boolean } {
-  const text = foldText(message).trim();
-  const negation = /^(?:jo|not|nuk dua|s'dua|s dua|i do not want)\s+/.test(text);
-  if (!negation) return { text: message, correction: false };
-  const rest = text.replace(/^(?:jo|not|nuk dua|s'dua|s dua|i do not want)\s+/, "");
-  const choice = rest.match(/(?:[,;]|\b(?:por dua|por|but i want|but|i want|dua)\b)\s*(.+)$/);
-  return { text: choice?.[1]?.replace(/^(?:dua|i want)\s+/, "") ?? "", correction: true };
+  const meaning = messageUnderstanding(message);
+  return { text: meaning.positiveEntityText, correction: meaning.correction && meaning.referenceKind !== null };
 }
 
 function relativeReference(message: string): { kind: "ordinal"; index: number } | { kind: "cheapest" | "this" | "other" | "ambiguous" } | null {
-  const text = foldText(message).replace(/[.!?]+$/g, "").trim();
-  const cheapest = /\b(?:me i liri|me te lirin|me te lire|the cheapest|cheapest)\b/.test(text);
-  const ordinals = [/\b(?:i pari|te parin|e para|e pare|the first|first one)\b/, /\b(?:i dyti|te dytin|e dyta|e dyte|the second|second one)\b/, /\b(?:i treti|te tretin|e treta|e trete|the third|third one)\b/];
-  if (ordinals.filter(pattern => pattern.test(text)).length + Number(cheapest) > 1) return { kind: "ambiguous" };
-  if (cheapest) return { kind: "cheapest" };
-  const index = ordinals.findIndex(pattern => pattern.test(text));
-  if (index >= 0) return { kind: "ordinal", index: index + 1 };
-  if (/^(?:(?:dua|zgjedh)\s+)?(?:tjetrin|tjetren|the other one)$/.test(text)) return { kind: "other" };
-  const numbered = text.match(/^(?:(?:dua|zgjedh|i want)\s+)?(?:produktin?|numrin?|number|#)\s*(\d{1,2})$/);
-  if (numbered) return { kind: "ordinal", index: Number(numbered[1]) };
-  if (/^(?:dua ta (?:blej|marr|porosis)|e dua)$/.test(text)) return { kind: "this" };
-  if (/^(?:(?:dua|zgjedh|e dua|me trego|i want|show me|buy|order)\s+)?(?:(?:ai|ate|kete)\s+sherbim(?:i|in)?|kete(?: produkt(?:in)?)?|ate(?: produkt(?:in)?)?|this one|this|it)(?:\s+(?:ta porosis|ta blej))?$/.test(text)) return { kind: "this" };
-  return null;
+  const m = messageUnderstanding(message);
+  if (m.referenceMode === "none") return null;
+  if (m.referenceMode === "ordinal") return m.referenceIndex === null ? { kind: "ambiguous" } : { kind: "ordinal", index: m.referenceIndex };
+  return { kind: m.referenceMode };
 }
 export const isEntityReference = (message: string) => Boolean(relativeReference(message) || positiveEntityText(message).correction);
 
 /** A kind hint is not identity or permission. The resolver still verifies the
  * tenant, freshness, delivery and current active catalog before selecting. */
 export function referenceEntityKind(message: string, state?: ConversationStatePayload | null): PresentedEntity["kind"] | undefined {
-  const text = foldText(message);
-  const service = /\b(?:sherbim\w*|service)\b/.test(text), product = /\b(?:produkt\w*|product)\b/.test(text);
-  if (service || product) return service === product ? undefined : service ? "service" : "product";
+  const kind = messageUnderstanding(message).referenceKind;
+  if (kind) return kind;
   const entities = state?.entityPresentation?.entities;
   const kinds = new Set(Array.isArray(entities) ? entities.map(entity => entity.kind) : []);
   return kinds.size === 1 ? [...kinds][0] : undefined;
@@ -151,12 +138,12 @@ export function resolveProductReference(args: {
     return product ? { status: "selected", product, via: "verified_id" } : clarify("unavailable", "Produkti nuk është më aktiv ose i disponueshëm në këtë biznes. Shkruaj një produkt tjetër.");
   }
   const positive = positiveEntityText(args.message);
-  const relative = relativeReference(positive.text);
+  const relative = relativeReference(args.message);
   if (isBareCollectionValue(args.message, args.collectingField, args.products)) return { status: "none" };
   if (relative?.kind === "ambiguous") return clarify("ambiguous_reference");
   if (!relative) {
     const text = foldText(positive.text).trim();
-    const sku = args.products.filter(p => p.sku && (foldText(p.sku) === text || `sku ${foldText(p.sku)}` === text));
+    const sku = args.products.filter(p => p.sku && foldText(p.sku) === text);
     const matches = sku.length ? sku : positive.text ? matchingCatalogNames([...args.products], positive.text) : [];
     if (matches.length > 1) return clarify("multiple_matches");
     if (matches.length === 1) return { status: "selected", product: matches[0], via: positive.correction ? "correction" : "name" };
@@ -164,16 +151,6 @@ export function resolveProductReference(args: {
   }
   const presentation = args.state?.entityPresentation;
   const last = args.state?.recentMessages?.at(-1);
-  // Legacy compatibility for a purchase continuation of the customer's own
-  // immediately preceding exact named-product question (not assistant prose).
-  if (kind === "product" && !presentation && /^dua ta (?:blej|marr|porosis)[.!\s]*$/.test(foldText(args.message))
-    && last?.role === "assistant" && (args.mode === "test" || args.deliveredReply?.slice(0, 1200) === last.content)) {
-    const previous = args.state?.recentMessages?.at(-2);
-    if (previous?.role === "user") {
-      const named = args.products.filter(p => new RegExp(`(?:^|[^a-z0-9])${foldText(p.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`).test(foldText(previous.content)));
-      if (named.length === 1) return { status: "selected", product: named[0], via: "name" };
-    }
-  }
   if (!presentation || presentation.businessId !== args.businessId || !Number.isFinite(presentation.expiresAt) || presentation.expiresAt <= Date.now()
     || last?.role !== "assistant" || hash(last.content) !== presentation.previewHash
     || args.mode !== "test" && (!args.deliveredReply || hash(args.deliveredReply) !== presentation.replyHash))

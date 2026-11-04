@@ -39,7 +39,7 @@ export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage)
         throw new Error("Queue connection lookup failed");
     if (!connection)
         return false;
-    const payload = { ...message, fragmentKind: fragmentKind(message.text, message.attachments.length > 0) };
+    const payload = { ...message, fragmentKind: await fragmentKind(message.text, message.attachments.length > 0) };
     const { error: insertError } = await db.from("workflow_inbound_queue").upsert({ business_id: connection.business_id, channel: message.channel, connection_id: connection.id, participant_id: message.externalParticipantId, external_id: message.externalMessageId, payload }, { onConflict: "connection_id,external_id", ignoreDuplicates: true });
     if (insertError)
         throw new Error("Queue persistence failed");

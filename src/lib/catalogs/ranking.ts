@@ -1,4 +1,5 @@
-import { foldText } from "@/lib/workflows/engine";
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
+import { foldText } from "@/lib/workflows/state";
 import { type Catalog, parseMetadata } from "./model";
 export type Requirements = Partial<
   Record<
@@ -27,19 +28,7 @@ export type Hit = {
   semantic: number;
 };
 export function routeIntent(message: string) {
-  const s = foldText(message);
-  if (
-    /\b(sku|stock|stok|cmim|cmimi|price|pricing|variant|kushton)\b/.test(s) &&
-    !/\b(price list|lista e cmimeve|liste cmimesh)\b/.test(s)
-  )
-    return "product";
-  if (
-    /katalog|catalog|broshur|brochure|datasheet|data sheet|dokument|documentation|collection|koleksion|full range|gama|game|familj.*produkt|product famil|price list|lista e cmimeve/.test(
-      s,
-    )
-  )
-    return "catalog";
-  return "general";
+  return messageUnderstanding(message).retrievalDomain;
 }
 export function readContext(raw: unknown): CatalogContext | null {
   if (!raw || typeof raw !== "object") return null;
@@ -85,27 +74,7 @@ export function readContext(raw: unknown): CatalogContext | null {
   return { query: r.query, requirements, pending, turns: r.turns };
 }
 function canonical(value: string) {
-  const v = foldText(value).trim();
-  const aliases: Record<string, string> = {
-    en: "english",
-    anglisht: "english",
-    sq: "albanian",
-    shqip: "albanian",
-    de: "german",
-    gjermanisht: "german",
-    it: "italian",
-    italisht: "italian",
-    shqiperi: "albania",
-    shqiperia: "albania",
-    kosove: "kosovo",
-    kosova: "kosovo",
-    gjermani: "germany",
-    gjermania: "germany",
-    eu: "europe",
-    evrope: "europe",
-    evropa: "europe",
-  };
-  return aliases[v] ?? v;
+  return foldText(value).trim();
 }
 export function matches(values: string[], query: string) {
   const q = canonical(query);
@@ -149,9 +118,9 @@ export function rankCatalogs(
         !matches(m.industries, requirements.industry)
       )
         return [];
-      const purpose = foldText(requirements.purpose ?? query);
-      const technical = /teknik|technical|datasheet/.test(purpose);
-      const commercial = /komercial|commercial/.test(purpose);
+      const purpose = messageUnderstanding(query).catalogPurpose;
+      const technical = purpose === "technical";
+      const commercial = purpose === "commercial";
       if (
         technical &&
         !commercial &&
@@ -177,16 +146,9 @@ export function rankCatalogs(
       const rule = c.use_when.some(
         (r) =>
           (r === "full_range" && intent === "catalog") ||
-          (r === "technical" &&
-            /teknik|technical|datasheet/i.test(
-              query + " " + (requirements.purpose ?? ""),
-            )) ||
-          (r === "commercial" &&
-            /komercial|commercial/i.test(
-              query + " " + (requirements.purpose ?? ""),
-            )) ||
-          (r === "b2b" &&
-            /b2b|distribut|wholesale|shumic|industrial/i.test(query)) ||
+          (r === "technical" && technical) ||
+          (r === "commercial" && commercial) ||
+          (r === "b2b" && purpose === "b2b") ||
           (r === "category" &&
             m.categories.some((v) => foldText(query).includes(foldText(v)))),
       );

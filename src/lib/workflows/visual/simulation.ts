@@ -1,3 +1,5 @@
+import { withMessageUnderstanding } from "@/lib/conversations/understanding/context";
+import { unknownUnderstanding, type MessageUnderstanding } from "@/lib/conversations/understanding/contract";
 import { advanceVisualWorkflow } from "./runtime";
 import { normalizeVisualDraft, validateVisualGraph } from "./model";
 import { visualGraphHash } from "./graph-hash";
@@ -33,6 +35,7 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
   const started = performance.now(), result = emptyResult(s), versionId = `simulation:${visualGraphHash(graph)}`;
   let state: VisualRunState | undefined = s.nodeId ? { nodeId: s.nodeId, versionId, status: "running", awaiting: !!s.awaiting, visited: [], values: structuredClone(s.values ?? {}) } : undefined;
   let message = s.message, photo = !!s.photo, last: VisualExecution | undefined;
+  let act: MessageUnderstanding["act"] = graph.nodes.find(n=>n.id===s.nodeId)?.kind !== "confirm" ? "answer" : s.expectation.port === "yes" ? "accept" : s.expectation.port === "no" ? "decline" : "uncertain";
   const responseEvidence: string[] = [];
   try {
     if (s.awaiting && graph.nodes.find(n => n.id === s.nodeId)?.kind === "confirm") {
@@ -48,7 +51,7 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
       state = prompt.state;
     }
     for (let turn = result.executionCount; turn < limits.turns; turn++) {
-      last = advanceVisualWorkflow({ graph, versionId, state, message, hasPhoto: photo, intent: s.intent, sharedValues: s.sharedValues });
+      last = withMessageUnderstanding(message, { ...unknownUnderstanding, act, evidence: message }, () => advanceVisualWorkflow({ graph, versionId, state, message, hasPhoto: photo, intent: s.intent, sharedValues: s.sharedValues }));
       result.executionCount++;
       state = last.state;
       result.traversedNodeIds.push(...last.traversedNodeIds);
@@ -68,6 +71,7 @@ function executeScenario(graph: VisualGraph, s: Scenario) {
       if (!s.followPrompts || last.action.kind === "end") break;
       const node = graph.nodes.find(n => n.id === last!.action.nodeId)!;
       message = node.kind === "confirm" ? "po" : syntheticValue(node);
+      act = node.kind === "confirm" ? "accept" : "answer";
       photo = node.config.fieldType === "photo";
       result.inputMessages.push(message);
     }

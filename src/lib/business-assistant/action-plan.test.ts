@@ -1,3 +1,4 @@
+vi.mock("@/lib/business-assistant/briefing-intent", () => ({ briefingQuestion: async () => null }));
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ response: vi.fn(), profile: vi.fn(), from: vi.fn(), rpc: vi.fn(), user: vi.fn(), access: vi.fn(), write: vi.fn(), revalidate: vi.fn() }));
 vi.mock("openai", () => ({ default: class { responses = { create: m.response }; } }));

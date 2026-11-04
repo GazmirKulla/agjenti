@@ -146,8 +146,8 @@ describe("R1 conversation-only declarations", () => {
     const projection = projectCustomerContext(state, message);
     expect(projection.profile.name.value).toBe("Nora Testi");
     expect(projection.declared.instagram_handle.value).toBe("@lule_prova_re");
-    const validated = validateResponse("Emri yt: Nora Testi. Biznesi yt: dyqan lulesh online. Instagrami yt: @lule_prova.",
-      { state, message, customer: projection, products: [], services: [], informational: true });
+    const validated = (await validateResponse("Emri yt: Nora Testi. Biznesi yt: dyqan lulesh online. Instagrami yt: @lule_prova.",
+      { state, message, customer: projection, products: [], services: [], informational: true }));
     expect(validated.changed).toBe(true);
     expect(validated.reply).toContain("@lule_prova_re");
     expect(validated.reply).not.toContain("@lule_prova.");
@@ -390,7 +390,7 @@ describe("W1 pending clarification and turn ownership", () => {
     const clarification = await ask(state);
     const resumed = await turn("kerkesen e meparshme", clarification.nextState);
     expect(resumed.conversationRouting).toMatchObject({ process: "booking", action: "resume" });
-    expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ message: "Vazhdo rezervimin", resume: true, routed: true }));
+    expect(mocks.booking).toHaveBeenCalledWith(expect.objectContaining({ message: "", resume: true, routed: true }));
     expect(resumed.nextState.fields.booking).toMatchObject({ phase: "collect" });
     expect(mocks.agent).not.toHaveBeenCalled();
   });
@@ -716,7 +716,7 @@ it("accepts a named order confirmation after information only when that task awa
   const state = order(); state.context!.execution.awaitingOrderConfirmation = true;
   const first = await turn("Sa kushton?", state);
   await turn("Konfirmoj porosinë", first.nextState);
-  expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ message: "Konfirmoj", orderRequest: false }));
+  expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ message: "Konfirmoj porosinë", orderRequest: false }));
   mocks.agent.mockClear();
   const next = await turn("Konfirmoj porosinë", order());
   expect(next.conversationRouting?.action).toBe("clarify");
@@ -1038,7 +1038,7 @@ it("declining a product replacement restores the old graph instead of using the 
   state.recentMessages=[{role:"assistant",content:"Ta zëvendësojmë porosinë me Poster? Shkruaj Po ose Jo."}];
   mocks.version.mockImplementation(async (_b, id) => entityVersion(id ?? "latest"));
   await turn("Jo", state);
-  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: undefined, message: "Vazhdo porosinë", state: expect.objectContaining({ visual: expect.objectContaining({ versionId: "bound-v1" }) }) }));
+  expect(mocks.agent).toHaveBeenLastCalledWith(expect.objectContaining({ entityVersion: undefined, message: "", state: expect.objectContaining({ visual: expect.objectContaining({ versionId: "bound-v1" }) }) }));
 });
 it("an ambiguous entity question cannot leave an older confirmation owned by the order", async () => {
   const state = boundState(); state.context!.execution.awaitingOrderConfirmation = true;
@@ -1315,6 +1315,7 @@ it("routes an explicitly named action flow and preserves an unfinished order",as
  const graph=addFlowTemplate(starterVisualGraph(),"business_provision","signup").graph;
  mocks.version.mockResolvedValue({id:"v-actions",businessId:"business",graph});
  mocks.agent.mockImplementation(async ({state})=>{const next=structuredClone(state);next.visual.status="waiting";next.visual.awaiting=true;return result(next,"Emri?");});
+ mocks.guidance.mockResolvedValue({ action: "route", target: graph.flows!.find(f => f.kind === "custom")!.id, source: "ai" });
  const before=order();
  const guard={jobId:1,leaseToken:"lease",conversationId:"conversation",revision:2};
  const output=await processConversationMessage({businessId:"business",message:"Regjistrim biznesi",state:before,hasPhoto:false,mode:"test",bookingGuard:guard});
@@ -1523,6 +1524,7 @@ describe("C1/C2 authoritative turn ownership", () => {
     const { addFlowTemplate } = await import("@/components/workflows/flow-templates");
     const { graph } = addFlowTemplate(version.graph, "business_provision", "other");
     graph.flows.find(f => f.nodeIds.includes("other_name"))!.label = "Hapje laboratori";
+    mocks.guidance.mockResolvedValue({ action: "route", target: graph.flows.find(f => f.nodeIds.includes("other_name"))!.id, source: "ai" });
     mocks.version.mockResolvedValue({ ...version, graph });
     await turn("Hapje laboratori", state);
     expect(mocks.agent).toHaveBeenCalledWith(expect.objectContaining({ state: expect.objectContaining({ fields: {}, visual: expect.objectContaining({ nodeId: "other_name", values: {} }) }) }));

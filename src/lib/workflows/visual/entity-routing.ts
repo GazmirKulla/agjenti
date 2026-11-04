@@ -1,6 +1,6 @@
 import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { foldText } from "../engine";
+import { foldText } from "../state";
 import { matchingCatalogNames } from "@/lib/products/match-name";
 import { isBareCollectionValue, isEntityReference, positiveEntityText, referenceEntityKind, resolveProductReference, resolveServiceReference } from "@/lib/products/entity-bridge";
 import type { ConversationStatePayload } from "../engine";

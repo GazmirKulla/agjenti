@@ -1,7 +1,7 @@
 import { messageUnderstanding } from "./understanding/context";
 import { agentModel } from "@/lib/agents/generate";
 import { affirmative, isQuestion } from "@/lib/workflows/context";
-import { emptyState, type ConversationStatePayload } from "@/lib/workflows/engine";
+import { emptyState, type ConversationStatePayload } from "@/lib/workflows/state";
 import { currentProcessOwner, suspendProcesses, type PendingClarification, type LocalProcessKind } from "@/lib/workflows/conversation-processes";
 import { rememberTurn } from "@/lib/workflows/guidance";
 import type { AgentTurnParams, AgentTurnResult } from "./process-agent-turn";
@@ -76,6 +76,9 @@ export function conversationControl(params: AgentTurnParams): AgentTurnResult | 
     if (params.state?.processes?.informationOnly && !pause && !short) return null;
     if (!pause && !short && !(params.state?.conversationPaused && !params.informationRequest && turnIntent(params.message) !== "information" && !isQuestion(params.message) && !explicitContinuation(params.message)))
         return null;
+    const meaning = messageUnderstanding(params.message);
+    // Explicitly named confirmation is routed to its own receipt/freshness checks.
+    if (!pause && meaning.act === "accept" && (meaning.process === "order" || meaning.process === "booking")) return null;
     if (!pause && short && currentProposal(params) && (affirmative(params.message) || messageUnderstanding(params.message).act === "decline"))
         return null;
     const state = structuredClone(params.state ?? emptyState());

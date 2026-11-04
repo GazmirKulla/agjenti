@@ -13,12 +13,12 @@ it.each([
   ["A i dërgoni produktet në adresën time?", "Transporti ofrohet në zonat e mbuluara."],
   ["A më vjen konfirmimi i konsultës në emailin tim?", "Konfirmimet varen nga kanalet e konfiguruara."],
   ["Can you connect my business website?", "Website import requires a supported public source."],
-])("does not confuse product usage with personal recall: %s", (message, reply) => {
+])("does not confuse product usage with personal recall: %s", async (message, reply) => {
   const state = migrateContext(), before = structuredClone(state);
   expect(customerFactReference(message)).toBeUndefined();
   const customer = projectCustomerContext(state, message);
   expect(customer.reference).toBeUndefined();
-  expect(validateResponse(reply, { state, message, customer, products: [], services: [], informational: true }).reply).toBe(reply);
+  expect((await validateResponse(reply, { state, message, customer, products: [], services: [], informational: true })).reply).toBe(reply);
   expect(state).toEqual(before);
 });
 

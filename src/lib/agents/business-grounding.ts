@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { foldText } from "@/lib/workflows/engine";
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { matchingCatalogNames } from "@/lib/products/match-name";
 import type { ReferenceProduct } from "@/lib/products/entity-bridge";
 import { rankKnowledge } from "@/lib/catalogs/source-ranking";
@@ -106,13 +106,10 @@ function price(p: ReferenceProduct & { price_mode?: GroundedService["price_mode"
 /** Small, fixed factual operations, not a router or natural-language SQL engine.
  * Invoke only AFTER the coordinator selected an informational execution path. */
 export function exactBusinessAnswer(read: BusinessGrounding, message: string, entity?: { kind: "product" | "service"; id: string }): ExactReply | undefined {
-  const text = foldText(message).trim().replace(/[?!.]+$/, "");
-  const count = /^(?:sa produkte (?:keni|ka|jane)|how many products (?:do you have|are there))$/.test(text);
-  const extreme = /^(?:(?:cili eshte )?(?:produkti )?me i (lire|shtrenjte)|(?:the )?(cheapest|most expensive) product)$/.exec(text);
-  const priceQuery = /^(?:sa kushton|sa kushtojne|what is the price of|how much is)\s+/.test(text);
-  const servicesQuery = /^(?:cfare sherbimesh keni|cilat sherbime ofroni|list services|what services do you offer)$/.test(text);
-  const duration = /^(?:sa zgjat|how long is)\s+/.test(text);
-  const stock = /^(?:a (?:eshte|ka|keni).*(?:ne gjendje|ne stok)|check (?:the )?(?:stock|inventory))$/.test(text);
+  const readKind = messageUnderstanding(message).businessRead;
+  const count = readKind === "product_count", extreme = readKind === "cheapest" || readKind === "most_expensive";
+  const priceQuery = readKind === "price", servicesQuery = readKind === "services";
+  const duration = readKind === "duration", stock = readKind === "inventory";
   if (stock) return { reply: "Nuk kam burim të verifikuar për stokun. Prania në katalog nuk konfirmon disponueshmërinë; kontakto biznesin." };
   if (!count && !extreme && !priceQuery && !servicesQuery && !duration) return;
   const serviceMatches = matchingCatalogNames(read.services.records, message);
@@ -131,7 +128,7 @@ export function exactBusinessAnswer(read: BusinessGrounding, message: string, en
     if (!rows.length) return { reply: "Nuk gjeta produkte aktive në katalog." };
     if (rows.some(p => !priced(p)) || new Set(rows.map(p => p.currency)).size !== 1)
       return { reply: "Nuk mund t’i krahasoj të gjitha çmimet: disa mungojnë ose monedhat ndryshojnë. Për cilin produkt ose monedhë po pyet?" };
-    const value = (extreme[1] === "lire" || extreme[2] === "cheapest" ? Math.min : Math.max)(...rows.map(p => p.price_amount!));
+    const value = (readKind === "cheapest" ? Math.min : Math.max)(...rows.map(p => p.price_amount!));
     const matches = rows.filter(p => p.price_amount === value);
     return { reply: `${matches.length > 1 ? "Ka produkte me çmim të barabartë" : "Sipas çmimeve aktuale të katalogut"}:\n${matches.slice(0, 10).map(p => `${p.name} — ${price(p)}`).join("\n")}${matches.length > 10 ? "\nLista e barazimeve është e pjesshme." : ""}`,
       presentedProducts: matches.slice(0, 10) };

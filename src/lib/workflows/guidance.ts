@@ -1,8 +1,8 @@
-import { messageUnderstanding } from "@/lib/conversations/understanding/context";
+import { messageUnderstanding, hasMessageUnderstanding } from "@/lib/conversations/understanding/context";
 import OpenAI from "openai";
 import { agentModel } from "@/lib/agents/generate";
 import { invalidateOrderReview } from "./context";
-import { type ConversationStatePayload } from "./engine";
+import { type ConversationStatePayload } from "./state";
 
 export type ConversationMessage = { role: "user" | "assistant"; content: string };
 export type GuidanceTarget = { id: string; label: string; prompt?: string; fieldKey?: string; kind?: string };
@@ -36,6 +36,18 @@ export async function chooseGuidance(input: {
   const entries = (kind: string) => (input.routes ?? []).filter(t => t.kind === kind);
   const orderTargets = entries("product");
   const supportTargets = entries("support_entry").length ? entries("support_entry") : entries("handoff");
+  // Reuse the validated turn observation for unambiguous navigation. IDs
+  // still come exclusively from the server's currently available targets.
+  if (hasMessageUnderstanding(input.message)) {
+    const m = messageUnderstanding(input.message);
+    if (m.navigation === "none" && ["accept", "decline", "answer"].includes(m.act) && m.intent === "undetermined")
+      return result("continue", null, "ai");
+    if (m.intent === "information" && input.allowAnswer !== false && !input.allowProcessInquiry) return result("answer", null, "ai");
+    if (m.intent === "order" && input.allowOrder && (!input.routes || orderTargets.length === 1))
+      return result("order", orderTargets[0]?.id ?? null, "ai");
+    if (m.intent === "support" && input.allowSupport && (!input.routes || supportTargets.length === 1))
+      return result("support", supportTargets[0]?.id ?? null, "ai");
+  }
   const fallback = result("clarify");
   if (!process.env.OPENAI_API_KEY?.trim()) return fallback;
   try {

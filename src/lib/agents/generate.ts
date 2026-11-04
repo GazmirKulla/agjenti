@@ -16,11 +16,8 @@ import {
   type WorkflowProgressItem,
 } from "@/lib/workflows/engine";
 
-export const DEFAULT_AGENT_MODEL = "gpt-5.6-luna";
-
-export function agentModel(): string {
-  return process.env.AGENT_MODEL?.trim() || DEFAULT_AGENT_MODEL;
-}
+import { agentModel } from "./model";
+export { agentModel, DEFAULT_AGENT_MODEL } from "./model";
 
 export async function generateAgentReply(params: {
   processOffers?: { flowId: string; label: string; versionId: string }[];
@@ -53,6 +50,7 @@ export async function generateAgentReply(params: {
   const currentStep = params.workflowProgress?.find(step => step.status === "current");
   const standardPrompt = historicalStepPrompt(params.state.step_key);
   const fallback = params.documentFallback || (currentStep?.kind === "customer" ? promptForStep("collect_customer") : standardPrompt ?? currentStep?.label ?? promptForStep(null));
+  const trustedFallback = !params.documentFallback && (currentStep?.kind === "customer" || Boolean(standardPrompt) || !currentStep);
   const customerContext = projectCustomerContext(params.state, params.customerMessage);
   // A saved selection is not proof that its entity is still active/available.
   if (customerContext.process?.entity) {
@@ -60,12 +58,12 @@ export async function generateAgentReply(params: {
     const catalog = entity.kind === "product" ? params.referenceProducts : params.referenceServices;
     if (!catalog?.some(item => item.id === entity.id)) delete customerContext.process.entity;
   }
-  const finish = (text: string, responseId: string | null, source: "ai" | "fallback", fallbackReason: string | null) => {
-    const result = validateResponse(text, { customer: customerContext, grounding: params.grounding,
+  const finish = async (text: string, responseId: string | null, source: "ai" | "fallback", fallbackReason: string | null) => {
+    const result = source === "fallback" && trustedFallback ? { reply: text, changed: false, status: "valid", findings: [] } : await validateResponse(text, { customer: customerContext, grounding: params.grounding,
       products: params.referenceProducts ?? [], services: params.referenceServices ?? [],
       message: params.customerMessage, state: params.state, informational: Boolean(params.documentContext) });
     params.onTrace?.({ stage: "ai", label: "Response consistency checked", status: result.changed ? "skipped" : "success",
-      data: { scope: "bounded_deterministic_claims", result: result.status, changed: result.changed, findings: result.findings } });
+      data: { scope: "semantic_evidence_review", result: result.status, changed: result.changed, findings: result.findings } });
     const products = renderProductReferences(result.reply, params.grounding?.products.records ?? params.referenceProducts ?? []);
     const services = renderProductReferences(products.reply, params.grounding?.services.records ?? params.referenceServices ?? [], "service");
     const mixed = result.reply.includes("[[product:") && result.reply.includes("[[service:");
@@ -142,8 +140,8 @@ export async function generateAgentReply(params: {
       try { draft = parseCommunicationDraft(JSON.parse(response.output_text)); } catch { draft = null; }
     }
     if (!draft) return finish(fallback, null, "fallback", "invalid_communication_contract");
-    const result = finish(draft.answer, response.id ?? null, "ai", null);
-    const question = draft.question && finish(draft.question.text, null, "ai", null);
+    const result = await finish(draft.answer, response.id ?? null, "ai", null);
+    const question = draft.question && await finish(draft.question.text, null, "ai", null);
     // Optional proposals can be suppressed by policy or known facts. Never
     // retain provider history of a question the customer may not receive.
     const offer = draft.processOffer && params.processOffers?.some(o => o.flowId === draft.processOffer!.flowId) && result.source === "ai"

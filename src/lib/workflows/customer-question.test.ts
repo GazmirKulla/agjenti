@@ -134,7 +134,7 @@ describe("F1 server-owned bounded question (not arbitrary assistant prose)", () 
       const state = setup(); answer(state, "Emri: Elira");
       expect(answer(state, message)).toBeNull();
       expect(state.context?.profile.name?.value).toBe("Elira");
-      expect(state.pendingCustomerQuestion).toBeUndefined();
+      expect(Boolean(state.pendingCustomerQuestion)).toBe(message !== "leje fare");
     }
   });
   it("question punctuation and semicolons remain data in the requested needs field", () => {
@@ -152,7 +152,7 @@ describe("F1 server-owned bounded question (not arbitrary assistant prose)", () 
     expect(absent.context?.profile).toEqual({});
   });
   it.each(["leje fare", "Ta bëjmë një test sikur ti të ishe klienti?", "Dua të rezervoj", "Vazhdo"]) ("navigation belongs to the coordinator: %s", message => {
-    const state=setup(); expect(answer(state,message)).toBeNull(); expect(state.pendingCustomerQuestion).toBeUndefined(); expect(state.context?.profile).toEqual({});
+    const state=setup(); expect(answer(state,message)).toBeNull(); expect(Boolean(state.pendingCustomerQuestion)).toBe(message !== "leje fare"); expect(state.context?.profile).toEqual({});
   });
   it("expired, foreign-tenant, undelivered and old prose do not authorize extraction", () => {
     expect(answer(setup(),original,1000000)).toBeNull();
@@ -205,6 +205,6 @@ describe("natural single customer questions", () => {
     const state = setup(["business_type"]);
     expect(answer(state, "Si funksionon?")).toBeNull();
     expect(state.customerDeclaredFacts).toBeUndefined();
-    expect(state.pendingCustomerQuestion).toBeUndefined();
+    expect(state.pendingCustomerQuestion?.fields).toEqual(["business_type"]);
   });
 });

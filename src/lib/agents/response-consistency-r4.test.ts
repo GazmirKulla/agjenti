@@ -34,10 +34,10 @@ it.each([
   "Porosia dështoi.", "Porosia u refuzua.",
   "Porosia është në pritje.", "Pagesa po procesohet.",
   "Tentuam të dërgonim kërkesën.",
-])("R4: informational prose cannot borrow action authority: %s", text => {
+])("R4: informational prose cannot borrow action authority: %s", async text => {
   const e = fixture(), before = structuredClone(e);
-  expect(validateResponse(text, e).status).toBe("unsupported_critical_claim");
-  expect(validateResponse(text, e).reply).toContain("Nuk kam konfirmim");
+  expect((await validateResponse(text, e)).status).toBe("unsupported_critical_claim");
+  expect((await validateResponse(text, e)).reply).toContain("Nuk kam konfirmim");
   expect(e).toEqual(before);
 });
 
@@ -51,16 +51,16 @@ it.each([
   "Kërkesa është për të premten pas 17:00, jo një rezervim i kryer.",
   "Mund të tentojmë të përgatisim kërkesën; rezultati nuk është verifikuar.",
   "A u njoftua stafi?", "Çfarë produkti dëshiron?",
-])("R4: preserves non-execution speech: %s", text => {
-  expect(validateResponse(text, fixture()).reply).toBe(text);
+])("R4: preserves non-execution speech: %s", async text => {
+  expect((await validateResponse(text, fixture())).reply).toBe(text);
 });
 
-it.each(["other-tenant", "same-tenant-old-request", "same-request-unverified"])("ignores historical/injected receipt %s", kind => {
+it.each(["other-tenant", "same-tenant-old-request", "same-request-unverified"])("ignores historical/injected receipt %s", async kind => {
   const e = fixture();
   e.state.fields.booking = { phase: "done", bookingId: kind };
   e.state.fields.receipt = { businessId: kind, status: "succeeded", id: "old" };
   e.state.recentMessages = [{ role: "assistant", content: "Porosia u krye me sukses." }];
-  expect(validateResponse("Porosia u krye me sukses.", e).status).toBe("unsupported_critical_claim");
+  expect((await validateResponse("Porosia u krye me sukses.", e)).status).toBe("unsupported_critical_claim");
 });
 
 it.each([
@@ -69,8 +69,8 @@ it.each([
   "Këpuca kushton €35; Rregullimi kushton nga 12,5 EUR.",
   "[[product:one]] kushton 35 EUR dhe [[product:two]] kushton 400 ALL.",
   "Nuk ka çmim të verifikuar për një artikull tjetër. Këpuca kushton 35 EUR.",
-])("R4: preserves independently bound multi-entity values: %s", text => {
-  expect(validateResponse(text, fixture()).reply).toBe(text);
+])("R4: preserves independently bound multi-entity values: %s", async text => {
+  expect((await validateResponse(text, fixture())).reply).toBe(text);
 });
 it.each([
   "Këpuca kushton 400 ALL dhe Çorapja kushton 35 EUR.",
@@ -78,46 +78,46 @@ it.each([
   "Këpuca kushton 35 EUR dhe Rregullimi kushton 12,5 EUR.",
   "Këpuca dhe Çorapja kushtojnë 35 EUR dhe 400 ALL.",
   "Një artikull i panjohur kushton 35 EUR.",
-])("R4: numbers elsewhere in the catalog are not evidence: %s", text => {
-  expect(validateResponse(text, fixture()).changed).toBe(true);
+])("R4: numbers elsewhere in the catalog are not evidence: %s", async text => {
+  expect((await validateResponse(text, fixture())).changed).toBe(true);
 });
-it("catalog names containing conjunctions are still a single attributed entity", () => {
+it("catalog names containing conjunctions are still a single attributed entity", async () => {
   const e = fixture(); e.grounding.products.records[0].name = "Krem dhe shampo";
   const correct = "Krem dhe shampo kushton 35 EUR dhe Çorapja kushton 400 ALL.";
-  expect(validateResponse(correct, e).reply).toBe(correct);
-  expect(validateResponse("Krem dhe shampo kushton 400 ALL dhe Çorapja kushton 35 EUR.", e).changed).toBe(true);
+  expect((await validateResponse(correct, e)).reply).toBe(correct);
+  expect((await validateResponse("Krem dhe shampo kushton 400 ALL dhe Çorapja kushton 35 EUR.", e)).changed).toBe(true);
 });
 
 it.each(["Emri yt nuk është Drita.", "Emri yt nuk eshte Drita.", "Ti quhesh Drita dhe ke 50 punonjës.",
-  "Your name is not Drita.", "Ti quhesh Drita dhe je mjeke.", "Ti quhesh Drita Dritat."])("R4: polarity/extensions of exact values: %s", text => {
-  const result = validateResponse(text, fixture("Si e kam emrin?"));
+  "Your name is not Drita.", "Ti quhesh Drita dhe je mjeke.", "Ti quhesh Drita Dritat."])("R4: polarity/extensions of exact values: %s", async text => {
+  const result = (await validateResponse(text, fixture("Si e kam emrin?")));
   expect(result.changed).toBe(true); expect(result.reply).toBe("Ti ke deklaruar emrin: Drita.");
 });
 it.each(["Ti shet këpucë online dhe ke 30 punonjës.", "Ti shet këpucë online dhe ofron kredi.",
-  "Biznesi yt shet këpucë online dhe është më i madhi në qytet."])("R4: supported prefix cannot authorize invented continuation: %s", text => {
-  const result = validateResponse(text, fixture("Çfarë shes unë?"));
+  "Biznesi yt shet këpucë online dhe është më i madhi në qytet."])("R4: supported prefix cannot authorize invented continuation: %s", async text => {
+  const result = (await validateResponse(text, fixture("Çfarë shes unë?")));
   expect(result.changed).toBe(true); expect(result.reply).toContain("Shitje këpucësh online");
 });
-it.each(["Ti shet këpucë online.", "Sipas deklarimit tënd, ti shet këpucë online.", "Ti ke deklaruar biznesin tënd: Shitje këpucësh online."])("R4: bounded supported paraphrase: %s", text => {
-  expect(validateResponse(text, fixture("Çfarë shes unë?")).reply).toBe(text);
+it.each(["Ti shet këpucë online.", "Sipas deklarimit tënd, ti shet këpucë online.", "Ti ke deklaruar biznesin tënd: Shitje këpucësh online."])("R4: bounded supported paraphrase: %s", async text => {
+  expect((await validateResponse(text, fixture("Çfarë shes unë?"))).reply).toBe(text);
 });
-it("a correct recall may retain an unrelated uncertainty clause", () => {
+it("a correct recall may retain an unrelated uncertainty clause", async () => {
   const text = "Ti quhesh Drita, por nuk e di stokun aktual.";
-  expect(validateResponse(text, fixture("Si quhem?")).reply).toBe(text);
+  expect((await validateResponse(text, fixture("Si quhem?"))).reply).toBe(text);
 });
-it("keeps hypothetical questions and business facts separate from customer recall", () => {
-  expect(validateResponse("Po sikur të kesh 50 punonjës?", fixture()).changed).toBe(false);
-  expect(validateResponse("Biznesi ofron rregullime.", fixture("Çfarë ofron biznesi?")).changed).toBe(false);
+it("keeps hypothetical questions and business facts separate from customer recall", async () => {
+  expect((await validateResponse("Po sikur të kesh 50 punonjës?", fixture())).changed).toBe(false);
+  expect((await validateResponse("Biznesi ofron rregullime.", fixture("Çfarë ofron biznesi?"))).changed).toBe(false);
 });
-it("corrected facts survive shortened history/reload without mutating state or widening disclosure", () => {
+it("corrected facts survive shortened history/reload without mutating state or widening disclosure", async () => {
   const e = fixture("Si quhem?");
   e.state.recentMessages = [{ role: "assistant", content: "Ti quhesh Old." }];
   setFact(e.state, "customer_name", "Arta", "text", "correction");
   e.state = migrateContext(JSON.parse(JSON.stringify(e.state)));
   e.customer = projectCustomerContext(e.state, e.message);
   const before = structuredClone(e);
-  expect(validateResponse("Ti quhesh Drita.", e).reply).toBe("Ti ke deklaruar emrin: Arta.");
-  expect(validateResponse("Ti quhesh Arta.", e).changed).toBe(false);
+  expect((await validateResponse("Ti quhesh Drita.", e)).reply).toBe("Ti ke deklaruar emrin: Arta.");
+  expect((await validateResponse("Ti quhesh Arta.", e)).changed).toBe(false);
   expect(e).toEqual(before);
   expect(projectCustomerContext(e.state, "Çfarë ofron biznesi?").profile).toEqual({});
 });
@@ -127,16 +127,16 @@ it.each([
   { domain: "salon", facts: { preferred_day: "e premte", preferred_time: "17:00" }, good: "preferred_day: e premte.", bad: "preferred_day: e hënë.", key: "preferred_day", current: "e premte" },
   { domain: "garage", facts: { vehicle: "Discovery Sport", year: "2018", symptom: "nuk ndizet" }, good: "year: 2018.", bad: "year: 2017.", key: "year", current: "2018" },
   { domain: "education", facts: { age: "6", interest: "muzikë" }, good: "age: 6.", bad: "age: 4.", key: "age", current: "6" },
-])("R4 $domain: current field values do not borrow other values or become profile", ({ facts, good, bad, key, current }) => {
+])("R4 $domain: current field values do not borrow other values or become profile", async ({ facts, good, bad, key, current }) => {
   const e = fixture(`Çfarë ${key} dhashë?`);
   e.state = migrateContext(); e.state.schemaVersion = 3;
   e.state.context!.execution.factOwner = "auxiliary";
   for (const [key, value] of Object.entries(facts)) setFact(e.state, key, value!, "text", "correction");
   e.customer = projectCustomerContext(e.state, e.message);
-  expect(validateResponse(good, e).reply).toBe(good);
-  expect(validateResponse(bad, e).reply).toContain(`${key}: ${current}`);
-  expect(validateResponse(bad, e).findings).toContainEqual({ status: "contradiction", code: "process_fact_unsupported" });
+  expect((await validateResponse(good, e)).reply).toBe(good);
+  expect((await validateResponse(bad, e)).reply).toContain(`${key}: ${current}`);
+  expect((await validateResponse(bad, e)).findings).toContainEqual({ status: "contradiction", code: "customer_fact_unverified" });
   expect(e.state.context!.profile).toEqual({});
-  expect(validateResponse("Ti ke diagnozë të konfirmuar nga servisi.", e).changed).toBe(true);
-  expect(validateResponse("Nëse ke nevojë, mund të kërkosh një kontroll.", e).changed).toBe(false);
+  expect((await validateResponse("Ti ke diagnozë të konfirmuar nga servisi.", e)).changed).toBe(true);
+  expect((await validateResponse("Nëse ke nevojë, mund të kërkosh një kontroll.", e)).changed).toBe(false);
 });

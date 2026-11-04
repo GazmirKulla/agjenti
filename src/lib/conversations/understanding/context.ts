@@ -8,6 +8,7 @@ export function messageUnderstanding(message: string): MessageUnderstanding {
   const current = context.getStore();
   return current && normalize(current.message) === normalize(message) ? current.meaning : unknownUnderstanding;
 }
+export function hasUnderstandingContext() { return Boolean(context.getStore()); }
 export function hasMessageUnderstanding(message: string) { return Boolean(context.getStore() && normalize(context.getStore()!.message) === normalize(message)); }
 export function withMessageUnderstanding<T>(message: string, meaning: MessageUnderstanding, run: () => T): T {
   return context.run({ message, meaning }, run);

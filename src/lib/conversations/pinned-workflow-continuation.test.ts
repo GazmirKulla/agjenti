@@ -564,6 +564,7 @@ it("round-trips a bound retail draft through the real server action, sealed sess
   const resume = await simulateVisualWorkflow("synthetic-retail", graph, "Vazhdo porosinë", info.session);
   expect(resume.turn!.reply).toBe("Quantity?");
   const quantity = await simulateVisualWorkflow("synthetic-retail", graph, "4", resume.session);
+  expect(quantity.error).toBeUndefined();
   expect(quantity.turn!.nextState.visual?.nodeId).toBe("confirm");
   const sealed = readTestSession(quantity.session!, "synthetic-user", businessId);
   expect(sealed.state.context?.order).toMatchObject({ size: { value: "M" }, quantity: { value: "4" } });

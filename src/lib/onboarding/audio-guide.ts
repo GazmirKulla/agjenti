@@ -171,9 +171,8 @@ export function audioGuide(
 }
 
 export function needsCatalogContext(answers: Answers) {
-  const text = [answers.details?.categoryDescription, answers.details?.businessDescription,
-    ...(answers.details?.offeringsSummary ?? []), answers.details?.customerProcess].join(" ");
-  return /(?:disa|shumë|shume|multiple|several|[2-9])\s+(?:katalog|catalog)|katalog[\wë]*\s+(?:të ndrysh|te ndrysh|të shum|te shum)/i.test(text);
+  // The extractor or review form owns this declaration; prose is never reclassified in the UI.
+  return hasValue(answers.details?.catalogContext);
 }
 
 /** Only expose details that add information to the selected sector and offer. */
@@ -188,7 +187,7 @@ export function reviewDetailFields(answers: Answers) {
     if (field === "categoryDescription") return answers.businessType === "other";
     if (field === "businessDescription") return hasValue(fieldValue(answers, field));
     if (field === "catalogContext") return needsCatalogContext(answers) || hasValue(fieldValue(answers, field));
-    if (field === "sellsProducts") return clarifications(answers).some(q => q.field === "offeringTypes" && q.message.includes("nuk përputhen"));
+    if (field === "sellsProducts") return clarifications(answers).some(q => q.field === "offeringTypes");
     if (field === "hasVariants" || field === "isPersonalized") {
       if (!mode || mode === "services") return false;
       return answers.businessType !== "digital" || hasValue(fieldValue(answers, field));

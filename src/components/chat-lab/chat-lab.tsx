@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { loadLabSetup, runLabTurn, searchLabBusinesses } from "@/lib/chat-lab/actions";
 import type { LabBusiness, LabSetup, LabTurn, LabFailure } from "@/lib/chat-lab/model";
 import type { TraceStage } from "@/lib/conversations/trace";
-import { emptyState } from "@/lib/workflows/engine";
+import { emptyState } from "@/lib/workflows/state";
 import { Card, Data, Fields, Inspector, Raw, intentOf, workflowOf } from "./inspector";
 import { TrainingSession, type TrainingRequest } from "@/components/agents/training-session";
 import "./chat-lab.css";

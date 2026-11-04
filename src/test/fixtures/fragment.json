@@ -1,0 +1,67 @@
+{
+  "src/lib/conversations/message-batch.test.ts::recognizes unfinished discourse without treating the hint as operational consent": {
+    "pse": "fragment",
+    "po mundohem": "fragment",
+    "cfare po t them": "fragment",
+    "ti psh": "continuation",
+    "mund ta kuptosh": "continuation",
+    "tek e tek": "continuation",
+    "te kuptoj": "continuation",
+    "?": "close"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: po": {
+    "po": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: jo": {
+    "jo": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: ok": {
+    "ok": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: konfirmoj": {
+    "konfirmoj": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: dua porosi": {
+    "dua porosi": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: anulo rezervimin": {
+    "anulo rezervimin": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: Si quhem une": {
+    "Si quhem une": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: Miqail\nShitje rroba online\nfiliz_studio_\nSa kushton, a e keni kete masen": {
+    "Miqail\nShitje rroba online\nfiliz_studio_\nSa kushton, a e keni kete masen": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: Emri: Miqail": {
+    "Emri: Miqail": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: Sa kushton produkti?": {
+    "Sa kushton produkti?": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: A mund te rezervoj": {
+    "A mund te rezervoj": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::keeps P1 facts, recall, confirmation and complete questions separate: +355691234567": {
+    "+355691234567": "separate"
+  },
+  "src/lib/conversations/message-batch.test.ts::never batches attachments and does not open a window for a single field answer": {
+    "Miqail": "continuation"
+  },
+  "src/app/api/agent-test/turns/route.test.ts::allows a fork only from its authenticated checkpoint position": {
+    "synthetic": "separate"
+  },
+  "src/app/api/agent-test/turns/route.test.ts::scopes private worker and persisted lookup to current tenant/user/stream": {
+    "synthetic": "separate"
+  },
+  "src/app/api/agent-test/turns/route.test.ts::does not claim retry success when the attempt limit or TTL blocked the write": {
+    "synthetic": "separate"
+  },
+  "src/app/api/agent-test/turns/route.test.ts::does not reset a batched child as an independent retry": {
+    "synthetic": "separate"
+  },
+  "src/app/api/agent-test/turns/route.test.ts::computes the fragment hint on the server and ignores fabricated grouping/count fields": {
+    "Emri: Drita": "separate",
+    "po mundohem": "fragment"
+  }
+}

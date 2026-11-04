@@ -1,4 +1,5 @@
-import { foldText, type ConversationStatePayload } from "@/lib/workflows/engine";
+import { messageUnderstanding } from "@/lib/conversations/understanding/context";
+import { type ConversationStatePayload } from "@/lib/workflows/state";
 import { migrateContext, profileKeys, safeFieldKey, validValue, type Fact } from "@/lib/workflows/context";
 import { currentProcessOwner } from "@/lib/workflows/conversation-processes";
 import { customerDeclaredKeys, validDeclaredValue } from "@/lib/workflows/customer-declared-facts";
@@ -24,7 +25,6 @@ export type CustomerContext = {
 };
 const secrets = /(?:password|secret|token|credential|authorization|api_key|ssn)/i;
 const contact = /(?:phone|telefon|contact|email|address|adres|name|emri|customer_|recipient)/i;
-const own = /\b(?:im|ime|tim|time|mia|mua|quhem|dhashe|dhene|thene|kam|marr|my|mine|provided)\b/;
 function fact(value: Fact | undefined): ProjectedFact | undefined {
   if (!value || value.validated !== true || typeof value.value !== "string" || typeof value.source !== "string"
     || !["text", "number", "phone", "email"].includes(value.type) || !validValue(value.value, value.type)) return;
@@ -38,8 +38,9 @@ function fact(value: Fact | undefined): ProjectedFact | undefined {
     validated: true, authority: declared ? "customer_declared" : "legacy_unverified" };
 }
 function mentions(text: string, key: string) {
-  const words = foldText(key).replace(/^customer_/, "").split(/[_\s]+/).filter(w => w.length > 2);
-  return words.length > 0 && words.every(word => text.includes(word));
+  const meaning = messageUnderstanding(text);
+  return meaning.requestedFields.includes(key) || meaning.recallKeys.includes(key);
+
 }
 type Candidate = { kind: Domain; id: string | null; versionId: string | null; status: string;
   fields: Record<string, Fact>; invalid?: string[]; entity?: { kind: "product" | "service"; id: string } };
@@ -52,7 +53,7 @@ export function projectCustomerContext(input: ConversationStatePayload, message:
   const state = input.context ? input : migrateContext(input);
   const out: CustomerContext = { profile: {}, declared: {} };
   if (state.staffHandoff || state.visual?.status === "handoff" && !state.visual.advisory) return { ...out, diagnostic: "staff_owned" };
-  const text = foldText(message), reference = customerFactReference(message, state), ownQuestion = own.test(text) || Boolean(reference);
+  const text = message, reference = customerFactReference(message, state), ownQuestion = Boolean(reference);
   if (reference) out.reference = reference;
   out.suppliedProfileKeys = profileKeys.filter(key => Boolean(fact(state.context?.profile[key])));
   for (const key of profileKeys) {
@@ -115,10 +116,8 @@ export function projectCustomerContext(input: ConversationStatePayload, message:
     candidates.push({ kind: "auxiliary", id: null, versionId: state.visual?.versionId ?? null, status: "current",
       fields: state.context?.order ?? {}, invalid: state.context?.execution.invalidFields });
   }
-  const domains: Domain[] = [];
-  if (/\b(?:porosi\w*|order)\b/.test(text)) domains.push("order");
-  if (/\b(?:sherbim\w*|service)\b/.test(text)) domains.push("service");
-  if (/\b(?:rezerv\w*|takim\w*|booking|appointment)\b/.test(text)) domains.push("booking");
+  const domain = messageUnderstanding(message).process;
+  const domains: Domain[] = domain && domain !== "actionFlow" ? [domain] : [];
   let selected: Candidate | undefined;
   if (domains.length === 1) selected = candidates.find(c => c.kind === domains[0]);
   else if (domains.length > 1) return { ...out, diagnostic: "ambiguous_process" };

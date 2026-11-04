@@ -7,7 +7,6 @@ import { AgentEffectObservation, AgentInstructionNotice } from "./agent-configur
 import { AssistantAttention } from "./attention";
 import { ConfirmationDialog } from "./confirmation-dialog";
 import { DailyBriefing } from "./daily-briefing";
-import { briefingQuestion } from "@/lib/business-assistant/briefing-model";
 import { useDashboardLanguage } from "@/components/dashboard/language";
 import { AssistantHistory, useAssistantHistory } from "./history";
 import { hasRecoverableWork, type ConversationView } from "@/lib/business-assistant/persistence-model";
@@ -342,7 +341,7 @@ export function BusinessAssistant({
         setMaterials(current => current.map(m => m.id === item.id ? { ...m, token: uploaded.attachment.token, status: "Gati" } : m));
       }
       const pastedLinks = (input.match(/https?:\/\/[^\s<>"']+/g) ?? []).map(url => url.replace(/[.,;!?)}\]]+$/, ""));
-      const reuse = !briefingQuestion(input) && !materials.length && !pastedLinks.length && previousMaterials.current?.context === materialContext ? previousMaterials.current : null;
+      const reuse = !materials.length && !pastedLinks.length && previousMaterials.current?.context === materialContext ? previousMaterials.current : null;
       const materialTokens = reuse?.tokens ?? tokens;
       const materialLinks = [...new Set([...(pastedLinks.length ? [] : reuse?.links ?? []), ...materials.flatMap(item => item.url ? [item.url] : []), ...pastedLinks])];
       const data = await request({

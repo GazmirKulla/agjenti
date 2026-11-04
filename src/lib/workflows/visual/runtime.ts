@@ -1,6 +1,6 @@
 import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { isQuestion, validValue, profileKey } from "../context";
-import { foldText } from "../engine";
+import { foldText } from "../state";
 import type { VisualExecution, VisualFieldValidation, VisualGraph, VisualIntent, VisualRunState } from "./types";
 import { confirmationFactKeys } from "./facts";
 export { explicitIntent as detectVisualIntent } from "../guidance";
@@ -101,7 +101,7 @@ export function advanceVisualWorkflow(p:{graph:VisualGraph;versionId:string;stat
       if(!yes && p.sharedValues && p.graph.nodes.find(node=>node.id===state.nodeId)?.kind==='collect') state.forceCollect=state.nodeId;
       continue;
     }
-    if(isQuestion(text)) { record("not_consumed", "question"); return result('prompt',n.id,communication()); }
+    if(isQuestion(text) || fieldType !== 'photo' && (messageUnderstanding(text).act !== 'answer' || messageUnderstanding(text).navigation !== 'none')) { record("not_consumed", "question"); return result('prompt',n.id,communication()); }
     const type=fieldType;
     const valid=type==='photo'?p.hasPhoto:type==='email'?/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text):type==='phone'?/^\+?[\d\s().-]{7,24}$/.test(text)&&text.replace(/\D/g,'').length>=7:type==='number'?/^\d+(?:[.,]\d+)?$/.test(text):Boolean(text)&&text.length<=2000;
     if(!valid) { record("invalid", "invalid_value"); return result('prompt',n.id,communication(true)); }

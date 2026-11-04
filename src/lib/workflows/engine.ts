@@ -1,3 +1,4 @@
+export { emptyState, foldText } from "./state";
 import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { historicalStepPrompt } from "./compatibility-prompts";
 export const PUZZLE_STEPS = [
@@ -81,27 +82,6 @@ export type WorkflowProgressItem = {
   value: string | null;
 };
 
-export function emptyState(): ConversationStatePayload {
-  return {
-    product_id: null,
-    product_type_id: null,
-    step_key: "choose_product",
-    fields: {},
-    customer: { name: null, phone: null, city: null, address: null },
-  };
-}
-
-/** Fold Albanian/Latin text for loose product matching. */
-export function foldText(value: string): string {
-  return value
-    .toLocaleLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .replace(/ë/g, "e")
-    .replace(/ç/g, "c")
-    .trim();
-}
-
 export function nextStepKey(
   current: string | null | undefined,
   steps: { key: string }[],
@@ -121,83 +101,6 @@ export function parseCustomerMessage(text: string): { name: string | null; phone
   const result = { name: null, phone: null, city: null, address: null } as { name: string | null; phone: string | null; city: string | null; address: string | null };
   for (const f of messageUnderstanding(text).facts) if (Object.hasOwn(result, f.key)) result[f.key as keyof typeof result] = f.value;
   return result;
-} {
-  const raw = text.trim();
-  const empty = { name: null, phone: null, city: null, address: null };
-  if (!raw) return empty;
-
-  const labeled: Record<string, string | null> = {
-    name: null,
-    phone: null,
-    city: null,
-    address: null,
-  };
-  const labelRe =
-    /(?:^|[\n,;])\s*(emri|name|tel|telefon|phone|qyteti|city|adresa|address)\s*[:\-]\s*([^\n,;]+)/gi;
-  for (const match of raw.matchAll(labelRe)) {
-    const key = foldText(match[1]);
-    const value = match[2].trim();
-    if (!value) continue;
-    if (key === "emri" || key === "name") labeled.name = value;
-    else if (key === "tel" || key === "telefon" || key === "phone")
-      labeled.phone = value;
-    else if (key === "qyteti" || key === "city") labeled.city = value;
-    else if (key === "adresa" || key === "address") labeled.address = value;
-  }
-  if (labeled.name || labeled.phone || labeled.city || labeled.address) {
-    return labeled as {
-      name: string | null;
-      phone: string | null;
-      city: string | null;
-      address: string | null;
-    };
-  }
-
-  const phoneMatch = raw.match(
-    /(?:\+?\d[\d\s().-]{6,}\d)/,
-  );
-  const phone = phoneMatch?.[0]?.replace(/\s+/g, " ").trim() ?? null;
-
-  const lines = raw
-    .split(/[\n;]+/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (lines.length >= 4) {
-    return {
-      name: lines[0],
-      phone: phone || lines[1],
-      city: lines[2],
-      address: lines.slice(3).join(", "),
-    };
-  }
-
-  const parts = raw
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (parts.length >= 4) {
-    return {
-      name: parts[0],
-      phone: phone || parts[1],
-      city: parts[2],
-      address: parts.slice(3).join(", "),
-    };
-  }
-
-  if (phone && parts.length >= 2) {
-    const withoutPhone = parts.filter((p) => !p.includes(phone.replace(/\s/g, "")) && p !== phone);
-    // Single-field fallback handled by caller
-    if (withoutPhone.length >= 3) {
-      return {
-        name: withoutPhone[0],
-        phone,
-        city: withoutPhone[1],
-        address: withoutPhone.slice(2).join(", "),
-      };
-    }
-  }
-
-  return empty;
 }
 
 function customerComplete(customer: ConversationStatePayload["customer"]) {

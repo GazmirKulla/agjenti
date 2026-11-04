@@ -1,6 +1,6 @@
 import { messageUnderstanding } from "@/lib/conversations/understanding/context";
 import { type Fact } from "./context";
-import { type ConversationStatePayload } from "./engine";
+import { type ConversationStatePayload } from "./state";
 
 /** Conversation-local only. Never hydrate from / copy to conversation_profiles,
  * never use as business configuration, entity identity or execution permission. */

@@ -1,6 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { encryptSecret } from "@/lib/crypto/tokens";
-import { emptyState, type ConversationStatePayload } from "@/lib/workflows/engine";
+import { emptyState, type ConversationStatePayload } from "@/lib/workflows/state";
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 import type { TestChatResult } from "../test-chat/types";
 export type PanelScope = { businessId: string; userId: string; streamId: string };

@@ -1,21 +1,13 @@
+import { interpretFragment } from "./fragment-observation";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import type { WorkflowJob } from "./workflow-queue";
 import type { TestChatInput } from "@/lib/agents/test-chat/types";
 
-/** Transport hint, NOT intent/consent or a fact extractor. Unknown/complete
- * messages stay separate. Only an unfinished question/discourse opener starts
- * a quiet window; short continuations may join it, retaining every raw input. */
-export function fragmentKind(text: string | null, hasMedia = false): "fragment" | "continuation" | "close" | "separate" {
-  if (hasMedia || !text?.trim()) return "separate";
-  const t = text.trim().normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-  if (/^[?!…]+$/.test(t)) return "close";
-  if (text.length > 160 || t.split(/\s+/).length > 10 || /[\n\r:;\d@]|https?:|[.!?]$/.test(t)) return "separate";
-  if (/^(po|jo|ok|okay|yes|no|dakord|sure|faleminderit|thanks|thank you)$/.test(t)) return "separate";
-  // Operational commands, explicit declarations and recall keep their existing
-  // per-message coordinator/checkpoint contracts, even during a burst.
-  if (/\b(porosi\w*|rezerv\w*|konfirm\w*|anulo\w*|ndalo\w*|blej|paguaj|order|book\w*|confirm|cancel|stop|buy|pay|quhem|emri|emrin|kujto\w*|rikujto\w*|remember|name)\b/.test(t)) return "separate";
-  return /^(pse|why|si|how|cfare|what|kur|when|nese|if|sepse|because|a mund|can you|could you|po mundohem|po perpiqem|i am trying|i'm trying)\b/.test(t)
-    ? "fragment" : "continuation";
+/** Best-effort transport observation, never consent. A failed/uncertain
+ * classification keeps messages separate without blocking ingestion. */
+export async function fragmentKind(text: string | null, hasMedia = false): Promise<"fragment" | "continuation" | "close" | "separate"> {
+  if (hasMedia || !text?.trim() || text.length > 160) return "separate";
+  return interpretFragment(text);
 }
 
 export function testInputBatch(input: TestChatInput, job: WorkflowJob): { input: TestChatInput; count: number } {

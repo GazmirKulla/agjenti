@@ -1,0 +1,1392 @@
+{
+  "1": {
+    "act": "answer",
+    "positiveEntityText": "1",
+    "evidence": "1"
+  },
+  "2": {
+    "act": "answer",
+    "positiveEntityText": "2",
+    "evidence": "2"
+  },
+  "konfirmoj": {
+    "act": "accept",
+    "positiveEntityText": "konfirmoj",
+    "evidence": "konfirmoj"
+  },
+  "dua rezervim": {
+    "intent": "booking",
+    "act": "answer",
+    "process": "booking",
+    "bookingMention": true,
+    "positiveEntityText": "dua rezervim",
+    "evidence": "dua rezervim"
+  },
+  "Vazhdo rezervimin": {
+    "intent": "booking",
+    "act": "answer",
+    "process": "booking",
+    "bookingMention": true,
+    "positiveEntityText": "Vazhdo rezervimin",
+    "evidence": "Vazhdo rezervimin"
+  },
+  "Konfirmoj": {
+    "act": "accept",
+    "positiveEntityText": "Konfirmoj",
+    "evidence": "Konfirmoj"
+  },
+  "": {
+    "act": "answer"
+  },
+  "Dua rezervim": {
+    "intent": "booking",
+    "act": "answer",
+    "process": "booking",
+    "bookingMention": true,
+    "positiveEntityText": "Dua rezervim",
+    "evidence": "Dua rezervim"
+  },
+  "simulation@example.invalid": {
+    "act": "answer",
+    "positiveEntityText": "simulation@example.invalid",
+    "evidence": "simulation@example.invalid"
+  },
+  "Çfarë do të thotë kjo?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Çfarë do të thotë kjo?",
+    "evidence": "Çfarë do të thotë kjo?"
+  },
+  "+355690000000": {
+    "act": "answer",
+    "positiveEntityText": "+355690000000",
+    "evidence": "+355690000000"
+  },
+  "many": {
+    "act": "answer",
+    "positiveEntityText": "many",
+    "evidence": "many"
+  },
+  "po": {
+    "act": "accept",
+    "positiveEntityText": "po",
+    "evidence": "po"
+  },
+  "jo": {
+    "act": "decline",
+    "positiveEntityText": "jo",
+    "evidence": "jo"
+  },
+  "Përshëndetje": {
+    "act": "answer",
+    "positiveEntityText": "Përshëndetje",
+    "evidence": "Përshëndetje"
+  },
+  "Ana": {
+    "act": "answer",
+    "positiveEntityText": "Ana",
+    "evidence": "Ana"
+  },
+  "ana@example.com": {
+    "act": "answer",
+    "positiveEntityText": "ana@example.com",
+    "evidence": "ana@example.com"
+  },
+  "Dua të porosis": {
+    "intent": "order",
+    "act": "answer",
+    "process": "order",
+    "positiveEntityText": "Dua të porosis",
+    "evidence": "Dua të porosis"
+  },
+  "Tiranë": {
+    "act": "answer",
+    "positiveEntityText": "Tiranë",
+    "evidence": "Tiranë"
+  },
+  "telefoni: +355699876543": {
+    "act": "answer",
+    "positiveEntityText": "telefoni: +355699876543",
+    "facts": [
+      {
+        "key": "phone",
+        "value": "+355699876543",
+        "evidence": "telefoni: +355699876543"
+      }
+    ],
+    "evidence": "telefoni: +355699876543",
+    "correction": true
+  },
+  "Më kujto preferencat për porosinë.": {
+    "intent": "information",
+    "act": "answer",
+    "positiveEntityText": "Më kujto preferencat për porosinë.",
+    "recallProcess": true,
+    "recall": true,
+    "evidence": "Më kujto preferencat për porosinë."
+  },
+  "ok ne rregull, fola ne telefon me stafin, dua te porosis produkt": {
+    "intent": "order",
+    "act": "answer",
+    "process": "order",
+    "staffContact": true,
+    "referenceKind": "product",
+    "positiveEntityText": "ok ne rregull, fola ne telefon me stafin, dua te porosis produkt",
+    "evidence": "ok ne rregull, fola ne telefon me stafin, dua te porosis produkt"
+  },
+  "Kthehu pas": {
+    "act": "answer",
+    "positiveEntityText": "Kthehu pas",
+    "evidence": "Kthehu pas"
+  },
+  "Cilat të dhëna të duhen?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Cilat të dhëna të duhen?",
+    "evidence": "Cilat të dhëna të duhen?"
+  },
+  "Miqail\nShitje rrobash online": {
+    "act": "answer",
+    "positiveEntityText": "Miqail\nShitje rrobash online",
+    "evidence": "Miqail\nShitje rrobash online",
+    "facts": [
+      {
+        "key": "name",
+        "value": "Miqail",
+        "evidence": "Miqail\nShitje rrobash online"
+      },
+      {
+        "key": "business_type",
+        "value": "Shitje rrobash online",
+        "evidence": "Miqail\nShitje rrobash online"
+      }
+    ]
+  },
+  "Dua të flas me stafin": {
+    "intent": "support",
+    "act": "answer",
+    "positiveEntityText": "Dua të flas me stafin",
+    "evidence": "Dua të flas me stafin"
+  },
+  "Sa produkte keni?": {
+    "businessRead": "product_count",
+    "act": "question",
+    "question": true,
+    "referenceKind": "product",
+    "positiveEntityText": "Sa produkte keni?",
+    "evidence": "Sa produkte keni?"
+  },
+  "Kam një dyqan lulesh online.": {
+    "act": "answer",
+    "positiveEntityText": "Kam një dyqan lulesh online.",
+    "facts": [
+      {
+        "key": "business_type",
+        "value": "dyqan lulesh online",
+        "evidence": "Kam një dyqan lulesh online."
+      }
+    ],
+    "evidence": "Kam një dyqan lulesh online."
+  },
+  "Instagramin e kam @lule_prova.": {
+    "act": "answer",
+    "positiveEntityText": "Instagramin e kam @lule_prova.",
+    "facts": [
+      {
+        "key": "instagram_handle",
+        "value": "@lule_prova",
+        "evidence": "Instagramin e kam @lule_prova."
+      }
+    ],
+    "evidence": "Instagramin e kam @lule_prova."
+  },
+  "Sa kushton shërbimi?": {
+    "businessRead": "price",
+    "retrievalDomain": "product",
+    "intent": "information",
+    "act": "question",
+    "question": true,
+    "referenceKind": "service",
+    "positiveEntityText": "Sa kushton shërbimi?",
+    "evidence": "Sa kushton shërbimi?"
+  },
+  "Faleminderit": {
+    "act": "acknowledge",
+    "positiveEntityText": "Faleminderit",
+    "evidence": "Faleminderit"
+  },
+  "Korrigjim: Instagrami im është @lule_prova_re.": {
+    "act": "answer",
+    "positiveEntityText": "Korrigjim: Instagrami im është @lule_prova_re.",
+    "facts": [
+      {
+        "key": "instagram_handle",
+        "value": "@lule_prova_re",
+        "evidence": "Korrigjim: Instagrami im është @lule_prova_re."
+      }
+    ],
+    "evidence": "Korrigjim: Instagrami im është @lule_prova_re."
+  },
+  "Instagram: lule_prova": {
+    "act": "answer",
+    "positiveEntityText": "Instagram: lule_prova",
+    "facts": [
+      {
+        "key": "instagram_handle",
+        "value": "lule_prova",
+        "evidence": "Instagram: lule_prova"
+      }
+    ],
+    "evidence": "Instagram: lule_prova"
+  },
+  "Më kujto emrin dhe Instagramin.": {
+    "intent": "information",
+    "act": "answer",
+    "positiveEntityText": "Më kujto emrin dhe Instagramin.",
+    "recallKeys": [
+      "name",
+      "instagram_handle"
+    ],
+    "recall": true,
+    "evidence": "Më kujto emrin dhe Instagramin."
+  },
+  "0691234567": {
+    "act": "answer",
+    "positiveEntityText": "0691234567",
+    "evidence": "0691234567"
+  },
+  "Pse ju duhet adresa": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Pse ju duhet adresa",
+    "evidence": "Pse ju duhet adresa"
+  },
+  "Informacion": {
+    "intent": "information",
+    "act": "answer",
+    "navigation": "information_only",
+    "positiveEntityText": "Informacion",
+    "evidence": "Informacion"
+  },
+  "dua te vazhdoj": {
+    "act": "answer",
+    "positiveEntityText": "dua te vazhdoj",
+    "evidence": "dua te vazhdoj"
+  },
+  "informacion": {
+    "intent": "information",
+    "act": "answer",
+    "navigation": "information_only",
+    "positiveEntityText": "informacion",
+    "evidence": "informacion"
+  },
+  "kerkesen e meparshme": {
+    "act": "other",
+    "navigation": "resume",
+    "positiveEntityText": "kerkesen e meparshme",
+    "evidence": "kerkesen e meparshme"
+  },
+  "vazhdo porosine": {
+    "intent": "order",
+    "act": "other",
+    "navigation": "resume",
+    "process": "order",
+    "positiveEntityText": "vazhdo porosine",
+    "evidence": "vazhdo porosine"
+  },
+  "Bluzë": {
+    "act": "answer",
+    "positiveEntityText": "Bluzë",
+    "evidence": "Bluzë"
+  },
+  "Dua të porosis Bluzë": {
+    "intent": "order",
+    "act": "answer",
+    "process": "order",
+    "positiveEntityText": "Dua të porosis Bluzë",
+    "evidence": "Dua të porosis Bluzë"
+  },
+  "Statusi i porosisë": {
+    "act": "answer",
+    "orderStatus": true,
+    "positiveEntityText": "Statusi i porosisë",
+    "evidence": "Statusi i porosisë"
+  },
+  "Jo": {
+    "act": "decline",
+    "positiveEntityText": "Jo",
+    "evidence": "Jo"
+  },
+  "Dua të ndryshoj diçka": {
+    "act": "other",
+    "positiveEntityText": "",
+    "correction": true,
+    "evidence": "Dua të ndryshoj diçka",
+    "navigation": "correct",
+    "referenceMode": "none",
+    "referenceKind": null
+  },
+  "Ok": {
+    "act": "acknowledge",
+    "positiveEntityText": "",
+    "evidence": "Ok"
+  },
+  "Ckemi\nSi jeni\nDua te porosis montesori\nE keni ne gjendje?": {
+    "intent": "order",
+    "act": "question",
+    "process": "order",
+    "question": true,
+    "positiveEntityText": "Ckemi\nSi jeni\nDua te porosis montesori\nE keni ne gjendje?",
+    "evidence": "Ckemi\nSi jeni\nDua te porosis montesori\nE keni ne gjendje?"
+  },
+  "Çfarë produktesh keni?": {
+    "act": "question",
+    "question": true,
+    "referenceKind": "product",
+    "positiveEntityText": "Çfarë produktesh keni?",
+    "evidence": "Çfarë produktesh keni?"
+  },
+  "Dua Puzzle": {
+    "act": "answer",
+    "positiveEntityText": "Dua Puzzle",
+    "evidence": "Dua Puzzle"
+  },
+  "Më trego produktin e dytë.": {
+    "referenceMode": "ordinal",
+    "intent": "information",
+    "act": "answer",
+    "referenceKind": "product",
+    "referenceIndex": 2,
+    "positiveEntityText": "Më trego produktin e dytë.",
+    "evidence": "Më trego produktin e dytë."
+  },
+  "Website": {
+    "act": "answer",
+    "positiveEntityText": "Website",
+    "evidence": "Website"
+  },
+  "Puzzle": {
+    "act": "answer",
+    "positiveEntityText": "Puzzle",
+    "evidence": "Puzzle"
+  },
+  "Large": {
+    "act": "answer",
+    "positiveEntityText": "Large",
+    "evidence": "Large"
+  },
+  "Konsultë": {
+    "act": "answer",
+    "positiveEntityText": "Konsultë",
+    "evidence": "Konsultë"
+  },
+  "four": {
+    "act": "answer",
+    "positiveEntityText": "four",
+    "evidence": "four"
+  },
+  "I need 4": {
+    "act": "answer",
+    "positiveEntityText": "I need 4",
+    "evidence": "I need 4"
+  },
+  "Dua të vazhdoj me Konsultë": {
+    "intent": "service",
+    "act": "answer",
+    "process": "service",
+    "positiveEntityText": "Dua të vazhdoj me Konsultë",
+    "evidence": "Dua të vazhdoj me Konsultë"
+  },
+  "Më trego shërbimin e dytë": {
+    "referenceMode": "ordinal",
+    "intent": "information",
+    "act": "answer",
+    "referenceKind": "service",
+    "referenceIndex": 2,
+    "positiveEntityText": "Më trego shërbimin e dytë",
+    "evidence": "Më trego shërbimin e dytë"
+  },
+  "Ndrysho madhësinë": {
+    "act": "other",
+    "positiveEntityText": "",
+    "correction": true,
+    "evidence": "Ndrysho madhësinë",
+    "navigation": "correct"
+  },
+  "jo tani": {
+    "act": "answer",
+    "navigation": "defer",
+    "correction": true,
+    "evidence": "jo tani"
+  },
+  "maybe later please": {
+    "act": "answer",
+    "positiveEntityText": "maybe later please",
+    "evidence": "maybe later please"
+  },
+  "Dua të rezervoj shërbimin e dytë": {
+    "referenceMode": "ordinal",
+    "intent": "booking",
+    "act": "answer",
+    "process": "booking",
+    "bookingMention": true,
+    "referenceKind": "service",
+    "referenceIndex": 2,
+    "positiveEntityText": "Dua të rezervoj shërbimin e dytë",
+    "evidence": "Dua të rezervoj shërbimin e dytë"
+  },
+  "ai shërbimi": {
+    "referenceMode": "this",
+    "act": "answer",
+    "referenceKind": "service",
+    "positiveEntityText": "ai shërbimi",
+    "evidence": "ai shërbimi"
+  },
+  "Dua ta porosis i dyti": {
+    "referenceMode": "ordinal",
+    "intent": "order",
+    "act": "answer",
+    "process": "order",
+    "referenceKind": "product",
+    "referenceIndex": 2,
+    "positiveEntityText": "Dua ta porosis i dyti",
+    "evidence": "Dua ta porosis i dyti"
+  },
+  "Dua Poster": {
+    "act": "answer",
+    "positiveEntityText": "Dua Poster",
+    "evidence": "Dua Poster"
+  },
+  "Ku do të më kontaktoni?": {
+    "intent": "support",
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Ku do të më kontaktoni?",
+    "evidence": "Ku do të më kontaktoni?"
+  },
+  "Sa kushton Montessori?": {
+    "businessRead": "price",
+    "retrievalDomain": "product",
+    "intent": "information",
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Sa kushton Montessori?",
+    "evidence": "Sa kushton Montessori?"
+  },
+  "Cilin sugjeroni per moshen 5 vjec?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Cilin sugjeroni per moshen 5 vjec?",
+    "evidence": "Cilin sugjeroni per moshen 5 vjec?"
+  },
+  "materialet": {
+    "act": "answer",
+    "positiveEntityText": "materialet",
+    "evidence": "materialet"
+  },
+  "Sa kushton transporti?": {
+    "businessRead": "price",
+    "retrievalDomain": "product",
+    "intent": "information",
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Sa kushton transporti?",
+    "evidence": "Sa kushton transporti?"
+  },
+  "09:00": {
+    "act": "answer",
+    "positiveEntityText": "09:00",
+    "evidence": "09:00"
+  },
+  "Dua të rezervoj Konsulta": {
+    "intent": "booking",
+    "act": "answer",
+    "process": "booking",
+    "bookingMention": true,
+    "positiveEntityText": "Dua të rezervoj Konsulta",
+    "evidence": "Dua të rezervoj Konsulta"
+  },
+  "kam nje klinike dentare": {
+    "act": "answer",
+    "positiveEntityText": "kam nje klinike dentare",
+    "evidence": "kam nje klinike dentare"
+  },
+  "Çfarë shërbimesh keni": {
+    "businessRead": "services",
+    "act": "question",
+    "question": true,
+    "referenceKind": "service",
+    "positiveEntityText": "Çfarë shërbimesh keni",
+    "evidence": "Çfarë shërbimesh keni"
+  },
+  "Dua porosi të re": {
+    "intent": "order",
+    "act": "answer",
+    "navigation": "new",
+    "process": "order",
+    "positiveEntityText": "Dua porosi të re",
+    "evidence": "Dua porosi të re"
+  },
+  "Dua të porosis dhe dua rezervim më 2026-10-15 në 09:00": {
+    "intent": "undetermined",
+    "act": "other",
+    "process": "order",
+    "bookingMention": true,
+    "positiveEntityText": "Dua të porosis dhe dua rezervim më 2026-10-15 në 09:00",
+    "evidence": "Dua të porosis dhe dua rezervim më 2026-10-15 në 09:00",
+    "requestedProcesses": [
+      "order",
+      "booking"
+    ]
+  },
+  "Çfarë shërbimesh keni?": {
+    "businessRead": "services",
+    "act": "question",
+    "question": true,
+    "referenceKind": "service",
+    "positiveEntityText": "Çfarë shërbimesh keni?",
+    "evidence": "Çfarë shërbimesh keni?"
+  },
+  "Regjistrim biznesi": {
+    "act": "other",
+    "positiveEntityText": "Regjistrim biznesi",
+    "evidence": "Regjistrim biznesi",
+    "process": "actionFlow"
+  },
+  "What are your hours?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "What are your hours?",
+    "evidence": "What are your hours?"
+  },
+  "Konfirmoj porosinë": {
+    "act": "accept",
+    "process": "order",
+    "positiveEntityText": "Konfirmoj porosinë",
+    "evidence": "Konfirmoj porosinë"
+  },
+  "Pershendetje": {
+    "act": "answer",
+    "positiveEntityText": "Pershendetje",
+    "evidence": "Pershendetje"
+  },
+  "Shsnsj": {
+    "act": "answer",
+    "positiveEntityText": "Shsnsj",
+    "evidence": "Shsnsj"
+  },
+  "Helpo": {
+    "act": "answer",
+    "positiveEntityText": "Helpo",
+    "evidence": "Helpo"
+  },
+  "WhatsApp": {
+    "act": "answer",
+    "staffContact": true,
+    "positiveEntityText": "WhatsApp",
+    "evidence": "WhatsApp"
+  },
+  "Ku është porosia ime?": {
+    "act": "question",
+    "question": true,
+    "orderStatus": true,
+    "positiveEntityText": "Ku është porosia ime?",
+    "evidence": "Ku është porosia ime?"
+  },
+  "Dua të rezervoj Session": {
+    "intent": "booking",
+    "act": "answer",
+    "process": "booking",
+    "bookingMention": true,
+    "positiveEntityText": "Dua të rezervoj Session",
+    "evidence": "Dua të rezervoj Session"
+  },
+  "Dua rezervim session": {
+    "intent": "booking",
+    "act": "answer",
+    "process": "booking",
+    "bookingMention": true,
+    "positiveEntityText": "Dua rezervim session",
+    "evidence": "Dua rezervim session"
+  },
+  "ku?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "ku?",
+    "evidence": "ku?"
+  },
+  "OK": {
+    "act": "accept",
+    "positiveEntityText": "OK",
+    "evidence": "OK"
+  },
+  "Telefoni: 0690000000. Dua të flas me stafin.": {
+    "intent": "support",
+    "act": "answer",
+    "positiveEntityText": "Telefoni: 0690000000. Dua të flas me stafin.",
+    "facts": [
+      {
+        "key": "phone",
+        "value": "0690000000",
+        "evidence": "Telefoni: 0690000000. Dua të flas me stafin."
+      }
+    ],
+    "evidence": "Telefoni: 0690000000. Dua të flas me stafin."
+  },
+  "nuk dua produkt, dua te kontaktohem ne whatsapp": {
+    "intent": "support",
+    "act": "answer",
+    "referenceKind": "product",
+    "positiveEntityText": "te kontaktohem ne whatsapp",
+    "correction": true,
+    "evidence": "nuk dua produkt, dua te kontaktohem ne whatsapp"
+  },
+  "Dua rezervim më 2026-10-15": {
+    "intent": "booking",
+    "act": "answer",
+    "process": "booking",
+    "bookingMention": true,
+    "positiveEntityText": "Dua rezervim më 2026-10-15",
+    "evidence": "Dua rezervim më 2026-10-15"
+  },
+  "Cili është numri juaj?": {
+    "act": "question",
+    "question": true,
+    "staffContact": true,
+    "positiveEntityText": "Cili është numri juaj?",
+    "evidence": "Cili është numri juaj?"
+  },
+  "Hi": {
+    "act": "answer",
+    "positiveEntityText": "Hi",
+    "evidence": "Hi"
+  },
+  "Si mund të regjistrohem?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Si mund të regjistrohem?",
+    "evidence": "Si mund të regjistrohem?",
+    "intent": "information"
+  },
+  "A përgjigjeni nga Instagrami im?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "A përgjigjeni nga Instagrami im?",
+    "evidence": "A përgjigjeni nga Instagrami im?"
+  },
+  "Jo tani": {
+    "act": "answer",
+    "navigation": "defer",
+    "correction": true,
+    "evidence": "Jo tani"
+  },
+  "Vazhdo Regjistrim biznesi": {
+    "act": "other",
+    "positiveEntityText": "Vazhdo Regjistrim biznesi",
+    "evidence": "Vazhdo Regjistrim biznesi",
+    "navigation": "resume",
+    "process": "actionFlow"
+  },
+  "Emri: Ana; Telefon: +355691234567; Qyteti: Tiranë; Adresa: Rruga A": {
+    "act": "answer",
+    "positiveEntityText": "Emri: Ana; Telefon: +355691234567; Qyteti: Tiranë; Adresa: Rruga A",
+    "facts": [
+      {
+        "key": "name",
+        "value": "Ana",
+        "evidence": "Emri: Ana; Telefon: +355691234567; Qyteti: Tiranë; Adresa: Rruga A"
+      },
+      {
+        "key": "phone",
+        "value": "+355691234567",
+        "evidence": "Emri: Ana; Telefon: +355691234567; Qyteti: Tiranë; Adresa: Rruga A"
+      },
+      {
+        "key": "city",
+        "value": "Tiranë",
+        "evidence": "Emri: Ana; Telefon: +355691234567; Qyteti: Tiranë; Adresa: Rruga A"
+      },
+      {
+        "key": "address",
+        "value": "Rruga A",
+        "evidence": "Emri: Ana; Telefon: +355691234567; Qyteti: Tiranë; Adresa: Rruga A"
+      }
+    ],
+    "evidence": "Emri: Ana; Telefon: +355691234567; Qyteti: Tiranë; Adresa: Rruga A"
+  },
+  "Si quhem?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Si quhem?",
+    "recallKeys": [
+      "name"
+    ],
+    "recall": true,
+    "evidence": "Si quhem?"
+  },
+  "Çfarë project_type dhashë për shërbimin?": {
+    "intent": "information",
+    "act": "question",
+    "question": true,
+    "referenceKind": "service",
+    "positiveEntityText": "Çfarë project_type dhashë për shërbimin?",
+    "recallProcess": true,
+    "recall": true,
+    "evidence": "Çfarë project_type dhashë për shërbimin?",
+    "process": "service",
+    "requestedFields": [
+      "project_type"
+    ]
+  },
+  "Çfarë të kam thënë më parë?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Çfarë të kam thënë më parë?",
+    "recallKeys": [
+      "name",
+      "instagram_handle",
+      "business_type",
+      "stated_needs"
+    ],
+    "recall": true,
+    "evidence": "Çfarë të kam thënë më parë?"
+  },
+  "Ku është porosia?": {
+    "act": "question",
+    "question": true,
+    "orderStatus": true,
+    "positiveEntityText": "Ku është porosia?",
+    "evidence": "Ku është porosia?"
+  },
+  "Lloji i biznesit: Shitje këpucësh online": {
+    "act": "answer",
+    "positiveEntityText": "Lloji i biznesit: Shitje këpucësh online",
+    "facts": [
+      {
+        "key": "business_type",
+        "value": "Shitje këpucësh online",
+        "evidence": "Lloji i biznesit: Shitje këpucësh online"
+      }
+    ],
+    "evidence": "Lloji i biznesit: Shitje këpucësh online"
+  },
+  "Më jep informacion": {
+    "intent": "information",
+    "act": "answer",
+    "positiveEntityText": "Më jep informacion",
+    "evidence": "Më jep informacion"
+  },
+  "not Puzzle, Libri": {
+    "act": "answer",
+    "positiveEntityText": "libri",
+    "correction": true,
+    "evidence": "not Puzzle, Libri",
+    "referenceKind": "product"
+  },
+  "Si e kam emrin?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Si e kam emrin?",
+    "recallKeys": [
+      "name"
+    ],
+    "recall": true,
+    "evidence": "Si e kam emrin?"
+  },
+  "Çfarë shes unë?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Çfarë shes unë?",
+    "recallKeys": [
+      "business_type"
+    ],
+    "recall": true,
+    "evidence": "Çfarë shes unë?"
+  },
+  "Çfarë ofron biznesi?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Çfarë ofron biznesi?",
+    "evidence": "Çfarë ofron biznesi?"
+  },
+  "Quhem Synthetic": {
+    "act": "answer",
+    "positiveEntityText": "Quhem Synthetic",
+    "facts": [
+      {
+        "key": "name",
+        "value": "Synthetic",
+        "evidence": "Quhem Synthetic"
+      }
+    ],
+    "evidence": "Quhem Synthetic"
+  },
+  "Cili është profili im në Instagram?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Cili është profili im në Instagram?",
+    "recallKeys": [
+      "instagram_handle"
+    ],
+    "recall": true,
+    "evidence": "Cili është profili im në Instagram?"
+  },
+  "Instagram: synthetic_shop; Lloji i biznesit: online clothing store; Pyetjet tipike: prices, sizes and orders": {
+    "act": "answer",
+    "positiveEntityText": "Instagram: synthetic_shop; Lloji i biznesit: online clothing store; Pyetjet tipike: prices, sizes and orders",
+    "facts": [
+      {
+        "key": "instagram_handle",
+        "value": "synthetic_shop",
+        "evidence": "Instagram: synthetic_shop; Lloji i biznesit: online clothing store; Pyetjet tipike: prices, sizes and orders"
+      },
+      {
+        "key": "business_type",
+        "value": "online clothing store",
+        "evidence": "Instagram: synthetic_shop; Lloji i biznesit: online clothing store; Pyetjet tipike: prices, sizes and orders"
+      },
+      {
+        "key": "stated_needs",
+        "value": "prices, sizes and orders",
+        "evidence": "Instagram: synthetic_shop; Lloji i biznesit: online clothing store; Pyetjet tipike: prices, sizes and orders"
+      }
+    ],
+    "evidence": "Instagram: synthetic_shop; Lloji i biznesit: online clothing store; Pyetjet tipike: prices, sizes and orders"
+  },
+  "Profili im në Instagram është corrected_shop": {
+    "act": "answer",
+    "positiveEntityText": "Profili im në Instagram është corrected_shop",
+    "correction": true,
+    "facts": [
+      {
+        "key": "instagram_handle",
+        "value": "corrected_shop",
+        "evidence": "Profili im në Instagram është corrected_shop"
+      }
+    ],
+    "evidence": "Profili im në Instagram është corrected_shop"
+  },
+  "Emri im është Corrected": {
+    "act": "answer",
+    "positiveEntityText": "Emri im është Corrected",
+    "correction": true,
+    "facts": [
+      {
+        "key": "name",
+        "value": "Corrected",
+        "evidence": "Emri im është Corrected"
+      }
+    ],
+    "evidence": "Emri im është Corrected"
+  },
+  "Instagrami im?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Instagrami im?",
+    "recallKeys": [
+      "instagram_handle"
+    ],
+    "recall": true,
+    "evidence": "Instagrami im?"
+  },
+  "Cili është telefoni im?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Cili është telefoni im?",
+    "recallKeys": [
+      "phone"
+    ],
+    "recall": true,
+    "evidence": "Cili është telefoni im?"
+  },
+  "shërbimin e dytë": {
+    "referenceMode": "ordinal",
+    "act": "answer",
+    "referenceKind": "service",
+    "referenceIndex": 2,
+    "positiveEntityText": "shërbimin e dytë",
+    "evidence": "shërbimin e dytë"
+  },
+  "jo atë, tjetrin": {
+    "act": "answer",
+    "positiveEntityText": "tjetrin",
+    "correction": true,
+    "evidence": "jo atë, tjetrin",
+    "referenceMode": "other",
+    "referenceKind": "product"
+  },
+  "këtë": {
+    "referenceMode": "this",
+    "act": "answer",
+    "positiveEntityText": "këtë",
+    "evidence": "këtë"
+  },
+  "Libri": {
+    "act": "answer",
+    "positiveEntityText": "Libri",
+    "evidence": "Libri"
+  },
+  "Quhem Drita": {
+    "act": "answer",
+    "positiveEntityText": "Quhem Drita",
+    "facts": [
+      {
+        "key": "name",
+        "value": "Drita",
+        "evidence": "Quhem Drita"
+      }
+    ],
+    "evidence": "Quhem Drita"
+  },
+  "Lloji i biznesit: Shitje librash online; Instagram: synthetic_books; Pyetjet tipike: çmimet dhe transporti": {
+    "intent": "information",
+    "act": "answer",
+    "positiveEntityText": "Lloji i biznesit: Shitje librash online; Instagram: synthetic_books; Pyetjet tipike: çmimet dhe transporti",
+    "facts": [
+      {
+        "key": "business_type",
+        "value": "Shitje librash online",
+        "evidence": "Lloji i biznesit: Shitje librash online; Instagram: synthetic_books; Pyetjet tipike: çmimet dhe transporti"
+      },
+      {
+        "key": "instagram_handle",
+        "value": "synthetic_books",
+        "evidence": "Lloji i biznesit: Shitje librash online; Instagram: synthetic_books; Pyetjet tipike: çmimet dhe transporti"
+      },
+      {
+        "key": "stated_needs",
+        "value": "çmimet dhe transporti",
+        "evidence": "Lloji i biznesit: Shitje librash online; Instagram: synthetic_books; Pyetjet tipike: çmimet dhe transporti"
+      }
+    ],
+    "evidence": "Lloji i biznesit: Shitje librash online; Instagram: synthetic_books; Pyetjet tipike: çmimet dhe transporti"
+  },
+  "Rikujto perseri emrin, biznesin, Instagramin dhe pyetjet tipike, pa te dhena te reja.": {
+    "intent": "information",
+    "act": "answer",
+    "positiveEntityText": "Rikujto perseri emrin, biznesin, Instagramin dhe pyetjet tipike, pa te dhena te reja.",
+    "recallKeys": [
+      "name",
+      "instagram_handle",
+      "business_type",
+      "stated_needs"
+    ],
+    "recall": true,
+    "evidence": "Rikujto perseri emrin, biznesin, Instagramin dhe pyetjet tipike, pa te dhena te reja."
+  },
+  "Më kujto emrin.": {
+    "intent": "information",
+    "act": "answer",
+    "positiveEntityText": "Më kujto emrin.",
+    "recallKeys": [
+      "name"
+    ],
+    "recall": true,
+    "evidence": "Më kujto emrin."
+  },
+  "Më kujto të dhënat për shërbimin.": {
+    "intent": "information",
+    "act": "answer",
+    "referenceKind": "service",
+    "positiveEntityText": "Më kujto të dhënat për shërbimin.",
+    "recallProcess": true,
+    "recall": true,
+    "evidence": "Më kujto të dhënat për shërbimin.",
+    "process": "service"
+  },
+  "Quhem Arta": {
+    "act": "answer",
+    "positiveEntityText": "Quhem Arta",
+    "facts": [
+      {
+        "key": "name",
+        "value": "Arta",
+        "evidence": "Quhem Arta"
+      }
+    ],
+    "evidence": "Quhem Arta"
+  },
+  "Instagram: corrected_books": {
+    "act": "answer",
+    "positiveEntityText": "Instagram: corrected_books",
+    "correction": true,
+    "facts": [
+      {
+        "key": "instagram_handle",
+        "value": "corrected_books",
+        "evidence": "Instagram: corrected_books"
+      }
+    ],
+    "evidence": "Instagram: corrected_books"
+  },
+  "Nuk dua të blej": {
+    "act": "decline",
+    "correction": true,
+    "evidence": "Nuk dua të blej",
+    "intent": "information"
+  },
+  "Sa kushton Paketa Parashkollore?": {
+    "businessRead": "price",
+    "retrievalDomain": "product",
+    "intent": "information",
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Sa kushton Paketa Parashkollore?",
+    "evidence": "Sa kushton Paketa Parashkollore?"
+  },
+  "Dua të vazhdoj me shërbimin e dytë": {
+    "referenceMode": "ordinal",
+    "intent": "service",
+    "act": "answer",
+    "process": "service",
+    "referenceKind": "service",
+    "referenceIndex": 2,
+    "positiveEntityText": "Dua të vazhdoj me shërbimin e dytë",
+    "evidence": "Dua të vazhdoj me shërbimin e dytë"
+  },
+  "many?": {
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "many?",
+    "evidence": "many?"
+  },
+  "Cili është produkti më i lirë?": {
+    "businessRead": "cheapest",
+    "act": "question",
+    "question": true,
+    "referenceKind": "product",
+    "positiveEntityText": "Cili është produkti më i lirë?",
+    "evidence": "Cili është produkti më i lirë?"
+  },
+  "Consult": {
+    "act": "answer",
+    "positiveEntityText": "Consult",
+    "evidence": "Consult"
+  },
+  "Sa kushton Libri?": {
+    "businessRead": "price",
+    "retrievalDomain": "product",
+    "intent": "information",
+    "act": "question",
+    "question": true,
+    "positiveEntityText": "Sa kushton Libri?",
+    "evidence": "Sa kushton Libri?"
+  },
+  "Dua të vazhdoj me Consult": {
+    "intent": "service",
+    "act": "answer",
+    "process": "service",
+    "positiveEntityText": "Dua të vazhdoj me Consult",
+    "evidence": "Dua të vazhdoj me Consult"
+  },
+  "Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj": {
+    "act": "answer",
+    "positiveEntityText": "Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj",
+    "evidence": "Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj",
+    "facts": [
+      {
+        "key": "name",
+        "value": "Miqail",
+        "evidence": "Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj"
+      },
+      {
+        "key": "business_type",
+        "value": "Shitje rrobash online",
+        "evidence": "Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj"
+      },
+      {
+        "key": "instagram_handle",
+        "value": "filiz_studio_",
+        "evidence": "Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj"
+      },
+      {
+        "key": "stated_needs",
+        "value": "Kam pyetje per masat, a eshte gjendje etj",
+        "evidence": "Miqail\n\nShitje rrobash online\n\nfiliz_studio_\n\nKam pyetje per masat, a eshte gjendje etj"
+      }
+    ]
+  },
+  "👍": {
+    "act": "acknowledge",
+    "positiveEntityText": "👍",
+    "evidence": "👍"
+  },
+  "Quhem Miqail": {
+    "act": "answer",
+    "positiveEntityText": "Quhem Miqail",
+    "facts": [
+      {
+        "key": "name",
+        "value": "Miqail",
+        "evidence": "Quhem Miqail"
+      }
+    ],
+    "evidence": "Quhem Miqail"
+  },
+  "Instagram: filiz_studio_; Lloji i biznesit: Shitje rrobash online; Pyetjet tipike: masat dhe gjendja": {
+    "act": "answer",
+    "positiveEntityText": "Instagram: filiz_studio_; Lloji i biznesit: Shitje rrobash online; Pyetjet tipike: masat dhe gjendja",
+    "facts": [
+      {
+        "key": "instagram_handle",
+        "value": "filiz_studio_",
+        "evidence": "Instagram: filiz_studio_; Lloji i biznesit: Shitje rrobash online; Pyetjet tipike: masat dhe gjendja"
+      },
+      {
+        "key": "business_type",
+        "value": "Shitje rrobash online",
+        "evidence": "Instagram: filiz_studio_; Lloji i biznesit: Shitje rrobash online; Pyetjet tipike: masat dhe gjendja"
+      },
+      {
+        "key": "stated_needs",
+        "value": "masat dhe gjendja",
+        "evidence": "Instagram: filiz_studio_; Lloji i biznesit: Shitje rrobash online; Pyetjet tipike: masat dhe gjendja"
+      }
+    ],
+    "evidence": "Instagram: filiz_studio_; Lloji i biznesit: Shitje rrobash online; Pyetjet tipike: masat dhe gjendja"
+  },
+  "industrial pumps catalog": {
+    "retrievalDomain": "catalog",
+    "act": "answer",
+    "positiveEntityText": "industrial pumps catalog",
+    "evidence": "industrial pumps catalog"
+  },
+  "Germany": {
+    "act": "answer",
+    "positiveEntityText": "Germany",
+    "evidence": "Germany"
+  },
+  "industrial pumps catalog Germany": {
+    "retrievalDomain": "catalog",
+    "act": "answer",
+    "positiveEntityText": "industrial pumps catalog Germany",
+    "evidence": "industrial pumps catalog Germany"
+  },
+  "not an email": {
+    "act": "answer",
+    "correction": true,
+    "evidence": "not an email"
+  },
+  "Po": {
+    "act": "accept",
+    "evidence": "Po",
+    "positiveEntityText": "Po"
+  },
+  "po konfirmoj": {
+    "act": "accept",
+    "evidence": "po konfirmoj"
+  },
+  "Të dhënat e shërbimit?": {
+    "evidence": "Të dhënat e shërbimit?",
+    "process": "service",
+    "recallProcess": true,
+    "recall": true,
+    "question": true,
+    "act": "question"
+  },
+  "Rezervimi im?": {
+    "evidence": "Rezervimi im?",
+    "process": "booking",
+    "recallProcess": true,
+    "recall": true,
+    "question": true,
+    "act": "question"
+  },
+  "Vazhdo porosinë": {
+    "evidence": "Vazhdo porosinë",
+    "act": "other",
+    "navigation": "resume",
+    "process": "order",
+    "intent": "order"
+  },
+  "Sa kushton produkti?": {
+    "evidence": "Sa kushton produkti?",
+    "act": "question",
+    "question": true,
+    "intent": "information"
+  },
+  "How can I start the application?": {
+    "evidence": "How can I start the application?",
+    "act": "question",
+    "question": true,
+    "intent": "information"
+  },
+  "Dua të porosis; sa kushton?": {
+    "evidence": "Dua të porosis; sa kushton?",
+    "intent": "order",
+    "question": true,
+    "requestedProcesses": [
+      "order"
+    ]
+  },
+  "Fola me stafin në WhatsApp, tani dua të porosis": {
+    "evidence": "Fola me stafin në WhatsApp, tani dua të porosis",
+    "intent": "order",
+    "staffContact": false
+  },
+  "Fola me stafin, tani dua të porosis": {
+    "evidence": "Fola me stafin, tani dua të porosis",
+    "intent": "order",
+    "staffContact": false
+  },
+  "Telefoni im është +355699876543": {
+    "evidence": "Telefoni im është +355699876543",
+    "act": "answer",
+    "facts": [
+      {
+        "key": "phone",
+        "value": "+355699876543",
+        "evidence": "Telefoni im është +355699876543"
+      }
+    ]
+  },
+  "Telefoni im është 0691234567; sa kushton?": {
+    "evidence": "Telefoni im është 0691234567; sa kushton?",
+    "act": "answer",
+    "facts": [
+      {
+        "key": "phone",
+        "value": "0691234567",
+        "evidence": "Telefoni im është 0691234567; sa kushton?"
+      }
+    ]
+  },
+  "+355699999999": {
+    "evidence": "+355699999999",
+    "act": "answer",
+    "facts": [
+      {
+        "key": "phone",
+        "value": "+355699999999",
+        "evidence": "+355699999999"
+      }
+    ]
+  },
+  "0697654321": {
+    "evidence": "0697654321",
+    "act": "answer",
+    "facts": [
+      {
+        "key": "phone",
+        "value": "0697654321",
+        "evidence": "0697654321"
+      }
+    ]
+  },
+  "Emri: Ana; Telefon: +355691234567; Madhësia: M": {
+    "evidence": "Emri: Ana; Telefon: +355691234567; Madhësia: M",
+    "act": "answer",
+    "facts": [
+      {
+        "key": "name",
+        "value": "Ana",
+        "evidence": "Emri: Ana; Telefon: +355691234567; Madhësia: M"
+      },
+      {
+        "key": "phone",
+        "value": "+355691234567",
+        "evidence": "Emri: Ana; Telefon: +355691234567; Madhësia: M"
+      },
+      {
+        "key": "size",
+        "value": "M",
+        "evidence": "Emri: Ana; Telefon: +355691234567; Madhësia: M"
+      }
+    ]
+  },
+  "filiz_studio_\nKam pyetje per masat": {
+    "evidence": "filiz_studio_\nKam pyetje per masat",
+    "act": "answer",
+    "facts": [
+      {
+        "key": "instagram_handle",
+        "value": "filiz_studio_",
+        "evidence": "filiz_studio_\nKam pyetje per masat"
+      },
+      {
+        "key": "stated_needs",
+        "value": "Kam pyetje per masat",
+        "evidence": "filiz_studio_\nKam pyetje per masat"
+      }
+    ]
+  },
+  "L": {
+    "evidence": "L",
+    "act": "answer"
+  },
+  "4": {
+    "evidence": "4",
+    "act": "answer"
+  },
+  "Rezervim": {
+    "evidence": "Rezervim",
+    "act": "other",
+    "intent": "booking",
+    "process": "booking",
+    "bookingMention": true
+  },
+  "industrial pumps": {
+    "evidence": "industrial pumps",
+    "act": "other",
+    "catalogPurpose": "technical"
+  },
+  "pumps": {
+    "evidence": "pumps",
+    "act": "other"
+  },
+  "Fola me stafin në WhatsApp. Tani dua të porosis Puzzle.": {
+    "evidence": "Fola me stafin në WhatsApp. Tani dua të porosis Puzzle.",
+    "intent": "order",
+    "staffContact": false
+  },
+  "Hapje laboratori": {
+    "evidence": "Hapje laboratori",
+    "act": "other",
+    "process": "actionFlow",
+    "navigation": "new"
+  },
+  "Telefoni im është 0691234567; ku është porosia ime?": {
+    "evidence": "Telefoni im është 0691234567; ku është porosia ime?",
+    "act": "question",
+    "question": true,
+    "intent": "information",
+    "orderStatus": true,
+    "facts": [
+      {
+        "key": "phone",
+        "value": "0691234567",
+        "evidence": "Telefoni im është 0691234567; ku është porosia ime?"
+      }
+    ]
+  },
+  "not Puzzle, I want Libri": {
+    "evidence": "not Puzzle, I want Libri",
+    "referenceKind": "product",
+    "correction": true
+  },
+  "Jo Puzzle, dua Libri": {
+    "evidence": "Jo Puzzle, dua Libri",
+    "referenceKind": "product",
+    "correction": true
+  },
+  "nuk dua Puzzle por Libri": {
+    "evidence": "nuk dua Puzzle por Libri",
+    "referenceKind": "product",
+    "correction": true
+  },
+  "not Puzzle": {
+    "evidence": "not Puzzle",
+    "referenceKind": "product",
+    "correction": true
+  },
+  "Jo Puzzle, dua Qwerty": {
+    "evidence": "Jo Puzzle, dua Qwerty",
+    "referenceKind": "product",
+    "correction": true
+  },
+  "po por ora 10": {
+    "evidence": "po por ora 10",
+    "act": "other",
+    "correction": true
+  }
+}

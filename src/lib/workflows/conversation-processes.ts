@@ -1,5 +1,5 @@
 import type { BookingDraft } from "@/lib/calendar/agent";
-import { emptyState, type ConversationStatePayload } from "./engine";
+import { emptyState, type ConversationStatePayload } from "./state";
 import { freshOrderReview, invalidateOrderReview, migrateContext, projectProfile, type SharedContext } from "./context";
 import type { VisualVersion } from "./visual/types";
 

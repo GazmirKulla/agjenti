@@ -1,4 +1,4 @@
-import { foldText } from "@/lib/workflows/engine";
+import { foldText } from "@/lib/workflows/state";
 
 const ignored = new Set("dua deshiroj porosis porosit blej produkt produkti produkte produktet sherbim sherbimi keni gjendje cmimi kushton cfare ckemi pershendetje hello please want order buy product products have stock available".split(" "));
 const words = (text: string) => foldText(text).split(/[^a-z0-9]+/).filter(word => word.length >= 4 && !ignored.has(word));

@@ -1,3 +1,5 @@
+const briefingIntent = vi.hoisted(() => vi.fn(async (): Promise<"today" | null> => null));
+vi.mock("@/lib/business-assistant/briefing-intent", () => ({ briefingQuestion: briefingIntent }));
 import { OperationError } from "@/lib/actions/operations/error";
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
@@ -60,6 +62,7 @@ const req = (body: unknown, origin = "https://example.com") =>
     body: JSON.stringify(body),
   });
 it("passes the native request identity to read-only briefing without planning or executing", async () => {
+  briefingIntent.mockResolvedValueOnce("today");
   m.user.mockResolvedValue({ data: { user: { id: "native-owner" } }, error: null });
   const reading = { status: "available", count: 2, href: "/b/demo/inbox", checkedAt: "2026-11-04T00:00:00Z" };
   m.briefing.mockResolvedValue({ period: "today", range: null, metrics: { messages: reading, orders: reading, customers: reading, bookings: reading },
