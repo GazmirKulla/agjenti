@@ -57,7 +57,7 @@ export function WhatsAppConnect({ businessId, appId, configId, version, connecte
       }, { config_id: configId, response_type: "code", override_default_response_type: true, extras: { setup: {}, sessionInfoVersion: "3" } });
     }}><Icon name="plus" size={18} />{connected ? t("Rilidh WhatsApp") : t("Lidh WhatsApp")}</button>}
     {code && assets && <div className="w-full space-y-3">
-      <label className="block">{t("PIN-i i verifikimit me dy hapa (6 shifra)")}<input className="field-input" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))} />
+      <label className="block">{t("PIN-i i verifikimit me dy hapa (6 shifra)")}<input className="field mt-2 block max-w-xs" type="password" inputMode="numeric" autoComplete="new-password" placeholder="••••••" maxLength={6} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ""))} />
       </label>
       <p className="muted-copy">{t("Përdor PIN-in ekzistues të numrit, ose cakto një PIN të ri nëse numri nuk ka ende një të tillë.")}</p>
       <button className="btn btn-primary" disabled={busy || pin.length !== 6} onClick={save}>{busy ? t("Po lidhet…") : t("Përfundo lidhjen")}</button>
