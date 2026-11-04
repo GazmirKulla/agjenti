@@ -43,6 +43,7 @@ export function planStepLabel(step: ActionPlanStep, decision?: "approved" | "rej
 /** Presentation only: server capability and authorization checks remain authoritative. */
 export function contextualAction(context: AssistantUIContext, name: string, modules: string[]) {
   const page = context.page;
+  if (["business", "activity", "integrations", "account", "setup"].includes(page)) return `Pyet ${name} për këtë faqe`;
   if (!modules.includes(page)) return null;
   switch (page) {
     case "products": return `Pyet ${name} për ${context.entityId ? "këtë produkt" : context.selectedEntityIds?.length ? "produktet e zgjedhura" : "produktet"}`;

@@ -149,7 +149,7 @@ export function contextLabel(c: AssistantUIContext) {
     (
       {
         home: "Kreu",
-        business: "Biznesi",
+        business: "Menaxhimi",
         activity: "Aktiviteti",
         products: "Produktet",
         services: "Shërbimet",

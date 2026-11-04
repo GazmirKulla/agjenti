@@ -101,9 +101,7 @@ test('mobile inline configuration has one modal, stable target, consent and canc
   await page.screenshot({ path: path.join(work, 'ux2-plan-mobile-dark.png') });
   // Move the same plan to the contextual mobile dialog.
   await page.getByRole('button', { name: 'Hap ose mbyll menunë' }).click();
-  await page.getByRole('dialog', { name: 'Menuja kryesore' }).getByRole('link', { name: 'Biznesi', exact: true }).click();
-  await page.getByText('Çfarë ofron biznesi', { exact: true }).click();
-  await page.getByRole('link', { name: /Produkte/ }).first().click();
+  await page.getByRole('dialog', { name: 'Menuja kryesore' }).getByRole('link', { name: 'Produktet', exact: true }).click();
   await page.getByRole('button', { name: 'Pyet Asistenti AI për produktet', exact: true }).click();
   await plan(page).getByRole('button', { name: 'Konfiguro', exact: true }).click();
   await expect(configuration(page)).toBeFocused();

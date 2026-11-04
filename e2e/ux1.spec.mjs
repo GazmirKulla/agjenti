@@ -25,19 +25,7 @@ async function send(page, text) {
   await chat(page).getByRole('button', { name: 'Dërgo mesazhin', exact: true }).click();
 }
 async function navigate(page, path) {
-  // Products moved out of the primary sidebar; search is still a direct route
-  // transition, preserving the original Back/Forward and mount assertions.
-  if (path === 'products') {
-    await page.getByRole('textbox', { name: 'Kërko faqe', exact: true }).fill('Produkte');
-    await page.locator(`.search-results a[href="/b/${retail.slug}/products"]`).first().click();
-  } else if (path === 'agents') {
-    await page.locator(`.dashboard-sidebar a[href="/b/${retail.slug}/business"]`).click();
-    const groups = page.getByRole('navigation', { name: 'Menaxhimi i biznesit', exact: true });
-    await groups.getByText('Si sillet agjenti', { exact: true }).click();
-    await groups.getByRole('link', { name: /Agjenti i klientëve/ }).click();
-  } else {
-    await page.locator(`.dashboard-sidebar a[href="/b/${retail.slug}${path ? `/${path}` : ''}"]`).first().click();
-  }
+  await page.locator(`.dashboard-sidebar a[href="/b/${retail.slug}${path ? `/${path}` : ''}"]`).first().click();
   await expect(page).toHaveURL(`http://localhost:3103/b/${retail.slug}${path ? `/${path}` : ''}`);
 }
 test.beforeAll(() => verifyContainers());
@@ -55,7 +43,7 @@ test('desktop: one mounted conversation, personal identity, manual overview and 
   await expect(chat(page)).toContainText('Asistenti AI — Asistenti yt');
   await expect(chat(page).getByRole('button', { name: 'Përgatit ofertën time' })).toBeVisible();
   await expect(widget(page).locator('.personal-assistant-avatar')).toHaveCSS('animation-name', 'none');
-  await expect(page.getByRole('navigation', { name: 'Menuja e biznesit', exact: true }).getByRole('link', { name: 'Biznesi', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Menuja e biznesit', exact: true }).getByRole('link', { name: 'Menaxhimi', exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(work, 'ux1-after-desktop.png') });
   await page.getByText('Pasqyra e biznesit dhe veprimet manuale', { exact: true }).click();
   await expect(page.locator('.assistant-first-home')).toHaveAttribute('open', '');
@@ -141,7 +129,7 @@ test('mobile: compact entry, working focus, manual access and no horizontal over
   await expect(page.locator('.assistant-mobile-dock')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.getByRole('button', { name: 'Hap ose mbyll menunë' }).click();
-  await page.getByRole('dialog', { name: 'Menuja kryesore' }).getByRole('link', { name: 'Biznesi', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Menuja kryesore' }).getByRole('link', { name: 'Menaxhimi', exact: true }).click();
   await expect(page).toHaveURL(`http://localhost:3103/b/${retail.slug}/business`);
   await page.getByText('Çfarë ofron biznesi', { exact: true }).click();
   await page.getByRole('link', { name: /Produkte/ }).first().click();

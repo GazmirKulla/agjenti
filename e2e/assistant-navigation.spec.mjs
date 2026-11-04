@@ -43,35 +43,28 @@ test.afterAll(async () => {
     }
   }
 });
-test('personalized primary navigation and grouped manual workspace preserve the same assistant', async ({ page }) => {
+test('visible manual navigation preserves product access and the same assistant', async ({ page }) => {
   await login(page);
   const nav = page.getByRole('navigation', { name: 'Menuja e biznesit', exact: true });
-  expect(await nav.getByRole('link').allTextContents()).toEqual(['Asistenti AI', 'Bisedat', 'Aktiviteti', 'Biznesi']);
+  await expect(nav.getByRole('link', { name: 'Produktet', exact: true })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Shërbimet', exact: true })).toBeVisible();
   await chat(page).evaluate(el => { el.dataset.proof = 'one-instance'; });
   await page.locator('#business-assistant-input').fill('Draft i papërfunduar');
-  await page.getByRole('button', { name: 'Personalizo asistentin', exact: true }).click();
-  await page.getByLabel('Emri i asistentit', { exact: true }).fill('Aria');
-  await page.getByRole('button', { name: 'Ruaj pamjen', exact: true }).click();
-  await expect(nav.getByRole('link', { name: 'Aria', exact: true })).toBeVisible();
-  await nav.getByRole('link', { name: 'Biznesi', exact: true }).click();
+  await nav.getByRole('link', { name: 'Produktet', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Produktet', exact: true })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Produktet', exact: true })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('link', { name: '＋ Shto produkt', exact: true }).click();
+  await expect(page.getByLabel('Emri i produktit', { exact: true })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Produktet', exact: true })).toHaveAttribute('aria-current', 'page');
+  await nav.getByRole('link', { name: 'Menaxhimi', exact: true }).click();
   const groups = page.getByRole('navigation', { name: 'Menaxhimi i biznesit', exact: true });
-  await expect(groups.locator('details')).toHaveCount(5);
-  await page.screenshot({ path: `${work}/navigation-after-business-desktop.png` });
-  await groups.getByText('Çfarë ofron biznesi', { exact: true }).click();
-  await expect(groups.getByRole('link', { name: /Produkte/ })).toBeVisible();
-  await expect(groups.locator(`a[href="${base}/services"]`)).toHaveCount(0);
-  await groups.getByText('Si sillet agjenti', { exact: true }).click();
-  await expect(groups.getByRole('link', { name: /Agjenti i klientëve/ })).toBeVisible();
-  await page.locator('.business-hub-utilities summary').click();
+  await expect(groups.getByRole('link', { name: /Produktet/ })).toBeVisible();
+  await expect(groups.getByRole('link', { name: /Shërbimet/ })).toBeVisible();
   await expect(page.getByRole('link', { name: /Workflow Designer · prova/ })).toBeVisible();
-  await nav.getByRole('link', { name: 'Aria', exact: true }).click();
+  await page.screenshot({ path: `${work}/navigation-after-business-desktop.png` });
+  await nav.getByRole('link', { name: 'Asistenti AI', exact: true }).click();
   await expect(page.locator('#business-assistant-input')).toHaveValue('Draft i papërfunduar');
   await expect(chat(page)).toHaveAttribute('data-proof', 'one-instance');
-  await page.reload();
-  await expect(nav.getByRole('link', { name: 'Aria', exact: true })).toBeVisible();
-  await page.goto(`${base}/settings/migo`);
-  await expect(page).toHaveURL(`http://localhost:3103${base}/settings/assistant`);
-  await expect(page.getByLabel('Emri i asistentit', { exact: true })).toHaveValue('Aria');
 });
 test('desktop drawer supports keyboard menus, selected state, rename, cancel and confirmed deletion', async ({ page }) => {
   const title = `Plan sintetik ${randomUUID().slice(0, 6)}`, id = await seed(title);
@@ -133,9 +126,9 @@ test('mobile drawer has no stacked modal, traps focus, restores focus and fits 3
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
   await page.getByRole('button', { name: 'Hap ose mbyll menunë', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Menuja e biznesit', exact: true }).getByRole('link', { name: 'Biznesi', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Menuja e biznesit', exact: true }).getByRole('link', { name: 'Menaxhimi', exact: true }).click();
   await expect(page).toHaveURL(`http://localhost:3103${base}/business`);
-  await expect(page.getByRole('heading', { name: 'Biznesi', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Menaxhimi', exact: true })).toBeVisible();
   await page.screenshot({ path: `${work}/navigation-after-business-mobile.png` });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

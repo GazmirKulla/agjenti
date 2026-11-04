@@ -1,0 +1,20 @@
+.page{display:grid;gap:28px;max-width:1240px;margin:0 auto}
+.header h1{font-size:30px;font-weight:700;letter-spacing:-.03em;margin:4px 0 8px}
+.header p{font-size:14px;line-height:1.6;color:var(--ink-muted);margin:0}
+.header small{font-size:12px;color:var(--ink-muted)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:18px}
+.panel{padding:24px;background:var(--surface);border:1px solid var(--line);border-radius:16px;min-width:0}
+.heading{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:12px;margin-bottom:18px}
+.heading h2,.directory h2{font-size:16px;font-weight:650;margin:0}
+.heading a{font-size:12px;color:var(--accent)}
+.counts{display:grid;grid-template-columns:1fr 1fr;gap:20px}.counts>div{display:grid;gap:6px}.counts strong{font-size:32px;line-height:1.2;font-weight:650}.counts span{font-size:13px;color:var(--ink-muted);line-height:1.5}
+.note{color:var(--ink-muted);font-size:12px;margin:0 0 14px}
+.bookings{padding:0;margin:0;list-style:none}.bookings li+li{border-top:1px solid var(--line)}.bookings a{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;font-size:13px}.bookings strong,.bookings small{display:block}.bookings small{color:var(--ink-muted);font-size:12px;margin-top:4px}.bookings time{color:var(--ink-muted);white-space:nowrap;font-size:12px}
+.directory>p{font-size:13px;color:var(--ink-muted);margin:8px 0 18px}
+.groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px}
+.group h3{margin:0 0 6px;font-size:14px;font-weight:650}.group>p{font-size:12px;line-height:1.5;color:var(--ink-muted);margin:0 0 14px}
+.links{display:grid;gap:3px}.links a{display:flex;align-items:center;gap:10px;padding:10px 8px;margin:0 -8px;border-radius:8px;min-height:40px;font-size:13px;color:var(--ink)}.links a:hover{background:var(--accent-soft);color:var(--accent)}.links a>span:last-child{margin-left:auto;color:var(--ink-muted)}
+.utilities{display:flex;flex-wrap:wrap;gap:8px 24px;padding-top:18px;border-top:1px solid var(--line);font-size:13px}.utilities a{padding:10px 0;color:var(--ink-muted)}
+.page a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:760px){.page{gap:22px}.header h1{font-size:26px}.panel{padding:18px}.bookings a{align-items:flex-start}.bookings time{white-space:normal;text-align:right}.actions a{flex:1;justify-content:center;white-space:nowrap}}

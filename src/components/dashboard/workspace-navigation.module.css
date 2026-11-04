@@ -11,3 +11,20 @@
 .business :is(a,summary):focus-visible,.sections a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .advanced{border:1px solid var(--line);border-radius:10px;font-size:13px}.advanced summary{cursor:pointer;padding:10px 12px;min-height:40px;color:var(--ink-muted)}.advanced summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:760px){.context{margin-bottom:16px}.sections{gap:4px}.sections a{font-size:12px;padding:9px}.businessLinks a{min-height:44px}}
+
+.group{margin:0 0 8px}
+.groupHeading{display:flex;align-items:center;gap:2px}
+.groupHeading :global(.dashboard-nav){flex:1;min-width:0;margin-bottom:0;padding:10px 10px;gap:10px;font-weight:650;font-size:13px}
+.groupToggle{display:grid;place-items:center;flex-shrink:0;width:32px;height:36px;border:0;border-radius:8px;background:transparent;color:var(--ink-muted);cursor:pointer}
+.groupToggle:hover{background:var(--hover)}
+.groupToggle span{transition:transform .15s}
+.groupToggle .expanded{transform:rotate(180deg)}
+.group .businessLinks{margin:4px 0 8px 18px;padding:0 0 0 12px;border-left:1px solid var(--line)}
+.group .businessLinks[hidden]{display:none}
+.group .businessLinks a{padding:8px 10px;min-height:36px;gap:9px;line-height:1.4}
+.group .businessLinks a[aria-current=page]{font-weight:650}
+.group :is(a,button):focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+:global(.dashboard-shell.is-icons) .groupHeading :global(.dashboard-nav){justify-content:center;padding:10px 0}
+:global(.dashboard-shell.is-icons) .group .businessLinks{margin:0;padding:0;border:0}
+:global(.dashboard-shell.is-icons) .group .businessLinks a{padding:10px 0;gap:0}
+@media(max-width:760px){.group .businessLinks a{min-height:44px}.groupToggle{width:44px;height:44px}}

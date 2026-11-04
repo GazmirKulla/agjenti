@@ -49,10 +49,11 @@ describe("Scoped dashboard language", () => {
     ] as Parameters<typeof organizeWorkspace>[0]);
     const html = render("en", h(WorkspaceNavigation, { navigation, base: "/b/shop", pathname: "/b/shop/inbox", section: "conversations", onNavigate: () => {} }));
     expect(html).toContain("Conversations");
-    expect(html).toContain("Business");
+    expect(html).toContain("Management");
     expect(html).toContain("AI Assistant");
     expect(html).toContain("/b/shop/business");
-    expect(html).not.toContain("/b/shop/services"); // Secondary destination, not a primary item.
+    expect(html).toContain("/b/shop/services"); // Direct access, even before any records exist.
+    expect(html).toContain("Services");
     expect(navigation.search).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: "services", label: "Shërbimet" }),
       expect.objectContaining({ path: "catalogs", label: "Katalogët" }),

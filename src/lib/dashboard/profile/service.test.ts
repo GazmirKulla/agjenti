@@ -25,15 +25,23 @@ it("hidden menus never remove capabilities", async () => {
   expect(profile.navigationItems).not.toContain("services");
   expect(stored.enabledModules).not.toContain("services");
 });
-it("reveals the service section from persisted usage without changing preferences", async () => {
-  const stored = rebuildProfileFromModules([]);
+it("shows empty allowed sections even when onboarding did not select them", async () => {
+  const stored = { ...rebuildProfileFromModules([]), source: "generated" };
   m.read.mockResolvedValue({ data: { dashboard_profile: stored }, error: null });
-  expect((await loadNavigationProfile("tenant")).navigationItems).not.toContain("services");
-  m.rpc.mockResolvedValue({ data: ["services"], error: null });
-  expect((await loadNavigationProfile("tenant")).navigationItems).toContain("services");
-  expect(m.rpc).toHaveBeenCalledWith("business_used_modules", { p_business: "tenant" });
+  const profile = await loadNavigationProfile("tenant");
+  for (const id of ["products", "services", "orders", "bookings", "knowledge", "workflows"])
+    expect(profile.navigationItems).toContain(id);
+  expect(m.rpc).not.toHaveBeenCalled();
   expect(stored.enabledModules).not.toContain("services");
 });
+it("never adds unpermitted modules, including core modules, to navigation", async () => {
+  m.read.mockResolvedValue({ data: { dashboard_profile: null }, error: null });
+  m.allowed.mockResolvedValue(["dashboard", "inbox", "products"]);
+  const profile = await loadNavigationProfile("tenant");
+  expect(profile.navigationItems).toEqual(["dashboard", "inbox", "products"]);
+  expect(profile.mobileNavigationItems.every(id => profile.enabledModules.includes(id))).toBe(true);
+});
+
 it("lets the owner show bookings while hiding the services menu", async () => {
   m.read.mockResolvedValue({ data: { dashboard_profile: { version: 1, source: "manual", enabledModules: ["bookings"], hiddenModules: ["services"] } }, error: null });
   const profile = await loadNavigationProfile("tenant");

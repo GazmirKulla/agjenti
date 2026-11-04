@@ -23,6 +23,10 @@ describe("one Migo presentation", () => {
     expect(contextualAction({ page: "agents", entryPoint: "contextual" }, "Migo", ["agents"])).toContain("agjentin e klientëve");
     expect(contextualAction(product, "Migo", [])).toBeNull();
   });
+  it.each(["business", "activity", "integrations", "settings", "account", "setup"])("keeps the assistant reachable from %s", page => {
+    expect(contextualAction({ page, entryPoint: "contextual" }, "Asistenti AI", ["settings"]))
+      .toBe("Pyet Asistenti AI për këtë faqe");
+  });
   it("uses the actual request history boundary for page, selection, filter and tenant notices", () => {
     const key = assistantContextKey("shop", product);
     for (const context of [home, { ...product, entityId: "p2" }, { ...product, searchQuery: "other" }]) {

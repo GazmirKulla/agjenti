@@ -1,4 +1,4 @@
-.shell:global(.dashboard-shell) { --sidebar-width: 216px; }
+.shell:global(.dashboard-shell) { --sidebar-width: 240px; }
 .shell :global(.dashboard-sidebar) { overflow: visible; padding: 22px 12px 14px; gap: 18px; }
 .shell :global(.dashboard-sidebar > nav) { flex: 1; min-height: 0; overflow-y: auto; }
 .shell :global(.dashboard-sidebar-footer) { flex-shrink: 0; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -20,3 +20,7 @@
 .profile :is(a,button):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media(min-width:761px) { .shell:global(.is-icons) { --sidebar-width: 72px; } .shell:global(.is-icons) .profileTrigger { justify-content: center; padding-inline: 0; } }
 @media(max-width:760px) { .shell :global(.dashboard-sidebar) { width: min(320px, 88vw); gap: 14px; } .popover { max-height: calc(100dvh - 110px); overflow-y: auto; } }
+
+.shell :global(.workspace-picker){margin:0 0 4px}
+.shell :global(.workspace-switch){margin:0}
+.shell :global(.dashboard-sidebar > nav > .dashboard-nav){padding:10px 12px;min-height:40px;margin-bottom:3px;gap:12px}

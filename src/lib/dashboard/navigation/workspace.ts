@@ -1,6 +1,12 @@
 import type { NavItem } from "./builder";
 
 export type WorkspaceLink = { id: string; path: string; label: string; icon: string };
+const workspaceLabels: Record<string, string> = {
+  products: "Produktet", services: "Shërbimet", catalogs: "Katalogët",
+  orders: "Porositë", bookings: "Rezervimet", leads: "Kërkesat",
+  agents: "Udhëzimet", knowledge: "Njohuritë", sources: "Burimet", workflows: "Workflow Designer",
+};
+export function workspaceLabel(item: WorkspaceLink) { return workspaceLabels[item.id] ?? item.label; }
 export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "settings" | "integrations" | "business" | "products" | "services" | "orders" | "leads" | "customers";
 const standaloneIds = ["products", "services", "orders", "leads", "customers"] as const;
 const agentIds = new Set(["agents", "knowledge", "workflows", "sources"]);
@@ -40,22 +46,24 @@ export function organizeWorkspace(items: NavItem[]) {
     ...(integrations.length ? [{ id: "integrations", section: "integrations" as const, path: "integrations", label: "Integrimet", icon: "integrations" }] : []),
     { id: "settings", section: "settings", path: "settings", label: "Cilësimet", icon: "settings" },
   ];
-  const search = [...primary, ...items, ...agent, ...settings, ...integrations].filter((item, index, all) => all.findIndex(other => other.path === item.path && other.label === item.label) === index);
+  const search: WorkspaceLink[] = [...primary, ...items, ...agent, ...settings, ...integrations].filter((item, index, all) => all.findIndex(other => other.path === item.path && other.label === item.label) === index);
   const main = ["home", "conversations", "activity", "customers"].flatMap(id => {
     const item = primary.find(item => item.id === id);
     return item ? [{ ...item, label: id === "home" ? "Asistenti AI" : item.label }] : [];
   });
-  return { primary, main, agent, settings, integrations, business, groups, search };
+  const management = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !["dashboard", "inbox", "customers"].includes(item.id));
+  search.push({ id: "management", path: "business", label: "Menaxhimi", icon: "briefcase" });
+  return { primary, main, agent, settings, integrations, business, groups, search, management };
 }
 
 /** Manual destinations, grouped by the owner's task; never changes module access. */
 export function businessWorkspaceGroups(navigation: ReturnType<typeof organizeWorkspace>) {
   const definitions = [
-    { id: "offer", label: "Çfarë ofron biznesi", description: "Produktet, shërbimet dhe katalogët që u ofron klientëve.", paths: ["products", "services", "catalogs"] },
-    { id: "knowledge", label: "Çfarë di agjenti", description: "Informacioni dhe burimet që përdor për t'u përgjigjur.", paths: ["knowledge", "sources"] },
-    { id: "channels", label: "Ku komunikon agjenti", description: "Lidhjet me Instagram dhe WhatsApp.", paths: ["instagram", "whatsapp"] },
-    { id: "behavior", label: "Si sillet agjenti", description: "Identiteti, udhëzimet dhe provat e agjentit të klientëve.", paths: ["agents", "agents/memory", "agents/test"] },
-    { id: "operations", label: "Puna e përditshme", description: "Porositë, rezervimet dhe kërkesat e klientëve.", paths: ["orders", "bookings", "calendar", "leads"] },
+    { id: "offer", label: "Produkte dhe shërbime", description: "Oferta që u prezanton klientëve.", paths: ["products", "services", "catalogs"] },
+    { id: "knowledge", label: "Njohuritë dhe burimet", description: "Informacioni që përdor agjenti për t'u përgjigjur.", paths: ["knowledge", "sources"] },
+    { id: "channels", label: "Kanalet", description: "Lidhjet me Instagram dhe WhatsApp.", paths: ["instagram", "whatsapp"] },
+    { id: "behavior", label: "Konfigurimi i agjentit", description: "Udhëzimet, memoria dhe provat e agjentit të klientëve.", paths: ["agents", "agents/memory", "agents/test"] },
+    { id: "operations", label: "Porosi dhe rezervime", description: "Puna e përditshme dhe kërkesat e klientëve.", paths: ["orders", "bookings", "calendar", "leads"] },
   ];
   const links = [...navigation.agent, ...navigation.search];
   return definitions.map(group => ({ ...group, items: group.paths.flatMap(path => {

@@ -6,8 +6,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { isDashboardRoute } from "./navigation";
-import { organizeWorkspace, workspaceSection } from "@/lib/dashboard/navigation/workspace";
-import { WorkspaceNavigation, WorkspaceSectionNavigation } from "./workspace-navigation";
+import { organizeWorkspace, workspaceSection, workspaceLabel } from "@/lib/dashboard/navigation/workspace";
+import { WorkspaceNavigation } from "./workspace-navigation";
 import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
@@ -197,6 +197,11 @@ export function AppShell({
   const workspace = organizeWorkspace(items);
   const section = workspaceSection(pathname, base, workspace);
   const searchItems = admin ? items : workspace.search;
+  const searchMatches = searchItems.filter(item =>
+    [item.label, ...(admin ? [] : [workspaceLabel(item)])].some(label =>
+      t(label).toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+    ),
+  ).filter((item, index, matches) => matches.findIndex(other => other.path === item.path) === index);
   const primaryItems = mobileNavigationItems;
   const mobilePaths = new Set(primaryItems.map((item) => item.path));
   if (nativeHost && !admin) return <main className="native-business-content">{children}</main>;
@@ -387,13 +392,7 @@ export function AppShell({
             />
             {search && (
               <div className="search-results">
-                {searchItems
-                  .filter((item) =>
-                    t(item.label)
-                      .toLocaleLowerCase()
-                      .includes(search.toLocaleLowerCase()),
-                  )
-                  .map((item) => (
+                {searchMatches.map((item) => (
                     <Link
                       key={`${item.id}-${admin ? item.label : t(item.label)}`}
                       onClick={() => {
@@ -403,15 +402,11 @@ export function AppShell({
                       }}
                       href={`${base}${item.path ? `/${item.path}` : ""}`}
                     >
-                      {admin ? item.label : t(item.label)}
+                      {admin ? item.label : t(workspaceLabel(item))}
                       <Icon name="arrow" size={15} />
                     </Link>
                   ))}
-                {!searchItems.some((item) =>
-                  t(item.label)
-                    .toLocaleLowerCase()
-                    .includes(search.toLocaleLowerCase()),
-                ) && <p>{t("Nuk u gjet asnjë faqe.")}</p>}
+                {searchMatches.length === 0 && <p>{t("Nuk u gjet asnjë faqe.")}</p>}
               </div>
             )}
           </div>
@@ -421,8 +416,7 @@ export function AppShell({
         <main className="dashboard-content">
           {/* Stable placement retains pending cards and the composer across navigation. */}
           {!admin && <AssistantWorkspaceSurface/>}
-          {!admin && !isDashboardRoute(pathname, base, "settings") && <WorkspaceSectionNavigation navigation={workspace} section={section} base={base} pathname={pathname} />}
-          {!admin && pathname !== base && !isDashboardRoute(pathname, base, "settings") && <AssistantEntry/>}
+          {!admin && pathname !== base && <AssistantEntry/>}
           {children}
         </main>
       </div>

@@ -145,22 +145,19 @@ async function applyModuleEntitlements(businessId: string, profile: DashboardPro
     mobileNavigationItems: profile.mobileNavigationItems.filter(id => allowed.has(id)) };
 }
 
-/** Navigation is presentation only. Successful writes become visible through usage,
- * without mutating business settings or granting any additional permissions. */
+/** Empty modules stay discoverable. Only explicit owner preferences hide links;
+ * server entitlements remain the source of authorization. */
 export async function loadNavigationProfile(businessId: string): Promise<DashboardProfile> {
   const profile = await loadDashboardProfile(businessId);
-  const { data, error } = await createServiceSupabase().rpc("business_used_modules", { p_business: businessId });
-  if (error || !Array.isArray(data)) throw new Error("Nuk u ngarkua navigimi i biznesit.");
   const hidden = new Set(profile.hiddenModules ?? []);
-  const visible = [...new Set([...profile.navigationItems, ...data.filter(isModuleId)])]
-    .filter(id => profile.enabledModules.includes(id) && !hidden.has(id));
+  const visible = profile.enabledModules.filter(id => !hidden.has(id));
   // No dependency between showing two navigation links: execution validates its
   // own prerequisites. The builder is used only for ordering/widgets here.
   const presentation = presentationProfile(visible, profile.signals);
   return { ...presentation, source: profile.source, hiddenModules: profile.hiddenModules,
     enabledModules: profile.enabledModules,
-    navigationItems: navigationOrder.filter(id => visible.includes(id) || moduleRegistry[id].core),
-    mobileNavigationItems: presentation.mobileNavigationItems.filter(id => !hidden.has(id)) };
+    navigationItems: navigationOrder.filter(id => profile.enabledModules.includes(id) && (visible.includes(id) || moduleRegistry[id].core)),
+    mobileNavigationItems: presentation.mobileNavigationItems.filter(id => profile.enabledModules.includes(id) && !hidden.has(id)) };
 }
 
 function presentationProfile(visible: ModuleId[], signals?: DashboardSignals): DashboardProfile {

@@ -81,3 +81,11 @@ it("keeps standalone business modules out of nested navigation and selects their
     expect(workspaceSection(`/b/shop/${id}/record`, "/b/shop", navigation)).toBe(id);
   }
 });
+
+it("provides direct management links without mixing agent configuration into operations", () => {
+  for (const path of ["products", "services", "catalogs", "orders", "bookings", "calendar", "leads"])
+    expect(navigation.management.some(item => item.path === path)).toBe(true);
+  for (const path of ["agents", "knowledge", "workflows", "sources", "instagram", "whatsapp"])
+    expect(navigation.management.some(item => item.path === path)).toBe(false);
+  expect(navigation.search.some(item => item.path === "business" && item.label === "Menaxhimi")).toBe(true);
+});
