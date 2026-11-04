@@ -6,6 +6,7 @@ import type { Action } from "@/lib/business-assistant/model";
  * manual-only reason. Exceptions never confer authority on the customer agent. */
 type Coverage = { operation: OperationKey } | { legacy: Action } | { exception: string };
 export const manualSurfaces = {
+  "src/app/admin/users/actions.ts#manageUser": {"exception": "Platform-administrator-only account creation, password changes and manual email verification; unavailable to the business-owner assistant."},
   "src/app/auth/mobile/session/route.ts#POST": { exception: "Mobile session establishment requires the signed-in person and OAuth boundary." },
   "src/app/admin/businesses/page.tsx#createBusiness": {"exception": "Platform provisioning uses administrator-only limits and billing policy."},
   "src/app/admin/businesses/page.tsx#addMember": {"exception": "Membership changes are security administration."},
