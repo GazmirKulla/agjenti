@@ -2,7 +2,6 @@
 import { revalidatePath } from "next/cache";
 import { manualCommandActor } from "@/lib/actions/command-actor";
 import { updateCatalogField as updateField } from "./field-command";
-export type { CatalogField } from "./field-command";
 export async function updateCatalogField(slug: string, change: Parameters<typeof updateField>[1]) {
   let actor;
   try { actor = await manualCommandActor(slug); }

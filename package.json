@@ -9,7 +9,7 @@
     "start": "next start --port 3003",
     "lint": "eslint",
     "test": "vitest run",
-    "test:capabilities": "vitest run src/lib/actions/operations/coverage.test.ts",
+    "test:capabilities": "vitest run src/lib/actions/operations/coverage.test.ts src/lib/actions/server-exports.test.ts",
     "e2e:up": "node e2e/local.mjs up && node e2e/fixtures.mjs",
     "e2e:transport": "node e2e/transport.mjs",
     "e2e:app": "node e2e/local.mjs app",

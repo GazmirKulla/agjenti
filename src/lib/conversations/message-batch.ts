@@ -1,6 +1,6 @@
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import type { WorkflowJob } from "./workflow-queue";
-import type { TestChatInput } from "@/lib/agents/test-chat/execute-turn";
+import type { TestChatInput } from "@/lib/agents/test-chat/types";
 
 /** Transport hint, NOT intent/consent or a fact extractor. Unknown/complete
  * messages stay separate. Only an unfinished question/discourse opener starts

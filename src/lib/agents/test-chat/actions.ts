@@ -1,7 +1,7 @@
 "use server";
 import { getSessionUser } from "@/lib/tenant/access";
-import { executeAgentTestTurn, type TestChatInput, type TestChatResult } from "./execute-turn";
-export type { TestChatInput, TestChatResult } from "./execute-turn";
+import { executeAgentTestTurn } from "./execute-turn";
+import type { TestChatInput, TestChatResult } from "./types";
 
 /** Compatibility entry point for existing isolated preview/tests. */
 export async function simulateAgentTurn(input: TestChatInput): Promise<TestChatResult> {

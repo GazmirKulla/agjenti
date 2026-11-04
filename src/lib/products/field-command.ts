@@ -2,13 +2,12 @@
 import { visualSelection, saveProductsWithVisualFlow } from "./visual-selection";
 import type { CommandActor } from "@/lib/actions/command-actor";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { productCatalogColumns, type ProductRow } from "./catalog";
+import { productCatalogColumns, type ProductRow, type CatalogField } from "./catalog";
 import { publishedProductBindings } from "./workflow-binding";
 import { publishedBusinessWorkflow, type BusinessWorkflow } from "@/lib/workflows/visual/business-workflow";
 import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { requireCatalogActivation } from "./activation";
 
-export type CatalogField = "workflow_id" | "product_type_id" | "is_active";
 type Change = { id: string; field: CatalogField; value: string | boolean | null; updatedAt: string };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

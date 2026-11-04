@@ -6,7 +6,7 @@ import { readTestSession } from "@/lib/agents/test-chat/session";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { runWorkflowQueue } from "@/lib/conversations/workflow-queue";
 import { fragmentKind } from "@/lib/conversations/message-batch";
-import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/actions";
+import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/types";
 export const maxDuration = 180;
 async function accessFor(request: Request) {
   const slug = new URL(request.url).searchParams.get("slug") ?? "";

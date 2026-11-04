@@ -1,4 +1,4 @@
-import type { TestChatResult } from "@/lib/agents/test-chat/actions";
+import type { TestChatResult } from "@/lib/agents/test-chat/types";
 import type { TestAttachment } from "@/lib/agents/test-chat/attachments";
 export type ChatTurn = Exclude<TestChatResult, { error: string }>;
 export type ChatEntry = { id: string; batchId?: string; text: string; photo: boolean; attachments: (TestAttachment & { preview?: string })[]; result: ChatTurn };

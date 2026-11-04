@@ -1,7 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { encryptSecret } from "@/lib/crypto/tokens";
-import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/execute-turn";
+import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/types";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import { channelAdapter } from "./channel";

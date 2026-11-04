@@ -3,30 +3,11 @@ import { loadSetupStatus } from "@/lib/setup/status";
 import { recordSetupTest } from "@/lib/setup/record-test";
 import { revalidatePath } from "next/cache";
 import { requireBusinessAccess } from "@/lib/tenant/access";
-import {
-  type AgentTurnResult,
-} from "@/lib/conversations/process-agent-turn";
+import type { TestChatInput, TestChatResult } from "./types";
 import { readTestSession, sealTestSession, MAX_TEST_TURNS } from "./session";
 import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
 import { readAttachment } from "./attachments";
 import { collectTestConfiguration } from "./provenance";
-export type TestChatInput = {
-  slug: string;
-  message: string;
-  hasMedia?: boolean;
-  session?: string | null;
-  attachments?: string[];
-};
-export type TestChatResult =
-  | { error: string }
-  | (AgentTurnResult & {
-      setupTestPassed?: boolean;
-      setupNotice?: string;
-      session: string;
-      turns: number;
-      autoReplyEnabled: boolean;
-      trainingReceipt?: string;
-    });
 
 function customerComplete(customer: {
   name: string | null;

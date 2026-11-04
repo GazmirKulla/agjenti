@@ -5,7 +5,7 @@ import { homeForAccess } from "@/lib/auth/destination";
 import { getAppSettings } from "@/lib/platform/settings";
 import { emptyAnswers, parseAnswers, initialInstructions, basicInstructions } from "./model";
 import { persistGeneratedProfile } from "@/lib/dashboard/profile/service";
-export type OnboardingResult = {
+type OnboardingResult = {
   error?: string;
   destination?: string;
   saved?: boolean;

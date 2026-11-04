@@ -8,10 +8,11 @@ import {
   catalogStatus,
   isMapped,
   type ProductRow,
+  type CatalogField,
   type Option,
 } from "@/lib/products/catalog";
 import { bulkConfigureProducts } from "@/lib/products/actions";
-import { updateCatalogField, type CatalogField } from "@/lib/products/inline-actions";
+import { updateCatalogField } from "@/lib/products/inline-actions";
 import { productMoney as money } from "@/lib/products/catalog";
 import { entityWorkflowHref } from "@/components/workflows/entity-flow-link";
 

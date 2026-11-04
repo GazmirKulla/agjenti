@@ -1,4 +1,5 @@
 import type { BusinessWorkflow } from "@/lib/workflows/visual/business-workflow";
+export type CatalogField = "workflow_id" | "product_type_id" | "is_active";
 export type ProductRow = {
   id: string;
   name: string;

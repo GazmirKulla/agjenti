@@ -1,6 +1,5 @@
 "use server";
 import { mutateVisualWorkflow as mutate } from "./save-service";
-export type { VisualSaveResult } from "./save-result";
 export async function saveVisualWorkflow(slug: string, revision: number, graph: unknown) {
   return mutate(slug, revision, graph, "draft");
 }
