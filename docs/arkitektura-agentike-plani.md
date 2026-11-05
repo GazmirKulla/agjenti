@@ -202,6 +202,8 @@ Rreziqet kryesore janë migrimi i editorit/authoring-ut në skemën e re, përzi
 
 ## 9. Përparimi i implementimit — 5 nëntor 2026
 
+Drejtimi i rikonfirmuar: runtime-i i vjetër do të zëvendësohet dhe hiqet, jo të mbahet si motor paralel ose shtresë kompatibiliteti. `schemaVersion: 4` është vetëm identifikues formati. Kriteri i dorëzimit mbetet një hyrje dhe një motor për të gjitha kanalet, me aftësitë ekzistuese të zhvendosura. Fshirja e rekordeve është anuluar nga përdoruesi; zëvendësimi i kodit nuk autorizon reset të të dhënave. Fallback-et që mbeten gjatë ndërtimit janë punë e papërfunduar, jo pjesë e arkitekturës përfundimtare.
+
 E implementuar në kod lokal, ende pa zëvendësuar hyrjen ekzistuese të bisedave:
 
 - `src/lib/orchestration/`: kontrata v4, validim përkufizimesh dhe vlerash, tranzicione atomike, instanca të ndara, oferta, fakte sipas subjektit, konfirmime me dëftesë paraqitjeje, pezullim/rifillim/anulim, pritje eventi dhe rezultate veprimesh. Korrigjimet para efektit rivlerësojnë kushtet dhe zhvlerësojnë konfirmimin e mëparshëm.

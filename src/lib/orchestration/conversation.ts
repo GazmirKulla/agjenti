@@ -17,7 +17,8 @@ import { executePreparedAction, type ToolAdapter } from "./execute";
 import { composeProcessReply } from "./respond";
 
 /** Replacement integration during construction. A v4 session can never fall back into legacy parsing.
- * Live cutover is withheld until the queue's v4 checkpoint/delivery RPCs are deployed together.
+ * The old coordinator is temporary construction code, not a supported compatibility engine.
+ * Live cutover still requires the transport and domain adapters; the checkpoint RPCs are deployed.
  */
 export async function tryProcessConversation(params: AgentTurnParams): Promise<AgentTurnResult | null> {
   const existing = params.state?.runtime;
@@ -31,7 +32,6 @@ export async function tryProcessConversation(params: AgentTurnParams): Promise<A
   }
   const current = params.visualPreview ?? await loadVisualVersion(params.businessId);
   if (current && current.businessId !== params.businessId) throw new TransitionError("definition_scope_mismatch");
-  if (!current && !existing) return null;
   const versions = new Map(current ? [[current.id, current]] : []);
   for (const versionId of new Set(Object.values(existing?.instances ?? {}).map(i => i.versionId).concat(Object.values(existing?.offers ?? {}).map(o => o.versionId)))) {
     if (!versions.has(versionId)) {
@@ -56,7 +56,7 @@ export async function tryProcessConversation(params: AgentTurnParams): Promise<A
   trace?.({ stage: "overview", label: "Process runtime v4", data: { mode: "test", businessId: params.businessId, versionIds: [...versions.keys()] } });
   const db = createServiceSupabase();
   const modules = await runtimeModules(params.businessId);
-  if (modules && !modules.includes("workflows")) throw new CapabilityEnforcementError("module_disabled", "Workflow është çaktivizuar. Progresi yt është ruajtur.");
+  if (definitions.length && modules && !modules.includes("workflows")) throw new CapabilityEnforcementError("module_disabled", "Workflow është çaktivizuar. Progresi yt është ruajtur.");
   const [agentRead, grounding] = await Promise.all([
     db.from("ai_agents").select(agentConfigurationColumns).eq("business_id", params.businessId).eq("is_active", true).maybeSingle(),
     readBusinessGrounding(db, params.businessId, modules),

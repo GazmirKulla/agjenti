@@ -7,6 +7,15 @@ import { tryProcessConversation } from "./conversation";
 const { load, interpret } = vi.hoisted(() => ({ load: vi.fn(), interpret: vi.fn() }));
 vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: load }));
 vi.mock("./interpret", () => ({ interpretCustomer: interpret }));
+vi.mock("@/lib/capabilities/enforcement", async original => ({ ...await original<object>(), runtimeModules: async () => [] }));
+vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => {
+  const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: null, error: null }) };
+  return { from: () => chain };
+} }));
+vi.mock("@/lib/agents/business-grounding", () => ({ readBusinessGrounding: async () => ({
+  knowledge: { status: "no_match", records: [] }, products: { status: "unavailable", records: [] }, services: { status: "unavailable", records: [] },
+}) }));
+vi.mock("./respond", () => ({ composeProcessReply: async () => ({ reply: "Information answer", targetIds: [], responseId: "reply", inputTokens: 1, outputTokens: 1 }) }));
 beforeEach(() => { vi.clearAllMocks(); load.mockResolvedValue(null); });
 const params = () => ({ businessId: "business", message: "Continue", hasPhoto: false, mode: "test" as const,
   state: { ...emptyState(), runtime: initialSnapshot("business", "conversation", "test") } });
@@ -28,4 +37,12 @@ it("rejects a foreign preview before loading configuration or interpreting the m
 it("keeps an unconverted live session on its existing transport during construction", async () => {
   await expect(tryProcessConversation({ ...params(), state: emptyState(), mode: "production" })).resolves.toBeNull();
   expect(load).not.toHaveBeenCalled();
+});
+it("handles information without a configured workflow through the new engine", async () => {
+  interpret.mockResolvedValue({ observation: { revision: 0, commands: [], needsClarification: false }, model: "test", responseId: "observation", inputTokens: 1, outputTokens: 1 });
+  const result = await runIsolated(() => tryProcessConversation({ ...params(), state: emptyState() }));
+  expect(result?.reply).toBe("Information answer");
+  expect(result?.nextState.runtime).toMatchObject({ schemaVersion: 4, revision: 1, instances: {}, offers: {} });
+  expect(interpret).toHaveBeenCalledOnce();
+  expect(result?.nextState.recentMessages).toHaveLength(2);
 });
