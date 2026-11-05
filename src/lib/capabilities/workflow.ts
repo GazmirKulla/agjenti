@@ -1,7 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
 import { assessBusinessCapabilities } from "./assessment";
-import { reviewWorkflowSemantics } from "./workflow-semantics";
+import { reviewWorkflowSemantics, WorkflowSemanticReviewError } from "./workflow-semantics";
 import { graphRequirements } from "./graph";
 import { capabilityModules, CapabilityEnforcementError, requireRuntimeModules } from "./enforcement";
 import type { CapabilityAssessment } from "./registry";
@@ -36,7 +36,7 @@ export async function enforceWorkflowCapabilities(businessId: string, userId: st
     const semantic = await reviewWorkflowSemantics("", graph);
     required.capabilityKeys = [...new Set([...required.capabilityKeys, ...semantic.capabilityKeys])];
     required.modules = [...new Set([...required.modules, ...capabilityModules(semantic.capabilityKeys)])];
-  } catch { throw new CapabilityEnforcementError("unverified", "Nuk u verifikua kuptimi i udhëzimeve të workflow-t. Drafti dhe versioni aktiv nuk ndryshuan."); }
+  } catch (error) { throw new CapabilityEnforcementError("unverified", error instanceof WorkflowSemanticReviewError ? error.message : "Nuk u verifikua kuptimi i udhëzimeve të workflow-t. Drafti dhe versioni aktiv nuk ndryshuan."); }
   // Assessment authorizes the actor even when the graph has no business actions.
   let assessments: CapabilityAssessment[];
   try { assessments = await assessBusinessCapabilities(businessId, { userId }, { keys: required.capabilityKeys, candidate: graph }); }

@@ -32,7 +32,7 @@ export type AutomationProposal = {
   canSaveDraft: boolean;
 };
 
-import { reviewWorkflowSemantics, type WorkflowSemanticReview } from "@/lib/capabilities/workflow-semantics";
+import { reviewWorkflowSemantics, WorkflowSemanticReviewError, type WorkflowSemanticReview } from "@/lib/capabilities/workflow-semantics";
 
 function graphCapabilities(before: VisualGraph, after: VisualGraph): string[] {
   const keys: string[] = [];
@@ -67,12 +67,13 @@ export async function buildAutomationProposal(input: ProposalInput): Promise<Aut
   const workflow = input.mode === "plan" ? undefined : input;
   const enforced = Boolean(workflow);
   let semanticUnavailable = false;
+  let semanticFailureMessage: string | undefined;
   let semanticKeys: string[] = [];
   let semanticEvidence: WorkflowSemanticReview["evidence"] = [];
   try { const review = await reviewWorkflowSemantics(input.request, workflow?.after, behaviors);
     for (const index of review.authoringBehaviorIndexes ?? []) behaviors[index].capabilityKeys = [];
     semanticKeys = review.capabilityKeys; semanticEvidence = review.evidence; }
-  catch { semanticUnavailable = true; }
+  catch (error) { semanticUnavailable = true; semanticFailureMessage = error instanceof WorkflowSemanticReviewError ? error.message : undefined; }
   const inferred = [...new Set([...semanticKeys, ...(workflow ? graphCapabilities(workflow.before, workflow.after) : []), ...(enforced && workflow ? graphRequirements(workflow.after).capabilityKeys : [])])];
   for (const key of inferred) if (!behaviors.some(b => b.capabilityKeys.includes(key))) behaviors.push({ description: getCapability(key)?.description ?? `Aftësi e kërkuar: ${key}`, capabilityKeys: [key] });
   let assessments: CapabilityAssessment[] = [];
@@ -102,7 +103,7 @@ export async function buildAutomationProposal(input: ProposalInput): Promise<Aut
     clarificationQuestions.length || enforcementFailure?.code === "unverified" ? "needs_clarification" : enforcementFailure ? "needs_setup" : "ready");
   const validationFindings: AutomationProposal["validationFindings"] = workflow ? validateVisualGraph(workflow.after).errors.map(e => ({ code: "invalid_graph", message: e.message, severity: "warning" })) : [];
   if (unsupportedActions.length) validationFindings.push({ code: "unsupported_actions", message: "Këto veprime nuk kanë ekzekutim të mbështetur.", severity: "error" });
-  if (semanticUnavailable) validationFindings.push({ code: "semantic_review_unavailable", message: "Nuk u verifikua kuptimi i udhëzimeve. Propozimi ruhet në bisedë; asnjë ndryshim nuk u krye.", severity: "error" });
+  if (semanticUnavailable) validationFindings.push({ code: "semantic_review_unavailable", message: semanticFailureMessage ?? "Nuk u verifikua kuptimi i udhëzimeve. Propozimi ruhet në bisedë; asnjë ndryshim nuk u krye.", severity: "error" });
   if (unavailable) validationFindings.push({ code: "assessment_unavailable", message: "Gatishmëria nuk u verifikua.", severity: "error" });
   if (enforcementFailure) validationFindings.push({ code: enforcementFailure.code, message: enforcementFailure.message, severity: "error" });
   const missingRequirements = [...new Set(capabilities.flatMap(c => c.missingRequirements))];

@@ -369,6 +369,7 @@ export function BusinessAssistant({
         { role: "assistant", content: data.message || "Kontrollo propozimin." },
       ]);
       setResult(data.briefing ? result : data);
+      if (data.saved) router.refresh();
       if (!data.briefing) setWorkOpen(Boolean(data.preview && data.token));
       if (data.briefing) { setRequestContext(requestContext); setRequestLabel(requestLabel); }
       if (!data.briefing) setRecovered(Boolean(data.recovered));

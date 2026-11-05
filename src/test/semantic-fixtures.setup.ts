@@ -54,4 +54,6 @@ vi.mock("@/lib/conversations/fragment-observation", () => ({
 // contract tests unmock this boundary; semantic cases set explicit observations.
 vi.mock("@/lib/capabilities/workflow-semantics", () => ({
   reviewWorkflowSemantics: vi.fn(async () => ({ capabilityKeys: [], evidence: [] })),
+  withWorkflowSemanticReviews: <T>(run: () => Promise<T>) => run(),
+  WorkflowSemanticReviewError: class extends Error {},
 }));

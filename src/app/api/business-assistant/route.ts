@@ -169,8 +169,12 @@ export async function POST(request: Request) {
           throw new PersistenceError("Ky plan i përket një elementi tjetër. Fillo një bisedë të re për zgjedhjen e re.", 409);
         if (priorIds.length && !nextIds.length) effectiveContext = retainedContext;
       }
-      return { ...await planRequest(access, body.text.trim(), history, effectiveContext, body.pendingToken, materials, assistantName, prior, preferences),
-        recoveryContext: effectiveContext };
+      const result = await planRequest(access, body.text.trim(), history, effectiveContext, body.pendingToken, materials, assistantName, prior, preferences);
+      if (result.saved) {
+        try { revalidatePath(`/b/${slug}`, "layout"); }
+        catch { /* The acknowledged write remains successful if refresh fails. */ }
+      }
+      return { ...result, recoveryContext: effectiveContext };
     }));
     if (assistantName !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials, assistantName));
     if (materials.length) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials));

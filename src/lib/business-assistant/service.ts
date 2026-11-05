@@ -1,4 +1,5 @@
 import { OperationError } from "@/lib/actions/operations/error";
+import { applyRequestedWorkflow } from "./workflow-apply";
 import { configurationInstructions } from "./configuration-contract";
 import { reviewConfigurationRequest } from "./configuration-review";
 import { parseConfigurationSteps } from "@/lib/actions/operations/configuration-policy";
@@ -569,8 +570,11 @@ export async function planRequest(
           continue;
         }
       }
-      if ((pendingWorkflow || recoveredPlan?.visualDraft) && proposal.action === "workflow_publish") throw new AssistantError("Ruaj propozimin si draft përpara publikimit.");
-      return finish(await prepareWorkflow(access, proposal, (context.workflow as WorkflowCard | undefined)?.workspace.revision, pendingWorkflow?.values.graph ?? recoveredPlan?.visualDraft?.graph));
+      const pendingGraph = pendingWorkflow?.values.graph ?? recoveredPlan?.visualDraft?.graph;
+      // Publish a pending candidate through the same draft writer first. Its
+      // identity, scope and current request are independently reviewed below.
+      if (pendingGraph && proposal.action === "workflow_publish") proposal = { ...proposal, action: "workflow_draft", changes: [] };
+      return finish(await applyRequestedWorkflow(access, proposal, text, history, (context.workflow as WorkflowCard | undefined)?.workspace.revision, pendingGraph));
     }
     if (proposal.action === "search") {
       context.searchResult = await searchContext(access, proposal);

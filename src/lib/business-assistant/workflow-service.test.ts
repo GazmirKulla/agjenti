@@ -1,6 +1,10 @@
 // Capability authorization is covered independently in capabilities/workflow.test.ts.
 vi.mock("@/lib/capabilities/workflow", () => ({ enforceWorkflowCapabilities: async () => [], enforceOrderWorkflow: async () => {}, requireOwnedBindings: async () => {} }));
 import { reviewWorkflowSemantics } from "@/lib/capabilities/workflow-semantics";
+vi.mock("./workflow-request", () => ({ reviewWorkflowRequest: vi.fn() }));
+import { reviewWorkflowRequest } from "./workflow-request";
+import { applyRequestedWorkflow } from "./workflow-apply";
+import { visualGraphHash } from "@/lib/workflows/visual/graph-hash";
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   workspace: vi.fn(),
@@ -243,6 +247,7 @@ it("rechecks current revision and tenant authorization before simulation-backed 
   m.workspace.mockResolvedValue({ graph: localGraph(), revision: 4 });
   await expect(executeTicket(access, result.token!)).rejects.toThrow("dritare tjetër");
   await expect(executeTicket({ ...access, businessId: "business-b" }, result.token!)).rejects.toThrow();
+  useLocalGraph();
   m.assess.mockRejectedValue(new Error("access revoked"));
   await expect(executeTicket(access, result.token!)).rejects.toThrow("qasja");
   expect(m.rpc).not.toHaveBeenCalled();
@@ -669,4 +674,70 @@ it("creates, refines, saves and publishes a v2 workflow through separate bound c
     await expect(executeTicket(access, publish.token!)).rejects.toThrow();
     expect(writes).toHaveLength(3);
   } finally { vi.unstubAllEnvs(); }
+});
+
+// Synthetic semantic observations test orchestration, not model language quality.
+it.each([['publish', 2], ['draft', 1], ['preview', 0], ['read', 0], ['clarify', 0]] as const)("applies an owner request with disposition %s through existing writers", async (mode, writes) => {
+  useLocalGraph();
+  let workspace = { graph: localGraph(), revision: 3, publishedVersionId: 'version-a', enabled: true, available: true, generated: false };
+  m.workspace.mockImplementation(async () => structuredClone(workspace));
+  m.rpc.mockImplementation(async (name, args) => {
+    if (name !== 'apply_assistant_visual_workflow') throw new Error('Unexpected writer');
+    expect(args.p_revision).toBe(workspace.revision);
+    workspace = { ...workspace, graph: args.p_graph, revision: workspace.revision + 1 };
+    return { data: workspace.revision, error: null };
+  });
+  vi.mocked(reviewWorkflowRequest).mockImplementation(async (_request, _history, _before, candidate, revision) => ({ mode, quote: 'Ndrysho', question: mode === 'clarify' ? 'Cilin hap?' : '', candidateHash: visualGraphHash(candidate), revision, expires: Date.now() + 60000 }));
+  const result = await applyRequestedWorkflow(access, proposal('workflow_draft', [{ field: 'operations', value: '[{"op":"rename","name":"Updated"}]' }]), 'Ndrysho emrin', [], 3);
+  expect(m.rpc).toHaveBeenCalledTimes(writes);
+  if (mode === 'publish') {
+    expect(m.rpc.mock.calls.map(c => c[1].p_operation)).toEqual(['draft', 'publish']);
+    expect(result).toMatchObject({ saved: true, outcome: { action: 'workflow_publish' } });
+    expect(result.message).toContain('u publikua');
+    expect(result.token).toBeUndefined();
+  }
+  if (mode === 'draft') expect(result.message).toContain('Ende nuk është publikuar');
+  if (mode === 'preview') expect(result.token).toBeTruthy();
+  if (mode === 'read' || mode === 'clarify') expect(result.token).toBeUndefined();
+});
+
+it('keeps an acknowledged draft when a concurrent edit prevents publication', async () => {
+  useLocalGraph();
+  vi.mocked(reviewWorkflowRequest).mockImplementation(async (_r, _h, _b, graph, revision) => ({ mode: 'publish', quote: 'Change', question: '', candidateHash: visualGraphHash(graph), revision, expires: Date.now() + 60000 }));
+  m.rpc.mockImplementation(async () => {
+    m.workspace.mockResolvedValue({ graph: { ...localGraph(), name: 'Someone else changed this' }, revision: 5, publishedVersionId: 'version-a', available: true });
+    return { data: 4, error: null };
+  });
+  const result = await applyRequestedWorkflow(access, proposal('workflow_draft', [{ field: 'operations', value: '[{"op":"rename","name":"Mine"}]' }]), 'Change name', [], 3);
+  expect(m.rpc).toHaveBeenCalledTimes(1);
+  expect(result).toMatchObject({ saved: true, outcome: { action: 'workflow_draft' } });
+  expect(result.message).toContain('Drafti u ruajt');
+  expect(result.message).toContain('nuk u konfirmua');
+  expect(result.token).toBeUndefined();
+});
+
+it('rejects expired request evidence before writing', async () => {
+  useLocalGraph();
+  vi.mocked(reviewWorkflowRequest).mockImplementation(async (_r, _h, _b, graph, revision) => ({ mode: 'publish', quote: 'Change', question: '', candidateHash: visualGraphHash(graph), revision, expires: Date.now() - 1 }));
+  await expect(applyRequestedWorkflow(access, proposal('workflow_draft', [{ field: 'operations', value: '[{"op":"rename","name":"Mine"}]' }]), 'Change name', [], 3)).rejects.toThrow('skaduar');
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+
+it('reports failed semantic verification as unverified rather than revoked access', async () => {
+  useLocalGraph();
+  vi.mocked(reviewWorkflowSemantics).mockRejectedValue(new Error('provider offline'));
+  const result = await prepareWorkflow(access, proposal('workflow_publish'), 3);
+  expect(result.workflow?.publication).toMatchObject({ result: 'UNVERIFIED', canPublish: false });
+  expect(result.workflow?.publication?.findings.map(f => f.code)).toContain('semantic_review_unavailable');
+  expect(result.workflow?.publication?.findings.map(f => f.code)).not.toContain('unauthorized');
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+it('does not label unavailable capability assessment as missing workflow ownership', async () => {
+  useLocalGraph();
+  m.assess.mockRejectedValue(new Error('database temporarily unavailable'));
+  const result = await prepareWorkflow(access, proposal('workflow_publish'), 3);
+  expect(result.workflow?.publication?.findings.map(f => f.code)).toContain('assessment_unavailable');
+  expect(result.workflow?.publication?.findings.map(f => f.code)).not.toContain('unauthorized');
+  expect(result.token).toBeUndefined();
+  expect(m.rpc).not.toHaveBeenCalled();
 });

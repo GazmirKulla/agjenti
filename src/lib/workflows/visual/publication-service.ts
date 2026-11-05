@@ -26,12 +26,14 @@ export async function reviewWorkflowPublication(p: {
     capabilities: automation.requiredCapabilities, assessmentUnavailable: unavailable, clarificationRequired: automation.clarificationQuestions.length > 0 });
   const runtime = p.graph.version === 2 ? await loadWorkflowReadiness(p.businessId) : { ready: true, blockers: [] };
   const publication = evaluatePublicationPolicy({ mode: "assistant_strict", ...p, candidate: p.graph,
-    authorized: !unavailable, ownedVersion: !version || version.businessId === p.businessId,
+    // Callers supply the authenticated business actor. Assessment failures are
+    // not evidence of revoked membership; the writer rechecks authority in SQL.
+    authorized: true, ownedVersion: p.prepared ? true : !workspace.publishedVersionId || version?.businessId === p.businessId,
     currentRevision: workspace.revision, currentDraft: workspace.graph, publishedVersionId: workspace.publishedVersionId,
     capabilities: automation.requiredCapabilities, assessmentUnavailable: unavailable, simulation, runtimeBlockers: runtime.blockers });
   const semanticFailure = automation.validationFindings.find(f => f.code === "semantic_review_unavailable");
   if (semanticFailure) {
-    publication.status = "blocked"; publication.canPublish = false; publication.canRequestApproval = false;
+    publication.result = "UNVERIFIED"; publication.status = "blocked"; publication.canPublish = false; publication.canRequestApproval = false;
     publication.findings = [readinessFinding(semanticFailure.code, semanticFailure.message)];
   }
   return { publication, simulation, automation };
