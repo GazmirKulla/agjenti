@@ -36,6 +36,8 @@ import {
 } from "@/lib/workflows/engine";
 
 export type AgentTurnResult = {
+  /** Server-owned delivery envelope. Never supplied by a customer or model. */
+  processCheckpoint?: { event: import("@/lib/orchestration/contracts").CustomerEvent; expectedRevision: number; targetIds: string[] };
   processOffer?: { flowId: string; text: string };
   executionResults?: import("./execution-receipt").ExecutionReceipt[];
   processCommunication?: import("./process-communication").ProcessCommunication;

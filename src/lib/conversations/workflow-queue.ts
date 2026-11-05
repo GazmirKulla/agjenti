@@ -11,6 +11,7 @@ import type { AgentTurnResult } from "./process-agent-turn";
 import { InboundPersistenceError } from "./inbound-persistence-error";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 import { fragmentKind, testInputBatch } from "./message-batch";
+import { commitProcessCheckpoint } from "@/lib/orchestration/persistence";
 export type WorkflowJob = {
     id: number;
     business_id: string;
@@ -18,6 +19,7 @@ export type WorkflowJob = {
     participant_id: string;
     payload: NormalizedIncomingMessage;
     status: string;
+    process_runtime?: boolean;
     attempts?: number;
     client_sequence?: number;
     client_request_id?: string;
@@ -48,9 +50,28 @@ export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage)
 }
 export async function prepareWorkflowReply(job: WorkflowJob, conversationId: string, revision: number, turn: AgentTurnResult) {
     if (isIsolatedExecution()) refuseIsolatedEffect("background_job", "prepare_workflow_reply");
-    // A process snapshot must use its CAS/event receipt transaction. The legacy
-    // RPC cannot preserve its delivery targets or durable action checkpoints.
-    if (turn.nextState.runtime) throw new Error("Process checkpoint transport required");
+    if (turn.nextState.runtime) {
+        const envelope = turn.processCheckpoint;
+        const state = turn.nextState.runtime;
+        if (!envelope || state.mode !== "live" || state.businessId !== job.business_id || state.conversationId !== conversationId
+            || envelope.event.businessId !== job.business_id || envelope.event.conversationId !== conversationId
+            || envelope.expectedRevision !== revision || state.revision !== revision + 1
+            || turn.handoff && !turn.advisoryHandoff) throw new Error("Invalid process delivery envelope");
+        const receipt = await commitProcessCheckpoint({ event: envelope.event, expectedRevision: revision,
+            transition: { state, notices: [], actions: [] }, lease: { jobId: job.id, leaseToken: job.lease_token },
+            reply: { text: turn.reply, presentedTargetIds: envelope.targetIds } });
+        // On replay the database's prepared text is authoritative, not regenerated prose.
+        if (receipt.replayed) {
+            const { data, error } = await createServiceSupabase().from("workflow_inbound_queue").select("reply,status")
+                .eq("id", job.id).eq("business_id", job.business_id).eq("lease_token", job.lease_token).maybeSingle();
+            if (error || data?.status !== "prepared" || typeof data.reply !== "string") throw new Error("Process reply receipt unavailable");
+            job.reply = data.reply;
+        } else job.reply = turn.reply;
+        job.conversation_id = conversationId;
+        job.process_runtime = true;
+        job.status = "prepared";
+        return;
+    }
     const { error } = await createServiceSupabase().rpc("prepare_workflow_reply", { p_id: job.id, p_token: job.lease_token, p_conversation: conversationId, p_revision: revision, p_state: turn.nextState, p_workflow: turn.workflowId, p_reply: turn.reply, p_response: turn.previousResponseId, p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });
     if (error)
         throw new Error("State commit failed");
@@ -67,7 +88,7 @@ async function sendPrepared(job: WorkflowJob) {
     const token = decryptSecret(connection.access_token_ciphertext);
     // Prepared jobs are durable. Recovery runs this hook again, and the order
     // receipt prevents duplicate creation even after a lost network response.
-    if (job.conversation_id && job.operation_kind !== "staff" && job.operation_kind !== "test")
+    if (job.conversation_id && !job.process_runtime && job.operation_kind !== "staff" && job.operation_kind !== "test")
         await registerAutomaticLocalOrder(job.business_id, job.conversation_id);
     const { data: claimed, error: claimError } = await db.rpc("begin_workflow_send", { p_id: job.id, p_token: job.lease_token });
     if (claimError)

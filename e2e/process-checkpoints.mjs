@@ -63,6 +63,7 @@ try {
   assert.ok(from >= 0 && to > from);
   sql(panel.slice(from, to));
   sql(readFileSync(path.join(root, 'supabase/migrations/20261105220000_process_checkpoints.sql'), 'utf8'));
+  sql(readFileSync(path.join(root, 'supabase/migrations/20261105233000_process_transport_receipts.sql'), 'utf8'));
   const business = randomUUID(), foreign = randomUUID(), conversation = randomUUID(), connection = randomUUID(), token = randomUUID();
   sql(`insert into businesses(id) values(${literal(business)}),(${literal(foreign)});
     insert into conversations(id,business_id,channel,instagram_participant_id,instagram_connection_id) values(${literal(conversation)},${literal(business)},'instagram','customer',${literal(connection)});
@@ -102,11 +103,12 @@ try {
   const committed = JSON.parse(sql(commit('reply', 2, offered, 'Review these details', ['proposal'])));
   assert.equal(committed.replayed, false);
   assert.equal(sql('select status from workflow_inbound_queue;'), 'prepared');
+  assert.equal(sql('select process_runtime from workflow_inbound_queue;'), 't');
   assert.equal(read().offers.proposal.presentedAt, undefined);
   const present = `set role service_role; select public.record_process_presentation(${literal(business)},1,${literal(token)});`;
   assert.throws(() => sql(present), /delivery_receipt_required/);
   sql("update workflow_inbound_queue set status='sent';"); // Simulates the verified transport receipt boundary.
-  sql(present);
+  // Presentation is automatic and atomic with the transport receipt, not a second application call.
   assert.equal(typeof read().offers.proposal.presentedAt, 'number');
   assert.equal(read().revision, 4);
   assert.equal(JSON.parse(sql(present)).replayed, true);
