@@ -2,11 +2,12 @@
 import { LocalizedStatusBadge } from "@/components/dashboard/language";
 import { useDashboardTranslator } from "@/components/dashboard/language";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import type { NormalizedAttachment } from "@/lib/instagram/types";
 import { Icon } from "@/components/dashboard/icon";
 import Link from "next/link";
+import { messageDate } from "@/lib/conversations/message-date";
 import { instagramReplyWindow } from "@/lib/instagram/window";
 import { useReplyOutbox } from "@/components/agents/reply-outbox";
 import { MessageReactions, useMessageReactions } from "@/components/agents/message-reactions";
@@ -186,9 +187,13 @@ export function ThreadClient(props: {
           <p className="muted-copy text-center">{t("200 mesazhet më të fundit")}</p>
         )}
         {props.messages.length ? (
-          props.messages.map((m) => (
+          props.messages.map((m, index) => {
+            const date = messageDate(m.created_at, t("sq-AL"));
+            const previous = index > 0 ? messageDate(props.messages[index - 1].created_at, t("sq-AL")) : null;
+            return <Fragment key={m.id}>
+              {date.day !== previous?.day && <div className="chat-date-separator"><time dateTime={date.day}>{date.label}</time></div>}
+
             <div
-              key={m.id}
               className={`chat-message ${m.direction === "outbound" ? "outbound" : "inbound"}`}
             >
               {m.body && <p>{m.body}</p>}
@@ -234,12 +239,7 @@ export function ThreadClient(props: {
                     ? t("Ekipi")
                     : t("Klienti")}{" "}
                 ·{" "}
-                {new Date(m.created_at).toLocaleTimeString("en-GB", {
-                  hour12: false,
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  timeZone: "Europe/Tirane",
-                })}
+                <time dateTime={m.created_at} title={date.full} aria-label={date.full}>{date.time}</time>
                 {m.delivery_status ? ` · ${t(m.delivery_status)}` : ""}
               </small>
               {m.delivery_error && (
@@ -248,7 +248,8 @@ export function ThreadClient(props: {
               {m.transport_request_id && outbox.operations.some(o => o.requestId === m.transport_request_id && o.canRetry) && <button type="button" onClick={()=>void outbox.retry(m.transport_request_id!)}>Provo përsëri të njëjtin dërgim</button>}
               <MessageReactions messageId={m.id} channel={props.channel ?? "instagram"} eligible={m.direction === "inbound" && m.source === "customer" && Boolean(m.external_message_id)} parts={m.message_transport_parts} controller={reactions} />
             </div>
-          ))
+            </Fragment>;
+          })
         ) : (
           <p className="muted-copy text-center">{t("Biseda ende nuk ka mesazhe.")}</p>
         )}
