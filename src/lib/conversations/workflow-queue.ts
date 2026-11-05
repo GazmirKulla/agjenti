@@ -48,6 +48,9 @@ export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage)
 }
 export async function prepareWorkflowReply(job: WorkflowJob, conversationId: string, revision: number, turn: AgentTurnResult) {
     if (isIsolatedExecution()) refuseIsolatedEffect("background_job", "prepare_workflow_reply");
+    // A process snapshot must use its CAS/event receipt transaction. The legacy
+    // RPC cannot preserve its delivery targets or durable action checkpoints.
+    if (turn.nextState.runtime) throw new Error("Process checkpoint transport required");
     const { error } = await createServiceSupabase().rpc("prepare_workflow_reply", { p_id: job.id, p_token: job.lease_token, p_conversation: conversationId, p_revision: revision, p_state: turn.nextState, p_workflow: turn.workflowId, p_reply: turn.reply, p_response: turn.previousResponseId, p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });
     if (error)
         throw new Error("State commit failed");

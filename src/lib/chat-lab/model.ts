@@ -23,6 +23,13 @@ export function workflowFields(state: ConversationStatePayload, steps: WorkflowS
     const present = value !== null && value !== undefined && value !== "";
     fields.push({ key, value: value ?? null, status: present ? "completed" : required ? "missing" : "optional" });
   };
+  if (state.runtime) {
+    for (const instance of Object.values(state.runtime.instances)) {
+      for (const fact of Object.values(instance.facts)) add(`${instance.id}.${fact.subject}.${fact.fieldId}`, fact.value, true);
+      if (instance.wait?.kind === "field" && instance.wait.fieldId && !instance.facts[instance.wait.fieldId]) add(`${instance.id}.${instance.wait.fieldId}`, null, true);
+    }
+    return fields;
+  }
   if (state.fields.catalog_context && typeof state.fields.catalog_context === "object") {
     const context = state.fields.catalog_context as { pending?: string; requirements?: Record<string, unknown> };
     for (const [key, value] of Object.entries(context.requirements ?? {})) add(key, value, true);

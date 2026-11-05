@@ -1,4 +1,5 @@
 import { unknownUnderstanding } from "./understanding/contract";
+import { tryProcessConversation } from "@/lib/orchestration/conversation";
 import { messageUnderstanding } from "./understanding/context";
 import { hasMessageUnderstanding, withMessageUnderstanding } from "./understanding/context";
 import { interpretMessage } from "./understanding/interpret";
@@ -155,6 +156,8 @@ export async function processConversationMessage(params: ConversationMessagePara
   if (isolatedTurn(params) && !isIsolatedExecution()) {
     return runIsolated(() => processConversationMessage(params));
   }
+  const replacement = await tryProcessConversation(params);
+  if (replacement) return replacement;
   if (params.message.trim() && !hasMessageUnderstanding(params.message)) {
     const meaning = await interpretMessage(params.message, params.state);
     return withMessageUnderstanding(params.message, meaning, () => processConversationMessage(params));

@@ -42,6 +42,8 @@ export type WorkflowStepDef = {
 };
 
 export type ConversationStatePayload = {
+  /** Authoritative replacement runtime. Other properties are presentation/transport compatibility only. */
+  runtime?: import("@/lib/orchestration/contracts").Snapshot;
   pendingCustomerQuestion?: import("./customer-question").PendingCustomerQuestion;
   /** Bounded duplicate-input fingerprint, no copy of customer data. */
   lastCustomerAnswerHash?: string;

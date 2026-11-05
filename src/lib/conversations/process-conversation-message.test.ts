@@ -10,6 +10,9 @@ import { migrateConversationProcesses } from "@/lib/workflows/conversation-proce
 import { rememberTurn } from "@/lib/workflows/guidance";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
 import type { AgentTurnParams, AgentTurnResult } from "./process-agent-turn";
+// Legacy coordinator contract tests remain until its order/booking adapters are replaced.
+// The v4 entry point and its fail-closed routing are covered in orchestration/conversation.test.ts.
+vi.mock("@/lib/orchestration/conversation", () => ({ tryProcessConversation: async () => null }));
 const mocks = vi.hoisted(() => ({ agent: vi.fn(), info: vi.fn(), booking: vi.fn(), guidance: vi.fn(), extract: vi.fn(), version: vi.fn(), status: vi.fn(), entity: vi.fn(), denyModules: false }));
 vi.mock("@/lib/workflows/visual/entity-routing", async original => ({ ...await original<object>(), resolveVisualEntity: mocks.entity }));
 vi.mock("@/lib/orders/customer-status", async original => ({ ...await original<object>(), customerOrderStatus: mocks.status }));

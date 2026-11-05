@@ -17,6 +17,8 @@ export function normalizeVisualDraft(raw: unknown): VisualGraph | null {
     ids.add(n.id);
     if (g.version === 1 && (n.kind === "action" || n.kind === "booking" || n.kind === "order_status")) return null;
     const c=n.config;
+    if (c.subject !== undefined && (typeof c.subject !== "string" || !fieldPattern.test(c.subject) || badKeys.has(c.subject))) return null;
+    if (c.required !== undefined && typeof c.required !== "boolean") return null;
     if(c.action !== undefined && !validActionBinding(c.action)) return null;
     if ((c.prompt !== undefined && (typeof c.prompt !== "string" || c.prompt.length>1500)) || (c.fieldKey !== undefined && (typeof c.fieldKey !== "string" || c.fieldKey.length>60 || badKeys.has(c.fieldKey))) || (c.value !== undefined && (typeof c.value !== "string" || c.value.length>300))) return null;
     if (c.fieldType !== undefined && !["text","email","phone","number","photo"].includes(c.fieldType)) return null;
@@ -33,6 +35,8 @@ export function normalizeVisualDraft(raw: unknown): VisualGraph | null {
     const boundProducts = new Set<string>(), boundServices = new Set<string>();
     for (const flow of g.flows) {
       if (!flow || typeof flow.id !== "string" || !idPattern.test(flow.id) || badKeys.has(flow.id) || flowIds.has(flow.id) || typeof flow.label !== "string" || flow.label.length > 100 || !["order","booking","information","support","custom"].includes(flow.kind) || !Array.isArray(flow.nodeIds) || !flow.nodeIds.length || flow.nodeIds.length > 32 || !flow.nodeIds.includes(flow.entryNodeId)) return null;
+      if (flow.purpose !== undefined && (typeof flow.purpose !== "string" || flow.purpose.length > 4000)) return null;
+      if (flow.offerPolicy !== undefined && !["on_request", "when_relevant"].includes(flow.offerPolicy)) return null;
       flowIds.add(flow.id);
       for (const [bindingIds, assigned] of [[flow.productIds, boundProducts], [flow.serviceIds, boundServices]] as const) {
         if (bindingIds === undefined) continue;
@@ -49,8 +53,8 @@ export function normalizeVisualDraft(raw: unknown): VisualGraph | null {
       if (g.nodes.find(n => n.id === flow.entryNodeId)?.kind === "start" || g.nodes.find(n => n.id === flow.entryNodeId)?.kind === "end") return null;
     }
   }
-  const body = { name:g.name.trim(),nodes:g.nodes.map(n=>({id:n.id,kind:n.kind,label:n.label.trim(),position:{x:n.position.x,y:n.position.y},config:{...(n.config.action ? {action:n.config.action} : {}),prompt:n.config.prompt,fieldKey:n.config.fieldKey,fieldType:n.config.fieldType,condition:n.config.condition,value:n.config.value}})),edges:g.edges.map(e=>({id:e.id,source:e.source,target:e.target,port:e.port})) };
-  return g.version === 2 ? { ...body, version: 2, flows: g.flows.map(f => ({id:f.id,label:f.label.trim(),kind:f.kind,entryNodeId:f.entryNodeId,nodeIds:[...f.nodeIds], ...(f.productIds !== undefined ? { productIds: f.productIds.map(id => id.toLowerCase()) } : {}), ...(f.serviceIds !== undefined ? { serviceIds: f.serviceIds.map(id => id.toLowerCase()) } : {})})) } : { ...body, version: 1 };
+  const body = { name:g.name.trim(),nodes:g.nodes.map(n=>({id:n.id,kind:n.kind,label:n.label.trim(),position:{x:n.position.x,y:n.position.y},config:{...(n.config.action ? {action:n.config.action} : {}),prompt:n.config.prompt,fieldKey:n.config.fieldKey,fieldType:n.config.fieldType,...(n.config.subject !== undefined ? {subject:n.config.subject} : {}),...(n.config.required !== undefined ? {required:n.config.required} : {}),condition:n.config.condition,value:n.config.value}})),edges:g.edges.map(e=>({id:e.id,source:e.source,target:e.target,port:e.port})) };
+  return g.version === 2 ? { ...body, version: 2, flows: g.flows.map(f => ({id:f.id,label:f.label.trim(),...(f.purpose !== undefined ? {purpose:f.purpose} : {}),...(f.offerPolicy !== undefined ? {offerPolicy:f.offerPolicy} : {}),kind:f.kind,entryNodeId:f.entryNodeId,nodeIds:[...f.nodeIds], ...(f.productIds !== undefined ? { productIds: f.productIds.map(id => id.toLowerCase()) } : {}), ...(f.serviceIds !== undefined ? { serviceIds: f.serviceIds.map(id => id.toLowerCase()) } : {})})) } : { ...body, version: 1 };
 }
 export function validateVisualGraph(raw: unknown): { graph?: VisualGraph; errors: {nodeId?:string;message:string}[] } {
   const graph=normalizeVisualDraft(raw), errors:{nodeId?:string;message:string}[]=[];

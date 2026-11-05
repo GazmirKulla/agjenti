@@ -11,13 +11,15 @@ export type VisualNode = {
     prompt?: string;
     fieldKey?: string;
     fieldType?: "text" | "email" | "phone" | "number" | "photo";
+    subject?: string;
+    required?: boolean;
     condition?: "intent_order" | "intent_booking" | "intent_support" | "field_present" | "field_equals";
     value?: string;
   };
 };
 export type VisualEdge = { id: string; source: string; target: string; port: VisualPort };
 export type VisualFlowKind = "order" | "booking" | "information" | "support" | "custom";
-export type VisualFlow = { id: string; label: string; kind: VisualFlowKind; entryNodeId: string; nodeIds: string[]; productIds?: string[]; serviceIds?: string[] };
+export type VisualFlow = { id: string; label: string; purpose?: string; offerPolicy?: "on_request" | "when_relevant"; kind: VisualFlowKind; entryNodeId: string; nodeIds: string[]; productIds?: string[]; serviceIds?: string[] };
 type VisualGraphBody = { name: string; nodes: VisualNode[]; edges: VisualEdge[] };
 export type VisualGraphV2 = VisualGraphBody & { version: 2; flows: VisualFlow[] };
 export type VisualGraph = (VisualGraphBody & { version: 1 }) | VisualGraphV2;
