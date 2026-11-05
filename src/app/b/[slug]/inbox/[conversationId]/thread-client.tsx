@@ -232,6 +232,7 @@ export function ThreadClient(props: {
                 },
               )}
               {!m.body && !m.media?.length && <p>{t("Mesazh pa tekst")}</p>}
+              <div className="chat-message-footer">
               <small>
                 {m.source === "agent"
                   ? t("Agjenti AI")
@@ -242,11 +243,12 @@ export function ThreadClient(props: {
                 <time dateTime={m.created_at} title={date.full} aria-label={date.full}>{date.time}</time>
                 {m.delivery_status ? ` · ${t(m.delivery_status)}` : ""}
               </small>
+              <MessageReactions messageId={m.id} channel={props.channel ?? "instagram"} eligible={m.direction === "inbound" && m.source === "customer" && Boolean(m.external_message_id)} parts={m.message_transport_parts} controller={reactions} />
+              </div>
               {m.delivery_error && (
                 <p className="text-danger text-xs mt-1">{t(m.delivery_error)}</p>
               )}
               {m.transport_request_id && outbox.operations.some(o => o.requestId === m.transport_request_id && o.canRetry) && <button type="button" onClick={()=>void outbox.retry(m.transport_request_id!)}>Provo përsëri të njëjtin dërgim</button>}
-              <MessageReactions messageId={m.id} channel={props.channel ?? "instagram"} eligible={m.direction === "inbound" && m.source === "customer" && Boolean(m.external_message_id)} parts={m.message_transport_parts} controller={reactions} />
             </div>
             </Fragment>;
           })
