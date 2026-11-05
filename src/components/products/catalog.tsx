@@ -17,6 +17,7 @@ import { productMoney as money } from "@/lib/products/catalog";
 import { entityWorkflowHref } from "@/components/workflows/entity-flow-link";
 
 import { ProductBusinessWorkflow } from "./business-workflow";
+import { OperationButton } from "@/components/dashboard/operation-button";
 
 const STATUS_LABEL: Record<string, string> = {
   archived: "I arkivuar",
@@ -328,14 +329,23 @@ export function ProductCatalog({
                       </span>
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="catalog-row-menu"
-                        aria-label={`Konfiguro ${p.name}`}
-                        onClick={() => setConfigId(p.id)}
-                      >
-                        ⋯
-                      </button>
+                      <div className="catalog-row-actions">
+                        <OperationButton
+                          slug={slug}
+                          operation="product.delete"
+                          input={{ id: p.id }}
+                        >
+                          Fshi<span className="sr-only"> {p.name}</span>
+                        </OperationButton>
+                        <button
+                          type="button"
+                          className="catalog-row-menu"
+                          aria-label={`Konfiguro ${p.name}`}
+                          onClick={() => setConfigId(p.id)}
+                        >
+                          ⋯
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

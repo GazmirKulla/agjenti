@@ -4,11 +4,13 @@ vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
 });
 import { beforeEach, it, expect, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
+const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), create: vi.fn(), embed: vi.fn() }));
+vi.mock("openai", () => ({ default: class { responses = { create: mocks.create }; embeddings = { create: mocks.embed }; } }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => mocks,
 }));
 import { retrieveBusinessSources } from "./retrieval";
+import { questions } from "./ranking";
 import { emptyMetadata } from "./model";
 it("R2 reports no matching sections without treating unrelated text as business evidence", async () => {
   mocks.rpc.mockResolvedValue({ data: [{ catalog_id: "doc", heading: "Refunds", body: "Unsupported refund promise", page: 4, semantic: 0 }] });
@@ -16,11 +18,19 @@ it("R2 reports no matching sections without treating unrelated text as business 
   const first = await retrieveBusinessSources("tenant", "industrial pumps catalog", null);
   const result = await retrieveBusinessSources("tenant", "Germany", first?.context, undefined, onRead);
   expect(result?.evidence).not.toContain("Unsupported refund promise");
-  expect(onRead.mock.calls.at(-1)?.[0]).toMatchObject({ source: "catalog_sections", businessId: "tenant", status: "no_match", reason: "no_relevant_sections" });
+  expect(onRead.mock.calls.at(-1)?.[0]).toMatchObject({ source: "catalog_sections", businessId: "tenant", status: "no_match", reason: "insufficient_relevance_in_bounded_search" });
 });
 let filters: unknown[][] = [];
 beforeEach(() => {
-  vi.stubEnv("OPENAI_API_KEY", "");
+  vi.stubEnv("OPENAI_API_KEY", "synthetic-key");
+  mocks.create.mockImplementation(async ({ input }: { input: string }) => {
+    const { message } = JSON.parse(input);
+    const market = ({ Germany: "Germany", Albania: "Albania" } as Record<string, string>)[message];
+    return { status: "completed", output_text: JSON.stringify(Object.fromEntries(Object.keys(questions).map(key =>
+      [key, key === "market" && market ? { value: market, evidence: message } : { value: null, evidence: null }])))};
+  });
+  mocks.embed.mockResolvedValue({ data: [{ embedding: Array(256).fill(0.1) }] });
+  mocks.rpc.mockClear();
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://agjenti.app");
   filters = [];
   const chain = {
@@ -99,4 +109,20 @@ it("preserves product-first lookup", async () => {
   expect(
     await retrieveBusinessSources("tenant", "price SKU A22", null),
   ).toBeNull();
+});
+
+it("keeps previous progress and never searches lexically when AI is unavailable", async () => {
+  vi.stubEnv("OPENAI_API_KEY", "");
+  const old = { query: "industrial pumps catalog", requirements: {}, pending: "market", turns: 1 };
+  const result = await retrieveBusinessSources("tenant", "Germany", old);
+  expect(result?.context).toEqual(old);
+  expect(result?.documents).toEqual([]);
+  expect(result?.clarification).toContain("Progresi është ruajtur");
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+it("does not use full-text search when embedding or requirement interpretation fails", async () => {
+  mocks.create.mockRejectedValueOnce(new Error("offline"));
+  const result = await retrieveBusinessSources("tenant", "industrial pumps catalog", null);
+  expect(result?.documents).toEqual([]);
+  expect(mocks.rpc).not.toHaveBeenCalled();
 });

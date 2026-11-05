@@ -1,5 +1,5 @@
 import { OperationError } from "@/lib/actions/operations/error";
-import { readCatalogRemovalRequest } from "@/lib/business-assistant/catalog-request";
+import { isIndependentRequest } from "@/lib/business-assistant/request-relation";
 import { after } from "next/server";
 import { deliverMobileNotifications } from "@/lib/mobile/notifications";
 import { getRequestUser, permittedWrite, bearerToken } from "@/lib/auth/request";
@@ -154,7 +154,7 @@ export async function POST(request: Request) {
       let effectiveContext = context;
       // A complete current command starts its own review; an unrelated stale draft
       // must not prevent preparing it or silently substitute its old selection.
-      if (!materials.length && readCatalogRemovalRequest(body.text.trim(), context, history)) { prior = undefined; preferences = {}; }
+      if (prior && !materials.length && await isIndependentRequest(body.text.trim(), prior.request, context)) { prior = undefined; preferences = {}; }
       if (prior) {
         const checked = await reassessPlan(access, { revision: 0, snapshot: prior, preferences: {} });
         if (!checked.recovery.verified) throw new PersistenceError(`${checked.recovery.message} Fillo një bisedë të re për një objektiv tjetër.`, 409);

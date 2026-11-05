@@ -76,9 +76,9 @@ export async function readBusinessGrounding(db: SupabaseClient, businessId: stri
 }
 
 /** Bounded per-turn projection. No facts are written to conversation state. */
-export function projectBusinessGrounding(read: BusinessGrounding, message: string, entity?: { kind: "product" | "service"; id: string }) {
-  const subset = <T extends ReferenceProduct & { description?: string | null }>(result: GroundedRead<T>, kind: "product" | "service"): GroundedRead<T> => {
-    const named = matchingCatalogNames(result.records, message);
+export async function projectBusinessGrounding(read: BusinessGrounding, message: string, entity?: { kind: "product" | "service"; id: string }) {
+  const subset = async <T extends ReferenceProduct & { description?: string | null }>(result: GroundedRead<T>, kind: "product" | "service"): Promise<GroundedRead<T>> => {
+    const named = await matchingCatalogNames(result.records, messageUnderstanding(message).positiveEntityText);
     const priority = result.records.filter(row => entity?.kind === kind && entity.id === row.id);
     const records = [...new Map([...priority, ...named, ...result.records].map(row => [row.id, row])).values()]
       .slice(0, 12).map(row => ({ ...row, description: row.description?.slice(0, 600),
@@ -87,14 +87,17 @@ export function projectBusinessGrounding(read: BusinessGrounding, message: strin
   };
   // Service mirrors are not an independent authority and can be edited as knowledge.
   // Use booking_services for current price/duration/booking configuration instead.
-  const ranked = rankKnowledge(read.knowledge.records.filter(row => row.intent_key !== "service"), message);
+  const [ranked, products, services] = await Promise.all([
+    rankKnowledge(read.knowledge.records.filter(row => row.intent_key !== "service"), message),
+    subset(read.products, "product"), subset(read.services, "service"),
+  ]);
   const records = ranked.slice(0, 12).map(({ entry }) => ({ ...entry, body: entry.body.slice(0, 1500), ...(entry.body.length > 1500 ? { bodyTruncated: true } : {}) }));
   const knowledge = { ...read.knowledge, records };
   if (!["unavailable", "unverified"].includes(knowledge.status)) {
     knowledge.status = !records.length ? read.knowledge.status === "partial" ? "partial" : "no_match" : "partial";
     knowledge.reason = !records.length ? "no_relevant_evidence_in_read" : "relevance_subset_not_complete_policy";
   }
-  return { ...read, products: subset(read.products, "product"), services: subset(read.services, "service"), knowledge };
+  return { ...read, products, services, knowledge };
 }
 
 type ExactReply = { reply: string; presentedProducts?: ReferenceProduct[]; presentedServices?: ReferenceProduct[] };
@@ -105,15 +108,16 @@ function price(p: ReferenceProduct & { price_mode?: GroundedService["price_mode"
 }
 /** Small, fixed factual operations, not a router or natural-language SQL engine.
  * Invoke only AFTER the coordinator selected an informational execution path. */
-export function exactBusinessAnswer(read: BusinessGrounding, message: string, entity?: { kind: "product" | "service"; id: string }): ExactReply | undefined {
+export async function exactBusinessAnswer(read: BusinessGrounding, message: string, entity?: { kind: "product" | "service"; id: string }): Promise<ExactReply | undefined> {
   const readKind = messageUnderstanding(message).businessRead;
   const count = readKind === "product_count", extreme = readKind === "cheapest" || readKind === "most_expensive";
   const priceQuery = readKind === "price", servicesQuery = readKind === "services";
   const duration = readKind === "duration", stock = readKind === "inventory";
   if (stock) return { reply: "Nuk kam burim të verifikuar për stokun. Prania në katalog nuk konfirmon disponueshmërinë; kontakto biznesin." };
   if (!count && !extreme && !priceQuery && !servicesQuery && !duration) return;
-  const serviceMatches = matchingCatalogNames(read.services.records, message);
-  const productMatches = matchingCatalogNames(read.products.records, message);
+  const [serviceMatches, productMatches] = await Promise.all([
+    matchingCatalogNames(read.services.records, count || extreme || servicesQuery ? "" : message), matchingCatalogNames(read.products.records, count || extreme || servicesQuery ? "" : message),
+  ]);
   const kind = !count && !extreme && (servicesQuery || duration || entity?.kind === "service" || serviceMatches.length && !productMatches.length) ? "service" : "product";
   const result = kind === "product" ? read.products : read.services;
   if (result.status === "unavailable") return { reply: result.reason === "module_disabled"

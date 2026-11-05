@@ -1,4 +1,4 @@
-import { foldText } from "@/lib/workflows/state";
+import { rankKnowledge } from "@/lib/catalogs/source-ranking";
 
 export type TrainingTarget = { slug: string } | { businessId: string };
 export type TrainingKind = "style" | "example" | "workflow";
@@ -39,17 +39,14 @@ export function validateTrainingInput(input: TrainingInput) {
 }
 
 /** Always include bounded style/rules; retrieve only examples relevant to this turn. */
-export function selectTrainingContext(memories: TrainingMemory[], workflowId: string | null, stepKey: string | null | undefined, message: string, visual?: { flowId: string; nodeId: string }): TrainingContext {
+export async function selectTrainingContext(memories: TrainingMemory[], workflowId: string | null, stepKey: string | null | undefined, message: string, visual?: { flowId: string; nodeId: string }): Promise<TrainingContext> {
   const scoped = memories.filter(m => m.is_active && (m.visual_flow_id ? m.visual_flow_id === visual?.flowId && (!m.visual_node_id || m.visual_node_id === visual?.nodeId) : (!m.workflow_id || m.workflow_id === workflowId) && (!m.step_key || m.step_key === stepKey)));
   const latest = [...scoped].sort((a, b) => b.updated_at.localeCompare(a.updated_at) || a.id.localeCompare(b.id));
   const specificity = (m: TrainingMemory) => m.step_key || m.visual_node_id ? 2 : m.workflow_id || m.visual_flow_id ? 1 : 0;
   const rules = latest.filter(m => m.kind !== "example").sort((a, b) => specificity(b) - specificity(a)).slice(0, 16);
-  const tokens = [...new Set(foldText(message).split(/[^a-z0-9]+/).filter(t => t.length > 2))];
-  const examples = latest.filter(m => m.kind === "example").map(m => {
-    const question = foldText(m.customer_message);
-    const score = question === foldText(message) ? 2 : tokens.filter(t => question.includes(t)).length / Math.max(tokens.length, 1);
-    return { m, score };
-  }).filter(item => item.score >= 0.35).sort((a, b) => b.score - a.score).slice(0, 4).map(item => item.m);
+  const candidates = latest.filter(m => m.kind === "example");
+  const examples = (await rankKnowledge(candidates.map(m => ({ title: m.customer_message, body: m.instruction, memory: m })), message))
+    .slice(0, 4).map(item => item.entry.memory);
   return { rules: [...rules, ...examples].map(m => ({ id: m.id, kind: m.kind, instruction: m.instruction, question: m.customer_message, response: m.desired_response, scope: m.visual_flow_id ? `visual flow ${m.visual_flow_id}${m.visual_node_id ? `, node ${m.visual_node_id}` : ""}` : m.step_key ? `workflow ${m.workflow_id}, step ${m.step_key}` : m.workflow_id ? `workflow ${m.workflow_id}` : "business" })) };
 }
 

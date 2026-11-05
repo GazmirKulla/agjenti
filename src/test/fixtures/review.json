@@ -1503,18 +1503,6 @@
       ]
     }
   },
-  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > keeps useful explanations outside a corrected claim": {
-    "Faleminderit për pyetjen. Libri kushton 999 EUR.": {
-      "findings": [
-        {
-          "status": "contradiction",
-          "code": "structured_business_fact_mismatch",
-          "quote": "Libri kushton 999 EUR.",
-          "subject": "p"
-        }
-      ]
-    }
-  },
   "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > policy requires actual scoped evidence, not customer/history/instructions": {
     "Shipping is free.": {
       "findings": [
@@ -1936,6 +1924,18 @@
           "status": "unverifiable",
           "quote": "Ti shet në Instagram.",
           "subject": null
+        }
+      ]
+    }
+  },
+  "src/lib/agents/response-consistency.test.ts::R3 bounded critical claims (synthetic outputs, not real model certification) > returns complete verified facts instead of splicing a rejected sentence": {
+    "Faleminderit për pyetjen. Libri kushton 999 EUR.": {
+      "findings": [
+        {
+          "status": "contradiction",
+          "code": "structured_business_fact_mismatch",
+          "quote": "Libri kushton 999 EUR.",
+          "subject": "p"
         }
       ]
     }

@@ -40,8 +40,8 @@ const fixtures: Record<string, unknown> = {};
 it("R2: exact product count uses database count, not the returned subset or the model", async () => {
   productCount = 2001;
   const result = await processLegacyAgentTurn({ businessId: "business-a", message: "Sa produkte keni?", hasPhoto: false, informational: "Answer only" });
-  expect(result.reply).toContain("2001");
-  expect(mocks.generate).not.toHaveBeenCalled();
+  expect(mocks.generate.mock.calls.at(-1)?.[0].documentContext).toContain("2001");
+  expect(mocks.generate.mock.calls.at(-1)?.[0].grounding.products.total).toBe(2001);
 });
 it("R2: excludes irrelevant knowledge and supplies current structured service facts", async () => {
   fixtures.booking_services = [{ id: "s", name: "Konsultë", description: "Konsultë sintetike", price_amount: 30, currency: "EUR", price_mode: "from", duration_minutes: 45, booking_enabled: false }];
@@ -59,8 +59,8 @@ it("R2: unavailable catalog during information does not reset an existing proces
   const before = structuredClone(state);
   const result = await processLegacyAgentTurn({ businessId: "business-a", message: "Sa produkte keni?", state, hasPhoto: false, informational: "Answer only" });
   expect(result.nextState).toEqual(before);
-  expect(result.reply).toContain("Nuk munda");
-  expect(mocks.generate).not.toHaveBeenCalled();
+  expect(mocks.generate.mock.calls.at(-1)?.[0].grounding.products.status).toBe("unavailable");
+  expect(mocks.generate.mock.calls.at(-1)?.[0].documentContext).toContain("Nuk munda");
 });
 it("C1: each turn reports the actual active agent and new content loaded into generation", async () => {
   const onTrace = vi.fn();
@@ -855,14 +855,14 @@ it("answers about an unbound catalog product, then starts ordering through the m
   const graph = upgradeVisualGraph(starterVisualGraph());
   graph.name = "Rrjedha e workflow 1";
   fixtures.products = [{ id: "book", name: "Libri i Shkronjave", sku: "LIB-101", description: "Ushtrime për shkronjat", price_amount: 520, currency: "ALL", product_type_id: "standard", workflow_id: null }];
-  mocks.generate.mockResolvedValue({ reply: "Libri i Shkronjave kushton 520 Lekë.", responseId: null, source: "ai", fallbackReason: null });
+  mocks.generate.mockResolvedValue({ reply: "Libri i Shkronjave kushton 520 Lekë.", presentedProducts: fixtures.products, responseId: null, source: "ai", fallbackReason: null });
   const preview = { id: "root-v1", businessId: "business-a", graph, createdAt: "2026-10-11" };
   const question = "Sa kushton Libri i Shkronjave?";
   const answer = await processAgentTurn({ businessId: "business-a", mode: "test", visualPreview: preview, message: question, hasPhoto: false, informationRequest: true });
   expect(answer.nextState.product_id).toBeNull();
   expect(answer.nextState.step_key).toBe("choose_product");
-  expect(answer.reply).toContain("520 ALL");
-  expect(mocks.generate).not.toHaveBeenCalled(); // Exact current price is server-rendered.
+  expect(answer.reply).toContain("520 Lekë");
+  expect(mocks.generate.mock.calls.at(-1)?.[0].documentContext).toContain("520 ALL");
   expect(queries.find(q => q.table === "products")?.filters).toContainEqual(["is_active", true]);
   answer.nextState.recentMessages = [{ role: "user", content: question }, { role: "assistant", content: answer.reply }];
   const order = await processAgentTurn({ businessId: "business-a", mode: "test", visualPreview: preview, message: "Dua ta blej", state: answer.nextState, hasPhoto: false, orderRequest: true });

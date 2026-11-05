@@ -45,10 +45,10 @@ export async function validateResponse(text: string, evidence: Evidence): Promis
     // Do not attempt another unsupported paraphrase after verification failed.
     const status = (["unsupported_critical_claim", "contradiction", "unverifiable", "uncertain", "correctable"] as const)
       .find(s=>findings.some(f=>f.status===s))!;
-    let reply = text;
-    for (const finding of raw.findings as Array<ConsistencyFinding & { quote: string; subject: string | null }>) {
-      reply = reply.split(finding.quote).join(correctClaim(finding, evidence));
-    }
+    // A correction is a complete safe response, never a substring splice into
+    // rejected prose. The generator may recompose once and review the whole reply.
+    const reply = [...new Set((raw.findings as Array<ConsistencyFinding & { quote: string; subject: string | null }>)
+      .map(finding => correctClaim(finding, evidence)))].join("\n");
     return { reply, changed: reply !== text, status, findings };
   } catch { return failed("review_unavailable"); }
 }

@@ -37,7 +37,7 @@ export async function composeProcessQuestion(params: AgentTurnParams, message: E
     params.onTrace?.({ stage: "context", label: "Customer agent configuration loaded", data: {
       agentConfiguration: { ...configurationRead(agent), configurationMode: params.configurationPreview ? "draft" : "published", configurationRevision: agent.configuration_revision },
     } });
-    const training = selectTrainingContext(memories, null, null, params.message, params.trainingVisualScope);
+    const training = (await selectTrainingContext(memories, null, null, params.message, params.trainingVisualScope));
     const state = params.state ?? emptyState();
     const projection = projectCustomerContext(state, params.message);
     const history = recentConversation(state).map(entry => ({ ...entry, content: redactUnrequestedContact(entry.content, state, projection) }));

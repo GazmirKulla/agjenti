@@ -7,7 +7,7 @@ const m = vi.hoisted(() => ({ execute: vi.fn(), version: vi.fn(), booking: vi.fn
 const services = [{ id: "s1", name: "Consult Basic" }, { id: "s2", name: "Consult Plus" }];
 vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: m.version }));
 vi.mock("@/lib/products/resolve-reference", () => ({
-  resolveCurrentServiceReference: async (args: Parameters<typeof resolveServiceReference>[0]) => resolveServiceReference({ ...args, services }),
+  resolveCurrentServiceReference: async (args: Parameters<typeof resolveServiceReference>[0]) => (await resolveServiceReference({ ...args, services })),
   resolveCurrentProductReference: async () => ({ status: "none" }),
 }));
 vi.mock("@/lib/capabilities/enforcement", () => ({ requireRuntimeModules: async () => {}, CapabilityEnforcementError: class extends Error {} }));

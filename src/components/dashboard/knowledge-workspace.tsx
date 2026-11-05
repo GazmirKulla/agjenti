@@ -14,6 +14,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { saveKnowledgeEntry } from "@/lib/knowledge/actions";
 import { AssistantRecordContext } from "@/components/business-assistant/workspace";
+import { OperationButton } from "@/components/dashboard/operation-button";
 
 export async function KnowledgeWorkspace({
   slug,
@@ -159,6 +160,7 @@ export async function KnowledgeWorkspace({
                   <h2>{e.title}</h2>
                   <p>{e.intent_key || "Informacion i biznesit"}</p>
                 </div>
+                {!services && <OperationButton slug={slug} operation="knowledge.delete" input={{ id: e.id }}>Fshi njohurinë</OperationButton>}
               </div>
               {!e.is_active && <p className="muted-copy">Kjo njohuri nuk përdoret nga Agjenti. Kontrolloje përpara aktivizimit.</p>}
               <ActionForm action={saveKnowledgeEntry.bind(null, slug)} className="grid gap-4 detail-block">

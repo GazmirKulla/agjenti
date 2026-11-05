@@ -4,7 +4,6 @@ import { configurationInstructions } from "./configuration-contract";
 import { reviewConfigurationRequest } from "./configuration-review";
 import { parseConfigurationSteps } from "@/lib/actions/operations/configuration-policy";
 import { prepareConfigurationPlan, executeConfigurationPlan, loadConfigurationPlan, renewConfigurationPlan } from "@/lib/actions/operations/plans";
-import { readCatalogRemovalRequest } from "./catalog-request";
 import { prepareOperationPlan, resumeOperationPlan, executeOperationPlan, type PreparedPlan } from "@/lib/actions/operations/plans";
 import { isOperationalSearch, searchOperations } from "@/lib/actions/operations/search";
 import { assistantOperationCatalog } from "@/lib/actions/operations/catalog";
@@ -233,14 +232,6 @@ export async function planRequest(
   planningPreferences: PlanningPreferences = {},
 ): Promise<PlanResult> {
   const validatedContext = parseUIContext(uiContext);
-  const removal = materials.length ? undefined : readCatalogRemovalRequest(text, validatedContext, history);
-  if (removal) {
-    if (!access.modules.includes("products")) throw new AssistantError("Produktet nuk janë aktivë në këtë biznes.");
-    const input = removal.scope === "listed" ? { ...removal, query: validatedContext?.searchQuery ?? "", status: validatedContext?.filters?.status ?? "all" } : removal;
-    return { ...await prepareProposal(access, { action: "operation", id: null, message: "", changes: [
-      { field: "key", value: "product.remove" }, { field: "input", value: JSON.stringify(input) },
-    ] }, defaultSettings.timezone), replacePlan: true };
-  }
   if (!process.env.OPENAI_API_KEY)
     throw new AssistantError("Asistenti AI nuk është konfiguruar ende.");
   const db = createServiceSupabase();

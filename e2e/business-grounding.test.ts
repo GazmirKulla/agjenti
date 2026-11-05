@@ -29,11 +29,11 @@ it('R2 actual PostgREST distinguishes failed reads from empty/partial results an
     const db = createClient(keys.api, keys.service, { auth: { persistSession: false, autoRefreshToken: false } });
     const read = await readBusinessGrounding(db, t.id, ['knowledge', 'products', 'services']);
     expect(read.products).toMatchObject({ status: 'no_match', total: 0 });
-    const context = projectBusinessGrounding(read, 'R2 Refund');
+    const context = (await projectBusinessGrounding(read, 'R2 Refund'));
     expect(context.knowledge.records.map(k => k.id).sort()).toEqual(ids.slice(0, 2).sort());
     expect(JSON.stringify(context)).not.toContain('Foreign business secret');
     expect(context.knowledge).toMatchObject({ source: 'knowledge_entries', businessId: t.id, status: 'partial' });
-    expect(projectBusinessGrounding(read, 'quantum astronomy physics').knowledge).toMatchObject({ status: 'no_match', records: [] });
+    expect((await projectBusinessGrounding(read, 'quantum astronomy physics')).knowledge).toMatchObject({ status: 'no_match', records: [] });
     const failedDb = createClient(keys.api, keys.service, { db: { schema: 'r2_nonexistent_schema' }, auth: { persistSession: false, autoRefreshToken: false } });
     // Deliberately invalid schema to exercise a REAL rejected PostgREST read.
     const failed = await readBusinessGrounding(failedDb as unknown as SupabaseClient, t.id, ['knowledge', 'products', 'services']);

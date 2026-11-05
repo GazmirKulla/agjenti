@@ -125,14 +125,14 @@ const clarify = (reason: string, reply = "Cilin produkt dëshiron? Shkruaj emrin
 
 /** Pure resolver: catalog must be loaded server-side with tenant + active filters.
  * Price comparisons use current catalog values, never a model's price claim. */
-export function resolveProductReference(args: {
+export async function resolveProductReference(args: {
   businessId: string; message: string; products: readonly ReferenceProduct[];
   state?: ConversationStatePayload | null; deliveredReply?: string | null; mode?: "test" | "production";
   verifiedId?: string;
   /** Server-derived pending field: bare SKU-shaped values belong to collection.
    * Explicit `sku ...`, named corrections and relative choices remain navigation. */
   collectingField?: FieldType;
-}, kind: PresentedEntity["kind"] = "product"): ProductResolution {
+}, kind: PresentedEntity["kind"] = "product"): Promise<ProductResolution> {
   if (args.verifiedId) {
     const product = args.products.find(p => p.id === args.verifiedId);
     return product ? { status: "selected", product, via: "verified_id" } : clarify("unavailable", "Produkti nuk është më aktiv ose i disponueshëm në këtë biznes. Shkruaj një produkt tjetër.");
@@ -144,7 +144,7 @@ export function resolveProductReference(args: {
   if (!relative) {
     const text = foldText(positive.text).trim();
     const sku = args.products.filter(p => p.sku && foldText(p.sku) === text);
-    const matches = sku.length ? sku : positive.text ? matchingCatalogNames([...args.products], positive.text) : [];
+    const matches = sku.length ? sku : positive.text ? await matchingCatalogNames([...args.products], positive.text) : [];
     if (matches.length > 1) return clarify("multiple_matches");
     if (matches.length === 1) return { status: "selected", product: matches[0], via: positive.correction ? "correction" : "name" };
     return positive.correction ? clarify("unknown_correction") : { status: "none" };
@@ -188,8 +188,8 @@ export function resolveProductReference(args: {
   return product ? { status: "selected", product, via: relative.kind } : clarify("unavailable", "Produkti i referuar nuk është më aktiv ose nuk gjendet në këtë listë. Shkruaj emrin e një produkti aktiv.");
 }
 
-export function resolveServiceReference(args: Omit<Parameters<typeof resolveProductReference>[0], "products"> & { services: readonly ReferenceProduct[] }) {
-  const result = resolveProductReference({ ...args, products: args.services }, "service");
+export async function resolveServiceReference(args: Omit<Parameters<typeof resolveProductReference>[0], "products"> & { services: readonly ReferenceProduct[] }) {
+  const result = await resolveProductReference({ ...args, products: args.services }, "service");
   if (result.status === "selected") return { status: result.status, service: result.product, via: result.via };
   if (result.status === "clarify") return { ...result, reply: "Cilin shërbim dëshiron? Shkruaj emrin e plotë ose kërko një listë të re; zgjedhja e mëparshme nuk u ndryshua." };
   return result;

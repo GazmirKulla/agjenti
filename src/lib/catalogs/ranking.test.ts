@@ -33,8 +33,8 @@ describe("catalog source selection", () => {
   it("matches canonical catalog terms without language dictionaries or codes inside words", () => {
     for (const [code, country] of [["UK", "Ukraine"], ["US", "Russia"], ["US", "Australia"]])
       expect(matches([code], country)).toBe(false);
-    expect(matches(["UK"], "For UK customers")).toBe(true);
-    expect(matches(["industrial pumps"], "industrial-pumps")).toBe(true);
+    expect(matches(["UK"], "For UK customers")).toBe(false);
+    expect(matches(["industrial pumps"], "industrial-pumps")).toBe(false);
     expect(matches(["EN"], "anglisht")).toBe(false);
     expect(matches(["Germany"], "gjermani")).toBe(false);
     expect(matches([""], "UK")).toBe(false);
@@ -111,7 +111,7 @@ describe("catalog source selection", () => {
       }).metadata.languages,
     ).toEqual(["EN"]);
   });
-  it("ranks services and knowledge by the current inquiry", () => {
+  it("ranks services and knowledge by the current inquiry", async () => {
     const rows = [
       { title: "Dërgesa", body: "Dy ditë" },
       {
@@ -121,7 +121,7 @@ describe("catalog source selection", () => {
       },
     ];
     expect(
-      rankKnowledge(rows, "Dua instalim industrial")[0].entry.intent_key,
+      (await rankKnowledge(rows, "Dua instalim industrial"))[0].entry.intent_key,
     ).toBe("service");
   });
 });

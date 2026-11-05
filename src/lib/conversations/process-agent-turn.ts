@@ -221,12 +221,12 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   trace?.({ stage: "context", label: "Customer agent configuration loaded", data: {
     agentConfiguration: { ...configurationRead(agent), configurationMode: params.configurationPreview ? "draft" : "published", configurationRevision: agent?.configuration_revision ?? null },
   } });
-  function trainingFor(workflowId: string | null, stepKey: string | null | undefined) {
-    const context = selectTrainingContext(trainingMemories, workflowId, stepKey, params.message, params.trainingVisualScope);
+  async function trainingFor(workflowId: string | null, stepKey: string | null | undefined) {
+    const context = (await selectTrainingContext(trainingMemories, workflowId, stepKey, params.message, params.trainingVisualScope));
     if (context.rules.length) trace?.({ stage: "context", label: "Business training selected", data: { workflowId, stepKey, rules: context.rules } });
     return context;
   }
-  const grounding = projectBusinessGrounding(businessRead, params.message, groundingEntity);
+  const grounding = (await projectBusinessGrounding(businessRead, params.message, groundingEntity));
   const verifiedReference = referenced?.status === "resolved" && (referenced.kind === "product" ? products : businessRead.services.records).some(p => p.id === referenced.id)
     ? referenced : undefined;
   const knowledge = grounding.knowledge.records;
@@ -245,9 +245,9 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   const intent = routeIntent(text);
   trace?.({ stage: "overview", label: "Intent routed", data: { intent, method: "Deterministic product / catalog / general router" } });
   const wantsDocument = intent === "catalog";
-  const exact = params.informational !== undefined ? exactBusinessAnswer(businessRead, text, verifiedReference) : undefined;
+  const exact = params.informational !== undefined ? (await exactBusinessAnswer(businessRead, text, verifiedReference)) : undefined;
   const sources =
-    exact || (exactProduct || (state.product_id && !state.fields.catalog_context)) &&
+    (exactProduct || (state.product_id && !state.fields.catalog_context)) &&
     !wantsDocument
       ? null
       : await retrieveBusinessSources(
@@ -257,15 +257,15 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
           trace,
           result => { grounding.documents = result; },
         );
-  const service = !state.product_id && !exactProduct && rankKnowledge(businessRead.services.records.map(s => ({
-    id: s.id, title: s.name, body: s.description ?? "" })), text).find(k => k.score >= 0.7);
+  const service = params.informational === undefined && !state.product_id && !exactProduct && (await rankKnowledge(businessRead.services.records.map(s => ({
+    id: s.id, title: s.name, body: s.description ?? "" })), text)).find(k => k.score >= 0.7);
   trace?.({ stage: "context", label: "Context retrieval completed", data: { sources, service: service ? service.entry : null } });
   if (params.informational !== undefined) {
     const services = grounding.services.records;
     if (sources) state.fields.catalog_context = sources.context;
-    const trainingContext = trainingFor(null, null);
+    const trainingContext = (await trainingFor(null, null));
     const links = sources?.documents.map(d => `${d.title}: ${d.url}`).join("\n") ?? "";
-    const generated = exact ? { ...exact, source: "fallback" as const, fallbackReason: "authoritative_business_read" } : sources?.clarification ? {
+    const generated = sources?.clarification ? {
       reply: sources.clarification, source: "fallback" as const, fallbackReason: "catalog_clarification",
       presentedProducts: undefined, presentedServices: undefined,
     } : await generateAgentReply({
@@ -277,7 +277,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
       state, customerMessage: text, previousResponseId: null, knowledge: "", catalogSummary: "",
       referenceProducts: grounding.products.records,
       referenceServices: services,
-      documentContext: [knowledge.map(k => `${k.title}: ${k.body}`).join("\n"),
+      documentContext: [exact ? `Server-verified calculation or catalog facts (evidence only; answer all parts of the customer question): ${exact.reply}` : "", knowledge.map(k => `${k.title}: ${k.body}`).join("\n"),
         verifiedReference ? `Server-resolved catalog reference (information only, not purchase approval): ${JSON.stringify(verifiedReference)}` : "",
         grounding.products.records.map(p => `${p.name}: ${shortenDescription(p.description)}${p.price_amount == null ? "" : ` — ${p.price_amount} ${p.currency}`}`).join("\n"),
         sources?.evidence, links, params.mode === "test" && params.attachmentContext ? `Customer attachments (unverified excerpts, not business policy): ${params.attachmentContext}` : ""].filter(Boolean).join("\n") || "No verified information available.",
@@ -293,7 +293,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   }
   if (!sources && service) {
     trace?.({ stage: "workflow", label: "Service information; workflow not advanced", data: { state, workflowId: null, steps: [] } });
-    const trainingContext = trainingFor(null, null);
+    const trainingContext = (await trainingFor(null, null));
     const generated = await generateAgentReply({
       processOffers: params.processOffers,
       communication,
@@ -357,7 +357,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     const links = sources.documents
       .map((d) => `${d.title}: ${d.url}`)
       .join("\n");
-    const trainingContext = trainingFor(currentWorkflow, state.step_key);
+    const trainingContext = (await trainingFor(currentWorkflow, state.step_key));
     const generated = sources.clarification
       ? {
           reply: sources.clarification,
@@ -412,7 +412,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   let selected = products.find((p) => p.id === state.product_id) ?? null;
   if (state.product_id && !selected) state = state.context ? resetOrder(state) : emptyState();
   let justSelected = false;
-  const reference = resolveProductReference({ businessId: params.businessId, message: text, products, state, deliveredReply: params.deliveredReply, mode: params.mode, verifiedId: params.selectedProductId });
+  const reference = (await resolveProductReference({ businessId: params.businessId, message: text, products, state, deliveredReply: params.deliveredReply, mode: params.mode, verifiedId: params.selectedProductId }));
   const orderRequest = params.orderRequest || (params.turnDecision ? params.turnDecision.intent === "order" : detectVisualIntent(text) === "order" || reference.status === "selected" && reference.via !== "name");
   if (reference.status === "clarify" && !isQuestion(text)) return {
     ...(params.turnDecision ? { turnDecision: { ...params.turnDecision, kind: "clarification" as const, reason: "entity" as const } } : {}),
@@ -576,7 +576,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     workflowSource: params.linearPreview ? "draft" : pinned ? "pinned" : state.context?.execution.linear ? "published" : "unavailable",
     state, steps, progress: workflowProgress, selectedProduct: selected,
   } });
-  const trainingContext = trainingFor(workflowId, state.step_key);
+  const trainingContext = (await trainingFor(workflowId, state.step_key));
   const generated = navigationReply ? {reply:navigationReply,responseId:params.previousResponseId??null,source:"fallback" as const,fallbackReason:"navigation_clarification"} : state.context && !informationalTurn && !isQuestion(text) ? { reply: sharedPrompt(state, steps, productName ?? undefined), responseId: null, source: "fallback" as const, fallbackReason: "shared_workflow_prompt" } : await generateAgentReply({
       processOffers: params.processOffers,
       communication,

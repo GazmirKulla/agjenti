@@ -42,11 +42,11 @@ describe("Package 2A meaning is independent from entity reference and punctuatio
       process: "clarify", action: "clarify", source: "rules", reason: "ambiguous", missingFields: [], reusedFields: [],
     } })).toMatchObject({ kind: "clarification", reason: "entity", intent: "undetermined" });
   });
-  it.each(["atë produktin", "Më trego atë produktin"])("%s uses verified single-entity presentation, not a guessed name", message => {
+  it.each(["atë produktin", "Më trego atë produktin"])("%s uses verified single-entity presentation, not a guessed name", async message => {
     const state = emptyState(); const products = [{ id: "p", name: "Kit sintetik", price_amount: 10, currency: "EUR" }];
     recordEntityPresentation(state, "tenant", "Kit sintetik", products);
     rememberTurn(null, state, "Më trego katalogun", "Kit sintetik");
-    expect(resolveProductReference({ businessId: "tenant", message, state, products, mode: "test" })).toMatchObject({ status: "selected", product: { id: "p" } });
-    expect(resolveProductReference({ businessId: "other-tenant", message, state, products, mode: "test" }).status).toBe("clarify");
+    expect((await resolveProductReference({ businessId: "tenant", message, state, products, mode: "test" }))).toMatchObject({ status: "selected", product: { id: "p" } });
+    expect((await resolveProductReference({ businessId: "other-tenant", message, state, products, mode: "test" })).status).toBe("clarify");
   });
 });

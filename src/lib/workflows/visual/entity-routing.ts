@@ -66,14 +66,14 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
     return Boolean(sku && (text === sku || text === `sku ${sku}`));
   });
   const serviceReference = reference?.selectedServiceId || !reference?.selectedProductId && referenceEntityKind(message, reference?.state) === "service";
-  const serviceResult = serviceReference && (reference?.selectedServiceId || isEntityReference(message)) ? resolveServiceReference({ businessId, message, services: activeServices,
+  const serviceResult = serviceReference && (reference?.selectedServiceId || isEntityReference(message)) ? await resolveServiceReference({ businessId, message, services: activeServices,
     state: reference?.state, verifiedId: reference?.selectedServiceId, deliveredReply: reference?.deliveredReply, mode: preview ? "test" : "production", collectingField }) : null;
   if (serviceResult?.status === "clarify") return { clarification: serviceResult.reply, available };
-  const resolved = !serviceReference && (reference?.selectedProductId || isEntityReference(message)) ? resolveProductReference({ businessId, message, products: activeProducts,
+  const resolved = !serviceReference && (reference?.selectedProductId || isEntityReference(message)) ? await resolveProductReference({ businessId, message, products: activeProducts,
     state: reference?.state, verifiedId: reference?.selectedProductId, deliveredReply: reference?.deliveredReply, mode: preview ? "test" : "production", collectingField }) : null;
   if (resolved?.status === "clarify") return { clarification: resolved.reply, available };
   const positive = positiveEntityText(message);
-  const named = fieldValue ? [] : skuMatches.length ? skuMatches : matchingCatalogNames(entities, positive.text);
+  const named = fieldValue ? [] : skuMatches.length ? skuMatches : await matchingCatalogNames(entities, positive.text);
   // A product-only lookup must not suppress an equally named service in the
   // existing visual router. Relative references already identify the entity kind.
   if (resolved?.status === "selected" && named.some(entity => entity.kind === "service")

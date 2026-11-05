@@ -208,6 +208,12 @@
   height: 16px;
   width: 16px;
 }
+.catalog-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
 .catalog-row-menu {
   display: inline-grid;
   place-items: center;

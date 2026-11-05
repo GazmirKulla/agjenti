@@ -4518,6 +4518,13 @@
       "question": true,
       "positiveEntityText": "Sa zgjat Konsulta?",
       "evidence": "Sa zgjat Konsulta?"
+    },
+    "Konsulta": {
+      "intent": "information",
+      "question": true,
+      "evidence": "Konsulta",
+      "positiveEntityText": "Konsulta",
+      "referenceKind": "service"
     }
   },
   "src/lib/agents/business-grounding.test.ts::R2 bounded authoritative evidence > labels unsupported inventory without pretending catalog activation proves stock": {
@@ -6595,6 +6602,25 @@
       "act": "accept",
       "process": "booking",
       "evidence": "Konfirmoj"
+    }
+  },
+  "src/lib/agents/business-grounding.test.ts::R2 bounded authoritative evidence > limits context, prioritizes verified IDs, and carries total/provenance/partial status": {
+    "Tell me about it": {
+      "intent": "information",
+      "question": true,
+      "evidence": "Tell me about it"
+    }
+  },
+  "src/lib/agents/business-grounding.test.ts::R2 bounded authoritative evidence > excludes zero relevance and service mirrors; retains conflicting relevant policy provenance": {
+    "What is the refund policy?": {
+      "intent": "information",
+      "question": true,
+      "evidence": "What is the refund policy?"
+    },
+    "Discount policy?": {
+      "intent": "information",
+      "question": true,
+      "evidence": "Discount policy?"
     }
   }
 }

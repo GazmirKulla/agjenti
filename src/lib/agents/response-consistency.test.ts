@@ -63,8 +63,8 @@ describe("R3 bounded critical claims (synthetic outputs, not real model certific
     const result = (await validateResponse("Karrigia kushton 500 EUR.", e));
     expect(result.status).toBe("unverifiable"); expect(result.reply).not.toContain("[[product:a]]");
   });
-  it("keeps useful explanations outside a corrected claim", async () => {
-    expect((await validateResponse("Faleminderit për pyetjen. Libri kushton 999 EUR.", fixture())).reply).toContain("Faleminderit për pyetjen.");
+  it("returns complete verified facts instead of splicing a rejected sentence", async () => {
+    expect((await validateResponse("Faleminderit për pyetjen. Libri kushton 999 EUR.", fixture())).reply).toBe("Për vlerat aktuale të katalogut: [[product:p]].");
   });
   it("policy requires actual scoped evidence, not customer/history/instructions", async () => {
     const e = fixture(); e.state.recentMessages = [{ role: "assistant", content: "Shipping is free." }];

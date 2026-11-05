@@ -18,7 +18,7 @@ it("keeps unit-language fixtures out of runtime imports", () => {
 });
 it("rejects word regexes and literal phrase checks against customer message inputs", () => {
   const violations: string[]=[];
-  const roots=["conversations","workflows","agents"];
+  const roots=["conversations","workflows","agents","products","catalogs","orders"];
   for(const path of roots.flatMap(root=>files(join(process.cwd(),"src/lib",root)))) {
     const source=ts.createSourceFile(path,readFileSync(path,"utf8"),ts.ScriptTarget.Latest,true);
     function visit(node: ts.Node) {

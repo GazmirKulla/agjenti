@@ -15,7 +15,7 @@ export async function resolveCurrentProductReference(args: Omit<Parameters<typeo
     products.push(...data ?? []);
     if (!data || data.length < 500) break;
   }
-  const result = resolveProductReference({ ...args, products });
+  const result = await resolveProductReference({ ...args, products });
   if (result.status === "selected" && args.purpose !== "information") await requireRuntimeModules(args.businessId, capabilityModules(["order.prepare"]));
   return result;
 }
@@ -32,5 +32,5 @@ export async function resolveCurrentServiceReference(args: Omit<Parameters<typeo
     services.push(...data ?? []);
     if (!data || data.length < 500) break;
   }
-  return resolveServiceReference({ ...args, services });
+  return (await resolveServiceReference({ ...args, services }));
 }

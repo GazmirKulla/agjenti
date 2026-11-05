@@ -77,14 +77,12 @@ function canonical(value: string) {
   return foldText(value).trim();
 }
 export function matches(values: string[], query: string) {
+  // Requirements have already been semantically normalized against supported
+  // metadata by the extractor. This is format equality, not phrase matching.
   const q = canonical(query);
-  return values.some((v) => {
-    const s = canonical(v);
-    // Match whole terms/phrases, never country codes inside unrelated words.
-    const words = (value: string) => ` ${value.replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
-    return Boolean(s && q) && (words(q).includes(words(s)) || words(s).includes(words(q)));
-  });
+  return Boolean(q) && values.some(value => canonical(value) === q);
 }
+
 export function rankCatalogs(
   catalogs: Catalog[],
   hits: Hit[],
@@ -92,9 +90,6 @@ export function rankCatalogs(
   requirements: Requirements,
   now = Date.now(),
 ) {
-  const tokens = foldText(query)
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 2);
   return catalogs
     .filter((c) => c.active && c.index_status === "ready" && c.confirmed_at)
     .flatMap((c) => {
@@ -135,12 +130,6 @@ export function rankCatalogs(
         !c.use_when.includes("commercial")
       )
         return [];
-      const hay = foldText(
-        [c.title, c.description, ...Object.values(m).flat()].join(" "),
-      );
-      const lexical =
-        tokens.filter((t) => hay.includes(t)).length /
-        Math.max(tokens.length, 1);
       const semantic = Math.max(0, ...sections.map((h) => h.semantic ?? 0));
       const intent = routeIntent(query);
       const rule = c.use_when.some(
@@ -150,16 +139,16 @@ export function rankCatalogs(
           (r === "commercial" && commercial) ||
           (r === "b2b" && purpose === "b2b") ||
           (r === "category" &&
-            m.categories.some((v) => foldText(query).includes(foldText(v)))),
+            Boolean(requirements.category && matches(m.categories, requirements.category))),
       );
       const fresh = Math.max(
         0,
         1 - (now - Date.parse(c.updated_at)) / (365 * 86400000),
       );
       const score =
-        semantic * 0.65 + lexical * 0.25 + (rule ? 0.08 : 0) + fresh * 0.02;
+        semantic * 0.9 + (rule ? 0.08 : 0) + fresh * 0.02;
       return [
-        { catalog: c, sections, score, relevance: Math.max(semantic, lexical) },
+        { catalog: c, sections, score, relevance: semantic },
       ];
     })
     .sort((a, b) => b.score - a.score);

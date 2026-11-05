@@ -57,3 +57,18 @@ vi.mock("@/lib/capabilities/workflow-semantics", () => ({
   withWorkflowSemanticReviews: <T>(run: () => Promise<T>) => run(),
   WorkflowSemanticReviewError: class extends Error {},
 }));
+
+// Labelled candidate observations isolate routing from provider quality. These
+// are fixture data only; real-model and schema tests exercise the actual boundary.
+vi.mock("@/lib/conversations/understanding/selection", async original => {
+  const actual = await original<typeof import("@/lib/conversations/understanding/selection")>();
+  const { createHash } = await import("node:crypto");
+  const { default: fixtures } = await import("./fixtures/selection.json");
+  return { ...actual, selectSemanticCandidates: vi.fn(async (kind: string, entries: unknown[], message: string) => {
+    if (!entries.length || !message.trim()) return [];
+    const key = createHash("sha256").update(JSON.stringify([kind, entries, message])).digest("hex");
+    const fixture = (fixtures as Record<string, { matches: unknown }>)[key];
+    if (!fixture) { missingFixtures.push(`semantic selection ${JSON.stringify([kind, entries, message])}`); throw new Error("Missing labelled selection fixture"); }
+    return structuredClone(fixture.matches);
+  }) };
+});

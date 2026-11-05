@@ -208,8 +208,8 @@ it("does not treat an information question about an unbound product as an order"
   graph.flows[0].kind = "custom";
   const result = await simulateVisualWorkflow("studio", graph, "Sa kushton Bluzë?");
   expect(result.error).toBeUndefined();
-  expect(result.turn?.reply).toBe("Bluzë: 20 EUR."); // R2 exact price, no model needed.
-  expect(mocks.generate).not.toHaveBeenCalled();
+  expect(result.turn?.reply).toBe("Informacion i biznesit.");
+  expect(mocks.generate.mock.calls.at(-1)?.[0].documentContext).toContain("20 EUR");
   expect(result.turn?.nextState.context?.order).toEqual({});
 });
 

@@ -88,6 +88,9 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     }
     if (["product.edit", "product.field"].includes(operation) && snapshot.archived_at) throw Error("Rikthe fillimisht produktin e arkivuar.");
     if (operation === "product.field" && !["workflow_id", "product_type_id", "is_active"].includes(String(input.field))) throw Error("Fushë e pavlefshme e produktit.");
+  } else if (operation === "knowledge.delete") {
+    snapshot = await record(businessId, "knowledge_entries", input.id, "id,title,body,updated_at");
+    subject = String(snapshot.title);
   } else if (operation === "knowledge.save") {
     if (input.id) snapshot = await record(businessId, "knowledge_entries", input.id, "id,title,body,is_active,intent_key,updated_at");
     const values = { ...snapshot, ...input };
@@ -147,6 +150,7 @@ export async function prepareOperation(businessId: string, userId: string, key: 
   const preview: Preview = { title: operationCatalog[operation].title, subject,
     fields: Object.entries(previewInput).filter(([field]) => !["id", "ids", "conversationId", "orderId", "revision"].includes(field)).map(([field, value]) => ({ label: fieldLabel(field), before: previewValue(previous[field]), after: previewValue(value) })),
     notice: operation === "product.delete" ? "Fshirja është përfundimtare. Produktet me histori ose lidhje ruhen përmes arkivimit."
+      : operation === "knowledge.delete" ? "Fshirja është përfundimtare. Kjo njohuri nuk do të përdoret më në përgjigjet e Agjentit."
       : operation === "agent.manage" && (snapshot.values as Record<string, unknown>).is_active ? `Agjenti aktiv zëvendësohet. Aktualisht: ${(snapshot.activeNames as string[]).join(", ") || "asnjë"}.`
       : operation === "product.restore" ? "Produkti rikthehet si draft joaktiv." : undefined };
   if (operation === "agent.communication") {
@@ -209,6 +213,17 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
     return {message: input.enabled ? "Regjistrimi lokal pas konfirmimit të klientit u autorizua." : "Regjistrimi automatik u çaktivizua.",path:"orders"};
   }
   if (key === "product.create") checked(await createProduct(actor, productForm(input)));
+  else if (key === "knowledge.delete") {
+    if (!uuid(input.id) || !Number.isFinite(Date.parse(String(before.updated_at)))) throw new OperationError("Konfirmimi i njohurisë nuk është i vlefshëm.");
+    const result = await db.from("knowledge_entries").delete()
+      .eq("business_id", businessId).eq("id", String(input.id))
+      .eq("updated_at", String(before.updated_at)).select("id").maybeSingle();
+    if (result.error) throw new OperationError(result.error.code === "23503"
+      ? "Kjo njohuri është e lidhur me një shërbim dhe nuk mund të fshihet. Menaxhoje te Shërbimet."
+      : "Njohuria nuk u fshi. Provo përsëri.");
+    if (!result.data) throw new OperationError("Njohuria ndryshoi ose u hoq. Rifresko faqen dhe rishqyrto fshirjen.");
+    return { message: "Njohuria u fshi.", path: "knowledge" };
+  }
   else if (key === "knowledge.save") {
     const values = { is_active: true, ...before, ...input };
     const form = new FormData();

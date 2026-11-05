@@ -1,3 +1,4 @@
+import { withSemanticSelections } from "./selection";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { unknownUnderstanding, type MessageUnderstanding } from "./contract";
 /** Request-local semantic evidence, analogous to execution-context. Never a
@@ -11,5 +12,5 @@ export function messageUnderstanding(message: string): MessageUnderstanding {
 export function hasUnderstandingContext() { return Boolean(context.getStore()); }
 export function hasMessageUnderstanding(message: string) { return Boolean(context.getStore() && normalize(context.getStore()!.message) === normalize(message)); }
 export function withMessageUnderstanding<T>(message: string, meaning: MessageUnderstanding, run: () => T): T {
-  return context.run({ message, meaning }, run);
+  return withSemanticSelections(() => context.run({ message, meaning }, run));
 }

@@ -1,3 +1,5 @@
+const requestRelation = vi.hoisted(() => vi.fn(async () => false));
+vi.mock("@/lib/business-assistant/request-relation", () => ({ isIndependentRequest: requestRelation }));
 const briefingIntent = vi.hoisted(() => vi.fn(async (): Promise<"today" | null> => null));
 vi.mock("@/lib/business-assistant/briefing-intent", () => ({ briefingQuestion: briefingIntent }));
 import { OperationError } from "@/lib/actions/operations/error";
@@ -254,7 +256,8 @@ it("returns actionable batch validation errors instead of a generic retry", asyn
   expect(await response.json()).toEqual({ error: "Lista e plotë nuk u verifikua." });
 });
 
-it("a clear catalog command replaces the unrelated old objective before stale-plan checks", async () => {
+it("a semantically independent request replaces the old objective before stale-plan checks", async () => {
+  requestRelation.mockResolvedValueOnce(true);
   m.prior = { version: 1, request: "Configure agent", target: { kind: "agent", id: "old" } };
   m.reassess.mockResolvedValue({ recovery: { verified: false, message: "Old target changed" } });
   const response = await POST(req({ mode: "plan", text: "Fshi të gjitha produktet e listuara", conversationId: "conversation", context: { page: "products", entryPoint: "contextual" } }));
