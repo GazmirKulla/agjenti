@@ -392,3 +392,31 @@ it("does not certify catalog clarification or document-only test for a product b
   );
   expect(mocks.record).not.toHaveBeenCalled();
 });
+
+it("captures actual trace events in the same result only for a platform administrator", async () => {
+  const base = await simulateAgentTurn(input);
+  if ("error" in base) throw Error(base.error);
+  const execute = async (params: { onTrace: import("@/lib/conversations/trace").TraceObserver }) => {
+    params.onTrace({ stage: "workflow", label: "Visual workflow executed", data: { versionId: "actual-version", api_key: "private" } });
+    return base;
+  };
+  mocks.process.mockImplementation(execute);
+  const memberResult = await simulateAgentTurn(input);
+  expect(memberResult).not.toHaveProperty("labObservation");
+  mocks.access.mockResolvedValue({ admin: true, business: { id: "business-a", auto_reply: false } });
+  const adminResult = await simulateAgentTurn(input);
+  expect(adminResult).toMatchObject({ labObservation: { trace: [{ label: "Visual workflow executed", data: { versionId: "actual-version", api_key: "[REDACTED]" } }] } });
+  expect(mocks.process.mock.calls.at(-1)?.[0].mode).toBe("test");
+});
+
+it("retains sanitized failed-turn evidence for admins without a new checkpoint", async () => {
+  mocks.access.mockResolvedValue({ admin: true, business: { id: "business-a", auto_reply: false } });
+  mocks.process.mockImplementation(async ({ onTrace }) => {
+    onTrace({ stage: "ai", label: "Request failed", status: "error", data: { api_key: "private" } });
+    throw Error("failure");
+  });
+  const result = await simulateAgentTurn(input);
+  expect(result).toHaveProperty("error");
+  expect(result).not.toHaveProperty("session");
+  expect(result).toMatchObject({ labObservation: { trace: [{ status: "error", data: { api_key: "[REDACTED]" } }] } });
+});

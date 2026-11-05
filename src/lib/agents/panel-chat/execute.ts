@@ -1,3 +1,5 @@
+import { observeLabTurn } from "@/lib/chat-lab/observation";
+import { isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { encryptSecret } from "@/lib/crypto/tokens";
 import { emptyState, type ConversationStatePayload } from "@/lib/workflows/state";
@@ -29,7 +31,9 @@ export async function runPanelChat(scope: PanelScope) {
         return !access.error && access.data === true && !owner.error && owner.data?.status === "active" && owner.data.auto_reply === true;
       };
       const state = saved.data.collected as ConversationStatePayload;
+      const observation = observeLabTurn(await isPlatformAdmin(scope.userId));
       const turn = await processConversationMessage({
+        onTrace: observation.onTrace,
         mode: "production", source: "panel", businessId: scope.businessId,
         message: job.payload.message, hasPhoto: false,
         state: state?.fields && state?.customer ? state : emptyState(),
@@ -38,7 +42,7 @@ export async function runPanelChat(scope: PanelScope) {
         deliveredReply: outbound.data?.reply ?? null, conversationKey: job.conversation_id,
         bookingGuard: { jobId: job.id, leaseToken: job.lease_token, conversationId: job.conversation_id, revision: saved.data.revision }, canAct,
       });
-      const result: TestChatResult = { ...turn, session: "", turns: job.client_sequence + 1, autoReplyEnabled: true };
+      const result: TestChatResult = { ...turn, labObservation: observation.finish(), session: "", turns: job.client_sequence + 1, autoReplyEnabled: true };
       const committed = await db.rpc("finish_panel_chat", { p_id: job.id, p_token: job.lease_token, p_revision: saved.data.revision,
         p_state: turn.nextState, p_workflow: turn.workflowId, p_reply: turn.reply, p_response: turn.previousResponseId,
         p_result: encryptSecret(JSON.stringify(result)), p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });

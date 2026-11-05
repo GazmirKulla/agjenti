@@ -2,10 +2,10 @@ import type { TestChatResult } from "@/lib/agents/test-chat/types";
 import type { TestAttachment } from "@/lib/agents/test-chat/attachments";
 export type ChatTurn = Exclude<TestChatResult, { error: string }>;
 export type ChatEntry = { id: string; batchId?: string; text: string; photo: boolean; attachments: (TestAttachment & { preview?: string })[]; result: ChatTurn };
-export type PendingTestTurn = { id: string; batchId?: string; sequence: number; text: string; photo: boolean; attachments: ChatEntry["attachments"]; session: string | null; accepted?: boolean; status: "queued" | "processing" | "failed" | "uncertain"; error?: string };
+export type PendingTestTurn = { failure?: ChatTurn["labObservation"]; id: string; batchId?: string; sequence: number; text: string; photo: boolean; attachments: ChatEntry["attachments"]; session: string | null; accepted?: boolean; status: "queued" | "processing" | "failed" | "uncertain"; error?: string };
 export type TestConversation = {
   mode?: "test" | "real"; id: string; title: string; entries: ChatEntry[]; updatedAt: number; outbox?: PendingTestTurn[] };
-export type TestTransportJob = { requestId: string; batchId?: string; sequence: number; status: string; error?: string; result?: ChatTurn | null };
+export type TestTransportJob = { failure?: ChatTurn["labObservation"]; requestId: string; batchId?: string; sequence: number; status: string; error?: string; result?: ChatTurn | null };
 /** Reconcile by operation identity and contiguous sequence, never response arrival order. */
 export function reconcileTestConversation(chat: TestConversation, jobs: TestTransportJob[]): TestConversation {
   const entries = [...chat.entries];
@@ -15,7 +15,7 @@ export function reconcileTestConversation(chat: TestConversation, jobs: TestTran
     const job = jobs.find(j => j.requestId === pending.id && j.sequence === pending.sequence);
     if (job?.status === "sent" && job.result && pending.sequence === entries.length) {
       entries.push({ id: pending.id, batchId: job.batchId, text: pending.text, photo: pending.photo, attachments: pending.attachments, result: job.result });
-    } else outbox.push(job ? { ...pending, batchId: job.batchId, accepted: true, status: job.status === "failed" || job.status === "sent" && !job.result ? "failed" : job.status === "processing" ? "processing" : "queued", error: job.error } : pending);
+    } else outbox.push(job ? { ...pending, batchId: job.batchId, accepted: true, status: job.status === "failed" || job.status === "sent" && !job.result ? "failed" : job.status === "processing" ? "processing" : "queued", error: job.error, failure: job.failure } : pending);
   }
   return { ...chat, entries, outbox };
 }

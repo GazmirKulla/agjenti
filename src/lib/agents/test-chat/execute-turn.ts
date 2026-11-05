@@ -1,3 +1,4 @@
+import { observeLabTurn } from "@/lib/chat-lab/observation";
 import { loadCommunicationDraft } from "@/lib/agents/communication-configuration";
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 import { loadSetupStatus } from "@/lib/setup/status";
@@ -29,6 +30,7 @@ export async function executeAgentTestTurn(
   userId: string,
   messageCount = 1,
 ): Promise<TestChatResult> {
+  let observation: ReturnType<typeof observeLabTurn> | undefined;
   try {
     if (
       !input ||
@@ -95,8 +97,10 @@ export async function executeAgentTestTurn(
     }
 
     const provenance = collectTestConfiguration();
+    const currentObservation = observeLabTurn(access.admin === true);
+    observation = currentObservation;
     const turn = await processConversationMessage({
-      onTrace: provenance.onTrace,
+      onTrace: event => { provenance.onTrace(event); currentObservation.onTrace(event); },
       ...(configurationPreview ? { configurationPreview } : {}),
       mode: "test",
       businessId: access.business.id,
@@ -144,6 +148,7 @@ export async function executeAgentTestTurn(
     return {
       ...turn,
       configuration: provenance.finish(turn),
+      ...(access.admin ? { labObservation: currentObservation.finish() } : {}),
       productName: turn.productName,
       workflowProgress: turn.workflowProgress,
       setupTestPassed,
@@ -165,7 +170,9 @@ export async function executeAgentTestTurn(
       trainingReceipt: issueTrainingReceipt(userId, access.business.id, text || "[Foto e simuluar]", turn.reply, turn.workflowId, turn.nextState.step_key),
     };
   } catch {
+    const failedObservation = observation?.finish();
     return {
+      ...(failedObservation ? { labObservation: failedObservation } : {}),
       error:
         "Prova nuk u përfundua. Kontrollo konfigurimin e agjentit dhe provo përsëri.",
     };

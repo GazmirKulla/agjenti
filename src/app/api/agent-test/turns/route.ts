@@ -13,7 +13,7 @@ async function accessFor(request: Request) {
   const user = await getSessionUser();
   const access = user && await requireBusinessAccess(user.id, slug);
   const current = access && await transportAccess(access.business.id);
-  return current && access ? { ...current, businessId: access.business.id, slug } : null;
+  return current && access ? { ...current, businessId: access.business.id, slug, admin: access.admin } : null;
 }
 export async function POST(request: Request) {
   const access = await accessFor(request);
@@ -66,10 +66,14 @@ export async function GET(request: Request) {
     let result: TestChatResult | null = null;
     if (!expired && owner.result_ciphertext) {
       result = results.get(owner.id) ?? JSON.parse(decryptSecret(owner.result_ciphertext));
+      if (result && !access.admin) {
+        result = { ...result };
+        delete result.labObservation;
+      }
       if (result) results.set(owner.id, result);
     }
     const grouped = job.batch_parent_id || rows.some(row => row.batch_parent_id === job.id);
-    return { requestId: job.client_request_id, sequence: job.client_sequence, batchId: grouped ? owner.client_request_id : undefined, status: expired && owner.status !== "sent" ? "failed" : owner.status, error: expired ? "Sesioni ka skaduar; rezultati nuk mund të rikthehet." : owner.error, result };
+    return { requestId: job.client_request_id, sequence: job.client_sequence, batchId: grouped ? owner.client_request_id : undefined, status: expired && owner.status !== "sent" ? "failed" : owner.status, error: expired ? "Sesioni ka skaduar; rezultati nuk mund të rikthehet." : owner.error, failure: result && "error" in result ? result.labObservation : undefined, result: result && "error" in result ? null : result };
   });
   if (jobs.some(j => ["queued", "processing"].includes(j.status))) after(() => runWorkflowQueue(10, { businessId: access.businessId, userId: access.userId, streamId: stream }).then(() => {}));
   return NextResponse.json({ jobs }, { headers: { "Cache-Control": "no-store" } });

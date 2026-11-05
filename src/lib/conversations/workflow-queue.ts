@@ -151,7 +151,7 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
                     input.session = previous.session;
                 }
                 const result = await executeAgentTestTurn(input, job.operator_user_id!, batch.count);
-                const { error } = await db.rpc("finish_test_transport", { p_id: job.id, p_token: job.lease_token, p_result: "error" in result ? null : encryptSecret(JSON.stringify(result)), p_error: "error" in result ? result.error : null });
+                const { error } = await db.rpc("finish_test_transport", { p_id: job.id, p_token: job.lease_token, p_result: "error" in result && !result.labObservation ? null : encryptSecret(JSON.stringify(result)), p_error: "error" in result ? result.error : null });
                 if (error) throw new Error("Test result commit failed");
                 processed++;
                 continue;

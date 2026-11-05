@@ -132,3 +132,15 @@
 .lab-data-values li { margin: 5px 0; }
 
 .lab-full-chat { display: flex; margin: 16px 0 8px; text-align: center; }
+
+.lab-unified-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 16px; align-items: start; }
+.lab-conversation-inspection { display: grid; grid-template-columns: minmax(320px, 1.3fr) minmax(300px, 1fr); gap: 16px; min-width: 0; align-items: start; }
+.lab-conversation-inspection > * { min-width: 0; }
+.lab-conversation-inspection .chat-header { flex-wrap: wrap; padding: 16px; }
+.lab-selected-exchange { border-left: 2px solid var(--accent); padding-left: 10px; }
+.lab-unified-layout .lab-setup select { width: 100%; margin: 10px 0; }
+.lab-conversation-inspection .chat-body.with-history { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1300px) { .lab-conversation-inspection { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .lab-unified-layout { grid-template-columns: minmax(0, 1fr); } .lab-businesses { max-height: 150px; } }
+/* The unified inspector stays in the same page on narrow screens. */
+.lab-conversation-inspection > .lab-inspector { display: block; }

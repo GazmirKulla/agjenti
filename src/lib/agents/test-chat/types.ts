@@ -9,8 +9,9 @@ export type TestChatInput = {
   attachments?: string[];
 };
 export type TestChatResult =
-  | { error: string }
+  | { error: string; labObservation?: { trace: import("@/lib/conversations/trace").TimedTraceEvent[]; timestamp: string } }
   | (AgentTurnResult & {
+      labObservation?: { trace: import("@/lib/conversations/trace").TimedTraceEvent[]; timestamp: string };
       setupTestPassed?: boolean;
       setupNotice?: string;
       session: string;

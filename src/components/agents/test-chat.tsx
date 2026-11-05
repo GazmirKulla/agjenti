@@ -3,7 +3,7 @@ import { blockedByFailedTurn, needsTestChatPolling, TestChatPolling } from "./te
 import { TestConfiguration } from "./test-configuration";
 import { AssistantComposer } from "@/components/business-assistant/composer";
 import { MessageRoutingView } from "@/components/workflows/message-routing";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import type { TestAttachment } from "@/lib/agents/test-chat/attachments";
@@ -21,13 +21,15 @@ const reasons: Record<string, string> = {
 };
 const initialChat: TestConversation = { id: "initial", title: "Bisedë e re", entries: [], updatedAt: 0 };
 type Upload = { id: string; file: File; preview?: string };
-export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false }: {
+export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false, renderInspector }: {
   slug: string; businessName: string; userId: string; configurationDraft?: string; advanced?: boolean;
+  renderInspector?: (entry: ChatEntry | undefined, chat: TestConversation) => ReactNode;
 }) {
   const [chats, setChats] = useState<TestConversation[]>([initialChat]);
   const [activeId, setActiveId] = useState("initial");
   const [ready, setReady] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [inspectedId, setInspectedId] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState("");
@@ -317,7 +319,8 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
     const url = URL.createObjectURL(new Blob([transcript(chat)], { type: "text/plain;charset=utf-8" }));
     const a = document.createElement("a"); a.href=url; a.download="biseda-e-proves.txt"; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
   }
-  return <section className={`agent-test chat-workspace ${advanced ? "chat-lab-workspace" : "business-chat"} ${expanded ? "is-expanded" : ""}`}>
+  const inspected = messages.find(entry => entry.id === inspectedId) ?? messages.at(-1);
+  return <div className={renderInspector ? "lab-conversation-inspection" : undefined}><section className={`agent-test chat-workspace ${advanced ? "chat-lab-workspace" : "business-chat"} ${expanded ? "is-expanded" : ""}`}>
     <header className="chat-header">
       <div><span className="agent-test-label"><span /> {advanced ? "CHATLAB" : "AGJENTI YT"} · {real ? "REAL" : "PROVË"}</span><h2>{businessName}</h2></div>
       <nav aria-label="Veprimet e bisedës">
@@ -327,7 +330,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         <button className="chat-icon" type="button" title="Historiku" aria-label="Historiku i bisedave" aria-expanded={showHistory} onClick={() => setShowHistory(v=>!v)}><Icon name="history" /></button>
         {advanced && <button className="chat-icon" type="button" title="Eksporto bisedën" aria-label="Eksporto bisedën" disabled={!messages.length || busy} onClick={download}><Icon name="download" /></button>}
         {advanced && <button className="chat-icon" type="button" title="Zgjero / zvogëlo" aria-label="Zgjero bisedën" aria-pressed={expanded} onClick={()=>setExpanded(v=>!v)}><Icon name="expand" /></button>}
-        {advanced && <button className="chat-toolbar-button" type="button" aria-expanded={showDetails} aria-controls="agent-test-diagnostics" onClick={()=>setShowDetails(v=>!v)}><Icon name="workflows" size={17}/> Rrjedha</button>}
+        {advanced && !renderInspector && <button className="chat-toolbar-button" type="button" aria-expanded={showDetails} aria-controls="agent-test-diagnostics" onClick={()=>setShowDetails(v=>!v)}><Icon name="workflows" size={17}/> Rrjedha</button>}
         <button className="chat-toolbar-button primary" type="button" disabled={preparing || voice} onClick={() => void reset()}><Icon name="plus" size={17}/> Bisedë e re</button>
       </nav>
     </header>
@@ -356,13 +359,13 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         {advanced && last && <TestConfiguration configuration={last.configuration} slug={slug} agentConfigured={last.debug.agentConfigured} />}
         <div className="agent-test-log" ref={chatLog} role="log" aria-label="Biseda e provës" aria-live="polite" onScroll={e=>{ const el=e.currentTarget; setShowJump(el.scrollHeight-el.scrollTop-el.clientHeight>120); }}>
           {!messages.length && !pending && !chat.outbox?.length && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti yt.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
-          {(pendingIndex !== null ? messages.slice(0,pendingIndex) : messages).map((entry,index)=><div className="chat-exchange" key={entry.id}>
+          {(pendingIndex !== null ? messages.slice(0,pendingIndex) : messages).map((entry,index)=><div className={`chat-exchange ${renderInspector && inspected?.id === entry.id ? "lab-selected-exchange" : ""}`} key={entry.id}>
             <div className="agent-test-bubble customer"><p>{entry.text}</p>{entry.photo && <span className="chat-file-pill">Foto e simuluar</span>}{entry.attachments.map((a,i)=><span className="chat-file-pill" key={i}>{a.preview?.startsWith("blob:") ? <Image unoptimized width={80} height={80} src={a.preview} alt={a.name}/> : <Icon name="file" size={15}/>} {a.name}</span>)}</div>
             <div className="chat-message-actions customer"><CopyMessage text={entry.text}/>{advanced && <button type="button" className="chat-icon" aria-label="Ndrysho mesazhin" title="Ndrysho mesazhin" disabled={real || busy || voice} onClick={()=>edit(index)}><Icon name="edit" size={16}/></button>}</div>
             {showsReply(messages,index) && <>
             {entry.batchId && <small className="chat-receipt">Përgjigje për {messages.filter(e=>e.batchId===entry.batchId).length} mesazhet e mësipërme</small>}
             <div className="agent-test-bubble agent"><span className="chat-agent-avatar"><Icon name="spark" size={19}/></span><ChatMessage text={entry.result.reply}/></div>
-            <div className="chat-message-actions"><CopyMessage text={entry.result.reply}/>{advanced && <button className="chat-icon" type="button" title="Rigjenero përgjigjen" aria-label="Rigjenero përgjigjen" disabled={real || busy || voice} onClick={()=>void send(index,entry)}><Icon name="refresh" size={16}/></button>}{canSpeak && <button className="chat-icon" type="button" title={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} aria-label={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} onClick={()=>speak(entry)}><Icon name={speaking===entry.id ? "stop" : "volume"} size={16}/></button>}{advanced && entry.result.trainingReceipt && <button type="button" className="chat-train" disabled={busy || voice} onClick={()=>{
+            <div className="chat-message-actions">{renderInspector && <button type="button" className="chat-toolbar-button" aria-pressed={inspected?.id === entry.id} onClick={() => setInspectedId(entry.id)}>Inspekto mesazhin {index + 1}</button>}<CopyMessage text={entry.result.reply}/>{advanced && <button className="chat-icon" type="button" title="Rigjenero përgjigjen" aria-label="Rigjenero përgjigjen" disabled={real || busy || voice} onClick={()=>void send(index,entry)}><Icon name="refresh" size={16}/></button>}{canSpeak && <button className="chat-icon" type="button" title={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} aria-label={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} onClick={()=>speak(entry)}><Icon name={speaking===entry.id ? "stop" : "volume"} size={16}/></button>}{advanced && entry.result.trainingReceipt && <button type="button" className="chat-train" disabled={busy || voice} onClick={()=>{
               const feedback={receipt:entry.result.trainingReceipt!,question:batchEntry(messages,index).text || "[Skedar]",response:entry.result.reply,workflowId:entry.result.workflowId,stepKey:entry.result.nextState.step_key??null}; setTrainingFeedback(feedback);setTrainingRequest(previous=>({key:(previous?.key??0)+1,feedback}));
             }}><Icon name="spark" size={14}/> Përmirëso</button>}</div>
             </>}
@@ -394,7 +397,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
           <p className="agent-test-disclaimer">{real ? "Tekst dhe audio · Për të korrigjuar të dhënat, shkruaj një mesazh të ri. Fshirja nga historiku nuk anulon veprimet reale." : !advanced ? "Foto, skedarë dhe audio · Deri në 3 skedarë, 3 MB secili" : "Enter për dërgim · Shift + Enter për rresht të ri · Foto, PDF, TXT, MD, CSV, JSON · 3 skedarë, 3 MB secili. Skedarët dhe audioja përpunohen nga AI; përdor të dhëna prove."}</p>
         </form>
       </div>
-        {advanced && showDetails && <aside id="agent-test-diagnostics" className="agent-test-debug" aria-label="Detajet e provës">
+        {advanced && !renderInspector && showDetails && <aside id="agent-test-diagnostics" className="agent-test-debug" aria-label="Detajet e provës">
           {chat.outbox?.filter(o => o.error).map(o => <p key={o.id}>{o.error}</p>)}
           {last?.setupNotice && <p className="agent-test-notice" role="status">{last.setupNotice}</p>}
           {last && <MessageRoutingView trace={last.visualWorkflow} state={last.nextState} routing={last.conversationRouting} message={messages.at(-1)?.text} />}
@@ -509,5 +512,5 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         </aside>}
     </div>
     {advanced && <TrainingSession target={{ slug }} feedback={trainingFeedback} request={trainingRequest} memoryHref={`/b/${slug}/agents/memory`} busy={busy || voice} onBusyChange={setTrainingBusy} onChanged={reset} />}
-  </section>;
+  </section>{renderInspector?.(inspected, chat)}</div>;
 }

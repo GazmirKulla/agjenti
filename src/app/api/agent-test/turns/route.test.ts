@@ -67,3 +67,10 @@ it("returns one authoritative group outcome only within the already-authorized p
  const expired=await (await GET(new Request(`http://local.test/api/agent-test/turns?slug=synthetic&stream=${input.streamId}`))).json();
  expect(expired.jobs.map((job:{result:unknown})=>job.result)).toEqual([null,null]);
 });
+
+it("strips stored admin traces when the current user only has business access",async()=>{
+ m.rows=[{id:10,client_request_id:'head',client_sequence:0,status:'sent',expires_at:new Date(Date.now()+60000).toISOString(),result_ciphertext:JSON.stringify({reply:'answer',session:'sealed',labObservation:{trace:[{data:{instructions:'private prompt'}}]}})}];
+ const response=await GET(new Request(`http://local.test/api/agent-test/turns?slug=synthetic&stream=${input.streamId}`));
+ const {jobs}=await response.json();
+ expect(jobs[0].result).toEqual({reply:'answer',session:'sealed'});
+});

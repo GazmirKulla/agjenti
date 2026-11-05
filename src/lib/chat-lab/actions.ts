@@ -96,3 +96,15 @@ export async function runLabTurn(input: { businessId: string; message: string; h
     return { error: "Test execution failed. Check the business configuration and try again. No real actions were performed.", ...(trace.length ? { trace: redactDebug(trace) as TimedTraceEvent[] } : {}) };
   }
 }
+
+export async function loadLabDrafts(businessId: string): Promise<{ drafts: { id: string; name: string }[]; error?: string }> {
+  try {
+    await adminId();
+    if (!validId(businessId)) throw Error();
+    const { data, error } = await createServiceSupabase().from("ai_agents")
+      .select("id,name,configuration_draft,configuration_revision").eq("business_id", businessId).order("name");
+    if (error) throw error;
+    return { drafts: (data ?? []).filter(agent => agent.configuration_draft?.baseRevision === agent.configuration_revision)
+      .map(({ id, name }) => ({ id, name })) };
+  } catch { return { drafts: [], error: "Draftet nuk u ngarkuan. Provo përsëri." }; }
+}
