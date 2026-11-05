@@ -1,6 +1,8 @@
 "use server";
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 
+import { publishedBusinessWorkflow } from "@/lib/workflows/visual/business-workflow";
+
 import { randomUUID } from "node:crypto";
 import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
@@ -37,18 +39,18 @@ export async function loadLabSetup(businessId: string): Promise<{ setup: LabSetu
     await adminId();
     if (!validId(businessId)) throw new Error();
     const db = createServiceSupabase();
-    const [business, products, services, workflows, channels, onboarding] = await Promise.all([
+    const [business, products, services, workflow, channels, onboarding] = await Promise.all([
       db.from("businesses").select("id,name,slug").eq("id", businessId).single(),
       db.from("products").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", true),
       db.from("knowledge_entries").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", true).eq("intent_key", "service"),
-      db.from("workflows").select("id", { count: "exact", head: true }).eq("business_id", businessId),
+      publishedBusinessWorkflow(businessId),
       db.from("instagram_connections").select("username,status").eq("business_id", businessId),
       db.from("business_onboarding").select("answers").eq("business_id", businessId).maybeSingle(),
     ]);
-    if ([business, products, services, workflows, channels, onboarding].some((r) => r.error) || !business.data) throw new Error();
+    if ([business, products, services, channels, onboarding].some((r) => r.error) || !business.data) throw new Error();
     const answers = onboarding.data?.answers;
     const type = answers?.businessType ?? answers?.businessProfile?.businessType;
-    return { setup: { ...business.data, businessType: typeof type === "string" ? type : "Not configured", products: products.count ?? 0, services: services.count ?? 0, workflows: workflows.count ?? 0, channels: channels.data ?? [] } };
+    return { setup: { ...business.data, businessType: typeof type === "string" ? type : "Not configured", products: products.count ?? 0, services: services.count ?? 0, workflows: workflow ? 1 : 0, workflowName: workflow?.name ?? null, channels: channels.data ?? [] } };
   } catch { return { error: "Unable to load business setup. Check access and try again." }; }
 }
 

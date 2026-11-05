@@ -4,7 +4,7 @@ import type { ConversationStatePayload, WorkflowStepDef } from "@/lib/workflows/
 
 export type LabBusiness = { id: string; name: string; slug: string };
 export type LabSetup = LabBusiness & {
-  businessType: string; products: number; services: number; workflows: number;
+  businessType: string; products: number; services: number; workflows: number; workflowName?: string | null;
   channels: { username: string | null; status: string }[];
 };
 export type LabField = { key: string; value: unknown; status: "completed" | "missing" | "optional" };

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ user: vi.fn(), admin: vi.fn(), from: vi.fn(), process: vi.fn() }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), admin: vi.fn(), from: vi.fn(), process: vi.fn(), workflow: vi.fn() }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: mocks.user, isPlatformAdmin: mocks.admin }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: mocks.from }) }));
 vi.mock("@/lib/conversations/process-conversation-message", () => ({ processConversationMessage: mocks.process }));
+vi.mock("@/lib/workflows/visual/business-workflow", () => ({ publishedBusinessWorkflow: mocks.workflow }));
 import { runLabTurn, searchLabBusinesses, loadLabSetup } from "./actions";
 import { emptyState } from "@/lib/workflows/engine";
 import { readTestSession, snapshotTestSession } from "@/lib/agents/test-chat/session";
@@ -10,7 +11,7 @@ import type { TraceObserver } from "@/lib/conversations/trace";
 const id = "11111111-1111-4111-8111-111111111111";
 const other = "22222222-2222-4222-8222-222222222222";
 beforeEach(() => {
-  vi.clearAllMocks(); vi.stubEnv("TOKEN_ENCRYPTION_KEY", "a".repeat(64));
+  vi.clearAllMocks(); mocks.workflow.mockResolvedValue(null); vi.stubEnv("TOKEN_ENCRYPTION_KEY", "a".repeat(64));
   mocks.user.mockResolvedValue({ id: "admin" }); mocks.admin.mockResolvedValue(true);
   const chain = { select: () => chain, eq: () => chain, single: async () => ({ data: { id }, error: null }) };
   mocks.from.mockReturnValue(chain); // No mutation methods: accidental writes fail.
@@ -82,4 +83,31 @@ it("retains a sanitized failure timeline without returning a new state/session",
   if (!("error" in result)) throw new Error("Expected failure");
   expect(result.trace?.at(-1)?.status).toBe("error");
   expect(result.trace?.[0].data?.api_key).toBe("[REDACTED]");
+});
+
+
+describe("ChatLab active workflow summary", () => {
+  function setupContext() {
+    mocks.from.mockImplementation((table: string) => {
+      const result = { data: table === "businesses" ? { id, name: "Business", slug: "business" } : table === "instagram_connections" ? [] : null, count: 0, error: null };
+      const chain = { select: () => chain, eq: vi.fn(() => chain), single: async () => result, maybeSingle: async () => result, then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve) };
+      return chain;
+    });
+  }
+  it("counts the active published visual workflow even with no legacy workflows", async () => {
+    setupContext();
+    mocks.workflow.mockResolvedValue({ name: "Customer journey", active: true, status: "Aktiv" });
+    expect(await loadLabSetup(id)).toMatchObject({ setup: { workflows: 1, workflowName: "Customer journey" } });
+    expect(mocks.workflow).toHaveBeenCalledWith(id);
+    expect(mocks.from.mock.calls.map(([table]) => table)).not.toContain("workflows");
+  });
+  it("reports zero only when the runtime loader finds no active published workflow", async () => {
+    setupContext();
+    expect(await loadLabSetup(id)).toMatchObject({ setup: { workflows: 0, workflowName: null } });
+  });
+  it("reports a load failure rather than a misleading zero when the published version cannot be loaded", async () => {
+    setupContext();
+    mocks.workflow.mockRejectedValue(new Error("Unavailable published version"));
+    expect(await loadLabSetup(id)).toHaveProperty("error");
+  });
 });
