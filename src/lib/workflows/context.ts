@@ -35,6 +35,10 @@ export type SharedContext = {
     };
 };
 export function sharedWorkflowEnabled(businessId: string) {
+    // Infrastructure is available to new businesses without tenant enrollment.
+    // The explicit allowlist mode remains a platform rollback mechanism.
+    if (process.env.SHARED_WORKFLOW_MODE === "disabled") return false;
+    if (process.env.SHARED_WORKFLOW_MODE !== "allowlist") return true;
     return (process.env.SHARED_WORKFLOW_BUSINESS_IDS ?? "").split(",").map(s => s.trim()).includes(businessId);
 }
 export function profileKey(key: string): ProfileKey | null {

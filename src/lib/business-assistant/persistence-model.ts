@@ -11,6 +11,7 @@ export type RecoverablePlan = {
   request: string;
   context?: AssistantUIContext;
   message?: string;
+  configuration?: {planId:string; state:"blocked"|"completed"; completed:string[]; total:number};
   actionPlan?: ActionPlan;
   preview?: Preview;
   target?: { kind: string; id: string; updatedAt?: string; revision?: number };
@@ -35,7 +36,7 @@ export type ConversationView = {
   conversation: StoredConversation; messages: StoredMessage[]; before: number | null; plan: StoredPlan | null;
 };
 export function hasRecoverableWork(plan: RecoverablePlan | null | undefined) {
-  return Boolean(plan && (plan.actionPlan || plan.preview || plan.visualDraft || plan.linearDraft || plan.orderDraft));
+  return Boolean(plan && (plan.configuration?.state === "blocked" || plan.actionPlan || plan.preview || plan.visualDraft || plan.linearDraft || plan.orderDraft));
 }
 
 /** Clarifications may preserve a draft, but an explicitly new objective must not
@@ -48,7 +49,7 @@ export function retainedPlanForReply(prior: RecoverablePlan | undefined, reply: 
  * Display text is untrusted user/model content, never evidence of execution. */
 export function safePlanSnapshot(input: RecoverablePlan): RecoverablePlan {
   const allowed = { version: 1, request: input.request, context: input.context, message: input.message,
-    actionPlan: input.actionPlan, preview: input.preview, target: input.target, visualDraft: input.visualDraft,
+    configuration: input.configuration, actionPlan: input.actionPlan, preview: input.preview, target: input.target, visualDraft: input.visualDraft,
     linearDraft: input.linearDraft, orderDraft: input.orderDraft };
   const json = JSON.stringify(allowed, (key, value) =>
     /^(token|pendingToken|publicationApproval|authorization|password|api_key|secret|credentials|signedUrl)$/i.test(key) ? undefined : value);

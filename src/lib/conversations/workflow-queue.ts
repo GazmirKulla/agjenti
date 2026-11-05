@@ -1,3 +1,4 @@
+import { registerAutomaticLocalOrder } from "@/lib/orders/automatic";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { encryptSecret } from "@/lib/crypto/tokens";
@@ -50,6 +51,7 @@ export async function prepareWorkflowReply(job: WorkflowJob, conversationId: str
     const { error } = await createServiceSupabase().rpc("prepare_workflow_reply", { p_id: job.id, p_token: job.lease_token, p_conversation: conversationId, p_revision: revision, p_state: turn.nextState, p_workflow: turn.workflowId, p_reply: turn.reply, p_response: turn.previousResponseId, p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });
     if (error)
         throw new Error("State commit failed");
+    job.conversation_id = conversationId;
     job.reply = turn.reply;
     job.status = "prepared";
 }
@@ -60,6 +62,10 @@ async function sendPrepared(job: WorkflowJob) {
     if (error || !connection || connection.status !== "connected")
         throw new Error("Connection unavailable");
     const token = decryptSecret(connection.access_token_ciphertext);
+    // Prepared jobs are durable. Recovery runs this hook again, and the order
+    // receipt prevents duplicate creation even after a lost network response.
+    if (job.conversation_id && job.operation_kind !== "staff" && job.operation_kind !== "test")
+        await registerAutomaticLocalOrder(job.business_id, job.conversation_id);
     const { data: claimed, error: claimError } = await db.rpc("begin_workflow_send", { p_id: job.id, p_token: job.lease_token });
     if (claimError)
         throw new Error("Send lease lost");

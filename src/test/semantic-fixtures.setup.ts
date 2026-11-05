@@ -5,7 +5,7 @@
  * boundaries; the opt-in real-model suite checks language interpretation.
  * Never import these fixtures from application code.
  */
-import { vi, expect, afterEach } from "vitest";
+import { vi, expect, afterEach, beforeEach } from "vitest";
 import semantics from "./fixtures/semantic.json";
 import common from "./fixtures/common-semantics.json";
 import reviews from "./fixtures/review.json";
@@ -55,3 +55,6 @@ vi.mock("@/lib/conversations/fragment-observation", () => ({
 vi.mock("@/lib/capabilities/workflow-semantics", () => ({
   reviewWorkflowSemantics: vi.fn(async () => ({ capabilityKeys: [], evidence: [] })),
 }));
+
+// Legacy-mode suites explicitly exercise the supported rollout rollback.
+beforeEach(() => vi.stubEnv("SHARED_WORKFLOW_MODE", "allowlist"));

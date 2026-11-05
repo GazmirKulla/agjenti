@@ -104,3 +104,10 @@ it("updates only the reassessed capability and preserves unrelated steps and unr
   expect(updated.steps[1]).toMatchObject({ capabilityReadiness: "ready", readiness: "BLOCKED", missingConfiguration: [] });
   expect(updated.steps[1]).not.toHaveProperty("approved");
 });
+it("offers assistant configuration for a new business without requiring an inactive record",()=>{
+  const html=renderToStaticMarkup(h(ActionPlanReview,{plan:{id:"new",request:"Configure replies",assessedAt:"now",questions:["Cilat produkte ofron?"],assumptions:[],steps:[{...step,readiness:"NEEDS_CONFIGURATION",capabilityReadiness:"needs_setup",missingConfiguration:["Shto njohuritë"]}]},businessName:"Biznes i ri",slug:"new",busy:false,onRequest:vi.fn(),onExecute:vi.fn(),onAssessment:vi.fn()}));
+  expect(html).toContain(">Konfiguro</button>");
+  expect(html).toContain("Hap aktivizimin manual");
+  expect(html.match(/Cilat produkte ofron\?/g)).toHaveLength(1);
+  expect(html).not.toContain("Nuk u gjet njohuri joaktive");
+});

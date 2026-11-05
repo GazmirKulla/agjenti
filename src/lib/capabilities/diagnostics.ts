@@ -12,6 +12,8 @@ export type ReadinessFinding = {
   remediation?: string;
 };
 const requirements: Record<string, string> = {
+  local_order_automation: "Kërko nga asistenti konfigurimin e regjistrimit lokal të porosive pas konfirmimit të klientit.",
+  local_order_executor_unavailable: "Shërbimi i porosive lokale kërkon përditësimin e platformës.",
   active_products: "Shto ose aktivizo produkte me çmim, monedhë dhe lloj të vlefshëm në katalog.",
   active_knowledge: "Shto ose aktivizo njohuritë e biznesit.",
   candidate_order_flow: "Konfiguro një rrjedhë porosie në draftin që po shqyrton.",

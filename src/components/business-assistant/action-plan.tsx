@@ -61,7 +61,8 @@ export function ApprovalCard({ step, decision, busy = false, feedback, onDecisio
 }
 
 /** Planning preferences may be durable; they are never execution authorization. */
-export function ActionPlanReview({ plan, busy, onRequest, slug, businessName, onAssessment, initialPreferences, onSavePreferences, recoveryBlocked = false }: {
+export function ActionPlanReview({ plan, busy, onRequest, slug, businessName, onAssessment, initialPreferences, onSavePreferences, onExecute, recoveryBlocked = false }: {
+  onExecute?: (message: string) => void;
   plan: ActionPlan; busy: boolean; onRequest: (message: string) => void;
   slug?: string; businessName?: string; onAssessment?: (assessment: CapabilityAssessment) => void;
   initialPreferences?: PlanningPreferences; onSavePreferences?: (value: PlanningPreferences) => Promise<void>; recoveryBlocked?: boolean;
@@ -113,7 +114,7 @@ export function ActionPlanReview({ plan, busy, onRequest, slug, businessName, on
         </ol>
         </details>}
         {focused ? <ApprovalCard key={focused.id} step={focused} decision={decisions[focused.id]} feedback={outcomes[focused.requiredCapability ?? ""]} busy={busy}
-          onConfigure={!recoveryBlocked && slug && onAssessment && focused.supported && (focused.requiredCapability === "product.search" || focused.requiredCapability === "knowledge.answer") &&
+          onConfigure={onExecute && !recoveryBlocked && focused.supported ? () => onExecute(`Konfiguro dhe aktivizo këtë hap për biznesin: ${focused.requestedBehavior}. Kërkesa e plotë për kontekst: ${plan.request}. Kryej vetëm konfigurimet që mbështeten nga informacioni i dhënë dhe pyet për atë që mungon.`) : !recoveryBlocked && slug && onAssessment && focused.supported && (focused.requiredCapability === "product.search" || focused.requiredCapability === "knowledge.answer") &&
             (["NEEDS_CONFIGURATION", "DISABLED", "BLOCKED"].includes(focused.readiness) || outcomes[focused.requiredCapability]?.unverified)
             ? () => setConfiguring(focused.requiredCapability as "product.search" | "knowledge.answer") : undefined}
           onNext={next ? () => { setSelectedId(next.id); section.current?.focus(); } : undefined}
@@ -121,6 +122,7 @@ export function ActionPlanReview({ plan, busy, onRequest, slug, businessName, on
           onRequest={message => onRequest(`Përditëso vetëm planin për këtë kërkesë, pa ruajtur ose aktivizuar asgjë: ${plan.request}\nHapi: ${focused.requestedBehavior}\nNdryshimi që kërkoj: ${message}`)} /> : <p>Nuk ka ende hapa. Sqaro rezultatin që dëshiron në chat.</p>}
         <p role="status" className="action-plan-note">{included} të përfshirë · {omitted} të lënë jashtë · Asgjë e publikuar</p>
         <details><summary>Rishiko planin</summary>
+          {onExecute && slug && onAssessment && focused && (focused.requiredCapability === "product.search" || focused.requiredCapability === "knowledge.answer") && <button type="button" disabled={busy || recoveryBlocked} onClick={()=>setConfiguring(focused.requiredCapability as "product.search" | "knowledge.answer")}>Hap aktivizimin manual</button>}
           {plan.assumptions.length > 0 && <><strong>Supozimet</strong><ul>{plan.assumptions.map((a, index) => <li key={index}>{a}</li>)}</ul></>}
           <div className="action-plan-actions">
             <button type="button" disabled={busy} onClick={() => void saveDecisions(Object.fromEntries(plan.steps.map(step => [step.id, "rejected"])))}>Lëre planin për më vonë</button>
@@ -128,6 +130,6 @@ export function ActionPlanReview({ plan, busy, onRequest, slug, businessName, on
           </div>
         </details>
       </>}
-    <p className="action-plan-note">{onSavePreferences ? "Zgjedhjet ruhen si preferenca planifikimi, jo si autorizime. " : "Zgjedhjet nuk ruhen pas ringarkimit ose një plani të ri. "}Publikimi mbetet veprim më vete te Workflow Designer.</p>
+    <p className="action-plan-note">{onSavePreferences ? "Zgjedhjet ruhen si preferenca planifikimi, jo si autorizime. " : "Zgjedhjet nuk ruhen pas ringarkimit ose një plani të ri. "}Asistenti mund ta kryejë konfigurimin kur ia kërkon; editori manual mbetet i disponueshëm.</p>
   </section>;
 }

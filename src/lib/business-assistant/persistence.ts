@@ -1,3 +1,4 @@
+import { readConfigurationProgress } from "@/lib/actions/operations/plans";
 import { bearerClient } from "@/lib/auth/request";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -75,6 +76,7 @@ export async function reassessPlan(access: Access, plan: StoredPlan | null) {
   if (!plan) return { plan: null, recovery: { verified: true, message: "" } };
   const snapshot = safePlanSnapshot(plan.snapshot);
   try {
+    if (snapshot.configuration) snapshot.configuration = await readConfigurationProgress(access.businessId,access.userId,snapshot.configuration.planId,access.accessToken);
     if (snapshot.context) await loadSelectedContext(access, parseUIContext(snapshot.context));
     for (const id of snapshot.context?.selectedEntityIds ?? []) {
       await loadSelectedContext(access, { page: "products", entryPoint: "contextual", entityType: "product", entityId: id });
@@ -165,6 +167,7 @@ export async function persistedTurn(
       ...(ticket?.before && targetKind && ["product", "service", "knowledge", "agent", "booking", "profile"].includes(targetKind) ? { target: { kind: targetKind, id: ticket.id,
         updatedAt: typeof ticket.before.updated_at === "string" ? ticket.before.updated_at : undefined,
         revision: typeof ticket.before.revision === "number" ? ticket.before.revision : undefined } } : {}),
+      ...(data.configuration ? {configuration:data.configuration} : {}),
       ...(data.workflow?.proposed ? { visualDraft: { graph: data.workflow.proposed, revision: data.workflow.workspace.revision } } : {}),
       ...(ticket?.action.startsWith("linear_") && ticket.before ? { linearDraft: {
         productId: ticket.id, definition: ticket.values.definition, scope: ticket.values.scope, source: ticket.values.source,

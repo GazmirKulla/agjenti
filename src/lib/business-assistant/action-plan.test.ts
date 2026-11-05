@@ -117,10 +117,10 @@ it("keeps agency leads, quotes and customer registration unsupported alongside a
   expect(result.steps.slice(0, 3).every(s => !s.title.includes(".create") && !s.title.includes(".capture"))).toBe(true);
 });
 
-it("names automatic order creation without substituting order preparation or enabling it", async () => {
+it("keeps local creation separate from preparation and requires its explicit policy", async () => {
   respond(["order.create", "order.prepare"]);
   const result = await plan("Dua krijimin automatik të porosisë dhe përgatitjen për stafin");
-  expect(result.steps[0]).toMatchObject({ title: "Krijimi automatik i porosisë", requiredCapability: "order.create", readiness: "UNSUPPORTED", supported: false, approvalRequired: false });
+  expect(result.steps[0]).toMatchObject({ title: "Krijimi automatik i porosisë", requiredCapability: "order.create", readiness: "NEEDS_CONFIGURATION", supported: true, approvalRequired: true });
   expect(result.steps[1]).toMatchObject({ requiredCapability: "order.prepare", readiness: "READY", supported: true });
 });
 

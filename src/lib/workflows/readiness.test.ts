@@ -18,3 +18,9 @@ it("reports missing migrations without exposing internal errors or secrets", asy
   const result = await loadWorkflowReadiness("pilot");
   expect(result.ready).toBe(false); expect(JSON.stringify(result)).not.toContain("private SQL");
 });
+it("makes runtime available to a new business without manual enrollment", async () => {
+  vi.stubEnv("SHARED_WORKFLOW_MODE", "all"); vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "older-business");
+  expect((await loadWorkflowReadiness("new-business")).ready).toBe(true);
+  vi.stubEnv("SHARED_WORKFLOW_MODE", "disabled");
+  expect((await loadWorkflowReadiness("new-business")).ready).toBe(false);
+});

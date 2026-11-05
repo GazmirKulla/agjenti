@@ -5,7 +5,7 @@ import { localInstant, validDate, validTime, uuid } from "@/lib/calendar/model";
 
 export const actions = [
   "operation", "operation_plan", "operation_resume",
-  "automation_plan",
+  "automation_plan", "configuration_apply", "configuration_resume",
   "orderflow_load",
   "orderflow_read",
   "orderflow_create",
@@ -128,14 +128,14 @@ export function readProposal(input: unknown): Proposal {
     throw new AssistantError("Përgjigjja e asistentit nuk është e vlefshme.");
   if(p.choices!==undefined&&(!Array.isArray(p.choices)||p.choices.length>4||p.choices.some(c=>typeof c!=="string"||!c.trim()||c.length>160))) throw new AssistantError("Zgjedhje të pavlefshme.");
   if (p.action === "product_import" && (p.id !== null || p.changes.length > 1)) throw new AssistantError("Importi përdor vetëm CSV-në ngarkuar.");
-  const allowed = p.action === "operation_plan" ? ["steps"] : p.action === "operation_resume" ? ["plan_id"] : p.action === "product_import" ? ["fields"] : fields[p.action.split("_")[0]] ?? [];
+  const allowed = ["operation_plan", "configuration_apply"].includes(p.action) ? ["steps"] : ["operation_resume", "configuration_resume"].includes(p.action) ? ["plan_id"] : p.action === "product_import" ? ["fields"] : fields[p.action.split("_")[0]] ?? [];
   const seen = new Set<string>();
   for (const change of p.changes) {
     if (
       !change ||
       !allowed.includes(change.field) ||
       typeof change.value !== "string" ||
-      change.value.length > (["operation", "operation_plan", "workflow_draft", "linear_draft"].includes(p.action) || p.action.startsWith("orderflow_") ? 24000 : 8000) ||
+      change.value.length > (["operation", "operation_plan", "configuration_apply", "configuration_resume", "workflow_draft", "linear_draft"].includes(p.action) || p.action.startsWith("orderflow_") ? 24000 : 8000) ||
       seen.has(change.field)
     )
       throw new AssistantError("Asistenti propozoi një fushë të pavlefshme.");

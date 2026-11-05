@@ -231,3 +231,17 @@ describe("W4 staff reconciliation", () => {
     expect(m.submit).not.toHaveBeenCalled();
   });
 });
+
+it("registers an agent order with no owner identity and never calls external dispatch", async () => {
+  const { submitAgentConfirmedOrder } = await import("./submission");
+  m.rpc.mockResolvedValueOnce({data:{orderId,attemptId:"automatic",status:"local_only",dispatch:false}});
+  expect(await submitAgentConfirmedOrder({businessId:args.businessId,conversationId:args.conversationId})).toMatchObject({status:"local_only",dispatch:false});
+  expect(m.rpc).toHaveBeenCalledWith("submit_agent_confirmed_order",expect.not.objectContaining({p_user:expect.anything()}));
+  expect(m.submit).not.toHaveBeenCalled();
+});
+it("fails closed if an agent-order response unexpectedly grants external dispatch",async()=>{
+  const { submitAgentConfirmedOrder } = await import("./submission");
+  m.rpc.mockResolvedValueOnce({data:{orderId,attemptId:"automatic",status:"pending_reconciliation",dispatch:true,payload:{}}});
+  await expect(submitAgentConfirmedOrder({businessId:args.businessId,conversationId:args.conversationId})).rejects.toThrow();
+  expect(m.submit).not.toHaveBeenCalled();
+});

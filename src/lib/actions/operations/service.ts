@@ -1,3 +1,11 @@
+import { loadSetupStatus } from "@/lib/setup/status";
+import { setupGateMessage } from "@/lib/setup/model";
+import { executeAgentTestTurn } from "@/lib/agents/test-chat/execute-turn";
+import { createIsolatedExecution, runWithExecution } from "@/lib/runtime/execution-context";
+import { loadAllowedModules } from "@/lib/dashboard/modules/entitlements";
+import { prepareWorkflow, executeWorkflow } from "@/lib/business-assistant/workflow-service";
+import { decryptSecret } from "@/lib/crypto/tokens";
+import type { Ticket } from "@/lib/business-assistant/service";
 import { prepareCommunicationConfiguration, saveCommunicationConfiguration } from "@/lib/agents/communication-configuration";
 import { prepareProductRemoval, executeProductRemoval, type RemovalRow } from "@/lib/products/removal";
 import { OperationError } from "./error";
@@ -46,6 +54,25 @@ export async function prepareOperation(businessId: string, userId: string, key: 
   let snapshot: Record<string, unknown> = {};
   let subject = actor.business.name;
   if (operation.startsWith("product.") && operation !== "product.field" && actor.business.catalog_source === "external") throw new OperationError("Ky katalog menaxhohet nga burimi i jashtëm.");
+  if (operation === "business.verify") {
+    if (!Array.isArray(input.messages) || !input.messages.length || input.messages.length > 8 || input.messages.some(m => typeof m !== "string" || !m.trim() || m.length > 2000)) throw new OperationError("Prova kërkon 1–8 mesazhe të vlefshme.");
+  }
+  if (operation === "workflow.configure") {
+    if (!["draft","publish"].includes(String(input.mode)) || typeof input.request !== "string" || !input.request.trim() || input.request.length > 12000 || input.mode === "draft" && !Array.isArray(input.operations) || input.mode === "publish" && input.operations !== undefined) throw new OperationError("Konfigurim workflow i pavlefshëm.");
+    const result = await prepareWorkflow({businessId,userId,accessToken,modules:await loadAllowedModules(businessId),catalogSource:actor.business.catalog_source}, {
+      action: input.mode === "draft" ? "workflow_draft" : "workflow_publish", id:null, message:input.request, requestedText:input.request,
+      changes: input.mode === "draft" ? [{field:"operations",value:JSON.stringify(input.operations)}] : [],
+    });
+    if (!result.token || !result.preview) throw new OperationError(result.message || "Workflow-i nuk kaloi kontrollet e konfigurimit.");
+    snapshot = {ticket:JSON.parse(decryptSecret(result.token))};
+    return {version:1,key:operation,input,snapshot,requestId:randomUUID(),preview:result.preview};
+  }
+  if (operation === "business.orders") {
+    if (typeof input.enabled !== "boolean") throw new OperationError("Specifiko gjendjen e porosive lokale.");
+    const current = await createServiceSupabase().from("business_automation_policies").select("revision,local_orders").eq("business_id",businessId).maybeSingle();
+    if (current.error) throw new OperationError("Shërbimi i porosive automatike nuk është ende i disponueshëm.");
+    snapshot = { revision: current.data?.revision ?? 0, enabled: current.data?.local_orders ?? false };
+  }
   if (operation === "product.remove") {
     const batch = await prepareProductRemoval(businessId, userId, input);
     return { version: 1, key: operation, input: { scope: "ids", ids: batch.rows.map(row => row.id) },
@@ -102,6 +129,10 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     snapshot = { enabled: current.data?.enabled ?? false };
   } else if (operation === "business.autoreply") {
     if (typeof input.enabled !== "boolean") throw Error("Specifiko Po ose Jo për përgjigjet automatike.");
+    if (input.enabled && !actor.business.auto_reply) {
+      const blocker = setupGateMessage(await loadSetupStatus(businessId));
+      if (blocker) throw new OperationError(blocker);
+    }
     snapshot = { auto_reply: actor.business.auto_reply };
   } else if (operation.startsWith("conversation.") || operation.startsWith("order.")) {
     const id = input.id ?? input.conversationId;
@@ -156,6 +187,27 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
   if (key.startsWith("product.") && key !== "product.field" && actor.business.catalog_source === "external") throw new OperationError("Ky katalog menaxhohet nga burimi i jashtëm.");
   if (key === "product.remove") return executeProductRemoval(businessId, userId, before.rows as RemovalRow[]);
   if (key === "product.delete" || key === "product.archive" || key === "product.restore") return changeProductLifecycle({ businessId, userId, id: String(input.id), expected: String(before.updated_at), operation: key.split(".")[1] as "delete" | "archive" | "restore" });
+  if (key === "business.verify") {
+    let session: string | undefined;
+    for (const message of input.messages as string[]) {
+      const result = await runWithExecution(createIsolatedExecution(), () => executeAgentTestTurn({slug:actor.business.slug,message,session},userId));
+      if ("error" in result) throw new OperationError(result.error);
+      session = result.session ?? undefined;
+      if (result.setupTestPassed) return {message:"Prova e izoluar e konfigurimit kaloi. Nuk u krijua porosi reale.",path:"agents/test"};
+    }
+    throw new OperationError("Prova nuk arriti rezultatin e kërkuar. Konfigurimi u ruajt, por përgjigjet automatike nuk u aktivizuan.");
+  }
+  if (key === "workflow.configure") {
+    const ticket = before.ticket as Ticket;
+    if (ticket.businessId !== businessId || ticket.userId !== userId || ticket.expires <= Date.now()) throw new OperationError("Autorizimi i workflow-t ka skaduar ose nuk përputhet.");
+    const result = await executeWorkflow({businessId,userId,modules:await loadAllowedModules(businessId),catalogSource:actor.business.catalog_source},ticket);
+    return {...result,path:"workflows"};
+  }
+  if (key === "business.orders") {
+    const result = await db.rpc("configure_business_automation", {p_business:businessId,p_user:userId,p_enabled:input.enabled,p_revision:before.revision});
+    if (result.error || !Number.isInteger(result.data)) throw new OperationError("Leja e porosive ndryshoi ose nuk u ruajt.");
+    return {message: input.enabled ? "Regjistrimi lokal pas konfirmimit të klientit u autorizua." : "Regjistrimi automatik u çaktivizua.",path:"orders"};
+  }
   if (key === "product.create") checked(await createProduct(actor, productForm(input)));
   else if (key === "knowledge.save") {
     const values = { is_active: true, ...before, ...input };
@@ -164,6 +216,7 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
     form.set("is_active", values.is_active ? "on" : "false");
     if (input.id) { form.set("id", String(input.id)); form.set("updated_at", String(before.updated_at)); checked(await saveKnowledgeEntry(actor, form)); }
     else checked(await createKnowledgeEntry(actor, form, prepared.requestId));
+    return { message: "Njohuria u ruajt.", path: "knowledge", id: input.id ? String(input.id) : prepared.requestId };
   }
   else if (key === "service.save") {
     const form = serviceForm({ is_active: false, booking_enabled: false, ...before, ...input });
@@ -223,7 +276,7 @@ export async function executeOperation(businessId: string, userId: string, prepa
   const claim = await db.rpc("claim_business_operation", { p_id: prepared.requestId, p_business: businessId, p_user: userId, p_operation: prepared.key });
   if (claim.error || !claim.data) throw Error("Veprimi nuk u rezervua për ekzekutim.");
   if (!claim.data.execute) {
-    if (claim.data.state === "completed" && claim.data.result) return claim.data.result as { message: string; path: string };
+    if (claim.data.state === "completed" && claim.data.result) return claim.data.result as { message: string; path: string; id?: string };
     throw Error("Ky veprim është në proces ose rezultati është i pasigurt. Kontrollo gjendjen para një propozimi tjetër.");
   }
   try {

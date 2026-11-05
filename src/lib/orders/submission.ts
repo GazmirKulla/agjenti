@@ -51,6 +51,13 @@ function isReceipt(value: unknown): value is SubmissionReceipt {
 
 /** Server-owned state only: the POST body cannot supply prices, product IDs or intent keys. */
 export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string; expectedRevision?: number }): Promise<SubmissionReceipt> {
+  return submitOrder(input);
+}
+/** Server runtime entry point. No owner identity and no external dispatch. */
+export async function submitAgentConfirmedOrder(input: {businessId: string; conversationId: string; expectedRevision?: number}): Promise<SubmissionReceipt> {
+  return submitOrder({...input,userId:null});
+}
+async function submitOrder(input: {businessId: string; conversationId: string; userId: string | null; expectedRevision?: number}): Promise<SubmissionReceipt> {
   assertBusinessEffectAllowed("order.create");
   if (isIsolatedExecution()) refuseIsolatedEffect("order.create");
   const db = createServiceSupabase();
@@ -104,13 +111,16 @@ export async function submitConfirmedOrder(input: { businessId: string; conversa
   if (!(await hasSubmissionWorkflow(businessId, state))) fail("workflow_not_ready");
   // The transaction rechecks actor, catalog, modules and the exact source snapshot
   // under the same conversation/state locks used by the inbound queue.
-  const { data, error } = await db.rpc("submit_confirmed_order", {
+  const { data, error } = userId === null ? await db.rpc("submit_agent_confirmed_order", {
+    p_business: businessId, p_conversation: conversationId, p_revision: row.revision, p_collected: row.collected, p_order: state,
+  }) : await db.rpc("submit_confirmed_order", {
     p_business: businessId, p_user: userId, p_conversation: conversationId, p_revision: row.revision,
     p_collected: row.collected, p_order: state, p_enforce_modules: moduleEnforcementEnabled(businessId),
   });
   if (error || !isReceipt(data)) fail(error?.message ?? "write_failed");
   const receipt = data;
   if (!receipt.dispatch) return receipt;
+  if (userId === null) fail("unexpected_dispatch");
   // PENDING_RECONCILIATION was persisted before permission to send was returned.
   // Crash, response loss or concurrent replay cannot acquire permission again.
   let result;

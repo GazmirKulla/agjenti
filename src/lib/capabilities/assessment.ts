@@ -62,11 +62,16 @@ async function assessKnownCapability(definition: CapabilityDefinition, businessI
     if (result.error) throw new Error("Nuk u verifikua konfigurimi i njohurive.");
     return statusFor(definition, modules, [], ["knowledge_entries: active records are queried server-side"], result.count ? [] : ["active_knowledge"]);
   }
-  if (["product.search", "product.recommend", "order.prepare"].includes(definition.key)) {
+  if (["product.search", "product.recommend", "order.prepare", "order.create"].includes(definition.key)) {
     const result = await countActive(db, "products", businessId, { is_active: true });
     if (result.error) throw new Error("Nuk u verifikua konfigurimi i katalogut.");
     const missing = result.count ? [] : ["active_products"];
-    if (definition.key === "order.prepare" && !(await hasOrderConfiguration(businessId, candidate))) missing.push(candidate ? "candidate_order_flow" : "published_order_flow");
+    if (["order.prepare", "order.create"].includes(definition.key) && !(await hasOrderConfiguration(businessId, candidate))) missing.push(candidate ? "candidate_order_flow" : "published_order_flow");
+    if (definition.key === "order.create") {
+      const policy = await db.from("business_automation_policies").select("local_orders").eq("business_id",businessId).maybeSingle();
+      if (policy.error) missing.push("local_order_executor_unavailable");
+      else if (!policy.data?.local_orders) missing.push("local_order_automation");
+    }
     return statusFor(definition, modules, [], ["products: active records are queried server-side",
       ...(definition.key === "order.prepare" ? [candidate ? "candidate configuration only; execution requires a published or pinned workflow" : "order workflow checked separately from catalog visibility"] : [])], missing);
   }

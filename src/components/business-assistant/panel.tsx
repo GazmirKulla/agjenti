@@ -63,6 +63,7 @@ function MessageCopy({ text }: { text: string }) {
   );
 }
 type Result = {
+  configuration?: import("@/lib/business-assistant/service").PlanResult["configuration"];
   configurationEffect?: import("@/lib/agents/configuration-contract").AgentConfigurationEffect;
   briefing?: import("@/lib/business-assistant/briefing-model").Briefing;
   persistence?: ConversationView;
@@ -189,7 +190,7 @@ export function BusinessAssistant({
     previousMaterials.current = null;
     lastContext.current = snapshot?.context ? assistantContextKey(slug, snapshot.context) : "";
     setRequestContext(snapshot?.context ?? null);
-    setResult(snapshot ? { message: snapshot.message, preview: snapshot.preview, actionPlan: snapshot.actionPlan } : null);
+    setResult(snapshot ? { message: snapshot.message, preview: snapshot.preview, actionPlan: snapshot.actionPlan, configuration: snapshot.configuration } : null);
     setRecovered(hasRecoverableWork(snapshot));
   }, [archive.restoration, slug]);
   useEffect(() => {
@@ -303,9 +304,9 @@ export function BusinessAssistant({
     if (data.persistence) archive.accept(data.persistence, Boolean(data.recovered));
     return data;
   }
-  async function analyze(event?: React.FormEvent) {
+  async function analyze(event?: React.FormEvent, requestText?: string) {
     event?.preventDefault();
-    if (locked.current || (!text.trim() && !materials.length)) return;
+    if (locked.current || (!(requestText ?? text).trim() && !materials.length)) return;
     locked.current = true;
     archive.inFlight.current = true;
     setWorkOpen(false);
@@ -313,7 +314,7 @@ export function BusinessAssistant({
     setSending(true);
     setError("");
     setResult(null);
-    const input = text.trim();
+    const input = (requestText ?? text).trim();
     setText("");
     setOutgoing(input || null);
     const contextKey = assistantContextKey(slug, context);
@@ -671,7 +672,7 @@ export function BusinessAssistant({
           {result?.choices?.length ? <div className="assistant-quick-actions">{result.choices.map(choice=><button type="button" key={choice} disabled={Boolean(busy)} onClick={()=>{setMode("text");setText(choice);}}>{choice}</button>)}</div> : null}
           {result?.productImport && <ProductCsvImport key={result.productImport.token} slug={slug} initialSource={result.productImport} />}
           {result?.actionPlan && <ActionPlanReview key={`${result.actionPlan.id}:${archive.restoration}`} plan={result.actionPlan} slug={slug} businessName={businessName} busy={Boolean(busy)}
-            initialPreferences={archive.view?.plan?.preferences} onSavePreferences={archive.view?.plan ? archive.savePreferences : undefined}
+            onExecute={value=>void analyze(undefined,value)} initialPreferences={archive.view?.plan?.preferences} onSavePreferences={archive.view?.plan ? archive.savePreferences : undefined}
             recoveryBlocked={recovered && !archive.view?.recovery?.verified} onAssessment={assessment => {
             const planId = result.actionPlan!.id;
             setResult(current => current?.actionPlan?.id === planId ? { ...current, actionPlan: refreshPlanCapability(current.actionPlan, assessment) } : current);
@@ -692,7 +693,13 @@ export function BusinessAssistant({
           )}
           {(result?.preview || recovered && archive.view?.plan) && <button type="button" className="assistant-secondary"
             disabled={Boolean(busy) || archive.loading} onClick={() => void closeProposal()}>Mbyll propozimin pa e zbatuar</button>}
-          {result?.saved && (
+          {result?.configuration && <section className="assistant-work-detail" aria-label="Progresi i konfigurimit">
+            <strong>{result.configuration.state === "completed" ? "Konfigurimi përfundoi" : "Konfigurimi kërkon vazhdim"}</strong>
+            <p>{result.configuration.completed.length}/{result.configuration.total} hapa të përfunduar</p>
+            <ul>{result.configuration.completed.map((step,index)=><li key={index}>{step}</li>)}</ul>
+            {result.configuration.state === "blocked" && <button type="button" disabled={Boolean(busy)} onClick={()=>void analyze(undefined,`Vazhdo konfigurimin ${result.configuration!.planId} brenda kërkesës së ruajtur. Mos përsërit hapat e kryer.`)}>Vazhdo me asistentin</button>}
+          </section>}
+          {result?.saved && !result.configuration && (
             <div className="assistant-success" role="status">
               <Icon name="check" size={22} />
               <div>

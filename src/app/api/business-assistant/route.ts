@@ -20,7 +20,7 @@ import { briefingAnswer } from "@/lib/business-assistant/briefing-model";
 import { dashboardLanguage } from "@/lib/dashboard/language/core";
 import { revalidatePath } from "next/cache";
 export const runtime = "nodejs";
-export const maxDuration = 90;
+export const maxDuration = 300;
 const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 async function readJson(request: Request) {

@@ -16,3 +16,15 @@ export async function operationActor(businessId: string, expectedUserId?: string
   if (member.error || admin.error || business.error || !business.data || !member.data && !admin.data) throw Error("Nuk ke qasje në këtë biznes.");
   return { userId: user.id, business: business.data };
 }
+
+/** Automatic configuration is owner-scoped even where a manual surface permits staff. */
+export async function configurationActor(businessId: string, userId: string, accessToken?: string) {
+  const actor = await operationActor(businessId, userId, accessToken);
+  const db = createServiceSupabase();
+  const [member, admin] = await Promise.all([
+    db.from("business_users").select("role").eq("business_id", businessId).eq("user_id", userId).maybeSingle(),
+    db.from("platform_admins").select("user_id").eq("user_id", userId).maybeSingle(),
+  ]);
+  if (member.error || admin.error || member.data?.role !== "owner" && !admin.data) throw Error("Vetëm pronari ose administratori mund të konfigurojë automatikisht biznesin.");
+  return actor;
+}

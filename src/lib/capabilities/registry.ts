@@ -64,6 +64,11 @@ export const capabilityRegistry: Record<string, CapabilityDefinition> = {
     approvalPolicy: "none",
     executorId: "catalog.product_recommend",
   },
+  "order.create": {
+    key: "order.create", description: "Regjistron porosinë brenda biznesit pas konfirmimit të klientit. Aktualisht një produkt me sasi një; pa dërgim të jashtëm, pagesë ose transport.",
+    category: "orders", inputSchema: {conversationId: "uuid"}, requiredModules: ["products","orders","workflows"], requiredIntegrations: [],
+    risk: "write", approvalPolicy: "confirmation", executorId: "conversation.local_order_creation",
+  },
   "order.prepare": {
     key: "order.prepare",
     description: "Përgatit dhe konfirmon të dhënat e porosisë për stafin; nuk krijon ose dërgon porosi.",

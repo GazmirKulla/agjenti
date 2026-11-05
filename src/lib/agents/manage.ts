@@ -21,5 +21,5 @@ export async function saveManagedAgent(businessId: string, userId: string, propo
   const result = await createServiceSupabase().rpc("save_managed_agent", { p_business: businessId, p_user: userId,
     p_id: proposal.id, p_before: proposal.before, p_active: proposal.active, p_values: proposal.values });
   if (result.error || result.data !== proposal.id) throw Error(result.error?.message === "agent_limit_reached" ? "U arrit limiti i agjentëve të biznesit." : "Agjenti ndryshoi ose nuk u ruajt. Rishqyrto propozimin.");
-  return { message: "Konfigurimi i agjentit u ruajt.", path: "agents" };
+  return { message: "Konfigurimi i agjentit u ruajt.", path: "agents", id: proposal.id };
 }
