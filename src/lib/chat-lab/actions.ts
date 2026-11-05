@@ -82,7 +82,7 @@ export async function runLabTurn(input: { businessId: string; message: string; h
     const externalActions = result.externalActions ?? snapshotExternalActions();
     trace.push({ stage: "tools", label: "External actions disabled", status: "skipped", elapsedMs: Date.now() - start, data: { policy: "No customer sends, database mutations, orders, bookings, payments or business webhooks. Isolated adapters report SIMULATED, UNVERIFIED, BLOCKED or UNSUPPORTED — never a real write.", externalActions } });
     trace.push({ stage: "overview", label: "Response finalized", elapsedMs: Date.now() - start, data: { response: result.reply, source: result.debug.source } });
-    const workflow = trace.find((event) => event.stage === "workflow");
+    const workflow = [...trace].reverse().find((event) => event.stage === "workflow" && event.label === "Workflow resolved" && event.status !== "error" && event.status !== "skipped");
     const fields = workflowFields(result.nextState, (workflow?.data?.steps ?? []) as WorkflowStepDef[]);
     const warnings = [
       ...(result.debug.fallbackReason ? [`Fallback: ${result.debug.fallbackReason}`] : []),

@@ -106,7 +106,7 @@ export function ChatLab() {
     customer: { id: null, ...current.customer, username: null, email: null, channel: "admin_chat_lab" },
     intent: { current: intentOf(latest), previous: intentOf(turns.at(-2)?.result) },
     selection: { product: latest?.productName ?? null, productId: current.product_id, service: latest?.trace.find((e) => e.label === "Context retrieval completed")?.data?.service ?? null, variant: current.fields.variant ?? null, quantity: current.fields.quantity ?? null },
-    workflow: { id: latest?.workflowId ?? null, name: latest ? workflowOf(latest).workflowName ?? null : null, currentStep: current.step_key, status: !latest ? "not started" : current.step_key === "order_ready" ? "ready" : "in progress" },
+    workflow: { id: latest?.workflowId ?? null, name: latest ? workflowOf(latest).workflowName ?? null : null, currentStep: current.step_key, versionId: latest ? workflowOf(latest).versionId ?? null : null, visualState: current.visual ?? null },
     collectedData: current.fields, missingData: latest?.fields.filter((f) => f.status === "missing").map((f) => f.key) ?? [],
     context: latest?.trace.filter((e) => e.stage === "context").map((e) => ({ section: e.label, ...e.data })) ?? [],
   };

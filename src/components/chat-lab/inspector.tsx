@@ -2,6 +2,7 @@
 import { VisualGraphView } from "@/components/workflows/visual-graph";
 import type { ReactNode } from "react";
 import type { LabTurn, LabField, LabFailure } from "@/lib/chat-lab/model";
+import { workflowEvidence, latestWorkflowObservation } from "@/lib/chat-lab/workflow-evidence";
 import type { TraceStage } from "@/lib/conversations/trace";
 
 export const tabs: { id: TraceStage; label: string }[] = [
@@ -36,10 +37,10 @@ export function intentOf(turn?: LabTurn) {
   return turn?.trace.find((event) => event.label === "Intent routed")?.data?.intent ?? null;
 }
 export function workflowOf(turn: LabTurn) {
-  return turn.trace.find((event) => event.stage === "workflow" && event.label === "Visual workflow executed")?.data ?? turn.trace.find((event) => event.stage === "workflow")?.data ?? {};
+  return latestWorkflowObservation(turn.trace);
 }
 export function Inspector({ turn, failure, tab, onTab }: { turn?: LabTurn; failure?: LabFailure; tab: TraceStage; onTab: (tab: TraceStage) => void }) {
-  const workflow = turn ? workflowOf(turn) : {};
+  const observations = turn ? workflowEvidence(turn.trace) : [];
   const ai = turn?.trace.filter((e) => e.stage === "ai") ?? [];
   const usage = ai.flatMap((e) => e.data?.usage ? [{ call: e.label, usage: e.data.usage }] : []);
   const tokenTotals = usage.length ? usage.reduce((sum, entry) => {
@@ -55,7 +56,7 @@ export function Inspector({ turn, failure, tab, onTab }: { turn?: LabTurn; failu
         <div className="lab-inspector-meta"><span className="lab-badge">Turn {turn.turns}</span><span>{turn.debug.elapsedMs.toLocaleString()} ms · {turn.debug.source}</span></div>
         {tab === "overview" && <>
           <Card title="User input"><p className="lab-value">{turn.input || "[Simulated photo]"}</p></Card>
-          <div className="lab-card-grid"><Card title="Detected intent"><Data value={intentOf(turn)} /><p className="lab-muted">Deterministic router · no confidence score</p></Card><Card title="Current workflow"><Data value={workflow.workflowName ?? turn.workflowId} /><span className="lab-badge">{turn.nextState.step_key}</span></Card></div>
+          <div className="lab-card-grid"><Card title="Detected intent"><Data value={intentOf(turn)} /><p className="lab-muted">Value recorded by the router for this turn.</p></Card><Card title="Workflow evidence"><Data value={observations.map(event => ({ observation: event.label, name: event.data?.workflowName, versionId: event.data?.versionId }))} />{!observations.length && <p className="lab-muted">Nuk ka dëshmi ekzekutimi të workflow-t në gjurmët e këtij mesazhi.</p>}</Card></div>
           <Card title="Final agent response"><p className="lab-value">{turn.reply}</p></Card>
           <Card title="Performance"><Data value={{ executionTime: `${turn.debug.elapsedMs} ms`, model: turn.debug.model, inputTokens: tokenTotals?.input ?? "Unavailable", outputTokens: tokenTotals?.output ?? "Unavailable", totalTokens: tokenTotals?.total ?? "Unavailable" }} /></Card>
           <Card title="Warnings / errors">{turn.warnings.length ? turn.warnings.map((warning, i) => <p className="lab-warning" key={i}>{warning}</p>) : <span className="lab-badge">No warnings</span>}</Card>
@@ -66,16 +67,26 @@ export function Inspector({ turn, failure, tab, onTab }: { turn?: LabTurn; failu
           <Card title="Customer and prior collected data"><Data value={turn.trace.find((e) => e.label === "Business context loaded")?.data?.previousState} /></Card>
         </>}
         {tab === "workflow" && <>
+          <Card title="Çfarë u përdor për këtë mesazh">
+            <p className="lab-muted">Këto të dhëna vijnë nga gjurma e kërkesës së zgjedhur, jo nga konfigurimi aktual i biznesit. Workflow aktiv nuk do të thotë se u ekzekutua në çdo mesazh.</p>
+            {!observations.length && <p role="status">Nuk ka dëshmi ekzekutimi të workflow-t në gjurmët e këtij mesazhi. Gjendja e ruajtur më poshtë mund të jetë nga një mesazh i mëparshëm.</p>}
+            {observations.map((event, index) => <section key={index}>
+              <h4>{event.label === "Visual workflow executed" ? "Ekzekutim i workflow-t vizual" : "Rezultati i kërkimit të workflow-t linear"}</h4>
+              <Data value={{ name: event.data?.workflowName, versionId: event.data?.versionId, source: event.data?.workflowSource, businessId: event.data?.businessId, executionMode: event.data?.executionMode, fromNodeId: event.data?.fromNodeId, currentNodeId: event.data?.currentNodeId, traversedNodeIds: event.data?.traversedNodeIds, elapsedMs: event.elapsedMs }} />
+              <Raw value={event} label="Gjurma e plotë e këtij vëzhgimi" />
+            </section>)}
+            <p className="lab-muted">published = version i publikuar; pinned = version i ruajtur për këtë bisedë; draft = provë e draftit. Ekzekutimi në provë nuk dëshmon krijimin e një porosie apo veprimi real.</p>
+          </Card>
           {turn.visualWorkflow && <><VisualGraphView graph={turn.visualWorkflow.graph} currentNodeId={turn.visualWorkflow.state.nodeId} visitedNodeIds={turn.visualWorkflow.state.visited} traversedNodeIds={turn.visualWorkflow.traversedNodeIds} compact /><Card title="Visual workflow data"><Data value={turn.visualWorkflow.state} /></Card></>}
-          <Card title="Workflow state"><Data value={{ name: workflow.workflowName, id: turn.workflowId, previousStep: workflow.previousStep, currentStep: turn.nextState.step_key, status: turn.nextState.step_key === "order_ready" ? "ready" : "in progress", nextPossibleSteps: turn.workflowProgress.filter((s) => s.status === "pending").slice(0, 1).map((s) => s.key) }} /></Card>
-          <Card title="Workflow progress">{turn.workflowProgress.length ? <ol className="lab-progress">{turn.workflowProgress.map((step) => <li key={step.key} className={`is-${step.status}`}><span>{step.status === "done" ? "✓" : step.status === "current" ? "●" : "○"}</span><div><strong>{step.label}</strong><small>{step.key} · {step.status}</small>{step.value && <p>{step.value}</p>}</div></li>)}</ol> : <p className="lab-muted">Informational turn; no workflow steps executed.</p>}</Card>
+          <Card title="Gjendja pas mesazhit"><Data value={{ workflowId: turn.workflowId, visual: turn.nextState.visual ?? null, linear: turn.nextState.context?.execution.linear ?? null, currentStep: turn.nextState.step_key }} /><p className="lab-muted">Gjendje e kthyer nga motori; mund të përmbajë progres të ruajtur më herët.</p></Card>
+          <Card title="Workflow progress">{turn.workflowProgress.length ? <ol className="lab-progress">{turn.workflowProgress.map((step) => <li key={step.key} className={`is-${step.status}`}><span>{step.status === "done" ? "✓" : step.status === "current" ? "●" : "○"}</span><div><strong>{step.label}</strong><small>{step.key} · {step.status}</small>{step.value && <p>{step.value}</p>}</div></li>)}</ol> : <p className="lab-muted">No linear workflow progress was returned for this turn. Check execution evidence above.</p>}</Card>
           <Card title="Collected workflow variables"><Data value={turn.nextState.fields} /></Card>
-          <Card title="Required and optional fields"><Fields fields={turn.fields} /><p className="lab-muted">Required flags come from workflow configuration. The production engine currently advances through configured steps sequentially.</p></Card>
+          <Card title="Required and optional fields"><Fields fields={turn.fields} /><p className="lab-muted">Fields reported from the linear workflow observation. Visual node details are available in the graph and execution trace above.</p></Card>
           <Card title="Missing required fields"><Data value={turn.fields.filter((f) => f.status === "missing").map((f) => f.key)} /></Card>
         </>}
         {tab === "ai" && <>
-          <Card title="Model configuration"><Data value={{ model: turn.debug.model, parameters: "Only explicitly supplied parameters are shown in each request; others use provider defaults.", toolDefinitions: "None — production currently has no model action tools." }} /></Card>
-          {ai.length ? ai.map((event, i) => <Card title={event.label} key={i}><span className={`lab-badge ${event.status === "error" ? "is-error" : ""}`}>{event.elapsedMs} ms{event.status ? ` · ${event.status}` : ""}</span><Data value={event.data?.request ? { request: event.data.request } : { parsed: event.data?.parsed, tokenUsage: event.data?.usage, response: event.data?.response ? "Provider body available in Raw Response below" : null }} /><Raw value={event.data} label={event.data?.request ? "View Raw Payload" : "View Raw Response"} /></Card>) : <p className="lab-muted">No AI call was needed for this turn.</p>}
+          <Card title="Model configuration"><Data value={{ model: turn.debug.model, parameters: "Only explicitly supplied parameters are shown in each request; others use provider defaults.", toolDefinitions: "See the recorded request payload for each call; absence of a trace is not evidence that no tools exist." }} /></Card>
+          {ai.length ? ai.map((event, i) => <Card title={event.label} key={i}><span className={`lab-badge ${event.status === "error" ? "is-error" : ""}`}>{event.elapsedMs} ms{event.status ? ` · ${event.status}` : ""}</span><Data value={event.data?.request ? { request: event.data.request } : { parsed: event.data?.parsed, tokenUsage: event.data?.usage, response: event.data?.response ? "Provider body available in Raw Response below" : null }} /><Raw value={event.data} label={event.data?.request ? "View Raw Payload" : "View Raw Response"} /></Card>) : <p className="lab-muted">No AI events were recorded for this turn.</p>}
           <Card title="Final transformed response"><p className="lab-value">{turn.reply}</p></Card>
         </>}
         {tab === "tools" && <>
