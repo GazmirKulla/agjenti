@@ -15,6 +15,7 @@ export async function updateSession(request: NextRequest) {
     path === "/api/meta/data-deletion" ||
     path === "/api/meta/deauthorize" ||
     path === "/privacy" ||
+    path === "/support" ||
     path === "/terms" ||
     path === "/data-deletion"
   ) {
