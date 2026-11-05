@@ -34,7 +34,7 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
   ]);
   const activeProducts = [...products];
   const activeServices = [...services];
-  if (preview) {
+  if (preview && reference?.draftPreview) {
     const boundProducts = [...new Set(graph.flows.flatMap(flow => flow.productIds ?? []))];
     const boundServices = [...new Set(graph.flows.flatMap(flow => flow.serviceIds ?? []))];
     const inactive = async <T>(ids: string[], query: (ids: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>) => {

@@ -1,7 +1,10 @@
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
 });
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), busy: vi.fn(), sync: vi.fn(), profile: vi.fn() }));
@@ -62,3 +65,5 @@ it("retries failed Google sync for an already saved booking and reports its loca
   expect(result.booking.id).toBe("booking"); expect(result.syncError).toBe("Google unavailable");
   expect(m.rpc).not.toHaveBeenCalled();
 });
+
+afterEach(() => m.profile.mockReset());

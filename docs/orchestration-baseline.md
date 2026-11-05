@@ -28,7 +28,7 @@ Ritmi: një fazë ose nënfazë e kufizuar → test që riprodhon problemin → 
 
 **Baseline:** Meta tashmë normalizon Instagram dhe WhatsApp në `NormalizedIncomingMessage` dhe i fut në të njëjtën queue. Nuk u shtua një model tjetër eventi ose një motor tjetër. Dallimi ishte në `processConversationMessage`: prania e `bookingGuard` ndikonte në përzgjedhjen e routing-ut. Testi production pa guard dështonte me `workflow_queue_required` për biznesin pilot, kurse testi i laboratorit kalonte.
 
-**Ndryshimi:** `coordinator-policy.ts` përcakton një politikë të vetme për coordinator-in dhe hydration në adapter. WhatsApp, testet, previews vizuale, bizneset në `SHARED_WORKFLOW_BUSINESS_IDS` dhe bisedat tashmë v3 përdorin coordinator-in e përbashkët. Instagram jashtë pilotit mbetet legacy. Routing-u mund të provohet në production-mode pa guard; kjo nuk autorizon efekte. Adapteri real kërkon queue për bisedat e përbashkëta, kurse rezervimi i drejtuar nga coordinator-i refuzon shkrimin pa guard. Linear preview mbetet provë e izoluar e produktit, jo simulim i gjithë bisedës.
+**Përditësim:** Instagram dhe WhatsApp përdorin coordinator-in e përbashkët për çdo biznes. Efektet reale vazhdojnë të kërkojnë queue guard, kontroll revisioni dhe autorizim. Linear preview mbetet provë e izoluar e produktit.
 
 **Ruajtja:** ripërdoren migrimi v2→v3, profili sipas biznesit/participantit/kanalit, snapshots e proceseve dhe versionet e fiksuara. Testet provojnë që një rezervim i vjetër rifillon me graph-in e vet pas ndërprerjes nga porosia, edhe kur ekziston publikim tjetër. Mesazhet e njëpasnjëshme vazhdojnë përmes grupimit dhe commit-it me lease/revision ekzistues.
 
@@ -162,10 +162,10 @@ Referencat janë relative ndaj root-it të repository-t; numrat u kontrolluan n�
 | `linearPreview` | `process-conversation-message.ts:132` delegon direkt te processAgentTurn. Preview i produktit e thërret vetë atë funksion. |
 | `mode === "test"` | Anashkalon degën legacy në `:134`; laboratori përdor coordinator-in. Nuk provon vetvetiu rrugën production. |
 | `bookingGuard` | Dëshmi e job/lease/revision për efektet në DB. Nuk duhet shpikur për të detyruar një rrugë testi. |
-| `source === "instagram"` jashtë pilotit | Në `:133–137`, state ende jo-v3 vazhdon te booking/agent legacy edhe kur ka queue guard. |
-| `schemaVersion === 3` | Nuk hyn në degën legacy, edhe nëse hiqet biznesi nga lista e pilotit. Heqja e flag-ut vetëm nuk është rollback i plotë i state të migruar. |
+| `source === "instagram"` | Përdor coordinator-in e përbashkët. |
+| `schemaVersion === 3` | Ruhet gjendja e migruar dhe versionet e fiksuara të proceseve. |
 | `visualPreview` | Përdor draft graph dhe ID hash, anashkalon degën legacy; production lexon versionet e publikuara/fiksuara. |
-| `SHARED_WORKFLOW_BUSINESS_IDS` | `context.ts:30` dhe coordinator-i kontrollojnë migrimin e sjelljes; queue tashmë është globale për lidhjet reale. |
+| Runtime i përbashkët | Zbatohet për çdo biznes, pa lista aktivizimi. |
 
 ## Shkrimet në state dhe revision
 

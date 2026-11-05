@@ -1,7 +1,10 @@
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
 });
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
@@ -163,3 +166,5 @@ it("does not perform a second sync while another worker owns the lease", async (
   );
   expect(fetch).not.toHaveBeenCalled();
 });
+
+afterEach(() => mocks.profile.mockReset());

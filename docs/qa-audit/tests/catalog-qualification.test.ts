@@ -24,8 +24,6 @@ const fixtures: Record<string, unknown> = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("OPENAI_API_KEY", "");
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "");
   mocks.from.mockImplementation((table: string) => {
     const result = () => ({ data: fixtures[table] ?? null, error: null });
     const chain = {

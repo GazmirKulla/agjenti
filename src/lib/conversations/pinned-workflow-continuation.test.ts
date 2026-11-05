@@ -20,7 +20,10 @@ vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: mocks.
 // These version-selection scenarios use the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
 });
 
 // Keep coordinator, agent turn, version store, entity router and visual executor real.

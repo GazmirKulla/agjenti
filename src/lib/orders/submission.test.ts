@@ -1,7 +1,10 @@
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
 });
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), submit: vi.fn(), profile: vi.fn() }));
@@ -88,6 +91,19 @@ describe("W4 order submission boundary", () => {
     expect(m.submit).toHaveBeenCalledTimes(1);
   });
   it("honors the losing transaction receipt when both POSTs pass the initial read", async () => {
+    const originalFrom = m.from.getMockImplementation()!;
+    let readers = 0;
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    m.from.mockImplementation((table: string) => {
+      const query = originalFrom(table);
+      if (table === "order_submissions") query.maybeSingle = async () => {
+        if (++readers === 8) release();
+        await barrier;
+        return { data: null, error: null };
+      };
+      return query;
+    });
     const results = await Promise.all(Array.from({ length: 8 }, () => submitConfirmedOrder(args)));
     expect(new Set(results.map(r => r.orderId))).toEqual(new Set([orderId]));
     expect(m.submit).toHaveBeenCalledTimes(1);

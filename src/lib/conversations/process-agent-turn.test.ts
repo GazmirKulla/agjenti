@@ -6,7 +6,10 @@ beforeEach(() => navigation.mockReset().mockResolvedValue({ action: "continue", 
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
 });
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
@@ -185,7 +188,9 @@ beforeEach(() => {
     const query = { table, filters: [] as unknown[][] };
     queries.push(query);
     const result = () => ({
-      data: fixtures[table] ?? null,
+      data: ["products", "booking_services"].includes(table) && query.filters.some(([key, value]) => key === "is_active" && value === false)
+        ? (Array.isArray(fixtures[table]) ? (fixtures[table] as Record<string, unknown>[]).filter(row => row.is_active === false) : [])
+        : fixtures[table] ?? null,
       error: failedTable === table ? { message: "unavailable" } : null,
       count: table === "products" && productCount !== undefined ? productCount : Array.isArray(fixtures[table]) ? (fixtures[table] as unknown[]).length : 0,
     });
@@ -197,6 +202,7 @@ beforeEach(() => {
       }),
       order: vi.fn(() => chain),
       range: vi.fn(() => chain),
+      in: vi.fn(() => chain),
       limit: vi.fn(() => chain),
       maybeSingle: vi.fn(async () => result()),
       then: (resolve: (v: unknown) => unknown) =>
@@ -530,7 +536,7 @@ describe("shared business turn processor", () => {
     });
   });
   it("does not accept a product/type injected from another business", async () => {
-    const result = await processAgentTurn({
+    await expect(processAgentTurn({
       businessId: "business-a",
       message: "Përshëndetje",
       hasPhoto: false,
@@ -540,9 +546,7 @@ describe("shared business turn processor", () => {
         product_type_id: "foreign-type",
         step_key: "order_ready",
       },
-    });
-    expect(result.nextState.product_id).toBeNull();
-    expect(result.nextState.step_key).toBe("choose_product");
+    })).rejects.toMatchObject({ code: "binding_unavailable" });
     expect(queries.some((q) => q.table === "workflows")).toBe(false);
   });
   it("does not load steps for a workflow outside the business", async () => {
@@ -683,7 +687,7 @@ it("keeps the sealed order steps when the product is assigned to a new workflow"
     fixtures.workflows = {id:"workflow-new",name:"New"};
     fixtures.workflow_steps = [{key:"new_question",kind:"text",position:0},{key:"customer",kind:"customer",position:1}];
     queries = [];
-    const next = await processAgentTurn({businessId:"business-a",message:"M",hasPhoto:false,state:first.nextState});
+    const next = await processAgentTurn({businessId:"business-a",message:"M",hasPhoto:false,state:migrateContext(first.nextState)});
     expect(next.workflowId).toBe("workflow-a");
     expect(next.nextState.step_key).toBe("awaiting_photo");
     expect(queries.some(q => q.table === "workflow_steps")).toBe(false);
@@ -725,7 +729,7 @@ it("preserves a sealed legacy order when shared context is enabled after reassig
     fixtures.products = [{id:"product-a",name:"Bluzë",workflow_id:"workflow-new"}];
     first.nextState.linearSnapshot = {id:"workflow-new",versionId:"new",name:"New",steps:[{key:"customer",kind:"customer"}]};
     queries = [];
-    const next = await processAgentTurn({businessId:"business-a",message:"M",hasPhoto:false,state:first.nextState});
+    const next = await processAgentTurn({businessId:"business-a",message:"M",hasPhoto:false,state:migrateContext(first.nextState)});
     expect(next.workflowId).toBe("workflow-a");
     expect(next.nextState.context?.execution.linear?.steps[0].key).toBe("collect_size");
     expect(next.nextState.step_key).toBe("awaiting_photo");
@@ -895,3 +899,5 @@ it("does not request customer details after OK acknowledging PDF information", a
  expect(result.nextState.step_key).toBe("collect_customer");
  expect(mocks.generate).not.toHaveBeenCalled();
 });
+
+afterEach(() => mocks.profile.mockReset());

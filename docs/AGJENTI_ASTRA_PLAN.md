@@ -14,8 +14,7 @@ Astra: kontrollo `git status`, mos mbishkruaj ndryshime lokale. Për çdo fazë 
 |---|---|
 | Chat Lab/Test | schema-v3 coordinator, suspend/resume |
 | WhatsApp production | queue + schema-v3 |
-| Instagram pilot në `SHARED_WORKFLOW_BUSINESS_IDS` | queue + schema-v3 |
-| Instagram jashtë pilotit | legacy single cursor, pa suspend/resume paralel |
+| Instagram production | queue + schema-v3 për çdo biznes |
 | `simulateProductWorkflow` | `linearPreview`, rrugë tjetër |
 
 `process-conversation-message.ts` (~133–137) ka kusht që kalon te `processBookingTurn(...) ?? processAgentTurn(...)`. Ekzistojnë `conversation_states.collected`, `revision` në queue, `context.profile`, `context.order`, `processes`, `recentMessages`, pinned workflow versions. AI bën klasifikim, nxjerrje faktesh dhe përgjigje, por **nuk ka dynamic tool-calling loop**. `order_ready` nuk krijon automatikisht porosi; krijimi bëhet nga stafi.
@@ -25,7 +24,7 @@ Astra: kontrollo `git status`, mos mbishkruaj ndryshime lokale. Për çdo fazë 
 ## Faza 0 — Verifikimi i baseline
 
 1. Ndiq lifecycle në `src/app/api/webhooks/meta/route.ts`, `handle-inbound.ts`, `process-conversation-message.ts`, `workflow-queue.ts`, `guidance.ts`, visual executor dhe adapters e testit.
-2. Verifiko çdo kusht `mode`, `bookingGuard`, `schemaVersion`, `visualPreview`, `SHARED_WORKFLOW_BUSINESS_IDS`.
+2. Verifiko çdo kusht `mode`, `bookingGuard`, `schemaVersion` dhe `visualPreview`; runtime-i zbatohet për çdo biznes.
 3. Gjej të gjitha writes në `conversation_states.collected` dhe `revision`.
 4. Ekzekuto baseline unit/integration, lint, typecheck sipas skripteve reale.
 5. Krijo `docs/orchestration-baseline.md` me call graph, file:line, teste dhe rreziqe.

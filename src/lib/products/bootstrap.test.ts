@@ -4,7 +4,7 @@ import type { VisualGraphV2 } from "@/lib/workflows/visual/types";
 const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), profile: vi.fn(), user: vi.fn(), access: vi.fn() }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }) }));
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
-vi.mock("@/lib/dashboard/modules/entitlements", () => ({ loadAllowedModules: async () => ["products", "orders", "workflows"] }));
+vi.mock("@/lib/dashboard/modules/entitlements", () => ({ loadAllowedModules: async () => (await m.profile()).enabledModules }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access }));
 vi.mock("@/lib/workflows/readiness", () => ({ loadWorkflowReadiness: async () => ({ ready: true, blockers: [] }) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));

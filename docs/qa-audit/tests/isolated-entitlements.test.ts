@@ -12,7 +12,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.invalid");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "audit-placeholder-not-a-secret");
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "");
   mocks.rpc.mockResolvedValue({ data: [...MODULE_IDS], error: null });
 });
 afterEach(() => vi.unstubAllEnvs());

@@ -11,7 +11,6 @@ import { canEnableModule } from "@/lib/dashboard/modules/dependencies";
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("OPENAI_API_KEY", "");
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "");
   mocks.modules = ["services"];
   const fixtures: Record<string, unknown> = {
     ai_agents: { instructions: "Answer from verified service information." },

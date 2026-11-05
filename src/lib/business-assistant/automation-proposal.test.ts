@@ -1,16 +1,17 @@
+vi.mock("@/lib/capabilities/enforcement", async original => ({ ...await original<typeof import("@/lib/capabilities/enforcement")>(), requireRuntimeModules: async () => {} }));
 import { reviewWorkflowSemantics } from "@/lib/capabilities/workflow-semantics";
 import { beforeEach, expect, it, vi } from "vitest";
 const assess = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/capabilities/assessment", () => ({ assessBusinessCapabilities: assess }));
 import { buildAutomationProposal, recheckAutomation, automationMessage } from "./automation-proposal";
 import { readAutomationIntent, type AutomationIntent } from "./automation-intent";
-import { starterVisualGraph } from "@/lib/workflows/visual/model";
+import { starterVisualGraph, emptyVisualGraph } from "@/lib/workflows/visual/model";
 import { applyWorkflowOperations, type Operation } from "./workflow";
 import { getCapability } from "@/lib/capabilities/registry";
 const ready = ["knowledge.answer", "product.search", "product.recommend", "booking.create", "booking.availability.read", "order.prepare", "order.status.read", "staff.handoff"].map(capabilityKey => ({ capabilityKey, status: "ready", reasonCode: "configured", missingRequirements: [] }));
 const operations: Operation[] = [{ op: "rename", name: "Shitjet" }];
 function input(keys = ["product.search"]) {
-  const before = starterVisualGraph();
+  const before = emptyVisualGraph();
   return { businessId: "a", userId: "owner", revision: 3, publishedVersionId: "v1", request: "Ndrysho rrjedhën e katalogut",
     intent: { requestedBehaviors: [{ description: "Kërko produktin", capabilityKeys: keys }], assumptions: [], clarificationQuestions: [] } as AutomationIntent,
     before, after: applyWorkflowOperations(before, JSON.stringify(operations)), operations };
@@ -87,7 +88,7 @@ it("infers required booking capability from a changed node even if the model omi
 });
 it("blocks inventory claims disguised as a knowledge prompt", async () => {
   vi.mocked(reviewWorkflowSemantics).mockResolvedValueOnce({ capabilityKeys: ["inventory.check", "back_in_stock.notify"], evidence: [] });
-  const data = input(); const after = structuredClone(data.after);
+  const data = input(); const after = starterVisualGraph();
   after.nodes.find(n => n.kind === "knowledge")!.config.prompt = "Check inventory and notify when back in stock";
   const result = await buildAutomationProposal({ ...data, after });
   expect(result.canSaveDraft).toBe(false); expect(result.unsupportedActions).toContain("back_in_stock.notify");
@@ -103,6 +104,7 @@ it("assesses a new action node even when the model omits its permission requirem
 });
 it("assesses existing nodes when a changed edge starts using them", async () => {
   const data = input([]);
+  data.after = starterVisualGraph();
   data.after.edges[0].target = "product";
   const result = await buildAutomationProposal(data);
   expect(result.requiredCapabilities.map(c => c.capabilityKey)).toContain("product.search");

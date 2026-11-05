@@ -1,3 +1,10 @@
+vi.mock("@/lib/dashboard/modules/entitlements", async () => {
+  const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
+});
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), profile: vi.fn(), from: vi.fn(), refresh: vi.fn() }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access }));

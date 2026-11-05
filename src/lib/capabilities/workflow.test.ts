@@ -1,3 +1,10 @@
+vi.mock("@/lib/dashboard/modules/entitlements", async () => {
+  const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
+});
 import { reviewWorkflowSemantics } from "@/lib/capabilities/workflow-semantics";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ profile: vi.fn(), from: vi.fn(), rpc: vi.fn(), workspace: vi.fn(), version: vi.fn(), user: vi.fn(), access: vi.fn() }));
@@ -9,7 +16,6 @@ vi.mock("@/lib/workflows/readiness", () => ({ loadWorkflowReadiness: async () =>
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { enforceWorkflowCapabilities, requireActiveBindings } from "./workflow";
 import { graphRequirements } from "./graph";
-import { moduleEnforcementEnabled } from "./enforcement";
 import { assessBusinessCapabilities } from "./assessment";
 import { writeVisualWorkflow } from "@/lib/workflows/visual/mutations";
 import { buildAutomationProposal } from "@/lib/business-assistant/automation-proposal";
@@ -96,8 +102,8 @@ it("AI and manual publishing enforce identical capability restrictions before an
 it("a direct HTTP request cannot bypass current modules or forge the tenant", async () => {
   m.profile.mockResolvedValue({ enabledModules: ["products", "workflows"] });
   const response = await POST(new Request("https://app.test/api/workflows/visual", { method: "POST", headers: { origin: "https://app.test", "content-type": "application/json" },
-    body: JSON.stringify({ slug: "shop", revision: 2, graph: graph(), operation: "publish", businessId: "foreign", MODULE_ENFORCEMENT_BUSINESS_IDS: "" }) }));
-  expect(await response.json()).toHaveProperty("error"); expect(m.profile).toHaveBeenCalledWith("tenant-a", { requireExplicit: true });
+    body: JSON.stringify({ slug: "shop", revision: 2, graph: graph(), operation: "publish", businessId: "foreign" }) }));
+  expect(await response.json()).toHaveProperty("error"); expect(m.profile).toHaveBeenCalledWith("tenant-a");
   expect(m.rpc).not.toHaveBeenCalled();
 });
 it("does not let an AI proposal advertise a disabled flow as executable", async () => {
@@ -151,11 +157,10 @@ it("rechecks current modules after the assessment rather than trusting earlier r
   const result = await writeVisualWorkflow("tenant-a", "actor", 2, graph(), "publish");
   expect(result.publication?.findings[0].code).toBe("module_disabled"); expect(m.rpc).not.toHaveBeenCalled();
 });
-it("keeps rollout explicit and leaves unenrolled legacy saves compatible", async () => {
-  
-  expect(moduleEnforcementEnabled("tenant-a")).toBe(false);
-  await expect(enforceWorkflowCapabilities("tenant-a", "actor", graph(), "publish")).resolves.toBeUndefined();
-  expect(m.profile).not.toHaveBeenCalled();
+it("checks capability policy for every business without enrollment", async () => {
+  m.profile.mockResolvedValue({enabledModules:["products","workflows"]});
+  await expect(enforceWorkflowCapabilities("tenant-a","actor",graph(),"publish")).rejects.toMatchObject({code:"module_disabled"});
+  expect(m.profile).toHaveBeenCalledWith("tenant-a");
 });
 it("distinguishes an unavailable optional integration from missing local configuration", async () => {
   m.profile.mockResolvedValue({ enabledModules: ["bookings", "services", "workflows"] });

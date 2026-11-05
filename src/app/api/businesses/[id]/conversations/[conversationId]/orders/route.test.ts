@@ -1,7 +1,10 @@
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
 });
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), ensure: vi.fn(), submit: vi.fn(), profile: vi.fn(), admin: vi.fn() }));
@@ -122,3 +125,5 @@ it("W4 ignores client confirmation, product, price and intent overrides", async 
   const response = await POST(new Request("https://app.test/orders", { method: "POST", body: JSON.stringify({ orderConfirmed: true, productId: "foreign", price: 0, intentId: "client-key" }) }), { params: Promise.resolve({ id: "business", conversationId: "conversation" }) });
   expect(response.status).toBe(400); expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
 });
+
+afterEach(() => m.profile.mockReset());

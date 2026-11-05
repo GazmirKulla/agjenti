@@ -11,7 +11,7 @@ import { rememberTurn, chooseGuidance, clarification, invalidateConfirmation } f
 import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
 import { detectVisualIntent } from "@/lib/workflows/visual/runtime";
-import { migrateContext, extractExplicitFacts, advanceSharedOrder, sharedPrompt, isQuestion, resetOrder, recordPrompt, setOrderTerms } from "@/lib/workflows/context";
+import { migrateContext, advanceSharedOrder, sharedPrompt, isQuestion, resetOrder, recordPrompt, setOrderTerms } from "@/lib/workflows/context";
 import type { TraceObserver } from "./trace";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
@@ -154,10 +154,8 @@ export async function processAgentTurn(params: AgentTurnParams): Promise<AgentTu
   return turn;
 }
 async function processTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
-  {
-    params = { ...params, state: migrateContext(params.state) };
-    extractExplicitFacts(params.state!, params.message);
-  }
+  // The conversation coordinator owns migration and scoped fact extraction.
+  // Adapters must not consume the message again before its routing decision.
   if(params.linearPreview) {
     if(params.mode!=="test"||!params.state?.context?.execution.linear?.versionId.startsWith("linear-preview:")) throw new Error("invalid_linear_preview");
     return processLegacyAgentTurn(params);

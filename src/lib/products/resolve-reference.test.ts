@@ -1,9 +1,12 @@
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
 });
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[], filters: [] as unknown[][], profile: vi.fn(), from: vi.fn(), error: false }));
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from }) }));
@@ -73,3 +76,5 @@ describe("W3 server revalidation", () => {
     expect(m.from).toHaveBeenCalledTimes(2);
   });
 });
+
+afterEach(() => m.profile.mockReset());

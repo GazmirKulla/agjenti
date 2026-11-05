@@ -1,3 +1,6 @@
+// Persistence tests isolate readiness; policy and tenant binding checks are covered in capabilities/workflow.test.ts.
+vi.mock("@/lib/capabilities/workflow", () => ({ enforceWorkflowCapabilities: async () => [], requireOwnedBindings: async () => {} }));
+vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualWorkspace: async () => ({ revision: 2, graph: { version: 2, flows: [{ id: "info", kind: "information", nodeIds: [] }] } }) }));
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");

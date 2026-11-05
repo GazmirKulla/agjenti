@@ -6,7 +6,10 @@ beforeEach(() => navigation.mockReset().mockResolvedValue({ action: "continue", 
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
 });
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
@@ -823,3 +826,5 @@ it("completes the registration process in simulation with a labelled link and no
  expect(output.reply).toContain("SIMULIM");expect(output.reply).not.toContain("{{actions");expect(output.nextState.visual?.status).toBe("completed");expect(legacy).not.toHaveBeenCalled();
  expect(output.executionResults).toContainEqual(expect.objectContaining({operation:"business.provision",status:"simulated"}));
 });
+
+afterEach(() => mocks.profile.mockReset());

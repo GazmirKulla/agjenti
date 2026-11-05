@@ -14,6 +14,7 @@ export async function requireActiveBindings(businessId: string, productIds: stri
 
 /** Draft references prove ownership, not runtime readiness. Publishing still requires activity. */
 export async function requireOwnedBindings(businessId: string, productIds: string[], serviceIds: string[], activeOnly = false) {
+  if (!productIds.length && !serviceIds.length) return;
   const db = createServiceSupabase();
   for (const [table, ids] of [["products", productIds], ["booking_services", serviceIds]] as const) {
     const unique = [...new Set(ids)];

@@ -1,7 +1,10 @@
 // Existing scenarios run with the default platform policy: all modules allowed.
 vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
+  return { loadAllowedModules: async () => {
+    const { loadDashboardProfile } = await import("@/lib/dashboard/profile/service");
+    return (await loadDashboardProfile("fixture"))?.enabledModules ?? [...MODULE_IDS];
+  }, requireModuleAllowed: async () => {} };
 });
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { upgradeVisualGraph, starterVisualGraph } from "./model";
@@ -114,20 +117,22 @@ it("allows inactive entities only when explicitly bound and preview is enabled",
   m.rows.booking_services = [{ id: s, name: "Konsultë", booking_enabled: false, is_active: false }];
   expect((await resolveVisualEntity("business", graph(), "Puzzle")).selected).toBeUndefined();
   expect((await resolveVisualEntity("business", graph(), "Konsultë")).selected).toBeUndefined();
-  const preview = await resolveVisualEntity("business", graph(), "Puzzle", undefined, true);
+  const preview = await resolveVisualEntity("business", graph(), "Puzzle", undefined, true, { draftPreview: true });
   expect(preview.selected?.entity.id).toBe(p);
   expect(preview.available?.map(entity => entity.id)).toEqual([p, s]);
-  expect((await resolveVisualEntity("business", graph(), "Konsultë", undefined, true)).selected?.entity.id).toBe(s);
-  expect((await resolveVisualEntity("business", graph(), "Poster", undefined, true)).mentioned).toBeUndefined();
-  expect((await resolveVisualEntity("business", graph(), "M", preview.selected?.binding, true)).selected?.entity.id).toBe(p);
+  expect((await resolveVisualEntity("business", graph(), "Konsultë", undefined, true, { draftPreview: true })).selected?.entity.id).toBe(s);
+  expect((await resolveVisualEntity("business", graph(), "Poster", undefined, true, { draftPreview: true })).mentioned).toBeUndefined();
+  expect((await resolveVisualEntity("business", graph(), "M", preview.selected?.binding, true, { draftPreview: true })).selected?.entity.id).toBe(p);
   expect((await resolveVisualEntity("business", graph(), "M", preview.selected?.binding)).selected).toBeUndefined();
 });
 it("preview never resolves a foreign tenant entity even when its ID is bound in the graph", async () => {
   m.rows.products = [{ id: p, name: "Puzzle", business_id: "other-business", is_active: false }];
   m.rows.booking_services = [{ id: s, name: "Konsultë", business_id: "other-business", is_active: true }];
-  const result = await resolveVisualEntity("business", graph(), "Puzzle", undefined, true);
+  const result = await resolveVisualEntity("business", graph(), "Puzzle", undefined, true, { draftPreview: true });
   expect(result.selected).toBeUndefined(); expect(result.available).toEqual([]);
   expect(m.filters.filter(filter => (filter as string[])[1] === "business_id")).toHaveLength(4);
   expect(m.filters).toContainEqual(["products", "id", [p]]);
   expect(m.filters).toContainEqual(["booking_services", "id", [s]]);
 });
+
+afterEach(() => m.profile.mockReset());

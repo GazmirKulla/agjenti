@@ -1,3 +1,5 @@
+// Capability authorization is covered independently in capabilities/workflow.test.ts.
+vi.mock("@/lib/capabilities/workflow", () => ({ enforceWorkflowCapabilities: async () => [], enforceOrderWorkflow: async () => {}, requireOwnedBindings: async () => {} }));
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), ticket: null as unknown, fixtures: {} as Record<string, unknown> }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }) }));

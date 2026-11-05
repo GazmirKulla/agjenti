@@ -56,7 +56,6 @@ describe("audit orchestration: executeVisualTurn with synthetic retail/quote gra
   });
 
   it("fails closed before an action executor when the required module is off", async () => {
-    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "audit-business");
     mocks.profile.mockResolvedValue({ enabledModules: ["knowledge"] });
     const g = linear(node("product", "product"));
     mocks.load.mockResolvedValue(version(g, "audit-old"));
