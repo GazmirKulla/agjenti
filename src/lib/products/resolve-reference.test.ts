@@ -34,7 +34,7 @@ describe("W3 server revalidation", () => {
     expect(m.filters).toContainEqual(["is_active", true]);
   });
   it("2B service discovery requires Services, but not booking authorization", async () => {
-    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+    
     m.profile.mockResolvedValue({ enabledModules: ["knowledge"] });
     await expect(resolveCurrentServiceReference({ businessId: "business", message: "Puzzle" })).rejects.toMatchObject({ code: "module_disabled" });
     expect(m.from).not.toHaveBeenCalled();
@@ -57,7 +57,7 @@ describe("W3 server revalidation", () => {
     expect(await resolveCurrentProductReference({ businessId: "business", message: "këtë", state, mode: "test" })).toMatchObject({ status: "clarify", reason: "unavailable" });
   });
   it("checks order capability readiness again before permitting a binding", async () => {
-    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+    
     m.profile.mockResolvedValue({ enabledModules: ["products", "workflows"] });
     await expect(resolveCurrentProductReference({ businessId: "business", message: "Puzzle" })).rejects.toMatchObject({ code: "module_disabled" });
     m.profile.mockResolvedValue({ enabledModules: ["products", "workflows", "orders"] });

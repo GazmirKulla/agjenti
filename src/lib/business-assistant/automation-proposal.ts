@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { graphRequirements, nodeCapabilityKeys, flowCapabilityKeys } from "@/lib/capabilities/graph";
-import { CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
+import { CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
 import { enforceWorkflowCapabilities } from "@/lib/capabilities/workflow";
 import { assessBusinessCapabilities } from "@/lib/capabilities/assessment";
 import { getCapability, type CapabilityAssessment, type CapabilityReadiness } from "@/lib/capabilities/registry";
@@ -65,7 +65,7 @@ type ProposalInput = { businessId: string; userId: string; request: string; inte
 export async function buildAutomationProposal(input: ProposalInput): Promise<AutomationProposal> {
   const behaviors = (input.intent?.requestedBehaviors ?? [{ description: input.request.slice(0, 500), capabilityKeys: [] }]).map(b => ({ ...b, capabilityKeys: [...b.capabilityKeys] }));
   const workflow = input.mode === "plan" ? undefined : input;
-  const enforced = Boolean(workflow) && moduleEnforcementEnabled(input.businessId);
+  const enforced = Boolean(workflow);
   let semanticUnavailable = false;
   let semanticKeys: string[] = [];
   let semanticEvidence: WorkflowSemanticReview["evidence"] = [];

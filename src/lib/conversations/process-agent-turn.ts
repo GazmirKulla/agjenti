@@ -6,12 +6,12 @@ import { conversationControl, resumeConversation } from "./conversation-control"
 import { agentConfigurationColumns, configurationRead } from "@/lib/agents/configuration";
 import { decidedFieldGuidance, informationalDecision, type TurnDecision } from "./turn-decision";
 import { recordReplyPresentation, resolveProductReference, type ReferenceProduct } from "@/lib/products/entity-bridge";
-import { capabilityModules, requireRuntimeModules, runtimeModules, CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
+import { capabilityModules, requireRuntimeModules, runtimeModules, CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
 import { rememberTurn, chooseGuidance, clarification, invalidateConfirmation } from "@/lib/workflows/guidance";
 import { readOrderSnapshot, sealOrderSnapshot } from "@/lib/workflows/order-snapshot";
 import { extractMessageFacts, profileExtractionFields } from "@/lib/workflows/extract-facts";
 import { detectVisualIntent } from "@/lib/workflows/visual/runtime";
-import { sharedWorkflowEnabled, migrateContext, extractExplicitFacts, advanceSharedOrder, sharedPrompt, isQuestion, resetOrder, recordPrompt, setOrderTerms } from "@/lib/workflows/context";
+import { migrateContext, extractExplicitFacts, advanceSharedOrder, sharedPrompt, isQuestion, resetOrder, recordPrompt, setOrderTerms } from "@/lib/workflows/context";
 import type { TraceObserver } from "./trace";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
@@ -154,7 +154,7 @@ export async function processAgentTurn(params: AgentTurnParams): Promise<AgentTu
   return turn;
 }
 async function processTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
-  if (sharedWorkflowEnabled(params.businessId) || Boolean(params.state?.context)) {
+  {
     params = { ...params, state: migrateContext(params.state) };
     extractExplicitFacts(params.state!, params.message);
   }
@@ -214,7 +214,7 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
     durationMs: Date.now() - started, readOnly: true,
   } });
   const products = businessRead.products.records;
-  if (moduleEnforcementEnabled(params.businessId) && params.state?.product_id && params.informational === undefined && !products.some(p => p.id === params.state!.product_id))
+  if (params.state?.product_id && params.informational === undefined && !products.some(p => p.id === params.state!.product_id))
     throw new CapabilityEnforcementError("binding_unavailable", "Produkti i këtij procesi nuk është më aktiv në këtë biznes. Progresi yt është ruajtur.");
   const agent = params.configurationPreview ? { id: params.configurationPreview.agentId, name: params.configurationPreview.name,
     instructions: params.configurationPreview.instructions, communication: params.configurationPreview.communication,
@@ -241,8 +241,6 @@ export async function processLegacyAgentTurn(params: AgentTurnParams & { informa
   let state = structuredClone(params.state ?? emptyState());
   const text = params.message.trim();
   if(state.context && state.step_key==="order_ready" && detectVisualIntent(text)==="order" && params.informational===undefined) state=resetOrder(state);
-  if (params.informational === undefined && !moduleEnforcementEnabled(params.businessId) && state.product_id && !products.some((p) => p.id === state.product_id))
-    state = state.context ? resetOrder(state) : emptyState();
   const exactProduct = products.some(
     (p) => foldText(p.name) === foldText(text) || matchesSku(p.sku, text),
   );

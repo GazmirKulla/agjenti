@@ -56,7 +56,7 @@ it.each(["expired", "product", "phone", "legacy", "snapshot"])("W2 rejects %s-st
 });
 afterEach(() => vi.unstubAllEnvs());
 it("blocks direct order execution after module deactivation before CRM or external writes", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  
   m.profile.mockResolvedValue({ enabledModules: ["products", "workflows"] });
   const response = await send();
   expect(response.status).toBe(403); expect(await response.json()).toMatchObject({ code: "module_disabled" });

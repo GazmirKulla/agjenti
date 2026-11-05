@@ -6,7 +6,7 @@ import { isBareCollectionValue, isEntityReference, positiveEntityText, reference
 import type { ConversationStatePayload } from "../engine";
 import type { VisualGraph, VisualRunState } from "./types";
 import { pendingCollectNode } from "./facts";
-import { runtimeModules, requireRuntimeModules, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
+import { runtimeModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 
 export type VisualEntity = { kind: "product" | "service"; id: string; name: string; productTypeId?: string | null; bookingEnabled?: boolean; price_amount?: number | null; currency?: string | null };
 export type VisualEntitySelection = { entity: VisualEntity; binding: NonNullable<VisualRunState["binding"]> };
@@ -34,7 +34,7 @@ export async function resolveVisualEntity(businessId: string, graph: VisualGraph
   ]);
   const activeProducts = [...products];
   const activeServices = [...services];
-  if (preview && !moduleEnforcementEnabled(businessId)) {
+  if (preview) {
     const boundProducts = [...new Set(graph.flows.flatMap(flow => flow.productIds ?? []))];
     const boundServices = [...new Set(graph.flows.flatMap(flow => flow.serviceIds ?? []))];
     const inactive = async <T>(ids: string[], query: (ids: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>) => {

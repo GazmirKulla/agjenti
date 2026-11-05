@@ -68,7 +68,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 it("blocks direct synchronization before acquiring a lease or sending an external request when bookings are disabled", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["services"] });
   const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
   await expect(syncBooking("business", mocks.booking.id)).rejects.toMatchObject({ code: "module_disabled" });

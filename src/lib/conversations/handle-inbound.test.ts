@@ -651,7 +651,7 @@ it("preserves the advisory cursor on the next live inbound turn",async()=>{
  });
 
 it("commits a non-pilot Instagram turn with a revision and lease before the queue sends it", async () => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  
   mocks.rpc.mockResolvedValue({ data: true, error: null });
   const job = { id: 1, business_id: "business-a", connection_id: "connection-a", participant_id: message.externalParticipantId, payload: message, status: "processing", lease_token: "lease-a", reply: null };
   await handleInboundMessage(message, job);
@@ -706,7 +706,7 @@ it.each(["sent", "uncertain", "prepared"])("checks the latest queue attempt even
 });
 
 it.each(["new", "pilot", "migrated"])("requires the queue for live %s Instagram state even when routing can be tested without it", async kind => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", kind === "pilot" ? "business-a" : "");
+  
   if (kind === "migrated") savedState.schemaVersion = 3;
   await expect(handleInboundMessage(message)).rejects.toThrow("workflow_queue_required");
   expect(mocks.process).not.toHaveBeenCalled();
@@ -714,7 +714,7 @@ it.each(["new", "pilot", "migrated"])("requires the queue for live %s Instagram 
   expect(writes.filter(w => w.table === "conversation_states")).toEqual([]);
 });
 it.each(["instagram", "whatsapp"] as const)("hydrates queued %s pilot state before passing it to the coordinator", async channel => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business-a");
+  
   const incoming = { ...message, channel, contextMetadata: channel === "whatsapp" ? { whatsappPhoneNumberId: "123456" } : message.contextMetadata };
   await handleInboundMessage(incoming, { ...queuedJob(), payload: incoming });
   expect(mocks.from).toHaveBeenCalledWith("conversation_profiles");

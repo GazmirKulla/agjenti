@@ -49,7 +49,7 @@ it("R2: excludes irrelevant knowledge and supplies current structured service fa
   expect(request.grounding.services.records[0]).toMatchObject({ id: "s", price_amount: 30, duration_minutes: 45, booking_enabled: false });
 });
 it("R2: unavailable catalog during information does not reset an existing process even outside module rollout", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "");
+  
   failedTable = "products";
   const state = migrateContext({ ...emptyState(), product_id: "product-a", step_key: "collect_size", fields: { size: "M" } });
   state.context!.execution.linear = { id: "workflow-a", versionId: "pinned-a", name: "Order", steps: [{ key: "collect_size", kind: "text" }] };
@@ -90,7 +90,7 @@ it("2B legacy consumes an informational decision without converting the entity t
 });
 afterEach(() => vi.unstubAllEnvs());
 it("blocks the legacy linear order adapter after module deactivation without reading or writing business records", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["products", "workflows"] });
   const state = { ...emptyState(), product_id: "product-a", step_key: "collect_customer" };
   const snapshot = structuredClone(state);
@@ -98,7 +98,7 @@ it("blocks the legacy linear order adapter after module deactivation without rea
   expect(state).toEqual(snapshot); expect(mocks.from).not.toHaveBeenCalled(); expect(mocks.generate).not.toHaveBeenCalled();
 });
 it("does not erase a pinned order or retrieve a disabled catalog during an informational interruption", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["knowledge"] });
   const state = migrateContext({ ...emptyState(), product_id: "product-a", step_key: "collect_size", fields: { size: "M" } });
   state.context!.execution.linear = { id: "workflow-a", versionId: "pinned", name: "Order", steps: [{ key: "collect_size", kind: "text" }] };
@@ -224,7 +224,7 @@ describe("W3 presentation-to-order journeys", () => {
     return turn("Çfarë produktesh keni?", state);
   }
   it.each(["i dyti", "Më trego produktin e dytë.", "më i liri"])("2A resolves %s for information without order preparation", async message => {
-    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+    
     mocks.profile.mockResolvedValue({ enabledModules: ["products", "knowledge"] });
     const info = await presentation();
     const chosen = await turn(message, info.nextState);
@@ -235,7 +235,7 @@ describe("W3 presentation-to-order journeys", () => {
     expect(mocks.generate.mock.calls.at(-1)![0].documentContext).toContain('"id":"p2"');
   });
   it("2A information selection followed by explicit ordering still requires order modules", async () => {
-    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+    
     mocks.profile.mockResolvedValue({ enabledModules: ["products", "knowledge"] });
     const info = await presentation();
     mocks.generate.mockResolvedValue({ reply: "Libri — 10 EUR", presentedProducts: [catalog[1]], responseId: null, source: "ai", fallbackReason: null });
@@ -354,7 +354,7 @@ describe("W3 presentation-to-order journeys", () => {
   });
   it("binds the selected product to the real visual runtime without consuming the selection as a field", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
-    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+    
     mocks.profile.mockResolvedValue({ enabledModules: ["products", "orders", "workflows"] });
     const ids = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000002"];
     const list = catalog.map((p, i) => ({ ...p, id: ids[i] })); fixtures.products = list;
@@ -721,7 +721,7 @@ it("preserves a sealed legacy order when shared context is enabled after reassig
   vi.stubEnv("TOKEN_ENCRYPTION_KEY", "snapshot-test-key");
   try {
     const first = await processAgentTurn({businessId:"business-a",message:"Bluzë",hasPhoto:false});
-    vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business-a");
+    
     fixtures.products = [{id:"product-a",name:"Bluzë",workflow_id:"workflow-new"}];
     first.nextState.linearSnapshot = {id:"workflow-new",versionId:"new",name:"New",steps:[{key:"customer",kind:"customer"}]};
     queries = [];

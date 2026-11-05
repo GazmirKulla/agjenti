@@ -10,7 +10,7 @@ const access: Access = { businessId: business, userId: "user", modules: ["workfl
 const definition = { name: "New order", steps: [{ key: "phone", kind: "text", fieldKey: "customer_phone", fieldType: "phone", label: "Telefoni" }, { key: "customer", kind: "customer", label: "Dorëzimi" }] };
 beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", business);
+    
     m.fixtures = { products: [{ id: product, name: "Bluzë", workflow_id: workflow }], linear_workflow_versions: [{ id: "version-1", workflow_id: workflow, name: "Original", steps: [{ key: "customer", kind: "customer", label: "Dorëzimi" }] }], product_workflow_drafts: null };
     m.from.mockImplementation((table: string) => { const chain = { select: () => chain, eq: () => chain, order: () => chain, limit: () => chain, maybeSingle: async () => ({ data: m.fixtures[table], error: null }), then: (f: (v: unknown) => unknown) => Promise.resolve({ data: m.fixtures[table], error: null }).then(f) }; return chain; });
     m.rpc.mockResolvedValue({ data: 1, error: null });

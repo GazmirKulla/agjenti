@@ -1,5 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { moduleEnforcementEnabled, requireRuntimeModules, capabilityModules } from "@/lib/capabilities/enforcement";
+import { requireRuntimeModules, capabilityModules } from "@/lib/capabilities/enforcement";
 import { enforceWorkflowCapabilities, requireOwnedBindings } from "@/lib/capabilities/workflow";
 import { loadVisualWorkspace } from "@/lib/workflows/visual/store";
 
@@ -11,7 +11,7 @@ export function visualSelection(value: unknown): { flowId: string; revision: num
 }
 /** Product writes and draft binding commit together; publication is never implicit. */
 export async function saveProductsWithVisualFlow(businessId: string, userId: string, selection: { flowId: string; revision: number }, mode: "create" | "update" | "import" | "bind", products: Record<string, unknown>[]) {
-  if (moduleEnforcementEnabled(businessId)) {
+  {
     try {
       const workspace = await loadVisualWorkspace(businessId);
       if (workspace.revision !== selection.revision || workspace.graph.version !== 2) return { error: "Rrjedha ndryshoi. Rifresko faqen." };

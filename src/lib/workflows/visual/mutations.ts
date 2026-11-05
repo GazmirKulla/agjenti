@@ -1,7 +1,7 @@
 import { requireActionAccess } from "@/lib/actions/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { enforceWorkflowCapabilities } from "@/lib/capabilities/workflow";
-import { CapabilityEnforcementError, moduleEnforcementEnabled } from "@/lib/capabilities/enforcement";
+import { CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
 import { normalizeVisualDraft, validateVisualGraph } from "./model";
 import { loadWorkflowReadiness } from "../readiness";
 import { loadVisualVersion, loadVisualWorkspace } from "./store";
@@ -44,7 +44,7 @@ export async function writeVisualWorkflow(
       : null;
   }
   let capabilities;
-  if (operation === "enable" && !activationGraph && moduleEnforcementEnabled(businessId))
+  if (operation === "enable" && !activationGraph)
     return { error: "Nuk u verifikua versioni i publikuar. Riaktivizimi nuk u krye." };
   if (operation !== "disable" && activationGraph) {
     try { capabilities = await enforceWorkflowCapabilities(businessId, userId, activationGraph, operation); }

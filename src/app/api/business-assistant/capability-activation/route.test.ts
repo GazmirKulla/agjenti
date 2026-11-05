@@ -36,7 +36,7 @@ async function offer() {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("TOKEN_ENCRYPTION_KEY", "synthetic-catalog-activation-only");
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "tenant-a,tenant-b");
+  
   m.user.mockResolvedValue({ id: "owner-a" });
   m.access.mockResolvedValue({ business: { id: "tenant-a", slug: "canonical-a", catalog_source: "internal" } });
   m.profile.mockResolvedValue({ enabledModules: ["products"] });

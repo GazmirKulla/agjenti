@@ -27,8 +27,8 @@ it('R3 validated reply precedes history and real PostgreSQL send preparation, re
   });
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', keys.api); vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', keys.service);
   vi.stubEnv('TOKEN_ENCRYPTION_KEY', fixture.encryptionKey);
-  vi.stubEnv('MODULE_ENFORCEMENT_BUSINESS_IDS', tenant.id);
-  vi.stubEnv('SHARED_WORKFLOW_BUSINESS_IDS', tenant.id);
+  
+  
   vi.stubEnv('OPENAI_API_KEY', 'synthetic-non-network-provider');
   model.create.mockImplementation(async () => ({ id: 'rejected-provider-history', output_text: model.text }));
   const effects = () => sql(`select json_build_array((select count(*) from public.orders),(select count(*) from public.order_submissions),

@@ -14,7 +14,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     m.writes = [];
     m.filters = [];
-    vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", business);
+    
     const chain = { select: () => chain, eq: (...v: unknown[]) => { m.filters.push(v); return chain; }, neq: () => chain, maybeSingle: async () => ({ data: { id: "connection", business_id: business, ig_user_id: "account", access_token_ciphertext: "sealed", status: "connected" }, error: null }), upsert: (...v: unknown[]) => { m.writes.push(v); return chain; }, update: (v: unknown) => { m.writes.push(v); return chain; }, throwOnError: async () => ({ error: null }), then: (f: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(f) };
     m.from.mockReturnValue(chain);
     m.send.mockResolvedValue({ ok: true, messageId: "sent" });
@@ -48,13 +48,13 @@ it("does not expose a reply as prepared if the atomic commit fails", async () =>
     expect(queued.status).toBe("processing");
 });
 it("persists inbound events with idempotency before processing", async () => {
-    vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+    
     const message = { channel: "instagram", externalMessageId: "event", externalParticipantId: "person", contextMetadata: { instagramAccountId: "account" }, timestamp: new Date(), rawPayload: {}, attachments: [] } as unknown as NormalizedIncomingMessage;
     expect(await enqueueWorkflowMessage(message)).toBe(true);
     expect(m.writes).toContainEqual([expect.objectContaining({ participant_id: "person", external_id: "event", business_id: business }), { onConflict: "connection_id,external_id", ignoreDuplicates: true }]);
 });
 it("claims every tenant independently of the shared workflow pilot", async () => {
-    vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+    
     m.rpc.mockResolvedValue({ data: [], error: null });
     await runWorkflowQueue();
     expect(m.rpc).toHaveBeenCalledWith("claim_workflow_transport", { p_businesses: null, p_test_user: null, p_test_stream: null, p_fragments: true });
@@ -75,7 +75,7 @@ it.each([true,false])("pauses only actual staff ownership, advisory=%s",async ad
 });
 
 it("queues WhatsApp durably even outside the Instagram pilot", async () => {
- vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+ 
  const message = { channel: "whatsapp", externalMessageId: "wamid.1", externalParticipantId: "355691234567", contextMetadata: { whatsappPhoneNumberId: "123456" }, timestamp: new Date(), rawPayload: {}, attachments: [] } as unknown as NormalizedIncomingMessage;
  expect(await enqueueWorkflowMessage(message)).toBe(true);
  expect(m.from).toHaveBeenCalledWith("whatsapp_connections");

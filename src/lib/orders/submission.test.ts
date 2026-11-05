@@ -182,7 +182,7 @@ describe("W4 order submission boundary", () => {
     expect(m.rpc).not.toHaveBeenCalled();
   });
   it("enforces module deactivation before dispatch", async () => {
-    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+    
     m.profile.mockResolvedValue({ enabledModules: ["products"] });
     await expect(submitConfirmedOrder(args)).rejects.toMatchObject({ code: "module_disabled" });
     expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();

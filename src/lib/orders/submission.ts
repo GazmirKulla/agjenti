@@ -1,4 +1,4 @@
-import { CapabilityEnforcementError, moduleEnforcementEnabled, requireRuntimeModules } from "@/lib/capabilities/enforcement";
+import { CapabilityEnforcementError, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { submitExternalOrder } from "@/lib/integrations/zana";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { freshOrderReview, migrateContext } from "@/lib/workflows/context";
@@ -115,7 +115,7 @@ async function submitOrder(input: {businessId: string; conversationId: string; u
     p_business: businessId, p_conversation: conversationId, p_revision: row.revision, p_collected: row.collected, p_order: state,
   }) : await db.rpc("submit_confirmed_order", {
     p_business: businessId, p_user: userId, p_conversation: conversationId, p_revision: row.revision,
-    p_collected: row.collected, p_order: state, p_enforce_modules: moduleEnforcementEnabled(businessId),
+    p_collected: row.collected, p_order: state, p_enforce_modules: true,
   });
   if (error || !isReceipt(data)) fail(error?.message ?? "write_failed");
   const receipt = data;

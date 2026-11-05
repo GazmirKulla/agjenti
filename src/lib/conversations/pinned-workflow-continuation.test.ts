@@ -85,8 +85,8 @@ const turn = (message: string, state = order(), source: "instagram" | "whatsapp"
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("OPENAI_API_KEY", "");
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "");
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  
+  
   vi.stubEnv("TOKEN_ENCRYPTION_KEY", "b".repeat(64));
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Network forbidden in synthetic regression"); }));
   mocks.user.mockResolvedValue({ id: "synthetic-user" });
@@ -139,8 +139,8 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 it.each(["correct", "phone_phrase", "staff", "module", "cancelled"])("post-confirmation %s retains A after B publication and respects existing ownership guards", async scenario => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", businessId);
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
+  
+  
   const a = versions.A;
   if (a.graph.version !== 2) throw new Error("fixture");
   a.graph.flows[0].productIds = [productId];
@@ -532,7 +532,7 @@ it.each(["active", "inactive", "foreign", "module_off"])("2B relative service re
   if (eligibility === "inactive") services[1].is_active = false;
   if (eligibility === "foreign") services[1].business_id = "other-business";
   if (eligibility === "module_off") {
-    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
+    
     mocks.profile.mockResolvedValue({ enabledModules: ["products", "orders", "workflows"] });
   }
   const accepted = await processConversationMessage({ businessId, message: "Po", state: change.nextState, deliveredReply: change.reply, source: "instagram", hasPhoto: false });
@@ -577,7 +577,7 @@ it("round-trips a bound retail draft through the real server action, sealed sess
 
 it.each(["products", "orders", "workflows"])("does not consume the pending field with %s disabled", async disabled => {
   const state = collecting("quantity", "number");
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["products", "orders", "workflows"].filter(module => module !== disabled) });
   const onTrace = vi.fn();
   const result = await processConversationMessage({ businessId, message: "4", state, hasPhoto: false, mode: "test", onTrace });
@@ -613,7 +613,7 @@ it("keeps an information-only business out of collection and action adapters", a
     { id: "end", kind: "end", label: "End", position: { x: 0, y: 0 }, config: {} },
   ], edges: [{ id: "s", source: "start", target: "info", port: "next" }, { id: "e", source: "info", target: "end", port: "next" }],
     flows: [{ id: "info", label: "Information", kind: "information", entryNodeId: "info", nodeIds: ["info"] }] };
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "knowledge"] });
   const result = await simulateVisualWorkflow("synthetic-information", graph, "What are your hours?");
   expect(result.error).toBeUndefined();
@@ -651,7 +651,7 @@ it("collects quote fields in their service process across interruption, without 
   expect(invalid.nextState.processes?.service?.visual.nodeId).toBe("budget");
   // A historical product list must not impose Orders/Products permissions on a quote field.
   recordEntityPresentation(invalid.nextState, businessId, "Bluzë", products);
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["services", "workflows", "knowledge"] });
   const budget = await turn("1500.50", invalid.nextState, "instagram", versions.A);
   expect(budget.reply).toBe("Reference?");
@@ -669,7 +669,7 @@ it("validates dates with the existing booking adapter, not a fictitious visual d
   services = [{ id: serviceId, business_id: businessId, name: "Consultation", is_active: true, booking_enabled: true, duration_minutes: 30, buffer_minutes: 0 }];
   const graph = versions.A.graph as VisualGraphV2;
   graph.flows.find(flow => flow.id === "booking")!.serviceIds = [serviceId];
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["services", "bookings", "workflows", "knowledge"] });
   mocks.bookParse.mockResolvedValue({ bookingIntent: true, cancel: false, serviceId, date: null, time: null, name: null, contact: null });
   const start = await simulateVisualWorkflow("synthetic-appointments", graph, "Dua të rezervoj Consultation");

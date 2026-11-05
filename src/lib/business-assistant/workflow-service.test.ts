@@ -631,7 +631,7 @@ it("creates, refines, saves and publishes a v2 workflow through separate bound c
   let current = { graph: initial, revision: 0, publishedVersionId: null as string | null, enabled: false, available: true, generated: true };
   m.workspace.mockImplementation(async () => structuredClone(current));
   m.version.mockImplementation(async () => ({ graph: structuredClone(current.graph), businessId: access.businessId }));
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", access.businessId);
+  
   vi.stubEnv("CRON_SECRET", "synthetic-only");
   const writes: string[] = [];
   m.rpc.mockImplementation(async (name: string, args: { p_operation: string; p_graph: VisualGraph; p_revision: number }) => {

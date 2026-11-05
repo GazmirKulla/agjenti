@@ -27,7 +27,7 @@ const graph: VisualGraphV2 = {
 let product: Record<string, unknown>;
 let writes: string[];
 beforeEach(() => {
-  vi.clearAllMocks(); vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", businessId);
+  vi.clearAllMocks(); 
   writes = [];
   product = { id: productId, business_id: businessId, name: "Synthetic item", product_type_id: typeId, workflow_id: null, price_amount: 25, currency: "EUR", is_active: false, updated_at: "2026-10-15T10:00:00Z" };
   m.profile.mockResolvedValue({ enabledModules: ["products", "orders", "workflows"] });

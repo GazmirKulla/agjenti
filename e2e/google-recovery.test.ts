@@ -75,7 +75,7 @@ beforeAll(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", keys.api);
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", keys.service);
   vi.stubEnv("TOKEN_ENCRYPTION_KEY", "s2-synthetic-test-key-never-use-outside-local");
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "");
+  
   vi.stubGlobal("fetch", controlledFetch);
   db = createClient(keys.api, keys.service, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: controlledFetch } });
 });

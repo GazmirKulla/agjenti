@@ -3,13 +3,13 @@ const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc }) }));
 import { loadWorkflowReadiness } from "./readiness";
 beforeEach(() => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "pilot"); vi.stubEnv("CRON_SECRET", "configured");
+  vi.stubEnv("CRON_SECRET", "configured");
   rpc.mockResolvedValue({ data: { schemaVersion: 3, scheduled: true, lastSuccessAt: new Date().toISOString() }, error: null });
 });
 afterEach(() => vi.unstubAllEnvs());
-it("requires tenant activation, schema, a minute schedule and recent successful worker", async () => {
+it("requires healthy infrastructure equally for every business", async () => {
   expect((await loadWorkflowReadiness("pilot")).ready).toBe(true);
-  expect((await loadWorkflowReadiness("other")).ready).toBe(false);
+  expect((await loadWorkflowReadiness("other")).ready).toBe(true);
   rpc.mockResolvedValue({ data: { schemaVersion: 3, scheduled: false, lastSuccessAt: "2020-01-01T00:00:00Z" }, error: null });
   expect((await loadWorkflowReadiness("pilot")).blockers).toHaveLength(2);
 });
@@ -19,8 +19,7 @@ it("reports missing migrations without exposing internal errors or secrets", asy
   expect(result.ready).toBe(false); expect(JSON.stringify(result)).not.toContain("private SQL");
 });
 it("makes runtime available to a new business without manual enrollment", async () => {
-  vi.stubEnv("SHARED_WORKFLOW_MODE", "all"); vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "older-business");
+  
   expect((await loadWorkflowReadiness("new-business")).ready).toBe(true);
-  vi.stubEnv("SHARED_WORKFLOW_MODE", "disabled");
-  expect((await loadWorkflowReadiness("new-business")).ready).toBe(false);
+
 });

@@ -3,7 +3,7 @@ const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc }) }));
 import { loadAllowedModules, requireModuleAllowed } from "./entitlements";
 import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
-beforeEach(() => { rpc.mockReset(); vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", ""); });
+beforeEach(() => { rpc.mockReset(); });
 it("applies platform revocation even outside the workspace-enforcement rollout", async () => {
   rpc.mockResolvedValue({ data: ["dashboard", "inbox", "services"], error: null });
   await expect(requireRuntimeModules("tenant", ["products"])).rejects.toMatchObject({ code: "module_disabled" });

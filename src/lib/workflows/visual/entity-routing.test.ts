@@ -62,14 +62,14 @@ it("W3 a product hint does not hide a service with the same explicitly mentioned
 });
 afterEach(() => vi.unstubAllEnvs());
 it("does not permit an inactive entity preview to bypass enrolled tenant restrictions", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  
   m.profile.mockResolvedValue({ enabledModules: ["products", "services", "workflows", "orders"] });
   m.rows.products = [{ id: p, name: "Puzzle", is_active: false }];
   expect((await resolveVisualEntity("business", graph(), "Puzzle", undefined, true)).selected).toBeUndefined();
   expect(m.filters).not.toContainEqual(["products", "is_active", false]);
 });
 it("rechecks a pinned binding's current module rather than accepting the old selection", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  
   m.profile.mockResolvedValue({ enabledModules: ["services", "workflows"] });
   await expect(resolveVisualEntity("business", graph(), "M", { flowId: "order", entity: { kind: "product", id: p } })).rejects.toMatchObject({ code: "module_disabled" });
   expect(m.create).not.toHaveBeenCalled();

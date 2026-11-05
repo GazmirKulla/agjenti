@@ -1,6 +1,11 @@
 /** Real planner + independent reviewer, synthetic tenant and no business writes. */
-import {beforeEach,expect,it,vi} from "vitest";
-const m=vi.hoisted(()=>({prepare:vi.fn(),execute:vi.fn(),assess:vi.fn(),load:vi.fn()}));
+import {afterEach,beforeEach,expect,it,vi} from "vitest";
+const m=vi.hoisted(()=>({observations:[] as unknown[],prepare:vi.fn(),execute:vi.fn(),assess:vi.fn(),load:vi.fn()}));
+vi.mock("openai",async original=>{
+ const actual=await original<typeof import("openai")>();
+ return {...actual,default:new Proxy(actual.default,{construct(Target,args){const client=Reflect.construct(Target,args);client.responses.create=new Proxy(client.responses.create.bind(client.responses),{async apply(target,receiver,args){const response=await Reflect.apply(target,receiver,args) as {output_text:string};m.observations.push({kind:args[0].text?.format?.name,response:JSON.parse(response.output_text),...(args[0].text?.format?.name==="configuration_review"?{input:JSON.parse(args[0].input)}:{})});return response;}});return client;}})};
+});
+afterEach(()=>{if(process.env.CONFIGURATION_MODEL_DIAGNOSTICS==="1") console.log(JSON.stringify(m.observations));});
 vi.mock("@/lib/actions/operations/plans",()=>({prepareConfigurationPlan:m.prepare,executeConfigurationPlan:m.execute,loadConfigurationPlan:vi.fn(),renewConfigurationPlan:vi.fn(),prepareOperationPlan:vi.fn(),resumeOperationPlan:vi.fn(),executeOperationPlan:vi.fn()}));
 vi.mock("@/lib/capabilities/assessment",()=>({assessBusinessCapabilities:m.assess,summarizeCapabilityAssessments:(v:unknown)=>v}));
 vi.mock("@/lib/business-assistant/workflow-service",async original=>({...await original<typeof import("@/lib/business-assistant/workflow-service")>(),loadAssistantWorkflow:m.load}));
@@ -14,7 +19,7 @@ import {emptyVisualGraph} from "@/lib/workflows/visual/model";
 const live=it.skipIf(process.env.RUN_SEMANTIC_MODEL!=="1");
 const access={businessId:"synthetic",userId:"synthetic-owner",modules:["settings","knowledge","agents","products","orders","workflows"],catalogSource:"internal"};
 beforeEach(()=>{
- vi.clearAllMocks();
+ vi.clearAllMocks();m.observations=[];
  m.assess.mockResolvedValue(["knowledge.answer","order.create"].map(capabilityKey=>({capabilityKey,status:"needs_setup",missingRequirements:["active_knowledge"],reasonCode:"missing_configuration"})));
  m.load.mockResolvedValue({workspace:{graph:emptyVisualGraph(),revision:0,generated:true,available:true,enabled:false,publishedVersionId:null},published:null});
  m.prepare.mockResolvedValue({id:"synthetic-plan"});

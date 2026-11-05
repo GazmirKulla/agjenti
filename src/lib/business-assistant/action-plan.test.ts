@@ -45,7 +45,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("OPENAI_API_KEY", "synthetic-no-network");
   vi.stubEnv("TOKEN_ENCRYPTION_KEY", "synthetic-plan-test-only");
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "tenant-a");
+  
   m.user.mockResolvedValue({ id: "owner-a" });
   m.access.mockResolvedValue({ business: { id: "tenant-a", catalog_source: "internal" } });
   m.profile.mockResolvedValue({ enabledModules: ["knowledge", "products", "orders", "workflows", "services", "bookings", "staff"] });

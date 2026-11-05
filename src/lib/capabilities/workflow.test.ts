@@ -45,7 +45,7 @@ function query(table: string) {
 }
 beforeEach(() => {
   vi.mocked(reviewWorkflowSemantics).mockReset();
-  vi.clearAllMocks(); vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "tenant-a");
+  vi.clearAllMocks(); 
   membership = true; active = true; count = 1; filters = []; connection = null;
   m.profile.mockResolvedValue({ source: "manual", enabledModules: ["products", "orders", "workflows"] });
   m.from.mockImplementation(query);
@@ -152,7 +152,7 @@ it("rechecks current modules after the assessment rather than trusting earlier r
   expect(result.publication?.findings[0].code).toBe("module_disabled"); expect(m.rpc).not.toHaveBeenCalled();
 });
 it("keeps rollout explicit and leaves unenrolled legacy saves compatible", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "other, *");
+  
   expect(moduleEnforcementEnabled("tenant-a")).toBe(false);
   await expect(enforceWorkflowCapabilities("tenant-a", "actor", graph(), "publish")).resolves.toBeUndefined();
   expect(m.profile).not.toHaveBeenCalled();

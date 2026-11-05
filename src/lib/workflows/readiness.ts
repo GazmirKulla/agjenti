@@ -1,11 +1,9 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { sharedWorkflowEnabled } from "./context";
 
 export type WorkflowReadiness = { ready: boolean; blockers: string[] };
 /** Server-only deployment health. Never return secrets or another tenant's data. */
-export async function loadWorkflowReadiness(businessId: string): Promise<WorkflowReadiness> {
+export async function loadWorkflowReadiness(__businessId: string): Promise<WorkflowReadiness> {
   const blockers: string[] = [];
-  if (!sharedWorkflowEnabled(businessId)) blockers.push("Shërbimi i workflow-ve është përkohësisht i çaktivizuar nga platforma.");
   if (!process.env.CRON_SECRET?.trim()) blockers.push("Konfiguro çelësin e rikuperimit të mesazheve.");
   const { data, error } = await createServiceSupabase().rpc("workflow_runtime_readiness");
   if (error || data?.schemaVersion !== 3) {

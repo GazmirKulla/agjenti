@@ -15,7 +15,7 @@ const guard = { jobId: 7, leaseToken: "lease", conversationId: "conversation", r
 const booking = { id: "booking", status: "pending", sync_status: "local" };
 afterEach(() => vi.unstubAllEnvs());
 it.each(["bookings", "services"])("refuses availability and new booking effects when %s is disabled", async disabled => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business");
+  
   m.profile.mockResolvedValue({ enabledModules: ["bookings", "services"].filter(module => module !== disabled) });
   await expect(availableSlots("business", input.serviceId, "2026-11-01")).rejects.toMatchObject({ code: "module_disabled" });
   await expect(persistBooking("business", input, guard)).rejects.toMatchObject({ code: "module_disabled" });

@@ -95,7 +95,7 @@ it("W2 blocks an old visual confirmation after an invalid profile correction", a
 });
 
 it("blocks an older pinned product action after module deactivation without mutating its snapshot", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "products"] });
   const graph = linear(node("product", "product"));
   mocks.load.mockResolvedValue(version(graph, "old-version"));
@@ -107,7 +107,7 @@ it("blocks an older pinned product action after module deactivation without muta
   expect(legacy).not.toHaveBeenCalled(); expect(state).toEqual(snapshot); expect(graph).toEqual(originalGraph);
 });
 it("blocks a general order flow with only collect nodes before accepting data", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "products"] });
   const graph: VisualGraph = { ...linear(node("name", "collect", { fieldKey: "name", prompt: "Emri?" })), version: 2,
     flows: [{ id: "order", kind: "order", label: "Porosi", entryNodeId: "name", nodeIds: ["name"] }] };
@@ -116,7 +116,7 @@ it("blocks a general order flow with only collect nodes before accepting data", 
   expect(state).toEqual(snapshot);
 });
 it("checks the executed branch rather than requiring disabled modules in unrelated branches", async () => {
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "business-a");
+  
   mocks.profile.mockResolvedValue({ enabledModules: ["workflows", "knowledge"] });
   const legacy = vi.fn(async (p: LegacyParams) => response(p));
   const result = await executeVisualTurn({ ...params(), message: "Sa kushton?" }, legacy);

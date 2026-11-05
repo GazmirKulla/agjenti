@@ -1,7 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { enforceOrderWorkflow } from "@/lib/capabilities/workflow";
 import { encryptSecret } from "@/lib/crypto/tokens";
-import { sharedWorkflowEnabled } from "@/lib/workflows/context";
 import { parseLinearDefinition, type LinearDefinition } from "@/lib/workflows/linear";
 import { AssistantError, type Proposal, type Preview } from "./model";
 import type { Access, Ticket } from "./service";
@@ -29,7 +28,7 @@ export type LinearCard = {
     partial?: boolean;
 };
 function allow(access: Access) {
-    if (!sharedWorkflowEnabled(access.businessId) || !access.modules.includes("workflows") || !access.modules.includes("products"))
+    if (!access.modules.includes("workflows") || !access.modules.includes("products"))
         throw new AssistantError("Workflow-t e produkteve me AI nuk janë aktivizuar për këtë biznes.");
 }
 export async function loadLinearContext(access: Access, productId?: string | null): Promise<LinearCard> {

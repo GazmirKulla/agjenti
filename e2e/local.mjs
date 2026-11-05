@@ -137,8 +137,6 @@ async function app(syntheticR3 = false, transport = false) {
   const env = { ...safeEnv(), NEXT_PUBLIC_APP_URL: 'http://localhost:3103', NEXT_PUBLIC_SUPABASE_URL: keys.api,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: keys.anon, SUPABASE_SERVICE_ROLE_KEY: keys.service,
     TOKEN_ENCRYPTION_KEY: fixtures.encryptionKey, OPENAI_API_KEY: '',
-    MODULE_ENFORCEMENT_BUSINESS_IDS: fixtures.tenants.map(t => t.id).join(','),
-    SHARED_WORKFLOW_BUSINESS_IDS: fixtures.tenants.map(t => t.id).join(','),
     NODE_OPTIONS: `--require=${path.join(root, 'e2e/network-guard.cjs')}` };
   // Dedicated controlled-provider command only. Never load a real API key or
   // grant external egress. Ordinary `app` retains its provider-denied behavior.

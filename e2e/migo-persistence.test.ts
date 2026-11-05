@@ -314,9 +314,9 @@ it("closing a plan is revision-fenced, durable and never a backend execution out
 });
 it("visual, linear and order drafts retain reviewable definitions, not approval tickets or publication", async () => {
   const counts = () => sql("select jsonb_build_array((select count(*) from workflows),(select count(*) from linear_workflow_versions),(select count(*) from visual_workflow_versions),(select count(*) from assistant_visual_requests));");
-  const before = counts(), productId = randomUUID(), oldFlag = process.env.SHARED_WORKFLOW_BUSINESS_IDS;
+  const before = counts(), productId = randomUUID();
   expect((await admin.from("products").insert({ id: productId, business_id: business, name: "UX3 workflow fixture", is_active: false })).error).toBeNull();
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", business);
+  
   try {
     const definition = { name: "UX3 review only", steps: [{ key: "customer", kind: "customer", label: "Të dhënat", required: true }] };
     for (const proposal of [
@@ -345,8 +345,6 @@ it("visual, linear and order drafts retain reviewable definitions, not approval 
     expect((await reassessPlan(access(), plan)).recovery.verified).toBe(false);
     expect(counts()).toBe(before);
   } finally {
-    if (oldFlag === undefined) delete process.env.SHARED_WORKFLOW_BUSINESS_IDS;
-    else process.env.SHARED_WORKFLOW_BUSINESS_IDS = oldFlag;
     await admin.from("products").delete().eq("id", productId).eq("business_id", business);
   }
 });

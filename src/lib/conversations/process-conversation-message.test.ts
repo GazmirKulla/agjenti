@@ -404,7 +404,7 @@ describe("W1 pending clarification and turn ownership", () => {
   });
 
   it.each(["collect", "confirm"] as const)("executes the existing visual runtime without consuming resume as %s input", async kind => {
-    vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "");
+    
     const graph: VisualGraph = { version: 2, name: "W1 fixture", nodes: [
       { id: "start", kind: "start", label: "Start", position: { x: 0, y: 0 }, config: {} },
       { id: "pending", kind, label: "Pending", position: { x: 0, y: 100 }, config: kind === "collect" ? { fieldKey: "note", fieldType: "text", prompt: "Shënimi?" } : { prompt: "Konfirmon porosinë?" } },
@@ -730,14 +730,14 @@ it("does not invoke a booking capability removed from a v2 definition", async ()
   expect(next.nextState.processes?.order?.status).toBe("active");
 });
 it("routes source-less production calls through the same coordinator", async () => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  
   await processConversationMessage({ businessId: "business", message: "Dua rezervim", hasPhoto: false, state: emptyState(), mode: "production" });
   const [bookingParams] = mocks.booking.mock.calls[0] ?? [];
   expect(bookingParams).toEqual(expect.objectContaining({ businessId: "business", message: "Dua rezervim", mode: "production" }));
   expect(bookingParams.routed).toBe(true);
 });
 it.each(["instagram", "whatsapp"] as const)("routes %s through business conversation handling without a pilot flag", async source => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  
   const bookingGuard = { jobId: 1, leaseToken: "lease", conversationId: "conversation", revision: 4 };
   const next = await processConversationMessage({ businessId: "business", source, message: "Pershendetje", hasPhoto: false, state: emptyState(), mode: "production", bookingGuard });
   expect(next.nextState.schemaVersion).toBe(3);
@@ -748,7 +748,7 @@ it.each(["instagram", "whatsapp"] as const)("routes %s through business conversa
 });
 
 it.each(["instagram", "whatsapp"] as const)("uses the business agent for ambiguous %s messages without inventing workflow changes", async source => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  
   mocks.guidance.mockResolvedValue({ action: "clarify", target: null, source: "ai" });
   mocks.info.mockImplementation(async ({ state }) => result(state, "Përshëndetje! Si mund t’ju ndihmojmë?"));
   let state = emptyState();
@@ -1210,7 +1210,7 @@ const channelCases = [
   { source: "admin_chat_lab" as const, mode: "test" as const, guarded: false },
 ];
 it.each(channelCases)("shares routing and task resumption in $source / guard=$guarded", async ({ source, mode, guarded }) => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  
   const bookingGuard = guarded ? { jobId: 1, leaseToken: "lease", conversationId: "conversation", revision: 4 } : undefined;
   const run = (message: string, state: ConversationStatePayload) => processConversationMessage({ businessId: "business", source, mode, bookingGuard, message, state, hasPhoto: false });
   const original = order();
@@ -1238,10 +1238,10 @@ it.each(channelCases)("shares routing and task resumption in $source / guard=$gu
   expect(support.nextState.processes?.order?.status).toBe("suspended");
 });
 it("keeps both migrated and new Instagram threads on the shared coordinator without a pilot", async () => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business");
+  
   const migrated = await processConversationMessage({ businessId: "business", source: "instagram", message: "M", state: order(), hasPhoto: false });
   expect(migrated.nextState.schemaVersion).toBe(3);
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  
   const continued = await processConversationMessage({ businessId: "business", source: "instagram", message: "L", state: migrated.nextState, hasPhoto: false });
   expect(continued.conversationRouting?.process).toBe("order");
   expect(continued.nextState.processes?.order?.snapshot.execution.linear?.versionId).toBe("v1");
@@ -1251,7 +1251,7 @@ it("keeps both migrated and new Instagram threads on the shared coordinator with
 });
 
 it.each(["instagram", "whatsapp"] as const)("preserves a migrated booking's pinned graph through an order detour in %s production", async source => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business");
+  
   const state = emptyState(); state.schemaVersion = 2;
   state.visual = { versionId: "old-booking", nodeId: "booking", status: "waiting", awaiting: true, visited: ["booking"], values: { note: "Keep" } };
   state.step_key = "booking_request";
@@ -1274,7 +1274,7 @@ it.each(["instagram", "whatsapp"] as const)("preserves a migrated booking's pinn
   expect(mocks.agent.mock.lastCall![0].state.visual).toEqual(state.visual);
 });
 it("emits bounded coordinator metadata for an early acknowledgement without customer text", async () => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "business");
+  
   const onTrace = vi.fn();
   const state = order(); state.recentMessages = [{ role: "assistant", content: "Informacion privat" }];
   await processConversationMessage({ businessId: "business", source: "instagram", message: "Ok", state, hasPhoto: false, onTrace,
@@ -1302,7 +1302,7 @@ it("keeps contact advice advisory and retains its topic without a visual cursor"
   expect(mocks.info).toHaveBeenCalledWith(expect.objectContaining({ informational: expect.stringContaining("no handoff") }));
 });
 it("supports a real handoff for a non-pilot business with no visual graph", async () => {
-  vi.stubEnv("SHARED_WORKFLOW_BUSINESS_IDS", "");
+  
   const next = await processConversationMessage({ businessId: "business", source: "instagram", message: "Dua të flas me stafin", state: emptyState(), hasPhoto: false });
   expect(next).toMatchObject({ handoff: true, advisoryHandoff: false, nextState: { staffHandoff: true } });
   expect(mocks.info).not.toHaveBeenCalled();

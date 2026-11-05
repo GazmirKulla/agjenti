@@ -18,7 +18,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.invalid");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-placeholder");
-  vi.stubEnv("MODULE_ENFORCEMENT_BUSINESS_IDS", "");
+  
   m.rpc.mockResolvedValue({ data: ["products", "orders"], error: null });
 });
 afterEach(() => vi.unstubAllEnvs());

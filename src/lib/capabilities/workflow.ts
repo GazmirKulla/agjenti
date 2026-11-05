@@ -3,7 +3,7 @@ import type { VisualGraph } from "@/lib/workflows/visual/types";
 import { assessBusinessCapabilities } from "./assessment";
 import { reviewWorkflowSemantics } from "./workflow-semantics";
 import { graphRequirements } from "./graph";
-import { capabilityModules, CapabilityEnforcementError, moduleEnforcementEnabled, requireRuntimeModules } from "./enforcement";
+import { capabilityModules, CapabilityEnforcementError, requireRuntimeModules } from "./enforcement";
 import type { CapabilityAssessment } from "./registry";
 import { capabilityFinding, readinessFinding } from "./diagnostics";
 
@@ -28,9 +28,8 @@ export async function requireOwnedBindings(businessId: string, productIds: strin
   }
 }
 
-/** New policy is opt-in per tenant; simulation and confirmation rules remain separate and unchanged. */
+/** One capability policy for every business; simulation and publication remain separately verified. */
 export async function enforceWorkflowCapabilities(businessId: string, userId: string, graph: VisualGraph, operation: "draft" | "publish" | "enable"): Promise<CapabilityAssessment[] | undefined> {
-  if (!moduleEnforcementEnabled(businessId)) return undefined;
   const required = graphRequirements(graph);
   try {
     const semantic = await reviewWorkflowSemantics("", graph);
@@ -66,7 +65,6 @@ export async function enforceWorkflowCapabilities(businessId: string, userId: st
 /** Authoring legacy definitions checks catalog/modules, not a pre-existing order
  * workflow (which would recreate the bootstrap cycle). Execution is checked separately. */
 export async function enforceOrderWorkflow(businessId: string, userId: string, productIds: string[]) {
-  if (!moduleEnforcementEnabled(businessId)) return;
   const assessments = await assessBusinessCapabilities(businessId, { userId }, { keys: ["product.search"] });
   await requireRuntimeModules(businessId, capabilityModules(["order.prepare"]));
   await requireActiveBindings(businessId, productIds, []);

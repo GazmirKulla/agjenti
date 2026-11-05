@@ -2,7 +2,6 @@ import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { capabilityRegistry, getCapability, type CapabilityAssessment, type CapabilityDefinition } from "./registry";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
-import { moduleEnforcementEnabled } from "./enforcement";
 import { googleConfigured } from "@/lib/calendar/google";
 import { hasOrderConfiguration } from "@/lib/orders/workflow-readiness";
 
@@ -100,7 +99,7 @@ async function assessKnownCapability(definition: CapabilityDefinition, businessI
     ];
     // Google is optional: local bookings need no external integration. An
     // explicitly connected but incomplete integration must not look ready.
-    if (!missing.length && moduleEnforcementEnabled(businessId)) {
+    if (!missing.length) {
       const connection = await db.from("google_calendar_connections").select("connected,calendar_id").eq("business_id", businessId).maybeSingle();
       if (connection.error) throw new Error("Nuk u verifikua konfigurimi i integrimit.");
       if (connection.data?.connected && (!connection.data.calendar_id || !googleConfigured()))
@@ -116,7 +115,7 @@ async function assessKnownCapability(definition: CapabilityDefinition, businessI
 
 export async function assessBusinessCapabilities(businessId: string, actor: CapabilityAssessmentActor, scope?: { keys: string[]; candidate?: VisualGraph }): Promise<CapabilityAssessment[]> {
   await authorizedBusiness(businessId, actor);
-  const profile = await loadDashboardProfile(businessId, { requireExplicit: moduleEnforcementEnabled(businessId) });
+  const profile = await loadDashboardProfile(businessId);
   const keys = [...new Set(scope?.keys ?? Object.keys(capabilityRegistry))];
   return Promise.all(keys.map(key => {
     const definition = getCapability(key);
@@ -129,7 +128,7 @@ export async function assessCapability(businessId: string, actor: CapabilityAsse
   await authorizedBusiness(businessId, actor);
   const definition = getCapability(capabilityKey);
   if (!definition) return { capabilityKey, status: "unsupported", availability: "unsupported", reasonCode: "unknown_capability", missingRequirements: [], safeAlternative: "Kërko një veprim të mbështetur nga Agjenti." };
-  const profile = await loadDashboardProfile(businessId, { requireExplicit: moduleEnforcementEnabled(businessId) });
+  const profile = await loadDashboardProfile(businessId);
   return assessKnownCapability(definition, businessId, profile.enabledModules);
 }
 
