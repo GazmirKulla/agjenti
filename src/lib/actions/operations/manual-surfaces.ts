@@ -43,6 +43,7 @@ export const manualSurfaces = {
   "src/lib/calendar/actions.ts#disconnectGoogleCalendar": {"exception": "OAuth revocation remains in the connected account UI."},
   "src/lib/catalogs/actions.ts#saveCatalog": {"exception": "Document upload requires a user-selected attachment."},
   "src/lib/chat-lab/actions.ts#searchLabBusinesses": {"exception": "Read-only business lookup in the platform test lab."},
+  "src/lib/chat-lab/actions.ts#loadLabDrafts": {"exception": "Read-only lookup of unpublished agent drafts in the platform test lab."},
   "src/lib/chat-lab/actions.ts#loadLabSetup": {"exception": "Read-only platform test-lab context."},
   "src/lib/chat-lab/actions.ts#runLabTurn": {"exception": "Isolated platform simulation with no production side effects."},
   "src/lib/dashboard/modules/actions.ts#saveModules": {"exception": "Navigation preferences do not grant or remove runtime capabilities."},
