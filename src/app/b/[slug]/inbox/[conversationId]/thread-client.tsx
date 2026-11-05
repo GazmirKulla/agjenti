@@ -129,6 +129,14 @@ export function ThreadClient(props: {
         >
           ↻
         </button>
+        <Link
+          href={`/b/${props.slug}/inbox`}
+          className="btn btn-ghost"
+          aria-label={t("Mbyll pamjen e bisedës")}
+          title={t("Mbyll pamjen e bisedës")}
+        >
+          <span aria-hidden="true">×</span>
+        </Link>
       </div>
       <div className="chat-actions">
         <button

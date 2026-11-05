@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import type { CommandActor } from "@/lib/actions/command-actor";
-import type { PreparedOperation } from "@/lib/actions/operations/service";
+import { readActivitySteps } from "@/lib/actions/operations/activity-steps";
 import { OperationButton } from "./operation-button";
 
 export async function OperationActivity({ actor }: { actor: CommandActor }) {
@@ -10,15 +10,19 @@ export async function OperationActivity({ actor }: { actor: CommandActor }) {
     db.from("business_operation_plans").select("id,title,state,steps").eq("business_id", actor.business.id).eq("user_id", actor.userId).order("updated_at", { ascending: false }).limit(20),
     db.from("business_attention_events").select("id,title,detail,href,created_at").eq("business_id", actor.business.id).eq("user_id", actor.userId).order("created_at", { ascending: false }).limit(20),
   ]);
-  const ids = (plans.data ?? []).flatMap(plan => (plan.steps as PreparedOperation[]).map(step => step.requestId));
+  const activityPlans = (plans.data ?? []).map(plan => ({ ...plan, activity: readActivitySteps(plan.steps) }));
+  const ids = activityPlans.flatMap(plan => plan.activity?.steps.map(step => step.requestId) ?? []);
   const receipts = ids.length ? await db.from("business_operation_receipts").select("id,state").eq("business_id", actor.business.id).eq("user_id", actor.userId).in("id", ids) : { data: [], error: null };
   const progress = new Map((receipts.data ?? []).map(row => [row.id, row.state]));
   return <>
     <section className="panel section-pad mt-5"><h2>Punët e tua me asistentin</h2>
-      {plans.error || receipts.error ? <p role="alert">Progresi nuk u ngarkua. Rifresko faqen përpara një veprimi tjetër.</p> : plans.data?.length ? plans.data.map(plan => <article key={plan.id} className="border-t py-4">
+      {plans.error || receipts.error ? <p role="alert">Progresi nuk u ngarkua. Rifresko faqen përpara një veprimi tjetër.</p> : activityPlans.length ? activityPlans.map(plan => <article key={plan.id} className="border-t py-4">
         <h3>{plan.title}</h3><p>{plan.state === "completed" ? "Përfunduar" : plan.state === "blocked" ? "Kërkon kontroll" : "Në pritje të konfirmimit"}</p>
-        <ol className="list-decimal pl-5">{(plan.steps as PreparedOperation[]).map(step => <li key={step.requestId}>{step.preview.title}{step.preview.subject ? ` · ${step.preview.subject}` : ""} — {progress.get(step.requestId) === "completed" ? "Përfunduar" : progress.has(step.requestId) ? "Rezultat për t’u verifikuar" : "Në pritje"}</li>)}</ol>
-        {plan.state !== "completed" && <OperationButton slug={actor.business.slug} operation="plan.resume" input={{ id: plan.id }}>Rishqyrto dhe vazhdo</OperationButton>}
+        <ol className="list-decimal pl-5">{(plan.activity?.steps ?? []).map(step => <li key={step.requestId}>{step.title}{step.subject ? ` · ${step.subject}` : ""} — {progress.get(step.requestId) === "completed" ? "Përfunduar" : progress.has(step.requestId) ? "Rezultat për t’u verifikuar" : "Në pritje"}</li>)}</ol>
+        {!plan.activity && <p role="alert">Hapat e planit nuk u ngarkuan. Progresi i ruajtur nuk ka ndryshuar.</p>}
+        {plan.state !== "completed" && plan.activity && (plan.activity.version === 1
+          ? <OperationButton slug={actor.business.slug} operation="plan.resume" input={{ id: plan.id }}>Rishqyrto dhe vazhdo</OperationButton>
+          : <p>Vazhdimin e konfigurimit kërkoje te <Link className="soft-link" href={`/b/${actor.business.slug}`}>Asistenti AI</Link>. Plani: <code>{plan.id}</code></p>)}
       </article>) : <p>Ende nuk ke plane me disa hapa.</p>}
     </section>
     <section className="panel section-pad mt-5"><h2>Njoftimet e ndjekjes</h2>

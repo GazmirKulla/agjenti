@@ -57,7 +57,26 @@ export async function InboxWorkspace({
     .order("last_message_at", { ascending: false })
     .limit(100);
   if (error) throw new Error(t("Nuk u ngarkuan bisedat."));
-  const selected = conversationId || rows?.[0]?.id;
+  const inboxRows = (rows ?? []).map((r) => {
+    const c = r.customers as unknown as {
+      business_id: string;
+      display_name: string | null;
+      username: string | null;
+    } | null;
+    return {
+      id: r.id,
+      channel: r.channel,
+      status: r.status,
+      name: conversationDisplayName({
+        participant_display_name: r.participant_display_name,
+        participant_username: r.participant_username,
+        customers: c?.business_id === businessId ? c : null,
+      }),
+      preview: r.last_message_preview,
+      unread: r.unread_count,
+    };
+  });
+  const selected = conversationId;
   const heading = (
     <PageHeading
       title="Inbox"
@@ -69,18 +88,28 @@ export async function InboxWorkspace({
       <>
         {heading}
         <InboxRefresh />
-        <section className="panel">
-          <InboxList rows={[]} slug={slug} channels={channels} />
-          <EmptyState
-            title={t("Inbox-i yt është gati")}
-            description={t("Lidh Instagram-in ose WhatsApp-in për të marrë mesazhet e para të klientëve.")}
-          />
-          <Link
-            className="soft-link mx-auto mb-6 w-fit"
-            href={`/b/${slug}/integrations`}
-          >
-            {t("Menaxho integrimet →")}</Link>
-        </section>
+        <div className="inbox-workspace inbox-list-home">
+          <InboxList rows={inboxRows} slug={slug} channels={channels} />
+          <section className="panel chat-panel">
+            <EmptyState
+              title={t(inboxRows.length ? "Zgjidh një bisedë" : "Inbox-i yt është gati")}
+              description={t(inboxRows.length
+                ? "Zgjidh një bisedë nga lista për të parë mesazhet."
+                : "Lidh Instagram-in ose WhatsApp-in për të marrë mesazhet e para të klientëve.")}
+            />
+            {!inboxRows.length && (
+              <Link className="soft-link mx-auto mb-6 w-fit" href={`/b/${slug}/integrations`}>
+                {t("Menaxho integrimet →")}
+              </Link>
+            )}
+          </section>
+          <aside className="inbox-customer">
+            <section className="panel section-pad">
+              <h2 className="text-base mb-5">{t("Informacioni i klientit")}</h2>
+              <p className="muted-copy">{t("Zgjidh një bisedë për të parë detajet e klientit.")}</p>
+            </section>
+          </aside>
+        </div>
       </>
     );
   const { data: conversation, error: conversationError } = await db
@@ -161,25 +190,7 @@ export async function InboxWorkspace({
           channels={channels}
           slug={slug}
           selected={selected}
-          rows={(rows ?? []).map((r) => {
-            const c = r.customers as unknown as {
-              business_id: string;
-              display_name: string | null;
-              username: string | null;
-            } | null;
-            return {
-              id: r.id,
-                channel: r.channel,
-              status: r.status,
-              name: conversationDisplayName({
-                participant_display_name: r.participant_display_name,
-                participant_username: r.participant_username,
-                customers: c?.business_id === businessId ? c : null,
-              }),
-              preview: r.last_message_preview,
-              unread: r.unread_count,
-            };
-          })}
+          rows={inboxRows}
         />
         <ThreadClient
           key={`${user.id}:${selected}`}
