@@ -23,7 +23,7 @@ export async function POST(request: Request, context: Context) {
       p_business: businessId, p_user: access.userId, p_request: body.requestId, p_kind: "staff", p_scope: conversationId,
       p_sequence: null, p_fingerprint: createHash("sha256").update(JSON.stringify({ conversationId, text })).digest("hex"), p_payload: { body: text },
     });
-    if (error) return NextResponse.json({ error: "Mesazhi nuk u pranua. Kontrollo bisedën, lejet dhe dritaren 24-orëshe.", code: "transport_rejected" }, { status: 409 });
+    if (error) return NextResponse.json({ error: "Mesazhi nuk u pranua. Kontrollo bisedën, lejet dhe afatin e përgjigjes (Instagram manual: 7 ditë; WhatsApp: 24 orë).", code: "transport_rejected" }, { status: 409 });
     after(() => runWorkflowQueue().then(() => {}));
     return NextResponse.json({ accepted: true, requestId: body.requestId, status: data.status }, { status: 202 });
   } catch (error) {

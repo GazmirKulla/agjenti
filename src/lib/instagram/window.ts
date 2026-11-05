@@ -19,3 +19,11 @@ export function instagramWindowClosedError(): { ok: false; error: string; code: 
 		code: INSTAGRAM_WINDOW_CLOSED_CODE,
 	};
 }
+
+/** Manual support only; automated sends keep the standard 24-hour window. */
+export function instagramReplyWindow(lastInboundAt: Date | string | null | undefined, now = new Date()): "standard" | "human_agent" | "closed" {
+  if (!lastInboundAt) return "closed";
+  const age = now.getTime() - new Date(lastInboundAt).getTime();
+  if (!Number.isFinite(age) || age < 0 || age >= 7 * 24 * 60 * 60 * 1000) return "closed";
+  return age < 24 * 60 * 60 * 1000 ? "standard" : "human_agent";
+}

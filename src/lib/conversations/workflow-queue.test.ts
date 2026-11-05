@@ -9,13 +9,13 @@ import type { AgentTurnResult } from "./process-agent-turn";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { InboundPersistenceError } from "./inbound-persistence-error";
 const business = "00000000-0000-4000-8000-000000004101";
-const job = { id: 1, business_id: business, connection_id: "connection", participant_id: "person", lease_token: "lease", reply: "Saved answer", status: "prepared", payload: { timestamp: "2026-10-10T10:00:00Z" } };
+const job = { id: 1, business_id: business, connection_id: "connection", participant_id: "person", lease_token: "lease", reply: "Saved answer", status: "prepared", payload: { channel: "instagram", timestamp: new Date().toISOString() } };
 beforeEach(() => {
     vi.clearAllMocks();
     m.writes = [];
     m.filters = [];
     
-    const chain = { select: () => chain, eq: (...v: unknown[]) => { m.filters.push(v); return chain; }, neq: () => chain, maybeSingle: async () => ({ data: { id: "connection", business_id: business, ig_user_id: "account", access_token_ciphertext: "sealed", status: "connected" }, error: null }), upsert: (...v: unknown[]) => { m.writes.push(v); return chain; }, update: (v: unknown) => { m.writes.push(v); return chain; }, throwOnError: async () => ({ error: null }), then: (f: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(f) };
+    const chain = { select: () => chain, eq: (...v: unknown[]) => { m.filters.push(v); return chain; }, neq: () => chain, maybeSingle: async () => ({ data: { id: "connection", business_id: business, ig_user_id: "account", access_token_ciphertext: "sealed", status: "connected", last_inbound_at: new Date(Date.now() - 48 * 3600000).toISOString() }, error: null }), upsert: (...v: unknown[]) => { m.writes.push(v); return chain; }, update: (v: unknown) => { m.writes.push(v); return chain; }, throwOnError: async () => ({ error: null }), then: (f: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(f) };
     m.from.mockReturnValue(chain);
     m.send.mockResolvedValue({ ok: true, messageId: "sent" });
     m.handle.mockReset();
@@ -176,4 +176,17 @@ it("does not mark delivery successful when the provider omits its receipt", asyn
  m.rpc.mockResolvedValueOnce({ data: [structuredClone(job)], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ error: null });
  await runWorkflowQueue(1);
  expect(m.rpc).toHaveBeenCalledWith("finish_workflow_send", expect.objectContaining({ p_ok: false, p_external: null }));
+});
+
+it("tags only the persisted staff operation using the current conversation window", async () => {
+ const staff = { ...structuredClone(job), operation_kind: "staff", conversation_id: "conversation", operator_user_id: "operator" };
+ m.rpc.mockResolvedValueOnce({data:[staff],error:null}).mockResolvedValueOnce({data:true,error:null}).mockResolvedValueOnce({data:null,error:null}).mockResolvedValueOnce({data:[],error:null});
+ await runWorkflowQueue();
+ expect(m.send).toHaveBeenCalledWith(expect.objectContaining({humanAgent: {lastInboundAt: expect.any(String)}}));
+ expect(m.filters).toContainEqual(["id", "conversation"]);
+});
+it("never extends the Instagram AI window even if a send lease is granted", async () => {
+ const expired = {...structuredClone(job), payload: {channel:"instagram", timestamp:new Date(Date.now()-48*3600000).toISOString()}};
+ m.rpc.mockResolvedValueOnce({data:[expired],error:null}).mockResolvedValueOnce({data:true,error:null}).mockResolvedValueOnce({data:null,error:null}).mockResolvedValueOnce({data:[],error:null});
+ await runWorkflowQueue(); expect(m.send).not.toHaveBeenCalled();
 });

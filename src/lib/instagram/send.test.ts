@@ -16,3 +16,14 @@ it("returns the provider receipt after confirmed delivery", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ message_id: "confirmed" })));
   expect(await sendInstagramText(params)).toMatchObject({ ok: true, messageId: "confirmed", parts: [{ messageId: "confirmed", status: "sent" }] });
 });
+
+it.each([23, 24, 167, 168])("uses the human tag only inside the manual extension (%s hours)", async hours => {
+ const send = vi.fn().mockResolvedValue(Response.json({message_id:"confirmed"})); vi.stubGlobal("fetch",send);
+ const result = await sendInstagramText({...params,humanAgent:{lastInboundAt:new Date(Date.now()-hours*3600000).toISOString()}});
+ if(hours>=168) {expect(result.ok).toBe(false); expect(send).not.toHaveBeenCalled();}
+ else {expect(result.ok).toBe(true); const body=JSON.parse(send.mock.calls[0][1].body); expect(body.tag).toBe(hours>=24?"HUMAN_AGENT":undefined);}
+});
+it("ordinary sends never acquire a Human Agent tag", async () => {
+ const send=vi.fn().mockResolvedValue(Response.json({message_id:"confirmed"}));vi.stubGlobal("fetch",send);
+ await sendInstagramText(params); expect(JSON.parse(send.mock.calls[0][1].body)).not.toHaveProperty("tag");
+});

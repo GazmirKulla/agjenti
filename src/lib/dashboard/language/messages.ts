@@ -175,6 +175,8 @@ export const english: Record<string, string> = {
   "Ekipi": "Staff",
   "Klienti": "Customer",
   "Biseda ende nuk ka mesazhe.": "This conversation has no messages yet.",
+  "Pas 24 orëve lejohet vetëm përgjigje njerëzore për kërkesën e klientit, deri në 7 ditë. Kërkohet leja Human Agent nga Meta.": "After 24 hours, only a human support reply to the customer's inquiry is allowed, up to 7 days. Meta Human Agent permission is required.",
+  "Afati i përgjigjes ka përfunduar. Klienti duhet të shkruajë përsëri.": "The reply window has closed. The customer must message again.",
   "Përgjigje manuale": "Manual reply",
   "Shkruaj një mesazh": "Write a message",
   "Shkruaj një mesazh…": "Write a message…",

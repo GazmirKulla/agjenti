@@ -115,7 +115,7 @@ export async function InboxWorkspace({
   const { data: conversation, error: conversationError } = await db
     .from("conversations")
     .select(
-      "id,channel,status,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(business_id,display_name,username,phone,created_at)",
+      "id,channel,status,last_inbound_at,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(business_id,display_name,username,phone,created_at)",
     )
     .eq("business_id", businessId)
     .eq("customers.business_id", businessId)
@@ -200,6 +200,7 @@ export async function InboxWorkspace({
           slug={slug}
           status={conversation.status}
           channel={conversation.channel}
+          lastInboundAt={conversation.last_inbound_at}
           customerName={name}
           messages={(messageResult.data ?? []).reverse()}
           logs={logResult.data ?? []}

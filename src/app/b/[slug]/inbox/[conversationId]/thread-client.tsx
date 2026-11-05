@@ -7,6 +7,7 @@ import Image from "next/image";
 import type { NormalizedAttachment } from "@/lib/instagram/types";
 import { Icon } from "@/components/dashboard/icon";
 import Link from "next/link";
+import { instagramReplyWindow } from "@/lib/instagram/window";
 import { useReplyOutbox } from "@/components/agents/reply-outbox";
 import { MessageReactions, useMessageReactions } from "@/components/agents/message-reactions";
 import { IntegrationActivity, type IntegrationActivityLog } from "@/components/dashboard/integration-activity";
@@ -30,11 +31,13 @@ export function ThreadClient(props: {
   slug: string;
   status: string;
   channel?: string;
+  lastInboundAt?: string | null;
   customerName: string;
   messages: Message[];
   logs: IntegrationActivityLog[];
 }) {
   const t = useDashboardTranslator();
+  const replyWindow = props.channel === "instagram" ? instagramReplyWindow(props.lastInboundAt) : "standard";
   const router = useRouter();
   const messageList = useRef<HTMLDivElement>(null);
   const lastMessageId = props.messages.at(-1)?.id;
@@ -255,12 +258,14 @@ export function ThreadClient(props: {
         className="chat-composer"
         onSubmit={(e) => {
           e.preventDefault();
-          if (text.trim() && outbox.enqueue(text.trim())) setText("");
+          if (replyWindow !== "closed" && text.trim() && outbox.enqueue(text.trim())) setText("");
         }}
       >
         <div className="composer-label">
           <Icon name="inbox" size={16} />
           {t("Përgjigje manuale")}</div>
+        {replyWindow === "human_agent" && <p className="muted-copy" role="status">{t("Pas 24 orëve lejohet vetëm përgjigje njerëzore për kërkesën e klientit, deri në 7 ditë. Kërkohet leja Human Agent nga Meta.")}</p>}
+        {replyWindow === "closed" && <p className="muted-copy" role="status">{t("Afati i përgjigjes ka përfunduar. Klienti duhet të shkruajë përsëri.")}</p>}
         <label className="sr-only" htmlFor="reply">
           {t("Shkruaj një mesazh")}</label>
         <textarea
@@ -276,7 +281,7 @@ export function ThreadClient(props: {
           <button
             className="btn btn-primary"
             type="submit"
-            disabled={!text.trim()}
+            disabled={!text.trim() || replyWindow === "closed"}
           >
             {t("Dërgo")}
             <Icon name="arrow" size={16} />

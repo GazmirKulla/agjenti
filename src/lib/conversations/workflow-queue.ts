@@ -6,7 +6,7 @@ import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/types
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import { channelAdapter } from "./channel";
-import { isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
+import { instagramReplyWindow, isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
 import type { AgentTurnResult } from "./process-agent-turn";
 import { InboundPersistenceError } from "./inbound-persistence-error";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
@@ -71,8 +71,17 @@ async function sendPrepared(job: WorkflowJob) {
         throw new Error("Send lease lost");
     if (!claimed) return; // A staff takeover can discard prepared output atomically.
     job.status = "sending";
-    const sent = job.payload.channel !== "whatsapp" || isInstagramMessagingWindowOpen(new Date(job.payload.timestamp).toISOString())
-      ? await adapter.send({ accountId: String("phone_number_id" in connection ? connection.phone_number_id : connection.ig_user_id), token: String(token), to: job.participant_id, body: job.reply ?? "",
+    let humanAgent: { lastInboundAt: string } | undefined;
+    if (job.operation_kind === "staff" && job.payload.channel === "instagram") {
+        const { data: conversation, error: lookupError } = await db.from("conversations").select("last_inbound_at")
+            .eq("id", job.conversation_id).eq("business_id", job.business_id).maybeSingle();
+        if (lookupError || !conversation?.last_inbound_at) throw new Error("Conversation window unavailable");
+        humanAgent = { lastInboundAt: conversation.last_inbound_at };
+    }
+    const allowed = humanAgent ? instagramReplyWindow(humanAgent.lastInboundAt) !== "closed"
+        : isInstagramMessagingWindowOpen(job.payload.timestamp);
+    const sent = allowed
+      ? await adapter.send({ accountId: String("phone_number_id" in connection ? connection.phone_number_id : connection.ig_user_id), token: String(token), to: job.participant_id, body: job.reply ?? "", ...(humanAgent ? { humanAgent } : {}),
           onPart: async (part, total) => {
             const receipt = { p_job: job.id, p_token: job.lease_token, p_index: part.index, p_total: total, p_body: part.body, p_status: part.status, p_external: part.messageId ?? null, p_error: part.error ?? null };
             for (let attempt = 0; attempt < 2; attempt++) {

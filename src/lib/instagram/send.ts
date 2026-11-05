@@ -1,3 +1,4 @@
+import { instagramReplyWindow } from "./window";
 import { splitInstagramText } from "@/lib/instagram/split-text";
 import type { MessagePart, PartObserver } from "@/lib/conversations/delivery-status";
 import { graphVersion } from "@/lib/instagram/oauth";
@@ -71,6 +72,8 @@ export async function sendInstagramText(params: {
 	to: string;
 	body: string;
 	onPart?: PartObserver;
+	/** Only the authenticated staff outbox supplies this server-read timestamp. */
+	humanAgent?: { lastInboundAt: string };
 }): Promise<SendInstagramResult> {
 	assertBusinessEffectAllowed("instagram.send");
 	if (isIsolatedExecution()) refuseIsolatedEffect("customer.message", "instagram");
@@ -80,10 +83,13 @@ export async function sendInstagramText(params: {
 	let lastId: string | undefined;
 	const parts: MessagePart[] = [];
 	for (const [index, chunk] of chunks.entries()) {
-		await params.onPart?.({ index, body: chunk, status: "sending" }, chunks.length);
+		const window = params.humanAgent ? instagramReplyWindow(params.humanAgent.lastInboundAt) : "standard";
+        if (window === "closed") return { ok: false, error: "Afati 7-ditor ka përfunduar. Klienti duhet të shkruajë përsëri.", parts };
+        await params.onPart?.({ index, body: chunk, status: "sending" }, chunks.length);
 		const send = await postMessage(params.accountId, params.token, {
 			recipient: { id: params.to },
 			message: { text: chunk },
+			...(window === "human_agent" ? { tag: "HUMAN_AGENT" } : {}),
 		});
 		const part: MessagePart = send.ok
 			? { index, body: chunk, status: "sent", messageId: send.messageId }
