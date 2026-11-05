@@ -7,6 +7,7 @@ import { ConversationInspector } from "./conversation-inspector";
 import "./chat-lab.css";
 
 export function ChatLab({ userId, initialBusiness, initialDraft }: { userId: string; initialBusiness?: string; initialDraft?: string }) {
+  const [setupOpen, setSetupOpen] = useState(true);
   const [query, setQuery] = useState("");
   const [businesses, setBusinesses] = useState<LabBusiness[]>([]);
   const [searching, setSearching] = useState(true);
@@ -16,6 +17,7 @@ export function ChatLab({ userId, initialBusiness, initialDraft }: { userId: str
   const [drafts, setDrafts] = useState<{ id: string; name: string }[]>([]);
   const [configurationDraft, setConfigurationDraft] = useState(initialDraft ?? "");
   const [loading, setLoading] = useState(false);
+  const [reload, setReload] = useState(0);
   const [error, setError] = useState("");
   useEffect(() => {
     let stale = false;
@@ -40,7 +42,7 @@ export function ChatLab({ userId, initialBusiness, initialDraft }: { userId: str
     }).catch(() => { if (!stale) setError("Konfigurimi nuk u ngarkua. Zgjidh sërish biznesin."); })
       .finally(() => { if (!stale) setLoading(false); });
     return () => { stale = true; };
-  }, [businessId]);
+  }, [businessId, reload]);
   function changeBusiness(id: string) {
     if (id === businessId) return;
     if (setup && !window.confirm("Ndrysho biznesin? Historiku ruhet në këtë shfletues; teksti i padërguar nuk ruhet.")) return;
@@ -50,8 +52,8 @@ export function ChatLab({ userId, initialBusiness, initialDraft }: { userId: str
   return <div className="chat-lab">
     <header className="lab-heading"><div><div className="lab-eyebrow">ADMIN WORKSPACE</div><h1>ChatLab</h1><p>Biseda, mjetet e testimit dhe gjurmët e të njëjtave mesazhe.</p></div></header>
     <div className="lab-unified-layout">
-      <aside className="lab-setup panel">
-        <div className="lab-panel-heading"><h2>Test Setup</h2></div>
+      <aside className={`lab-setup panel ${setupOpen ? "" : "is-collapsed"}`}>
+        <div className="lab-panel-heading"><div><h2>Konfigurimi i provës</h2>{!setupOpen && <p className="lab-muted">{setup?.name ?? "Zgjidh biznesin"}</p>}</div><button type="button" className="lab-setup-toggle" aria-label="Shfaq ose fshih konfigurimin e provës" aria-expanded={setupOpen} onClick={() => setSetupOpen(open => !open)}>{setupOpen ? "−" : "+"}</button></div>
         <label htmlFor="lab-business-search">Biznesi</label><input id="lab-business-search" type="search" value={query} maxLength={100} placeholder="Kërko biznesin…" onChange={event => setQuery(event.target.value)} />
         {searchError && <p role="alert">{searchError}</p>}
         <div className="lab-businesses" aria-busy={searching}>
@@ -59,15 +61,15 @@ export function ChatLab({ userId, initialBusiness, initialDraft }: { userId: str
           {!searching && !businesses.length && <p>Nuk u gjetën biznese.</p>}
         </div>
         {loading && <p role="status">Po ngarkojmë konfigurimin…</p>}
-        {error && <p role="alert">{error}</p>}
+        {error && <p role="alert">{error} <button className="btn btn-ghost" onClick={() => setReload(value => value + 1)}>Provo përsëri</button></p>}
         {setup && <>
-          <h3>{setup.name}</h3>
+          <h3 className="lab-business-name">{setup.name}</h3>
           <dl className="lab-counts"><div><dt>Produkte aktive</dt><dd>{setup.products}</dd></div><div><dt>Shërbime aktive</dt><dd>{setup.services}</dd></div><div><dt>Workflow aktiv</dt><dd>{setup.workflows}</dd></div></dl>
           {setup.workflowName && <p>{setup.workflowName}</p>}
           <label htmlFor="lab-configuration">Konfigurimi</label>
           <select id="lab-configuration" value={configurationDraft} onChange={event => {
             if (window.confirm("Ndrysho konfigurimin? Bisedat e tij kanë historik të veçantë; teksti i padërguar nuk ruhet.")) setConfigurationDraft(event.target.value);
-          }}><option value="">Versioni i publikuar</option>{drafts.map(draft => <option key={draft.id} value={draft.id}>Draft · {draft.name}</option>)}</select>
+          }}><option value="">I publikuar</option>{drafts.map(draft => <option key={draft.id} value={draft.id}>Draft · {draft.name}</option>)}</select>
           {configurationDraft && <p className="lab-muted">Drafti nuk ndryshon versionin e publikuar dhe nuk lejon Real chat.</p>}
           <div className="lab-channels"><h3>Integrimet</h3>{setup.channels.length ? setup.channels.map((channel, index) => <p key={index}>Instagram {channel.username} · {channel.status}</p>) : <p>Pa lidhje Instagram. Prova funksionon pa të.</p>}</div>
         </>}

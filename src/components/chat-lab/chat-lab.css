@@ -131,16 +131,76 @@
 .lab-data-values { list-style: disc; padding-left: 17px; margin: 5px 0; }
 .lab-data-values li { margin: 5px 0; }
 
-.lab-full-chat { display: flex; margin: 16px 0 8px; text-align: center; }
-
-.lab-unified-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 16px; align-items: start; }
-.lab-conversation-inspection { display: grid; grid-template-columns: minmax(320px, 1.3fr) minmax(300px, 1fr); gap: 16px; min-width: 0; align-items: start; }
+/* One workspace: setup, chat and the selected turn's inspector. */
+.chat-lab { container: chatlab / inline-size; }
+.lab-unified-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; align-items: start; }
+.lab-unified-layout > .panel, .lab-conversation-inspection > .panel { min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); overflow: hidden; }
+.lab-conversation-inspection { display: grid; grid-template-columns: minmax(350px, 1.3fr) minmax(310px, 1fr); gap: 16px; min-width: 0; align-items: start; }
 .lab-conversation-inspection > * { min-width: 0; }
-.lab-conversation-inspection .chat-header { flex-wrap: wrap; padding: 16px; }
+.lab-conversation-inspection > .lab-inspector { display: flex; height: clamp(660px, 82dvh, 980px); scroll-margin-top: 20px; }
+.lab-conversation-inspection .lab-inspector > .lab-panel-heading,
+.lab-conversation-inspection .lab-inspector > .lab-tabs { flex-shrink: 0; }
+.lab-conversation-inspection .lab-inspector > .lab-raw { margin: 0; border-radius: 0; border: 0; border-top: 1px solid var(--line); flex-shrink: 0; max-height: 180px; overflow: auto; }
+.lab-conversation-inspection .lab-warning { margin: 10px; flex-shrink: 0; }
+.lab-conversation-inspection .chat-header { flex-direction: column; align-items: stretch; padding: 16px 18px 12px; gap: 12px; }
+.lab-conversation-inspection .chat-header nav { gap: 6px; }
+.lab-conversation-inspection .chat-header nav > .primary { margin-left: auto; }
+.lab-conversation-inspection .agent-test-label { white-space: nowrap; }
+.lab-conversation-inspection .chat-safety-note { padding: 0 18px 14px; line-height: 1.6; }
+.lab-conversation-inspection .test-configuration { padding: 10px 18px; }
+.lab-conversation-inspection .chat-workspace .agent-test-log { height: clamp(320px, 45dvh, 520px); padding: 22px 18px; gap: 22px; }
+.lab-conversation-inspection .chat-workspace .agent-test-composer { padding: 10px 14px 16px; }
+.lab-conversation-inspection .chat-message-actions { flex-wrap: wrap; gap: 4px; margin-left: 0; }
+.lab-conversation-inspection .chat-message-actions > .chat-toolbar-button { font-size: 11px; padding: 7px 9px; }
+.lab-conversation-inspection .training-toolbar { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; padding: 16px 18px; }
+.lab-conversation-inspection .training-toolbar > .training-spark { width: 36px; height: 36px; }
+.lab-conversation-inspection .training-toolbar-copy { min-width: 0; }
+.lab-conversation-inspection .training-toolbar-actions { grid-column: 1 / -1; width: 100%; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.lab-conversation-inspection .training-action { padding: 11px 15px; font-size: 12px; }
+.lab-conversation-inspection .training-memory-link { white-space: normal; }
 .lab-selected-exchange { border-left: 2px solid var(--accent); padding-left: 10px; }
-.lab-unified-layout .lab-setup select { width: 100%; margin: 10px 0; }
 .lab-conversation-inspection .chat-body.with-history { grid-template-columns: minmax(0, 1fr); }
-@media (max-width: 1300px) { .lab-conversation-inspection { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 700px) { .lab-unified-layout { grid-template-columns: minmax(0, 1fr); } .lab-businesses { max-height: 150px; } }
-/* The unified inspector stays in the same page on narrow screens. */
-.lab-conversation-inspection > .lab-inspector { display: block; }
+.lab-conversation-inspection .chat-history { max-height: 230px; border-right: 0; border-bottom: 1px solid var(--line); }
+.lab-unified-layout .lab-setup select { width: 100%; margin: 0 0 12px; }
+.lab-unified-layout .lab-business-name { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.lab-unified-layout .lab-setup > p, .lab-unified-layout .lab-channels p { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.lab-businesses button { border: 1px solid transparent; background: transparent; color: var(--ink); font: inherit; }
+.lab-businesses button:hover { background: var(--paper-2); }
+.lab-businesses button[aria-pressed=true] { border-color: var(--accent); }
+.lab-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.lab-tabs button { border: 1px solid transparent; background: transparent; min-height: 36px; font-family: inherit; }
+.lab-tabs button:hover { background: var(--paper-2); }
+.lab-tabs button[aria-selected=true] { border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+.lab-data { margin: 0; }
+.lab-data dd { margin: 0; }
+.lab-card h4 { font-size: 13px; line-height: 1.5; margin: 18px 0 10px; }
+.lab-conversation-inspection.is-expanded { position: fixed; inset: 12px; z-index: 100; padding: 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--paper-2); overflow: auto; box-shadow: var(--shadow-soft); }
+.lab-conversation-inspection.is-expanded > .lab-inspector { height: calc(100dvh - 50px); }
+@container chatlab (max-width: 1040px) {
+  .lab-unified-layout { grid-template-columns: minmax(0, 1fr); }
+  .lab-unified-layout > .lab-setup { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 24px; padding: 16px; }
+  .lab-setup > .lab-panel-heading { grid-column: 1 / -1; margin: -16px -16px 4px; }
+  .lab-setup > label, .lab-setup > input, .lab-setup > .lab-businesses { grid-column: 1; }
+  .lab-setup > .lab-businesses { max-height: 120px; margin: 0; grid-row: 4 / 9; }
+  .lab-setup > .lab-business-name, .lab-setup > .lab-counts, .lab-setup > p, .lab-setup > select { grid-column: 2; margin: 0; }
+  .lab-setup > label[for=lab-configuration] { grid-column: 2; }
+  .lab-setup > .lab-channels { grid-column: 1 / -1; margin: 0; padding-top: 10px; }
+}
+@container chatlab (max-width: 740px) {
+  .lab-conversation-inspection { grid-template-columns: minmax(0, 1fr); }
+  .lab-conversation-inspection > .lab-inspector { height: min(780px, 85dvh); min-height: 440px; }
+  .lab-unified-layout > .lab-setup { display: block; }
+  .lab-setup > .lab-businesses { max-height: 110px; margin: 10px 0; }
+  .lab-setup > .lab-counts { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+  .lab-setup > .lab-counts > div { gap: 8px; }
+  .lab-setup > .lab-panel-heading { margin-bottom: 14px; }
+  .lab-setup > label[for=lab-configuration] { margin-top: 12px; }
+  .lab-conversation-inspection .chat-header nav > .primary { margin-left: 0; }
+  .lab-conversation-inspection.is-expanded { inset: 0; border-radius: 0; padding: 8px; }
+}
+
+.lab-setup-toggle { flex: 0 0 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper-2); color: var(--ink); font-size: 18px; }
+.lab-unified-layout > .lab-setup.is-collapsed { display: block; padding: 0 14px; }
+.lab-setup.is-collapsed > :not(.lab-panel-heading) { display: none; }
+.lab-setup.is-collapsed > .lab-panel-heading { margin: 0 -14px; border-bottom: 0; align-items: center; }
+.lab-setup .lab-panel-heading h2 { font-size: 14px; }

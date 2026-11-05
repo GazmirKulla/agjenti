@@ -19,7 +19,7 @@ export function ConversationInspector({ entry, chat }: { entry?: ChatEntry; chat
     warnings: [...(entry.result.debug.fallbackReason ? [entry.result.debug.fallbackReason] : []), ...trace.filter(event => event.status === "error").map(event => event.label)],
   } : undefined;
   const failed = chat.outbox?.find(operation => operation.status === "failed");
-  return <aside className="lab-inspector panel" aria-label="Inspektori i bisedës">
+  return <aside id="lab-conversation-inspector" className="lab-inspector panel" aria-label="Inspektori i bisedës">
     <div className="lab-panel-heading"><div><h2>Conversation Inspector</h2><p className="lab-muted">{entry ? `Mesazhi ${chat.entries.indexOf(entry) + 1} · ${chat.mode === "real" ? "REAL" : "PROVË"}` : "Zgjidh një mesazh"}</p></div></div>
     {entry && !observation && <p className="lab-warning" role="status">Ky mesazh nuk ka gjurmë të regjistruara. Gjendja e ruajtur nuk është provë ekzekutimi. Dërgo një mesazh të ri për të regjistruar gjurmët.</p>}
     <Inspector turn={turn} failure={failed ? { error: failed.error ?? "Kërkesa dështoi.", trace: failed.failure?.trace } : undefined} tab={tab} onTab={setTab} />
