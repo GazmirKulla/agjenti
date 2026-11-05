@@ -130,3 +130,5 @@
 
 .lab-data-values { list-style: disc; padding-left: 17px; margin: 5px 0; }
 .lab-data-values li { margin: 5px 0; }
+
+.lab-full-chat { display: flex; margin: 16px 0 8px; text-align: center; }

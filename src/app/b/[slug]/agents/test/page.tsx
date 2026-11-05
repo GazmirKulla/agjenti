@@ -20,7 +20,7 @@ export default async function AgentTestPage({
     <>
       <PageHeading
         title="Provo Agjentin"
-        description={`Bisedë prove për ${access.business.name}, pa lidhje me Instagram-in.`}
+        description={`Bisedo me agjentin e ${access.business.name} si një klient.`}
       />
       <div className="mb-5">
         <Link href={`/b/${slug}/agents`} className="soft-link">

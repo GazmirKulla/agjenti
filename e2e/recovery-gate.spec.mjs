@@ -74,9 +74,9 @@ for (const kind of ['retail', 'information']) test(`C1 ${kind}: authenticated ap
     ? { agentId: p.id, active: true, instructionHash: p.hash, instructionSource: 'active_agent' }
     : { agentId: null, instructionHash: null, instructionSource: 'base', fallbackReason: 'no_active_agent' }));
   expect(turn.configuration.responseFallbackReason).toBe('missing_api_key');
-  if (!p.active) await expect(page.getByRole('status').filter({ hasText: 'Nuk ka agjent klientësh aktiv' })).toBeVisible();
-  await page.getByText('Konfigurimi i përdorur në këtë provë', { exact: true }).click();
-  await expect(page.getByText('Integrimi AI nuk është konfiguruar.', { exact: true })).toBeVisible();
+  if (!p.active) await expect(page.getByRole('status').filter({ hasText: 'Agjenti nuk është gati.' })).toBeVisible();
+  await expect(page.getByText('Konfigurimi i përdorur në këtë provë', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Agjenti nuk mundi të përgjigjej normalisht.' })).toBeVisible();
   await page.reload(); await expect(page.getByText(turn.reply, { exact: true }).last()).toBeVisible();
   const history = await page.request.get(`/api/business-assistant/conversations?slug=${t.slug}&id=${conversationId}`);
   expect((await history.json()).messages.find(m => m.kind === 'backend_outcome').outcome.configurationEffect.behaviorVerified).toBe(false);

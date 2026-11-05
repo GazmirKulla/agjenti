@@ -1,13 +1,14 @@
 import { after, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
-import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { getSessionUser, isPlatformAdmin, requireBusinessAccess } from "@/lib/tenant/access";
 import { transportAccess, isTransportId } from "@/lib/conversations/transport-access";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { runPanelChat } from "@/lib/agents/panel-chat/execute";
 export const maxDuration = 180;
 async function accessFor(request: Request) {
   const user = await getSessionUser();
-  const access = user && await requireBusinessAccess(user.id, new URL(request.url).searchParams.get("slug") ?? "");
+  if (!user || !(await isPlatformAdmin(user.id))) return null;
+  const access = await requireBusinessAccess(user.id, new URL(request.url).searchParams.get("slug") ?? "");
   const current = access && await transportAccess(access.business.id);
   if (!access || !current) return null;
   const { data, error } = await current.db.rpc("can_use_panel_chat", { p_business: access.business.id, p_user: current.userId });
@@ -16,7 +17,7 @@ async function accessFor(request: Request) {
 export async function POST(request: Request) {
   if (request.headers.get("origin") !== new URL(request.url).origin) return NextResponse.json({ error: "Kërkesë e palejuar." }, { status: 403 });
   const access = await accessFor(request);
-  if (!access) return NextResponse.json({ error: "Real chat kërkon pronarin ose administratorin." }, { status: 403 });
+  if (!access) return NextResponse.json({ error: "Real chat është i disponueshëm vetëm për administratorët e platformës në ChatLab." }, { status: 403 });
   try {
     const raw = await request.text();
     if (raw.length > 10000) throw new Error("Kërkesë shumë e madhe.");

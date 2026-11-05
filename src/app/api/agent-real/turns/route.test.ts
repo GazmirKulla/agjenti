@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const m=vi.hoisted(()=>({rpc:vi.fn(),after:vi.fn(),run:vi.fn(),access:vi.fn()}));
-vi.mock("@/lib/tenant/access",()=>({getSessionUser:async()=>({id:"owner"}),requireBusinessAccess:async()=>({business:{id:"tenant"}})}));
+const m=vi.hoisted(()=>({rpc:vi.fn(),after:vi.fn(),run:vi.fn(),access:vi.fn(),admin:vi.fn()}));
+vi.mock("@/lib/tenant/access",()=>({isPlatformAdmin:m.admin,getSessionUser:async()=>({id:"owner"}),requireBusinessAccess:async()=>({business:{id:"tenant"}})}));
 vi.mock("@/lib/conversations/transport-access",async original=>({...await original<object>(),transportAccess:m.access}));
 vi.mock("@/lib/agents/panel-chat/execute",()=>({runPanelChat:m.run}));
 vi.mock("next/server",async original=>({...await original<object>(),after:m.after}));
@@ -10,6 +10,7 @@ const input={streamId,requestId,sequence:0,input:{message:"Synthetic request"}};
 const request=(data:unknown,origin="https://local.test")=>new Request("https://local.test/api/agent-real/turns?slug=demo",{method:"POST",headers:{origin},body:JSON.stringify(data)});
 beforeEach(()=>{
  vi.clearAllMocks();
+ m.admin.mockResolvedValue(true);
  m.access.mockResolvedValue({userId:"owner",db:{rpc:m.rpc}});
  m.rpc.mockImplementation(async(name:string)=>({data:name==="can_use_panel_chat"?true:{},error:null}));
 });
@@ -41,5 +42,15 @@ it("enqueues under the authenticated scope and defers the canonical worker",asyn
 it("does not report acceptance or dispatch after an enqueue conflict",async()=>{
  m.rpc.mockImplementation(async(name:string)=>name==="can_use_panel_chat"?{data:true,error:null}:{data:null,error:{message:"conflict"}});
  expect((await POST(request(input))).status).toBe(409);
+ expect(m.after).not.toHaveBeenCalled();
+});
+
+it("rejects a business owner before reaching real execution or status recovery",async()=>{
+ m.admin.mockResolvedValue(false);
+ expect((await POST(request(input))).status).toBe(403);
+ const { GET } = await import("./route");
+ expect((await GET(new Request(`https://local.test/api/agent-real/turns?slug=demo&stream=${streamId}`))).status).toBe(403);
+ expect(m.access).not.toHaveBeenCalled();
+ expect(m.rpc).not.toHaveBeenCalled();
  expect(m.after).not.toHaveBeenCalled();
 });

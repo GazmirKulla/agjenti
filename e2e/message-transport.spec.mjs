@@ -208,7 +208,7 @@ async function login(page,context){
  await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(t.email);await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(f.password);
  await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${t.slug}`);await page.goto(`/b/${t.slug}/agents/test`);
 }
-const history=page=>page.evaluate(({user,slug})=>JSON.parse(sessionStorage.getItem(`agjenti:test-chat:v1:${user}:${slug}`)??'[]'),{user:t.userId,slug:t.slug});
+const history=page=>page.evaluate(({user,slug})=>JSON.parse(sessionStorage.getItem(`agjenti:business-chat:v1:${user}:${slug}`)??'[]'),{user:t.userId,slug:t.slug});
 async function send(page,text){const input=page.locator('#agent-test-message');await expect(input).toBeEnabled();await input.fill(text);await page.getByRole('button',{name:'Dërgo mesazhin',exact:true}).click();await expect(input).toHaveValue('');}
 test('exact rapid fragments freeze once, new burst during generation waits, reload preserves IDs and one reply per group',async({page,context})=>{
  test.setTimeout(180000);
@@ -242,11 +242,9 @@ test('exact rapid fragments freeze once, new burst during generation waits, relo
  await send(page,'Sa kushton produkti?');
  await expect.poll(async()=>((await history(page))[0]?.entries??[]).length,{timeout:30000}).toBe(11);
  expect((await history(page))[0].entries[10].batchId).toBeUndefined();
- // Editing/regeneration replays from before a whole group, not from its final state.
- await page.getByRole('button',{name:'Ndrysho mesazhin',exact:true}).nth(8).click();
- await expect(page.locator('#agent-test-message')).toHaveValue(continuationTexts.join('\n'));
- await expect(page.getByText('Po ndryshon grupin e 3 mesazheve.',{exact:false})).toBeVisible();
- await page.getByRole('button',{name:'Anulo ndryshimin',exact:true}).click();
+ // Advanced replay/edit controls belong to the platform's ChatLab.
+ await expect(page.getByRole('button',{name:'Ndrysho mesazhin',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Rigjenero përgjigjen',exact:true})).toHaveCount(0);
  expect(counts()).toBe(before);
 });
 test('three rapid messages → stop waiting → reload → ordered P0/P1/R4 recall, no customer writes',async({page,context})=>{
@@ -328,9 +326,8 @@ test('lost POST response reconciles one identity, explicit failed enqueue retry,
  await expect(page.locator('.chat-typing')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Ndalo pritjen',exact:true})).toHaveCount(0);
  await expect(page.getByText('Synthetic temporary failure',{exact:true})).toHaveCount(0);
- await page.getByRole('button',{name:'Rrjedha',exact:true}).click();
- await expect(page.getByLabel('Detajet e provës')).toContainText('Synthetic temporary failure');
- await page.getByRole('button',{name:'Rrjedha',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Rrjedha',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('alert').filter({hasText:'Mesazhi nuk u përfundua'})).toBeVisible();
  await expect(page.getByRole('button',{name:'Bisedë e re',exact:true})).toBeEnabled();
  const id=(await history(page))[0].outbox[0].id;
  await send(page,'Më kujto emrin.');
