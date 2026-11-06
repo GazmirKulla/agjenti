@@ -29,7 +29,8 @@ export function expandBooking(nodeId: string, next: string, collectionOnly = fal
   return { fields, steps: [
     ...customer.map((f, i): Step => ({ id: i === 0 ? nodeId : key(`collect_${i}`), kind: "collect", fieldId: f.id,
       prompt: i === 0 ? "Which service would you like to book? Resolve the service to its verified catalog identifier." : f.label,
-      next: i + 1 < customer.length ? key(`collect_${i + 1}`) : review })),
+      next: i === 0 ? key("resolve") : i + 1 < customer.length ? key(`collect_${i + 1}`) : review })),
+    { id: key("resolve"), kind: "resolve", fieldIds: fields.filter(f => f.source === "server").map(f => f.id), next: key("collect_1") },
     { id: review, kind: "confirm", fieldIds: fields.map(f => f.id), label: collectionOnly ? "Review the booking preferences. These details are collected only; no appointment will be created." : "Review the booking details. Manual confirmation creates a pending request, not a confirmed appointment.", yes: effect, no: declined },
     ...(collectionOnly ? [{ id: effect, kind: "message" as const, text: "Booking preferences recorded only. No slot was reserved and no booking was created.", next }] : [{ id: effect, kind: "effect" as const, tool: "booking.create", toolVersion: 1,
       inputs: Object.fromEntries(["serviceId", "date", "time", "name", "contact", "serviceName", "durationMinutes", "bufferMinutes", "timezone", "confirmationMode"].map(name => [name, key(name)])), next, failed },

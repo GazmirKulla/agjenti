@@ -17,6 +17,7 @@ export type Step =
   | { id: string; kind: "semantic_condition"; predicate: string; yes: string; no: string }
   | { id: string; kind: "confirm"; fieldIds: string[]; requiredFieldIds?: string[]; yes: string; no: string; label: string }
   | { id: string; kind: "inform"; next: string }
+  | { id: string; kind: "resolve"; fieldIds: string[]; next: string }
   | { id: string; kind: "effect"; tool: string; toolVersion: number; inputs: Record<string, string>; next: string; failed: string }
   | { id: string; kind: "message"; text: string; next: string }
   | { id: string; kind: "wait"; eventType: string; timeoutMs: number; next: string; expired: string }

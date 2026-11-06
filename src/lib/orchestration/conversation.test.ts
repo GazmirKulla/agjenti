@@ -6,6 +6,7 @@ import { tryProcessConversation } from "./conversation";
 
 const { load, interpret } = vi.hoisted(() => ({ load: vi.fn(), interpret: vi.fn() }));
 vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: load }));
+vi.mock("./version-store", async original => ({ ...await original<object>(), loadCurrentLinearVersions: async () => [] }));
 vi.mock("./interpret", () => ({ interpretCustomer: interpret }));
 vi.mock("./persistence", () => ({
   commitProcessCheckpoint: async (input: { transition: { state: unknown } }) => ({ state: input.transition.state, replayed: false }),
@@ -30,7 +31,7 @@ it("never falls back to legacy parsing for a v4 session outside isolated executi
 });
 it("never hands a v4 session to the linear preview adapter", async () => {
   const input = { ...params(), linearPreview: {} as NonNullable<Parameters<typeof tryProcessConversation>[0]["linearPreview"]> };
-  await expect(runIsolated(() => tryProcessConversation(input))).rejects.toThrow("process_session_restart_required");
+  await expect(runIsolated(() => tryProcessConversation(input))).rejects.toThrow("process_preview_required");
   expect(load).not.toHaveBeenCalled();
 });
 it("rejects a foreign preview before loading configuration or interpreting the message", async () => {

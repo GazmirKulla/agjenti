@@ -18,9 +18,10 @@ async function handle(request: Request, context: RouteContext, reconcile: boolea
     const { id: businessId, conversationId } = await context.params;
     const userId = await actor(businessId);
     if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const body = await request.json().catch(() => null);
     const receipt = reconcile
-      ? await reconcileOrder({ businessId, conversationId, userId, body: await request.json().catch(() => null) })
-      : await submitConfirmedOrder({ businessId, conversationId, userId });
+      ? await reconcileOrder({ businessId, conversationId, userId, body })
+      : await submitConfirmedOrder({ businessId, conversationId, userId, ...(typeof body?.actionId === "string" ? { actionId: body.actionId } : {}) });
     const response = submissionResponse(receipt);
     return NextResponse.json(response.body, { status: response.status });
   } catch (error) {

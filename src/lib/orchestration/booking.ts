@@ -65,6 +65,13 @@ export function bookingAdapter(scope?: { businessId: string; conversationId: str
       return { status: "succeeded", output: { bookingId: result.booking.id, status: result.booking.status,
         startsAt: result.booking.starts_at, serviceName: result.booking.service_name, calendarSync: result.syncError ? "unverified" : result.booking.sync_status } };
     },
+    async reconcile(action, context): Promise<EffectResult | null> {
+      if (isIsolatedExecution() || !scope || scope.businessId !== context.businessId || scope.conversationId !== context.conversationId) return null;
+      const { data, error } = await createServiceSupabase().from("bookings").select("id,status,starts_at,service_name,sync_status,service_id,customer_name,customer_contact")
+        .eq("business_id", scope.businessId).eq("request_key", `ig:${scope.conversationId}:${action.id}`).maybeSingle();
+      if (error || !data || data.service_id !== action.input.serviceId || data.customer_name !== String(action.input.name).trim() || data.customer_contact !== String(action.input.contact).trim()) return null;
+      return { status: "succeeded", output: { bookingId: data.id, status: data.status, startsAt: data.starts_at, serviceName: data.service_name, calendarSync: data.sync_status } };
+    },
     async simulate() {
       recordExternalAction({ kind: "booking.create", disposition: "SIMULATED", detail: "process_runtime_not_booked" });
       return { bookingId: "simulation", status: "simulated", availability: "unverified" };

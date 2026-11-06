@@ -5,6 +5,7 @@ import { freshOrderReview, migrateContext } from "@/lib/workflows/context";
 import { restoreOrder } from "@/lib/workflows/conversation-processes";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import { isIsolatedExecution, refuseIsolatedEffect, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
+import type { Snapshot } from "@/lib/orchestration/contracts";
 import { hasSubmissionWorkflow } from "./workflow-readiness";
 
 export type SubmissionReceipt = {
@@ -50,14 +51,14 @@ function isReceipt(value: unknown): value is SubmissionReceipt {
 }
 
 /** Server-owned state only: the POST body cannot supply prices, product IDs or intent keys. */
-export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string; expectedRevision?: number }): Promise<SubmissionReceipt> {
+export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string; expectedRevision?: number; actionId?: string }): Promise<SubmissionReceipt> {
   return submitOrder(input);
 }
 /** Server runtime entry point. No owner identity and no external dispatch. */
 export async function submitAgentConfirmedOrder(input: {businessId: string; conversationId: string; expectedRevision?: number}): Promise<SubmissionReceipt> {
   return submitOrder({...input,userId:null});
 }
-async function submitOrder(input: {businessId: string; conversationId: string; userId: string | null; expectedRevision?: number}): Promise<SubmissionReceipt> {
+async function submitOrder(input: {businessId: string; conversationId: string; userId: string | null; expectedRevision?: number; actionId?: string}): Promise<SubmissionReceipt> {
   assertBusinessEffectAllowed("order.create");
   if (isIsolatedExecution()) refuseIsolatedEffect("order.create");
   const db = createServiceSupabase();
@@ -71,6 +72,19 @@ async function submitOrder(input: {businessId: string; conversationId: string; u
     .eq("conversation_id", conversationId).eq("business_id", businessId).maybeSingle();
   if (stateError) fail("read_failed");
   if (input.expectedRevision !== undefined && row?.revision !== input.expectedRevision) fail("stale_state");
+  if (row?.collected?.schemaVersion === 4) {
+    if (!userId) fail("confirmation_required"); // Runtime submissions require the claimed queue lease, through the domain adapter.
+    const snapshot = row.collected as Snapshot;
+    if (snapshot.businessId !== businessId || snapshot.conversationId !== conversationId || snapshot.mode !== "live") fail("confirmation_required");
+    const actions = Object.values(snapshot.instances).flatMap(i => i.action?.tool === "order.create" ? [i.action] : []);
+    const pending = actions.filter(a => a.output?.submissionStatus === "awaiting_staff");
+    const eligible = input.actionId ? actions.filter(a => a.id === input.actionId) : pending.length ? pending : actions;
+    if (eligible.length !== 1 || !uuid.test(eligible[0].id)) fail("confirmation_required");
+    const { data, error } = await db.rpc("submit_process_order", { p_business: businessId, p_conversation: conversationId, p_revision: row.revision,
+      p_action: eligible[0].id, p_user: userId, p_job: null, p_token: null });
+    if (error || !isReceipt(data)) fail(error?.message ?? "write_failed");
+    return settleReceipt(businessId, userId, data);
+  }
   const stored = migrateContext(row?.collected as ConversationStatePayload | undefined);
   // Capture the server's receipt before restoreOrder expires approvals. Replaying a
   // known receipt is read-only even after expiry; it NEVER grants another dispatch.
@@ -118,7 +132,12 @@ async function submitOrder(input: {businessId: string; conversationId: string; u
     p_collected: row.collected, p_order: state, p_enforce_modules: true,
   });
   if (error || !isReceipt(data)) fail(error?.message ?? "write_failed");
-  const receipt = data;
+  return settleReceipt(businessId, userId, data);
+}
+
+async function settleReceipt(businessId: string, userId: string | null, receipt: SubmissionReceipt): Promise<SubmissionReceipt> {
+  const db = createServiceSupabase();
+
   if (!receipt.dispatch) return receipt;
   if (userId === null) fail("unexpected_dispatch");
   // PENDING_RECONCILIATION was persisted before permission to send was returned.

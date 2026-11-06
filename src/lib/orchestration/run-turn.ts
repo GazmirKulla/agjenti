@@ -1,7 +1,7 @@
 import { TransitionError, type CustomerEvent, type Observation, type Snapshot, type Transition } from "./contracts";
 import { digest } from "./definition";
-import { transitionCustomer, type Environment } from "./transition";
-import { executePreparedAction, type ToolAdapter } from "./execute";
+import { transitionCustomer, transitionActionResult, type Environment } from "./transition";
+import { executePreparedAction, validOutput, type ToolAdapter } from "./execute";
 import { commitProcessCheckpoint, processExecutionStore, type ProcessLease } from "./persistence";
 
 /** One turn protocol for isolated and live execution. Recover persisted work before interpreting again. */
@@ -14,6 +14,27 @@ export async function runProcessTurn(input: {
   let state = structuredClone(input.state);
   const live = input.env.mode === "live";
   if (live && !input.lease) throw new TransitionError("process_lease_required");
+  const recoveryNotices: Transition["notices"] = [];
+  if (live) for (const instance of Object.values(state.instances)) {
+    const action = instance.action;
+    if (!action || action.status !== "running" && action.status !== "unknown") continue;
+    const adapter = input.adapters.find(a => a.key === action.tool && a.version === action.toolVersion);
+    if (!adapter?.reconcile || input.deadline - Date.now() < 1000) continue;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const receipt = await Promise.race([
+        adapter.reconcile(action, { businessId: state.businessId, conversationId: state.conversationId, revision: state.revision, signal: controller.signal }),
+        new Promise<null>(resolve => { timer = setTimeout(() => { controller.abort(); resolve(null); }, Math.min(5000, input.deadline - Date.now())); }),
+      ]);
+      if (!receipt || receipt.status === "unknown" || !validOutput(receipt.output)) continue;
+      const next = transitionActionResult(state, { instanceId: instance.id, actionId: action.id, ...receipt }, { ...input.env, now: Date.now() });
+      if (next.state.pendingTurn) next.state.pendingTurn.notices.push(...next.notices);
+      await processExecutionStore({ businessId: state.businessId, conversationId: state.conversationId, lease: input.lease! })
+        .finish(next, state.revision, { actionId: action.id, inputDigest: action.inputDigest, ...receipt });
+      state = next.state; if (!state.pendingTurn) recoveryNotices.push(...next.notices); input.onState?.(state);
+    } finally { if (timer) clearTimeout(timer); }
+  }
   const messageDigest = digest(input.event.message);
   let result: Transition;
   if (state.pendingTurn) {
@@ -36,11 +57,11 @@ export async function runProcessTurn(input: {
   }
   state = result.state;
   input.onState?.(state);
-  if (Object.values(state.instances).some(i => i.action?.status === "running")) {
+  if (Object.values(state.instances).some(i => i.action?.status === "running" || i.action?.status === "unknown")) {
     // The provider might already have committed. Never retry an uncertain side effect.
     return { state, actions: [], notices: [{ kind: "blocked", reason: "effect_reconciliation_required" }] };
   }
-  const notices = [...result.notices], pending = [...result.actions];
+  const notices = [...recoveryNotices, ...result.notices], pending = [...new Map([...result.actions, ...Object.values(state.instances).flatMap(i => i.action?.status === "prepared" ? [i.action] : [])].map(a => [a.id, a])).values()];
   const durable = live ? processExecutionStore({ businessId: state.businessId, conversationId: state.conversationId, lease: input.lease! }) : null;
   for (let count = 0; pending.length; count++) {
     if (count >= 4) throw new TransitionError("execution_budget_exhausted");

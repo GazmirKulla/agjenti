@@ -10,6 +10,8 @@ export type ToolAdapter = {
   /** An exception after dispatch is uncertain. A definite rejection must return failed. */
   execute: (action: Action, context: { businessId: string; conversationId: string; revision: number; signal: AbortSignal }) => Promise<EffectResult>;
   simulate?: (action: Action) => Promise<Record<string, Value>>;
+  /** Read an existing domain receipt only. Absence is not proof of failure. */
+  reconcile?: (action: Action, context: { businessId: string; conversationId: string; revision: number; signal: AbortSignal }) => Promise<EffectResult | null>;
 };
 export type ExecutionStore = {
   /** CAS + event deduplication + current lease/ownership checks in one transaction. */
@@ -17,7 +19,7 @@ export type ExecutionStore = {
   /** Atomically persist the receipt and the resulting checkpoint. */
   finish: (transition: Transition, expectedRevision: number, receipt: EffectReceipt) => Promise<void>;
 };
-function validOutput(output: unknown): output is Record<string, Value> {
+export function validOutput(output: unknown): output is Record<string, Value> {
   return output !== null && typeof output === "object" && !Array.isArray(output) && Object.keys(output).length <= 32
     && Object.entries(output).every(([key, value]) => validKey(key) && (typeof value === "boolean" || typeof value === "number" && Number.isFinite(value)
       || typeof value === "string" && value.length <= 8000 || Array.isArray(value) && value.length <= 32 && value.every(v => typeof v === "string" && v.length <= 2000)));

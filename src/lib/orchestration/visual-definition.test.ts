@@ -40,10 +40,10 @@ it("executes the editor's actual custom fields once and traces each visited node
   expect(result.notices.map(n => n.kind)).toEqual(["approval"]);
   expect(result.state.instances[result.state.focusId!].facts.organization_name.subject).toBe("organization");
 });
-it("does not invent an adapter for unsupported capabilities", () => {
+it("compiles product nodes into the confirmed order adapter", () => {
   const version = registrationVersion();
   version.graph.nodes[1] = node("name", "product");
-  expect(() => compileVisualProcesses(version)).toThrow("process_graph_adapter_pending");
+  expect(compileVisualProcesses(version)[0].steps.some(s => s.kind === "effect" && s.tool === "order.create")).toBe(true);
 });
 it("rejects incompatible subjects for a repeated field instead of silently aliasing them", () => {
   const version = registrationVersion();

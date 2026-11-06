@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadLinearContext } from "@/lib/business-assistant/linear-service";
 import { parseLinearDefinition } from "./linear";
-import { migrateContext } from "./context";
 import { readTestSession, sealTestSession } from "@/lib/agents/test-chat/session";
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 export async function simulateProductWorkflow(slug: string, productId: string, message: string, token?: string, photo = false) {
@@ -21,14 +20,11 @@ export async function simulateProductWorkflow(slug: string, productId: string, m
         const definition = parseLinearDefinition(card.draft.definition);
         const versionId = `linear-preview:${createHash("sha256").update(JSON.stringify(definition)).digest("hex")}`;
         const session = readTestSession(token ?? null, user.id, access.business.id);
-        if (session.state.context?.execution.linear && (session.state.context.execution.linear.versionId !== versionId || session.state.product_id !== productId))
+        if (Object.values(session.state.runtime?.instances ?? {}).some(i => i.versionId !== versionId))
             throw new Error("Drafti ndryshoi. Rifillo provën.");
-        const state = migrateContext(session.state);
-        state.product_id = productId;
-        if (!token)
-            state.step_key = definition.steps[0].key;
-        state.context!.execution.linear = { id: card.draft.source_workflow_id ?? productId, versionId, name: definition.name, steps: definition.steps };
-        const turn = await processConversationMessage({ businessId: access.business.id, mode: "test", linearPreview: true, message: token ? message.trim() : "", hasPhoto: token && photo ? true : false, state });
+        const turn = await processConversationMessage({ businessId: access.business.id, mode: "test", linearPreview: true,
+          linearPreviewDefinition: { versionId, workflowId: card.draft.source_workflow_id ?? productId, name: definition.name, steps: definition.steps, productId },
+          message: token ? message.trim() : `Provo porosinë për produktin me identifikues ${productId}.`, hasPhoto: token && photo ? true : false, state: session.state });
         return { reply: turn.reply, session: sealTestSession(session, turn.nextState, turn.previousResponseId) };
     }
     catch (e) {

@@ -8,6 +8,7 @@ export type ExternalActionKind =
   | "booking.availability"
   | "booking.create"
   | "order.create"
+  | "orders.status"
   | "payment.process"
   | "staff.handoff"
   | "provider.http"

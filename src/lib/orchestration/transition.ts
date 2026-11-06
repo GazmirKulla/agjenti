@@ -195,6 +195,11 @@ function advance(state: Snapshot, instance: Instance, env: Environment, notices:
         instance.stepId = step.next;
         delete instance.wait;
         break;
+      case "resolve":
+        refreshServerFacts(state, instance, definition, env, step.fieldIds);
+        instance.stepId = step.next;
+        delete instance.wait;
+        break;
       case "message":
         notices.push({ kind: "message", instanceId: instance.id, text: step.text });
         instance.stepId = step.next;

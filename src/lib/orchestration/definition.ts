@@ -16,6 +16,7 @@ function stepShape(s: unknown): boolean {
     case "semantic_condition": return shape(s, ["id", "kind", "predicate", "yes", "no"]) && text(s.predicate) && text(s.yes) && text(s.no);
     case "confirm": return shape(s, ["id", "kind", "fieldIds", "yes", "no", "label"], ["requiredFieldIds"]) && Array.isArray(s.fieldIds) && s.fieldIds.every(id => text(id, 120)) && (s.requiredFieldIds === undefined || Array.isArray(s.requiredFieldIds) && s.requiredFieldIds.every(id => text(id, 120))) && text(s.yes) && text(s.no) && text(s.label);
     case "inform": return shape(s, ["id", "kind", "next"]) && text(s.next);
+    case "resolve": return shape(s, ["id", "kind", "fieldIds", "next"]) && Array.isArray(s.fieldIds) && s.fieldIds.every(id => text(id, 120)) && text(s.next);
     case "effect": return shape(s, ["id", "kind", "tool", "toolVersion", "inputs", "next", "failed"]) && text(s.tool, 200) && Number.isSafeInteger(s.toolVersion) && record(s.inputs) && Object.values(s.inputs).every(id => text(id, 120)) && text(s.next) && text(s.failed);
     case "message": return shape(s, ["id", "kind", "text", "next"]) && text(s.text) && text(s.next);
     case "wait": return shape(s, ["id", "kind", "eventType", "timeoutMs", "next", "expired"]) && text(s.eventType) && typeof s.timeoutMs === "number" && text(s.next) && text(s.expired);
@@ -49,7 +50,7 @@ export function destinations(step: Step): string[] {
     case "condition": case "semantic_condition": case "confirm": return [step.yes, step.no];
     case "effect": return [step.next, step.failed];
     case "wait": return [step.next, step.expired];
-    case "collect": case "message": case "inform": return [step.next];
+    case "collect": case "message": case "inform": case "resolve": return [step.next];
     default: return [];
   }
 }
@@ -86,6 +87,7 @@ export function validateDefinition(definition: unknown): ProcessDefinition {
     if (!/^[A-Za-z0-9_-]{1,120}$/.test(s.id) || forbidden.has(s.id) || destinations(s).some(id => !steps.has(id))) throw new TransitionError("invalid_step_destination");
     if ((s.kind === "collect" || s.kind === "condition") && !fields.has(s.fieldId)) throw new TransitionError("unknown_field");
     if (s.kind === "collect" && fields.get(s.fieldId)?.source === "server") throw new TransitionError("server_field_not_collectable");
+    if (s.kind === "resolve" && (!s.fieldIds.length || s.fieldIds.some(id => fields.get(id)?.source !== "server"))) throw new TransitionError("invalid_resolved_fields");
     if (s.kind === "condition" && (s.operator !== "present" && s.operator !== "equals" || s.operator === "equals" && (s.value === undefined || !validFieldValue(fields.get(s.fieldId)!, s.value)))) throw new TransitionError("invalid_condition");
     if (s.kind === "confirm" && (new Set(s.fieldIds).size !== s.fieldIds.length || s.fieldIds.some(id => !fields.has(id)) || s.requiredFieldIds?.some(id => !s.fieldIds.includes(id)))) throw new TransitionError("invalid_review_fields");
     if (s.kind === "effect" && (!s.tool || !Number.isInteger(s.toolVersion) || s.toolVersion < 1 || Object.entries(s.inputs).some(([key, id]) => !validKey(key) || !fields.has(id)))) throw new TransitionError("invalid_effect_definition");
