@@ -21,14 +21,8 @@
 
 @media (max-width: 760px) {
   .assistant-first-mobile {
-    --primary: #73e4b5; --on-primary: #111827; --accent: #087f62; --accent-soft: #eaf9f2;
-    --ink: #111827; --ink-muted: #64716d; --surface: #ffffff; --paper: #f7faf9; --line: #e6ece9;
     --mobile-header-height: calc(72px + env(safe-area-inset-top, 0px));
     background: var(--surface); color: var(--ink);
-  }
-  html[data-resolved="dark"] .assistant-first-mobile {
-    --ink: #eef5f1; --ink-muted: #a2b5ab; --surface: #101a18; --paper: #182520;
-    --line: #2b3c34; --accent: #73e4b5; --accent-soft: #1c352a;
   }
   .assistant-first-mobile .dashboard-topbar {
     height: var(--mobile-header-height); min-height: var(--mobile-header-height); padding: env(safe-area-inset-top, 0px) 12px 0;
