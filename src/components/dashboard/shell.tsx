@@ -24,6 +24,7 @@ export function AppShell({
   businesses = [],
   navigationItems,
   mobileNavigationItems,
+  nativeHost: embedded = false,
 }: {
   children: React.ReactNode;
   name: string;
@@ -35,9 +36,10 @@ export function AppShell({
   businesses?: { id: string; name: string; slug: string }[];
   navigationItems: NavItem[];
   mobileNavigationItems: NavItem[];
+  nativeHost?: boolean;
 }) {
-  const [nativeHost, setNativeHost] = useState(false);
-  useEffect(() => { setNativeHost(/AgjentiNative\/2\.0/.test(navigator.userAgent)); }, []);
+  const [nativeHost, setNativeHost] = useState(embedded);
+  useEffect(() => { if (/AgjentiNative\/2\.0/.test(navigator.userAgent)) setNativeHost(true); }, []);
   const t = useDashboardTranslator();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);

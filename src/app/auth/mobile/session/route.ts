@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
+import { NATIVE_EMBED_COOKIE } from "@/lib/native/embedded";
 
 export const runtime = "nodejs";
 const failure = (status: number) => NextResponse.json({ error: "Hyrja në aplikacion nuk përfundoi. Provo përsëri." }, { status, headers: { "Cache-Control": "no-store" } });
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     if (!body || typeof body.access_token !== "string" || typeof body.refresh_token !== "string" ||
         !body.access_token || !body.refresh_token || body.access_token.length > 8192 || body.refresh_token.length > 8192) return failure(400);
-    const next = typeof body.next === "string" && /^\/(?:b\/[^\\?#]+(?:[?][^\\#]*)?|onboarding|account)$/.test(body.next)
+    const next = typeof body.next === "string" && /^\/(?:b\/[^\\?#]+|onboarding|account)(?:[?][^\\#]*)?$/.test(body.next)
       ? body.next : "/auth/mobile/continue";
     const response = NextResponse.redirect(new URL(next, request.url), 303);
     response.headers.set("Cache-Control", "no-store");
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
     if (verified.error || !verified.data.user) return failure(401);
     const session = await supabase.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token });
     if (session.error || session.data.user?.id !== verified.data.user.id) return failure(401);
+    response.cookies.set(NATIVE_EMBED_COOKIE, "1", { httpOnly: true, path: "/", sameSite: "lax", secure: new URL(request.url).protocol === "https:" });
     return response;
   } catch { return failure(400); }
 }

@@ -22,7 +22,15 @@ it("validates the access token before setting any session", async () => {
 });
 it("rejects a mismatched refreshed session", async () => {
   m.session.mockResolvedValue({ data: { user: { id: "b" } }, error: null });
-  expect((await request()).status).toBe(401);
+  const response = await request();
+  expect(response.status).toBe(401);
+  expect(response.headers.get("set-cookie") ?? "").not.toContain("agjenti_native");
+});
+it("marks the web session as opened inside the native app", async () => {
+  const cookie = (await request()).headers.get("set-cookie") ?? "";
+  expect(cookie).toContain("agjenti_native=1");
+  expect(cookie).toMatch(/HttpOnly/i);
+  expect(cookie).not.toMatch(/Max-Age|Expires/i);
 });
 it("redirects without credentials in the URL only after authentication", async () => {
   const response = await request();
@@ -40,7 +48,9 @@ it("bounds request size and rejects malformed payloads", async () => {
 it("opens only an internal supported destination after session exchange", async () => {
   const internal = await request({}, JSON.stringify({ access_token: "access", refresh_token: "refresh", next: "/b/one/products" }));
   expect(internal.headers.get("location")).toBe("https://agjenti.app/b/one/products");
-  for (const next of ["https://evil.example", "//evil.example", "/\\evil.example"]) {
+  const themed = await request({}, JSON.stringify({ access_token: "access", refresh_token: "refresh", next: "/account?theme=dark" }));
+  expect(themed.headers.get("location")).toBe("https://agjenti.app/account?theme=dark");
+  for (const next of ["https://evil.example", "//evil.example", "/\\evil.example", "/account/../admin", "/onboarding#x"]) {
     const response = await request({}, JSON.stringify({ access_token: "access", refresh_token: "refresh", next }));
     expect(response.headers.get("location")).toBe("https://agjenti.app/auth/mobile/continue");
   }
