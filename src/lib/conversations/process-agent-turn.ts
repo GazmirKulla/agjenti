@@ -93,6 +93,8 @@ function matchesSku(sku: string | null | undefined, message: string) {
  * Caller is responsible for authorization and, for real turns, persistence/send.
  */
 export type AgentTurnParams = {
+  /** Injected only by the authenticated queue worker. */
+  processTransport?: import("@/lib/calendar/service").BookingEffectGuard;
   configurationPreview?: import("@/lib/agents/communication-configuration").AgentConfigurationPreview;
   /** Internal coordinator contract, never client-controlled or authorization. */
   turnDecision?: TurnDecision;

@@ -7,6 +7,10 @@ import { tryProcessConversation } from "./conversation";
 const { load, interpret } = vi.hoisted(() => ({ load: vi.fn(), interpret: vi.fn() }));
 vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: load }));
 vi.mock("./interpret", () => ({ interpretCustomer: interpret }));
+vi.mock("./persistence", () => ({
+  commitProcessCheckpoint: async (input: { transition: { state: unknown } }) => ({ state: input.transition.state, replayed: false }),
+  processExecutionStore: () => ({ claim: vi.fn(), finish: vi.fn() }),
+}));
 vi.mock("@/lib/capabilities/enforcement", async original => ({ ...await original<object>(), runtimeModules: async () => [] }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => {
   const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: null, error: null }) };
@@ -45,4 +49,12 @@ it("handles information without a configured workflow through the new engine", a
   expect(result?.nextState.runtime).toMatchObject({ schemaVersion: 4, revision: 1, instances: {}, offers: {} });
   expect(interpret).toHaveBeenCalledOnce();
   expect(result?.nextState.recentMessages).toHaveLength(2);
+});
+it("routes an authenticated live turn through checkpoint preparation without marking prompts delivered", async () => {
+  interpret.mockResolvedValue({ observation: { revision: 0, commands: [], needsClarification: false }, model: "test", responseId: "observation", inputTokens: 1, outputTokens: 1 });
+  const result = await tryProcessConversation({ ...params(), state: emptyState(), mode: "production",
+    processTransport: { jobId: 10, leaseToken: "lease", conversationId: "conversation", revision: 0 } });
+  expect(result?.nextState.runtime).toMatchObject({ mode: "live", revision: 2, conversationId: "conversation" });
+  expect(result?.nextState.runtime?.pendingTurn).toBeUndefined();
+  expect(result?.processCheckpoint).toMatchObject({ event: { id: "job:10:reply" }, expectedRevision: 1, targetIds: [] });
 });

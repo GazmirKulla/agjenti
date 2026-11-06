@@ -8,6 +8,7 @@ import { runWorkflowQueue, prepareWorkflowReply, enqueueWorkflowMessage } from "
 import type { AgentTurnResult } from "./process-agent-turn";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { InboundPersistenceError } from "./inbound-persistence-error";
+import { initialSnapshot } from "@/lib/orchestration/contracts";
 const business = "00000000-0000-4000-8000-000000004101";
 const job = { id: 1, business_id: business, connection_id: "connection", participant_id: "person", lease_token: "lease", reply: "Saved answer", status: "prepared", payload: { channel: "instagram", timestamp: new Date().toISOString() } };
 beforeEach(() => {
@@ -21,6 +22,27 @@ beforeEach(() => {
     m.handle.mockReset();
     m.rpc.mockReset();
     m.rpc.mockResolvedValue({ data: 0, error: null });
+});
+it("commits a process reply through the process transaction instead of the legacy state writer", async () => {
+    const queued = { ...job, status: "processing", payload: job.payload as unknown as NormalizedIncomingMessage };
+    const state = { ...initialSnapshot(business, "conversation", "live"), revision: 5 };
+    m.rpc.mockResolvedValue({ data: { replayed: false, revision: 5, state }, error: null });
+    const turn = { nextState: { runtime: state }, reply: "Review", processCheckpoint: { event: { id: "event", actor: "customer", businessId: business, conversationId: "conversation", message: "Start" }, expectedRevision: 4, targetIds: ["offer"] } } as unknown as AgentTurnResult;
+    await prepareWorkflowReply(queued, "conversation", 4, turn);
+    expect(m.rpc).toHaveBeenCalledOnce();
+    expect(m.rpc).toHaveBeenCalledWith("commit_process_checkpoint", expect.objectContaining({ p_state: state, p_revision: 4, p_targets: ["offer"], p_reply: "Review" }));
+    expect(queued).toMatchObject({ status: "prepared", process_runtime: true });
+});
+it("does not expose a process reply after failed persistence or accept a test snapshot as live", async () => {
+    const queued = { ...job, status: "processing", payload: job.payload as unknown as NormalizedIncomingMessage };
+    const state = { ...initialSnapshot(business, "conversation", "live"), revision: 1 };
+    const turn = { nextState: { runtime: state }, reply: "Review", processCheckpoint: { event: { id: "event", actor: "customer", businessId: business, conversationId: "conversation", message: "Start" }, expectedRevision: 0, targetIds: [] } } as unknown as AgentTurnResult;
+    m.rpc.mockResolvedValue({ error: { code: "P0001" } });
+    await expect(prepareWorkflowReply(queued, "conversation", 0, turn)).rejects.toThrow("process_checkpoint_failed");
+    expect(queued.status).toBe("processing");
+    m.rpc.mockClear(); state.mode = "test";
+    await expect(prepareWorkflowReply(queued, "conversation", 0, turn)).rejects.toThrow("Invalid process delivery envelope");
+    expect(m.rpc).not.toHaveBeenCalled();
 });
 it("sends persisted replies after recovery without regenerating or advancing state", async () => {
     m.rpc.mockResolvedValueOnce({ data: [structuredClone(job)], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: [], error: null });

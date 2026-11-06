@@ -64,6 +64,7 @@ try {
   sql(panel.slice(from, to));
   sql(readFileSync(path.join(root, 'supabase/migrations/20261105220000_process_checkpoints.sql'), 'utf8'));
   sql(readFileSync(path.join(root, 'supabase/migrations/20261105233000_process_transport_receipts.sql'), 'utf8'));
+  sql(readFileSync(path.join(root, 'supabase/migrations/20261106113000_process_live_entry.sql'), 'utf8'));
   const business = randomUUID(), foreign = randomUUID(), conversation = randomUUID(), connection = randomUUID(), token = randomUUID();
   sql(`insert into businesses(id) values(${literal(business)}),(${literal(foreign)});
     insert into conversations(id,business_id,channel,instagram_participant_id,instagram_connection_id) values(${literal(conversation)},${literal(business)},'instagram','customer',${literal(connection)});
@@ -118,6 +119,26 @@ try {
   assert.throws(() => sql(commit('staff-owned', 4, { ...base, revision: 5 })), /ownership_lost/);
   sql("update conversations set status='active'; update workflow_inbound_queue set leased_until=now()-interval '1 second';");
   assert.throws(() => sql(commit('expired-lease', 4, { ...base, revision: 5 })), /lease_lost/);
+  sql(`alter table conversations add column last_message_at timestamptz, add column last_inbound_at timestamptz,
+    add column last_message_preview text, add column openai_previous_response_id text, add column updated_at timestamptz;
+    alter table workflow_inbound_queue add column payload jsonb, add column result_ciphertext text, add column error text;
+    create table messages(business_id uuid,conversation_id uuid,direction text,source text,body text,delivery_status text);`);
+  sql(readFileSync(path.join(root, 'supabase/migrations/20261106110000_process_panel_reply.sql'), 'utf8'));
+  const panelConversation = randomUUID(), user = randomUUID(), stream = randomUUID(), panelToken = randomUUID();
+  sql(`insert into platform_admins(user_id) values(${literal(user)});
+    insert into conversations(id,business_id,channel,panel_user_id,panel_stream_id,auto_reply) values(${literal(panelConversation)},${literal(business)},'panel',${literal(user)},${literal(stream)},true);
+    insert into conversation_states(conversation_id,business_id) values(${literal(panelConversation)},${literal(business)});
+    insert into workflow_inbound_queue(business_id,lease_token,leased_until,status,conversation_id,channel,operation_kind,participant_id,operator_user_id,test_stream_id,payload)
+    values(${literal(business)},${literal(panelToken)},now()+interval '10 minutes','processing',${literal(panelConversation)},'panel','panel',${literal(user)},${literal(user)},${literal(stream)},'{"message":"Start"}');`);
+  const panelState = { ...offered, conversationId: panelConversation, revision: 1 };
+  const panelFinish = `set role service_role; select public.finish_process_panel_chat(2,${literal(panelToken)},0,${json(panelState)},'panel-event',${literal('b'.repeat(64))},'Review', '["proposal"]','sealed-result',false);`;
+  sql(panelFinish);
+  const panelRead = JSON.parse(sql(`select collected from conversation_states where conversation_id=${literal(panelConversation)};`));
+  assert.equal(panelRead.revision, 2);
+  assert.equal(typeof panelRead.offers.proposal.presentedAt, 'number');
+  assert.equal(sql('select count(*) from messages;'), '2');
+  sql(panelFinish);
+  assert.equal(sql('select count(*) from messages;'), '2');
   console.log('PASS: real PostgreSQL checkpoint CAS, concurrent deduplication, rollback, tenant/role isolation, ownership, lease and delivery receipts.');
   console.log('Scope: focused dependency fixture; full Supabase baseline and provider delivery are not tested here.');
 } finally {

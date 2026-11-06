@@ -76,6 +76,9 @@ export type Action = {
 };
 export type Offer = { id: string; definitionId: string; versionId: string; expiresAt: number; presentedAt?: number };
 export type Snapshot = {
+  handoffRequested?: boolean;
+  history?: { role: "user" | "assistant"; content: string }[];
+  pendingTurn?: { eventId: string; messageDigest: string; notices: RuntimeNotice[] };
   schemaVersion: 4;
   mode: "live" | "test";
   businessId: string;

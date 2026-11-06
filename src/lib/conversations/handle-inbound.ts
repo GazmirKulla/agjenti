@@ -1,4 +1,5 @@
 import { inboxHistory, type InboxHistoryMessage } from "./inbox-history";
+import { readStoredConversationState } from "@/lib/orchestration/stored-state";
 import { isAcceptedDelivery } from "./delivery-status";
 import { inboundBatch } from "./message-batch";
 import { randomUUID } from "node:crypto";
@@ -359,11 +360,11 @@ export async function handleInboundMessage(
   const stateRow=rawState as unknown as {collected:ConversationStatePayload|null;workflow_id:string|null;revision?:number}|null;
   // A paused handoff returns above. Reaching this point with its saved state means
   // staff explicitly resumed the conversation; start a new run without erasing data.
-  let inboundState = structuredClone((stateRow?.collected as ConversationStatePayload | null) ?? emptyState());
+  let inboundState = readStoredConversationState(stateRow?.collected ?? {}, { businessId, conversationId, revision: stateRow?.revision });
   // Direct processor calls can test production routing, but live state commits
   // and sends for shared conversations must always pass through the durable queue.
   if (!job) throw new Error("workflow_queue_required");
-  if(job) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState,message.channel);
+  if(job && !inboundState.runtime) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState,message.channel);
   // Persisted inbox history also includes customers and staff who spoke while AI
   // was paused. Never replay those messages as workflow commands or field values.
   const [{ data: historyRows, error: historyError }, { data: lastOutbound, error: outboundError }] = await Promise.all([
@@ -443,6 +444,7 @@ export async function handleInboundMessage(
     customerIdentity: { conversationId, instagramParticipantId: message.externalParticipantId, instagramConnectionId: conn.id, channel: message.channel },
     source: message.channel,
     bookingGuard: job ? { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: stateRow?.revision ?? 0 } : undefined,
+    processTransport: job ? { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: stateRow?.revision ?? 0 } : undefined,
     canAct,
     businessId,
     message: message.text ?? "",

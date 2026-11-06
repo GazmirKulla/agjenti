@@ -2,7 +2,8 @@ import { observeLabTurn } from "@/lib/chat-lab/observation";
 import { isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { encryptSecret } from "@/lib/crypto/tokens";
-import { emptyState, type ConversationStatePayload } from "@/lib/workflows/state";
+import { readStoredConversationState } from "@/lib/orchestration/stored-state";
+import { digest } from "@/lib/orchestration/definition";
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
 import type { TestChatResult } from "../test-chat/types";
 export type PanelScope = { businessId: string; userId: string; streamId: string };
@@ -30,19 +31,33 @@ export async function runPanelChat(scope: PanelScope) {
         ]);
         return !access.error && access.data === true && !owner.error && owner.data?.status === "active" && owner.data.auto_reply === true;
       };
-      const state = saved.data.collected as ConversationStatePayload;
+      const state = readStoredConversationState(saved.data.collected, { businessId: scope.businessId, conversationId: job.conversation_id, revision: saved.data.revision });
       const observation = observeLabTurn(await isPlatformAdmin(scope.userId));
       const turn = await processConversationMessage({
         onTrace: observation.onTrace,
         mode: "production", source: "panel", businessId: scope.businessId,
         message: job.payload.message, hasPhoto: false,
-        state: state?.fields && state?.customer ? state : emptyState(),
+        state,
         persistedWorkflowId: saved.data.workflow_id,
         previousResponseId: conversation.data.openai_previous_response_id,
         deliveredReply: outbound.data?.reply ?? null, conversationKey: job.conversation_id,
         bookingGuard: { jobId: job.id, leaseToken: job.lease_token, conversationId: job.conversation_id, revision: saved.data.revision }, canAct,
+        processTransport: { jobId: job.id, leaseToken: job.lease_token, conversationId: job.conversation_id, revision: saved.data.revision },
       });
       const result: TestChatResult = { ...turn, labObservation: observation.finish(), session: "", turns: job.client_sequence + 1, autoReplyEnabled: true };
+      if (turn.nextState.runtime) {
+        const checkpoint = turn.processCheckpoint;
+        const snapshot = turn.nextState.runtime;
+        if (!checkpoint || snapshot.mode !== "live" || snapshot.businessId !== scope.businessId || snapshot.conversationId !== job.conversation_id
+          || checkpoint.event.businessId !== scope.businessId || checkpoint.event.conversationId !== job.conversation_id
+          || checkpoint.expectedRevision !== snapshot.revision - 1) throw new Error("Invalid panel process checkpoint");
+        const committed = await db.rpc("finish_process_panel_chat", { p_id: job.id, p_token: job.lease_token,
+          p_revision: checkpoint.expectedRevision, p_state: snapshot, p_event: checkpoint.event.id, p_event_hash: digest(checkpoint.event),
+          p_reply: turn.reply, p_targets: checkpoint.targetIds, p_result: encryptSecret(JSON.stringify(result)),
+          p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });
+        if (committed.error) throw new Error("Panel process result commit failed");
+        continue;
+      }
       const committed = await db.rpc("finish_panel_chat", { p_id: job.id, p_token: job.lease_token, p_revision: saved.data.revision,
         p_state: turn.nextState, p_workflow: turn.workflowId, p_reply: turn.reply, p_response: turn.previousResponseId,
         p_result: encryptSecret(JSON.stringify(result)), p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });

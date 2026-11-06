@@ -55,9 +55,8 @@ export async function prepareWorkflowReply(job: WorkflowJob, conversationId: str
         const state = turn.nextState.runtime;
         if (!envelope || state.mode !== "live" || state.businessId !== job.business_id || state.conversationId !== conversationId
             || envelope.event.businessId !== job.business_id || envelope.event.conversationId !== conversationId
-            || envelope.expectedRevision !== revision || state.revision !== revision + 1
-            || turn.handoff && !turn.advisoryHandoff) throw new Error("Invalid process delivery envelope");
-        const receipt = await commitProcessCheckpoint({ event: envelope.event, expectedRevision: revision,
+            || envelope.expectedRevision < revision || state.revision !== envelope.expectedRevision + 1) throw new Error("Invalid process delivery envelope");
+        const receipt = await commitProcessCheckpoint({ event: envelope.event, expectedRevision: envelope.expectedRevision,
             transition: { state, notices: [], actions: [] }, lease: { jobId: job.id, leaseToken: job.lease_token },
             reply: { text: turn.reply, presentedTargetIds: envelope.targetIds } });
         // On replay the database's prepared text is authoritative, not regenerated prose.
