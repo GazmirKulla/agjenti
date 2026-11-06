@@ -3,6 +3,8 @@ const m = vi.hoisted(() => ({ session: vi.fn(), admin: vi.fn(), service: vi.fn()
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.session, isPlatformAdmin: m.admin }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: m.service }));
 vi.mock("next/cache", () => ({ revalidatePath: m.revalidate }));
+const restore = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/account/deletion", () => ({ restoreAccountDeletion: restore }));
 import { manageUser } from "./actions";
 const userId = "f0f5b4a3-2100-4000-8000-000000000001";
 function form(action = "create", overrides: Record<string, string | undefined> = {}) {
@@ -53,6 +55,18 @@ it("verifies email without a password update", async () => {
 it("changes only the password of the selected user", async () => {
   await manageUser(form("password"));
   expect(m.update).toHaveBeenCalledWith(userId, { password: "Example-password-2026" });
+});
+it("restores a pending deletion without requiring a password", async () => {
+  restore.mockResolvedValue({ error: null });
+  expect(await manageUser(form("restore", { password: "", password_confirm: "" }))).toEqual({ success: expect.stringContaining("rikthye") });
+  expect(restore).toHaveBeenCalledWith(userId);
+  expect(m.auditInsert).toHaveBeenCalledWith({ actor_id: userId, target_id: userId, action: "restore" });
+  expect(m.update).not.toHaveBeenCalled();
+});
+it("explains when there is no deletion to restore", async () => {
+  restore.mockResolvedValue({ error: { code: "not_scheduled" } });
+  expect(await manageUser(form("restore"))).toEqual({ error: expect.stringContaining("nuk ka fshirje") });
+  expect(m.auditFinish).toHaveBeenCalledWith({ status: "failed" });
 });
 it("does not change Auth when the audit store is unavailable", async () => {
   m.auditInsert.mockResolvedValue({ data: null, error: {} });

@@ -91,12 +91,15 @@ export default function DataDeletionPage() {
                   Hyr në panel → Instagram dhe shkëput llogarinë e lidhur.
                 </li>
                 <li>
-                  Kontakto{" "}
-                  <a href="mailto:zanastoreeu@gmail.com">
-                    zanastoreeu@gmail.com
-                  </a>{" "}
-                  me email-in e llogarisë dhe emrin e biznesit për të kërkuar
-                  mbylljen e llogarisë ose fshirjen e të dhënave të panelit.
+                  Në aplikacionin Agjenti hap Llogaria → Fshi llogarinë. Llogaria
+                  çaktivizohet menjëherë dhe fshihet përfundimisht pas 30 ditëve,
+                  bashkë me bizneset ku je anëtari i vetëm.
+                </li>
+                <li>
+                  Brenda 30 ditëve mund ta rikthesh duke na shkruar në{" "}
+                  <a href="mailto:agjentiapp@gmail.com">agjentiapp@gmail.com</a>{" "}
+                  me email-in e llogarisë. Po në këtë adresë mund të kërkosh
+                  fshirjen edhe pa aplikacionin.
                 </li>
               </ol>
             </section>

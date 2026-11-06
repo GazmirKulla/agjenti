@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { BrandLogo } from "@/components/brand/logo";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
+import { DELETED_ACCOUNT_CODE, DELETED_ACCOUNT_MESSAGE } from "@/lib/account/deletion-notice";
 import "./auth.css";
 function LoginForm() {
   const params = useSearchParams();
@@ -21,6 +22,7 @@ function LoginForm() {
   const [error, setError] = useState(() => {
     const err = params.get("error");
     if (!err) return "";
+    if (err === "account_deleted") return DELETED_ACCOUNT_MESSAGE;
     if (err === "oauth_callback") {
       return "Hyrja me Google/Apple dështoi ose u anulua. Provo përsëri.";
     }
@@ -88,6 +90,8 @@ function LoginForm() {
       setError(
         code === "invalid_credentials"
           ? "Email-i ose fjalëkalimi nuk është i saktë."
+          : code === DELETED_ACCOUNT_CODE
+            ? DELETED_ACCOUNT_MESSAGE
           : code === "email_not_confirmed"
             ? "Konfirmo fillimisht email-in nga lidhja që të kemi dërguar."
             : code === "user_already_exists"

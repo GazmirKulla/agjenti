@@ -6,7 +6,7 @@ import { manageUser } from "./actions";
 
 type Business = { id: string; name: string };
 export function UserForm({ action, userId, businesses = [], onSuccess }: {
-  action: "create" | "password" | "verify_email";
+  action: "create" | "password" | "verify_email" | "restore";
   userId?: string;
   businesses?: Business[];
   onSuccess?: () => void;
@@ -22,7 +22,7 @@ export function UserForm({ action, userId, businesses = [], onSuccess }: {
       <label className="form-label">Emri<input className="field" name="name" required maxLength={150} autoComplete="off" /></label>
       <label className="form-label">Email<input className="field" name="email" type="email" required maxLength={254} autoComplete="off" /></label>
     </>}
-    {action !== "verify_email" && <>
+    {(action === "create" || action === "password") && <>
       <label className="form-label">Fjalëkalimi i ri<input className="field" type="password" name="password" required minLength={8} maxLength={128} autoComplete="new-password" /></label>
       <label className="form-label">Përsërit fjalëkalimin<input className="field" type="password" name="password_confirm" required minLength={8} maxLength={128} autoComplete="new-password" /></label>
     </>}
@@ -33,6 +33,7 @@ export function UserForm({ action, userId, businesses = [], onSuccess }: {
       <label className="form-label">Roli në biznes<select className="field" name="role" defaultValue="staff"><option value="staff">Staf</option><option value="owner">Pronar</option></select></label>
     </>}
     {action === "verify_email" && <p className="muted-copy">Konfirmon email-in direkt, pa dërguar mesazh verifikimi.</p>}
-    <button type="submit" className="btn btn-primary">{action === "create" ? "Krijo përdorues" : action === "password" ? "Ndrysho fjalëkalimin" : "Verifiko email-in"}</button>
+    {action === "restore" && <p className="muted-copy">Anulon fshirjen e planifikuar dhe e lejon përsëri hyrjen. Njoftimet në pajisje duhet të aktivizohen përsëri nga përdoruesi.</p>}
+    <button type="submit" className="btn btn-primary">{action === "create" ? "Krijo përdorues" : action === "password" ? "Ndrysho fjalëkalimin" : action === "restore" ? "Rikthe llogarinë" : "Verifiko email-in"}</button>
   </ActionForm></div>;
 }

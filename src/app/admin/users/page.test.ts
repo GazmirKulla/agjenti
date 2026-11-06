@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { writeFileSync } from "node:fs";
-const m = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), session: vi.fn(), admin: vi.fn() }));
+const m = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), session: vi.fn(), admin: vi.fn(), deletions: vi.fn() }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.session, isPlatformAdmin: m.admin }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: m.rpc, from: m.from }) }));
 vi.mock("./actions", () => ({ manageUser: vi.fn() }));
@@ -13,8 +13,18 @@ beforeEach(() => {
   m.from.mockImplementation((table: string) => {
     if (table === "businesses") return { select: () => ({ order: async () => ({ data: [], error: null }) }) };
     if (table === "platform_user_events") return { select: () => ({ in: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) };
+    if (table === "account_deletions") return { select: () => ({ in: () => ({ in: async () => ({ data: m.deletions(), error: null }) }) }) };
     throw new Error("Unexpected table");
   });
+  m.deletions.mockReturnValue([]);
+});
+it("offers restoration only while a deletion is pending", async () => {
+  expect(renderToStaticMarkup(await Page({ searchParams: Promise.resolve({}) }))).not.toContain("Rikthe llogarinë");
+  m.deletions.mockReturnValue([{ user_id: "u1", status: "scheduled", purge_after: "2026-12-06T00:00:00Z" }]);
+  const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({}) }));
+  expect(html).toContain("Fshirje e kërkuar"); expect(html).toContain("Rikthe llogarinë");
+  m.deletions.mockReturnValue([{ user_id: "u1", status: "purging", purge_after: "2026-12-06T00:00:00Z" }]);
+  expect(renderToStaticMarkup(await Page({ searchParams: Promise.resolve({}) }))).not.toContain("Rikthe llogarinë");
 });
 it("renders orphan accounts, manual verification and password management; preserves filters in pagination", async () => {
   const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ q: "prove", filter: "no-business" }) }));

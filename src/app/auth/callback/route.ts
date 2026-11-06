@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { appOrigin } from "@/lib/auth/app-origin";
+import { DELETED_ACCOUNT_CODE } from "@/lib/account/deletion-notice";
 
 type CookieToSet = {
 	name: string;
@@ -28,6 +29,10 @@ export async function GET(request: Request) {
 	const next = safeNext(searchParams.get("next"), type);
 	const origin = appOrigin(request);
 	const loginError = `${origin}/login?error=oauth_callback${next.startsWith("/join?") ? `&next=${encodeURIComponent(next)}` : ""}`;
+	const deletedError = `${origin}/login?error=account_deleted`;
+	if (searchParams.get("error_code") === DELETED_ACCOUNT_CODE) {
+		return NextResponse.redirect(deletedError);
+	}
 
 	const cookieStore = await cookies();
 	const pending: CookieToSet[] = [];
@@ -73,7 +78,9 @@ export async function GET(request: Request) {
 	}
 
 	if (error) {
-		return NextResponse.redirect(loginError);
+		return NextResponse.redirect(
+			(error as { code?: string }).code === DELETED_ACCOUNT_CODE ? deletedError : loginError,
+		);
 	}
 
 	const response = NextResponse.redirect(`${origin}${next}`);

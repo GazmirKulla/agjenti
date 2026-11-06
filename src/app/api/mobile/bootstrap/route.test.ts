@@ -35,7 +35,7 @@ it("returns only allowed businesses and modules without exposing credentials", a
   expect(
     data.businesses[0].navigation.map((x: { id: string }) => x.id),
   ).toEqual(["products", "settings"]);
-  expect(data.user).toEqual({ id: "owner", email: "owner@example.test" });
+  expect(data.user).toEqual({ id: "owner", email: "owner@example.test", canDeleteAccount: true });
   expect(response.headers.get("cache-control")).toContain("no-store");
 });
 it("reports backend failures instead of fabricating an empty workspace", async () => {

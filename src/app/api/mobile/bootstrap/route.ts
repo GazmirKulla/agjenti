@@ -33,7 +33,10 @@ export async function GET(request: Request) {
       }),
     );
     return Response.json(
-      { user: { id: user.id, email: user.email }, businesses },
+      {
+        user: { id: user.id, email: user.email, canDeleteAccount: !membership.admin },
+        businesses,
+      },
       { headers },
     );
   } catch {

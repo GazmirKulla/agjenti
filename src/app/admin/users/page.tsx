@@ -11,7 +11,7 @@ type UserRow = {
   last_sign_in_at: string | null; email_confirmed_at: string | null; banned: boolean; admin: boolean;
   businesses: { id: string; name: string; slug: string; role: string }[];
 };
-const actionLabels: Record<string, string> = { create: "Krijim llogarie", password: "Ndryshim fjalëkalimi", verify_email: "Verifikim manual i email-it" };
+const actionLabels: Record<string, string> = { create: "Krijim llogarie", password: "Ndryshim fjalëkalimi", verify_email: "Verifikim manual i email-it", restore: "Rikthim llogarie" };
 const statusLabels: Record<string, string> = { pending: "Pa konfirmim përfundimtar", completed: "U krye", failed: "Dështoi" };
 
 export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -30,7 +30,11 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   if (result.error || options.error) throw new Error("Nuk u ngarkuan përdoruesit. Kontrollo lidhjen dhe migrimin e administrimit të përdoruesve.");
   const { users, total } = result.data as { users: UserRow[]; total: number };
   const ids = users.map(u => u.id);
-  const history = ids.length ? await db.from("platform_user_events").select("id,actor_id,target_id,action,status,created_at").in("target_id", ids).order("created_at", { ascending: false }).limit(250) : { data: [], error: null };
+  const [history, deletionRows] = ids.length ? await Promise.all([
+    db.from("platform_user_events").select("id,actor_id,target_id,action,status,created_at").in("target_id", ids).order("created_at", { ascending: false }).limit(250),
+    db.from("account_deletions").select("user_id,status,purge_after").in("user_id", ids).in("status", ["scheduled", "purging"]),
+  ]) : [{ data: [], error: null }, { data: [], error: null }];
+  const deletions = new Map((deletionRows.data ?? []).map(d => [d.user_id, d as { status: string; purge_after: string }]));
   const actorIds = [...new Set((history.data ?? []).map(e => e.actor_id))];
   const profiles = actorIds.length ? await db.from("profiles").select("id,email").in("id", actorIds) : { data: [] };
   const actorEmails = new Map((profiles.data ?? []).map(p => [p.id, p.email]));
@@ -50,8 +54,11 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         u.businesses.map(b => b.name).join(", ") || "Pa biznes", u.admin ? "Administrator" : "Përdorues", formatDate(u.created_at), formatDate(u.last_sign_in_at),
       ], detail: <>
         <div className="detail-header"><div><h2>{u.name}</h2><p>{u.email}</p></div></div>
-        <div className="detail-block"><h3>Llogaria</h3><dl className="detail-fields"><div><dt>Statusi</dt><dd>{u.banned ? "E pezulluar" : "E papezulluar"}</dd></div><div><dt>Email-i</dt><dd>{u.email_confirmed_at ? `Verifikuar më ${formatDate(u.email_confirmed_at)}` : "I paverifikuar"}</dd></div><div><dt>Aksesi</dt><dd>{u.admin ? "Administrator platforme" : "Përdorues"}</dd></div></dl></div>
+        <div className="detail-block"><h3>Llogaria</h3><dl className="detail-fields"><div><dt>Statusi</dt><dd>{deletions.get(u.id) ? `Fshirje e kërkuar · fshihet përfundimisht më ${formatDate(deletions.get(u.id)!.purge_after)}` : u.banned ? "E pezulluar" : "E papezulluar"}</dd></div><div><dt>Email-i</dt><dd>{u.email_confirmed_at ? `Verifikuar më ${formatDate(u.email_confirmed_at)}` : "I paverifikuar"}</dd></div><div><dt>Aksesi</dt><dd>{u.admin ? "Administrator platforme" : "Përdorues"}</dd></div></dl></div>
         <div className="detail-block"><h3>Bizneset dhe rolet</h3>{u.businesses.length ? u.businesses.map(b => <p key={b.id}><Link className="soft-link" href={`/b/${b.slug}`}>{b.name}</Link> · {b.role === "owner" ? "Pronar" : "Staf"}</p>) : <p className="muted-copy">Ky përdorues nuk është anëtar i asnjë biznesi.</p>}</div>
+        {deletionRows.error && <div className="detail-block"><p role="alert">Gjendja e fshirjes nuk u ngarkua.</p></div>}
+        {deletions.get(u.id)?.status === "scheduled" && <div className="detail-block"><h3>Rikthe llogarinë</h3><UserForm key={`restore-${u.id}`} action="restore" userId={u.id} /></div>}
+        {deletions.get(u.id)?.status === "purging" && <div className="detail-block"><p className="muted-copy">Fshirja përfundimtare është në proces dhe nuk mund të anulohet.</p></div>}
         {u.email && !u.email_confirmed_at && <div className="detail-block"><h3>Verifikimi manual</h3><UserForm key={`verify-${u.id}`} action="verify_email" userId={u.id} /></div>}
         <div className="detail-block"><h3>Ndrysho fjalëkalimin</h3><UserForm key={`password-${u.id}`} action="password" userId={u.id} /></div>
         <div className="detail-block"><h3>Historia administrative</h3><p className="muted-copy">Veprimet më të fundit të regjistruara nga ky seksion.</p>{history.error ? <p role="alert">Historia nuk u ngarkua.</p> : (history.data ?? []).filter(e => e.target_id === u.id).length ? (history.data ?? []).filter(e => e.target_id === u.id).slice(0, 10).map(e => <p key={e.id}>{actionLabels[e.action]} · {statusLabels[e.status]}<br /><small>{formatDate(e.created_at)} · {actorEmails.get(e.actor_id) ?? e.actor_id}</small></p>) : <p className="muted-copy">Nuk ka veprime të regjistruara.</p>}</div>

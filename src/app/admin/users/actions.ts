@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { restoreAccountDeletion } from "@/lib/account/deletion";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 
@@ -11,10 +12,11 @@ export async function manageUser(form: FormData) {
   const actor = await getSessionUser();
   if (!actor || !(await isPlatformAdmin(actor.id))) return { error: "Kërkohet qasja e administratorit të platformës." };
   const action = String(form.get("action") ?? "");
-  if (!["create", "password", "verify_email"].includes(action)) return { error: "Veprim i pavlefshëm." };
+  if (!["create", "password", "verify_email", "restore"].includes(action)) return { error: "Veprim i pavlefshëm." };
   const password = String(form.get("password") ?? "");
-  if (action !== "verify_email" && (password.length < 8 || password.length > 128)) return { error: "Fjalëkalimi duhet të ketë 8–128 karaktere." };
-  if (action !== "verify_email" && password !== String(form.get("password_confirm") ?? "")) return { error: "Fjalëkalimet nuk përputhen." };
+  const needsPassword = action === "create" || action === "password";
+  if (needsPassword && (password.length < 8 || password.length > 128)) return { error: "Fjalëkalimi duhet të ketë 8–128 karaktere." };
+  if (needsPassword && password !== String(form.get("password_confirm") ?? "")) return { error: "Fjalëkalimet nuk përputhen." };
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const name = String(form.get("name") ?? "").trim();
   const businessId = String(form.get("business_id") ?? "");
@@ -33,13 +35,16 @@ export async function manageUser(form: FormData) {
   if (auditError || !receipt) return { error: "Historia administrative nuk është e disponueshme. Veprimi nuk u krye." };
   const result = action === "create"
     ? await db.auth.admin.createUser({ id: targetId, email, password, email_confirm: form.get("verified") === "on", user_metadata: { full_name: name } })
-    : await db.auth.admin.updateUserById(targetId, action === "password" ? { password } : { email_confirm: true });
+    : action === "restore"
+      ? await restoreAccountDeletion(targetId)
+      : await db.auth.admin.updateUserById(targetId, action === "password" ? { password } : { email_confirm: true });
   const { error: receiptError } = await db.from("platform_user_events").update({ status: result.error ? "failed" : "completed" }).eq("id", receipt.id);
   if (result.error) {
     const code = result.error.code;
     return { error: code === "email_exists" || code === "user_already_exists"
       ? "Ky email ka tashmë një llogari. Kërko përdoruesin në listë."
       : code === "weak_password" ? "Fjalëkalimi nuk përmbush kërkesat e sigurisë. Zgjidh një më të fortë."
+      : code === "not_scheduled" ? "Kjo llogari nuk ka fshirje në pritje ose fshirja përfundimtare ka filluar. Rifresko faqen."
       : "Veprimi nuk u krye. Kontrollo të dhënat dhe provo përsëri." };
   }
   let membershipFailed = false;
@@ -51,5 +56,5 @@ export async function manageUser(form: FormData) {
   revalidatePath("/admin/users");
   if (membershipFailed) return { error: "Llogaria u krijua, por lidhja me biznesin dështoi. Shto anëtarin nga seksioni Bizneset; mos e krijo llogarinë përsëri." };
   if (receiptError) return { error: "Ndryshimi u krye, por konfirmimi në histori dështoi. Rifresko faqen përpara se të përsëritësh veprimin." };
-  return { success: action === "create" ? "Përdoruesi u krijua pa dërguar email ftese." : action === "password" ? "Fjalëkalimi u ndryshua." : "Email-i u verifikua manualisht." };
+  return { success: action === "create" ? "Përdoruesi u krijua pa dërguar email ftese." : action === "password" ? "Fjalëkalimi u ndryshua." : action === "restore" ? "Llogaria u rikthye dhe fshirja u anulua." : "Email-i u verifikua manualisht." };
 }
