@@ -1,6 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { availableSlots, persistBooking } from "@/lib/calendar/service";
-import { localInstant, validDate, validTime } from "@/lib/calendar/model";
+import { defaultSettings, localInstant, validDate, validTime } from "@/lib/calendar/model";
 import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
 import { digest } from "./definition";
@@ -12,16 +12,19 @@ import { compileVisualProcesses } from "./visual-definition";
 import { bookingFields } from "./booking-definition";
 
 export type BookingTerms = { serviceId: string; serviceName: string; durationMinutes: number; bufferMinutes: number; timezone: string; confirmationMode: "manual" | "automatic" };
-export async function readBookingTerms(businessId: string, serviceId: string): Promise<BookingTerms> {
-  await requireRuntimeModules(businessId, ["bookings", "services"]);
+export async function readBookingTerms(businessId: string, serviceId: string, collectionOnly = false): Promise<BookingTerms> {
+  await requireRuntimeModules(businessId, collectionOnly ? ["services"] : ["bookings", "services"]);
   const db = createServiceSupabase();
+  let query = db.from("booking_services").select("id,name,duration_minutes,buffer_minutes").eq("business_id", businessId).eq("id", serviceId).eq("is_active", true);
+  if (!collectionOnly) query = query.eq("booking_enabled", true);
   const [service, settings] = await Promise.all([
-    db.from("booking_services").select("id,name,duration_minutes,buffer_minutes").eq("business_id", businessId).eq("id", serviceId).eq("is_active", true).eq("booking_enabled", true).maybeSingle(),
+    query.maybeSingle(),
     db.from("business_calendar_settings").select("timezone,confirmation_mode,agent_booking_enabled").eq("business_id", businessId).maybeSingle(),
   ]);
-  if (service.error || settings.error || !service.data || !settings.data?.agent_booking_enabled) throw new TransitionError("booking_unavailable");
+  if (service.error || settings.error || !service.data || !collectionOnly && !settings.data?.agent_booking_enabled) throw new TransitionError("booking_unavailable");
+  const calendar = settings.data ?? defaultSettings;
   return { serviceId: service.data.id, serviceName: service.data.name, durationMinutes: service.data.duration_minutes,
-    bufferMinutes: service.data.buffer_minutes, timezone: settings.data.timezone, confirmationMode: settings.data.confirmation_mode };
+    bufferMinutes: service.data.buffer_minutes, timezone: calendar.timezone, confirmationMode: calendar.confirmation_mode };
 }
 
 /** The reviewed terms are server fields; customer observations cannot set them. */

@@ -29,6 +29,7 @@ export function digest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
 }
 export function validFieldValue(field: Field, value: Value): boolean {
+  if (field.type === "photo") return value === true;
   if (field.type === "boolean") return typeof value === "boolean";
   if (field.type === "number") return typeof value === "number" && Number.isFinite(value) && (field.min === undefined || value >= field.min) && (field.max === undefined || value <= field.max);
   if (field.type === "choices") return Array.isArray(value) && value.length > 0 && value.length <= 32 && new Set(value).size === value.length && value.every(v => field.options?.includes(v));
@@ -54,7 +55,7 @@ export function destinations(step: Step): string[] {
 }
 /** Validate immutable definitions before exposing them to either the model or runtime. */
 export function validateDefinition(definition: unknown): ProcessDefinition {
-  if (!record(definition) || !shape(definition, ["id", "versionId", "businessId", "name", "purpose", "offerPolicy", "entry", "fields", "steps"])
+  if (!record(definition) || !shape(definition, ["id", "versionId", "businessId", "name", "purpose", "offerPolicy", "entry", "fields", "steps"], ["policyKey", "collection"])
     || !text(definition.id, 200) || !text(definition.versionId, 200) || !text(definition.businessId, 200) || !text(definition.name, 200)
     || !text(definition.purpose) || !text(definition.entry, 120) || !Array.isArray(definition.fields) || definition.fields.length > 64
     || !Array.isArray(definition.steps) || definition.steps.length > 128 || !definition.steps.every(stepShape)
@@ -64,6 +65,10 @@ export function validateDefinition(definition: unknown): ProcessDefinition {
       && (f.options === undefined || Array.isArray(f.options) && f.options.length <= 100 && f.options.every(o => text(o, 200)))
       && (f.min === undefined || typeof f.min === "number") && (f.max === undefined || typeof f.max === "number"))) throw new TransitionError("invalid_definition");
   const d = definition as unknown as ProcessDefinition;
+  if (d.policyKey !== undefined && !/^[a-f0-9]{64}$/.test(d.policyKey)) throw new TransitionError("invalid_process_policy");
+  if (d.collection && (!record(d.collection) || !shape(d.collection, ["domain", "revision", "profileFields"])
+    || !["order", "service", "booking"].includes(d.collection.domain) || !Number.isSafeInteger(d.collection.revision) || d.collection.revision < 1
+    || !Array.isArray(d.collection.profileFields) || d.collection.profileFields.some(k => !["name", "phone", "email", "city", "address"].includes(k)))) throw new TransitionError("invalid_process_policy");
   if (!d.id || !d.versionId || !d.businessId || !d.name.trim() || d.name.length > 200 || d.purpose.length > 4000
     || !["on_request", "when_relevant"].includes(d.offerPolicy) || !d.steps.length || d.steps.length > 128 || d.fields.length > 64) throw new TransitionError("invalid_definition");
   const fields = new Map(d.fields.map(f => [f.id, f]));
@@ -71,7 +76,7 @@ export function validateDefinition(definition: unknown): ProcessDefinition {
   if (fields.size !== d.fields.length || steps.size !== d.steps.length || !steps.has(d.entry)) throw new TransitionError("duplicate_or_missing_definition_id");
   for (const f of d.fields) {
     if (!validKey(f.id) || !validKey(f.subject) || !f.label.trim() || typeof f.required !== "boolean"
-      || !["text", "email", "phone", "number", "boolean", "date", "time", "choice", "choices", "reference"].includes(f.type)
+      || !["text", "email", "phone", "number", "boolean", "date", "time", "choice", "choices", "reference", "photo"].includes(f.type)
       || f.min !== undefined && !Number.isFinite(f.min) || f.max !== undefined && !Number.isFinite(f.max)
       || f.min !== undefined && f.max !== undefined && f.min > f.max
       || ["choice", "choices", "reference"].includes(f.type) && (!f.options?.length || f.options.length > 100 || new Set(f.options).size !== f.options.length)

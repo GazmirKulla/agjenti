@@ -15,19 +15,21 @@ export function bookingContext(versions: VisualVersion[]) {
   }
   return {
     async prepare(state: Snapshot, definitions: ProcessDefinition[], observation?: Observation) {
-      const ids = new Set<string>();
+      const ids = new Map<string, boolean>();
       for (const definition of definitions) for (const { node } of nodes(definition)) {
         const fieldId = bookingFields(node.id).key("serviceId");
-        const add = (value: Value | undefined) => { if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) ids.add(value); };
+        const collectionOnly = definition.steps.find(s => s.id === bookingFields(node.id).key("create"))?.kind !== "effect";
+        const add = (value: Value | undefined) => { if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) ids.set(`${collectionOnly}:${value}`, collectionOnly); };
         for (const instance of Object.values(state.instances)) if (instance.definitionId === definition.id && instance.versionId === definition.versionId) add(instance.facts[fieldId]?.value);
         for (const command of observation?.commands ?? []) {
           const facts = command.kind === "facts" ? command.values : command.kind === "start" || command.kind === "accept_offer" ? command.initialFacts : [];
           for (const fact of facts) if (fact.fieldId === fieldId) add(fact.value);
         }
       }
-      await Promise.all([...ids].map(async id => {
-        try { terms.set(id, await readBookingTerms(state.businessId, id)); }
-        catch { terms.delete(id); }
+      await Promise.all([...ids].map(async ([cacheKey, collectionOnly]) => {
+        const id = cacheKey.slice(cacheKey.indexOf(":") + 1);
+        try { terms.set(cacheKey, await readBookingTerms(state.businessId, id, collectionOnly)); }
+        catch { terms.delete(cacheKey); }
       }));
     },
     serverFacts(definition: ProcessDefinition, instance: Instance): Record<string, Value> {
@@ -36,7 +38,8 @@ export function bookingContext(versions: VisualVersion[]) {
         const serviceId = instance.facts[bookingFields(node.id).key("serviceId")]?.value;
         if (typeof serviceId !== "string") continue;
         if (flow?.serviceIds?.length && !flow.serviceIds.includes(serviceId)) throw new TransitionError("service_outside_workflow");
-        const current = terms.get(serviceId);
+        const collectionOnly = definition.steps.find(s => s.id === bookingFields(node.id).key("create"))?.kind !== "effect";
+        const current = terms.get(`${collectionOnly}:${serviceId}`);
         if (current) Object.assign(result, bookingServerValues(node.id, current));
       }
       return result;

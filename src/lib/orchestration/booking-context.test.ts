@@ -20,7 +20,7 @@ beforeEach(() => { read.mockReset(); read.mockResolvedValue({ serviceId, service
 it("reads current terms only in the trusted tenant and maps them to the scoped node", async () => {
   const context = bookingContext([version]);
   await context.prepare({ ...initialSnapshot("business", "conversation", "test"), instances: { i: instance } }, [definition]);
-  expect(read).toHaveBeenCalledWith("business", serviceId);
+  expect(read).toHaveBeenCalledWith("business", serviceId, false);
   expect(context.serverFacts(definition, instance)).toMatchObject({ [key("durationMinutes")]: 30 });
 });
 it("does not reuse terms after a failed refresh", async () => {

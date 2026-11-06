@@ -1,7 +1,7 @@
 import { upgradeVisualGraph, validateVisualGraph } from "@/lib/workflows/visual/model";
 import type { VisualVersion, VisualNode, VisualPort } from "@/lib/workflows/visual/types";
 import { TransitionError, type Field, type ProcessDefinition, type Step } from "./contracts";
-import { validateDefinition, validFieldValue } from "./definition";
+import { validateDefinition, validFieldValue, digest, destinations } from "./definition";
 import { expandBooking } from "./booking-definition";
 import { parseCollectionPolicy } from "@/lib/runtime/collection-policy";
 
@@ -20,12 +20,12 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
   const checked = validateVisualGraph(version.graph);
   if (!checked.graph) throw new TransitionError("invalid_visual_definition");
   const graph = upgradeVisualGraph(checked.graph);
-  const unsupported = graph.nodes.filter(n => n.kind === "product" || n.kind === "order_status" || n.config.fieldType === "photo");
-  // Collection-only domain projection is still being migrated. Preserve its existing path.
-  if (parseCollectionPolicy(version.collectionPolicy)?.scopes.some(s => s.versionId === version.id && s.mode === "collection_only")
-    && graph.nodes.some(n => n.kind === "booking" || n.kind === "action")) throw new UnsupportedProcessGraph(graph.nodes.filter(n => n.kind === "booking" || n.kind === "action").map(n => n.id));
+  const unsupported = graph.nodes.filter(n => n.kind === "product" || n.kind === "order_status");
+  const policy = parseCollectionPolicy(version.collectionPolicy);
   if (unsupported.length) throw new UnsupportedProcessGraph(unsupported.map(n => n.id));
   return graph.flows.map(flow => {
+    const scope = policy?.scopes.find(s => s.versionId === version.id && s.flowId === flow.id);
+    const collectionOnly = scope?.mode === "collection_only";
     const reached = new Map<string, VisualNode>();
     const visit = (id: string) => {
       if (reached.has(id)) return;
@@ -37,7 +37,7 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
     visit(flow.entryNodeId);
     const fields = new Map<string, Field>();
     for (const node of reached.values()) if (node.kind === "collect") {
-      if (!node.config.fieldKey || node.config.fieldType === "photo") throw new UnsupportedProcessGraph([node.id]);
+      if (!node.config.fieldKey) throw new UnsupportedProcessGraph([node.id]);
       const field: Field = { id: node.config.fieldKey, subject: node.config.subject ?? "request", label: node.label,
         type: node.config.fieldType ?? "text", required: node.config.required ?? true };
       const existing = fields.get(field.id);
@@ -53,7 +53,9 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
     const steps: Step[] = [...reached.values()].flatMap((node): Step | Step[] => {
       switch (node.kind) {
         case "booking": {
-          const expanded = expandBooking(node.id, target(node, "next"));
+          const owner = graph.flows.find(f => f.nodeIds.includes(node.id));
+          const collect = collectionOnly || policy?.scopes.some(s => s.versionId === version.id && s.flowId === owner?.id && s.mode === "collection_only");
+          const expanded = expandBooking(node.id, target(node, "next"), collect);
           for (const field of expanded.fields) {
             if (fields.has(field.id)) throw new TransitionError("conflicting_field_schema");
             fields.set(field.id, field);
@@ -81,6 +83,7 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
         case "knowledge": case "start": return { id: node.id, kind: "inform", next: target(node, "next") };
         case "end": case "handoff": return { id: node.id, kind: node.kind, label: node.config.prompt || node.label };
         case "action": {
+          if (collectionOnly) return { id: node.id, kind: "end", label: "The request details were collected. The configured business action was not executed in collection-only mode." };
           const binding = node.config.action;
           if (!binding) throw new TransitionError("invalid_effect_definition");
           return { id: node.id, kind: "effect", tool: binding.actionKey, toolVersion: binding.actionVersion, inputs: binding.inputs, next: target(node, "yes"), failed: target(node, "no") };
@@ -88,7 +91,12 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
         default: throw new UnsupportedProcessGraph([node.id]);
       }
     });
+    const reachable = new Set<string>();
+    const walk = (id: string) => { if (reachable.has(id)) return; reachable.add(id); const step = steps.find(s => s.id === id); if (step) destinations(step).forEach(walk); };
+    walk(flow.entryNodeId);
     return validateDefinition({ id: flow.id, versionId: version.id, businessId: version.businessId, name: flow.label,
-      purpose: flow.purpose || flow.label, offerPolicy: flow.offerPolicy ?? "when_relevant", entry: flow.entryNodeId, fields: [...fields.values()], steps });
+      ...(policy ? { policyKey: digest(policy) } : {}),
+      ...(collectionOnly ? { collection: { domain: scope.domain, revision: policy!.revision, profileFields: scope.profileFields } } : {}),
+      purpose: flow.purpose || flow.label, offerPolicy: flow.offerPolicy ?? "when_relevant", entry: flow.entryNodeId, fields: [...fields.values()], steps: steps.filter(s => reachable.has(s.id)) });
   });
 }

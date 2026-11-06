@@ -5,7 +5,7 @@ export type Field = {
   id: string;
   subject: string;
   label: string;
-  type: "text" | "email" | "phone" | "number" | "boolean" | "date" | "time" | "choice" | "choices" | "reference";
+  type: "text" | "email" | "phone" | "number" | "boolean" | "date" | "time" | "choice" | "choices" | "reference" | "photo";
   required: boolean;
   options?: string[];
   min?: number;
@@ -22,6 +22,8 @@ export type Step =
   | { id: string; kind: "wait"; eventType: string; timeoutMs: number; next: string; expired: string }
   | { id: string; kind: "end" | "handoff"; label: string };
 export type ProcessDefinition = {
+  policyKey?: string;
+  collection?: { domain: "order" | "service" | "booking"; revision: number; profileFields: string[] };
   id: string;
   versionId: string;
   businessId: string;
@@ -48,6 +50,8 @@ export type Wait = {
 };
 export type Approval = { waitId: string; stepId: string; fieldIds: string[]; factDigest: string; eventId: string; expiresAt: number };
 export type Instance = {
+  policyKey?: string;
+  confirmedReviews?: Approval[];
   id: string;
   definitionId: string;
   versionId: string;

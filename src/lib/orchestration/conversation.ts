@@ -14,6 +14,7 @@ import { interpretCustomer } from "./interpret";
 import { recordPresentation, type Environment } from "./transition";
 import { runProcessTurn } from "./run-turn";
 import { businessProvisionAdapter } from "./business-provision";
+import { processPreparedRequest } from "./prepared-request";
 import { composeProcessReply } from "./respond";
 import { bookingAdapter } from "./booking";
 import { bookingContext } from "./booking-context";
@@ -63,7 +64,7 @@ export async function tryProcessConversation(params: AgentTurnParams): Promise<A
   const db = createServiceSupabase();
   const modules = await runtimeModules(params.businessId);
   if (definitions.length && modules && !modules.includes("workflows")) throw new CapabilityEnforcementError("module_disabled", "Workflow është çaktivizuar. Progresi yt është ruajtur.");
-  const hasBookings = definitions.some(d => d.steps.some(s => s.kind === "effect" && s.tool === "booking.create"));
+  const hasBookings = [...versions.values()].some(v => v.graph.nodes.some(n => n.kind === "booking"));
   const [agentRead, grounding, calendarRead] = await Promise.all([
     db.from("ai_agents").select(agentConfigurationColumns).eq("business_id", params.businessId).eq("is_active", true).maybeSingle(),
     readBusinessGrounding(db, params.businessId, modules),
@@ -93,7 +94,7 @@ export async function tryProcessConversation(params: AgentTurnParams): Promise<A
   }
   const traversed: string[] = [];
   const env: Environment = { mode, now: Date.now(), definitions, startableVersionIds: new Set(current ? [current.id] : []), tools, promptTtlMs: 15 * 60000,
-    serverFacts: booking.serverFacts,
+    serverFacts: booking.serverFacts, photoReceived: params.hasPhoto,
     onStep: step => {
       const version = versions.get(step.versionId);
       const editorNodeId = version ? visualNodeForStep(version, step.stepId) : step.stepId;
@@ -131,6 +132,7 @@ export async function tryProcessConversation(params: AgentTurnParams): Promise<A
   if (hasBookings && mode === "live") {
     for (const instance of Object.values(state.instances).filter(i => i.id === state.focusId && (i.status === "waiting_input" || i.status === "waiting_approval"))) {
       const version = versions.get(instance.versionId);
+      if (definitions.find(d => d.id === instance.definitionId && d.versionId === instance.versionId)?.collection) continue;
       for (const node of version?.graph.nodes.filter(n => n.kind === "booking") ?? []) {
         const { key } = bookingFields(node.id), serviceId = instance.facts[key("serviceId")]?.value, date = instance.facts[key("date")]?.value;
         if (typeof serviceId !== "string" || typeof date !== "string") continue;
@@ -158,7 +160,7 @@ export async function tryProcessConversation(params: AgentTurnParams): Promise<A
   const version = active ? versions.get(active.versionId) : current;
   const nextState = { ...emptyState(), runtime: state, step_key: active?.stepId ?? null,
     recentMessages: state.history };
-  return { ...(transport ? { processCheckpoint: { event: { ...event, id: `job:${transport.jobId}:reply` }, expectedRevision, targetIds: composed.targetIds } } : {}), reply: composed.reply, nextState, previousResponseId: null, workflowId: null, productName: null,
+  return { ...(active && definition && version ? { preparedRequest: processPreparedRequest(active, definition, version, Date.now()) } : {}), ...(transport ? { processCheckpoint: { event: { ...event, id: `job:${transport.jobId}:reply` }, expectedRevision, targetIds: composed.targetIds } } : {}), reply: composed.reply, nextState, previousResponseId: null, workflowId: null, productName: null,
     workflowProgress: definition?.fields.map(f => ({ key: f.id, label: f.label, kind: "text" as const,
       status: active?.facts[f.id] ? "done" as const : active?.wait?.fieldId === f.id ? "current" as const : "pending" as const,
       value: active?.facts[f.id] ? String(active.facts[f.id].value) : null })) ?? [],

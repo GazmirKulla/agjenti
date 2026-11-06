@@ -99,5 +99,7 @@ it("expands the existing booking node into collection, review and an approved do
   expect(approved.actions).toHaveLength(1);
   expect(approved.actions[0]).toMatchObject({ tool: "booking.create", input: { ...terms, ...values } });
   version.collectionPolicy = { version: 1, revision: 1, scopes: [{ versionId: version.id, flowId: "reservation", domain: "booking", mode: "collection_only", profileFields: [] }] };
-  expect(() => compileVisualProcesses(version)).toThrow("process_graph_adapter_pending");
+  const [collection] = compileVisualProcesses(version);
+  expect(collection.collection?.domain).toBe("booking");
+  expect(collection.steps.some(s => s.kind === "effect")).toBe(false);
 });

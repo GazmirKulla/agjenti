@@ -14,6 +14,8 @@ export type Environment = {
   tools: ToolPolicy[];
   promptTtlMs: number;
   id?: () => string;
+  /** Verified inbound attachment presence, never a model observation. */
+  photoReceived?: boolean;
   onStep?: (step: { instanceId: string; definitionId: string; versionId: string; stepId: string; kind: string }) => void;
   serverFacts?: (definition: ProcessDefinition, instance: Instance) => Record<string, import("./contracts").Value>;
 };
@@ -21,6 +23,9 @@ const closed = new Set<Instance["status"]>(["completed", "cancelled", "handoff",
 function fail(code: string): never { throw new TransitionError(code); }
 const nextId = (env: Environment) => (env.id ?? randomUUID)();
 const factDigest = (instance: Instance, fields: string[]) => digest(fields.map(id => [id, instance.facts[id] ?? null]));
+function assertPolicy(instance: Instance, definition: ProcessDefinition) {
+  if (instance.policyKey !== definition.policyKey) fail("process_policy_changed");
+}
 function definitionFor(state: Snapshot, instance: Pick<Instance, "definitionId" | "versionId">, env: Environment) {
   const found = env.definitions.find(d => d.id === instance.definitionId && d.versionId === instance.versionId && d.businessId === state.businessId);
   return found ?? fail("definition_unavailable");
@@ -56,7 +61,7 @@ function createWait(instance: Instance, kind: Wait["kind"], fields: string[], en
 function start(state: Snapshot, definitionId: string, versionId: string, env: Environment) {
   const definition = definitionFor(state, { definitionId, versionId }, env);
   if (!env.startableVersionIds.has(versionId)) fail("process_not_startable");
-  const instance: Instance = { id: nextId(env), definitionId, versionId, stepId: definition.entry, status: "running", facts: {} };
+  const instance: Instance = { id: nextId(env), definitionId, versionId, stepId: definition.entry, status: "running", facts: {}, ...(definition.policyKey ? { policyKey: definition.policyKey } : {}) };
   if (Object.hasOwn(state.instances, instance.id)) fail("identity_collision");
   state.instances[instance.id] = instance;
   state.focusId = instance.id;
@@ -64,12 +69,13 @@ function start(state: Snapshot, definitionId: string, versionId: string, env: En
 }
 function applyFacts(state: Snapshot, instance: Instance, values: FactInput[], event: CustomerEvent, env: Environment) {
   const definition = definitionFor(state, instance, env);
+  assertPolicy(instance, definition);
   const keys = new Set<string>();
   if (values.length > 64) fail("fact_budget_exceeded");
   for (const item of values) {
     evidence(item.evidence, event);
     const field = definition.fields.find(f => f.id === item.fieldId);
-    if (!field || field.source === "server" || keys.has(item.fieldId) || !validFieldValue(field, item.value)) fail("invalid_fact");
+    if (!field || field.source === "server" || field.type === "photo" || keys.has(item.fieldId) || !validFieldValue(field, item.value)) fail("invalid_fact");
     keys.add(item.fieldId);
     if (digest(instance.facts[field.id]?.value ?? null) !== digest(item.value)) {
       if (Object.hasOwn(instance.facts, field.id)) {
@@ -119,6 +125,7 @@ function validateApproval(instance: Instance, fieldIds: string[], env: Environme
 function advance(state: Snapshot, instance: Instance, env: Environment, notices: RuntimeNotice[], actions: Action[], condition?: (instance: Instance, stepId: string) => "yes" | "no") {
   if (closed.has(instance.status) || instance.status === "suspended" || instance.status === "waiting_effect") return;
   const definition = definitionFor(state, instance, env);
+  assertPolicy(instance, definition);
   for (let transitions = 0; transitions < 128; transitions++) {
     const step = definition.steps.find(s => s.id === instance.stepId) ?? fail("unknown_step");
     instance.visited ??= [];
@@ -294,6 +301,7 @@ export function transitionCustomer(snapshot: Snapshot, event: CustomerEvent, obs
     }
     const instance = instanceFor(state, command.instanceId);
     const definition = definitionFor(state, instance, env);
+    if (command.kind !== "cancel") assertPolicy(instance, definition);
     if (closed.has(instance.status) || instance.status === "waiting_effect") fail("instance_not_editable");
     touched.add(instance.id);
     if (command.kind === "facts") {
@@ -314,7 +322,10 @@ export function transitionCustomer(snapshot: Snapshot, event: CustomerEvent, obs
         notices.push({ kind: "message", instanceId: instance.id, reason: "review_terms_changed", text: "The business terms changed. Review the current details before proceeding." });
         continue;
       }
-      if (command.kind === "approve") instance.approval = { waitId: wait.id, stepId: step.id, fieldIds: [...step.fieldIds], factDigest: wait.factDigest, eventId: event.id, expiresAt: wait.expiresAt };
+      if (command.kind === "approve") {
+        instance.approval = { waitId: wait.id, stepId: step.id, fieldIds: [...step.fieldIds], factDigest: wait.factDigest, eventId: event.id, expiresAt: wait.expiresAt };
+        instance.confirmedReviews = [...(instance.confirmedReviews ?? []), structuredClone(instance.approval)];
+      }
       else delete instance.approval;
       instance.stepId = command.kind === "approve" ? step.yes : step.no;
       instance.status = "running";
@@ -348,6 +359,19 @@ export function transitionCustomer(snapshot: Snapshot, event: CustomerEvent, obs
       state.focusId = instance.id;
     }
   }
+  // Only an already-presented, unambiguous photo prompt can consume an attachment.
+  const photoTargets = Object.values(snapshot.instances).filter(i => i.status === "waiting_input" && i.wait?.kind === "field"
+    && i.wait.presentedAt !== undefined && i.wait.presentedAt <= env.now && i.wait.expiresAt > env.now
+    && definitionFor(snapshot, i, env).fields.find(f => f.id === i.wait?.fieldId)?.type === "photo");
+  if (env.photoReceived && photoTargets.length === 1) {
+    const original = photoTargets[0], instance = state.instances[original.id];
+    if (instance.status === "waiting_input" && instance.wait?.id === original.wait!.id) {
+      const definition = definitionFor(state, instance, env); assertPolicy(instance, definition);
+      const field = definition.fields.find(f => f.id === instance.wait!.fieldId)!;
+      instance.facts[field.id] = { value: true, subject: field.subject, fieldId: field.id, revision: state.revision + 1, eventId: event.id, evidence: `attachment:${event.id}` };
+      touched.add(instance.id);
+    }
+  }
   for (const id of touched) advance(state, instanceFor(state, id), env, notices, actions, (instance, stepId) => {
     const decision = observation.conditions?.find(c => c.definitionId === instance.definitionId && c.versionId === instance.versionId
       && c.stepId === stepId && c.instanceId === (Object.hasOwn(snapshot.instances, instance.id) ? instance.id : null));
@@ -377,6 +401,7 @@ export function recordPresentation(snapshot: Snapshot, targetIds: string[], now:
 export function authorizeDispatch(snapshot: Snapshot, instanceId: string, actionId: string, env: Environment): Action {
   validateEnvironment(snapshot, env);
   const instance = instanceFor(snapshot, instanceId);
+  assertPolicy(instance, definitionFor(snapshot, instance, env));
   const action = instance.action;
   if (instance.status !== "waiting_effect" || !action || action.id !== actionId || action.status !== "prepared") fail("action_not_dispatchable");
   const policy = toolFor(instance, env);
