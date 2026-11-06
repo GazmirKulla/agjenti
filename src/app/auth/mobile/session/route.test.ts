@@ -26,6 +26,18 @@ it("rejects a mismatched refreshed session", async () => {
   expect(response.status).toBe(401);
   expect(response.headers.get("set-cookie") ?? "").not.toContain("agjenti_native");
 });
+it("replaces a previous account's session cookies", async () => {
+  m.create.mockImplementation((_url, _key, options) => ({ auth: { getUser: m.user, setSession: async () => {
+    options.cookies.setAll([{ name: "sb-ref-auth-token.0", value: "new", options: {} }]);
+    return m.session();
+  } } }));
+  const response = await request({ cookie: "sb-ref-auth-token=old; sb-ref-auth-token.0=old; sb-ref-auth-token.1=old; NEXT_LOCALE=sq" });
+  const cookies = response.cookies.getAll();
+  expect(cookies.find(c => c.name === "sb-ref-auth-token")?.value).toBe("");
+  expect(cookies.find(c => c.name === "sb-ref-auth-token.1")?.value).toBe("");
+  expect(cookies.find(c => c.name === "sb-ref-auth-token.0")?.value).toBe("new");
+  expect(cookies.some(c => c.name === "NEXT_LOCALE")).toBe(false);
+});
 it("marks the web session as opened inside the native app", async () => {
   const cookie = (await request()).headers.get("set-cookie") ?? "";
   expect(cookie).toContain("agjenti_native=1");

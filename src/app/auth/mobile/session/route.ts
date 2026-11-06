@@ -35,6 +35,9 @@ export async function POST(request: Request) {
     const response = NextResponse.redirect(new URL(next, request.url), 303);
     response.headers.set("Cache-Control", "no-store");
     response.headers.set("Referrer-Policy", "no-referrer");
+    // A previous account's session (plain or chunked) would otherwise shadow the new one.
+    for (const name of (request.headers.get("cookie") ?? "").split(";").map(part => part.split("=")[0].trim()))
+      if (/^sb-[\w-]+-auth-token(?:\.\d+)?$/.test(name)) response.cookies.set(name, "", { path: "/", maxAge: 0 });
     const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
       cookies: { getAll: () => [], setAll: values => { for (const { name, value, options } of values) response.cookies.set(name, value, { ...options, secure: new URL(request.url).protocol === "https:", sameSite: "lax" }); } },
     });
