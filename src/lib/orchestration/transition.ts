@@ -14,7 +14,8 @@ export type Environment = {
   tools: ToolPolicy[];
   promptTtlMs: number;
   id?: () => string;
-  onStep?: (step: { instanceId: string; stepId: string; kind: string }) => void;
+  onStep?: (step: { instanceId: string; definitionId: string; versionId: string; stepId: string; kind: string }) => void;
+  serverFacts?: (definition: ProcessDefinition, instance: Instance) => Record<string, import("./contracts").Value>;
 };
 const closed = new Set<Instance["status"]>(["completed", "cancelled", "handoff", "failed"]);
 function fail(code: string): never { throw new TransitionError(code); }
@@ -68,7 +69,7 @@ function applyFacts(state: Snapshot, instance: Instance, values: FactInput[], ev
   for (const item of values) {
     evidence(item.evidence, event);
     const field = definition.fields.find(f => f.id === item.fieldId);
-    if (!field || keys.has(item.fieldId) || !validFieldValue(field, item.value)) fail("invalid_fact");
+    if (!field || field.source === "server" || keys.has(item.fieldId) || !validFieldValue(field, item.value)) fail("invalid_fact");
     keys.add(item.fieldId);
     if (digest(instance.facts[field.id]?.value ?? null) !== digest(item.value)) {
       if (Object.hasOwn(instance.facts, field.id)) {
@@ -85,6 +86,23 @@ function applyFacts(state: Snapshot, instance: Instance, values: FactInput[], ev
       if (instance.wait?.kind === "approval") delete instance.wait;
     }
   }
+}
+function refreshServerFacts(state: Snapshot, instance: Instance, definition: ProcessDefinition, env: Environment, fieldIds: string[]) {
+  const fields = definition.fields.filter(f => f.source === "server" && fieldIds.includes(f.id));
+  if (!fields.length) return false;
+  if (!env.serverFacts) fail("server_facts_unavailable");
+  const values = env.serverFacts(definition, instance);
+  let changed = false;
+  for (const field of fields) {
+    const value = values[field.id];
+    if (value === undefined || !validFieldValue(field, value)) fail("server_facts_unavailable");
+    if (digest(instance.facts[field.id]?.value ?? null) !== digest(value)) {
+      instance.facts[field.id] = { value, subject: field.subject, fieldId: field.id, revision: state.revision + 1,
+        eventId: `server:${definition.versionId}:${field.id}`, evidence: `server:${field.id}` };
+      changed = true;
+    }
+  }
+  return changed;
 }
 function toolFor(instance: Instance, env: Environment) {
   const action = instance.action ?? fail("missing_action");
@@ -105,7 +123,7 @@ function advance(state: Snapshot, instance: Instance, env: Environment, notices:
     const step = definition.steps.find(s => s.id === instance.stepId) ?? fail("unknown_step");
     instance.visited ??= [];
     if (!instance.visited.includes(step.id)) instance.visited.push(step.id);
-    env.onStep?.({ instanceId: instance.id, stepId: step.id, kind: step.kind });
+    env.onStep?.({ instanceId: instance.id, definitionId: definition.id, versionId: definition.versionId, stepId: step.id, kind: step.kind });
     switch (step.kind) {
       case "collect": {
         const field = definition.fields.find(f => f.id === step.fieldId)!;
@@ -129,6 +147,7 @@ function advance(state: Snapshot, instance: Instance, env: Environment, notices:
         break;
       }
       case "confirm": {
+        refreshServerFacts(state, instance, definition, env, step.fieldIds);
         if ((step.requiredFieldIds ?? step.fieldIds).some(id => definition.fields.find(f => f.id === id)!.required && !Object.hasOwn(instance.facts, id))) fail("missing_review_fields");
         const currentDigest = factDigest(instance, step.fieldIds);
         if (instance.wait?.stepId !== step.id || instance.wait.factDigest !== currentDigest || instance.wait.expiresAt <= env.now) {
@@ -290,6 +309,11 @@ export function transitionCustomer(snapshot: Snapshot, event: CustomerEvent, obs
       if (instance.status !== "waiting_approval" || !wait || wait.id !== command.waitId || wait.kind !== "approval"
         || wait.presentedAt === undefined || wait.presentedAt > env.now || wait.expiresAt <= env.now
         || step?.kind !== "confirm" || wait.factDigest !== factDigest(instance, step.fieldIds)) fail("invalid_approval_target");
+      if (command.kind === "approve" && refreshServerFacts(state, instance, definition, env, step.fieldIds)) {
+        delete instance.wait; delete instance.approval;
+        notices.push({ kind: "message", instanceId: instance.id, reason: "review_terms_changed", text: "The business terms changed. Review the current details before proceeding." });
+        continue;
+      }
       if (command.kind === "approve") instance.approval = { waitId: wait.id, stepId: step.id, fieldIds: [...step.fieldIds], factDigest: wait.factDigest, eventId: event.id, expiresAt: wait.expiresAt };
       else delete instance.approval;
       instance.stepId = command.kind === "approve" ? step.yes : step.no;

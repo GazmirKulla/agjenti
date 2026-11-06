@@ -1,6 +1,7 @@
 /** Server-owned process state. Model observations cannot supply identities, policies or receipts. */
 export type Value = string | number | boolean | string[];
 export type Field = {
+  source?: "customer" | "server";
   id: string;
   subject: string;
   label: string;

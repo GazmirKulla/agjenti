@@ -7,6 +7,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { verifyBookingGuard } from './process-booking-contract.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bin = process.env.PROCESS_TEST_PG_BIN ?? '/opt/homebrew/opt/postgresql@17/bin';
@@ -139,6 +140,7 @@ try {
   assert.equal(sql('select count(*) from messages;'), '2');
   sql(panelFinish);
   assert.equal(sql('select count(*) from messages;'), '2');
+  verifyBookingGuard({ sql, literal, json, root, business, conversation, token });
   console.log('PASS: real PostgreSQL checkpoint CAS, concurrent deduplication, rollback, tenant/role isolation, ownership, lease and delivery receipts.');
   console.log('Scope: focused dependency fixture; full Supabase baseline and provider delivery are not tested here.');
 } finally {

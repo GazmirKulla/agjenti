@@ -78,3 +78,32 @@ describe("real model: process offer policy", () => {
     expect(meaning.observation.needsClarification).toBe(false);
   });
 });
+
+it("real model: booking resolves a service name and requires a separate delivered approval", async () => {
+  const { expandBooking, bookingFields, bookingServerValues, bookingToolPolicy } = await import("../src/lib/orchestration/booking-definition");
+  const expanded = expandBooking("book", "done"), { key } = bookingFields("book");
+  const serviceId = "11111111-1111-4111-8111-111111111111";
+  const terms = { serviceId, serviceName: "Konsultë", durationMinutes: 30, bufferMinutes: 10, timezone: "Europe/Tirane", confirmationMode: "manual" as const };
+  const configured: ProcessDefinition = { ...definition, id: "booking", name: "Rezervim", purpose: "Book a consultation", entry: "book", fields: expanded.fields,
+    steps: [...expanded.steps, { id: "done", kind: "end", label: "Booking submitted" }] };
+  const env: Environment = { mode: "test", now: Date.now(), definitions: [configured], startableVersionIds: new Set([configured.versionId]), tools: [bookingToolPolicy(true)], promptTtlMs: 60000,
+    serverFacts: () => bookingServerValues("book", terms) };
+  const context = { instructions: "Book consultations only after a separate review and approval.", knowledge: [], services: [{ id: serviceId, name: "Konsultë", booking_enabled: true }], timezone: terms.timezone };
+  const base = initialSnapshot(configured.businessId, "booking-probe", "test");
+  const message = "Dua një rezervim për shërbimin Konsultë, më 2026-12-01 në 10:00. Emri im është Klient Test dhe kontakti test@example.test.";
+  const first = await interpretCustomer({ state: base, env, message, businessContext: context, history: [], deadline: Date.now() + 16000 });
+  const event = { id: "booking-start", businessId: base.businessId, conversationId: base.conversationId, actor: "customer" as const, message };
+  const result = transitionCustomer(base, event, first.observation, env);
+  const id = result.state.focusId!;
+  expect(result.state.instances[id]?.facts[key("serviceId")]?.value, JSON.stringify(first.observation)).toBe(serviceId);
+  expect(result.state.instances[id]?.status, JSON.stringify(first.observation)).toBe("waiting_approval");
+  expect(result.actions).toEqual([]);
+  const state = recordPresentation(result.state, [result.state.instances[id].wait!.id], Date.now());
+  env.now = Date.now();
+  const approval = "Konfirmoj, dërgoje kërkesën me këto të dhëna.";
+  const second = await interpretCustomer({ state, env, message: approval, businessContext: context,
+    history: [{ role: "assistant", content: "Konsultë, 2026-12-01 10:00 Europe/Tirane, Klient Test, test@example.test. Kërkesa pret miratimin e biznesit. E konfirmoni?" }], deadline: Date.now() + 16000 });
+  const approved = transitionCustomer(state, { ...event, id: "booking-approval", message: approval }, second.observation, env);
+  expect(approved.actions, JSON.stringify(second.observation)).toHaveLength(1);
+  expect(approved.actions[0].tool).toBe("booking.create");
+}, 40000);

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { writeFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createServiceSupabase } from "../src/lib/supabase/service";
 import { tryProcessConversation } from "../src/lib/orchestration/conversation";
@@ -14,6 +15,7 @@ it.skipIf(!process.env.PROCESS_SMOKE_BUSINESS_ID)("runs two real panel turns thr
   const created = await db.rpc("create_panel_chat", { p_business: businessId, p_user: userId, p_stream: streamId });
   if (created.error) throw created.error;
   const conversationId = created.data;
+  const evidence: unknown[] = [];
   try {
     for (const [sequence, message] of ["Si funksionon?", "Dua të regjistroj një biznes."].entries()) {
       const queued = await db.rpc("enqueue_panel_chat", { p_business: businessId, p_user: userId, p_stream: streamId, p_request: randomUUID(), p_sequence: sequence, p_message: message, p_fingerprint: digest([streamId, sequence, message]) });
@@ -24,7 +26,7 @@ it.skipIf(!process.env.PROCESS_SMOKE_BUSINESS_ID)("runs two real panel turns thr
       const saved = await db.from("conversation_states").select("collected,revision").eq("business_id", businessId).eq("conversation_id", conversationId).single();
       if (saved.error) throw saved.error;
       const turn = await tryProcessConversation({ businessId, message, hasPhoto: false, mode: "production", source: "panel",
-        onTrace: e => { if (e.label === "Process observation validated") console.info("SMOKE_OBSERVATION", JSON.stringify({ commands: e.data?.commands, conditions: e.data?.conditions })); },
+        onTrace: e => { if (e.label === "Process observation validated") evidence.push({ sequence, observation: { commands: e.data?.commands, conditions: e.data?.conditions, needsClarification: e.data?.needsClarification } }); },
         state: readStoredConversationState(saved.data.collected, { businessId, conversationId, revision: saved.data.revision }),
         processTransport: { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: saved.data.revision } });
       expect(turn?.nextState.runtime?.mode).toBe("live");
@@ -38,12 +40,13 @@ it.skipIf(!process.env.PROCESS_SMOKE_BUSINESS_ID)("runs two real panel turns thr
         const after = await db.from("conversation_states").select("collected").eq("conversation_id", conversationId).single();
         if (after.error) throw after.error;
         const instances = Object.values(after.data.collected.instances) as { status: string; wait?: { presentedAt?: number }; action?: unknown }[];
-        console.info("SMOKE_RESULT", JSON.stringify({ reply: turn!.reply, instances, offers: after.data.collected.offers }));
+        evidence.push({ reply: turn!.reply, instances, offers: after.data.collected.offers });
         expect(instances.some(i => i.status === "waiting_input" && typeof i.wait?.presentedAt === "number")).toBe(true);
         expect(instances.every(i => !i.action)).toBe(true);
       }
     }
   } finally {
+    writeFileSync("/private/tmp/agjenti-process-live-smoke.json", JSON.stringify(evidence, null, 2), { mode: 0o600 });
     await db.from("workflow_inbound_queue").delete().eq("business_id", businessId).eq("operator_user_id", userId).eq("test_stream_id", streamId).throwOnError();
     await db.from("conversations").delete().eq("business_id", businessId).eq("id", conversationId).eq("panel_stream_id", streamId).throwOnError();
   }

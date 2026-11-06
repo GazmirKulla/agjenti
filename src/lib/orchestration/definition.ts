@@ -58,7 +58,8 @@ export function validateDefinition(definition: unknown): ProcessDefinition {
     || !text(definition.id, 200) || !text(definition.versionId, 200) || !text(definition.businessId, 200) || !text(definition.name, 200)
     || !text(definition.purpose) || !text(definition.entry, 120) || !Array.isArray(definition.fields) || definition.fields.length > 64
     || !Array.isArray(definition.steps) || definition.steps.length > 128 || !definition.steps.every(stepShape)
-    || !definition.fields.every(f => record(f) && shape(f, ["id", "subject", "label", "type", "required"], ["options", "min", "max"])
+    || !definition.fields.every(f => record(f) && shape(f, ["id", "subject", "label", "type", "required"], ["options", "min", "max", "source"])
+      && (f.source === undefined || f.source === "customer" || f.source === "server")
       && text(f.id, 120) && text(f.subject, 120) && text(f.label, 200) && text(f.type, 30) && typeof f.required === "boolean"
       && (f.options === undefined || Array.isArray(f.options) && f.options.length <= 100 && f.options.every(o => text(o, 200)))
       && (f.min === undefined || typeof f.min === "number") && (f.max === undefined || typeof f.max === "number"))) throw new TransitionError("invalid_definition");
@@ -79,6 +80,7 @@ export function validateDefinition(definition: unknown): ProcessDefinition {
   for (const s of d.steps) {
     if (!/^[A-Za-z0-9_-]{1,120}$/.test(s.id) || forbidden.has(s.id) || destinations(s).some(id => !steps.has(id))) throw new TransitionError("invalid_step_destination");
     if ((s.kind === "collect" || s.kind === "condition") && !fields.has(s.fieldId)) throw new TransitionError("unknown_field");
+    if (s.kind === "collect" && fields.get(s.fieldId)?.source === "server") throw new TransitionError("server_field_not_collectable");
     if (s.kind === "condition" && (s.operator !== "present" && s.operator !== "equals" || s.operator === "equals" && (s.value === undefined || !validFieldValue(fields.get(s.fieldId)!, s.value)))) throw new TransitionError("invalid_condition");
     if (s.kind === "confirm" && (new Set(s.fieldIds).size !== s.fieldIds.length || s.fieldIds.some(id => !fields.has(id)) || s.requiredFieldIds?.some(id => !s.fieldIds.includes(id)))) throw new TransitionError("invalid_review_fields");
     if (s.kind === "effect" && (!s.tool || !Number.isInteger(s.toolVersion) || s.toolVersion < 1 || Object.entries(s.inputs).some(([key, id]) => !validKey(key) || !fields.has(id)))) throw new TransitionError("invalid_effect_definition");

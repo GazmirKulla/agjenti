@@ -2,9 +2,17 @@ import { upgradeVisualGraph, validateVisualGraph } from "@/lib/workflows/visual/
 import type { VisualVersion, VisualNode, VisualPort } from "@/lib/workflows/visual/types";
 import { TransitionError, type Field, type ProcessDefinition, type Step } from "./contracts";
 import { validateDefinition, validFieldValue } from "./definition";
+import { expandBooking } from "./booking-definition";
+import { parseCollectionPolicy } from "@/lib/runtime/collection-policy";
 
 export class UnsupportedProcessGraph extends Error {
   constructor(readonly nodeIds: string[]) { super("process_graph_adapter_pending"); }
+}
+
+/** Project internal domain steps onto the authored node without changing runtime identity. */
+export function visualNodeForStep(version: VisualVersion, stepId: string): string {
+  if (version.graph.nodes.some(n => n.id === stepId)) return stepId;
+  return version.graph.nodes.find(n => n.kind === "booking" && expandBooking(n.id, "projection").steps.some(s => s.id === stepId))?.id ?? stepId;
 }
 
 /** Deterministic compilation of the editor's immutable graph, never a second authored workflow. */
@@ -12,7 +20,10 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
   const checked = validateVisualGraph(version.graph);
   if (!checked.graph) throw new TransitionError("invalid_visual_definition");
   const graph = upgradeVisualGraph(checked.graph);
-  const unsupported = graph.nodes.filter(n => n.kind === "product" || n.kind === "booking" || n.kind === "order_status" || n.config.fieldType === "photo");
+  const unsupported = graph.nodes.filter(n => n.kind === "product" || n.kind === "order_status" || n.config.fieldType === "photo");
+  // Collection-only domain projection is still being migrated. Preserve its existing path.
+  if (parseCollectionPolicy(version.collectionPolicy)?.scopes.some(s => s.versionId === version.id && s.mode === "collection_only")
+    && graph.nodes.some(n => n.kind === "booking" || n.kind === "action")) throw new UnsupportedProcessGraph(graph.nodes.filter(n => n.kind === "booking" || n.kind === "action").map(n => n.id));
   if (unsupported.length) throw new UnsupportedProcessGraph(unsupported.map(n => n.id));
   return graph.flows.map(flow => {
     const reached = new Map<string, VisualNode>();
@@ -38,10 +49,19 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
       if (edges.length !== 1) throw new TransitionError("invalid_step_destination");
       return edges[0].target;
     };
-    const steps: Step[] = [...reached.values()].map(node => {
+    const authoredFieldIds = [...fields.keys()];
+    const steps: Step[] = [...reached.values()].flatMap((node): Step | Step[] => {
       switch (node.kind) {
+        case "booking": {
+          const expanded = expandBooking(node.id, target(node, "next"));
+          for (const field of expanded.fields) {
+            if (fields.has(field.id)) throw new TransitionError("conflicting_field_schema");
+            fields.set(field.id, field);
+          }
+          return expanded.steps;
+        }
         case "collect": return { id: node.id, kind: "collect", fieldId: node.config.fieldKey!, prompt: node.config.prompt!, next: target(node, "next") };
-        case "confirm": return { id: node.id, kind: "confirm", fieldIds: [...fields.keys()], requiredFieldIds: [],
+        case "confirm": return { id: node.id, kind: "confirm", fieldIds: authoredFieldIds, requiredFieldIds: [],
           label: node.config.prompt!, yes: target(node, "yes"), no: target(node, "no") };
         case "condition": {
           // These are persisted editor operator identifiers, not customer-language matching.
