@@ -19,6 +19,7 @@ import { entityWorkflowHref } from "@/components/workflows/entity-flow-link";
 import { ProductBusinessWorkflow } from "./business-workflow";
 import { useManualOperation } from "@/components/dashboard/operation-button";
 import { RowMenu, type RowMenuItem } from "@/components/dashboard/row-menu";
+import { ListToolbar } from "@/components/dashboard/list-toolbar";
 
 const STATUS_LABEL: Record<string, string> = {
   archived: "I arkivuar",
@@ -257,28 +258,7 @@ export function ProductCatalog({
         <div className="catalog-toolbar-simple">
           <h2>{mapping ? "Lidh produktet" : "Katalogu"}</h2>
         </div>
-        <div className="catalog-search">
-          <RowMenu
-            label="Filtro produktet"
-            title="Filtro produktet"
-            items={filterItems}
-            triggerClassName="btn btn-ghost catalog-tool"
-            trigger={<>
-              <svg aria-hidden viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-              <span>Filtro</span>
-              {activeFilters > 0 && <span className="catalog-tool-count" aria-label={`${activeFilters} aktivë`}>{activeFilters}</span>}
-            </>}
-          />
-          <RowMenu
-            label="Opsionet e listës"
-            title="Opsionet e listës"
-            items={optionItems}
-            triggerClassName="btn btn-ghost catalog-tool"
-            trigger={<>
-              <svg aria-hidden viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>
-              <span>Opsione</span>
-            </>}
-          />
+        <ListToolbar subject="produktet" filters={filterItems} activeFilters={activeFilters} options={optionItems}>
           <input
             className="field"
             type="search"
@@ -290,7 +270,7 @@ export function ProductCatalog({
               setPage(1);
             }}
           />
-        </div>
+        </ListToolbar>
         {notice && (
           <p role="status" className="catalog-notice">
             {notice}

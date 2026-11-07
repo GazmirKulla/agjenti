@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ActionForm } from "@/components/dashboard/action-form";
@@ -7,7 +7,9 @@ import { PageHeading } from "@/components/dashboard/ui";
 import { saveBusinessService } from "@/lib/services/actions";
 import { servicePrice, type BusinessService } from "@/lib/services/model";
 import { dayNames, type Hours } from "@/lib/calendar/model";
-import { EntityFlowLink } from "@/components/workflows/entity-flow-link";
+import { EntityFlowLink, entityWorkflowHref } from "@/components/workflows/entity-flow-link";
+import { RowMenu, type RowMenuItem } from "@/components/dashboard/row-menu";
+import { ListToolbar } from "@/components/dashboard/list-toolbar";
 import { usePageAssistantContext } from "@/components/business-assistant/workspace";
 import "./services.css";
 function ServiceEditor({
@@ -30,8 +32,10 @@ function ServiceEditor({
     [priceMode, setPriceMode] = useState(service?.price_mode ?? "request");
   const change = (index: number, key: "start" | "end", value: string) =>
     setHours(hours.map((h, i) => (i === index ? { ...h, [key]: value } : h)));
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => panel.current?.scrollIntoView({ block: "start", behavior: "smooth" }), []);
   return (
-    <section className="panel section-pad service-editor">
+    <section ref={panel} className="panel section-pad service-editor">
       <div className="service-editor-heading">
         <h2>{service ? "Ndrysho shërbimin" : "Shërbim i ri"}</h2>
         <button type="button" className="btn btn-ghost" onClick={onClose}>
@@ -287,19 +291,50 @@ export function ServicesWorkspace({
   workflowsEnabled?: boolean;
 }) {
   const [query, setQuery] = useState(""),
-    [filter, setFilter] = useState("all"),
+    [status, setStatus] = useState("all"),
+    [booking, setBooking] = useState("all"),
+    [sort, setSort] = useState("saved"),
     [editor, setEditor] = useState<BusinessService | "new" | null>(null);
   usePageAssistantContext(editor && editor !== "new" ? { entityType: "service", entityId: editor.id, selectionLabel: editor.name } : {});
-  const shown = services.filter(
+  const filtered = services.filter(
     (s) =>
-      (filter === "all" ||
-        (filter === "active" && s.is_active) ||
-        (filter === "inactive" && !s.is_active) ||
-        (filter === "bookable" && s.booking_enabled)) &&
+      (status === "all" || (status === "active") === s.is_active) &&
+      (booking === "all" || (booking === "bookable") === s.booking_enabled) &&
       `${s.name} ${s.description} ${s.category}`
         .toLocaleLowerCase()
         .includes(query.toLocaleLowerCase()),
   );
+  const shown = sort === "saved"
+    ? filtered
+    : [...filtered].sort((a, b) =>
+        sort === "category"
+          ? (a.category || "\uffff").localeCompare(b.category || "\uffff") || a.name.localeCompare(b.name)
+          : a.name.localeCompare(b.name),
+      );
+  const activeFilters = Number(status !== "all") + Number(booking !== "all");
+  const filterItems: RowMenuItem[] = [
+    ...([["all", "Të gjitha"], ["active", "Aktive"], ["inactive", "Joaktive"]] as const).map(([value, label]) => ({
+      group: "Statusi", label, checked: status === value, onSelect: () => setStatus(value),
+    })),
+    ...([["all", "Të gjitha"], ["bookable", "Me rezervim"], ["plain", "Pa rezervim"]] as const).map(([value, label]) => ({
+      group: "Rezervimi", label, checked: booking === value, onSelect: () => setBooking(value),
+    })),
+    ...(activeFilters ? [{ label: "Pastro filtrat", onSelect: () => { setStatus("all"); setBooking("all"); } }] : []),
+  ];
+  const optionItems: RowMenuItem[] = [
+    ...([["saved", "Renditja e ruajtur"], ["name", "Emri (A–Z)"], ["category", "Kategoria"]] as const).map(([value, label]) => ({
+      group: "Rendit sipas", label, checked: sort === value, onSelect: () => setSort(value),
+    })),
+    { group: "Veprime", label: "Shto shërbim", onSelect: () => setEditor("new") },
+  ];
+  function serviceActions(s: BusinessService): RowMenuItem[] {
+    const binding = flowBindings.find((item) => item.id === s.id);
+    return [
+      { label: "Ndrysho shërbimin", onSelect: () => setEditor(s) },
+      ...(s.booking_enabled && s.is_active ? [{ label: "Rezervo", href: `/b/${slug}/calendar?service=${s.id}` }] : []),
+      { label: binding ? `Ndrysho rrjedhën: ${binding.name}` : "Lidh me një rrjedhë", href: entityWorkflowHref(slug, "service", s.id, binding?.flowId) },
+    ];
+  }
   return (
     <>
       <PageHeading
@@ -321,8 +356,11 @@ export function ServicesWorkspace({
           onClose={() => setEditor(null)}
         />
       )}
-      <section className="services-catalog">
-        <div className="services-toolbar">
+      <section className="panel services-catalog">
+        <h2 className="services-title">
+          Të gjitha shërbimet <span>{services.length}</span>
+        </h2>
+        <ListToolbar subject="shërbimet" filters={filterItems} activeFilters={activeFilters} options={optionItems}>
           <input
             className="field"
             type="search"
@@ -331,56 +369,38 @@ export function ServicesWorkspace({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <select
-            className="field"
-            aria-label="Filtro shërbimet"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          >
-            <option value="all">Të gjitha ({services.length})</option>
-            <option value="active">Aktive</option>
-            <option value="inactive">Joaktive</option>
-            <option value="bookable">Me rezervim</option>
-          </select>
-        </div>
-        <div className="services-grid">
-          {shown.map((s) => (
-            <article className="panel service-card" key={s.id}>
-              <div className="service-card-top">
-                <span className="status-badge">
-                  {s.is_active ? "Aktiv" : "Joaktiv"}
-                </span>
-                {s.category && <span className="muted-copy">{s.category}</span>}
-              </div>
-              <h2>{s.name}</h2>
-              <p className="service-description">
-                {s.description || "Pa përshkrim"}
-              </p>
-              <strong>{servicePrice(s)}</strong>
-              <EntityFlowLink slug={slug} kind="service" id={s.id} binding={flowBindings.find(item => item.id === s.id)} enabled={workflowsEnabled} />
-              <p className="muted-copy">
-                {s.booking_enabled
-                  ? `${s.duration_minutes} min · ${s.hours ? "Orar i veçantë" : "Orari i biznesit"}`
-                  : "Pa rezervim me orar"}
-              </p>
-              <div className="service-buttons">
-                <button className="btn btn-ghost" onClick={() => setEditor(s)}>
-                  Ndrysho
-                </button>
-                {s.booking_enabled && s.is_active && (
-                  <Link
-                    className="btn btn-ghost"
-                    href={`/b/${slug}/calendar?service=${s.id}`}
-                  >
-                    Rezervo
-                  </Link>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
+        </ListToolbar>
+        {shown.length > 0 && (
+          <ul className="service-rows">
+            {shown.map((s) => {
+              const binding = flowBindings.find((item) => item.id === s.id);
+              return (
+                <li key={s.id} className="service-row">
+                  <button type="button" className="service-row-main" onClick={() => setEditor(s)}>
+                    <span className="service-row-name">
+                      <strong>{s.name}</strong>
+                      <small>
+                        {[s.category, binding && `Rrjedha: ${binding.name}${workflowsEnabled ? "" : " (e çaktivizuar)"}`].filter(Boolean).join(" · ") || "Pa kategori"}
+                      </small>
+                    </span>
+                    <span className="service-row-price">{servicePrice(s)}</span>
+                    <span className="service-row-booking">
+                      {s.booking_enabled
+                        ? `${s.duration_minutes} min · ${s.hours ? "Orar i veçantë" : "Orari i biznesit"}`
+                        : "Pa rezervim"}
+                    </span>
+                    <span className={`status-badge service-row-status${s.is_active ? "" : " is-inactive"}`}>
+                      {s.is_active ? "Aktiv" : "Joaktiv"}
+                    </span>
+                  </button>
+                  <RowMenu label={`Më shumë për ${s.name}`} title={s.name} items={serviceActions(s)} />
+                </li>
+              );
+            })}
+          </ul>
+        )}
         {!shown.length && (
-          <div className="panel section-pad">
+          <div className="section-pad">
             <h2>
               {services.length
                 ? "Nuk u gjet asnjë shërbim"

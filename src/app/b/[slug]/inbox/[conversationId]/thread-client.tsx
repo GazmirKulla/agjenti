@@ -7,6 +7,7 @@ import Image from "next/image";
 import type { NormalizedAttachment } from "@/lib/instagram/types";
 import { Icon } from "@/components/dashboard/icon";
 import Link from "next/link";
+import { RowMenu } from "@/components/dashboard/row-menu";
 import { messageDate } from "@/lib/conversations/message-date";
 import { instagramReplyWindow } from "@/lib/instagram/window";
 import { useReplyOutbox } from "@/components/agents/reply-outbox";
@@ -124,15 +125,24 @@ export function ThreadClient(props: {
             <LocalizedStatusBadge status={props.status} />
           </div>
         </Link>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={pending}
-          onClick={() => router.refresh()}
-          aria-label={t("Rifresko bisedën")}
-        >
-          ↻
-        </button>
+        <RowMenu
+          label={t("Opsionet e bisedës")}
+          title={props.customerName}
+          triggerClassName="btn btn-ghost chat-options"
+          items={[
+            { label: t("Rifresko bisedën"), disabled: pending, onSelect: () => router.refresh() },
+            {
+              label: props.status === "active" ? t("Pauzo Agjentin AI") : t("Rifillo Agjentin AI"),
+              disabled: pending,
+              onSelect: () => void request(props.status === "active" ? "pause" : "resume"),
+            },
+            { label: t("Shëno si të mbyllur"), disabled: pending || props.status === "completed", onSelect: () => void request("complete") },
+            { label: t("Konfirmo porosinë"), disabled: pending, onSelect: () => void request("orders") },
+            { label: t("Hap detajet e klientit"), href: `/b/${props.slug}/inbox/${props.conversationId}/customer` },
+            { label: t("Pastro mesazhet"), disabled: pending || !props.messages.length, onSelect: confirmClearMessages },
+            { label: t("Fshi bisedën"), danger: true, disabled: pending, onSelect: confirmDelete },
+          ]}
+        />
         <Link
           href={`/b/${props.slug}/inbox`}
           className="btn btn-ghost"
@@ -141,44 +151,6 @@ export function ThreadClient(props: {
         >
           <span aria-hidden="true">×</span>
         </Link>
-      </div>
-      <div className="chat-actions">
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() =>
-            request(props.status === "active" ? "pause" : "resume")
-          }
-        >
-          {props.status === "active"
-            ? t("Pauzo Agjentin AI")
-            : t("Rifillo Agjentin AI")}
-        </button>
-        <button
-          type="button"
-          disabled={pending || props.status === "completed"}
-          onClick={() => request("complete")}
-        >
-          {t("Shëno si të mbyllur")}</button>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => request("orders")}
-        >
-          {t("Konfirmo porosinë")}</button>
-        <button
-          type="button"
-          disabled={pending || !props.messages.length}
-          onClick={confirmClearMessages}
-        >
-          {t("Pastro mesazhet")}</button>
-        <button
-          type="button"
-          className="chat-action-danger"
-          disabled={pending}
-          onClick={confirmDelete}
-        >
-          {t("Fshi bisedën")}</button>
       </div>
       <div className="chat-messages" ref={messageList}>
         {reactions.error && <p role="alert">{t(reactions.error)} <button type="button" onClick={() => void reactions.refresh()}>{t("Rifresko")}</button></p>}

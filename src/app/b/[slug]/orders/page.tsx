@@ -11,6 +11,14 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { requireEnabledModule } from "@/lib/dashboard/modules/permissions";
 
+const ORDER_STATUSES = [
+  ["draft", "Draft"],
+  ["confirmed", "Të konfirmuara"],
+  ["submitted", "Të përcjella"],
+  ["failed", "Të dështuara"],
+  ["pending_reconciliation", "Për verifikim nga stafi"],
+] as const;
+
 export default async function OrdersPage({
   params,
 }: {
@@ -40,13 +48,7 @@ export default async function OrdersPage({
         description="Ndiq porositë e krijuara nga bisedat me klientët."
       />
       <div className="stats-grid">
-        {[
-          ["draft", "Draft"],
-          ["confirmed", "Të konfirmuara"],
-          ["submitted", "Të përcjella"],
-          ["failed", "Të dështuara"],
-          ["pending_reconciliation", "Për verifikim nga stafi"],
-        ].map(([status, label]) => (
+        {ORDER_STATUSES.map(([status, label]) => (
           <StatCard
             key={status}
             label={label}
@@ -60,6 +62,8 @@ export default async function OrdersPage({
         listTitle="Të gjitha porositë"
         placeholder="Kërko numër porosie ose klient…"
         columns={["Porosia / Klienti", "Shuma", "Statusi", "Data"]}
+        facets={[{ key: "status", label: "Statusi", options: ORDER_STATUSES.map(([value, label]) => ({ value, label })) }]}
+        sortable
         emptyTitle="Ende nuk ka porosi"
         emptyDescription="Konfirmo një porosi nga biseda me klientin për ta parë këtu."
         records={(orders ?? []).map((o) => {
@@ -72,6 +76,7 @@ export default async function OrdersPage({
             id: o.id,
             title: `#${o.external_order_id || o.id.slice(0, 8)}`,
             subtitle: c?.display_name || c?.username || "Klient",
+            facets: { status: o.status },
             cells: [
               money(o.total_amount, o.currency),
               <StatusBadge key="status" status={o.status} />,

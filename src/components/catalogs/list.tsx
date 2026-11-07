@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { Catalog } from "@/lib/catalogs/model";
+import { ListToolbar } from "@/components/dashboard/list-toolbar";
+import { RowMenu, type RowMenuItem } from "@/components/dashboard/row-menu";
 export const statusLabels: Record<string, string> = {
   pending: "Pa indeksuar",
   indexing: "Duke analizuar",
@@ -17,39 +19,69 @@ export function CatalogList({
   slug: string;
 }) {
   const [search, setSearch] = useState(""),
-    [status, setStatus] = useState("all");
-  const rows = catalogs.filter(
+    [status, setStatus] = useState("all"),
+    [index, setIndex] = useState("all"),
+    [byTitle, setByTitle] = useState(false);
+  const filtered = catalogs.filter(
     (c) =>
       (status === "all" ||
         (status === "active" && c.active) ||
         (status === "inactive" && !c.active)) &&
+      (index === "all" || c.index_status === index) &&
       [c.title, ...Object.values(c.metadata).flat()]
         .join(" ")
         .toLocaleLowerCase()
         .includes(search.toLocaleLowerCase()),
   );
+  const rows = byTitle ? [...filtered].sort((a, b) => a.title.localeCompare(b.title)) : filtered;
+  const activeFilters = Number(status !== "all") + Number(index !== "all");
+  const filters: RowMenuItem[] = [
+    ...([["all", "Të gjitha"], ["active", "Aktive"], ["inactive", "Joaktive"]] as const).map(([value, label]) => ({
+      group: "Statusi", label, checked: status === value, onSelect: () => setStatus(value),
+    })),
+    ...[["all", "Të gjitha"], ...Object.entries(statusLabels)].map(([value, label]) => ({
+      group: "Indeksimi", label, checked: index === value, onSelect: () => setIndex(value),
+    })),
+    ...(activeFilters ? [{ label: "Pastro filtrat", onSelect: () => { setStatus("all"); setIndex("all"); } }] : []),
+  ];
+  const options: RowMenuItem[] = [
+    { group: "Rendit sipas", label: "Përditësuar së fundi", checked: !byTitle, onSelect: () => setByTitle(false) },
+    { group: "Rendit sipas", label: "Titulli (A–Z)", checked: byTitle, onSelect: () => setByTitle(true) },
+    { group: "Veprime", label: "Shto katalog", href: "#catalog-create" },
+  ];
   return (
-    <section className="panel">
+    <section className="panel catalog-list">
       <h2>Dokumentet e biznesit</h2>
-      <div className="catalog-filters">
+      <ListToolbar subject="katalogët" filters={filters} activeFilters={activeFilters} options={options}>
         <input
           aria-label="Kërko katalog"
           className="field"
-          placeholder="Titull, kategori, gjuhë, treg…"
+          type="search"
+          placeholder="Titull, kategori, gjuhë…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select
-          className="field"
-          aria-label="Statusi"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="all">Të gjitha</option>
-          <option value="active">Aktive</option>
-          <option value="inactive">Joaktive</option>
-        </select>
-      </div>
+      </ListToolbar>
+      {rows.length > 0 && (
+        <ul className="catalog-cards">
+          {rows.map((c) => (
+            <li key={c.id}>
+              <Link className="catalog-card-main" href={`/b/${slug}/catalogs/${c.id}`}>
+                <strong>{c.title}</strong>
+                <small>
+                  {[c.source_type.toUpperCase(), c.metadata.categories?.join(", "), c.metadata.languages?.join(", ")].filter(Boolean).join(" · ")}
+                </small>
+                <span className="catalog-card-meta">
+                  <span className={`catalog-index is-${c.index_status}`}>{statusLabels[c.index_status]}</span>
+                  <span>{c.active ? "Aktiv" : "Joaktiv"}</span>
+                  <span>{c.updated_at.slice(0, 10)}</span>
+                </span>
+              </Link>
+              <RowMenu label={`Më shumë për ${c.title}`} title={c.title} items={[{ label: "Hap katalogun", href: `/b/${slug}/catalogs/${c.id}` }]} />
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="catalog-table">
         <table>
           <thead>
@@ -93,9 +125,10 @@ export function CatalogList({
         </table>
       </div>
       {!rows.length && (
-        <p>
-          Nuk u gjet asnjë katalog. Shto dokumentin e parë për ta përgatitur për
-          Agjentin.
+        <p className="catalog-empty">
+          {catalogs.length
+            ? "Nuk u gjet asnjë katalog me këtë kërkim ose filtër."
+            : "Nuk u gjet asnjë katalog. Shto dokumentin e parë për ta përgatitur për Agjentin."}
         </p>
       )}
     </section>

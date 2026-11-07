@@ -30,14 +30,6 @@
   gap: 16px;
   min-width: 0;
 }
-.catalog-filters {
-  display: flex;
-  gap: 12px;
-  margin: 16px 0;
-}
-.catalog-filters select {
-  max-width: 170px;
-}
 .catalog-table {
   overflow-x: auto;
 }
@@ -109,12 +101,6 @@
   .catalog-meta {
     grid-template-columns: 1fr;
   }
-  .catalog-filters {
-    flex-direction: column;
-  }
-  .catalog-filters select {
-    max-width: none;
-  }
   .catalog-workspace .field {
     font-size: 16px;
   }
@@ -128,40 +114,76 @@
     order: initial;
   }
 }
-@media (max-width: 600px) {
-  .catalog-table table {
-    min-width: 0;
-  }
-  .catalog-table thead {
+/* Catalog list is mobile-first: cards on phones, the table from 761px. */
+.catalog-workspace .catalog-list,
+.catalog-columns .catalog-list {
+  overflow: hidden;
+  padding: 0.85rem 0 0;
+}
+.catalog-list > h2 {
+  margin: 0;
+  padding-inline: 1rem;
+}
+.catalog-columns {
+  margin-bottom: 100px;
+}
+.catalog-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.catalog-cards li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding-right: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.catalog-card-main {
+  display: grid;
+  gap: 0.25rem;
+  min-height: 64px;
+  padding: 0.75rem 0 0.75rem 1rem;
+  color: var(--ink);
+}
+.catalog-card-main strong {
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+.catalog-card-main small {
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+}
+.catalog-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+.catalog-index {
+  color: var(--ink);
+  font-weight: 600;
+}
+.catalog-index.is-failed {
+  color: var(--danger);
+}
+.catalog-index.is-ready {
+  color: var(--success);
+}
+.catalog-table {
+  display: none;
+}
+.catalog-empty {
+  padding: 1rem;
+}
+@media (min-width: 761px) {
+  .catalog-cards {
     display: none;
   }
-  .catalog-table tbody {
-    display: grid;
-    gap: 14px;
-  }
-  .catalog-table tr {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 14px;
-  }
-  .catalog-table td {
-    padding: 0;
-    border: 0;
-    overflow-wrap: anywhere;
-    min-width: 0;
-  }
-  .catalog-table td:first-child {
-    grid-column: 1/-1;
-    font-size: 1rem;
-  }
-  .catalog-table td:not(:first-child):before {
-    content: attr(data-label);
+  .catalog-table {
     display: block;
-    color: var(--ink-muted);
-    font-size: 0.72rem;
-    margin-bottom: 3px;
+    padding-inline: 1rem;
   }
 }

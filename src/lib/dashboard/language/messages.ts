@@ -159,6 +159,7 @@ export const english: Record<string, string> = {
   "Pastro të gjitha mesazhet e dërguara dhe të marra në këtë bisedë nga Agjenti.app? Biseda, klienti dhe porositë ruhen. Mesazhet në Instagram/WhatsApp nuk fshihen. Ky veprim nuk kthehet mbrapsht.": "Clear all sent and received messages in this conversation from Agjenti.app? The conversation, customer and orders are kept. Messages on Instagram/WhatsApp are not deleted. This cannot be undone.",
   "Kthehu te bisedat": "Back to conversations",
   "Hap detajet e klientit": "Open customer details",
+  "Opsionet e bisedës": "Conversation options",
   "Rifresko bisedën": "Refresh conversation",
   "Pauzo Agjentin AI": "Pause AI agent",
   "Rifillo Agjentin AI": "Resume AI agent",

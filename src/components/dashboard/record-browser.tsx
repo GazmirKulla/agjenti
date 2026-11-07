@@ -11,6 +11,8 @@ import {
 } from "react";
 import { Icon } from "./icon";
 import { EmptyState } from "./ui";
+import { ListToolbar } from "./list-toolbar";
+import type { RowMenuItem } from "./row-menu";
 
 export type BrowserRecord = {
   id: string;
@@ -19,7 +21,11 @@ export type BrowserRecord = {
   badge?: ReactNode;
   detail: ReactNode;
   cells?: ReactNode[];
+  /** Values matched against `facets` in client-side lists. */
+  facets?: Record<string, string>;
 };
+
+export type BrowserFacet = { key: string; label: string; options: { value: string; label: string }[] };
 
 export function RecordBrowser({
   records,
@@ -33,7 +39,13 @@ export function RecordBrowser({
   createForm,
   createLabel = "Shto të re",
   createAsModal = false,
+  facets = [],
+  sortable = false,
 }: {
+  /** Client-side filters; ignored for server-paged lists. */
+  facets?: BrowserFacet[];
+  /** Offers title ordering alongside the original order in client-side lists. */
+  sortable?: boolean;
   serverPage?: {
     page: number;
     pageSize: number;
@@ -58,14 +70,58 @@ export function RecordBrowser({
   const [selected, setSelected] = useState(records[0]?.id ?? "");
   const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(0);
+  const [opened, setOpened] = useState(false);
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const [byTitle, setByTitle] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const matches = serverPage
+  const filtered = serverPage
     ? records
-    : records.filter((r) =>
-        `${r.title} ${r.subtitle ?? ""}`
-          .toLocaleLowerCase()
-          .includes(query.toLocaleLowerCase()),
+    : records.filter(
+        (r) =>
+          `${r.title} ${r.subtitle ?? ""}`
+            .toLocaleLowerCase()
+            .includes(query.toLocaleLowerCase()) &&
+          Object.entries(chosen).every(([key, value]) => r.facets?.[key] === value),
       );
+  const matches = byTitle && !serverPage
+    ? [...filtered].sort((a, b) => a.title.localeCompare(b.title))
+    : filtered;
+  const activeFilters = Object.keys(chosen).length;
+  const filterItems: RowMenuItem[] = serverPage
+    ? []
+    : [
+        ...facets.flatMap((facet) =>
+          [{ value: "", label: "Të gjitha" }, ...facet.options].map((option) => ({
+            group: facet.label,
+            label: option.label,
+            checked: (chosen[facet.key] ?? "") === option.value,
+            onSelect: () => {
+              setChosen((current) => {
+                const next = { ...current };
+                if (option.value) next[facet.key] = option.value;
+                else delete next[facet.key];
+                return next;
+              });
+              setPage(0);
+            },
+          })),
+        ),
+        ...(activeFilters
+          ? [{ label: "Pastro filtrat", onSelect: () => { setChosen({}); setPage(0); } }]
+          : []),
+      ];
+  const optionItems: RowMenuItem[] =
+    sortable && !serverPage
+      ? [
+          { group: "Rendit sipas", label: "Më të rejat", checked: !byTitle, onSelect: () => setByTitle(false) },
+          { group: "Rendit sipas", label: "Emri (A–Z)", checked: byTitle, onSelect: () => setByTitle(true) },
+        ]
+      : [];
+  function open(id: string) {
+    setSelected(id);
+    setOpened(true);
+    if (!createAsModal) setCreating(false);
+  }
   const safePage = Math.min(
     page,
     Math.max(0, Math.ceil(matches.length / 10) - 1),
@@ -89,6 +145,18 @@ export function RecordBrowser({
     }
   }, [creating, createAsModal]);
 
+  const detailOpen = opened || (creating && !createAsModal);
+  useEffect(() => {
+    if (!detailOpen) return;
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || dialogRef.current?.open || !window.matchMedia("(max-width: 760px)").matches) return;
+      setOpened(false);
+      setCreating(false);
+    };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [detailOpen]);
+
   const formWithClose =
     createAsModal && isValidElement(createForm)
       ? cloneElement(createForm as ReactElement<{ onSuccess?: () => void }>, {
@@ -97,7 +165,7 @@ export function RecordBrowser({
       : createForm;
 
   return (
-    <div className={`record-browser ${columns ? "table-browser" : ""}`}>
+    <div className={`record-browser ${columns ? "table-browser" : ""}${detailOpen ? " is-detail-open" : ""}`}>
       <section className="panel record-list">
         <div className="record-toolbar">
           <h2>
@@ -113,6 +181,8 @@ export function RecordBrowser({
             </button>
           )}
         </div>
+        {hideSearch && !filterItems.length && !optionItems.length ? null : (
+        <ListToolbar subject="listën" filters={filterItems} activeFilters={activeFilters} options={optionItems}>
         {hideSearch ? null : serverPage ? (
           <form
             action={serverPage.path}
@@ -145,8 +215,29 @@ export function RecordBrowser({
             />
           </div>
         )}
+        </ListToolbar>
+        )}
         {rows.length ? (
           columns ? (
+            <>
+            <ul className="record-cards">
+              {rows.map((r) => (
+                <li key={r.id}>
+                  <button type="button" className="record-card" onClick={() => open(r.id)}>
+                    <span className="record-card-copy">
+                      <strong>{r.title}</strong>
+                      {r.subtitle && <small>{r.subtitle}</small>}
+                      {r.cells?.length ? (
+                        <span className="record-card-meta">
+                          {r.cells.map((cell, i) => <span key={i}>{cell}</span>)}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="record-card-chevron" aria-hidden>›</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
             <div className="table-scroll">
               <table className="data-table">
                 <thead>
@@ -171,10 +262,7 @@ export function RecordBrowser({
                         <button
                           type="button"
                           className="row-select"
-                          onClick={() => {
-                            setSelected(r.id);
-                            if (!createAsModal) setCreating(false);
-                          }}
+                          onClick={() => open(r.id)}
                         >
                           <strong>{r.title}</strong>
                           <small>{r.subtitle}</small>
@@ -188,6 +276,7 @@ export function RecordBrowser({
                 </tbody>
               </table>
             </div>
+            </>
           ) : (
             <div className="record-items">
               {rows.map((r) => (
@@ -195,10 +284,7 @@ export function RecordBrowser({
                   type="button"
                   key={r.id}
                   className={`record-item ${active?.id === r.id && !(creating && !createAsModal) ? "selected" : ""}`}
-                  onClick={() => {
-                    setSelected(r.id);
-                    if (!createAsModal) setCreating(false);
-                  }}
+                  onClick={() => open(r.id)}
                   aria-pressed={
                     active?.id === r.id && !(creating && !createAsModal)
                   }
@@ -218,13 +304,13 @@ export function RecordBrowser({
         ) : (
           <EmptyState
             title={
-              serverPage?.search || query
+              serverPage?.search || query || activeFilters
                 ? "Nuk u gjet asnjë rezultat"
                 : emptyTitle
             }
             description={
-              serverPage?.search || query
-                ? "Provo një emër ose term tjetër."
+              serverPage?.search || query || activeFilters
+                ? "Provo një emër, term ose filtër tjetër."
                 : emptyDescription
             }
           />
@@ -294,6 +380,16 @@ export function RecordBrowser({
           creating && !createAsModal ? "create" : (active?.id ?? "empty")
         }
       >
+        <button
+          type="button"
+          className="record-detail-back"
+          onClick={() => {
+            setOpened(false);
+            setCreating(false);
+          }}
+        >
+          ‹ Kthehu te lista
+        </button>
         {creating && !createAsModal ? (
           <>
             <h2 className="detail-title">{createLabel}</h2>
