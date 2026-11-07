@@ -21,6 +21,28 @@ it("R2 reports no matching sections without treating unrelated text as business 
   expect(onRead.mock.calls.at(-1)?.[0]).toMatchObject({ source: "catalog_sections", businessId: "tenant", status: "no_match", reason: "insufficient_relevance_in_bounded_search" });
 });
 let filters: unknown[][] = [];
+it("native routing qualifies and retrieves a document without the old conversation interpreter", async () => {
+  const requirements = Object.fromEntries(Object.keys(questions).map(key => [key, { value: null, evidence: null }]));
+  mocks.create.mockResolvedValueOnce({ status: "completed", output_text: JSON.stringify({ domain: "catalog", continuePending: false, evidence: "Manualin", requirements }) });
+  const execution = { semanticRouting: true as const, deadline: Date.now() + 10000, history: [] };
+  const first = await retrieveBusinessSources("tenant", "Manualin e pompave", null, undefined, undefined, execution);
+  expect(first?.context.pending).toBe("market");
+  mocks.create.mockResolvedValueOnce({ status: "completed", output_text: JSON.stringify({ domain: "catalog", continuePending: true, evidence: "Gjermani",
+    requirements: { ...requirements, market: { value: "Germany", evidence: "Gjermani" } } }) });
+  const second = await retrieveBusinessSources("tenant", "Gjermani", first?.context, undefined, undefined, execution);
+  expect(second?.documents).toHaveLength(1);
+  expect(second?.evidence).toContain("400 L/min");
+  expect(second?.context.requirements.market).toBe("Germany");
+});
+it("native routing leaves a pending document inquiry untouched during an unrelated product question", async () => {
+  const requirements = Object.fromEntries(Object.keys(questions).map(key => [key, { value: null, evidence: null }]));
+  mocks.create.mockResolvedValue({ status: "completed", output_text: JSON.stringify({ domain: "product", continuePending: false, evidence: "Price", requirements }) });
+  const old = { query: "Manual", requirements: { market: "Germany" }, pending: "language", turns: 1 };
+  const before = structuredClone(old);
+  expect(await retrieveBusinessSources("tenant", "Price?", old, undefined, undefined, { semanticRouting: true, deadline: Date.now() + 10000, history: [] })).toBeNull();
+  expect(old).toEqual(before);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
 beforeEach(() => {
   vi.stubEnv("OPENAI_API_KEY", "synthetic-key");
   mocks.create.mockImplementation(async ({ input }: { input: string }) => {

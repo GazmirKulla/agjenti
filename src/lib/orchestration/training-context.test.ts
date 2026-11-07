@@ -11,7 +11,7 @@ function memory(id: string, scope: Partial<TrainingMemory> = {}): TrainingMemory
   return { id, business_id: "business", kind: "workflow", instruction: id, customer_message: "", desired_response: "", workflow_id: null,
     step_key: null, is_active: true, revision: 1, updated_at: "2026-11-07", ...scope };
 }
-beforeEach(() => load.mockReset());
+beforeEach(() => { load.mockReset(); });
 it("includes global rules and only the pinned linear workflow's current authored step", async () => {
   const version = linearProcessVersion({ id: "v", businessId: "business", workflowId: "workflow", name: "Order", productIds: [], steps: [{ key: "delivery", kind: "customer" }] });
   const state = initialSnapshot("business", "conversation", "test");

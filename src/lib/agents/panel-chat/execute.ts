@@ -58,10 +58,7 @@ export async function runPanelChat(scope: PanelScope) {
         if (committed.error) throw new Error("Panel process result commit failed");
         continue;
       }
-      const committed = await db.rpc("finish_panel_chat", { p_id: job.id, p_token: job.lease_token, p_revision: saved.data.revision,
-        p_state: turn.nextState, p_workflow: turn.workflowId, p_reply: turn.reply, p_response: turn.previousResponseId,
-        p_result: encryptSecret(JSON.stringify(result)), p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });
-      if (committed.error) throw new Error("Panel result commit failed");
+      throw new Error("Native panel checkpoint required");
     } catch {
       // Retry the same job with a fresh lease. Workflow action keys remain stable
       // if an effect committed before the transcript receipt was lost.

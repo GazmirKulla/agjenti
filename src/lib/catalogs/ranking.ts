@@ -89,6 +89,7 @@ export function rankCatalogs(
   query: string,
   requirements: Requirements,
   now = Date.now(),
+  meaning?: { domain: "catalog" | "product" | "general"; purpose: string | null },
 ) {
   return catalogs
     .filter((c) => c.active && c.index_status === "ready" && c.confirmed_at)
@@ -113,7 +114,7 @@ export function rankCatalogs(
         !matches(m.industries, requirements.industry)
       )
         return [];
-      const purpose = messageUnderstanding(query).catalogPurpose;
+      const purpose = meaning ? meaning.purpose : messageUnderstanding(query).catalogPurpose;
       const technical = purpose === "technical";
       const commercial = purpose === "commercial";
       if (
@@ -131,7 +132,7 @@ export function rankCatalogs(
       )
         return [];
       const semantic = Math.max(0, ...sections.map((h) => h.semantic ?? 0));
-      const intent = routeIntent(query);
+      const intent = meaning ? meaning.domain : routeIntent(query);
       const rule = c.use_when.some(
         (r) =>
           (r === "full_range" && intent === "catalog") ||

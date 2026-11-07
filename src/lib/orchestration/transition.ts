@@ -18,6 +18,8 @@ export type Environment = {
   photoReceived?: boolean;
   onStep?: (step: { instanceId: string; definitionId: string; versionId: string; stepId: string; kind: string }) => void;
   serverFacts?: (definition: ProcessDefinition, instance: Instance) => Record<string, import("./contracts").Value>;
+  bindDependencies?: (instance: Instance, eventId: string) => void;
+  resolveDefinition?: (definition: ProcessDefinition, instance: Instance) => ProcessDefinition;
 };
 const closed = new Set<Instance["status"]>(["completed", "cancelled", "handoff", "failed"]);
 function fail(code: string): never { throw new TransitionError(code); }
@@ -26,9 +28,10 @@ const factDigest = (instance: Instance, fields: string[]) => digest(fields.map(i
 function assertPolicy(instance: Instance, definition: ProcessDefinition) {
   if (instance.policyKey !== definition.policyKey) fail("process_policy_changed");
 }
-function definitionFor(state: Snapshot, instance: Pick<Instance, "definitionId" | "versionId">, env: Environment) {
+export function definitionFor(state: Snapshot, instance: Pick<Instance, "definitionId" | "versionId">, env: Environment) {
   const found = env.definitions.find(d => d.id === instance.definitionId && d.versionId === instance.versionId && d.businessId === state.businessId);
-  return found ?? fail("definition_unavailable");
+  if (!found) fail("definition_unavailable");
+  return "facts" in instance && env.resolveDefinition ? env.resolveDefinition(found, instance as Instance) : found;
 }
 function instanceFor(state: Snapshot, id: string) {
   return Object.hasOwn(state.instances, id) ? state.instances[id] : fail("unknown_instance");
@@ -92,6 +95,7 @@ function applyFacts(state: Snapshot, instance: Instance, values: FactInput[], ev
       if (instance.wait?.kind === "approval") delete instance.wait;
     }
   }
+  env.bindDependencies?.(instance, event.id);
 }
 function refreshServerFacts(state: Snapshot, instance: Instance, definition: ProcessDefinition, env: Environment, fieldIds: string[]) {
   const fields = definition.fields.filter(f => f.source === "server" && fieldIds.includes(f.id));

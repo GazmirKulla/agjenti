@@ -1,6 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
-import type { VisualVersion } from "@/lib/workflows/visual/types";
+import type { ProcessVersion } from "./linear-definition";
 import { TransitionError, type Instance, type Observation, type ProcessDefinition, type Snapshot, type Value } from "./contracts";
 import { orderFields } from "./order-definition";
 export type OrderTerms = { productId: string; productName: string; productTypeId: string; unitAmount: number; currency: string; quantity: number };
@@ -11,7 +11,7 @@ export async function readOrderTerms(businessId: string, productId: string, coll
   if (error || !data || !collectionOnly && (typeof data.price_amount !== "number" || data.price_amount < 0 || !/^[A-Z]{3}$/.test(data.currency ?? ""))) throw new TransitionError("product_unavailable");
   return { productId: data.id, productName: data.name, productTypeId: data.product_type_id ?? "none", unitAmount: data.price_amount ?? 0, currency: data.currency ?? "unpriced", quantity: 1 };
 }
-export function orderContext(versions: VisualVersion[]) {
+export function orderContext(versions: ProcessVersion[]) {
   const terms = new Map<string, OrderTerms>();
   return {
     async prepare(state: Snapshot, definitions: ProcessDefinition[], observation?: Observation) {
@@ -38,7 +38,8 @@ export function orderContext(versions: VisualVersion[]) {
       if (typeof productId !== "string") return {};
       const version = versions.find(v => v.id === definition.versionId);
       const flow = version?.graph.version === 2 ? version.graph.flows.find(f => f.id === definition.id) : undefined;
-      if (flow?.productIds?.length && !flow.productIds.includes(productId)) throw new TransitionError("product_outside_workflow");
+      const pinned = version?.linear && instance.productWorkflow?.productId === productId && instance.productWorkflow.versionId === version.id;
+      if (!pinned && flow?.productIds?.length && !flow.productIds.includes(productId)) throw new TransitionError("product_outside_workflow");
       const current = terms.get(`${!!definition.collection}:${productId}`);
       if (!current) return {};
       const options = Object.fromEntries(definition.steps.flatMap(s => s.kind === "collect" && s.fieldId !== key("productId") && !["customer_name", "customer_phone", "customer_city", "customer_address", "customer_email"].includes(s.fieldId)

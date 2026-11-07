@@ -1,109 +1,62 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { emptyState, type ConversationStatePayload } from "@/lib/workflows/engine";
-import { resolveServiceReference } from "@/lib/products/entity-bridge";
-import { processConversationMessage } from "./process-conversation-message";
-import type { AgentTurnParams } from "./process-agent-turn";
-const m = vi.hoisted(() => ({ execute: vi.fn(), version: vi.fn(), booking: vi.fn(), guidance: vi.fn() }));
-const services = [{ id: "s1", name: "Consult Basic" }, { id: "s2", name: "Consult Plus" }];
-vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: m.version }));
-vi.mock("@/lib/products/resolve-reference", () => ({
-  resolveCurrentServiceReference: async (args: Parameters<typeof resolveServiceReference>[0]) => (await resolveServiceReference({ ...args, services })),
-  resolveCurrentProductReference: async () => ({ status: "none" }),
-}));
-vi.mock("@/lib/capabilities/enforcement", () => ({ requireRuntimeModules: async () => {}, CapabilityEnforcementError: class extends Error {} }));
-vi.mock("./process-agent-turn", () => ({ processAgentTurn: m.execute, processLegacyAgentTurn: async ({ state }: AgentTurnParams) => answer(state!, "Information") }));
-vi.mock("@/lib/calendar/agent", () => ({ processBookingTurn: m.booking }));
-vi.mock("@/lib/workflows/extract-facts", () => ({ extractMessageFacts: async () => 0, profileExtractionFields: [] }));
-vi.mock("@/lib/workflows/guidance", async original => ({ ...await original<object>(), chooseGuidance: m.guidance }));
-vi.mock("@/lib/workflows/visual/entity-routing", async original => ({ ...await original<object>(),
-  resolveVisualEntity: async (_b: string, _g: unknown, message: string, saved?: { entity: { id: string } }, _test?: boolean, reference?: { selectedServiceId?: string }) => {
-    const id = reference?.selectedServiceId ?? saved?.entity.id;
-    const matches = services.filter(s => id ? s.id === id : message.includes(s.name) || /Consult$/.test(message));
-    if (matches.length > 1) return { choices: matches.map(s => ({ ...s, kind: "service" })) };
-    return matches.length ? { selected: { entity: { ...matches[0], kind: "service" }, binding: { flowId: "custom", entity: { id: matches[0].id, kind: "service" } } } } : {};
-  },
-}));
-function answer(state: ConversationStatePayload, reply: string) {
-  return { reply, nextState: structuredClone(state), previousResponseId: null, workflowId: null, productName: null, workflowProgress: [],
-    debug: { model: "test", source: "fallback", fallbackReason: null, agentConfigured: true, knowledgeCount: 0, productCount: 0, workflowSteps: [], elapsedMs: 0 } };
+import { initialSnapshot, type Observation } from "@/lib/orchestration/contracts";
+import { compileVisualProcesses } from "@/lib/orchestration/visual-definition";
+import { serviceContext } from "@/lib/orchestration/service-context";
+import { serviceFields } from "@/lib/orchestration/service-definition";
+import { recordPresentation, transitionCustomer, type Environment } from "@/lib/orchestration/transition";
+import type { VisualVersion } from "@/lib/workflows/visual/types";
+const { terms } = vi.hoisted(() => ({ terms: vi.fn() }));
+vi.mock("@/lib/orchestration/booking", () => ({ readBookingTerms: terms }));
+const basic = "11111111-1111-4111-8111-111111111111", plus = "22222222-2222-4222-8222-222222222222";
+const version: VisualVersion = { id: "v1", businessId: "business", createdAt: "today", graph: { version: 2, name: "Services",
+  flows: [{ id: "service", label: "Service request", kind: "custom", entryNodeId: "detail", nodeIds: ["detail"], serviceIds: [basic, plus] }],
+  nodes: [{ id: "start", kind: "start", label: "Start", position: { x: 0, y: 0 }, config: {} },
+    { id: "detail", kind: "collect", label: "Details", position: { x: 0, y: 0 }, config: { fieldKey: "details", prompt: "Details?" } },
+    { id: "end", kind: "end", label: "Done", position: { x: 0, y: 0 }, config: {} }],
+  edges: [{ id: "s", source: "start", target: "end", port: "next" }, { id: "d", source: "detail", target: "end", port: "next" }] } };
+beforeEach(() => { terms.mockReset(); terms.mockImplementation(async (_business, id) => ({ serviceName: id === plus ? "Consult Plus" : "Consult Basic" })); });
+function setup() {
+  const definitions = compileVisualProcesses(version), context = serviceContext([version]);
+  const env: Environment = { mode: "test", now: 10, definitions, startableVersionIds: new Set([version.id]), tools: [], promptTtlMs: 1000, serverFacts: context.serverFacts };
+  const event = { id: "event", businessId: "business", conversationId: "conversation", actor: "customer" as const, message: "Service information" };
+  return { definitions, context, env, event, state: initialSnapshot("business", "conversation", "test") };
 }
-beforeEach(() => {
-  vi.clearAllMocks();
-  m.guidance.mockResolvedValue({ action: "continue", source: "rules", target: null });
-  m.version.mockImplementation(async (_b, id) => ({ id: id ?? "version-a", businessId: "tenant", graph: { version: 2, nodes: [{ id: "detail", kind: "collect", config: { fieldKey: "detail" } }],
-    flows: [{ id: "custom", kind: "custom", serviceIds: ["s1", "s2"], entryNodeId: "detail", nodeIds: ["detail"] }] } }));
-  m.execute.mockImplementation(async ({ state }: AgentTurnParams) => { const next = structuredClone(state!); next.visual!.status = "waiting"; next.visual!.awaiting = true; return answer(next, "Details?"); });
+it("an informational service reference does not create a request or booking", () => {
+  const h = setup();
+  const result = transitionCustomer(h.state, h.event, { revision: 0, commands: [], needsClarification: false }, h.env);
+  expect(result.state.instances).toEqual({}); expect(result.actions).toEqual([]);
 });
-const turn = (message: string, state?: ConversationStatePayload, extra = {}) => processConversationMessage({ businessId: "tenant", message, state, hasPhoto: false, mode: "test", ...extra });
-async function list(process = true) { return turn(process ? "Dua të vazhdoj me Consult" : "Consult"); }
-
-it.each(["Më trego shërbimin e dytë", "shërbimin e dytë"])("does not grant service process intent from an informational list: %s", async text => {
-  const offered = await list(false); expect(offered.nextState.processes?.pendingServiceSelection).toBeUndefined();
-  const result = await turn(text, offered.nextState);
-  expect(result.nextState.processes?.service).toBeUndefined(); expect(m.execute).not.toHaveBeenCalled();
-  expect(result.turnDecision?.entity).toMatchObject({ kind: "service", id: "s2" });
+it.each(["shërbimin e dytë", "the second service", "el segundo servicio"])("accepts a delivered service offer using a structured relative reference: %s", async message => {
+  const h = setup();
+  const offered = transitionCustomer(h.state, h.event, { revision: 0, commands: [{ kind: "offer", definitionId: "service", versionId: "v1", evidence: h.event.message }], needsClarification: false }, h.env);
+  const offerId = Object.keys(offered.state.offers)[0], state = recordPresentation(offered.state, [offerId], 10);
+  const observation: Observation = { revision: state.revision, needsClarification: false, commands: [{ kind: "accept_offer", offerId, evidence: message,
+    initialFacts: [{ fieldId: serviceFields("service").key("id"), value: plus, evidence: message }] }] };
+  await h.context.prepare(state, h.definitions, observation);
+  const result = transitionCustomer(state, { ...h.event, id: "accept", message }, observation, h.env), instance = result.state.instances[result.state.focusId!];
+  expect(instance).toMatchObject({ versionId: "v1", status: "waiting_input", wait: { fieldId: "details" } });
+  expect(instance.facts[serviceFields("service").key("name")].value).toBe("Consult Plus");
+  expect(result.actions).toEqual([]);
+  expect(terms).toHaveBeenCalledWith("business", plus, true);
+  expect(result.state.offers[offerId]).toBeUndefined();
 });
-it("preserves explicit process intent for a relative reference", async () => {
-  const offered = await list(false);
-  const result = await turn("Dua të vazhdoj me shërbimin e dytë", offered.nextState);
-  expect(result.reply).toBe("Details?"); expect(result.turnDecision).toMatchObject({ kind: "new_process", intent: "service", process: "service" });
-  expect(m.execute.mock.lastCall![0].turnDecision).toBe(result.turnDecision);
+it.each(["expired", "undelivered", "foreign"])("rejects a %s offer without starting a service", reason => {
+  const h = setup();
+  const offered = transitionCustomer(h.state, h.event, { revision: 0, commands: [{ kind: "offer", definitionId: "service", versionId: "v1", evidence: h.event.message }], needsClarification: false }, h.env);
+  const offerId = Object.keys(offered.state.offers)[0];
+  const state = reason === "undelivered" ? offered.state : recordPresentation(offered.state, [offerId], 10);
+  if (reason === "expired") state.offers[offerId].expiresAt = 0;
+  expect(() => transitionCustomer(state, { ...h.event, ...(reason === "foreign" ? { businessId: "foreign" } : {}) }, { revision: state.revision, needsClarification: false,
+    commands: [{ kind: "accept_offer", offerId, evidence: h.event.message, initialFacts: [] }] }, h.env)).toThrow();
 });
-it.each(["shërbimin e dytë", "Consult Plus"])("consumes an explicit pending selection once, preserving version: %s", async text => {
-  const offered = await list(); const original = structuredClone(offered.nextState);
-  expect(offered.nextState.processes?.pendingServiceSelection?.versionId).toBe("version-a");
-  const result = await turn(text, offered.nextState);
-  expect(result.nextState.processes?.pendingServiceSelection).toBeUndefined();
-  expect(result.nextState.processes?.service?.visual).toMatchObject({ versionId: "version-a", nodeId: "detail", binding: { entity: { kind: "service", id: "s2" } } });
-  expect(result.turnDecision).toMatchObject({ intent: "service", kind: "new_process" });
-  expect(offered.nextState).toEqual(original);
+it("preserves ambiguity without selecting a service or converting it to an order", () => {
+  const h = setup(), result = transitionCustomer(h.state, h.event, { revision: 0, commands: [], needsClarification: true }, h.env);
+  expect(result.state.instances).toEqual({}); expect(result.actions).toEqual([]); expect(result.notices).toEqual([{ kind: "clarify" }]);
 });
-it.each(["expired", "tenant", "undelivered", "changed_prompt", "information", "cancel", "paused", "staff"])("cannot reuse a %s process selection", async reason => {
-  const offered = await list(); const state = offered.nextState;
-  if (reason === "expired") state.processes!.pendingServiceSelection!.expiresAt = 0;
-  if (reason === "tenant") state.processes!.pendingServiceSelection!.businessId = "foreign";
-  if (reason === "changed_prompt") state.processes!.pendingServiceSelection!.prompt = "other prompt";
-  if (reason === "paused") state.conversationPaused = true;
-  if (reason === "staff") state.staffHandoff = true;
-  const result = await turn(reason === "information" ? "Më trego shërbimin e dytë" : reason === "cancel" ? "leje fare" : "shërbimin e dytë", state,
-    reason === "undelivered" ? { mode: "production", source: "instagram", deliveredReply: "not delivered" } : {});
-  expect(result.nextState.processes?.service).toBeUndefined(); expect(m.execute).not.toHaveBeenCalled();
-  expect(result.nextState.processes?.pendingServiceSelection).toBeUndefined();
-});
-it("does not select an ambiguous service or act without reference evidence", async () => {
-  const offered = await list(); expect(offered.nextState.entityPresentation?.entities).toHaveLength(2);
-  expect(m.execute).not.toHaveBeenCalled();
-  const result = await turn("shërbimin e dytë", emptyState());
-  expect(result.turnDecision?.kind).toBe("clarification"); expect(m.execute).not.toHaveBeenCalled();
-});
-it("keeps booking intent separate from custom-service continuation", async () => {
-  const offered = await list(false);
-  m.version.mockResolvedValue({ id: "booking-a", businessId: "tenant", graph: { version: 2,
-    nodes: [{ id: "detail", kind: "booking", config: {} }], flows: [{ id: "custom", kind: "booking", entryNodeId: "detail", nodeIds: ["detail"], serviceIds: ["s1", "s2"] }] } });
-  m.execute.mockImplementation(async ({ state }: AgentTurnParams) => answer(state!, "Booking adapter"));
-  const service = await turn("Dua të vazhdoj me shërbimin e dytë", offered.nextState);
-  expect(service.nextState.processes?.booking).toBeUndefined(); expect(m.execute).not.toHaveBeenCalled();
-  const booking = await turn("Dua të rezervoj shërbimin e dytë", offered.nextState);
-  expect(booking.turnDecision).toMatchObject({ intent: "booking", kind: "new_process", entity: { id: "s2", kind: "service" } });
-  expect(m.execute.mock.lastCall![0]).toMatchObject({ bookingRequest: true, selectedServiceId: "s2" });
-});
-it("rejects a missing pinned version rather than falling back to the latest graph", async () => {
-  const offered = await list(); m.version.mockResolvedValue(null);
-  const result = await turn("shërbimin e dytë", offered.nextState);
-  expect(result.reply).toContain("Versioni"); expect(result.turnDecision?.kind).toBe("clarification"); expect(m.execute).not.toHaveBeenCalled();
-});
-it("cannot reinterpret an unsupported service process as an order", async () => {
-  m.version.mockResolvedValue(null); m.guidance.mockResolvedValue({ action: "order", source: "ai", target: null });
-  const result = await turn("Dua të vazhdoj me Consult");
-  expect(m.guidance).not.toHaveBeenCalled(); expect(m.execute).not.toHaveBeenCalled(); expect(m.booking).not.toHaveBeenCalled();
-  expect(result.nextState.processes?.order).toBeUndefined(); expect(result.nextState.processes?.service).toBeUndefined();
-});
-it.each(["vazhdo", "rifillo", "resume"])("%s resumes the interrupted service without consuming navigation as field data", async message => {
-  const offered = await list(); const selected = await turn("shërbimin e dytë", offered.nextState);
-  const information = await turn("Sa kushton?", selected.nextState);
-  expect(information.nextState.processes?.service?.status).toBe("suspended");
-  m.execute.mockClear();
-  const resumed = await turn(message, information.nextState);
-  expect(m.execute.mock.lastCall![0]).toMatchObject({ message: "", turnDecision: { kind: "resume" }, state: { visual: { versionId: "version-a", nodeId: "detail", awaiting: false } } });
-  expect(resumed.nextState.processes?.service?.visual.binding?.entity.id).toBe("s2");
+it("rejects a service outside the configured workflow even when the model supplies a valid identifier", async () => {
+  const h = setup(), message = "Choose that service";
+  const observation: Observation = { revision: 0, needsClarification: false, commands: [{ kind: "start", definitionId: "service", versionId: "v1", evidence: message,
+    initialFacts: [{ fieldId: serviceFields("service").key("id"), value: "33333333-3333-4333-8333-333333333333", evidence: message }] }] };
+  await h.context.prepare(h.state, h.definitions, observation);
+  expect(() => transitionCustomer(h.state, { ...h.event, message }, observation, h.env)).toThrow("service_outside_workflow");
 });

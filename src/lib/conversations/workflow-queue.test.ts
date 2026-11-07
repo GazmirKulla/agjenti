@@ -10,7 +10,7 @@ import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { InboundPersistenceError } from "./inbound-persistence-error";
 import { initialSnapshot } from "@/lib/orchestration/contracts";
 const business = "00000000-0000-4000-8000-000000004101";
-const job = { id: 1, business_id: business, connection_id: "connection", participant_id: "person", lease_token: "lease", reply: "Saved answer", status: "prepared", payload: { channel: "instagram", timestamp: new Date().toISOString() } };
+const job = { process_runtime: true, id: 1, business_id: business, connection_id: "connection", participant_id: "person", lease_token: "lease", reply: "Saved answer", status: "prepared", payload: { channel: "instagram", timestamp: new Date().toISOString() } };
 beforeEach(() => {
     vi.clearAllMocks();
     m.writes = [];
@@ -89,11 +89,16 @@ it("fails closed when the fragment-aware SQL protocol is unavailable", async () 
  expect(m.handle).not.toHaveBeenCalled(); expect(m.send).not.toHaveBeenCalled();
 });
 
-it.each([true,false])("pauses only actual staff ownership, advisory=%s",async advisoryHandoff=>{
- m.rpc.mockResolvedValue({error:null});
+it("rejects legacy state before any persistence or send", async () => {
  const queued={...job,status:"processing",payload:job.payload as unknown as NormalizedIncomingMessage};
- await prepareWorkflowReply(queued,"conversation",0,{nextState:{},reply:"Reply",handoff:true,advisoryHandoff} as AgentTurnResult);
- expect(m.rpc).toHaveBeenCalledWith("prepare_workflow_reply",expect.objectContaining({p_handoff:!advisoryHandoff}));
+ await expect(prepareWorkflowReply(queued,"conversation",0,{nextState:{},reply:"Reply"} as AgentTurnResult)).rejects.toThrow("Native process checkpoint required");
+ expect(m.rpc).not.toHaveBeenCalled(); expect(m.send).not.toHaveBeenCalled();
+});
+it("does not deliver a queued legacy agent reply", async () => {
+ m.rpc.mockResolvedValueOnce({data:[{...job,process_runtime:false}],error:null}).mockResolvedValue({data:[],error:null});
+ await runWorkflowQueue(1);
+ expect(m.send).not.toHaveBeenCalled();
+ expect(m.rpc).not.toHaveBeenCalledWith("begin_workflow_send",expect.anything());
 });
 
 it("queues WhatsApp durably even outside the Instagram pilot", async () => {

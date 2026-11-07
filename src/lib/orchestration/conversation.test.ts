@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { initialSnapshot } from "./contracts";
 import { emptyState } from "@/lib/workflows/state";
 import { runIsolated } from "@/lib/runtime/isolated-run";
-import { tryProcessConversation } from "./conversation";
+import { processConversation } from "./conversation";
 
 const { load, interpret } = vi.hoisted(() => ({ load: vi.fn(), interpret: vi.fn() }));
 vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: load }));
@@ -27,26 +27,26 @@ const params = () => ({ businessId: "business", message: "Continue", hasPhoto: f
   state: { ...emptyState(), runtime: initialSnapshot("business", "conversation", "test") } });
 
 it("never falls back to legacy parsing for a v4 session outside isolated execution", async () => {
-  await expect(tryProcessConversation(params())).rejects.toThrow("process_transport_cutover_required");
+  await expect(processConversation(params())).rejects.toThrow("process_transport_cutover_required");
   expect(interpret).not.toHaveBeenCalled();
 });
 it("never hands a v4 session to the linear preview adapter", async () => {
-  const input = { ...params(), linearPreview: {} as NonNullable<Parameters<typeof tryProcessConversation>[0]["linearPreview"]> };
-  await expect(runIsolated(() => tryProcessConversation(input))).rejects.toThrow("process_preview_required");
+  const input = { ...params(), linearPreview: {} as NonNullable<Parameters<typeof processConversation>[0]["linearPreview"]> };
+  await expect(runIsolated(() => processConversation(input))).rejects.toThrow("process_preview_required");
   expect(load).not.toHaveBeenCalled();
 });
 it("rejects a foreign preview before loading configuration or interpreting the message", async () => {
-  const input = { ...params(), visualPreview: { businessId: "foreign" } as NonNullable<Parameters<typeof tryProcessConversation>[0]["visualPreview"]> };
-  await expect(runIsolated(() => tryProcessConversation(input))).rejects.toThrow("definition_scope_mismatch");
+  const input = { ...params(), visualPreview: { businessId: "foreign" } as NonNullable<Parameters<typeof processConversation>[0]["visualPreview"]> };
+  await expect(runIsolated(() => processConversation(input))).rejects.toThrow("definition_scope_mismatch");
   expect(interpret).not.toHaveBeenCalled();
 });
 it("requires durable transport even for a new live session", async () => {
-  await expect(tryProcessConversation({ ...params(), state: emptyState(), mode: "production" })).rejects.toThrow("process_transport_cutover_required");
+  await expect(processConversation({ ...params(), state: emptyState(), mode: "production" })).rejects.toThrow("process_transport_cutover_required");
   expect(load).not.toHaveBeenCalled();
 });
 it("handles information without a configured workflow through the new engine", async () => {
   interpret.mockResolvedValue({ observation: { revision: 0, commands: [], needsClarification: false }, model: "test", responseId: "observation", inputTokens: 1, outputTokens: 1 });
-  const result = await runIsolated(() => tryProcessConversation({ ...params(), state: emptyState() }));
+  const result = await runIsolated(() => processConversation({ ...params(), state: emptyState() }));
   expect(result?.reply).toBe("Information answer");
   expect(result?.nextState.runtime).toMatchObject({ schemaVersion: 4, revision: 1, instances: {}, offers: {} });
   expect(interpret).toHaveBeenCalledOnce();
@@ -54,7 +54,7 @@ it("handles information without a configured workflow through the new engine", a
 });
 it("routes an authenticated live turn through checkpoint preparation without marking prompts delivered", async () => {
   interpret.mockResolvedValue({ observation: { revision: 0, commands: [], needsClarification: false }, model: "test", responseId: "observation", inputTokens: 1, outputTokens: 1 });
-  const result = await tryProcessConversation({ ...params(), state: emptyState(), mode: "production",
+  const result = await processConversation({ ...params(), state: emptyState(), mode: "production",
     processTransport: { jobId: 10, leaseToken: "lease", conversationId: "conversation", revision: 0 } });
   expect(result?.nextState.runtime).toMatchObject({ mode: "live", revision: 2, conversationId: "conversation" });
   expect(result?.nextState.runtime?.pendingTurn).toBeUndefined();

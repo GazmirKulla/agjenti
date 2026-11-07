@@ -100,6 +100,3 @@ export async function processAgentTurn(params: AgentTurnParams): Promise<AgentTu
   const { processConversationMessage } = await import("./process-conversation-message");
   return processConversationMessage(params);
 }
-export async function processLegacyAgentTurn(params: AgentTurnParams & { informational?: string; requireConfiguredWorkflow?: boolean }): Promise<AgentTurnResult> {
-  return processAgentTurn(params);
-}

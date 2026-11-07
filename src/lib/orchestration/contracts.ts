@@ -51,6 +51,7 @@ export type Wait = {
 };
 export type Approval = { waitId: string; stepId: string; fieldIds: string[]; factDigest: string; eventId: string; expiresAt: number };
 export type Instance = {
+  productWorkflow?: { productId: string; workflowId: string | null; versionId: string | null };
   policyKey?: string;
   confirmedReviews?: Approval[];
   id: string;
@@ -84,6 +85,7 @@ export type Action = {
 };
 export type Offer = { id: string; definitionId: string; versionId: string; expiresAt: number; presentedAt?: number };
 export type Snapshot = {
+  retrieval?: import("@/lib/catalogs/ranking").CatalogContext;
   handoffRequested?: boolean;
   history?: { role: "user" | "assistant"; content: string }[];
   pendingTurn?: { eventId: string; messageDigest: string; notices: RuntimeNotice[] };

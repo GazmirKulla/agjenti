@@ -6,6 +6,7 @@ import { digest } from "./definition";
 import { readOrderTerms } from "./order-context";
 import type { ToolAdapter, EffectResult } from "./execute";
 import type { ProcessLease } from "./persistence";
+import { composeProductCollection } from "./product-composition";
 export function orderAdapter(scope?: { businessId: string; conversationId: string; lease: ProcessLease; instance: (id: string) => Instance | undefined }): ToolAdapter {
   return { key: "order.create", version: 1,
     async execute(action, context): Promise<EffectResult> {
@@ -14,11 +15,20 @@ export function orderAdapter(scope?: { businessId: string; conversationId: strin
       if (!instance || typeof action.input.productId !== "string") return { status: "failed", output: { code: "invalid_order_scope" } };
       try {
         const version = await loadProcessVersion(scope.businessId, instance.versionId);
-        const definition = version && compileProcessVersion(version).find(d => d.id === instance.definitionId);
+        let definition = version && compileProcessVersion(version).find(d => d.id === instance.definitionId);
+        if (!instance.productWorkflow || instance.productWorkflow.productId !== action.input.productId)
+          return { status: "failed", output: { code: "product_dependency_unavailable" } };
+        if (definition && !version?.linear && instance.productWorkflow.versionId) {
+          const dependency = await loadProcessVersion(scope.businessId, instance.productWorkflow.versionId);
+          if (!dependency?.linear || dependency.linear.workflowId !== instance.productWorkflow.workflowId
+            || instance.productWorkflow.productId !== action.input.productId)
+            return { status: "failed", output: { code: "product_workflow_changed" } };
+          definition = composeProductCollection(definition, dependency);
+        }
         const step = definition?.steps.find(s => s.id === action.stepId);
         if (!definition || definition.collection || definition.policyKey !== instance.policyKey || step?.kind !== "effect" || step.tool !== "order.create") return { status: "failed", output: { code: "order_definition_unavailable" } };
         const flow = version?.graph.version === 2 ? version.graph.flows.find(f => f.id === instance.definitionId) : undefined;
-        if (flow?.productIds?.length && !flow.productIds.includes(action.input.productId)) return { status: "failed", output: { code: "product_outside_workflow" } };
+        if (!version?.linear && flow?.productIds?.length && !flow.productIds.includes(action.input.productId)) return { status: "failed", output: { code: "product_outside_workflow" } };
         const current = await readOrderTerms(scope.businessId, action.input.productId);
         if (digest(current) !== digest(Object.fromEntries(Object.keys(current).map(key => [key, action.input[key]])))) return { status: "failed", output: { code: "commercial_terms_changed" } };
       } catch { return { status: "failed", output: { code: "order_configuration_unverified" } }; }

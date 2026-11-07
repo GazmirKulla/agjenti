@@ -16,13 +16,14 @@ const schema = { type: "object", additionalProperties: false, required: ["matche
 /** Candidate positions refer only to this server-provided read. Selection never
  * creates an ID, proves completeness or authorizes an effect. All batches must
  * succeed: an unread batch may contain another equally plausible identity. */
-async function executeSelection(kind: "identity" | "relevance", entries: readonly SemanticCandidate[], message: string): Promise<SemanticSelection[]> {
+async function executeSelection(kind: "identity" | "relevance", entries: readonly SemanticCandidate[], message: string, deadline?: number): Promise<SemanticSelection[]> {
   if (!entries.length || !message.trim()) return [];
   if (!process.env.OPENAI_API_KEY?.trim()) throw new SelectionUnavailable();
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000, maxRetries: 0 });
   const matches: SemanticSelection[] = [];
   try {
-    for (let start = 0; start < entries.length; start += 100) {
+    const readBatch = async (start: number) => {
+      if (deadline !== undefined && Date.now() >= deadline) throw new SelectionUnavailable();
       const batch = entries.slice(start, start + 100);
       const response = await client.responses.create({
         model: agentModel(), store: false, max_output_tokens: 4000,
@@ -31,7 +32,7 @@ async function executeSelection(kind: "identity" | "relevance", entries: readonl
           : "Select evidence useful for answering ALL parts of the current question, including explanations and follow-up questions. Mere word overlap is not relevance. Scores express relevance, not truth or permission. Return no unrelated candidate. Examples are illustrative, never business facts."}`,
         input: JSON.stringify({ message, candidates: batch.map((entry, index) => ({ index, title: entry.title.slice(0, 1000), ...(entry.body === undefined ? {} : { body: entry.body.slice(0, 3000) }) })) }),
         text: { format: { type: "json_schema", name: "semantic_selection", strict: true, schema } },
-      });
+      }, deadline === undefined ? undefined : { timeout: Math.max(1, deadline - Date.now()) });
       if (response.status !== "completed") throw new SelectionUnavailable();
       const raw = JSON.parse(response.output_text);
       if (!raw || Object.keys(raw).length !== 1 || !Array.isArray(raw.matches) || raw.matches.length > batch.length) throw new SelectionUnavailable();
@@ -43,7 +44,10 @@ async function executeSelection(kind: "identity" | "relevance", entries: readonl
         seen.add(match.index);
         matches.push({ index: start + match.index, score: match.score, evidence: match.evidence });
       }
-    }
+    };
+    // Independent read-only batches share one deadline and publish no partial selection.
+    for (let start = 0; start < entries.length; start += 400)
+      await Promise.all([0, 100, 200, 300].map(offset => start + offset).filter(index => index < entries.length).map(readBatch));
     return matches.sort((a, b) => b.score - a.score || a.index - b.index);
   } catch { throw new SelectionUnavailable(); }
 }
@@ -55,11 +59,11 @@ const selections = new AsyncLocalStorage<Map<string, Promise<SemanticSelection[]
 export function withSemanticSelections<T>(run: () => T): T {
   return selections.getStore() ? run() : selections.run(new Map(), run);
 }
-export async function selectSemanticCandidates(kind: "identity" | "relevance", entries: readonly SemanticCandidate[], message: string): Promise<SemanticSelection[]> {
+export async function selectSemanticCandidates(kind: "identity" | "relevance", entries: readonly SemanticCandidate[], message: string, deadline?: number): Promise<SemanticSelection[]> {
   const cache = selections.getStore();
-  if (!cache) return executeSelection(kind, entries, message);
+  if (!cache) return executeSelection(kind, entries, message, deadline);
   const key = JSON.stringify([kind, entries, message]);
   let pending = cache.get(key);
-  if (!pending) { pending = executeSelection(kind, entries, message); cache.set(key, pending); }
+  if (!pending) { pending = executeSelection(kind, entries, message, deadline); cache.set(key, pending); }
   return structuredClone(await pending);
 }

@@ -1,62 +1,34 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-
-// Audit-only reproductions. Real coordinator/adapter; mocked tenant DB, retrieval,
-// and final model. No provider, network, database, or transport calls are possible.
-const mocks = vi.hoisted(() => ({ from: vi.fn(), generate: vi.fn(), retrieve: vi.fn() }));
-vi.mock("@/lib/dashboard/modules/entitlements", async () => {
-  const { MODULE_IDS } = await import("@/lib/dashboard/modules/types");
-  return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
-});
-vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: mocks.from }) }));
-vi.mock("@/lib/agents/generate", () => ({ generateAgentReply: mocks.generate, agentModel: () => "audit-mock" }));
-vi.mock("@/lib/catalogs/retrieval", () => ({ retrieveBusinessSources: mocks.retrieve }));
-import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
-import { processLegacyAgentTurn } from "@/lib/conversations/process-agent-turn";
-import type { ConversationStatePayload } from "@/lib/workflows/engine";
-
+import { beforeEach, expect, it, vi } from "vitest";
+import { emptyState } from "@/lib/workflows/state";
+import { runIsolated } from "@/lib/runtime/isolated-run";
+const m = vi.hoisted(() => ({ retrieve: vi.fn(), compose: vi.fn(), interpret: vi.fn() }));
+vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: async () => null }));
+vi.mock("@/lib/orchestration/version-store", async original => ({ ...await original<object>(), loadCurrentLinearVersions: async () => [] }));
+vi.mock("@/lib/orchestration/interpret", () => ({ interpretCustomer: m.interpret }));
+vi.mock("@/lib/orchestration/respond", () => ({ composeProcessReply: m.compose }));
+vi.mock("@/lib/orchestration/training-context", () => ({ processTrainingContext: async () => ({ rules: [] }) }));
+vi.mock("@/lib/capabilities/enforcement", async original => ({ ...await original<object>(), runtimeModules: async () => [] }));
+vi.mock("@/lib/catalogs/retrieval", () => ({ retrieveBusinessSources: m.retrieve }));
+vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => {
+ const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: null, error: null }) };
+ return { from: () => chain };
+} }));
+vi.mock("@/lib/agents/business-grounding", () => ({ readBusinessGrounding: async () => ({
+ knowledge: { status: "no_match", records: [] }, products: { status: "unavailable", records: [] }, services: { status: "unavailable", records: [] },
+}) }));
+import { processConversation } from "@/lib/orchestration/conversation";
 const context = { query: "Industrial pumps catalog", requirements: {}, pending: "market", turns: 0 };
 const clarification = "Në cilin shtet do ta përdorni?";
-const fixtures: Record<string, unknown> = {
-  products: [], ai_agents: { instructions: "Answer only from verified business facts." },
-  knowledge_entries: [], agent_training_memories: [], business_discovery: null,
-  visual_workflows: null,
-};
 beforeEach(() => {
-  vi.clearAllMocks();
-  vi.stubEnv("OPENAI_API_KEY", "");
-  mocks.from.mockImplementation((table: string) => {
-    const result = () => ({ data: fixtures[table] ?? null, error: null });
-    const chain = {
-      select: () => chain, eq: () => chain, order: () => chain,
-      range: () => chain, limit: () => chain, maybeSingle: async () => result(),
-      then: (resolve: (value: unknown) => unknown) => Promise.resolve(result()).then(resolve),
-    };
-    return chain;
-  });
-  mocks.retrieve.mockResolvedValue({ context: structuredClone(context), clarification, documents: [], evidence: "" });
-  mocks.generate.mockResolvedValue({ reply: "Tell me more about your request.", responseId: null, source: "ai", fallbackReason: null });
+ vi.clearAllMocks();
+ m.interpret.mockImplementation(async ({ state }: { state: { revision: number } }) => ({ observation: { revision: state.revision, commands: [], needsClarification: false }, model: "test", inputTokens: 1, outputTokens: 1 }));
+ m.retrieve.mockResolvedValue({ context: structuredClone(context), clarification, documents: [], evidence: "" });
+ m.compose.mockResolvedValue({ reply: clarification, targetIds: [], responseId: "reply", inputTokens: 1, outputTokens: 1 });
 });
-afterEach(() => vi.unstubAllEnvs());
-
-it("preserves a required catalog clarification on successful model availability", async () => {
-  const answer = await processLegacyAgentTurn({ businessId: "audit-tenant", message: "Industrial pumps catalog", hasPhoto: false, informational: "Answer the informational request." });
-  // Retrieval has explicitly withheld documents pending a mandatory qualifier.
-  // A generic generated answer must not replace that server-owned question.
-  expect(answer.reply).toBe(clarification);
-  expect(mocks.generate).not.toHaveBeenCalled();
-});
-
-it.each(["instagram", "whatsapp"] as const)("retains catalog qualification context through the normal %s coordinator", async source => {
-  const answer = await processConversationMessage({ businessId: "audit-tenant", source, mode: "production", message: "Industrial pumps catalog", hasPhoto: false });
-  expect(answer.conversationRouting?.process).toBe("information");
-  expect(answer.nextState.fields.catalog_context).toEqual(context);
-});
-
-it("passes the prior catalog query and pending market into the second live turn", async () => {
-  const turn = (message: string, state?: ConversationStatePayload) => processConversationMessage({
-    businessId: "audit-tenant", source: "instagram", mode: "production", message, state, hasPhoto: false,
-  });
-  const first = await turn("Industrial pumps catalog");
-  await turn("Germany", first.nextState);
-  expect(mocks.retrieve).toHaveBeenLastCalledWith("audit-tenant", "Germany", context);
+it("passes withheld documents and the required qualifier to the native composer, retaining context for the next turn", async () => {
+ const first = await runIsolated(() => processConversation({ businessId: "audit-tenant", message: "Industrial pumps catalog", hasPhoto: false, mode: "test", state: emptyState() }));
+ expect(m.compose).toHaveBeenCalledWith(expect.objectContaining({ context: expect.objectContaining({ documents: { records: [], evidence: "", clarification } }) }));
+ expect(first.nextState.runtime?.retrieval).toEqual(context);
+ await runIsolated(() => processConversation({ businessId: "audit-tenant", message: "Germany", hasPhoto: false, mode: "test", state: first.nextState }));
+ expect(m.retrieve).toHaveBeenLastCalledWith("audit-tenant", "Germany", context, expect.any(Function), undefined, expect.objectContaining({ semanticRouting: true }));
 });

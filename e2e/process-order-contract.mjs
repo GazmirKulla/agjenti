@@ -7,7 +7,7 @@ export function verifyProcessOrder({ sql, literal, json, root, business, convers
     alter table conversation_states add column cart jsonb default '[]';
     create table products(id uuid primary key,business_id uuid,name text,product_type_id uuid,price_amount numeric,currency text,is_active boolean,external_id text,workflow_id uuid);
     create table product_types(id uuid primary key,external_key text,is_active boolean);
-    create table linear_workflow_versions(id uuid primary key,business_id uuid,workflow_id uuid);
+    create table linear_workflow_versions(id uuid primary key,business_id uuid,workflow_id uuid,steps jsonb default '[]');
     create table visual_workflow_versions(id uuid primary key,business_id uuid,graph jsonb);
     create table business_automation_policies(business_id uuid primary key,local_orders boolean);
     create table customers(id uuid primary key default gen_random_uuid(),business_id uuid,instagram_user_id text,whatsapp_user_id text,username text,display_name text,phone text,updated_at timestamptz);
@@ -24,11 +24,14 @@ export function verifyProcessOrder({ sql, literal, json, root, business, convers
   sql(readFileSync(path.join(root, 'supabase/migrations/20261106160000_process_order_submission.sql'), 'utf8'));
   sql(readFileSync(path.join(root, 'supabase/migrations/20261106170000_process_linear_orders.sql'), 'utf8'));
   sql(readFileSync(path.join(root, 'supabase/migrations/20261107011000_process_order_review_receipts.sql'), 'utf8'));
+  sql(readFileSync(path.join(root, 'supabase/migrations/20261107120000_process_product_dependencies.sql'), 'utf8'));
+  sql(readFileSync(path.join(root, 'supabase/migrations/20261107121000_process_pinned_product_bindings.sql'), 'utf8'));
   const product = randomUUID(), version = randomUUID(), actionId = randomUUID(), user = randomUUID();
   const action = { id: actionId, tool: 'order.create', toolVersion: 1, status: 'running', inputDigest: 'test-digest', approval: { waitId: randomUUID(), expiresAt: Date.now() + 600000 },
     input: { productId: product, productName: 'Product', productTypeId: 'none', unitAmount: 25, currency: 'EUR', quantity: 1,
       options: JSON.stringify({ size: 'M' }), name: 'Example Customer', phone: '+355691234567', city: 'Tirane', address: 'Example address' } };
-  const state = { schemaVersion: 4, mode: 'live', businessId: business, conversationId: conversation, instances: { instance: { definitionId: 'order', versionId: version, action } } };
+  const state = { schemaVersion: 4, mode: 'live', businessId: business, conversationId: conversation, instances: { instance: { definitionId: 'order', versionId: version,
+    productWorkflow: { productId: product, workflowId: null, versionId: null }, action } } };
   const setState = value => sql(`update conversation_states set revision=20,collected=${json(value)} where conversation_id=${literal(conversation)};`);
   const call = (id = actionId, actor = null) => `select public.submit_process_order(${literal(business)},${literal(conversation)},20,${literal(id)},${actor ? literal(actor) : 'null'},${actor ? 'null' : '1'},${actor ? 'null' : literal(token)});`;
   sql(`insert into products values(${literal(product)},${literal(business)},'Product',null,25,'EUR',true,null,null);
@@ -69,9 +72,31 @@ export function verifyProcessOrder({ sql, literal, json, root, business, convers
   assert.equal(sql('select count(*) from orders;'), '2');
   assert.equal(sql('select count(*) from customers;'), '1');
   const linearVersion = randomUUID(), workflow = randomUUID(), linearAction = randomUUID();
-  sql(`insert into linear_workflow_versions values(${literal(linearVersion)},${literal(business)},${literal(workflow)}); update products set workflow_id=${literal(workflow)};`);
-  setState({ ...state, instances: { instance: { definitionId: `linear_${workflow}`, versionId: linearVersion, action: { ...action, id: linearAction } } } });
+  sql(`insert into linear_workflow_versions(id,business_id,workflow_id) values(${literal(linearVersion)},${literal(business)},${literal(workflow)}); update products set workflow_id=${literal(workflow)};`);
+  setState({ ...state, instances: { instance: { definitionId: `linear_${workflow}`, versionId: linearVersion,
+    productWorkflow: { productId: product, workflowId: workflow, versionId: linearVersion }, action: { ...action, id: linearAction } } } });
   assert.equal(JSON.parse(sql(call(linearAction))).status, 'local_only');
   assert.equal(sql('select count(*) from orders;'), '3');
+  const composedAction = randomUUID();
+  const composed = { ...state, instances: { instance: { ...state.instances.instance, action: { ...action, id: composedAction } } } };
+  delete composed.instances.instance.productWorkflow;
+  setState(composed);
+  assert.throws(() => sql(call(composedAction)), /product_workflow_changed/);
+  composed.instances.instance.productWorkflow = { productId: product, workflowId: workflow, versionId: linearVersion };
+  sql(`update linear_workflow_versions set steps='[{"key":"size","kind":"choice","required":true,"options":["S","M"]}]'::jsonb;`);
+  setState(composed);
+  assert.throws(() => sql(call(composedAction)), /product_fields_required/);
+  composed.instances.instance.facts = { size: { value: 'XL' } };
+  composed.instances.instance.action.input = { ...action.input, options: '{"size":"XL"}' };
+  setState(composed);
+  assert.throws(() => sql(call(composedAction)), /invalid_product_option/);
+  composed.instances.instance.facts.size.value = 'M';
+  composed.instances.instance.action.input.options = '{"size":"M"}';
+  // Product reassignment affects future requests, not this accepted immutable version.
+  sql(`update products set workflow_id=${literal(randomUUID())};`);
+  setState(composed);
+  assert.equal(JSON.parse(sql(call(composedAction))).status, 'local_only');
+  assert.equal(JSON.parse(sql(call(composedAction))).dispatch, false);
+  assert.equal(sql('select count(*) from orders;'), '4');
   console.log('PASS: process order transaction protects current terms/approval, automation policy, manual authority, one-time dispatch and deduplication.');
 }

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createServiceSupabase } from "../src/lib/supabase/service";
-import { tryProcessConversation } from "../src/lib/orchestration/conversation";
+import { processConversation } from "../src/lib/orchestration/conversation";
 import { readStoredConversationState } from "../src/lib/orchestration/stored-state";
 import { digest } from "../src/lib/orchestration/definition";
 
@@ -25,7 +25,7 @@ it.skipIf(!process.env.PROCESS_SMOKE_BUSINESS_ID)("runs two real panel turns thr
       const job = claim.data[0];
       const saved = await db.from("conversation_states").select("collected,revision").eq("business_id", businessId).eq("conversation_id", conversationId).single();
       if (saved.error) throw saved.error;
-      const turn = await tryProcessConversation({ businessId, message, hasPhoto: false, mode: "production", source: "panel",
+      const turn = await processConversation({ businessId, message, hasPhoto: false, mode: "production", source: "panel",
         onTrace: e => { if (e.label === "Process observation validated") evidence.push({ sequence, observation: { commands: e.data?.commands, conditions: e.data?.conditions, needsClarification: e.data?.needsClarification } }); },
         state: readStoredConversationState(saved.data.collected, { businessId, conversationId, revision: saved.data.revision }),
         processTransport: { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: saved.data.revision } });

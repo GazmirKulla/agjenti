@@ -4,12 +4,22 @@ import type { Snapshot } from "./contracts";
 import type { ProcessVersion } from "./linear-definition";
 import { digest } from "./definition";
 import { visualNodeForStep } from "./visual-definition";
+import { productStepSource } from "./product-composition";
 
 /** Training remains scoped to the actual pinned workflow and authored editor step. */
 export async function processTrainingContext(state: Snapshot, versions: ReadonlyMap<string, ProcessVersion>, message: string) {
   const instance = state.focusId ? state.instances[state.focusId] : Object.values(state.instances).at(-1);
   const version = instance ? versions.get(instance.versionId) : undefined;
   const memories = await loadActiveTrainingMemories(state.businessId);
+  const dependency = instance?.productWorkflow?.versionId ? versions.get(instance.productWorkflow.versionId) : undefined;
+  const productStep = version && dependency && instance ? productStepSource(version, dependency, instance.stepId) : undefined;
+  if (productStep && dependency?.linear) {
+    const [parent, child] = await Promise.all([
+      selectTrainingContext(memories, null, null, message, { flowId: instance!.definitionId, nodeId: productStep.nodeId }),
+      selectTrainingContext(memories, dependency.linear.workflowId, productStep.stepKey, message),
+    ]);
+    return { rules: [...new Map([...child.rules, ...parent.rules].map(rule => [rule.id, rule])).values()] };
+  }
   if (version?.linear) {
     const step = version.linear.steps.find(s => {
       const id = `linear_${digest(s.key).slice(0, 20)}`;

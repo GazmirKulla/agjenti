@@ -1,5 +1,5 @@
 import { TransitionError, type ConditionObservation, type CustomerCommand, type FactInput, type Observation, type Snapshot, type Value } from "./contracts";
-import { type Environment } from "./transition";
+import { definitionFor, type Environment } from "./transition";
 
 type ObjectValue = Record<string, unknown>;
 function object(value: unknown): value is ObjectValue { return value !== null && typeof value === "object" && !Array.isArray(value); }
@@ -95,12 +95,12 @@ export function observationContext(state: Snapshot, env: Environment) {
         canStart: env.startableVersionIds.has(d.versionId), fields: d.fields,
         semanticConditions: d.steps.filter(s => s.kind === "semantic_condition") })),
     instances: Object.values(state.instances).map(i => {
-      const definition = env.definitions.find(d => d.businessId === state.businessId && d.id === i.definitionId && d.versionId === i.versionId);
+      const definition = definitionFor(state, i, env);
       const step = definition?.steps.find(s => s.id === i.stepId);
       const review = step?.kind === "confirm" ? { description: step.label, fields: step.fieldIds.map(id => ({
         field: definition!.fields.find(f => f.id === id), value: i.facts[id]?.value ?? null,
       })) } : null;
-      return { id: i.id, definitionId: i.definitionId, versionId: i.versionId, status: i.status, facts: i.facts, skippedFields: i.skippedFields ?? {},
+      return { id: i.id, definitionId: i.definitionId, versionId: i.versionId, status: i.status, fields: definition.fields, facts: i.facts, skippedFields: i.skippedFields ?? {},
         pending: i.wait ? { ...i.wait, review, canRespond: i.wait.presentedAt !== undefined && i.wait.presentedAt <= env.now && i.wait.expiresAt > env.now } : null };
     }),
     offers: Object.values(state.offers).filter(o => o.expiresAt > env.now).map(o => ({ ...o, canRespond: o.presentedAt !== undefined && o.presentedAt <= env.now })),
