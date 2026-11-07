@@ -17,7 +17,8 @@ import { productMoney as money } from "@/lib/products/catalog";
 import { entityWorkflowHref } from "@/components/workflows/entity-flow-link";
 
 import { ProductBusinessWorkflow } from "./business-workflow";
-import { OperationButton } from "@/components/dashboard/operation-button";
+import { useManualOperation } from "@/components/dashboard/operation-button";
+import { RowMenu, type RowMenuItem } from "@/components/dashboard/row-menu";
 
 const STATUS_LABEL: Record<string, string> = {
   archived: "I arkivuar",
@@ -25,6 +26,19 @@ const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
   unlinked: "I palidhur",
 };
+const STATUS_FILTERS = [
+  ["all", "Të gjitha"],
+  ["active", "Aktive"],
+  ["archived", "Të arkivuara"],
+  ["draft", "Draft"],
+  ["unlinked", "Të palidhura"],
+  ["imports", "Katalog i jashtëm"],
+] as const;
+const SORTS = [
+  ["newest", "Më të rejat"],
+  ["name", "Emri (A–Z)"],
+  ["price", "Çmimi (nga më i ulëti)"],
+] as const;
 
 export function ProductCatalog({
   slug,
@@ -40,12 +54,15 @@ export function ProductCatalog({
   mapping?: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState(mapping ? "unlinked" : "all");
+  const defaultFilter = mapping ? "unlinked" : "all";
+  const [filter, setFilter] = useState(defaultFilter);
+  const [typeFilter, setTypeFilter] = useState("");
+  const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
   useCatalogAssistantContext({
     searchQuery: query,
-    filters: { status: filter },
+    filters: { status: filter, ...(typeFilter ? { type: typeFilter } : {}) },
     selectedEntityIds: selected,
     selectionLabel: selected.length === 1 ? products.find(product => product.id === selected[0])?.name : selected.length ? `${selected.length} produkte të zgjedhura` : undefined,
   });
@@ -80,14 +97,53 @@ export function ProductCatalog({
   );
   const router = useRouter();
   const filtered = useMemo(
-    () => catalogFilter(catalogProducts, query, filter, "", "newest"),
-    [catalogProducts, query, filter],
+    () => catalogFilter(catalogProducts, query, filter, typeFilter, sort),
+    [catalogProducts, query, filter, typeFilter, sort],
   );
   const maxPage = Math.max(1, Math.ceil(filtered.length / 10));
   const currentPage = Math.min(page, maxPage);
   const shown = filtered.slice((currentPage - 1) * 10, currentPage * 10);
   const configProduct =
     catalogProducts.find((p) => p.id === configId) ?? null;
+  const removal = useManualOperation(slug, "product.delete");
+  const activeFilters = Number(filter !== defaultFilter) + Number(Boolean(typeFilter));
+  const filterItems: RowMenuItem[] = [
+    ...STATUS_FILTERS.map(([value, label]) => ({
+      group: "Statusi", label, checked: filter === value,
+      onSelect: () => { setFilter(value); setPage(1); },
+    })),
+    ...(types.length
+      ? [{ id: "", name: "Të gjitha llojet" }, ...types].map((type) => ({
+          group: "Lloji", label: type.name, checked: typeFilter === type.id,
+          onSelect: () => { setTypeFilter(type.id); setPage(1); },
+        }))
+      : []),
+    ...(activeFilters
+      ? [{ label: "Pastro filtrat", onSelect: () => { setFilter(defaultFilter); setTypeFilter(""); setPage(1); } }]
+      : []),
+  ];
+  const optionItems: RowMenuItem[] = [
+    ...SORTS.map(([value, label]) => ({
+      group: "Rendit sipas", label, checked: sort === value,
+      onSelect: () => { setSort(value); setPage(1); },
+    })),
+    {
+      group: "Veprime",
+      label: `Konfiguro produktet e kësaj faqeje (${shown.length})`,
+      disabled: !shown.length,
+      onSelect: () => { setSelected(shown.map((p) => p.id)); setBulkOpen(true); },
+    },
+  ];
+  function rowActions(p: ProductRow): RowMenuItem[] {
+    return [
+      { label: "Hap produktin", href: `/b/${slug}/products/${p.id}` },
+      { label: "Konfiguro llojin dhe procesin", onSelect: () => setConfigId(p.id) },
+      ...(p.visual_workflow
+        ? [{ label: `Hap procesin: ${p.visual_workflow.name}`, href: entityWorkflowHref(slug, "product", p.id, p.visual_workflow.flowId) }]
+        : []),
+      { label: "Fshi produktin", danger: true, disabled: removal.busy, onSelect: () => void removal.prepare({ id: p.id }) },
+    ];
+  }
 
   useEffect(() => {
     const dialog = configDialog.current;
@@ -200,72 +256,81 @@ export function ProductCatalog({
       <section className="panel product-catalog">
         <div className="catalog-toolbar-simple">
           <h2>{mapping ? "Lidh produktet" : "Katalogu"}</h2>
-          {selected.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setBulkOpen(true)}
-            >
-              Veprime ({selected.length})
-            </button>
-          )}
         </div>
         <div className="catalog-search">
+          <RowMenu
+            label="Filtro produktet"
+            title="Filtro produktet"
+            items={filterItems}
+            triggerClassName="btn btn-ghost catalog-tool"
+            trigger={<>
+              <svg aria-hidden viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+              <span>Filtro</span>
+              {activeFilters > 0 && <span className="catalog-tool-count" aria-label={`${activeFilters} aktivë`}>{activeFilters}</span>}
+            </>}
+          />
+          <RowMenu
+            label="Opsionet e listës"
+            title="Opsionet e listës"
+            items={optionItems}
+            triggerClassName="btn btn-ghost catalog-tool"
+            trigger={<>
+              <svg aria-hidden viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></svg>
+              <span>Opsione</span>
+            </>}
+          />
           <input
             className="field"
+            type="search"
             aria-label="Kërko produkte"
-            placeholder="Kërko emër, SKU ose përshkrim…"
+            placeholder="Kërko emër ose SKU…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
               setPage(1);
             }}
           />
-          <select
-            className="field"
-            aria-label="Filtro sipas statusit"
-            value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">Të gjitha</option>
-            <option value="active">Aktive</option>
-            <option value="archived">Të arkivuara</option>
-            <option value="draft">Draft</option>
-            <option value="unlinked">Të palidhura</option>
-            <option value="imports">Katalog i jashtëm</option>
-          </select>
         </div>
         {notice && (
           <p role="status" className="catalog-notice">
             {notice}
           </p>
         )}
+        {shown.length > 0 && (
+          <div className="product-cards">
+            <ul>
+              {shown.map((p) => {
+                const status = catalogStatus(p);
+                return (
+                  <li key={p.id} className="product-card" aria-busy={Boolean(savingRows[p.id])}>
+                    <Link className="product-card-main" href={`/b/${slug}/products/${p.id}`}>
+                      {p.image_url ? (
+                        <img src={p.image_url} alt="" loading="lazy" />
+                      ) : (
+                        <span className="product-no-image" aria-hidden>□</span>
+                      )}
+                      <span className="product-card-text">
+                        <strong>{p.name}</strong>
+                        <small>
+                          {p.sku ? `SKU: ${p.sku}` : p.source === "linked" ? "Katalog i lidhur" : "Pa SKU"}
+                        </small>
+                        <span className="product-card-meta">
+                          <span>{money(p.price_amount, p.currency)}</span>
+                          <span className={`product-status is-${status}`}>{STATUS_LABEL[status] ?? status}</span>
+                        </span>
+                      </span>
+                    </Link>
+                    <RowMenu label={`Më shumë për ${p.name}`} title={p.name} items={rowActions(p)} />
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
         <div className="product-table-scroll">
           <table className="product-table">
             <thead>
               <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    aria-label="Zgjidh produktet e kësaj faqeje"
-                    checked={
-                      shown.length > 0 &&
-                      shown.every((p) => selected.includes(p.id))
-                    }
-                    onChange={(e) =>
-                      setSelected((ids) =>
-                        e.target.checked
-                          ? [...new Set([...ids, ...shown.map((p) => p.id)])]
-                          : ids.filter(
-                              (id) => !shown.some((p) => p.id === id),
-                            ),
-                      )
-                    }
-                  />
-                </th>
                 <th>Produkti</th>
                 <th>Çmimi</th>
                 <th>Statusi</th>
@@ -278,25 +343,7 @@ export function ProductCatalog({
               {shown.map((p) => {
                 const status = catalogStatus(p);
                 return (
-                  <tr
-                    key={p.id}
-                    className={selected.includes(p.id) ? "is-selected" : ""}
-                    aria-busy={Boolean(savingRows[p.id])}
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        aria-label={`Zgjidh ${p.name}`}
-                        checked={selected.includes(p.id)}
-                        onChange={(e) =>
-                          setSelected((ids) =>
-                            e.target.checked
-                              ? [...ids, p.id]
-                              : ids.filter((id) => id !== p.id),
-                          )
-                        }
-                      />
-                    </td>
+                  <tr key={p.id} aria-busy={Boolean(savingRows[p.id])}>
                     <td>
                       <Link
                         className="product-cell"
@@ -329,23 +376,7 @@ export function ProductCatalog({
                       </span>
                     </td>
                     <td>
-                      <div className="catalog-row-actions">
-                        <OperationButton
-                          slug={slug}
-                          operation="product.delete"
-                          input={{ id: p.id }}
-                        >
-                          Fshi<span className="sr-only"> {p.name}</span>
-                        </OperationButton>
-                        <button
-                          type="button"
-                          className="catalog-row-menu"
-                          aria-label={`Konfiguro ${p.name}`}
-                          onClick={() => setConfigId(p.id)}
-                        >
-                          ⋯
-                        </button>
-                      </div>
+                      <RowMenu label={`Më shumë për ${p.name}`} items={rowActions(p)} />
                     </td>
                   </tr>
                 );
@@ -403,6 +434,7 @@ export function ProductCatalog({
           </div>
         </footer>
       </section>
+      {removal.dialog}
 
       <dialog
         ref={configDialog}
@@ -576,7 +608,7 @@ export function ProductCatalog({
         ref={bulkDialog}
         className="record-create-dialog catalog-dialog"
         aria-labelledby="catalog-bulk-title"
-        onClose={() => setBulkOpen(false)}
+        onClose={() => { setBulkOpen(false); setSelected([]); }}
         onClick={(e) => {
           if (e.target === bulkDialog.current) setBulkOpen(false);
         }}
@@ -586,7 +618,7 @@ export function ProductCatalog({
             <div>
               <h2 id="catalog-bulk-title">Veprime</h2>
               <p className="muted-copy">
-                {selected.length} produkte të zgjedhura
+                {selected.length} produkte në këtë faqe
               </p>
             </div>
             <button
