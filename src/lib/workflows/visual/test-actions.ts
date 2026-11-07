@@ -20,11 +20,9 @@ export async function simulateVisualWorkflow(slug: string, raw: unknown, message
     const id = `preview:${visualGraphHash(graph)}`;
     // Read older sealed sessions too; a suspended process can own the only cursor.
     const { state } = session;
-    const pins = [session.visualPreviewId, state.visual?.versionId, state.completedVisual?.versionId,
-      state.processes?.order?.snapshot.visual?.versionId, state.processes?.booking?.versionId,
-      state.processes?.booking?.visual?.versionId, state.processes?.service?.versionId,
-      state.processes?.service?.visual?.versionId, state.processes?.actionFlow?.versionId,
-      state.processes?.actionFlow?.visual?.versionId, state.processes?.auxiliary?.visual.versionId];
+    const pins = [session.visualPreviewId,
+      ...Object.values(state.runtime?.instances ?? {}).flatMap(instance => [instance.versionId, instance.productWorkflow?.versionId]),
+      ...Object.values(state.runtime?.offers ?? {}).map(offer => offer.versionId)];
     if (pins.some(pin => pin && pin !== id) || session.turns > 0 && !pins.some(Boolean)) return { error: "Rrjedha ndryshoi. Rifillo provën." };
     session.visualPreviewId = id;
     const provenance = collectTestConfiguration(id);

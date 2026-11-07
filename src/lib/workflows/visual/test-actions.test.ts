@@ -10,8 +10,7 @@ vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: m.db }));
 import { simulateVisualWorkflow } from "./test-actions";
 import { starterVisualGraph } from "./model";
 import { readTestSession, sealTestSession } from "@/lib/agents/test-chat/session";
-import { migrateContext } from "../context";
-import { snapshotOrder } from "../conversation-processes";
+import { initialSnapshot } from "@/lib/orchestration/contracts";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -69,12 +68,10 @@ describe("visual workflow preview sessions", () => {
     expect((await simulateVisualWorkflow("studio", graph, "Continue", first.session)).error).toContain("Rrjedha ndryshoi");
     expect(m.process).not.toHaveBeenCalled();
   });
-  it("rejects a legacy sealed preview with a mismatched suspended process pin", async () => {
-    const state = migrateContext();
-    const snapshot = snapshotOrder(state);
-    snapshot.visual = { versionId: "preview:old", nodeId: "collect", status: "waiting", awaiting: true, visited: [], values: {} };
-    state.processes = { active: null, promptOwner: null, order: { id: "test-order", status: "suspended", snapshot } };
-    const token = sealTestSession(readTestSession(null, "user-a", "business-a"), state, null);
+  it("rejects a sealed preview with a mismatched native instance pin", async () => {
+    const runtime = initialSnapshot("business-a", "conversation", "test");
+    runtime.instances.request = { id: "request", definitionId: "d", versionId: "preview:old", stepId: "collect", status: "suspended", facts: {} };
+    const token = sealTestSession(readTestSession(null, "user-a", "business-a"), { ...emptyState(), runtime }, null);
     expect((await simulateVisualWorkflow("studio", starterVisualGraph(), "Continue", token)).error).toContain("Rrjedha ndryshoi");
     expect(m.process).not.toHaveBeenCalled();
   });

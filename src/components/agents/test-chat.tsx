@@ -400,8 +400,8 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         {advanced && !renderInspector && showDetails && <aside id="agent-test-diagnostics" className="agent-test-debug" aria-label="Detajet e provës">
           {chat.outbox?.filter(o => o.error).map(o => <p key={o.id}>{o.error}</p>)}
           {last?.setupNotice && <p className="agent-test-notice" role="status">{last.setupNotice}</p>}
-          {last && <MessageRoutingView trace={last.visualWorkflow} state={last.nextState} routing={last.conversationRouting} message={messages.at(-1)?.text} />}
-          <h3>{last?.conversationRouting ? "Rrjedha e bisedës" : "Workflow i porosisë"}</h3>
+          {last && <MessageRoutingView trace={last.visualWorkflow} state={last.nextState} message={messages.at(-1)?.text} />}
+          <h3>{last?.visualWorkflow ? "Rrjedha e bisedës" : "Workflow i porosisë"}</h3>
           {!last ? (
             <p className="agent-test-disclaimer">
               Pas mesazhit të parë shfaqen hapat: çfarë u plotësua dhe çfarë

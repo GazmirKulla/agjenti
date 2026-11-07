@@ -7,7 +7,7 @@ import { expect, it, vi } from 'vitest';
 import { work, project, verifyContainers, localKeys, sql } from './local.mjs';
 import { quote } from './fixtures.mjs';
 import { processConversationMessage } from '@/lib/conversations/process-conversation-message';
-import { migrateContext, setFact } from '@/lib/workflows/context';
+import { emptyState } from '@/lib/workflows/state';
 
 const model = vi.hoisted(() => ({ text: '', create: vi.fn() }));
 vi.mock('openai', () => ({ default: class {
@@ -15,7 +15,7 @@ vi.mock('openai', () => ({ default: class {
   embeddings = { create: async () => ({ data: [] }) };
 } }));
 
-it('R3 validated reply precedes history and real PostgreSQL send preparation, retaining CAS and isolation', async () => {
+it('native reply precedes history and real PostgreSQL send preparation, retaining CAS and isolation', async () => {
   expect(project).toBe('agjenti-e2e-local-recovery-3a-20261023'); verifyContainers();
   const keys = localKeys(), fixture = JSON.parse(readFileSync(path.join(work, 'fixtures.json'), 'utf8'));
   const tenant = fixture.tenants.find((t: { kind: string }) => t.kind === 'information');
@@ -27,10 +27,12 @@ it('R3 validated reply precedes history and real PostgreSQL send preparation, re
   });
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', keys.api); vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', keys.service);
   vi.stubEnv('TOKEN_ENCRYPTION_KEY', fixture.encryptionKey);
-  
-  
   vi.stubEnv('OPENAI_API_KEY', 'synthetic-non-network-provider');
-  model.create.mockImplementation(async () => ({ id: 'rejected-provider-history', output_text: model.text }));
+  model.create.mockImplementation(async (args: { text?: { format?: { name?: string } } }) => {
+    const name = args.text?.format?.name;
+    if (name === 'process_observation') return { status: 'completed', id: 'observation', output_text: JSON.stringify({ revision: 0, commands: [], needsClarification: false }) };
+    return { status: 'completed', id: 'reply', output_text: JSON.stringify({ answer: model.text, prompts: {} }) };
+  });
   const effects = () => sql(`select json_build_array((select count(*) from public.orders),(select count(*) from public.order_submissions),
     (select count(*) from public.bookings),(select count(*) from public.customers),(select count(*) from public.workflow_inbound_queue),
     (select count(*) from public.workflow_booking_effects),(select count(*) from public.integrations),(select count(*) from public.messages));`);
@@ -40,35 +42,24 @@ it('R3 validated reply precedes history and real PostgreSQL send preparation, re
     expect((await member.auth.signInWithPassword({ email: tenant.email, password: fixture.password })).error).toBeNull();
     const forbidden = await member.from('products').select('id').eq('business_id', foreign.id);
     expect(forbidden.error).toBeNull(); expect(forbidden.data).toEqual([]);
-    const initial = migrateContext(); setFact(initial, 'customer_name', 'Synthetic R3', 'text', 'message_label');
+    const initial = emptyState();
     const snapshot = structuredClone(initial);
-    model.text = 'Rezervimi u konfirmua për nesër.';
+    model.text = 'Përshëndetje, si mund të ndihmoj?';
     const turn = await processConversationMessage({ businessId: tenant.id, state: initial, message: 'Përshëndetje', hasPhoto: false, mode: 'test' });
     expect(model.create).toHaveBeenCalled();
-    expect(turn.reply).toContain('Nuk kam konfirmim');
+    expect(turn.reply).toBe('Përshëndetje, si mund të ndihmoj?');
     expect(turn.previousResponseId).toBeNull();
     expect(turn.nextState.recentMessages?.at(-1)?.content).toBe(turn.reply);
-    expect(JSON.stringify(turn.nextState)).not.toContain(model.text);
+    expect(turn.nextState.runtime).toMatchObject({ schemaVersion: 4 });
     expect(initial).toEqual(snapshot);
-    expect(turn.nextState.context?.profile.name?.value).toBe('Synthetic R3');
-    model.text = 'Nuk ma ke treguar emrin.';
-    const recall = await processConversationMessage({ businessId: tenant.id, state: turn.nextState, message: 'Si quhem?', hasPhoto: false, mode: 'test' });
-    expect(recall.reply).toBe('Ti ke deklaruar emrin: Synthetic R3.');
-    expect(recall.nextState.recentMessages?.at(-1)?.content).toBe(recall.reply);
-    // P1: the same real coordinator path must persist a composite, not a false
-    // absence claim. Facts here are synthetic and remain conversation-local.
-    const { extractCustomerDeclaredFacts } = await import('@/lib/workflows/customer-declared-facts');
-    extractCustomerDeclaredFacts(recall.nextState, 'Instagram: synthetic_p1; Lloji i biznesit: Shitje librash online');
-    model.text = 'Nuk më ke dhënë asnjë të dhënë.';
-    const composite = await processConversationMessage({ businessId: tenant.id, state: recall.nextState,
-      message: 'Më kujto emrin, biznesin dhe Instagramin.', hasPhoto: false, mode: 'test' });
-    for (const value of ['Synthetic R3', 'synthetic_p1', 'Shitje librash online']) expect(composite.reply).toContain(value);
-    expect(composite.nextState.recentMessages?.at(-1)?.content).toBe(composite.reply);
-    // Actual production SQL boundary, synthetic channel rows and complete rollback.
+    model.text = 'Mund të të shpjegoj lidhjen me Instagram.';
+    const follow = await processConversationMessage({ businessId: tenant.id, state: turn.nextState, message: 'Si lidhet Instagram?', hasPhoto: false, mode: 'test' });
+    expect(follow.reply).toBe('Mund të të shpjegoj lidhjen me Instagram.');
+    expect(follow.nextState.recentMessages?.at(-1)?.content).toBe(follow.reply);
     const json = (value: unknown) => `${quote(JSON.stringify(value))}::jsonb`;
     sql(`begin; set local lock_timeout='5s'; set local statement_timeout='10s';
       do $test$ declare c uuid:=gen_random_uuid(); channel_id uuid:=gen_random_uuid(); q public.workflow_inbound_queue;
-        state jsonb:=${json(composite.nextState)}; answer text:=${quote(composite.reply)};
+        state jsonb:=${json(follow.nextState)}; answer text:=${quote(follow.reply)};
       begin
         insert into public.instagram_connections(id,business_id,ig_user_id,access_token_ciphertext) values(channel_id,${quote(tenant.id)},channel_id::text,'synthetic-only');
         insert into public.conversations(id,business_id,instagram_participant_id,instagram_connection_id,auto_reply,status)

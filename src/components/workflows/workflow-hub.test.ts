@@ -2,15 +2,13 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { starterVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/model";
-import { migrateConversationProcesses } from "@/lib/workflows/conversation-processes";
-import type { ConversationRouting } from "@/lib/workflows/conversation-processes";
-import { setFact } from "@/lib/workflows/context";
+import { emptyState } from "@/lib/workflows/engine";
+import { initialSnapshot } from "@/lib/orchestration/contracts";
 import { WorkflowHub, WorkflowContextPanel, WorkflowFlowChooser } from "./workflow-hub";
 import { removeVisualFlow } from "@/lib/workflows/visual/remove-flow";
 import { workflowHubSelection } from "./hub-selection";
 
 describe("message workflow presentation", () => {
-  const decision: ConversationRouting = { process: "booking", action: "start", reason: "Klienti kërkoi një rezervim; porosia ruhet.", source: "rules", reusedFields: ["customer_phone"], missingFields: ["date", "time"], suspended: "order" };
   it("shows configured booking only and keeps the editor graph unchanged", () => {
     const graph = starterVisualGraph();
     const before = structuredClone(graph);
@@ -27,22 +25,34 @@ describe("message workflow presentation", () => {
     expect(html).not.toContain("is-order");
     expect(html).toContain("Përgjigju nga njohuritë");
   });
-  it("shows an actual booking decision even when no visual trace was returned", () => {
-    const state = migrateConversationProcesses(null, () => "test");
-    state.processes!.booking = { id: "booking", status: "active" };
-    const html = renderToStaticMarkup(createElement(WorkflowHub, { state, routing: decision, message: "Dua takim të premten" }));
+  it("shows an actual booking instance from native runtime without leftover routing", () => {
+    const runtime = initialSnapshot("business", "conversation", "test");
+    runtime.focusId = "booking";
+    runtime.profileMemory = { phone: { value: "0691234567", type: "phone" } };
+    runtime.instances.booking = {
+      id: "booking", definitionId: "booking", versionId: "v", stepId: "date", status: "suspended",
+      facts: { date: { value: "2026-11-07", subject: "booking", fieldId: "date", revision: 1, eventId: "e", evidence: "Dua takim të premten" } },
+    };
+    const state = { ...emptyState(), runtime };
+    const html = renderToStaticMarkup(createElement(WorkflowHub, { state, message: "Dua takim të premten", bookingEnabled: true }));
     expect(html).toContain("Dua takim të premten");
-    expect(html).toContain("is-booking is-current");
-    expect(html).toContain(decision.reason);
-    const context = renderToStaticMarkup(createElement(WorkflowContextPanel, { state, routing: decision }));
+    expect(html).toContain("is-booking");
+    const context = renderToStaticMarkup(createElement(WorkflowContextPanel, { state }));
+    expect(context).toContain("0691234567");
     expect(context).toContain("U ruajt për më vonë");
+    expect(context).toContain("2026-11-07");
   });
-  it("keeps customer input as text and renders collected and missing fields", () => {
-    const state = migrateConversationProcesses(null, () => "test");
-    setFact(state, "customer_phone", "0691234567", "phone", "message");
-    const html = renderToStaticMarkup(createElement(WorkflowContextPanel, { state, routing: decision }));
+  it("keeps customer input as text and renders collected native facts", () => {
+    const runtime = initialSnapshot("business", "conversation", "test");
+    runtime.focusId = "order";
+    runtime.profileMemory = { phone: { value: "0691234567", type: "phone" } };
+    runtime.instances.order = {
+      id: "order", definitionId: "order", versionId: "v", stepId: "date", status: "waiting_input",
+      facts: { date: { value: "2026-11-07", subject: "order", fieldId: "date", revision: 1, eventId: "e", evidence: "të premten" } },
+    };
+    const html = renderToStaticMarkup(createElement(WorkflowContextPanel, { state: { ...emptyState(), runtime } }));
     expect(html).toContain("0691234567");
-    expect(html).toContain("Data · Ora");
+    expect(html).toContain("Data");
     expect(html).toContain("Telefoni");
     const hub = renderToStaticMarkup(createElement(WorkflowHub, { message: "<script>alert(1)</script>" }));
     expect(hub).toContain("&lt;script&gt;");

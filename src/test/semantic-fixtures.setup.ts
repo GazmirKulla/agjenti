@@ -8,7 +8,6 @@
 import { vi, expect, afterEach } from "vitest";
 import semantics from "./fixtures/semantic.json";
 import common from "./fixtures/common-semantics.json";
-import reviews from "./fixtures/review.json";
 import fragments from "./fixtures/fragment.json";
 import { unknownUnderstanding, type MessageUnderstanding } from "@/lib/conversations/understanding/contract";
 const missingFixtures: string[] = [];
@@ -38,14 +37,6 @@ vi.mock("@/lib/conversations/understanding/context", async original => {
     return actual.hasUnderstandingContext() ? actual.messageUnderstanding(message) : meaning(message);
   } };
 });
-vi.mock("@/lib/conversations/understanding/interpret", async original => {
-  const actual = await original<typeof import("@/lib/conversations/understanding/interpret")>();
-  return { ...actual, interpretMessage: async (message: string) => meaning(message) };
-});
-vi.mock("@/lib/agents/response-review", async original => ({
- ...await original<typeof import("@/lib/agents/response-review")>(),
- reviewInformationalResponse: vi.fn(async (text: string) => lookup(reviews, text)),
-}));
 vi.mock("@/lib/conversations/fragment-observation", () => ({
  interpretFragment: async (text: string) => lookup(fragments, text),
 }));

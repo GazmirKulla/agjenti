@@ -66,7 +66,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     }
     return visualNodeForStep(version, stepId);
   };
-  if (!existing && (params.state?.visual || params.state?.processes?.active || params.state?.product_id || Object.keys(params.state?.fields ?? {}).length)) throw new TransitionError("process_session_restart_required");
+  if (!existing && leftoverSession(params.state)) throw new TransitionError("process_session_restart_required");
   if (existing && (existing.businessId !== params.businessId || existing.mode !== mode || transport && existing.conversationId !== transport.conversationId)) throw new TransitionError("event_scope_mismatch");
   const started = Date.now(), deadline = started + 38000;
   const trace = params.onTrace;
@@ -235,5 +235,11 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     debug: { model: agentModel(), source: "ai", fallbackReason: null, agentConfigured: !!agent?.instructions, knowledgeCount: grounding.knowledge.records.length,
       productCount: grounding.products.records.length, trainingMemoryIds: training.rules.map(r => r.id), workflowSteps: definition?.steps.map(s => s.id) ?? [], elapsedMs: Date.now() - started },
   };
+}
+
+function leftoverSession(state?: AgentTurnParams["state"]) {
+  if (!state) return false;
+  const processes = (state as { processes?: { active?: unknown } }).processes;
+  return Boolean(state.visual || state.product_id || Object.keys(state.fields ?? {}).length || processes?.active);
 }
 

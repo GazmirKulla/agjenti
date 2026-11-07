@@ -352,3 +352,80 @@ Ky përditësim ka përparësi mbi listën “Mbeten ende” sipër:
 - Leftover i identifikuar, jo i pastruar këtu: çelësa jetimë në `src/test/fixtures/semantic.json` për testet e fshira; `guidance.ts` `explicitIntent` mbetet në rrugën e vjetër.
 
 Mbeten ende: `conversation-processes` (importuar nga `turn-decision`/`conversation-control`/`prepared-request-correction`/`customer-context`, jo nga hyrja live); suite-a 72 episodeve; replay i plotë DB; provider-ët realë; publikimi. **Zëvendësimi i plotë nuk është shpallur i përfunduar.**
+
+### Përditësim — 7 nëntor 2026, heqja e `conversation-processes`
+
+Ky përditësim ka përparësi mbi listën “Mbeten ende” sipër:
+
+- **Motori i snapshot-eve v3 u hoq.** Nuk ekzistojnë më `conversation-processes.ts`, `migrateConversationProcesses`, `restoreOrder`, `bookingAdapterState`, `snapshotOrder` dhe `suspendProcesses`. U hoqën edhe `conversation-control` dhe `prepared-request-correction`, që ishin konsumatorë leftover jo në hyrjen live. Editori, rruga manuale e porosive (`submit_process_order`) dhe runtime native mbeten.
+- **Tipet e payload-it u lanë te `engine.ts`.** `ConversationProcesses`/`ConversationRouting` janë projeksion prezentimi; `currentProcessOwner` lexon shënuesit leftover të prompt-it, jo progresin live. `turn-decision` dhe `customer-context` nuk importojnë më motor migrimi. Hyrja live mbetet `processConversationMessage` → `processConversation`; gjendja e re refuzohet me `process_session_restart_required` nëse vjen pa `runtime`.
+- Verifikimi lokal i këtij slice: TypeScript kaloi; 168 teste të fokusuara (state-authority, entity-bridge, workflow-hub, test-actions, customer-context, composite-recall, turn-decision, orders route, prepared-request, conversation) plus 81 generate/customer-context/turn-decision. Nuk u krijua biznes/porosi/rezervim real dhe nuk u publikua.
+- Leftover i identifikuar, jo i pastruar këtu: `turn-decision` dhe `generateAgentReply`/`customer-context` mbeten jashtë zinxhirit live; `guidance.ts` `explicitIntent`; çelësa jetimë në `semantic.json` për testet e fshira.
+
+Mbeten ende: suite-a 72 episodeve; replay i plotë DB; provider-ët realë; publikimi. **Zëvendësimi i plotë nuk është shpallur i përfunduar.**
+
+### Përditësim — 7 nëntor 2026, heqja e klasifikuesve leftover
+
+Ky përditësim ka përparësi mbi listën “Mbeten ende” sipër:
+
+- **Klasifikuesit konkurrues u hoqën.** Nuk ekzistojnë më `turn-decision.ts` (funksionet), `process-offer.ts`, `interpret-process-offer.ts`, `compose-process-question.ts`, as `chooseGuidance`/`explicitIntent`. Hyrja live mbetet `processConversationMessage` → `processConversation` → `interpretCustomer`/`composeProcessReply`. Editori dhe rruga manuale nuk u prekën.
+- **U ruajtën kontratat e prezentimit.** `rememberTurn`/`recentConversation` mbeten për transkriptin e kufizuar. `parseCommunicationDraft` mban kufirin e një pyetjeje/propozimi pa fusha të fshehura. `generateAgentReply` dhe `customer-context` mbeten jashtë zinxhirit live.
+- Verifikimi lokal i këtij slice: TypeScript kaloi; 63 teste (guidance, communication-contract, process-agent-turn, respond, interpret, conversation, generate). Nuk u krijua biznes/porosi/rezervim real dhe nuk u publikua.
+- Leftover i identifikuar, jo i pastruar këtu: `generateAgentReply`/`customer-context`/`currentProcessOwner`; `understanding/interpret`; `customer-question.ts`; çelësa jetimë në `semantic.json`.
+
+Mbeten ende: suite-a 72 episodeve; replay i plotë DB; provider-ët realë; publikimi. **Zëvendësimi i plotë nuk është shpallur i përfunduar.**
+
+### Përditësim — 7 nëntor 2026, heqja e `generateAgentReply`
+
+Ky përditësim ka përparësi mbi listën “Mbeten ende” sipër:
+
+- **Kompozuesi leftover u hoq.** Nuk ekziston më `generateAgentReply`, as `communication-instructions.ts`. `src/lib/agents/generate.ts` mbetet vetëm si ri-eksport i `agentModel`/`DEFAULT_AGENT_MODEL` për importuesit ekzistues. Hyrja live e përgjigjes është `composeProcessReply` në `orchestration/respond.ts`. `e2e/customer-journey-model.test.ts` (opt-in) thërret `composeProcessReply`. Editori dhe rruga manuale nuk u prekën.
+- **Mbulimi unique i katalogut mbetet native.** Slot-et e produkteve/shërbimeve, ID e paverifikuara dhe lista e përzierë janë te `respond.test.ts` dhe `catalog-presentation.test.ts`. Testet e riparimit/konsistencës së `validateResponse` nuk u portuan te live; ato mbeten te pipeline leftover `customer-context`/`response-consistency`/`response-review`, që `composeProcessReply` nuk e thërret.
+- Verifikimi lokal i këtij slice: TypeScript kaloi; 98 teste të fokusuara (respond, catalog-presentation, conversation, interpret, communication-contract, customer-context, composite-recall; customer-journey opt-in i anashkaluar). Nuk u krijua biznes/porosi/rezervim real dhe nuk u publikua.
+- Leftover i identifikuar, jo i pastruar këtu: `customer-context`/`response-consistency`/`response-review`/`currentProcessOwner`; `understanding/interpret`; `customer-question.ts`; çelësa jetimë në `semantic.json`/`review.json` për testet e `generate.test.ts`.
+
+Mbeten ende: suite-a 72 episodeve; replay i plotë DB; provider-ët realë; publikimi. **Zëvendësimi i plotë nuk është shpallur i përfunduar.**
+
+### Përditësim — 7 nëntor 2026, heqja e pipeline leftover të përgjigjes dhe interpretimit v3
+
+Ky përditësim ka përparësi mbi listën “Mbeten ende” sipër:
+
+- **Pipeline leftover i përgjigjes u hoq.** Nuk ekzistojnë më `customer-context`, `response-consistency`, `response-review`, `customer-fact-reference`, `customer-question`, `customer-declared-facts`, `communication-contract`, `understanding/interpret.ts`, as `currentProcessOwner`/`applyInboundToState`. Hyrja live mbetet `processConversationMessage` → `processConversation` → `interpretCustomer`/`composeProcessReply`. Editori, katalogu (`understanding/context`/`selection`), handoff, ranking dhe rruga manuale nuk u prekën.
+- **E2E u ridrejtuar te kontrata native.** `e2e/semantic-model.test.ts` (opt-in) thërret `interpretCustomer` dhe `briefingQuestion`. `e2e/response-consistency.test.ts` verifikon përgjigjen native, historinë, CAS dhe izolimin SQL, jo `validateResponse`. `e2e/r4-validation.test.ts` u hoq sepse ishte suita leftover e validatorit. 204 çelësa jetimë u hoqën nga `semantic.json`; `review.json` u hoq.
+- Verifikimi lokal i këtij slice: TypeScript kaloi; 314 teste të fokusuara (engine, understanding, interpret/respond/conversation native, process-agent-turn, ai-reaction, guidance, context, workflow-hub, entity-bridge, handoff, ranking, customer-status, grounding, retrieval, selection). Nuk u krijua biznes/porosi/rezervim real dhe nuk u publikua.
+- Leftover i identifikuar, jo i pastruar këtu: tipet e prezentimit `ConversationProcesses`/`ConversationRouting` në `engine.ts` dhe fusha `conversationRouting` në `AgentTurnResult` (editori i hub-it i lexon); `understanding/context` mbetet i lexuar nga katalogu/entity-bridge/handoff, por `withMessageUnderstanding` nuk vendoset nga `interpretCustomer`. Testet me lista frazash të `applyInboundToState` nuk u portuan.
+
+Mbeten ende: suite-a 72 episodeve; replay i plotë DB; provider-ët realë; publikimi. **Zëvendësimi i plotë nuk është shpallur i përfunduar.**
+
+### Përditësim — 7 nëntor 2026, prezentimi native dhe leftover-et e pa lidhura me live
+
+Ky përditësim ka përparësi mbi listën “Mbeten ende” sipër:
+
+- **Editori lexon runtime native.** `WorkflowHub`/`WorkflowContextPanel`/`MessageRoutingView` shfaqin `state.runtime` (profileMemory, instanca, fakte), jo `conversationRouting` ose `state.processes`. Editori, kartat e rrjedhave, zgjedhësi i flow-ve dhe rruga manuale e porosive mbeten. `simulateVisualWorkflow` pin-on versionet nga instancat/ofertat native.
+- **U hoqën motorë leftover jo në hyrjen live.** Nuk ekzistojnë më `handoff.ts`, `customer-status.ts` (interpretuesi i vjetër), `product-order.ts`, `entity-routing.ts`, `resolve-reference.ts`, `linear-communication.ts`, as funksioni v3 `preparedRequest`. `PreparedRequest` mbetet si tip për `processPreparedRequest`. Testet me lista frazash (status porosie, WhatsApp/telefon) nuk u portuan.
+- Verifikimi lokal i këtij slice: TypeScript kaloi; 138 teste të fokusuara (hub, test-actions, prepared-request native, conversation, process-agent-turn, entity-bridge, catalog-presentation, ranking, engine, understanding, respond, ai-reaction, graph-validation). Hub-i u verifikua me markup statik, jo me seancë live në browser. Nuk u krijua biznes/porosi/rezervim real dhe nuk u publikua.
+- Leftover i identifikuar, jo i pastruar këtu: tipet `ConversationProcesses`/`ConversationRouting` në payload-in e prezentimit; `advanceSharedOrder`/`extractExplicitFacts` në `context.ts`; `understanding/context` lexohet nga katalogu/entity-bridge, por `interpretCustomer` nuk e vendos. `resolveProductReference` mbetet për mbulimin unique të katalogut.
+
+Mbeten ende: suite-a 72 episodeve; replay i plotë DB; provider-ët realë; publikimi. **Zëvendësimi i plotë nuk është shpallur i përfunduar.**
+
+### Përditësim — 7 nëntor 2026, heqja e avancimit linear leftover
+
+Ky përditësim ka përparësi mbi listën “Mbeten ende” sipër:
+
+- **Motori linear leftover u hoq.** Nuk ekzistojnë më `advanceSharedOrder`, `extractExplicitFacts`, `sharedPrompt`, `isQuestion`/`affirmative`, as tipet `ConversationProcesses`/`ConversationRouting`. `setFact`/`migrateContext`/`validValue` mbeten për validim fushash, parserin linear të editorit dhe kujtesën e profilit. Hyrja live mbetet `processConversationMessage` → `processConversation`. Rruga manuale e porosive (`submit_process_order`) refuzon gjendjen leftover pa schema 4.
+- **Zgjedhja “tjetrin” lexon runtime ose `product_id`.** `resolveProductReference` nuk lexon më snapshot `processes.order`. Editori, katalogu (`understanding/context`/`selection`) dhe kartat e rrjedhave mbeten. Testet me lista frazash të `advanceSharedOrder` nuk u portuan.
+- Verifikimi lokal i këtij slice: TypeScript kaloi; 138 teste të fokusuara (context, field-candidates, engine, linear, interpret, orders route, entity-bridge, workflow-readiness, conversation, catalog-presentation, ranking, respond, hub, prepared-request, ai-reaction). Nuk u krijua biznes/porosi/rezervim real dhe nuk u publikua.
+- Leftover i identifikuar, jo i pastruar këtu: `understanding/context` lexohet nga katalogu/entity-bridge/ranking, por `interpretCustomer` nuk e vendos; `SharedContext` dhe fusha leftover (`product_id`, `visual`, `schemaVersion` 2/3) mbeten në payload; `resolveProductReference` mbetet për mbulimin unique të katalogut.
+
+Mbeten ende: suite-a 72 episodeve; replay i plotë DB; provider-ët realë; publikimi. **Zëvendësimi i plotë nuk është shpallur i përfunduar.**
+
+### Përditësim — 7 nëntor 2026, suite 72, replay, provider, build
+
+Ky përditësim ka përparësi mbi listën “Mbeten ende” sipër:
+
+- **Suite-a 72 episodeve u ekzekutua me model real.** `e2e/episode-suite.test.ts` (opt-in `RUN_EPISODE_SUITE=1`) mbulon gjashtë konfigurime × katër gjuhë × tre përsëritje në runtime native (`interpretCustomer` + `transitionCustomer`, mënyra test). 72/72 kaluan; `e2e/process-model.test.ts` 7/7. Nuk u krijua porosi/rezervim/biznes real. Testet përdorin shembuj gjuhësorë si të dhëna, jo logjikë runtime.
+- **Replay SQL i izoluar kaloi.** `node e2e/process-checkpoints.mjs` verifikoi CAS, deduplikim, lease, ownership, booking/order dhe cutover në PostgreSQL 17 të përkohshëm. Replay i plotë i baseline-it Supabase (`e2e/local.mjs up`) nuk u ekzekutua: Docker mungon në këtë makinë.
+- **Provider real i modelit u përdor; kanalet live jo.** OpenAI u thirr për suite-n dhe process-model. Nuk u lidh Instagram/WhatsApp/Zana dhe nuk u ekzekutua `PROCESS_SMOKE_BUSINESS_ID` (nuk është konfiguruar). `yarn build` kaloi lokalisht (capabilities + Next.js); aplikacioni nuk u deploy-ua.
+- Leftover i identifikuar: `understanding/context` ende lexohet nga katalogu; replay i plotë Supabase pret Docker; efektet live të kanaleve/providerëve të biznesit mbeten të paprovuara.
+
+Mbeten ende: replay i plotë Supabase me Docker; prova live e kanaleve/Zana; deploy i aplikacionit. **Zëvendësimi i plotë nuk është shpallur i përfunduar.**

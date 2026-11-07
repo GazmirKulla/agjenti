@@ -90,17 +90,10 @@ describe("existing state remains authoritative over positive model judgement", (
   it("does not mistake an acknowledgement pause for unfinished work", () => {
     expect(hasUnfinishedWork({ ...emptyState(), conversationPaused: true })).toBe(false);
   });
-  it.each(["active", "suspended"] as const)("blocks %s bookings", status => {
-    expect(hasUnfinishedWork({ ...emptyState(), processes: { active: null, booking: { id: "booking", status } } })).toBe(true);
-  });
-  it("blocks pending confirmation, staff handoff and selected unfinished orders without mutating state", () => {
-    for (const state of [{ ...emptyState(), staffHandoff: true }, { ...emptyState(), product_id: "selected" },
-      { ...emptyState(), context: { profile: {}, order: {}, execution: { awaitingOrderConfirmation: true } } }]) {
-      const before = structuredClone(state); expect(hasUnfinishedWork(state)).toBe(true); expect(state).toEqual(before);
-    }
-  });
-  it("allows a completed booking but not a waiting visual cursor", () => {
-    expect(hasUnfinishedWork({ ...emptyState(), processes: { active: null, booking: { id: "booking", status: "completed" } } })).toBe(false);
-    expect(hasUnfinishedWork({ ...emptyState(), visual: { versionId: "A", nodeId: "confirm", status: "waiting", awaiting: true, visited: [], values: {} } })).toBe(true);
+  it("blocks staff handoff on leftover presentation state without mutating it", () => {
+    const state = { ...emptyState(), staffHandoff: true };
+    const before = structuredClone(state);
+    expect(hasUnfinishedWork(state)).toBe(true);
+    expect(state).toEqual(before);
   });
 });

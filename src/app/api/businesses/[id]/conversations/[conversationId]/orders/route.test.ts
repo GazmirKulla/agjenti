@@ -17,26 +17,15 @@ vi.mock("@/lib/integrations/zana", () => ({ submitExternalOrder: m.submit }));
 import { initialSnapshot } from "@/lib/orchestration/contracts";
 import { PATCH, POST } from "./route";
 import { emptyState } from "@/lib/workflows/engine";
-import { advanceSharedOrder, migrateContext, setFact, setOrderTerms } from "@/lib/workflows/context";
-import { bookingAdapterState, snapshotOrder } from "@/lib/workflows/conversation-processes";
 let state: Record<string, unknown>;
 let filters: [string, string, unknown][];
-function confirmedOrder() {
-  let next = migrateContext(emptyState());
-  next.product_id = "product"; next.step_key = "collect_customer";
-  setOrderTerms(next, { id: "product", price_amount: 1200, currency: "ALL" });
-  for (const [key, value] of Object.entries({ name: "Test", phone: "0690000000", city: "Test", address: "Test address" }))
-    setFact(next, `customer_${key}`, value, "text", "test");
-  setFact(next, "size", "M", "text", "test");
-  const steps = [{ key: "size", kind: "text" as const }, { key: "collect_customer", kind: "customer" as const }];
-  next.context!.execution.linear = { id: "workflow", versionId: "published-linear", name: "Order", steps };
-  next = advanceSharedOrder(next, "", false, steps);
-  return advanceSharedOrder(next, "Po", false, steps);
+function leftoverOrder() {
+  return { ...emptyState(), schemaVersion: 3 as const, product_id: "product", step_key: "order_ready" };
 }
 beforeEach(() => {
   vi.clearAllMocks(); filters = [];
   m.admin.mockResolvedValue(true);
-  state = confirmedOrder() as unknown as Record<string, unknown>;
+  state = leftoverOrder() as unknown as Record<string, unknown>;
   m.from.mockImplementation((table: string) => {
     const q = { select: () => q, eq: (key: string, value: unknown) => { filters.push([table,key,value]); return q; },
       maybeSingle: async () => ({ data: table === "conversations" ? { id: "conversation", customer_id: null } : table === "conversation_states" ? { collected: state, revision: 4, cart: [] } : null }) };
@@ -44,16 +33,11 @@ beforeEach(() => {
   });
 });
 const send = () => POST(new Request("https://app.test/api/orders", { method: "POST" }), { params: Promise.resolve({ id: "business", conversationId: "conversation" }) });
-it.each(["expired", "product", "phone", "legacy", "snapshot"])("W2 rejects %s-stale order approval before any writes", async change => {
-  const next = confirmedOrder();
-  if (change === "expired") next.context!.execution.orderReview!.expiresAt = Date.now() - 1;
+it.each(["expired", "product", "phone", "legacy"])("W2 rejects leftover %s-stale order claims before any writes", async change => {
+  const next = leftoverOrder();
   if (change === "product") next.product_id = "other-product";
-  if (change === "phone") setFact(next, "customer_phone", "0692222222", "phone", "correction");
-  if (change === "legacy") delete next.context!.execution.orderReview;
-  if (change === "snapshot") {
-    next.processes = { active: "order", order: { id: "o", status: "active", snapshot: snapshotOrder(next) } };
-    setFact(next, "size", "L", "text", "correction");
-  }
+  if (change === "phone") next.customer.phone = "0692222222";
+  if (change === "legacy" || change === "expired") next.step_key = "collect_customer";
   state = next as unknown as Record<string, unknown>;
   expect((await send()).status).toBe(400);
   expect(m.ensure).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
@@ -95,11 +79,10 @@ it("submits the stored native order action without changing another process's fo
   expect(snapshot.focusId).toBe("booking"); expect(m.submit).not.toHaveBeenCalled();
 });
 it("does not submit an order snapshot whose confirmation was invalidated", async () => {
-  const confirmed = migrateContext(emptyState());
-  confirmed.product_id = "product"; confirmed.step_key = "order_ready";
-  confirmed.context!.execution.orderConfirmed = false;
-  confirmed.processes = { active: "booking", order: { id: "order-run", status: "suspended", snapshot: snapshotOrder(confirmed) } };
-  state = bookingAdapterState(confirmed) as unknown as Record<string, unknown>;
+  const snapshot = initialSnapshot("business", "conversation", "live");
+  snapshot.instances.order = { id: "order", definitionId: "order", versionId: "v1", stepId: "submit", status: "completed", facts: {} };
+  snapshot.revision = 4;
+  state = snapshot as unknown as Record<string, unknown>;
   expect((await send()).status).toBe(400);
   expect(m.ensure).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
 });
@@ -111,7 +94,7 @@ it.each([POST, PATCH])("W4 revoked membership / cross-tenant access cannot submi
   expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
 });
 it("W4 ignores client confirmation, product, price and intent overrides", async () => {
-  state = { ...confirmedOrder(), step_key: "collect_customer" };
+  state = { ...leftoverOrder(), step_key: "collect_customer" };
   const response = await POST(new Request("https://app.test/orders", { method: "POST", body: JSON.stringify({ orderConfirmed: true, productId: "foreign", price: 0, intentId: "client-key" }) }), { params: Promise.resolve({ id: "business", conversationId: "conversation" }) });
   expect(response.status).toBe(400); expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
 });

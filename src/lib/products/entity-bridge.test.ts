@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { emptyState } from "@/lib/workflows/engine";
 import { rememberTurn } from "@/lib/workflows/guidance";
 import { migrateContext } from "@/lib/workflows/context";
-import { migrateConversationProcesses, restoreOrder, snapshotOrder } from "@/lib/workflows/conversation-processes";
 import { combineProductPresentations, recordEntityPresentation, recordReplyPresentation, renderProductReferences, resolveProductReference, resolveServiceReference, type ReferenceProduct } from "./entity-bridge";
 
 const products: ReferenceProduct[] = [
@@ -55,10 +54,8 @@ describe("2B shared presentation evidence for services", () => {
     expect(state.entityPresentation).toBeUndefined();
     expect((await resolve("i dyti", state)).status).toBe("clarify");
   });
-  it("other uses the current canonical selection, not a historical order snapshot", async () => {
-    const state = migrateConversationProcesses(migrateContext(presented()), () => "task");
-    state.context!.execution.factOwner = "order"; state.product_id = "p1";
-    state.processes!.order = { id: "task", status: "active", snapshot: snapshotOrder(state) };
+  it("other uses the current native or product selection, not a leftover snapshot", async () => {
+    const state = presented();
     state.product_id = "p2";
     expect((await resolve("jo atë, tjetrin", state))).toMatchObject({ status: "selected", product: { id: "p1" } });
   });
@@ -141,16 +138,5 @@ describe("W3 verified presentation and references", () => {
     expect((await resolve("këtë", state))).toMatchObject({ status: "clarify" });
     expect((await resolve("Libri", state))).toMatchObject({ status: "selected", product: { id: "p2" } });
     expect(migrateContext(state).entityPresentation).toBeUndefined();
-  });
-  it("keeps current selection and presentation authoritative over historical snapshots", () => {
-    let state = migrateConversationProcesses(migrateContext(presented()), () => "task");
-    state.context!.execution.factOwner = "order"; state.product_id = "p1";
-    state.processes!.order = { id: "order", status: "suspended", snapshot: snapshotOrder(state) };
-    state.product_id = "p2";
-    const before = structuredClone(state);
-    state = restoreOrder(state, { resume: true });
-    expect(state.product_id).toBe("p2");
-    expect(state.entityPresentation).toEqual(before.entityPresentation);
-    expect(before.processes!.order!.snapshot.product_id).toBe("p1");
   });
 });

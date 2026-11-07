@@ -1,4 +1,4 @@
-import { isQuestion, safeFieldKey, validValue, type FieldType } from "./context";
+import { safeFieldKey, validValue, type FieldType } from "./context";
 
 /** Server-supplied definitions, not model-selected persistence destinations.
  * Interpretation is pure: callers still own authorization, provenance and CAS. */
@@ -8,7 +8,6 @@ export type CandidateField = {
   label?: string;
   options?: string[];
   maxLength?: number;
-  allowQuestions?: boolean;
   validate?: (value: string, labelled: boolean) => boolean;
 };
 export type FieldCandidate = { key: string } & (
@@ -20,7 +19,6 @@ export function validFieldCandidate(field: CandidateField, value: string, labell
     // Preserve configured text fields (including multiline descriptions).
     // Narrower single-line/format constraints belong to the caller's definition.
     && value.length <= (field.maxLength ?? 2000)
-    && (field.allowQuestions !== false || !isQuestion(value))
     && (!field.options?.length || field.options.includes(value))
     && (!field.validate || field.validate(value, labelled));
 }

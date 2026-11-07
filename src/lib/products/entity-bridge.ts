@@ -167,9 +167,7 @@ export async function resolveProductReference(args: {
     product = current[0];
   }
   if (relative.kind === "other") {
-    const selected = kind === "product" ? args.state?.context?.execution.factOwner === "order" || !args.state?.processes?.order
-      ? args.state?.product_id : args.state.processes.order.snapshot.product_id
-      : args.state?.processes?.booking?.draft?.serviceId ?? args.state?.processes?.service?.visual.binding?.entity.id;
+    const selected = selectedEntityId(args.state, kind);
     // A binary list and an authoritative selected entity are both required.
     if (entries.length !== 2 || !selected || !entries.some(entry => entry.id === selected)) return clarify("ambiguous_reference");
     product = current.find(item => item && item.id !== selected);
@@ -188,6 +186,15 @@ export async function resolveProductReference(args: {
   return product ? { status: "selected", product, via: relative.kind } : clarify("unavailable", "Produkti i referuar nuk është më aktiv ose nuk gjendet në këtë listë. Shkruaj emrin e një produkti aktiv.");
 }
 
+function selectedEntityId(state: ConversationStatePayload | null | undefined, kind: PresentedEntity["kind"]) {
+  const instance = state?.runtime?.focusId ? state.runtime.instances[state.runtime.focusId] : undefined;
+  if (instance) {
+    const suffix = kind === "product" ? "_productId" : "_serviceId";
+    const fact = Object.values(instance.facts).find(f => typeof f.value === "string" && f.fieldId.endsWith(suffix));
+    if (typeof fact?.value === "string") return fact.value;
+  }
+  return kind === "product" ? state?.product_id : undefined;
+}
 export async function resolveServiceReference(args: Omit<Parameters<typeof resolveProductReference>[0], "products"> & { services: readonly ReferenceProduct[] }) {
   const result = await resolveProductReference({ ...args, products: args.services }, "service");
   if (result.status === "selected") return { status: result.status, service: result.product, via: result.via };

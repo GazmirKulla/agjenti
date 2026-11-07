@@ -1,4 +1,3 @@
-import type { TurnDecision } from "./turn-decision";
 import type { ReferenceProduct } from "@/lib/products/entity-bridge";
 import type { TraceObserver } from "./trace";
 import type { ConversationStatePayload, WorkflowProgressItem, WorkflowStepDef } from "@/lib/workflows/engine";
@@ -6,20 +5,12 @@ import type { ConversationStatePayload, WorkflowProgressItem, WorkflowStepDef } 
 export type AgentTurnResult = {
   /** Server-owned delivery envelope. Never supplied by a customer or model. */
   processCheckpoint?: { event: import("@/lib/orchestration/contracts").CustomerEvent; expectedRevision: number; targetIds: string[] };
-  processOffer?: { flowId: string; text: string };
-  executionResults?: import("./execution-receipt").ExecutionReceipt[];
-  processCommunication?: import("./process-communication").ProcessCommunication;
-  customerQuestion?: import("./communication-contract").CustomerQuestionProposal;
-  communication?: import("./communication-contract").CommunicationReceipt;
   preparedRequest?: import("./prepared-request").PreparedRequest;
   /** Authorized test entry points only; observation, never permission or behavioral proof. */
   configuration?: import("@/lib/agents/configuration-contract").TestConfigurationProvenance;
-  turnDecision?: TurnDecision;
   /** Server-rendered catalog references in reply; finalized by the coordinator. */
   presentedProducts?: ReferenceProduct[];
   presentedServices?: ReferenceProduct[];
-  orderStatusPending?: boolean;
-  conversationRouting?: import("@/lib/workflows/conversation-processes").ConversationRouting;
   visualWorkflow?: import("@/lib/workflows/visual/types").VisualTrace;
   /** Isolated/Chat Lab only. Live turns omit this; never treat SIMULATED as a real write. */
   externalActions?: import("@/lib/runtime/execution-context").ExternalAction[];
@@ -51,8 +42,6 @@ export type AgentTurnParams = {
   /** Injected only by the authenticated queue worker. */
   processTransport?: import("@/lib/calendar/service").BookingEffectGuard;
   configurationPreview?: import("@/lib/agents/communication-configuration").AgentConfigurationPreview;
-  /** Internal coordinator contract, never client-controlled or authorization. */
-  turnDecision?: TurnDecision;
   /** Coordinator-resolved hint, revalidated against the active tenant catalog by adapters. Never a customer API input. */
   selectedProductId?: string;
   selectedServiceId?: string;
