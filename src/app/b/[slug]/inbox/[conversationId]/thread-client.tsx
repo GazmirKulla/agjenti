@@ -47,6 +47,24 @@ export function ThreadClient(props: {
     const list = messageList.current;
     if (list) list.scrollTop = list.scrollHeight;
   }, [lastMessageId]);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport || !/AgjentiNative\/2\.0/.test(navigator.userAgent)) return;
+    const sync = () => {
+      document.documentElement.style.setProperty(
+        "--keyboard-inset",
+        `${Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)}px`,
+      );
+    };
+    sync();
+    viewport.addEventListener("resize", sync);
+    viewport.addEventListener("scroll", sync);
+    return () => {
+      viewport.removeEventListener("resize", sync);
+      viewport.removeEventListener("scroll", sync);
+      document.documentElement.style.removeProperty("--keyboard-inset");
+    };
+  }, []);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);

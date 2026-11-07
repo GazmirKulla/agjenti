@@ -3462,8 +3462,16 @@ html.drawer-scroll-lock body {
     font-size: 14px;
   }
   .chat-composer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 8px;
     flex: 0 0 auto;
     padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  .chat-composer .muted-copy,
+  .chat-composer [role="alert"] {
+    grid-column: 1 / -1;
   }
   .chat-composer .composer-label,
   .chat-logs {
@@ -3472,9 +3480,9 @@ html.drawer-scroll-lock body {
   .chat-composer textarea {
     min-height: 48px;
     max-height: 112px;
-    resize: vertical;
+    resize: none;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: 24px;
     background: var(--surface);
     color: var(--ink);
     padding: 12px;
@@ -3482,7 +3490,7 @@ html.drawer-scroll-lock body {
   }
   .composer-footer {
     justify-content: flex-end;
-    margin-top: 7px;
+    margin-top: 0;
   }
   .composer-footer span {
     display: none;
@@ -4394,32 +4402,77 @@ html:has(.native-business-content:has(.inbox-workspace)) body.min-h-screen {
 .native-business-content .inbox-list-foot {
   display: none;
 }
-.native-business-content .chat-header > .chat-mobile-back,
-.native-business-content .chat-header > .btn.chat-close,
-.native-business-content .chat-header .chat-contact-link,
-.native-business-content .inbox-customer-mobile-header {
+.native-business-content .chat-header > .btn.chat-close {
   display: none;
 }
 .native-business-content .chat-header {
-  justify-content: flex-end;
-  padding: 4px 8px;
-  min-height: 44px;
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  padding: 8px 12px 10px;
+  min-height: 52px;
   background: var(--paper);
+}
+.native-business-content .chat-mobile-back {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: var(--surface);
 }
 .native-business-content .inbox-workspace.has-selection,
 .native-business-content .inbox-workspace.inbox-list-home,
 .native-business-content .inbox-workspace.is-mobile-customer {
   height: 100%;
 }
-.native-business-content .chat-messages {
-  flex: 1;
+.native-business-content .inbox-workspace.has-selection .chat-panel {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
   height: auto;
+  max-height: none;
   min-height: 0;
   background: var(--paper);
 }
+.native-business-content .chat-messages {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--paper);
+}
 .native-business-content .chat-composer {
-  padding: 10px 12px 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding: 10px 12px calc(12px + var(--keyboard-inset, 0px));
+  background: var(--paper);
+}
+.native-business-content .chat-composer .composer-label,
+.native-business-content .chat-composer .muted-copy,
+.native-business-content .chat-composer [role="alert"] {
+  grid-column: 1 / -1;
+}
+.native-business-content .chat-composer textarea {
+  grid-column: 1;
+  min-height: 48px;
+  max-height: 120px;
+  resize: none;
+  border-radius: 24px;
+}
+.native-business-content .composer-footer {
+  grid-column: 2;
+  margin: 0;
+}
+.native-business-content .inbox-workspace.is-mobile-customer .chat-panel {
+  display: none;
 }
 .native-business-content .inbox-workspace.is-mobile-customer .inbox-customer {
+  position: fixed;
+  inset: 0;
   padding: 12px 14px 16px;
 }
