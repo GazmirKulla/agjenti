@@ -1,3 +1,4 @@
+import { attributeAiUsage, withAiUsage } from "@/lib/ai/usage";
 import { observeLabTurn } from "@/lib/chat-lab/observation";
 import { loadCommunicationDraft } from "@/lib/agents/communication-configuration";
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
@@ -25,10 +26,17 @@ function customerComplete(customer: {
   );
 }
 
-export async function executeAgentTestTurn(
+export function executeAgentTestTurn(
   input: TestChatInput,
   userId: string,
   messageCount = 1,
+): Promise<TestChatResult> {
+  return withAiUsage(undefined, () => runTestTurn(input, userId, messageCount));
+}
+async function runTestTurn(
+  input: TestChatInput,
+  userId: string,
+  messageCount: number,
 ): Promise<TestChatResult> {
   let observation: ReturnType<typeof observeLabTurn> | undefined;
   try {
@@ -48,6 +56,7 @@ export async function executeAgentTestTurn(
       };
     const access = await requireBusinessAccess(userId, input.slug);
     if (!access) return { error: "Nuk ke qasje në këtë biznes." };
+    attributeAiUsage(access.business.id);
     const text = input.message.trim();
     if (!text && !input.hasMedia && !input.attachments?.length)
       return { error: "Shkruaj një mesazh, bashkëngjit skedar ose simulo një foto." };

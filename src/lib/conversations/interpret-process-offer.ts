@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/generate";
 import type { ConversationMessage } from "@/lib/workflows/guidance";
 export type OfferInterpretation = { relation: "accept" | "decline" | "clarify" | "other" | "uncertain"; flowId: string | null; evidence: string };

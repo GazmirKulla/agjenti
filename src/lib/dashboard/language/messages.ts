@@ -373,5 +373,7 @@ export const english: Record<string, string> = {
   "Instagram, website dhe analiza e biznesit": "Instagram, website and business analysis",
   "Lidhja me Instagram": "Instagram connection",
   "Lidhja me WhatsApp Business": "WhatsApp Business connection",
-  "Cilësimet e hapësirës": "Workspace settings"
+  "Cilësimet e hapësirës": "Workspace settings",
+  "mesazhe AI këtë muaj": "AI messages this month",
+  "Thirrjet te OpenAI për këtë biznes që nga fillimi i muajit": "OpenAI requests for this business since the start of the month"
 };

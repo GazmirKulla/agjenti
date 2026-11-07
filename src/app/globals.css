@@ -432,6 +432,32 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
   width: auto;
   max-width: 570px;
 }
+.ai-usage-pill {
+  display: none;
+}
+@media (min-width: 761px) {
+  .ai-usage-pill {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0 12px;
+    height: 2.25rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink-muted);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .ai-usage-pill svg {
+    color: var(--accent);
+  }
+  .ai-usage-pill strong {
+    color: var(--ink);
+    font-weight: 700;
+  }
+}
 .sidebar-icon-toggle {
   display: inline-grid;
   place-items: center;

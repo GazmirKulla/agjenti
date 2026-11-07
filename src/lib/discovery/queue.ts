@@ -1,3 +1,4 @@
+import { withAiUsage } from "@/lib/ai/usage";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { extractInstagram, extractWebsite } from "@/lib/business-intelligence/ingestion";
 import { normalizeSource } from "@/lib/business-intelligence/normalization";
@@ -147,7 +148,7 @@ export async function runDiscoveryQueue(businessId: string | null = null, budget
     if (claim.error) throw new Error("discovery_queue_unavailable");
     const job = (claim.data as Job[] | null)?.[0];
     if (!job) break;
-    try { await processDiscoveryStep(job); }
+    try { await withAiUsage(job.business_id, () => processDiscoveryStep(job)); }
     catch (error) {
       const message = error instanceof Error && error.message === "scan_migration_required" ? "Konfigurimi automatik kërkon migrimin 20261008160000_business_process.sql në databazë, pas migrimeve ekzistuese. Kontakto administratorin." : "Analiza u ndërpre. Do të provohet përsëri; mund të vazhdosh edhe manualisht.";
       await checkpoint(job, job.checkpoint, job.stage, message).catch(() => {});

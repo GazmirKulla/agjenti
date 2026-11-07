@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/model";
 import { briefingPeriods, type BriefingPeriod } from "./briefing-model";
 /** Read-only semantic shortcut. All other requests retain the existing assistant path. */

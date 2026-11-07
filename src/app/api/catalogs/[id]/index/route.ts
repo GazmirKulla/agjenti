@@ -2,9 +2,10 @@ import { catalogAccess } from "@/lib/catalogs/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { indexCatalog } from "@/lib/catalogs/indexing";
 import type { Catalog } from "@/lib/catalogs/model";
+import { meteredRoute } from "@/lib/ai/usage";
 export const runtime = "nodejs";
 export const maxDuration = 180;
-export async function POST(
+async function handlePOST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -60,3 +61,4 @@ export async function POST(
     );
   }
 }
+export const POST = meteredRoute(handlePOST);

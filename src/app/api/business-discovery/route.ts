@@ -14,6 +14,7 @@ import { businessProfiles, allowedOfferings } from "@/lib/onboarding/rules";
 import { discoveryPreviews } from "@/lib/discovery/previews";
 import { capturedInstagramProfile } from "@/lib/instagram/captured-profile";
 import { parseBusinessProcess } from "@/lib/discovery/business-process";
+import { meteredRoute } from "@/lib/ai/usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -45,7 +46,7 @@ async function readBody(request: Request) {
   return body as Record<string, unknown>;
 }
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const { business } = await authorize(request);
     const db = createServiceSupabase();
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
   } catch (error) { return failure(error); }
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     if (request.headers.get("origin") !== new URL(request.url).origin) throw new Error("unauthorized");
     const { user, business } = await authorize(request);
@@ -176,3 +177,5 @@ function failure(error: unknown) {
   // Unknown failures may originate in storage, not in a user's fields.
   return json({ code: Object.hasOwn(errors, message) ? message : "save_failed", error: errors[message] ?? "Konfigurimi nuk u ruajt. Provo përsëri; nëse vazhdon, kontakto mbështetjen." }, message === "unauthorized" ? 403 : 400);
 }
+export const GET = meteredRoute(handleGET);
+export const POST = meteredRoute(handlePOST);

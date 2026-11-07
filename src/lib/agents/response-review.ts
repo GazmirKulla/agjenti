@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "./model";
 import { projectCustomerNeeds } from "./customer-context";
 import type { Evidence } from "./response-consistency";

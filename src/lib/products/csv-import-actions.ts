@@ -1,4 +1,5 @@
 "use server";
+import { withAiUsage } from "@/lib/ai/usage";
 import { requireActionAccess } from "@/lib/actions/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { evaluateImport } from "./import-evaluation";
@@ -34,7 +35,11 @@ export async function confirmProductCsv(slug: string, token: string) {
     return result;
   } catch (e) { return { error: (e as Error).message }; }
 }
-export async function evaluateProductCsv(slug: string, source: string, options: ImportOptions): Promise<{ error?: string; preview?: ImportPreview; mapping?: ImportOptions["mapping"] }> {
+/** Counts the AI requests of this action against the business it authorizes. */
+export async function evaluateProductCsv(...args: Parameters<typeof evaluateProductCsvUnmetered>) {
+  return withAiUsage(undefined, () => evaluateProductCsvUnmetered(...args));
+}
+async function evaluateProductCsvUnmetered(slug: string, source: string, options: ImportOptions): Promise<{ error?: string; preview?: ImportPreview; mapping?: ImportOptions["mapping"] }> {
   try {
     const access = await accessFor(slug);
     return await evaluateImport(access, source, options);

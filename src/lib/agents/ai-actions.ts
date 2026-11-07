@@ -1,10 +1,15 @@
 "use server";
+import { withAiUsage } from "@/lib/ai/usage";
 
 import { completeText } from "@/lib/ai/complete";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
-export async function generateAgentInstructions(slug: string, _form?: FormData) {
+/** Counts the AI requests of this action against the business it authorizes. */
+export async function generateAgentInstructions(...args: Parameters<typeof generateAgentInstructionsUnmetered>) {
+  return withAiUsage(undefined, () => generateAgentInstructionsUnmetered(...args));
+}
+async function generateAgentInstructionsUnmetered(slug: string, _form?: FormData) {
   const user = await getSessionUser();
   if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
   const access = await requireBusinessAccess(user.id, slug);

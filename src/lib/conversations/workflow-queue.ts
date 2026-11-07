@@ -1,3 +1,4 @@
+import { withAiUsage } from "@/lib/ai/usage";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { encryptSecret } from "@/lib/crypto/tokens";
@@ -41,7 +42,7 @@ export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage)
         throw new Error("Queue connection lookup failed");
     if (!connection)
         return false;
-    const payload = { ...message, fragmentKind: await fragmentKind(message.text, message.attachments.length > 0) };
+    const payload = { ...message, fragmentKind: await withAiUsage(connection.business_id, () => fragmentKind(message.text, message.attachments.length > 0)) };
     const { error: insertError } = await db.from("workflow_inbound_queue").upsert({ business_id: connection.business_id, channel: message.channel, connection_id: connection.id, participant_id: message.externalParticipantId, external_id: message.externalMessageId, payload }, { onConflict: "connection_id,external_id", ignoreDuplicates: true });
     if (insertError)
         throw new Error("Queue persistence failed");
@@ -150,6 +151,7 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
         }
         attempts++;
         try {
+            await withAiUsage(job.business_id, async () => {
             if (job.operation_kind === "test") {
                 if (!testScope || job.business_id !== testScope.businessId || job.operator_user_id !== testScope.userId || job.test_stream_id !== testScope.streamId) throw new Error("Test transport isolation violation");
                 const { executeAgentTestTurn } = await import("@/lib/agents/test-chat/execute-turn");
@@ -168,7 +170,7 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
                 const { error } = await db.rpc("finish_test_transport", { p_id: job.id, p_token: job.lease_token, p_result: "error" in result && !result.labObservation ? null : encryptSecret(JSON.stringify(result)), p_error: "error" in result ? result.error : null });
                 if (error) throw new Error("Test result commit failed");
                 processed++;
-                continue;
+                return;
             }
             if (job.status !== "prepared") {
                 const { handleInboundMessage } = await import("./handle-inbound");
@@ -179,6 +181,7 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
             else
                 await db.from("workflow_inbound_queue").update({ status: "ignored", leased_until: null }).eq("id", job.id).eq("lease_token", job.lease_token).eq("status", "processing").throwOnError();
             processed++;
+            });
         }
         catch (error) {
             // Retain prepared output after a pre-send failure. A send with an unknown result is never replayed.

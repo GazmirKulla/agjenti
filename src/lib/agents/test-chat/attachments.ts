@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/generate";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/tokens";
 

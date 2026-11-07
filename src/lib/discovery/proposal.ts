@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/generate";
 import { emptyAnswers, initialInstructions, basicInstructions, parseAnswers } from "@/lib/onboarding/model";
 import { businessCategories } from "@/lib/onboarding/categories";

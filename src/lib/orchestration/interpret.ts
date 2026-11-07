@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/model";
 import { type Observation, type Snapshot } from "./contracts";
 import { observationContext, observationInstructions, observationSchema, parseObservation } from "./observation";

@@ -1,5 +1,5 @@
 import { messageUnderstanding } from "@/lib/conversations/understanding/context";
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { getFact, isQuestion, setFact } from "./context";
 import { validFieldCandidate, type CandidateField } from "./field-candidates";
 import type { ConversationStatePayload } from "./engine";

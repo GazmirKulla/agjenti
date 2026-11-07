@@ -1,5 +1,5 @@
 "use client";
-import { useDashboardTranslator } from "./language";
+import { useDashboardLanguage, useDashboardTranslator } from "./language";
 import { ProfilePopover } from "./profile-popover";
 import s from "./app-shell.module.css";
 import Link from "next/link";
@@ -25,6 +25,7 @@ export function AppShell({
   navigationItems,
   mobileNavigationItems,
   nativeHost: embedded = false,
+  aiUsage,
 }: {
   children: React.ReactNode;
   name: string;
@@ -37,10 +38,13 @@ export function AppShell({
   navigationItems: NavItem[];
   mobileNavigationItems: NavItem[];
   nativeHost?: boolean;
+  /** This month's OpenAI requests, present only for business owners and platform administrators. */
+  aiUsage?: number;
 }) {
   const [nativeHost, setNativeHost] = useState(embedded);
   useEffect(() => { if (/AgjentiNative\/2\.0/.test(navigator.userAgent)) setNativeHost(true); }, []);
   const t = useDashboardTranslator();
+  const language = useDashboardLanguage();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [backdrop, setBackdrop] = useState(false);
@@ -413,6 +417,13 @@ export function AppShell({
             )}
           </div>
           </div>
+          {!admin && aiUsage !== undefined && (
+            <p className="ai-usage-pill" title={t("Thirrjet te OpenAI për këtë biznes që nga fillimi i muajit")}>
+              <Icon name="spark" size={16} />
+              <strong>{aiUsage.toLocaleString(language === "en" ? "en-GB" : "sq-AL")}</strong>
+              <span>{t("mesazhe AI këtë muaj")}</span>
+            </p>
+          )}
           {!admin && slug && <div id="personal-assistant-slot" className="personal-assistant-slot" />}
         </header>
         <main className="dashboard-content">

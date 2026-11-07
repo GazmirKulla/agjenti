@@ -31,7 +31,7 @@ import type { VisualNodeKind } from "@/lib/workflows/visual/types";
 import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
 import type { PublicationApproval } from "@/lib/workflows/visual/publication-types";
 import { parseUIContext, type AssistantUIContext } from "./context";
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/tokens";

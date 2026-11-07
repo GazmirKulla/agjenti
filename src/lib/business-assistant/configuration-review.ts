@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/model";
 import type { ConfigurationAuthority, ConfigurationStep } from "@/lib/actions/operations/configuration-policy";
 import { AssistantError } from "./model";

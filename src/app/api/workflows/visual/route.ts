@@ -1,12 +1,13 @@
 import { mutateVisualWorkflow } from "@/lib/workflows/visual/save-service";
 import { unconfirmedSaveMessage } from "@/lib/workflows/visual/save-result";
 import type { WorkflowOperation } from "@/lib/workflows/visual/mutations";
+import { meteredRoute } from "@/lib/ai/usage";
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 const operations = new Set<WorkflowOperation>(["draft", "publish", "enable", "disable"]);
 
 /** Stable URL: an editor left open across a deployment can still save its draft. */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   if (request.headers.get("origin") !== new URL(request.url).origin)
     return json({ error: "Kërkesë e palejuar." }, 403);
   if (!request.headers.get("content-type")?.startsWith("application/json"))
@@ -38,3 +39,4 @@ export async function POST(request: Request) {
     return json({ error: unconfirmedSaveMessage }, 503);
   }
 }
+export const POST = meteredRoute(handlePOST);

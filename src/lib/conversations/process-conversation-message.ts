@@ -1,3 +1,4 @@
+import { withAiUsage } from "@/lib/ai/usage";
 import { processConversation } from "@/lib/orchestration/conversation";
 import type { AgentTurnParams, AgentTurnResult } from "./process-agent-turn";
 import type { OrderCustomerIdentity } from "@/lib/orders/own-orders";
@@ -18,5 +19,5 @@ export async function processConversationMessage(params: ConversationMessagePara
   if (params.configurationPreview && (params.mode !== "test" || params.configurationPreview.businessId !== params.businessId)) throw new Error("invalid_configuration_preview");
   const isolated = params.source === "admin_chat_lab" || params.mode === "test" || !!params.visualPreview || !!params.linearPreview || isIsolatedExecution();
   if (isolated && !isIsolatedExecution()) return runIsolated(() => processConversationMessage({ ...params, mode: "test" }));
-  return processConversation(isolated ? { ...params, mode: "test" } : params);
+  return withAiUsage(params.businessId, () => processConversation(isolated ? { ...params, mode: "test" } : params));
 }

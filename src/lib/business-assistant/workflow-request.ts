@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/model";
 import { visualGraphHash } from "@/lib/workflows/visual/graph-hash";
 import type { VisualGraph } from "@/lib/workflows/visual/types";

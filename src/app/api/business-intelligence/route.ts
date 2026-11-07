@@ -26,6 +26,7 @@ import {
 import { scanKnowledge, withoutScanKnowledge, knowledgeNotice } from "@/lib/business-intelligence/scan-routing";
 import { seedDraft, snapshotEntities } from "@/lib/business-intelligence/state";
 import { revalidatePath } from "next/cache";
+import { meteredRoute } from "@/lib/ai/usage";
 export const runtime = "nodejs";
 export const maxDuration = 180;
 const json = (body: unknown, status = 200) =>
@@ -37,7 +38,7 @@ async function authorize(slug: string) {
   if (!access) throw new Error("unauthorized");
   return { user, business: access.business };
 }
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const slug = new URL(request.url).searchParams.get("slug") ?? "";
     const { business } = await authorize(slug);
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
     );
   }
 }
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   let sourceId: string | null = null;
   try {
     if (request.headers.get("origin") !== new URL(request.url).origin)
@@ -376,3 +377,5 @@ export async function POST(request: Request) {
     );
   }
 }
+export const GET = meteredRoute(handleGET);
+export const POST = meteredRoute(handlePOST);

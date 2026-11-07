@@ -10,10 +10,11 @@ import {
 } from "@/lib/products/import-service";
 import { evaluateImport } from "@/lib/products/import-evaluation";
 import { revalidatePath } from "next/cache";
+import { meteredRoute } from "@/lib/ai/usage";
 export const maxDuration = 90;
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   if (!permittedWrite(request))
     return json({ error: "Kërkesë e palejuar." }, 403);
   try {
@@ -101,3 +102,4 @@ export async function POST(request: Request) {
     );
   }
 }
+export const POST = meteredRoute(handlePOST);

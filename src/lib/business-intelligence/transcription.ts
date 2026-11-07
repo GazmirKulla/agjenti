@@ -1,4 +1,5 @@
-import OpenAI, { toFile } from "openai";
+import { toFile } from "openai";
+import OpenAI from "@/lib/ai/openai";
 export async function transcribeAudio(
   file: File,
   client = new OpenAI({

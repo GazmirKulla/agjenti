@@ -1,5 +1,5 @@
 import { messageUnderstanding, hasMessageUnderstanding } from "@/lib/conversations/understanding/context";
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/generate";
 import { invalidateOrderReview } from "./context";
 import { type ConversationStatePayload } from "./state";

@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/model";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import { parseUnderstanding, understandingSchema } from "./contract";

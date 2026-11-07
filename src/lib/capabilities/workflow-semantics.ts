@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { agentModel } from "@/lib/agents/model";
 import type { VisualGraph } from "@/lib/workflows/visual/types";

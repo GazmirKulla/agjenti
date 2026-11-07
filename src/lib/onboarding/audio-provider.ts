@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { transcribeAudio } from "@/lib/business-intelligence/transcription";
 import { agentModel } from "@/lib/agents/generate";
 import { businessProfiles } from "./rules";

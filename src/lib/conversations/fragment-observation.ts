@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/model";
 export async function interpretFragment(text: string): Promise<"fragment" | "continuation" | "close" | "separate"> {
   if (!process.env.OPENAI_API_KEY?.trim()) return "separate";

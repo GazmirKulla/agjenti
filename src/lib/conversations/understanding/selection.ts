@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/model";
 
 export type SemanticCandidate = { title: string; body?: string };

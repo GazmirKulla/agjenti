@@ -1,9 +1,14 @@
 "use server";
+import { withAiUsage } from "@/lib/ai/usage";
 import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { parseBusinessProcess } from "./business-process";
-export async function saveBusinessProcess(slug: string, revision: number, raw: unknown) {
+/** Counts the AI requests of this action against the business it authorizes. */
+export async function saveBusinessProcess(...args: Parameters<typeof saveBusinessProcessUnmetered>) {
+  return withAiUsage(undefined, () => saveBusinessProcessUnmetered(...args));
+}
+async function saveBusinessProcessUnmetered(slug: string, revision: number, raw: unknown) {
   const user = await getSessionUser();
   const access = user ? await requireBusinessAccess(user.id, slug) : null;
   if (!user || !access) return { error: "Nuk ke qasje në këtë biznes." };

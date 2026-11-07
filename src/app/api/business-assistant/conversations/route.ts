@@ -3,6 +3,7 @@ import { requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { isUuid, listConversations, readConversation, reassessPlan, writeConversation, PersistenceError } from "@/lib/business-assistant/persistence";
 import { planningPreferences } from "@/lib/business-assistant/persistence-model";
+import { meteredRoute } from "@/lib/ai/usage";
 
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
 async function accessFor(request: Request) {
@@ -16,7 +17,7 @@ async function accessFor(request: Request) {
 function failure(error: unknown) {
   return json({ error: error instanceof PersistenceError ? error.message : "Historiku nuk u ngarkua. Provo përsëri." }, error instanceof PersistenceError ? error.status : 503);
 }
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const access = await accessFor(request), params = new URL(request.url).searchParams, id = params.get("id");
     if (!id) return json(await listConversations(access, params.get("cursor") ?? undefined));
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     return json(params.get("assess") === "1" ? { ...view, ...await reassessPlan(access, view.plan) } : view);
   } catch (error) { return failure(error); }
 }
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   try {
     const access = await accessFor(request);
@@ -60,3 +61,5 @@ export async function POST(request: Request) {
     return json(body.mode === "delete" ? { deleted: true } : await readConversation(access, body.id));
   } catch (error) { return failure(error); }
 }
+export const GET = meteredRoute(handleGET);
+export const POST = meteredRoute(handlePOST);

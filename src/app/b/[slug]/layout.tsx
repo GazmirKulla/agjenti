@@ -15,6 +15,7 @@ import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import { loadBillingUsage } from "@/lib/billing/service";
 import { BillingUsageNotice } from "@/components/dashboard/billing-usage-notice";
 import { isNativeEmbed } from "@/lib/native/embedded";
+import { loadAiUsage } from "@/lib/ai/usage-report";
 export default async function BusinessLayout({
   children,
   params,
@@ -29,11 +30,12 @@ export default async function BusinessLayout({
   const access = await listMemberships(user.id);
   const business = (await requireBusinessAccess(user.id, slug))?.business;
   if (!business) redirect("/auth/continue");
-  const [settings, dashboardProfile, billingUsage, nativeHost] = await Promise.all([
+  const [settings, dashboardProfile, billingUsage, nativeHost, aiUsage] = await Promise.all([
     getAppSettings(),
     loadNavigationProfile(business.id),
     loadBillingUsage(business.id),
     isNativeEmbed(),
+    loadAiUsage(user.id, business.id, access.admin),
   ]);
   const navigationItems = buildNavigationItems(dashboardProfile, "desktop");
   const mobileNavigationItems = buildNavigationItems(
@@ -59,6 +61,7 @@ export default async function BusinessLayout({
       navigationItems={navigationItems}
       mobileNavigationItems={mobileNavigationItems}
       nativeHost={nativeHost}
+      aiUsage={aiUsage?.calls}
     >
       {settings.announcement && (
         <div

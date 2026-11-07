@@ -3,10 +3,11 @@ import { requireBusinessAccess } from "@/lib/tenant/access";
 import { confirmCatalogActivation, inspectCatalogActivation } from "@/lib/business-assistant/catalog-activation";
 import { AssistantError } from "@/lib/business-assistant/model";
 import { confirmKnowledgeActivation, inspectKnowledgeActivation } from "@/lib/business-assistant/knowledge-activation";
+import { meteredRoute } from "@/lib/ai/usage";
 export const runtime = "nodejs";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   try {
     const user = await getRequestUser(request);
@@ -39,3 +40,4 @@ export async function POST(request: Request) {
     return json({ error: error instanceof AssistantError ? error.message : "Konfigurimi nuk u verifikua. Rihap kontrollin përpara se të vazhdosh." }, error instanceof AssistantError ? 409 : 500);
   }
 }
+export const POST = meteredRoute(handlePOST);

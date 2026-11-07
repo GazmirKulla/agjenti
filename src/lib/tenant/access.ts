@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { attributeAiUsage } from "@/lib/ai/usage";
 
 export type BusinessRow = {
   id: string;
@@ -71,7 +72,14 @@ export const listMemberships = cache(async function listMemberships(
   return { admin: false, businesses: (businesses ?? []) as BusinessRow[] };
 });
 
-export const requireBusinessAccess = cache(async function requireBusinessAccess(
+export async function requireBusinessAccess(userId: string, slug: string) {
+  const access = await resolveBusinessAccess(userId, slug);
+  // Runs on every call: cached results must still name the business for each metering scope.
+  if (access) attributeAiUsage(access.business.id);
+  return access;
+}
+
+const resolveBusinessAccess = cache(async function resolveBusinessAccess(
   userId: string,
   slug: string,
 ) {

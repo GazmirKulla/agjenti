@@ -6,6 +6,7 @@ import {
   navigationOrder,
 } from "@/lib/dashboard/modules/registry";
 import { dashboardLanguage, translator } from "@/lib/dashboard/language/core";
+import { loadAiUsage } from "@/lib/ai/usage-report";
 export async function GET(request: Request) {
   const headers = { "Cache-Control": "private, no-store", Vary: "X-Agjenti-Language" };
   const t = translator(dashboardLanguage(request.headers.get("x-agjenti-language")));
@@ -19,9 +20,13 @@ export async function GET(request: Request) {
     const membership = await listMemberships(user.id);
     const businesses = await Promise.all(
       membership.businesses.map(async (business) => {
-        const profile = await loadNavigationProfile(business.id);
+        const [profile, aiUsage] = await Promise.all([
+          loadNavigationProfile(business.id),
+          loadAiUsage(user.id, business.id, membership.admin),
+        ]);
         return {
           ...business,
+          aiUsage: aiUsage && { calls: aiUsage.calls },
           modules: profile.enabledModules,
           navigation: navigationOrder
             .filter((id) => profile.navigationItems.includes(id))

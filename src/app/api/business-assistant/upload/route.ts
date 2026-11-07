@@ -1,10 +1,11 @@
 import { getRequestUser, permittedWrite } from "@/lib/auth/request";
 import { requireBusinessAccess } from "@/lib/tenant/access";
 import { inspectAttachment, readAttachmentForm, sealAttachment } from "@/lib/business-assistant/materials";
+import { meteredRoute } from "@/lib/ai/usage";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   const user = await getRequestUser(request);
   if (!user) return json({ error: "Hyr përsëri në llogari." }, 401);
@@ -18,3 +19,4 @@ export async function POST(request: Request) {
     return json({ error: known ? (error as Error).message : "Përpunimi nuk përfundoi. Provo përsëri." }, 400);
   }
 }
+export const POST = meteredRoute(handlePOST);

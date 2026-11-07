@@ -1,6 +1,6 @@
 import { historicalStepPrompt } from "@/lib/workflows/compatibility-prompts";
 import { recentConversation } from "@/lib/workflows/guidance";
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { communicationSchema, parseCommunicationDraft, type CustomerQuestionProposal } from "@/lib/conversations/communication-contract";
 import { renderProductReferences, type ReferenceProduct } from "@/lib/products/entity-bridge";
 import { type TrainingContext } from "./training/model";

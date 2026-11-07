@@ -6,6 +6,7 @@ import { readTestSession } from "@/lib/agents/test-chat/session";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { runWorkflowQueue } from "@/lib/conversations/workflow-queue";
 import { fragmentKind } from "@/lib/conversations/message-batch";
+import { withAiUsage } from "@/lib/ai/usage";
 import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/types";
 export const maxDuration = 180;
 async function accessFor(request: Request) {
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
     // stream must not skip a locally failed/unaccepted preceding message.
     if (!prior && data.sequence !== session.turns) return NextResponse.json({ error: "Mungon mesazhi i mëparshëm." }, { status: 409 });
     const fingerprint = createHash("sha256").update(JSON.stringify({ input, stream: data.streamId, sequence: data.sequence })).digest("hex");
-    const payload = { ...input, fragmentKind: await fragmentKind(input.message, input.hasMedia || Boolean(input.attachments?.length)) };
+    const payload = { ...input, fragmentKind: await withAiUsage(access.businessId, () => fragmentKind(input.message, input.hasMedia || Boolean(input.attachments?.length))) };
     const { data: job, error } = await access.db.rpc("enqueue_transport_operation", { p_business: access.businessId, p_user: access.userId, p_request: data.requestId, p_kind: "test", p_scope: data.streamId, p_sequence: data.sequence, p_fingerprint: fingerprint, p_payload: payload });
     if (error) return NextResponse.json({ error: "Kërkesa nuk u pranua. Rifresko statusin; mos krijo identitet të ri për retry." }, { status: 409 });
     if (data.retry === true && job.batch_parent_id) return NextResponse.json({ error: "Riprovo kërkesën e parë të grupit, me të njëjtin identitet." }, { status: 409 });

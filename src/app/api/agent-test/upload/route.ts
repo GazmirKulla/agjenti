@@ -3,10 +3,11 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { inspectAttachment, readAttachmentForm, sealAttachment } from "@/lib/agents/test-chat/attachments";
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
 import { transcribeAudio } from "@/lib/business-intelligence/transcription";
+import { meteredRoute } from "@/lib/ai/usage";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   if (request.headers.get("origin") !== new URL(request.url).origin) return json({ error: "Kërkesë e palejuar." }, 403);
   const user = await getSessionUser();
   if (!user) return json({ error: "Hyr përsëri në llogari." }, 401);
@@ -34,3 +35,4 @@ export async function POST(request: Request) {
     return json({ error: known ? (error as Error).message : "Përpunimi nuk përfundoi. Provo përsëri." }, 400);
   }
 }
+export const POST = meteredRoute(handlePOST);

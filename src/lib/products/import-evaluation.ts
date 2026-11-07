@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI from "@/lib/ai/openai";
 import { agentModel } from "@/lib/agents/generate";
 import type { Access } from "@/lib/business-assistant/service";
 import { openImportToken, prepareImport } from "./import-service";
