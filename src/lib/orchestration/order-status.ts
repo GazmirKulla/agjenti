@@ -18,6 +18,17 @@ export function orderStatusAdapter(scope?: { businessId: string; conversationId:
         return { status: "succeeded", output: { orders: JSON.stringify(orders), limit: 6, trackingAvailable: false } };
       } catch { return { status: "failed", output: { code: "order_status_unavailable" } }; }
     },
+    async reconcile(_action, context): Promise<EffectResult | null> {
+      if (isIsolatedExecution() || !scope || scope.businessId !== context.businessId || scope.conversationId !== context.conversationId) return null;
+      try {
+        await requireRuntimeModules(scope.businessId, ["orders", "workflows"]);
+        const identity = scope.identity;
+        if (!identity || identity.conversationId !== scope.conversationId) return { status: "failed", output: { code: "customer_identity_unverified" } };
+        const orders = await ownOrders(scope.businessId, identity);
+        if (!orders) return { status: "failed", output: { code: "customer_identity_unverified" } };
+        return { status: "succeeded", output: { orders: JSON.stringify(orders), limit: 6, trackingAvailable: false } };
+      } catch { return null; }
+    },
     async simulate() {
       recordExternalAction({ kind: "orders.status", disposition: "SIMULATED", detail: "no_customer_orders_read" });
       return { status: "simulated", realOrdersRead: false };

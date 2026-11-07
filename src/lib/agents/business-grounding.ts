@@ -43,7 +43,7 @@ export function readResult<T>(source: GroundedRead<T>["source"], businessId: str
  * trusted tenant and current runtimeModules result; never expose as a client RPC.
  * Count and bounded rows come from the same PostgREST statement/snapshot. */
 export async function readBusinessGrounding(db: SupabaseClient, businessId: string, modules: string[] | null,
-  entity?: { kind: "product" | "service"; id: string }): Promise<BusinessGrounding> {
+  entity?: { kind: "product" | "service"; id: string } | { kind: "product" | "service"; id: string }[]): Promise<BusinessGrounding> {
   const enabled = (module: string) => !modules || modules.includes(module);
   const absent = { data: [], error: null, count: 0 };
   const [p, s, k] = await Promise.all([
@@ -59,15 +59,15 @@ export async function readBusinessGrounding(db: SupabaseClient, businessId: stri
   // A coordinator-resolved relative reference can lie outside the bounded read.
   // Fetch its current facts using the SAME active/tenant restrictions, not its
   // historical presented name/price. This never makes a partial read complete.
-  if (entity) {
-    const result = entity.kind === "product" ? products : services;
-    if (result.status !== "unavailable" && !result.records.some(row => row.id === entity.id)) {
-      const extra = await db.from(entity.kind === "product" ? "products" : "booking_services")
-        .select(entity.kind === "product" ? "id,name,sku,description,product_type_id,workflow_id,price_amount,currency" : "id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled")
-        .eq("business_id", businessId).eq("is_active", true).eq("id", entity.id).maybeSingle();
-      if (extra.error) { result.status = "unavailable"; result.reason = "reference_read_failed"; result.records = []; result.total = null; }
-      else if (extra.data && "id" in extra.data && extra.data.id === entity.id) { result.records.push(extra.data as GroundedProduct & GroundedService); result.status = "partial"; result.reason = "selected_entity_outside_snapshot"; }
-    }
+  const pins = entity ? Array.isArray(entity) ? entity : [entity] : [];
+  for (const item of pins) {
+    const result = item.kind === "product" ? products : services;
+    if (result.status === "unavailable" || result.records.some(row => row.id === item.id)) continue;
+    const extra = await db.from(item.kind === "product" ? "products" : "booking_services")
+      .select(item.kind === "product" ? "id,name,sku,description,product_type_id,workflow_id,price_amount,currency" : "id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled")
+      .eq("business_id", businessId).eq("is_active", true).eq("id", item.id).maybeSingle();
+    if (extra.error) { result.status = "unavailable"; result.reason = "reference_read_failed"; result.records = []; result.total = null; break; }
+    if (extra.data && "id" in extra.data && extra.data.id === item.id) { result.records.push(extra.data as GroundedProduct & GroundedService); result.status = "partial"; result.reason = "selected_entity_outside_snapshot"; }
   }
   return { products, services,
     knowledge: readResult("knowledge_entries", businessId, k, enabled("knowledge")),

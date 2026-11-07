@@ -18,6 +18,9 @@ export function registrationVersion(): VisualVersion & { graph: VisualGraphV2 } 
       { id: "e", source: "email", target: "confirm", port: "next" }, { id: "y", source: "confirm", target: "done", port: "yes" }, { id: "no", source: "confirm", target: "name", port: "no" }],
   } };
 }
+it("rejects an unusable visual graph before compiling a process", () => {
+  expect(() => compileVisualProcesses({ id: "v", businessId: "business", createdAt: "", graph: { version: 1, name: "", nodes: [], edges: [] } })).toThrow("invalid_visual_definition");
+});
 it("round trips configured purpose, subject and optionality through the existing editor format", () => {
   const version = registrationVersion();
   version.graph = normalizeVisualDraft(version.graph) as VisualGraphV2;
@@ -102,4 +105,61 @@ it("expands the existing booking node into collection, review and an approved do
   const [collection] = compileVisualProcesses(version);
   expect(collection.collection?.domain).toBe("booking");
   expect(collection.steps.some(s => s.kind === "effect")).toBe(false);
+});
+
+it("invalidates a booking approval after a time correction and does not dispatch the old review", async () => {
+  const { bookingFields, bookingServerValues, bookingToolPolicy } = await import("./booking-definition");
+  const { recordPresentation } = await import("./transition");
+  const version = registrationVersion();
+  version.graph.nodes = [node("start", "start"), node("book", "booking"), node("done", "end")];
+  version.graph.flows = [{ id: "reservation", label: "Reservation", kind: "booking", entryNodeId: "book", nodeIds: ["book"] }];
+  version.graph.edges = [{ id: "s", source: "start", target: "done", port: "next" }, { id: "b", source: "book", target: "done", port: "next" }];
+  const definitions = compileVisualProcesses(version), { key } = bookingFields("book");
+  const terms = { serviceId: "11111111-1111-4111-8111-111111111111", serviceName: "Consultation", durationMinutes: 30, bufferMinutes: 10, timezone: "UTC", confirmationMode: "manual" as const };
+  const values = { serviceId: terms.serviceId, date: "2026-12-01", time: "10:00", name: "Test Customer", contact: "test@example.test" };
+  const message = "Book Consultation on December 1 at 10:00 for Test Customer test@example.test";
+  const env: Environment = { mode: "test", now: 1, definitions, startableVersionIds: new Set([version.id]), tools: [bookingToolPolicy(true)], promptTtlMs: 60000,
+    serverFacts: () => bookingServerValues("book", terms) };
+  const event = { id: "e", businessId: "business", conversationId: "conversation", message, actor: "customer" as const };
+  const first = transitionCustomer(initialSnapshot("business", "conversation", "test"), event, { revision: 0, needsClarification: false,
+    commands: [{ kind: "start", definitionId: "reservation", versionId: version.id, evidence: message,
+      initialFacts: Object.entries(values).map(([name, value]) => ({ fieldId: key(name), value, evidence: message })) }] }, env);
+  const id = first.state.focusId!, oldWait = first.state.instances[id].wait!.id;
+  const presented = recordPresentation(first.state, [oldWait], 2);
+  const corrected = transitionCustomer(presented, { ...event, id: "c", message: "11:00" }, { revision: presented.revision, needsClarification: false,
+    commands: [{ kind: "facts", instanceId: id, values: [{ fieldId: key("time"), value: "11:00", evidence: "11:00" }] }] }, { ...env, now: 3 });
+  expect(corrected.actions).toEqual([]);
+  expect(corrected.state.instances[id].facts[key("time")].value).toBe("11:00");
+  expect(corrected.state.instances[id].wait!.id).not.toBe(oldWait);
+  expect(corrected.state.instances[id].wait!.presentedAt).toBeUndefined();
+  expect(() => transitionCustomer(corrected.state, { ...event, id: "old", message: "Proceed" }, { revision: corrected.state.revision, needsClarification: false,
+    commands: [{ kind: "approve", instanceId: id, waitId: oldWait, evidence: "Proceed" }] }, { ...env, now: 4 })).toThrow("invalid_approval_target");
+});
+
+it("replaces a booking review when current duration changes before approval", async () => {
+  const { bookingFields, bookingServerValues, bookingToolPolicy } = await import("./booking-definition");
+  const { recordPresentation } = await import("./transition");
+  const version = registrationVersion();
+  version.graph.nodes = [node("start", "start"), node("book", "booking"), node("done", "end")];
+  version.graph.flows = [{ id: "reservation", label: "Reservation", kind: "booking", entryNodeId: "book", nodeIds: ["book"] }];
+  version.graph.edges = [{ id: "s", source: "start", target: "done", port: "next" }, { id: "b", source: "book", target: "done", port: "next" }];
+  const definitions = compileVisualProcesses(version), { key } = bookingFields("book");
+  const terms = { serviceId: "11111111-1111-4111-8111-111111111111", serviceName: "Consultation", durationMinutes: 30, bufferMinutes: 10, timezone: "UTC", confirmationMode: "manual" as const };
+  const values = { serviceId: terms.serviceId, date: "2026-12-01", time: "10:00", name: "Test Customer", contact: "test@example.test" };
+  const message = "Book Consultation on December 1 at 10:00 for Test Customer test@example.test";
+  const env: Environment = { mode: "test", now: 1, definitions, startableVersionIds: new Set([version.id]), tools: [bookingToolPolicy(true)], promptTtlMs: 60000,
+    serverFacts: () => bookingServerValues("book", terms) };
+  const event = { id: "e", businessId: "business", conversationId: "conversation", message, actor: "customer" as const };
+  const first = transitionCustomer(initialSnapshot("business", "conversation", "test"), event, { revision: 0, needsClarification: false,
+    commands: [{ kind: "start", definitionId: "reservation", versionId: version.id, evidence: message,
+      initialFacts: Object.entries(values).map(([name, value]) => ({ fieldId: key(name), value, evidence: message })) }] }, env);
+  const id = first.state.focusId!, waitId = first.state.instances[id].wait!.id;
+  const presented = recordPresentation(first.state, [waitId], 2);
+  terms.durationMinutes = 60;
+  const changed = transitionCustomer(presented, { ...event, id: "a", message: "Proceed" }, { revision: presented.revision, needsClarification: false,
+    commands: [{ kind: "approve", instanceId: id, waitId, evidence: "Proceed" }] }, { ...env, now: 3 });
+  expect(changed.actions).toEqual([]);
+  expect(changed.state.instances[id].status).toBe("waiting_approval");
+  expect(changed.state.instances[id].wait!.id).not.toBe(waitId);
+  expect(changed.state.instances[id].facts[key("durationMinutes")].value).toBe(60);
 });

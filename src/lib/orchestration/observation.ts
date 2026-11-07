@@ -83,12 +83,19 @@ export const observationSchema = shape({
 });
 
 /** Every declared field is included, including unanswered custom fields. No profile aliasing. */
-export function observationContext(state: Snapshot, env: Environment) {
+export function observationContext(state: Snapshot, env: Environment, extras?: {
+  catalog?: { kind: "product" | "service"; entities: { id: string; displayOrder: number; available: boolean; name?: string }[] };
+  products?: { id: string; name: string }[];
+  services?: { id: string; name: string }[];
+}) {
   return {
     photoReceived: env.photoReceived === true,
     currentTime: new Date(env.now).toISOString(),
     revision: state.revision,
     focusId: state.focusId,
+    profileMemory: state.profileMemory ?? {},
+    catalogPresentation: extras?.catalog ?? null,
+    catalog: { products: extras?.products ?? [], services: extras?.services ?? [] },
     processes: env.definitions.filter(d => d.businessId === state.businessId && (env.startableVersionIds.has(d.versionId)
       || Object.values(state.instances).some(i => i.versionId === d.versionId && i.definitionId === d.id)))
       .map(d => ({ id: d.id, versionId: d.versionId, name: d.name, purpose: d.purpose, offerPolicy: d.offerPolicy,
@@ -111,7 +118,8 @@ export const observationInstructions = `Interpret the current customer message i
 Use only the process, instance, field, offer and wait identifiers supplied in the context. Facts belong to their declared subject and instance; an organization's name is not a person's name. Extract explicit declarations and clear answers, with verbatim evidence from the CURRENT message. Do not infer missing facts, copy facts from history or silently repair conflicting values. Preserve invalid literal formats for server validation.
 Fields with source server are authoritative business terms. Never supply or change them through facts or initialFacts; only customer fields can be extracted from messages.
 Photo fields are verified by the transport. Never supply photo facts. When a verified photo answers the only delivered photo prompt, the server will collect it without a facts command. A claim that a photo was sent is not proof of an attachment.
-For catalog identifier fields, resolve an unambiguous customer reference against the supplied verified catalog and return its identifier with verbatim evidence from the current message. Do not invent identifiers or resolve ambiguous names. Interpret relative dates only when the current time and business time zone make them unambiguous; otherwise request clarification.
+For catalog identifier fields, resolve an unambiguous customer reference against the supplied verified catalog and catalogPresentation, and return its identifier with verbatim evidence from the current message. catalogPresentation is the confirmed delivered list with displayOrder and current tenant-active IDs; relative references resolve only against that list. Do not invent identifiers, do not use names as identity, and do not compact missing display positions. If a presented item is unavailable or the reference is ambiguous, return needsClarification. Interpret relative dates only when the current time and business time zone make them unambiguous; otherwise request clarification.
+profileMemory is previously stored, validated contact for this participant. It is not an instance fact, not authorization, and not evidence for a facts command. Do not copy it into facts unless the current message restates it. An informational question about the customer's own stored contact may use it; do not disclose it otherwise.
 For processes being started or continued by commands, evaluate their configured semanticConditions in context. Return conditions with definitionId, versionId, stepId, yes/no/unclear outcome and current-message evidence. Use the existing instanceId, or null only for an instance being started or accepted in this turn. These observations select configured branches; they never grant permission or approve effects. Return no condition observations for unrelated processes. If a condition cannot be resolved, use unclear.
 A message can contain several field answers, a correction and an informational question. Do not consume the whole message after extracting one fact. Questions and acknowledgements alone preserve existing progress. Start only a process the customer explicitly requests; acceptance of an offer must target that delivered offer. An offer to start is not approval of a final effect. Propose a relevant process according to its configured purpose and offerPolicy, even when the process has no external action. Do not repeatedly offer unrelated processes or force a process on an informational conversation.
 When starting or accepting an offer, put facts explicitly supplied in this same message in initialFacts, bound to the definition fields; otherwise use an empty array. The server assigns the new instance ID.

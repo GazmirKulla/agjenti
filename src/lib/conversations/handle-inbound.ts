@@ -1,10 +1,10 @@
+import { initialSnapshot } from "@/lib/orchestration/contracts";
 import { inboxHistory, type InboxHistoryMessage } from "./inbox-history";
 import { readStoredConversationState } from "@/lib/orchestration/stored-state";
 import { isAcceptedDelivery } from "./delivery-status";
 import { inboundBatch } from "./message-batch";
 import { randomUUID } from "node:crypto";
 import { InboundPersistenceError } from "./inbound-persistence-error";
-import { hydrateProfile } from "./profile";
 import { prepareWorkflowReply, type WorkflowJob } from "./workflow-queue";
 import { processConversationMessage } from "./process-conversation-message";
 import { decryptSecret } from "@/lib/crypto/tokens";
@@ -14,12 +14,9 @@ import { fetchInstagramUserProfile } from "@/lib/instagram/user-profile";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
-import { suspendProcesses } from "@/lib/workflows/conversation-processes";
 import { runAiReaction } from "./ai-reaction-runtime";
 import { hasUnfinishedWork } from "./ai-reaction-decision";
 import {
-  emptyState,
-  promptForStep,
   type ConversationStatePayload,
 } from "@/lib/workflows/engine";
 
@@ -238,7 +235,7 @@ export async function handleInboundMessage(
           conversation_id: conversationId,
           business_id: businessId,
           status: "in_progress",
-          collected: emptyState(),
+          collected: initialSnapshot(businessId, conversationId, "live"),
         });
       console.log("[inbound] conversation_states insert", {
         ok: !stateError,
@@ -356,15 +353,16 @@ export async function handleInboundMessage(
     .eq("conversation_id", conversationId)
     .maybeSingle();
   if(job&&stateReadError) throw new Error("Conversation state unavailable");
-  if(job&&!rawState) await supabase.from("conversation_states").upsert({conversation_id:conversationId,business_id:businessId,status:"in_progress",collected:emptyState()},{onConflict:"conversation_id",ignoreDuplicates:true}).throwOnError();
+  if(job&&!rawState) await supabase.from("conversation_states").upsert({conversation_id:conversationId,business_id:businessId,status:"in_progress",collected:initialSnapshot(businessId,conversationId,"live")},{onConflict:"conversation_id",ignoreDuplicates:true}).throwOnError();
   const stateRow=rawState as unknown as {collected:ConversationStatePayload|null;workflow_id:string|null;revision?:number}|null;
   // A paused handoff returns above. Reaching this point with its saved state means
-  // staff explicitly resumed the conversation; start a new run without erasing data.
+  // staff explicitly resumed the conversation; keep native facts and continue.
   let inboundState = readStoredConversationState(stateRow?.collected ?? {}, { businessId, conversationId, revision: stateRow?.revision });
   // Direct processor calls can test production routing, but live state commits
   // and sends for shared conversations must always pass through the durable queue.
   if (!job) throw new Error("workflow_queue_required");
-  if(job && !inboundState.runtime) inboundState=await hydrateProfile(businessId,message.externalParticipantId,inboundState,message.channel);
+  const runtime = inboundState.runtime ?? initialSnapshot(businessId, conversationId, "live");
+  inboundState = { ...inboundState, runtime };
   // Persisted inbox history also includes customers and staff who spoke while AI
   // was paused. Never replay those messages as workflow commands or field values.
   const [{ data: historyRows, error: historyError }, { data: lastOutbound, error: outboundError }] = await Promise.all([
@@ -381,26 +379,8 @@ export async function handleInboundMessage(
   const history = inboxHistory((historyRows ?? []) as InboxHistoryMessage[], new Set(batch.originals.map(original => original.externalMessageId)));
   inboundState.recentMessages = history.messages;
   const staffReplied = history.staffReplied || lastOutbound?.source === "staff" && isAcceptedDelivery(lastOutbound.delivery_status);
-  const resumedHandoff = inboundState.staffHandoff || inboundState.visual?.status === "handoff" && !inboundState.visual.advisory;
-  // Fresh threads and explicit AI resume start clean. Only a live staff takeover
-  // (or an unfinished handoff still marked in state) should arm the clarify guard.
-  if (!inboundState.runtime && !createdFresh && (resumedHandoff || staffReplied) && inboundState.conversationPaused !== false) {
-    delete inboundState.staffHandoff;
-    inboundState.conversationPaused = true;
-    suspendProcesses(inboundState);
-    if (inboundState.processes) {
-      const processes = inboundState.processes;
-      delete processes.pendingChoice; delete processes.auxiliary;
-      delete processes.pendingClarification;
-    }
-  } else if (resumedHandoff) {
-    delete inboundState.staffHandoff;
-  }
-  if (inboundState.visual?.status === "handoff" && !inboundState.visual.advisory) {
-    inboundState.completedVisual = structuredClone(inboundState.visual);
-    inboundState.visual.status = "completed";
-  }
-  const started = Date.now();
+  const resumedHandoff = runtime.handoffRequested === true;
+  if (resumedHandoff) inboundState.runtime = { ...runtime, handoffRequested: false };
   const canAct = async () => {
     const [{ data: current, error }, { data: business, error: businessError }] = await Promise.all([
       supabase.from("conversations").select("status,auto_reply").eq("id", conversationId!).eq("business_id", businessId).maybeSingle(),
@@ -420,16 +400,7 @@ export async function handleInboundMessage(
     // (staff resume, delete, or abandoned) and must not force the clarify prompt.
     unconfirmedPrompt = Boolean(attempted && ["prepared", "sending", "uncertain"].includes(attempted.status));
     if (unconfirmedPrompt || (attempted && attempted.reply !== deliveredReply)) deliveredReply = null;
-    if (unconfirmedPrompt && inboundState.runtime) throw new Error("delivery_unverified");
-    if (unconfirmedPrompt && !inboundState.runtime) {
-      inboundState.conversationPaused = true;
-      suspendProcesses(inboundState);
-      if (inboundState.processes) {
-        delete inboundState.processes.pendingChoice;
-        delete inboundState.processes.pendingClarification;
-        delete inboundState.processes.auxiliary;
-      }
-    }
+    if (unconfirmedPrompt) throw new Error("delivery_unverified");
   }
   // Capture pre-turn evidence before the coordinator may update/suspend state.
   const reactionHistory = history.messages.map(message => ({ ...message }));
@@ -455,7 +426,6 @@ export async function handleInboundMessage(
     previousResponseId: resumedHandoff || staffReplied || unconfirmedPrompt ? null : open?.openai_previous_response_id ?? null,
   });
   const state = turn.nextState;
-  const generated = { reply: turn.reply, responseId: turn.previousResponseId };
   if(job) {
     await prepareWorkflowReply(job,conversationId,stateRow?.revision??0,turn);
     // Persist the normal reply first. Optional acknowledgements never replace it
@@ -469,64 +439,5 @@ export async function handleInboundMessage(
       } catch { /* Normal prepared reply remains authoritative and sendable. */ }
     }
     return;
-  }
-  if (!await canAct()) return;
-  await supabase
-    .from("conversation_states")
-    .upsert({
-      conversation_id: conversationId,
-      business_id: businessId,
-      workflow_id: turn.workflowId,
-      status: state.step_key === "order_ready" ? "ready" : "in_progress",
-      collected: state,
-      step_key: state.step_key,
-      updated_at: new Date().toISOString(),
-    })
-    .throwOnError();
-
-  if (turn.handoff && !turn.advisoryHandoff) {
-    await supabase.from("conversations").update({ status: "paused", auto_reply: false })
-      .eq("id", conversationId).eq("business_id", businessId).throwOnError();
-  }
-  if (!(turn.handoff && !turn.advisoryHandoff) && !await canAct()) return;
-  const send = await adapter.send({
-    accountId: String(accountId),
-    token: accessToken,
-    to: message.externalParticipantId,
-    body: generated.reply || promptForStep(state.step_key),
-  });
-
-  await supabase.from("agent_turns").insert({
-    conversation_id: conversationId,
-    business_id: businessId,
-    status: send.ok ? "ok" : "failed",
-    reply: generated.reply,
-    elapsed_ms: Date.now() - started,
-  });
-
-  if (send.ok) {
-    await supabase.from("messages").insert({
-      business_id: businessId,
-      conversation_id: conversationId,
-      [adapter.connection]: conn.id,
-      direction: "outbound",
-      source: "agent",
-      body: generated.reply,
-      external_message_id: send.messageId ?? null,
-      delivery_status: "sent",
-    });
-    await supabase
-      .from("conversations")
-      .update({
-        openai_previous_response_id: generated.responseId,
-        last_message_at: new Date().toISOString(),
-        last_message_preview: generated.reply.slice(0, 140),
-      })
-      .eq("id", conversationId);
-  } else if (send.code === "token_revoked") {
-    await supabase
-      .from(adapter.table)
-      .update({ status: "revoked", last_error: send.error })
-      .eq("id", conn.id);
   }
 }

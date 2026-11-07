@@ -32,8 +32,10 @@ import { productDependencies } from "./product-dependencies";
 import { productStepSource } from "./product-composition";
 import { retrieveBusinessSources } from "@/lib/catalogs/retrieval";
 import { processGroundingContext } from "./grounding-context";
+import { catalogPresentationFromReply, visibleCatalogPresentation } from "./catalog-presentation";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
+import { readProcessProfile } from "@/lib/conversations/profile";
 
 /** One process runtime for authenticated live channels and isolated previews. */
 export async function processConversation(params: AgentTurnParams): Promise<AgentTurnResult> {
@@ -73,12 +75,29 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const modules = await runtimeModules(params.businessId);
   if (definitions.length && modules && !modules.includes("workflows")) throw new CapabilityEnforcementError("module_disabled", "Workflow është çaktivizuar. Progresi yt është ruajtur.");
   const hasBookings = [...versions.values()].some(v => v.graph.nodes.some(n => n.kind === "booking"));
-  const [agentRead, grounding, calendarRead, journey] = await Promise.all([
+  let state: Snapshot = existing ? structuredClone(existing) : { ...initialSnapshot(params.businessId, transport?.conversationId ?? randomUUID(), mode), revision: transport?.revision ?? 0 };
+  const identity = params.customerIdentity;
+  const catalogPins = [
+    ...(state.catalogPresentation?.entities.map(entity => ({ kind: state.catalogPresentation!.kind, id: entity.id })) ?? []),
+    ...Object.values(state.instances).flatMap(instance => {
+      const productId = instance.facts[orderFields(instance.definitionId).key("productId")]?.value;
+      const pins: { kind: "product" | "service"; id: string }[] = typeof productId === "string" ? [{ kind: "product", id: productId }] : [];
+      for (const version of versions.values()) for (const node of version.graph.nodes.filter(n => n.kind === "booking")) {
+        const serviceId = instance.facts[bookingFields(node.id).key("serviceId")]?.value;
+        if (typeof serviceId === "string") pins.push({ kind: "service", id: serviceId });
+      }
+      return pins;
+    }),
+    ...(preview ? [{ kind: "product" as const, id: preview.productId }] : []),
+  ];
+  const [agentRead, grounding, calendarRead, journey, profileMemory] = await Promise.all([
     db.from("ai_agents").select(agentConfigurationColumns).eq("business_id", params.businessId).eq("is_active", true).maybeSingle(),
-    readBusinessGrounding(db, params.businessId, modules, preview ? { kind: "product", id: preview.productId } : undefined),
+    readBusinessGrounding(db, params.businessId, modules, catalogPins),
     hasBookings ? db.from("business_calendar_settings").select("timezone").eq("business_id", params.businessId).maybeSingle() : { data: null, error: null },
     loadBusinessProcess(params.businessId),
+    identity?.instagramParticipantId ? readProcessProfile(params.businessId, identity.instagramParticipantId, identity.channel ?? "instagram") : Promise.resolve(undefined),
   ]);
+  if (profileMemory) state.profileMemory = profileMemory;
   if (agentRead.error) throw new Error("process_configuration_unavailable");
   const agent = params.configurationPreview ?? agentRead.data;
   const configuration = configurationRead(agent);
@@ -87,7 +106,10 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     businessTimezone: !calendarRead.error ? calendarRead.data?.timezone ?? null : null,
     instructions: agent?.instructions ?? "", communication: agent?.communication,
     businessProcess: businessProcessContext(journey.process),
-    ...await processGroundingContext(grounding, params.message, Math.min(deadline - 18000, Date.now() + 10000)),
+    ...await processGroundingContext(grounding, params.message, Math.min(deadline - 18000, Date.now() + 10000), {
+      productIds: catalogPins.filter(pin => pin.kind === "product").map(pin => pin.id),
+      serviceIds: catalogPins.filter(pin => pin.kind === "service").map(pin => pin.id),
+    }),
     attachments: params.attachmentContext,
   };
   trace?.({ stage: "tools", label: "Process business sources loaded", data: { knowledge: grounding.knowledge.status, products: grounding.products.status, services: grounding.services.status, readOnly: true } });
@@ -115,7 +137,6 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       traversed.push(editorNodeId);
       trace?.({ stage: "workflow", label: "Process step evaluated", data: { ...step, editorNodeId, businessId: params.businessId, executionMode: mode } });
     } };
-  let state: Snapshot = existing ? structuredClone(existing) : { ...initialSnapshot(params.businessId, transport?.conversationId ?? randomUUID(), mode), revision: transport?.revision ?? 0 };
   if (hasBookings) await booking.prepare(state, definitions);
   if (hasOrders) await orders.prepare(state, definitions);
   await services.prepare(state, definitions);
@@ -134,7 +155,16 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       if (transition.notices.some(n => n.kind === "handoff") && modules && !modules.includes("staff")) throw new CapabilityEnforcementError("module_disabled", "Kalimi te stafi është çaktivizuar.");
     },
     interpret: async () => {
-      const interpretation = await interpretCustomer({ message: params.message, state, env, history, deadline, businessContext: context });
+      const presented = visibleCatalogPresentation(state, env.now, params.deliveredReply);
+      const interpretation = await interpretCustomer({ message: params.message, state, env, history, deadline, businessContext: context,
+        observationExtras: {
+          catalog: presented ? { kind: presented.kind, entities: presented.entities.map(entity => {
+            const row = presented.kind === "product" ? context.products.records.find(item => item.id === entity.id) : context.services.records.find(item => item.id === entity.id);
+            return { id: entity.id, displayOrder: entity.displayOrder, available: Boolean(row), ...(row ? { name: row.name } : {}) };
+          }) } : undefined,
+          products: context.products.records.map(row => ({ id: row.id, name: row.name })),
+          services: context.services.records.map(row => ({ id: row.id, name: row.name })),
+        } });
       if (hasBookings) await booking.prepare(state, definitions, interpretation.observation);
       if (hasOrders) await orders.prepare(state, definitions, interpretation.observation);
       await services.prepare(state, definitions, interpretation.observation);
@@ -169,11 +199,15 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       { semanticRouting: true, deadline: deadline - 8000, history }) : null,
   ]);
   const composed = await composeProcessReply({ message: params.message, history, state, env, notices,
-    context: { ...context, availability, training, documents: documents ? { records: documents.documents, evidence: documents.evidence, clarification: documents.clarification } : null }, deadline });
+    context: { ...context, availability, training, profileMemory: state.profileMemory,
+      documents: documents ? { records: documents.documents, evidence: documents.evidence, clarification: documents.clarification } : null }, deadline });
   // The isolated session token is issued together with this reply. Live channels require the SQL delivery receipt.
   const expectedRevision = state.revision;
   delete state.pendingTurn;
   if (documents) state.retrieval = documents.context;
+  const catalogPresentation = catalogPresentationFromReply(params.businessId, composed.reply, composed.presented, Date.now());
+  if (catalogPresentation) state.catalogPresentation = catalogPresentation;
+  else delete state.catalogPresentation;
   state.handoffRequested = handoff;
   if (mode === "test") state = recordPresentation(state, composed.targetIds, Date.now());
   else state.revision++;
@@ -188,6 +222,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const nextState = { ...emptyState(), runtime: state, step_key: active?.stepId ?? null,
     recentMessages: state.history };
   return { ...(active && definition && version ? { preparedRequest: processPreparedRequest(active, definition, version, Date.now()) } : {}), ...(transport ? { processCheckpoint: { event: { ...event, id: `job:${transport.jobId}:reply` }, expectedRevision, targetIds: composed.targetIds } } : {}), reply: composed.reply, nextState, previousResponseId: null, workflowId: null, productName: null,
+    ...(composed.presented?.kind === "product" ? { presentedProducts: [...composed.presented.items] } : {}),
+    ...(composed.presented?.kind === "service" ? { presentedServices: [...composed.presented.items] } : {}),
     workflowProgress: definition?.fields.map(f => ({ key: f.id, label: f.label, kind: "text" as const,
       status: active?.facts[f.id] ? "done" as const : active?.wait?.fieldId === f.id ? "current" as const : "pending" as const,
       value: active?.facts[f.id] ? String(active.facts[f.id].value) : null })) ?? [],

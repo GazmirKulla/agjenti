@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import * as runtime from "./runtime";
+import * as runtime from "@/lib/orchestration/transition";
+import { visualGraphHash } from "./graph-hash";
 import { matchesSimulationBinding, simulateWorkflowProposal, simulationBinding } from "./simulation";
 import { normalizeVisualDraft, starterVisualGraph, upgradeVisualGraph } from "./model";
 import type { VisualGraph, VisualNode } from "./types";
@@ -18,9 +19,9 @@ function collectGraph(): VisualGraph {
     edges: [{ id: "first", source: "start", target: "email", port: "next" }, { id: "last", source: "email", target: "end", port: "next" }] };
 }
 function branchGraph(): VisualGraph {
-  return { version: 1, name: "WhatsApp only", nodes: [node("start", "start"), node("channel", "condition", { condition: "field_equals", fieldKey: "channel", value: "whatsapp" }),
+  return { version: 1, name: "WhatsApp only", nodes: [node("start", "start"), node("channel_value", "collect", { fieldKey: "channel", fieldType: "text", prompt: "Channel?" }), node("channel", "condition", { condition: "field_equals", fieldKey: "channel", value: "whatsapp" }),
     node("phone", "collect", { fieldKey: "phone", fieldType: "phone", prompt: "Phone?" }), node("end", "end")], edges: [
-    { id: "first", source: "start", target: "channel", port: "next" }, { id: "yes", source: "channel", target: "phone", port: "yes" },
+    { id: "first", source: "start", target: "channel_value", port: "next" }, { id: "collected", source: "channel_value", target: "channel", port: "next" }, { id: "yes", source: "channel", target: "phone", port: "yes" },
     { id: "no", source: "channel", target: "end", port: "no" }, { id: "last", source: "phone", target: "end", port: "next" }] };
 }
 const run = (candidate: VisualGraph, before = candidate, capabilities: CapabilityAssessment[] = []) => simulateWorkflowProposal({ proposalId: "proposal-a", baseRevision: 3, candidate, before, capabilities });
@@ -30,7 +31,7 @@ describe("isolated automatic simulation", () => {
     const graph = collectGraph(), snapshot = structuredClone(graph), report = run(graph);
     expect(report.result).toBe("PASS"); expect(report.canPublish).toBe(true);
     expect(report.scenarios.every(s => s.executionCount > 0 && s.traversedNodeIds.length > 0)).toBe(true);
-    expect(report.scenarios.find(s => s.scenarioId === "entry:order")?.traversedNodeIds).toEqual(["start", "email", "email", "end"]);
+    expect(report.scenarios.find(s => s.scenarioId === "entry:order")?.traversedNodeIds).toEqual(["email", "email", "end"]);
     expect(graph).toEqual(snapshot);
   });
   it("selects both condition branches from explicit graph expectations", () => {
@@ -49,12 +50,12 @@ describe("isolated automatic simulation", () => {
     expect(report.result).toBe("PASS");
     for (const port of ["yes", "no"]) {
       expect(report.scenarios.find(s => s.scenarioId === `branch:confirm:${port}`)).toMatchObject({
-        result: "PASS", executionCount: 2, traversedNodeIds: ["confirm", "confirm", port], selectedBranches: { confirm: port },
+        result: "PASS", executionCount: 2, traversedNodeIds: ["confirm", port], selectedBranches: { confirm: port },
       });
     }
     for (const category of ["missing_input", "ambiguous_input"]) {
       expect(report.scenarios.find(s => s.scenarioId === `${category}:confirm`)).toMatchObject({
-        result: "PASS", executionCount: 2, traversedNodeIds: ["confirm", "confirm"], selectedBranches: {},
+        result: "PASS", executionCount: 2, traversedNodeIds: ["confirm"], selectedBranches: {},
       });
     }
     expect(forbidden).not.toHaveBeenCalled();
@@ -99,7 +100,7 @@ describe("isolated automatic simulation", () => {
   it("binds reports to proposal, normalized graph and base revision", () => {
     const graph = collectGraph(), report = run(graph), binding = simulationBinding(report);
     expect(matchesSimulationBinding(binding, "proposal-a", 3, graph)).toBe(true);
-    expect(matchesSimulationBinding({ ...binding, version: 1 }, "proposal-a", 3, graph)).toBe(false);
+    expect(matchesSimulationBinding({ ...binding, version: 2 }, "proposal-a", 3, graph)).toBe(false);
     expect(matchesSimulationBinding(binding, "proposal-b", 3, graph)).toBe(false);
     expect(matchesSimulationBinding(binding, "proposal-a", 4, graph)).toBe(false);
     const changed = structuredClone(graph); changed.nodes[1].config.prompt = "Changed";
@@ -117,16 +118,13 @@ describe("isolated automatic simulation", () => {
     expect(report.canPublish).toBe(false); expect(JSON.stringify(report)).not.toContain("secret.invalid");
   });
   it("reports execution errors and independently detects incorrect branch selection", () => {
-    const advance = runtime.advanceVisualWorkflow;
-    vi.spyOn(runtime, "advanceVisualWorkflow").mockImplementation(p => {
-      const execution = advance(p);
-      if (p.state?.nodeId === "channel") execution.state.branchPorts = { channel: "no" };
-      return execution;
-    });
+    const advance = runtime.transitionCustomer;
+    vi.spyOn(runtime, "transitionCustomer").mockImplementation((state, event, observation, env) => advance(state, event, observation, { ...env,
+      onStep: step => env.onStep?.(step.stepId === "phone" ? { ...step, stepId: "end" } : step) }));
     const report = run(branchGraph());
     expect(report.result).toBe("FAIL"); expect(report.canPublish).toBe(false);
     expect(report.scenarios.find(s => s.scenarioId === "branch:channel:yes")?.result).toBe("FAIL");
-    vi.spyOn(runtime, "advanceVisualWorkflow").mockImplementation(() => { throw new Error("secret-diagnostic"); });
+    vi.spyOn(runtime, "transitionCustomer").mockImplementation(() => { throw new Error("secret-diagnostic"); });
     const failed = run(collectGraph());
     expect(failed.result).toBe("FAIL"); expect(JSON.stringify(failed)).not.toContain("secret-diagnostic");
   });
@@ -137,10 +135,11 @@ describe("isolated automatic simulation", () => {
     expect(report.scenarios.filter(s => s.category === "regression").map(s => s.initialState.nodeId)).toEqual(["end"]);
   });
   it("detects a regression from actual before/after execution, independent of structural comparison", () => {
-    const before = collectGraph(), after = { ...before, name: "New label" }, advance = runtime.advanceVisualWorkflow;
-    vi.spyOn(runtime, "advanceVisualWorkflow").mockImplementation(p => {
-      const execution = advance(p);
-      if (p.graph.name === "New label") execution.state.values.unexpected = "new value";
+    const before = collectGraph(), after = { ...before, name: "New label" }, advance = runtime.transitionCustomer;
+    vi.spyOn(runtime, "transitionCustomer").mockImplementation((state, event, observation, env) => {
+      const execution = advance(state, event, observation, env);
+      if (env.definitions[0].versionId === `simulation-${visualGraphHash(normalizeVisualDraft(after)!)}`) execution.state.instances.simulation.facts.unexpected = {
+        fieldId: "unexpected", subject: "request", value: "new value", revision: 0, eventId: "fixture", evidence: "fixture" };
       return execution;
     });
     const report = run(after, before);
@@ -148,7 +147,7 @@ describe("isolated automatic simulation", () => {
     expect(report.canPublish).toBe(false);
   });
   it("redacts prompts and configuration-derived values from reports", () => {
-    const graph = branchGraph(); graph.nodes[1].config.value = "secret-condition"; graph.nodes[2].config.prompt = "secret-prompt";
+    const graph = branchGraph(); graph.nodes.find(n => n.id === "channel")!.config.value = "secret-condition"; graph.nodes.find(n => n.id === "phone")!.config.prompt = "secret-prompt";
     const report = run(graph);
     expect(report.scenarios.find(s => s.scenarioId === "branch:channel:yes")?.result).toBe("PASS");
     expect(JSON.stringify(report)).not.toMatch(/secret-condition|secret-prompt/);

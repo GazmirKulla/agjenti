@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import { emptyState, type ConversationStatePayload } from "./engine";
 import { bookingAdapterState, migrateConversationProcesses, restoreOrder } from "./conversation-processes";
 import type { VisualVersion } from "./visual/types";
-import { advanceVisualWorkflow } from "./visual/runtime";
 
 const version: VisualVersion = {
   id: "pinned-v1", businessId: "business", createdAt: "2026-10-11",
@@ -87,17 +86,6 @@ describe("legacy process migration", () => {
     expect(state.processes?.active).toBeNull();
     expect(state.processes?.order).toBeUndefined();
     expect(state.visual).toEqual(input.visual);
-  });
-
-  it("continues the exact pending collect after migration", () => {
-    const input = bookingState(false);
-    const adapter = bookingAdapterState(migrateConversationProcesses(input, () => "task", version));
-    const result = advanceVisualWorkflow({ graph: version.graph, versionId: version.id, state: adapter.visual,
-      message: "Kontroll i ri", hasPhoto: false, intent: "booking" });
-    expect(result.action.kind).toBe("booking");
-    expect(result.state.values.reason).toBe("Kontroll i ri");
-    expect(result.state.binding).toEqual(input.visual!.binding);
-    expect(result.state.branchPorts).toEqual(input.visual!.branchPorts);
   });
 
   it.each(["book", "details"])("recognizes a V1 booking at %s without a draft or binding", nodeId => {

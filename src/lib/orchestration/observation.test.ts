@@ -30,4 +30,13 @@ describe("semantic observation boundary", () => {
     expect(result.state.instances.instance.facts.email_registration.subject).toBe("organization");
     expect(result.notices.some(n => n.kind === "question")).toBe(false);
   });
+  it("includes presented catalog ids and profile memory without treating them as authorization", () => {
+    const state = initialSnapshot("b", "c", "test");
+    state.profileMemory = { name: { value: "Ana", type: "text" } };
+    const env: Environment = { mode: "test", now: 0, definitions: [], startableVersionIds: new Set(), tools: [], promptTtlMs: 1000 };
+    const context = observationContext(state, env, { catalog: { kind: "product", entities: [{ id: "p2", displayOrder: 1, available: true, name: "Second" }] }, products: [{ id: "p2", name: "Second" }] });
+    expect(context.profileMemory).toEqual({ name: { value: "Ana", type: "text" } });
+    expect(context.catalogPresentation).toEqual({ kind: "product", entities: [{ id: "p2", displayOrder: 1, available: true, name: "Second" }] });
+    expect(context.catalog.products).toEqual([{ id: "p2", name: "Second" }]);
+  });
 });

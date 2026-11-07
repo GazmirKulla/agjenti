@@ -2,7 +2,7 @@ import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import type { VisualVersion, VisualNode } from "@/lib/workflows/visual/types";
 import type { VisualEntity } from "@/lib/workflows/visual/entity-routing";
 import { freshOrderReview, getFact, validValue } from "@/lib/workflows/context";
-import type { BookingDraft } from "@/lib/calendar/agent";
+import type { BookingDraft } from "@/lib/calendar/draft";
 import { validDate, validTime } from "@/lib/calendar/model";
 
 export type PreparedRequest = {

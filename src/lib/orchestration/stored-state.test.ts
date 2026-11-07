@@ -9,6 +9,9 @@ it("preserves the authoritative snapshot on reload without copying facts into le
   expect(state.runtime).not.toBe(snapshot);
   expect(state.fields).toEqual({});
 });
+it("rejects leftover v3 snapshots instead of projecting them as an empty conversation", () => {
+  expect(() => readStoredConversationState({ schemaVersion: 3, fields: {}, customer: {} }, scope)).toThrow("unsupported_stored_state");
+});
 it.each(["business", "conversation", "revision", "mode", "future"])("rejects a %s mismatch instead of restarting the conversation", mismatch => {
   const snapshot = { ...initialSnapshot(scope.businessId, scope.conversationId, "live"), revision: 3 };
   const invalid = { ...snapshot, ...(mismatch === "business" ? { businessId: "foreign" } : mismatch === "conversation" ? { conversationId: "foreign" }

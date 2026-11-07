@@ -4,6 +4,7 @@ import {
   type ProcessDefinition, type RuntimeNotice, type Snapshot, type ToolPolicy, type Transition, type Wait, type FactInput,
 } from "./contracts";
 import { digest, validFieldValue, validateDefinition } from "./definition";
+import { orderFields } from "./order-definition";
 
 /** These capabilities and clocks come from the server, never from a model response. */
 export type Environment = {
@@ -70,7 +71,7 @@ function start(state: Snapshot, definitionId: string, versionId: string, env: En
   state.focusId = instance.id;
   return instance;
 }
-function applyFacts(state: Snapshot, instance: Instance, values: FactInput[], event: CustomerEvent, env: Environment) {
+function writeFacts(state: Snapshot, instance: Instance, values: FactInput[], event: CustomerEvent, env: Environment) {
   const definition = definitionFor(state, instance, env);
   assertPolicy(instance, definition);
   const keys = new Set<string>();
@@ -95,7 +96,30 @@ function applyFacts(state: Snapshot, instance: Instance, values: FactInput[], ev
       if (instance.wait?.kind === "approval") delete instance.wait;
     }
   }
+}
+function applyFacts(state: Snapshot, instance: Instance, values: FactInput[], event: CustomerEvent, env: Environment) {
+  const productFieldId = orderFields(instance.definitionId).key("productId");
+  const split = definitionFor(state, instance, env).fields.some(field => field.id === productFieldId);
+  const productValues = split ? values.filter(item => item.fieldId === productFieldId) : [];
+  const rest = split ? values.filter(item => item.fieldId !== productFieldId) : values;
+  if (productValues.length) {
+    writeFacts(state, instance, productValues, event, env);
+    env.bindDependencies?.(instance, event.id);
+  }
+  if (rest.length) writeFacts(state, instance, rest, event, env);
   env.bindDependencies?.(instance, event.id);
+}
+function applyProfileMemory(state: Snapshot, instance: Instance, env: Environment) {
+  const memory = state.profileMemory;
+  if (!memory) return;
+  const definition = definitionFor(state, instance, env);
+  for (const field of definition.fields) {
+    if (field.source === "server" || Object.hasOwn(instance.facts, field.id) || !field.id.startsWith("customer_")) continue;
+    const item = memory[field.id.slice(9) as keyof NonNullable<Snapshot["profileMemory"]>];
+    if (!item || !validFieldValue(field, item.value)) continue;
+    instance.facts[field.id] = { fieldId: field.id, subject: field.subject, value: item.value,
+      revision: state.revision + 1, eventId: `profile:${field.id}`, evidence: "profile_memory" };
+  }
 }
 function refreshServerFacts(state: Snapshot, instance: Instance, definition: ProcessDefinition, env: Environment, fieldIds: string[]) {
   const fields = definition.fields.filter(f => f.source === "server" && fieldIds.includes(f.id));
@@ -285,6 +309,7 @@ export function transitionCustomer(snapshot: Snapshot, event: CustomerEvent, obs
     if (command.kind === "start") {
       const instance = start(state, command.definitionId, command.versionId, env);
       applyFacts(state, instance, command.initialFacts, event, env);
+      applyProfileMemory(state, instance, env);
       touched.add(instance.id);
       continue;
     }
@@ -303,6 +328,7 @@ export function transitionCustomer(snapshot: Snapshot, event: CustomerEvent, obs
       if (command.kind === "accept_offer") {
         const instance = start(state, offer.definitionId, offer.versionId, env);
         applyFacts(state, instance, command.initialFacts, event, env);
+        applyProfileMemory(state, instance, env);
         touched.add(instance.id);
       }
       delete state.offers[command.offerId];

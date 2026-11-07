@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { initialSnapshot, type Snapshot, type FactInput } from "./contracts";
+import { composeProductCollection } from "./product-composition";
 import { compileVisualProcesses } from "./visual-definition";
 import { linearProcessVersion } from "./linear-definition";
 import { productDependencies } from "./product-dependencies";
@@ -57,6 +58,38 @@ it("keeps a selected product's pinned version when a new linear version is publi
   const result = h.answer(h.first.state, [{ fieldId: "size", value: "M", evidence: "M" }]);
   expect(result.state.instances[h.id].productWorkflow?.versionId).toBe("linear-v1");
   expect(result.state.instances[h.id].wait?.fieldId).toBe("gift");
+});
+it("rebinds a corrected product before validating the new option schema", () => {
+  const other = "22222222-2222-4222-8222-222222222222";
+  const next = linearProcessVersion({ id: "linear-v2", businessId: "business", workflowId: "customization", name: "Customization", productIds: [other], steps: [
+    { key: "size", kind: "choice", options: ["XL"], required: true }, { key: "delivery", kind: "customer" }] });
+  const h = setup();
+  h.versions.set(next.id, next);
+  Object.assign(h.env, productDependencies(h.versions, [parent, child, next]));
+  const { key } = orderFields("order");
+  const corrected = transitionCustomer(h.first.state, { ...h.event, id: "correct", message: `${other} XL` }, { revision: h.first.state.revision, needsClarification: false,
+    commands: [{ kind: "facts", instanceId: h.id, values: [{ fieldId: key("productId"), value: other, evidence: other }, { fieldId: "size", value: "XL", evidence: "XL" }] }] }, h.env);
+  expect(corrected.state.instances[h.id].productWorkflow).toEqual({ productId: other, workflowId: "customization", versionId: "linear-v2" });
+  expect(corrected.state.instances[h.id].facts.size.value).toBe("XL");
+});
+it("does not keep the previous product option after a product-only correction", () => {
+  const other = "22222222-2222-4222-8222-222222222222";
+  const next = linearProcessVersion({ id: "linear-v2", businessId: "business", workflowId: "customization", name: "Customization", productIds: [other], steps: [
+    { key: "color", kind: "choice", options: ["red"], required: true }, { key: "delivery", kind: "customer" }] });
+  const h = setup();
+  const sized = h.answer(h.first.state, [{ fieldId: "size", value: "M", evidence: "M" }]);
+  h.versions.set(next.id, next);
+  Object.assign(h.env, productDependencies(h.versions, [parent, child, next]));
+  const { key } = orderFields("order");
+  const corrected = transitionCustomer(sized.state, { ...h.event, id: "correct", message: other }, { revision: sized.state.revision, needsClarification: false,
+    commands: [{ kind: "facts", instanceId: h.id, values: [{ fieldId: key("productId"), value: other, evidence: other }] }] }, h.env);
+  expect(corrected.state.instances[h.id].facts.size).toBeUndefined();
+  expect(corrected.state.instances[h.id].wait?.fieldId).toBe("color");
+});
+it("rejects composed graphs that exceed the process size limit", () => {
+  const base = compileVisualProcesses(parent)[0];
+  base.fields.push(...Array.from({ length: 60 }, (_, index) => ({ id: `extra${index}`, subject: "order", label: `Extra ${index}`, type: "text" as const, required: false })));
+  expect(() => composeProductCollection(base, child)).toThrow("product_composition_limit");
 });
 it("respects collection-only profile policy while retaining configured product options", () => {
   const h = setup(true);

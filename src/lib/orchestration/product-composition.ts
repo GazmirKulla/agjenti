@@ -66,5 +66,6 @@ export function composeProductCollection(base: ProcessDefinition, version: Proce
     step.fieldIds = [...new Set([...step.fieldIds, ...fields.map(f => f.id)])];
     step.requiredFieldIds = [...new Set([...(step.requiredFieldIds ?? step.fieldIds), ...fields.filter(f => f.required).map(f => f.id)])];
   }
+  if (definition.fields.length > 64 || definition.steps.length > 128) throw new TransitionError("product_composition_limit");
   return validateDefinition(definition);
 }

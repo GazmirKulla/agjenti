@@ -12,24 +12,17 @@ vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from:
 vi.mock("@/lib/integrations/zana", () => ({ submitExternalOrder: m.submit }));
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
 import { reconcileOrder, submissionResponse, submitConfirmedOrder, type SubmissionReceipt } from "./submission";
-import { advanceSharedOrder, migrateContext, setFact, setOrderTerms } from "@/lib/workflows/context";
-import { emptyState } from "@/lib/workflows/engine";
-import { bookingAdapterState, snapshotOrder } from "@/lib/workflows/conversation-processes";
+import { initialSnapshot, type Snapshot } from "@/lib/orchestration/contracts";
 
 const productId = "00000000-0000-4000-8000-000000000001";
 const orderId = "00000000-0000-4000-8000-000000000002";
 const args = { businessId: "business", conversationId: "conversation", userId: "actor" };
-function confirmed() {
-  let s = migrateContext(emptyState()); s.product_id = productId; s.step_key = "customer";
-  s.context!.execution.factOwner = "order";
-  for (const [key, value] of Object.entries({ name: "Ana", phone: "+355691234567", city: "Tiranë", address: "Rruga A" }))
-    setFact(s, `customer_${key}`, value, "text", "customer");
-  setFact(s, "size", "M", "text", "customer");
-  setOrderTerms(s, { id: productId, price_amount: 19.5, currency: "EUR" });
-  const steps = [{ key: "size", kind: "text" as const }, { key: "customer", kind: "customer" as const }];
-  s.context!.execution.linear = { id: "order-workflow", versionId: "published-linear", name: "Order", steps };
-  s = advanceSharedOrder(s, "", false, steps);
-  return advanceSharedOrder(s, "Po", false, steps);
+const actionId = "00000000-0000-4000-8000-000000000003";
+function confirmed(): Snapshot {
+ const s = initialSnapshot(args.businessId, args.conversationId, "live"); s.revision = 7;
+ s.instances.order = { id: "order", definitionId: "definition", versionId: "pinned-v1", stepId: "submit", status: "completed", facts: {},
+  action: { id: actionId, instanceId: "order", stepId: "submit", tool: "order.create", toolVersion: 1, input: {}, inputDigest: "digest", status: "succeeded", output: { submissionStatus: "awaiting_staff" } } };
+ return s;
 }
 let state = confirmed();
 let product: { id: string; product_type_id: string | null; price_amount: number | null; currency: string } | null;
@@ -53,9 +46,9 @@ beforeEach(() => {
   // Contract double, NOT proof of PostgreSQL concurrency/atomicity. Actual SQL tests
   // live in supabase/tests/order_submission*. They need an isolated migrated DB.
   m.rpc.mockImplementation(async (name: string, input: Record<string, unknown>) => {
-    if (name === "submit_confirmed_order") {
+    if (name === "submit_process_order") {
       if (ledger) return { data: { ...ledger, dispatch: false } };
-      ledger = { orderId, attemptId: "attempt", dispatch: true, status: "pending_reconciliation", confirmation: state.context!.execution.orderReview,
+      ledger = { orderId, attemptId: "attempt", dispatch: true, status: "pending_reconciliation", confirmation: { id: actionId },
         payload: { channel: "whatsapp", currency: "EUR", totalAmount: 19.5, items: [{ productId, quantity: 1, unitAmount: 19.5 }] } };
       return { data: { ...ledger } };
     }
@@ -72,11 +65,9 @@ describe("W4 order submission boundary", () => {
     expect(m.rpc).not.toHaveBeenCalled();
     expect(m.submit).not.toHaveBeenCalled();
   });
-  it("refuses a catalog-only order even with fresh confirmation, before RPC or external dispatch", async () => {
-    delete state.context!.execution.linear;
-    state.step_key = "order_confirm";
-    state = advanceSharedOrder(state, "", false, []); state = advanceSharedOrder(state, "Po", false, []);
-    await expect(submitConfirmedOrder(args)).rejects.toMatchObject({ code: "workflow_not_ready" });
+  it("refuses legacy confirmations before RPC or external dispatch", async () => {
+    state = { schemaVersion: 3 } as unknown as Snapshot;
+    await expect(submitConfirmedOrder(args)).rejects.toMatchObject({ code: "confirmation_required" });
     expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
   });
   it("submits only once for concurrent identical requests; both callers see the same local order", async () => {
@@ -90,28 +81,14 @@ describe("W4 order submission boundary", () => {
     expect(await first).toMatchObject({ orderId, status: "accepted" });
     expect(m.submit).toHaveBeenCalledTimes(1);
   });
-  it("honors the losing transaction receipt when both POSTs pass the initial read", async () => {
-    const originalFrom = m.from.getMockImplementation()!;
-    let readers = 0;
-    let release!: () => void;
-    const barrier = new Promise<void>(resolve => { release = resolve; });
-    m.from.mockImplementation((table: string) => {
-      const query = originalFrom(table);
-      if (table === "order_submissions") query.maybeSingle = async () => {
-        if (++readers === 8) release();
-        await barrier;
-        return { data: null, error: null };
-      };
-      return query;
-    });
+  it("concurrent callers use the transactional receipt; only one gets dispatch permission", async () => {
     const results = await Promise.all(Array.from({ length: 8 }, () => submitConfirmedOrder(args)));
     expect(new Set(results.map(r => r.orderId))).toEqual(new Set([orderId]));
     expect(m.submit).toHaveBeenCalledTimes(1);
-    expect(m.rpc.mock.calls.filter(([name]) => name === "submit_confirmed_order").length).toBeGreaterThan(1);
+    expect(m.rpc.mock.calls.filter(([name]) => name === "submit_process_order")).toHaveLength(8);
   });
-  it("sequential replay, including expired evidence, returns the committed result without sending", async () => {
+  it("sequential replay returns the persisted result without sending again", async () => {
     await submitConfirmedOrder(args);
-    state.context!.execution.orderReview!.expiresAt = Date.now() - 1;
     expect(await submitConfirmedOrder(args)).toMatchObject({ orderId, status: "accepted", dispatch: false });
     expect(m.submit).toHaveBeenCalledTimes(1);
   });
@@ -158,38 +135,15 @@ describe("W4 order submission boundary", () => {
     expect(submissionResponse(await submitConfirmedOrder(args))).toMatchObject({ status: 200, body: { submissionStatus: "local_only" } });
     expect(m.submit).toHaveBeenCalledWith({ businessId: args.businessId, attemptId: "attempt",
       payload: { channel: "whatsapp", currency: "EUR", totalAmount: 19.5, items: [{ productId, quantity: 1, unitAmount: 19.5 }] } });
-    expect(m.rpc).toHaveBeenCalledWith("submit_confirmed_order", expect.objectContaining({ p_user: "actor", p_revision: 7, p_collected: state }));
+    expect(m.rpc).toHaveBeenCalledWith("submit_process_order", expect.objectContaining({ p_user: "actor", p_revision: 7, p_action: actionId }));
   });
-  it.each(["expired", "product_correction", "phone_correction", "legacy", "terms_mutation"])("rejects %s before creating an order", async cause => {
-    if (cause === "expired") state.context!.execution.orderReview!.expiresAt = Date.now() - 1;
-    if (cause === "product_correction") state.product_id = "new-product";
-    if (cause === "phone_correction") setFact(state, "customer_phone", "+355699999999", "phone", "correction");
-    if (cause === "legacy") delete state.context!.execution.orderReview!.id;
-    if (cause === "terms_mutation") state.context!.execution.orderTerms!.currency = "USD";
+  it.each(["foreign_business", "foreign_conversation", "test_mode", "missing_action", "ambiguous_action"])("rejects %s before the transaction", async cause => {
+    if(cause === "foreign_business") state.businessId = "foreign";
+    if(cause === "foreign_conversation") state.conversationId = "foreign";
+    if(cause === "test_mode") state.mode = "test";
+    if(cause === "missing_action") delete state.instances.order.action;
+    if(cause === "ambiguous_action") state.instances.other = { ...state.instances.order, id: "other", action: { ...state.instances.order.action!, id: "00000000-0000-4000-8000-000000000004" } };
     await expect(submitConfirmedOrder(args)).rejects.toMatchObject({ code: "confirmation_required" });
-    expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
-  });
-  it.each(["price", "currency", "missing_price", "inactive_or_foreign"])("revalidates %s against the tenant catalog", async cause => {
-    if (cause === "price") product!.price_amount = 30;
-    if (cause === "currency") product!.currency = "USD";
-    if (cause === "missing_price") product!.price_amount = null;
-    if (cause === "inactive_or_foreign") product = null;
-    await expect(submitConfirmedOrder(args)).rejects.toMatchObject({ code: cause === "inactive_or_foreign" ? "product_unavailable" : "commercial_terms_changed" });
-    expect(filters).toContainEqual(["products", "business_id", "business"]);
-    expect(filters).toContainEqual(["products", "is_active", true]);
-    expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
-  });
-  it("does not silently flatten a multi-item cart", async () => {
-    cart = [{ productId, quantity: 2 }];
-    await expect(submitConfirmedOrder(args)).rejects.toMatchObject({ code: "unsupported_order_scope" });
-    expect(m.rpc).not.toHaveBeenCalled();
-  });
-  it("rejects a confirmed quantity outside the supported scope", async () => {
-    setFact(state, "quantity", "2", "number", "customer");
-    state.step_key = "order_confirm";
-    const steps = [{ key: "quantity", kind: "text" as const }];
-    state = advanceSharedOrder(state, "", false, steps); state = advanceSharedOrder(state, "Po", false, steps);
-    await expect(submitConfirmedOrder(args)).rejects.toMatchObject({ code: "unsupported_order_scope" });
     expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
   });
   it("cannot execute a cancelled state even if a legacy receipt remains", async () => {
@@ -208,22 +162,16 @@ describe("W4 order submission boundary", () => {
     await expect(submitConfirmedOrder(args)).rejects.toMatchObject({ code });
     expect(m.submit).not.toHaveBeenCalled();
   });
-  it("preserves suspended order facts, pinned version and booking cursor", async () => {
-    // The pin is part of the review, so confirm again after establishing it.
-    state.context!.execution.linear!.versionId = "pinned-v1";
-    state.step_key = "order_confirm";
-    state = advanceSharedOrder(state, "", false, []); state = advanceSharedOrder(state, "Po", false, []);
-    state.processes = { active: "booking", order: { id: "order-run", status: "completed", snapshot: snapshotOrder(state) } };
-    state = bookingAdapterState(state); const before = structuredClone(state);
-    await submitConfirmedOrder(args);
-    const p = m.rpc.mock.calls.find(([name]) => name === "submit_confirmed_order")![1];
-    expect(p.p_order.context.execution.linear.versionId).toBe("pinned-v1");
-    expect(p.p_order.customer.phone).toBe("+355691234567");
+  it("preserves the snapshot and submits only the selected server action", async () => {
+    const before = structuredClone(state);
+    await submitConfirmedOrder({ ...args, actionId });
+    expect(m.rpc).toHaveBeenCalledWith("submit_process_order", { p_business: args.businessId, p_conversation: args.conversationId,
+      p_revision: 7, p_action: actionId, p_user: args.userId, p_job: null, p_token: null });
     expect(state).toEqual(before);
   });
   it("scopes all receipt/state reads to both business and conversation", async () => {
     await submitConfirmedOrder(args);
-    for (const table of ["conversation_states", "order_submissions"]) {
+    for (const table of ["conversation_states"]) {
       expect(filters).toContainEqual([table, "business_id", args.businessId]);
       expect(filters).toContainEqual([table, "conversation_id", args.conversationId]);
     }
@@ -246,18 +194,4 @@ describe("W4 staff reconciliation", () => {
     await expect(reconcileOrder({ ...args, body: { orderId, status: "rejected", evidence: "Provider verified rejection via support ticket" } })).rejects.toMatchObject({ code });
     expect(m.submit).not.toHaveBeenCalled();
   });
-});
-
-it("registers an agent order with no owner identity and never calls external dispatch", async () => {
-  const { submitAgentConfirmedOrder } = await import("./submission");
-  m.rpc.mockResolvedValueOnce({data:{orderId,attemptId:"automatic",status:"local_only",dispatch:false}});
-  expect(await submitAgentConfirmedOrder({businessId:args.businessId,conversationId:args.conversationId})).toMatchObject({status:"local_only",dispatch:false});
-  expect(m.rpc).toHaveBeenCalledWith("submit_agent_confirmed_order",expect.not.objectContaining({p_user:expect.anything()}));
-  expect(m.submit).not.toHaveBeenCalled();
-});
-it("fails closed if an agent-order response unexpectedly grants external dispatch",async()=>{
-  const { submitAgentConfirmedOrder } = await import("./submission");
-  m.rpc.mockResolvedValueOnce({data:{orderId,attemptId:"automatic",status:"pending_reconciliation",dispatch:true,payload:{}}});
-  await expect(submitAgentConfirmedOrder({businessId:args.businessId,conversationId:args.conversationId})).rejects.toThrow();
-  expect(m.submit).not.toHaveBeenCalled();
 });

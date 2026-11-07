@@ -1,10 +1,11 @@
-import { withMessageUnderstanding } from "@/lib/conversations/understanding/context";
-import { unknownUnderstanding, type MessageUnderstanding } from "@/lib/conversations/understanding/contract";
-import { advanceVisualWorkflow } from "./runtime";
+import { initialSnapshot, type Field, type ProcessDefinition, type Instance, type CustomerCommand } from "@/lib/orchestration/contracts";
+import { transitionCustomer, recordPresentation, type Environment } from "@/lib/orchestration/transition";
+import { validFieldValue } from "@/lib/orchestration/definition";
+import { compileVisualProcesses, visualNodeForStep } from "@/lib/orchestration/visual-definition";
 import { normalizeVisualDraft, validateVisualGraph } from "./model";
 import { visualGraphHash } from "./graph-hash";
 import { generateSimulationScenarios, syntheticValue, type Scenario } from "./simulation-scenarios";
-import type { VisualExecution, VisualGraph, VisualRunState } from "./types";
+import type { VisualGraph, VisualVersion, VisualNode } from "./types";
 import type { SimulationBinding, SimulationReport, ScenarioResult, SimulationStatus } from "./simulation-types";
 import { getCapability, type CapabilityAssessment } from "@/lib/capabilities/registry";
 import { capabilityFinding, readinessFinding } from "@/lib/capabilities/diagnostics";
@@ -30,77 +31,125 @@ function emptyResult(s: Scenario): ScenarioResult {
     collectedFields: [], attemptedActions: [], validationFindings: [], executionCount: 0, durationMs: 0, result: "UNVERIFIED" };
 }
 
-/** No transports, providers, persistence or LLM callbacks are accepted by this adapter. */
+/** Synthetic observations exercise the production compiler and transition engine.
+ * No model, executor, transport or persistence is accepted by this adapter. */
 function executeScenario(graph: VisualGraph, s: Scenario) {
-  const started = performance.now(), result = emptyResult(s), versionId = `simulation:${visualGraphHash(graph)}`;
-  let state: VisualRunState | undefined = s.nodeId ? { nodeId: s.nodeId, versionId, status: "running", awaiting: !!s.awaiting, visited: [], values: structuredClone(s.values ?? {}) } : undefined;
-  let message = s.message, photo = !!s.photo, last: VisualExecution | undefined;
-  let act: MessageUnderstanding["act"] = s.expectation.kind === "suspend" ? "uncertain" : graph.nodes.find(n=>n.id===s.nodeId)?.kind !== "confirm" ? "answer" : s.expectation.port === "yes" ? "accept" : s.expectation.port === "no" ? "decline" : "uncertain";
-  const responseEvidence: string[] = [];
+  const started = performance.now(), result = emptyResult(s);
+  const version: VisualVersion = { id: `simulation-${visualGraphHash(graph)}`, businessId: "simulation", graph, createdAt: "2026-01-01T00:00:00Z" };
+  let state = initialSnapshot("simulation", "simulation", "test");
+  let definition: ProcessDefinition | undefined;
+  const responses: unknown[] = [];
+  let external: VisualNode | undefined;
+  const boundary = new Error("external_simulation_boundary");
+  const values = () => Object.fromEntries(Object.entries(state.instances.simulation?.facts ?? {}).map(([key, fact]) => [key, fact.value]));
+  const canonical = (field: Field, value: string) => field.type === "number" ? Number(value) : field.type === "photo" ? true : value;
   try {
-    if (s.awaiting && graph.nodes.find(n => n.id === s.nodeId)?.kind === "confirm") {
-      // A waiting cursor alone is not a presented confirmation. Obtain the real
-      // runtime receipt before testing either answer (or missing/ambiguous input).
-      const prompt = advanceVisualWorkflow({ graph, versionId, state, message: "", hasPhoto: false,
-        intent: s.intent, sharedValues: s.sharedValues, inputAvailable: false });
-      result.executionCount++;
-      result.inputMessages.unshift("");
-      result.traversedNodeIds.push(...prompt.traversedNodeIds);
-      responseEvidence.push(JSON.stringify([prompt.action.kind, prompt.action.nodeId, prompt.action.communication]));
-      if (prompt.action.kind !== "prompt" || prompt.action.nodeId !== s.nodeId) throw new Error("confirmation_prompt_missing");
-      state = prompt.state;
+    const definitions = compileVisualProcesses(version);
+    const authored = graph.nodes.find(n => n.id === s.nodeId);
+    definition = s.nodeId && authored?.kind !== "start" ? definitions.find(d => d.steps.some(step => step.id === s.nodeId)) : definitions.length === 1 ? definitions[0] : undefined;
+    if (!definition) {
+      result.category = "coverage";
+      result.actualOutcome = "Zgjedhja e procesit ose hapi jashtë procesit kërkon provë semantike integrimi.";
+      result.validationFindings.push(readinessFinding("hub_unverified", result.actualOutcome));
+      return { result, evidence: "unverified_entry" };
     }
-    for (let turn = result.executionCount; turn < limits.turns; turn++) {
-      last = withMessageUnderstanding(message, { ...unknownUnderstanding, act, evidence: message }, () => advanceVisualWorkflow({ graph, versionId, state, message, hasPhoto: photo, intent: s.intent, sharedValues: s.sharedValues }));
-      result.executionCount++;
-      state = last.state;
-      result.traversedNodeIds.push(...last.traversedNodeIds);
-      result.selectedBranches = { ...state.branchPorts };
-      // Compare actual prompt content for regression, but never return it to the caller/UI.
-      responseEvidence.push(JSON.stringify([last.action.kind, last.action.nodeId, last.action.communication]));
-      if (externalActions.has(last.action.kind)) {
-        result.attemptedActions.push({ kind: last.action.kind, nodeId: last.action.nodeId, disposition: "not_executed" });
-        if (s.expectation.kind === "branch" && (state.branchPorts?.[s.expectation.nodeId!] !== s.expectation.port || !last.traversedNodeIds.includes(s.expectation.target ?? ""))) {
-          result.result = "FAIL";
-          result.actualOutcome = "Dega e ekzekutuar nuk përputhet me lidhjen e pritur.";
-          result.validationFindings.push(readinessFinding("expectation_mismatch", result.actualOutcome));
-          break;
+    const instance: Instance = { id: "simulation", definitionId: definition.id, versionId: definition.versionId,
+      stepId: authored && authored.kind !== "start" ? authored.id : definition.entry,
+      status: "suspended", suspendedStatus: "running", facts: {} };
+    for (const [key, value] of Object.entries({ ...s.sharedValues, ...s.values })) {
+      const field = definition.fields.find(f => f.id === key);
+      if (!field || !validFieldValue(field, canonical(field, value))) throw new Error("invalid_fixture_field");
+      instance.facts[key] = { fieldId: key, subject: field.subject, value: canonical(field, value), revision: 0, eventId: "fixture", evidence: "synthetic fixture" };
+    }
+    state.instances.simulation = instance; state.focusId = instance.id;
+    const env: Environment = { mode: "test", now: 1000, promptTtlMs: 60000, definitions,
+      startableVersionIds: new Set([version.id]), tools: [],
+      onStep: step => {
+        const nodeId = visualNodeForStep(version, step.stepId);
+        const previous = graph.nodes.find(n => n.id === result.traversedNodeIds.at(-1));
+        if (previous?.kind === "condition" || previous?.kind === "confirm") {
+          const edge = graph.edges.find(e => e.source === previous.id && e.target === nodeId);
+          if (edge?.port === "yes" || edge?.port === "no") result.selectedBranches[previous.id] = edge.port;
         }
-        result.result = "UNVERIFIED";
-        result.actualOutcome = "Runtime arriti te një shërbim real; veprimi nuk u krye.";
-        const node = graph.nodes.find(n => n.id === last!.action.nodeId)!;
-        for (const capabilityKey of nodeCapabilityKeys(node).length ? nodeCapabilityKeys(node) : [null])
-          result.validationFindings.push(readinessFinding("external_action_not_executed", "Nuk u thirr shërbimi, AI, katalogu, rezervimi, porosia ose stafi. Rezultati i tyre mbetet i paverifikuar.",
-            { nodeId: node.id, capabilityKey, missingRequirements: ["isolated_execution_evidence"], remediation: "Provo këtë veprim me adapter të izoluar dhe pritshmëri të pavarura. Mos përdor porosi ose mesazhe reale." }));
-        break;
+        result.traversedNodeIds.push(nodeId);
+        const node = graph.nodes.find(n => n.id === nodeId);
+        if (node && externalActions.has(node.kind)) { external = node; throw boundary; }
+      } };
+    const step = (message: string, commands: CustomerCommand[], photo = false) => {
+      const before = state.instances.simulation;
+      const traceStart = result.traversedNodeIds.length;
+      const predicates = { intent_order: "order", intent_booking: "booking", intent_support: "support" };
+      const conditions = definition!.steps.flatMap(node => {
+        if (node.kind !== "semantic_condition") return [];
+        const operator = graph.nodes.find(n => n.id === node.id)?.config.condition;
+        const intent = operator && Object.hasOwn(predicates, operator) ? predicates[operator as keyof typeof predicates] : undefined;
+        return [{ definitionId: definition!.id, versionId: version.id, instanceId: "simulation", stepId: node.id,
+          outcome: intent === s.intent ? "yes" as const : "no" as const, evidence: message }];
+      });
+      result.executionCount++;
+      const transition = transitionCustomer(state, { id: `fixture-${result.executionCount}`, businessId: "simulation", conversationId: "simulation", actor: "customer", message },
+        { revision: state.revision, commands, conditions, needsClarification: false }, { ...env, photoReceived: photo });
+      state = transition.state;
+      if (commands.some(c => c.kind === "approve" || c.kind === "decline")) {
+        const destination = result.traversedNodeIds[traceStart];
+        const edge = graph.edges.find(e => e.source === before.stepId && e.target === destination);
+        if (edge?.port === "yes" || edge?.port === "no") result.selectedBranches[before.stepId] = edge.port;
       }
-      if (!s.followPrompts || last.action.kind === "end") break;
-      const node = graph.nodes.find(n => n.id === last!.action.nodeId)!;
-      message = node.kind === "confirm" ? "po" : syntheticValue(node);
-      act = node.kind === "confirm" ? "accept" : "answer";
-      photo = node.config.fieldType === "photo";
-      result.inputMessages.push(message);
+      responses.push(transition.notices.map(n => ({ kind: n.kind, text: n.text, field: n.field?.id })));
+      state = recordPresentation(state, transition.notices.flatMap(n => n.targetId ? [n.targetId] : []), env.now);
+    };
+    // Seeded progress is explicit fixture data. Resume obtains a real native wait;
+    // a cursor alone never becomes permission to accept a confirmation or photo.
+    step("synthetic resume", [{ kind: "resume", instanceId: "simulation", evidence: "synthetic resume" }]);
+    let initialAnswer = Boolean(s.awaiting);
+    while (result.executionCount < limits.turns && (initialAnswer || s.followPrompts)) {
+      const current = state.instances.simulation;
+      if (!current.wait || current.status === "completed") break;
+      const node = graph.nodes.find(n => n.id === current.stepId);
+      if (!node) throw new Error("synthetic_prompt_unavailable");
+      const message = initialAnswer ? s.message : node.kind === "confirm" ? "synthetic approval" : syntheticValue(node);
+      const commands: CustomerCommand[] = [];
+      const suspended = initialAnswer && s.expectation.kind === "suspend";
+      if (!suspended && current.wait.kind === "approval") commands.push({ kind: initialAnswer && s.expectation.port === "no" ? "decline" : "approve",
+        instanceId: current.id, waitId: current.wait.id, evidence: message });
+      else if (!suspended && current.wait.kind === "field") {
+        const field = definition.fields.find(f => f.id === current.wait!.fieldId)!;
+        if (field.type !== "photo") commands.push({ kind: "facts", instanceId: current.id, values: [{ fieldId: field.id, value: canonical(field, message), evidence: message }] });
+      }
+      if (!initialAnswer) result.inputMessages.push(message);
+      step(message, commands, !suspended && node.config.fieldType === "photo");
+      initialAnswer = false;
+      if (!s.followPrompts) break;
     }
-    if (last && !result.attemptedActions.length) {
-      const e = s.expectation, node = graph.nodes.find(n => n.id === e.nodeId), key = node?.config.fieldKey;
-      const matches = e.kind === "complete" || e.kind === "regression" ? last.action.kind === "end"
-        : e.kind === "branch" ? state?.branchPorts?.[e.nodeId!] === e.port && last.traversedNodeIds[1] === e.target
-        : e.kind === "suspend" ? last.action.kind === "prompt" && last.action.nodeId === e.nodeId && JSON.stringify(state?.values) === JSON.stringify(s.values ?? {})
-        : e.kind === "collect" ? !!key && state?.values[key] === e.value
-        : !!key && state?.values[key] === e.value && result.traversedNodeIds[1] === e.target;
-      result.result = matches ? "PASS" : "FAIL";
-      result.actualOutcome = matches ? "Ekzekutimi përputhet me pritshmërinë strukturore të këtij skenari." : "Ekzekutimi nuk përputhet me pritshmërinë strukturore.";
-      if (!matches) result.validationFindings.push({ code: "expectation_mismatch", nodeId: last.action.nodeId, message: "Kontrollo rrugën e ndjekur dhe lidhjet e hapit. Nuk provohet rezultati i kërkuar." });
+    const current = state.instances.simulation, e = s.expectation;
+    const node = graph.nodes.find(n => n.id === e.nodeId), field = definition.fields.find(f => f.id === node?.config.fieldKey);
+    const matches = e.kind === "complete" || e.kind === "regression" ? current.status === "completed"
+      : e.kind === "branch" ? result.selectedBranches[e.nodeId!] === e.port && result.traversedNodeIds.includes(e.target ?? "")
+      : e.kind === "suspend" ? current.wait?.stepId === e.nodeId && JSON.stringify(values()) === JSON.stringify(s.values ?? {})
+      : !!field && values()[field.id] === canonical(field, e.value!) && (e.kind !== "existing" || result.traversedNodeIds.includes(e.target ?? ""));
+    result.result = matches ? "PASS" : "FAIL";
+    result.actualOutcome = matches ? "Tranzicioni native përputhet me pritshmërinë strukturore." : "Tranzicioni native nuk përputhet me pritshmërinë strukturore.";
+    if (!matches) result.validationFindings.push(readinessFinding("expectation_mismatch", result.actualOutcome));
+  } catch (error) {
+    if (error === boundary && external) {
+      result.result = "UNVERIFIED";
+      result.attemptedActions.push({ kind: external.kind, nodeId: external.id, disposition: "not_executed" });
+      result.actualOutcome = "Motori native arriti te kufiri i shërbimit; veprimi nuk u ekzekutua.";
+      for (const capabilityKey of nodeCapabilityKeys(external).length ? nodeCapabilityKeys(external) : [null])
+        result.validationFindings.push(readinessFinding("external_action_not_executed", result.actualOutcome,
+          { nodeId: external.id, capabilityKey, missingRequirements: ["isolated_execution_evidence"] }));
+      if (s.expectation.kind === "branch" && result.selectedBranches[s.expectation.nodeId!] !== s.expectation.port) {
+        result.result = "FAIL";
+        result.validationFindings.push(readinessFinding("expectation_mismatch", "Dega e ekzekutuar nuk përputhet me pritshmërinë."));
+      }
+    } else {
+      result.result = "FAIL"; result.actualOutcome = "Përpilimi ose tranzicioni native ndaloi me gabim.";
+      result.validationFindings.push(readinessFinding("runtime_error", result.actualOutcome));
     }
-  } catch {
-    result.result = "FAIL"; result.actualOutcome = "Runtime ndaloi me gabim.";
-    result.validationFindings.push({ code: "runtime_error", nodeId: state?.nodeId ?? s.nodeId, message: "Gabim gjatë ekzekutimit të rrugës; kontrollo lidhjet dhe kufirin e hapave." });
   }
-  result.collectedFields = graph.nodes.filter(n => n.config.fieldKey && Object.hasOwn(state?.values ?? {}, n.config.fieldKey)).map(n => ({ nodeId: n.id, value: redacted }));
+  result.collectedFields = graph.nodes.filter(n => n.config.fieldKey && Object.hasOwn(values(), n.config.fieldKey)).map(n => ({ nodeId: n.id, value: redacted }));
   result.durationMs = Math.round((performance.now() - started) * 100) / 100;
-  // Internal-only evidence for before/after comparison. Never serialized into a report.
-  const evidence = JSON.stringify({ trace: result.traversedNodeIds, branches: result.selectedBranches, values: state?.values, responses: responseEvidence });
-  return { result, evidence };
+  return { result, evidence: JSON.stringify({ trace: result.traversedNodeIds, branches: result.selectedBranches, values: values(), responses }) };
 }
 
 function blockedScenario(code: string, message: string, result: SimulationStatus = "BLOCKED", nodeId?: string): ScenarioResult {
@@ -109,11 +158,11 @@ function blockedScenario(code: string, message: string, result: SimulationStatus
 }
 
 export function simulationBinding(report: SimulationReport): SimulationBinding {
-  return { version: 2, proposalId: report.proposalId, baseRevision: report.baseRevision, candidateGraphHash: report.candidateGraphHash };
+  return { version: 3, proposalId: report.proposalId, baseRevision: report.baseRevision, candidateGraphHash: report.candidateGraphHash };
 }
 export function matchesSimulationBinding(binding: Omit<SimulationBinding, "version"> & { version: number }, proposalId: string, revision: number, raw: unknown): boolean {
   const graph = normalizeVisualDraft(raw);
-  return !!graph && binding.version === 2 && binding.proposalId === proposalId && binding.baseRevision === revision && binding.candidateGraphHash === visualGraphHash(graph);
+  return !!graph && binding.version === 3 && binding.proposalId === proposalId && binding.baseRevision === revision && binding.candidateGraphHash === visualGraphHash(graph);
 }
 
 /** Synchronous, bounded, isolated execution against the SAME deterministic runtime used in production/Chat Lab. */
@@ -123,7 +172,7 @@ export function simulateWorkflowProposal(input: {
 }): SimulationReport {
   const started = performance.now();
   const graph = normalizeVisualDraft(input.candidate);
-  const report: SimulationReport = { version: 2, engine: "visual-runtime-v2", proposalId: input.proposalId, baseRevision: input.baseRevision,
+  const report: SimulationReport = { version: 3, engine: "process-runtime", proposalId: input.proposalId, baseRevision: input.baseRevision,
     candidateGraphHash: visualGraphHash(graph ?? input.candidate), baselineGraphHash: visualGraphHash(input.before),
     scenarios: [], validationFindings: [], durationMs: 0, result: "BLOCKED", canPublish: false };
   const validation = validateVisualGraph(input.candidate);

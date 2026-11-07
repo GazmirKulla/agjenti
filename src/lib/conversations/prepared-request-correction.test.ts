@@ -6,7 +6,7 @@ import { withCollectionPolicy } from "@/lib/runtime/execution-context";
 import type { VisualVersion } from "@/lib/workflows/visual/types";
 import { correctPreparedRequest } from "./prepared-request-correction";
 import { CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
-import { bookingReviewKey, type BookingDraft } from "@/lib/calendar/agent";
+import { bookingReviewKey, type BookingDraft } from "@/lib/calendar/draft";
 
 const mocks = vi.hoisted(() => ({ modules: vi.fn(), resolve: vi.fn(), from: vi.fn() }));
 vi.mock("@/lib/capabilities/enforcement", async importOriginal => ({ ...await importOriginal<object>(), requireRuntimeModules: mocks.modules }));

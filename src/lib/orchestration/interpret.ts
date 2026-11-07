@@ -3,6 +3,7 @@ import { agentModel } from "@/lib/agents/model";
 import { type Observation, type Snapshot } from "./contracts";
 import { observationContext, observationInstructions, observationSchema, parseObservation } from "./observation";
 import { type Environment } from "./transition";
+type ObservationExtras = Parameters<typeof observationContext>[2];
 
 export class InterpretationUnavailable extends Error {
   constructor(readonly reason: "budget" | "configuration" | "incomplete" | "invalid_output" | "provider") {
@@ -25,6 +26,7 @@ export async function interpretCustomer(input: {
   history: { role: "user" | "assistant"; content: string }[];
   deadline: number;
   businessContext?: { instructions: string; knowledge: unknown };
+  observationExtras?: ObservationExtras;
 }): Promise<Interpretation> {
   const startedAt = Date.now();
   const remaining = input.deadline - startedAt;
@@ -35,7 +37,7 @@ export async function interpretCustomer(input: {
     const response = await new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: Math.min(15000, remaining), maxRetries: 0 }).responses.create({
       model, store: false, max_output_tokens: 3000,
       instructions: observationInstructions,
-      input: JSON.stringify({ message: input.message, businessContext: input.businessContext, context: observationContext(input.state, input.env),
+      input: JSON.stringify({ message: input.message, businessContext: input.businessContext, context: observationContext(input.state, input.env, input.observationExtras),
         history: input.history.slice(-12).map(m => ({ role: m.role, content: m.content.slice(0, 6000) })) }),
       text: { format: { type: "json_schema", name: "process_observation", strict: true, schema: observationSchema } },
     });

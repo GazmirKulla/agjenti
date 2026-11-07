@@ -27,7 +27,7 @@ import { starterVisualGraph, upgradeVisualGraph } from "@/lib/workflows/visual/m
 import type { Proposal } from "./model";
 import { encryptSecret } from "@/lib/crypto/tokens";
 import type { VisualGraph } from "@/lib/workflows/visual/types";
-import * as visualRuntime from "@/lib/workflows/visual/runtime";
+import * as visualRuntime from "@/lib/orchestration/transition";
 function localGraph(): VisualGraph {
   return { version: 1, name: "Local only", nodes: [
     { id: "start", kind: "start", label: "Start", position: { x: 0, y: 0 }, config: {} },
@@ -266,7 +266,7 @@ it("reruns simulation for legacy publish tickets and cannot bypass it by omittin
 it("refuses approval and confirmation when actual runtime scenarios fail", async () => {
   useLocalGraph();
   const prepared = await prepareWorkflow(access, proposal("workflow_publish"), 3);
-  const faulty = vi.spyOn(visualRuntime, "advanceVisualWorkflow").mockImplementation(() => { throw new Error("runtime failure"); });
+  const faulty = vi.spyOn(visualRuntime, "transitionCustomer").mockImplementation(() => { throw new Error("runtime failure"); });
   try {
     const blocked = await prepareWorkflow(access, proposal("workflow_publish"), 3);
     expect(blocked.workflow?.simulation?.result).toBe("FAIL"); expect(blocked.token).toBeUndefined();

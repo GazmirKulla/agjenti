@@ -84,8 +84,19 @@ export type Action = {
   output?: Record<string, Value>;
 };
 export type Offer = { id: string; definitionId: string; versionId: string; expiresAt: number; presentedAt?: number };
+export type ProfileMemory = Partial<Record<"name" | "phone" | "email" | "city" | "address", { value: string; type: "text" | "email" | "phone" }>>;
+export type CatalogPresentation = {
+  businessId: string;
+  kind: "product" | "service";
+  sourceTurn: string;
+  expiresAt: number;
+  replyDigest: string;
+  entities: { id: string; displayOrder: number }[];
+};
 export type Snapshot = {
   retrieval?: import("@/lib/catalogs/ranking").CatalogContext;
+  catalogPresentation?: CatalogPresentation;
+  profileMemory?: ProfileMemory;
   handoffRequested?: boolean;
   history?: { role: "user" | "assistant"; content: string }[];
   pendingTurn?: { eventId: string; messageDigest: string; notices: RuntimeNotice[] };

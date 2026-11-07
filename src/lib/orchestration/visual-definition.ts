@@ -36,6 +36,12 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
   const checked = validateVisualGraph(version.graph);
   if (!checked.graph) throw new TransitionError("invalid_visual_definition");
   const graph = upgradeVisualGraph(checked.graph);
+  // A legacy authored local start/end graph still represents a real, effect-free
+  // process. Compile it through the same engine instead of silently losing it.
+  if (checked.graph.version === 1 && !graph.flows.length) {
+    const start = graph.nodes.find(n => n.kind === "start");
+    if (start) graph.flows.push({ id: "root", label: graph.name, kind: "custom", entryNodeId: start.id, nodeIds: graph.nodes.map(n => n.id) });
+  }
   const policy = parseCollectionPolicy(version.collectionPolicy);
   return graph.flows.map(flow => {
     const scope = policy?.scopes.find(s => s.versionId === version.id && s.flowId === flow.id);

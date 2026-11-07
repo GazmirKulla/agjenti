@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrateContext, setFact } from "@/lib/workflows/context";
 import type { VisualVersion } from "@/lib/workflows/visual/types";
-import { bookingReviewKey, type BookingDraft } from "@/lib/calendar/agent";
+import { bookingReviewKey, type BookingDraft } from "@/lib/calendar/draft";
 import { preparedRequest } from "./prepared-request";
 
 const entity = { id: "service", kind: "service" as const, name: "Consultation" };

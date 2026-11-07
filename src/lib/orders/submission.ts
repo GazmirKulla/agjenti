@@ -1,12 +1,8 @@
 import { CapabilityEnforcementError, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { submitExternalOrder } from "@/lib/integrations/zana";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { freshOrderReview, migrateContext } from "@/lib/workflows/context";
-import { restoreOrder } from "@/lib/workflows/conversation-processes";
-import type { ConversationStatePayload } from "@/lib/workflows/engine";
 import { isIsolatedExecution, refuseIsolatedEffect, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
 import type { Snapshot } from "@/lib/orchestration/contracts";
-import { hasSubmissionWorkflow } from "./workflow-readiness";
 
 export type SubmissionReceipt = {
   orderId: string;
@@ -54,11 +50,7 @@ function isReceipt(value: unknown): value is SubmissionReceipt {
 export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string; expectedRevision?: number; actionId?: string }): Promise<SubmissionReceipt> {
   return submitOrder(input);
 }
-/** Server runtime entry point. No owner identity and no external dispatch. */
-export async function submitAgentConfirmedOrder(input: {businessId: string; conversationId: string; expectedRevision?: number}): Promise<SubmissionReceipt> {
-  return submitOrder({...input,userId:null});
-}
-async function submitOrder(input: {businessId: string; conversationId: string; userId: string | null; expectedRevision?: number; actionId?: string}): Promise<SubmissionReceipt> {
+async function submitOrder(input: {businessId: string; conversationId: string; userId: string; expectedRevision?: number; actionId?: string}): Promise<SubmissionReceipt> {
   assertBusinessEffectAllowed("order.create");
   if (isIsolatedExecution()) refuseIsolatedEffect("order.create");
   const db = createServiceSupabase();
@@ -72,7 +64,7 @@ async function submitOrder(input: {businessId: string; conversationId: string; u
     .eq("conversation_id", conversationId).eq("business_id", businessId).maybeSingle();
   if (stateError) fail("read_failed");
   if (input.expectedRevision !== undefined && row?.revision !== input.expectedRevision) fail("stale_state");
-  if (row?.collected?.schemaVersion === 4) {
+  if (row?.collected?.schemaVersion === 4 && row.status !== "cancelled" && Number.isInteger(row.revision)) {
     if (!userId) fail("confirmation_required"); // Runtime submissions require the claimed queue lease, through the domain adapter.
     const snapshot = row.collected as Snapshot;
     if (snapshot.businessId !== businessId || snapshot.conversationId !== conversationId || snapshot.mode !== "live") fail("confirmation_required");
@@ -85,54 +77,7 @@ async function submitOrder(input: {businessId: string; conversationId: string; u
     if (error || !isReceipt(data)) fail(error?.message ?? "write_failed");
     return settleReceipt(businessId, userId, data);
   }
-  const stored = migrateContext(row?.collected as ConversationStatePayload | undefined);
-  // Capture the server's receipt before restoreOrder expires approvals. Replaying a
-  // known receipt is read-only even after expiry; it NEVER grants another dispatch.
-  const originalReview = stored.context?.execution.factOwner && stored.context.execution.factOwner !== "order"
-    ? stored.processes?.order?.snapshot.execution.orderReview : stored.context?.execution.orderReview;
-  if (originalReview?.id && uuid.test(originalReview.id)) {
-    const { data: prior, error } = await db.from("order_submissions").select("order_id,attempt_id,status,external_order_id,confirmation")
-      .eq("business_id", businessId).eq("conversation_id", conversationId).eq("confirmation_id", originalReview.id).maybeSingle();
-    if (error) fail("read_failed");
-    if (prior) {
-      if (prior.confirmation?.factsKey !== originalReview.factsKey) fail("confirmation_conflict");
-      const existing = { orderId: prior.order_id, attemptId: prior.attempt_id, status: prior.status, externalOrderId: prior.external_order_id, dispatch: false };
-      if (!isReceipt(existing)) fail("receipt_unverified");
-      return existing;
-    }
-  }
-  const state = stored.schemaVersion === 3 && stored.processes?.order ? restoreOrder(stored) : stored;
-  const review = state.context?.execution.orderReview;
-  if (!row || row.status === "cancelled" || !Number.isInteger(row.revision) || !review?.id || !uuid.test(review.id) || !state.product_id
-      || state.step_key !== "order_ready" || !state.context?.execution.orderConfirmed || !freshOrderReview(state, true)) fail("confirmation_required");
-  if (!Array.isArray(row.cart) || row.cart.length) fail("unsupported_order_scope");
-  state.fields = Object.fromEntries(review!.fieldKeys.flatMap(key => {
-    const fact = state.context!.order[key];
-    return fact ? [[key, fact.type === "photo" ? true : fact.value]] : [];
-  }));
-  if (["quantity", "collect_quantity"].some(key => state.fields[key] !== undefined && String(state.fields[key]) !== "1")) fail("unsupported_order_scope");
-  if (!state.customer?.name || !state.customer.phone || !state.customer.address) fail("confirmation_required");
-  const { data: product, error: productError } = await db.from("products").select("id,product_type_id,price_amount,currency")
-    .eq("id", state.product_id).eq("business_id", businessId).eq("is_active", true).maybeSingle();
-  if (productError) fail("read_failed");
-  if (!product) fail("product_unavailable");
-  const terms = state.context!.execution.orderTerms;
-  if (!terms || terms.productId !== product.id || terms.quantity !== 1 || typeof product.price_amount !== "number"
-      || !Number.isFinite(product.price_amount) || product.price_amount < 0 || !/^[A-Z]{3}$/.test(product.currency ?? "")
-      || terms.unitAmount !== product.price_amount || terms.currency !== product.currency) fail("commercial_terms_changed");
-  if ((product.product_type_id ?? null) !== (state.product_type_id ?? null)) fail("product_changed");
-  await requireRuntimeModules(businessId, ["workflows"]);
-  if (!(await hasSubmissionWorkflow(businessId, state))) fail("workflow_not_ready");
-  // The transaction rechecks actor, catalog, modules and the exact source snapshot
-  // under the same conversation/state locks used by the inbound queue.
-  const { data, error } = userId === null ? await db.rpc("submit_agent_confirmed_order", {
-    p_business: businessId, p_conversation: conversationId, p_revision: row.revision, p_collected: row.collected, p_order: state,
-  }) : await db.rpc("submit_confirmed_order", {
-    p_business: businessId, p_user: userId, p_conversation: conversationId, p_revision: row.revision,
-    p_collected: row.collected, p_order: state, p_enforce_modules: true,
-  });
-  if (error || !isReceipt(data)) fail(error?.message ?? "write_failed");
-  return settleReceipt(businessId, userId, data);
+  fail("confirmation_required");
 }
 
 async function settleReceipt(businessId: string, userId: string | null, receipt: SubmissionReceipt): Promise<SubmissionReceipt> {

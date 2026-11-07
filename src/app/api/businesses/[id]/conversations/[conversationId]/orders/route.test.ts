@@ -14,6 +14,7 @@ vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from:
 vi.mock("@/lib/tenant/access", () => ({ isPlatformAdmin: m.admin }));
 vi.mock("@/lib/conversations/ensure-customer", () => ({ ensureCustomerForConversation: m.ensure }));
 vi.mock("@/lib/integrations/zana", () => ({ submitExternalOrder: m.submit }));
+import { initialSnapshot } from "@/lib/orchestration/contracts";
 import { PATCH, POST } from "./route";
 import { emptyState } from "@/lib/workflows/engine";
 import { advanceSharedOrder, migrateContext, setFact, setOrderTerms } from "@/lib/workflows/context";
@@ -76,33 +77,22 @@ it("does not create a product order from a service-only visual run", async () =>
   expect((await send()).status).toBe(400);
   expect(m.ensure).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
 });
-it("revalidates product ownership before creating CRM or order records", async () => {
+it("refuses legacy product ownership claims before creating CRM or order records", async () => {
   expect((await send()).status).toBe(400);
-  expect(filters).toContainEqual(["products","business_id","business"]);
-  expect(m.ensure).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
+  expect(m.rpc).not.toHaveBeenCalled(); expect(m.ensure).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
 });
-it("submits the confirmed order snapshot while a booking owns the current cursor", async () => {
-  const confirmed = confirmedOrder();
-  confirmed.processes = { active: "booking", order: { id: "order-run", status: "completed", snapshot: snapshotOrder(confirmed) } };
-  state = bookingAdapterState(confirmed) as unknown as Record<string, unknown>;
-  const inserted: Record<string, unknown>[] = [];
-  m.from.mockImplementation((table: string) => {
-    const q = { select: () => q, eq: () => q, update: () => q,
-      insert: (row: Record<string, unknown>) => { if (table === "orders") inserted.push(row); return q; },
-      single: async () => ({ data: { id: "new-order" } }),
-      maybeSingle: async () => ({ data: table === "conversations" ? { id: "conversation" } : table === "conversation_states" ? { collected: state, revision: 4, cart: [] } : table === "products" ? { id: "product", name: "Puzzle", price_amount: 1200, currency: "ALL" }
-        : table === "linear_workflow_versions" ? { id: "published-linear", steps: [{ key: "size", kind: "text" }, { key: "collect_customer", kind: "customer" }] } : null }),
-    }; return q;
-  });
-  m.ensure.mockResolvedValue({ ok: true, customerId: "customer" });
-  m.rpc.mockImplementation(async (name: string, args: Record<string, unknown>) => {
-    if (name === "submit_confirmed_order") inserted.push({ payload: args.p_order });
-    return { data: { orderId: "new-order", attemptId: "attempt", status: name === "submit_confirmed_order" ? "pending_reconciliation" : "local_only", dispatch: name === "submit_confirmed_order", payload: {} } };
-  });
-  m.submit.mockResolvedValue({ ok: true, skipped: true, status: "local_only" });
+it("submits the stored native order action without changing another process's focus", async () => {
+  const snapshot = initialSnapshot("business", "conversation", "live");
+  const actionId = "00000000-0000-4000-8000-000000000003";
+  snapshot.instances.order = { id: "order", definitionId: "order", versionId: "v1", stepId: "submit", status: "completed", facts: {}, action: {
+    id: actionId, instanceId: "order", stepId: "submit", tool: "order.create", toolVersion: 1, input: {}, inputDigest: "digest", status: "succeeded", output: { submissionStatus: "awaiting_staff" } } };
+  snapshot.instances.booking = { id: "booking", definitionId: "booking", versionId: "v1", stepId: "date", status: "waiting_input", facts: {} };
+  snapshot.focusId = "booking"; snapshot.revision = 4;
+  state = snapshot as unknown as Record<string, unknown>;
+  m.rpc.mockResolvedValue({ data: { orderId: "new-order", attemptId: "attempt", status: "local_only", dispatch: false } });
   expect((await send()).status).toBe(200);
-  expect(inserted[0].payload).toMatchObject({ product_id: "product", step_key: "order_ready", fields: { size: "M" } });
-  expect((state as { product_id?: string }).product_id).toBeNull();
+  expect(m.rpc).toHaveBeenCalledWith("submit_process_order", expect.objectContaining({ p_action: actionId, p_user: "user", p_revision: 4 }));
+  expect(snapshot.focusId).toBe("booking"); expect(m.submit).not.toHaveBeenCalled();
 });
 it("does not submit an order snapshot whose confirmation was invalidated", async () => {
   const confirmed = migrateContext(emptyState());

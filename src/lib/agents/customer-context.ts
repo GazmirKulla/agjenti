@@ -4,7 +4,7 @@ import { migrateContext, profileKeys, safeFieldKey, validValue, type Fact } from
 import { currentProcessOwner } from "@/lib/workflows/conversation-processes";
 import { customerDeclaredKeys, validDeclaredValue } from "@/lib/workflows/customer-declared-facts";
 import { validDate, validTime } from "@/lib/calendar/model";
-import type { BookingDraft } from "@/lib/calendar/agent";
+import type { BookingDraft } from "@/lib/calendar/draft";
 import { customerFactReference, type CustomerFactReference } from "./customer-fact-reference";
 
 type Domain = "order" | "service" | "booking" | "auxiliary";

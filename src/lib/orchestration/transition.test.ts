@@ -104,6 +104,16 @@ describe("generic process transitions", () => {
     expect(Object.keys(b.state.instances)).toHaveLength(2);
   });
 
+  it("keeps a pending collect field through an informational turn with no process commands", () => {
+    const h = harness();
+    const state = h.started();
+    const id = state.focusId!, wait = structuredClone(state.instances[id].wait);
+    const next = h.turn(state, "How does this work?", []);
+    expect(next.state.instances[id].wait).toEqual(wait);
+    expect(next.state.instances[id].facts).toEqual({});
+    expect(next.actions).toEqual([]);
+  });
+
   it("retains facts and the pending target through suspension and resumption", () => {
     const h = harness();
     const state = h.reviewed();
@@ -259,5 +269,28 @@ describe("generic process transitions", () => {
       expect(result.state.instances[id].facts).toEqual({});
       expect(result.state.instances[id].skippedFields?.organization_name.evidence).toBe("leave this blank");
     }
+  });
+  it("applies stored profile memory on start without requiring it in the current message", () => {
+    const lead: ProcessDefinition = { id: "lead", versionId: "v1", businessId: "business-1", name: "Lead", purpose: "Collect a contact", offerPolicy: "on_request", entry: "name",
+      fields: [{ id: "customer_name", subject: "customer", label: "Name", type: "text", required: true, min: 2, max: 120 }, { id: "note", subject: "customer", label: "Note", type: "text", required: true }],
+      steps: [{ id: "name", kind: "collect", fieldId: "customer_name", next: "note" }, { id: "note", kind: "collect", fieldId: "note", next: "done" }, { id: "done", kind: "end", label: "Saved" }] };
+    const h = harness({ definitions: [lead] });
+    const state = { ...h.initial, profileMemory: { name: { value: "Ana Demo", type: "text" as const } } };
+    const result = h.turn(state, "I want to leave a request", [{ kind: "start", definitionId: "lead", versionId: "v1", evidence: "leave a request", initialFacts: [] }]);
+    const id = result.state.focusId!;
+    expect(result.state.instances[id].facts.customer_name).toMatchObject({ value: "Ana Demo", evidence: "profile_memory" });
+    expect(result.state.instances[id].wait?.fieldId).toBe("note");
+  });
+  it("does not overwrite an already collected customer field with profile memory", () => {
+    const lead: ProcessDefinition = { id: "lead", versionId: "v1", businessId: "business-1", name: "Lead", purpose: "Collect a contact", offerPolicy: "on_request", entry: "name",
+      fields: [{ id: "customer_name", subject: "customer", label: "Name", type: "text", required: true, min: 2, max: 120 }, { id: "note", subject: "customer", label: "Note", type: "text", required: true }],
+      steps: [{ id: "name", kind: "collect", fieldId: "customer_name", next: "note" }, { id: "note", kind: "collect", fieldId: "note", next: "done" }, { id: "done", kind: "end", label: "Saved" }] };
+    const h = harness({ definitions: [lead] });
+    const state = { ...h.initial, profileMemory: { name: { value: "Old name", type: "text" as const } } };
+    const result = h.turn(state, "My name is Current name", [{ kind: "start", definitionId: "lead", versionId: "v1", evidence: "Current name",
+      initialFacts: [{ fieldId: "customer_name", value: "Current name", evidence: "Current name" }] }]);
+    const id = result.state.focusId!;
+    expect(result.state.instances[id].facts.customer_name).toMatchObject({ value: "Current name", evidence: "Current name" });
+    expect(result.state.instances[id].wait?.fieldId).toBe("note");
   });
 });

@@ -14,10 +14,6 @@ export function readStoredConversationState(value: unknown, scope: { businessId:
       || !(snapshot.focusId === null || typeof snapshot.focusId === "string" && Object.hasOwn(snapshot.instances, snapshot.focusId))) throw new TransitionError("invalid_stored_process_state");
     return { ...emptyState(), runtime: structuredClone(snapshot), recentMessages: snapshot.history ?? [], step_key: snapshot.focusId ? snapshot.instances[snapshot.focusId].stepId : null };
   }
-  // Historical rows are preserved during construction. Never interpret a malformed/newer
-  // process snapshot as an empty conversation and silently lose its pending approval.
-  if (typeof state.schemaVersion === "number" && state.schemaVersion > 3 || state.runtime) throw new TransitionError("unsupported_stored_state");
   if (!Object.keys(state).length) return emptyState();
-  if (!state.fields || !state.customer) throw new TransitionError("invalid_stored_state");
-  return structuredClone(state) as ConversationStatePayload;
+  throw new TransitionError("unsupported_stored_state");
 }

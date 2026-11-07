@@ -21,3 +21,14 @@ it("does not substitute arbitrary products when semantic selection fails", async
   const result = await processGroundingContext(grounding(), "request", Date.now() + 1000);
   expect(result.products).toMatchObject({ records: [], total: 50, status: "partial", reason: "semantic_context_unavailable" });
 });
+it("keeps a presented catalog id outside the semantic subset", async () => {
+  select.mockResolvedValue([{ index: 0, score: 1, evidence: "first" }]);
+  const result = await processGroundingContext(grounding(), "first", Date.now() + 1000, { productIds: ["product-49"] });
+  expect(result.products.records.map(p => p.id)).toEqual(["product-49", "product-0"]);
+  expect(result.products.status).toBe("partial");
+});
+it("keeps the presented id when semantic ranking is unavailable", async () => {
+  select.mockRejectedValue(new Error("offline"));
+  const result = await processGroundingContext(grounding(), "request", Date.now() + 1000, { productIds: ["product-49"] });
+  expect(result.products.records.map(p => p.id)).toEqual(["product-49"]);
+});

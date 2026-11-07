@@ -30,5 +30,5 @@ it("passes withheld documents and the required qualifier to the native composer,
  expect(m.compose).toHaveBeenCalledWith(expect.objectContaining({ context: expect.objectContaining({ documents: { records: [], evidence: "", clarification } }) }));
  expect(first.nextState.runtime?.retrieval).toEqual(context);
  await runIsolated(() => processConversation({ businessId: "audit-tenant", message: "Germany", hasPhoto: false, mode: "test", state: first.nextState }));
- expect(m.retrieve).toHaveBeenLastCalledWith("audit-tenant", "Germany", context, expect.any(Function), undefined, expect.objectContaining({ semanticRouting: true }));
+ expect(m.retrieve).toHaveBeenLastCalledWith("audit-tenant", "Germany", context, undefined, undefined, expect.objectContaining({ semanticRouting: true }));
 });

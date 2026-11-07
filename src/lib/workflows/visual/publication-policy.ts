@@ -16,8 +16,9 @@ export function reviewableSimulationLimitations(simulation: SimulationReport): s
   for (const scenario of simulation.scenarios) {
     if (scenario.result === "PASS" && scenario.executionCount > 0) continue;
     if (scenario.result !== "UNVERIFIED" || !scenario.validationFindings.length) return null;
-    const hub = scenario.scenarioId === "hub_unverified" && scenario.category === "coverage"
-      && scenario.validationFindings.every(f => f.code === "hub_unverified");
+    const hub = scenario.category === "coverage" && scenario.executionCount === 0
+      && scenario.validationFindings.some(f => f.code === "hub_unverified")
+      && scenario.validationFindings.every(f => f.code === "hub_unverified" || f.code === "baseline_unverified");
     const external = scenario.executionCount > 0 && scenario.attemptedActions.length > 0
       && scenario.validationFindings.every(f => f.code === "external_action_not_executed" || f.code === "baseline_unverified");
     if (!hub && !external) return null;

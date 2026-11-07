@@ -14,6 +14,19 @@ it("uses only the verified channel identity", async () => {
   const result = await orderStatusAdapter({ businessId: "b", conversationId: "c", identity }).execute(action, context);
   expect(read).toHaveBeenCalledWith("b", identity); expect(result.status).toBe("succeeded");
 });
+it("reconciles an unknown status read by repeating the same identity-scoped lookup", async () => {
+  read.mockResolvedValue([{ id: "own-order", status: "confirmed", created_at: "today" }]);
+  const result = await orderStatusAdapter({ businessId: "b", conversationId: "c", identity }).reconcile!(action, context);
+  expect(read).toHaveBeenCalledWith("b", identity);
+  expect(result).toMatchObject({ status: "succeeded" });
+});
+it("does not treat a missing status receipt as failure when identity cannot be verified", async () => {
+  expect(await orderStatusAdapter({ businessId: "b", conversationId: "c" }).reconcile!(action, context)).toEqual({ status: "failed", output: { code: "customer_identity_unverified" } });
+  await runIsolated(async () => {
+    expect(await orderStatusAdapter({ businessId: "b", conversationId: "c", identity }).reconcile!(action, context)).toBeNull();
+  });
+  expect(read).not.toHaveBeenCalled();
+});
 it("does not expose customer orders without identity, across tenants or in isolated execution", async () => {
   expect((await orderStatusAdapter({ businessId: "b", conversationId: "c" }).execute(action, context)).status).toBe("failed");
   const adapter = orderStatusAdapter({ businessId: "b", conversationId: "c", identity });
