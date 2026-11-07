@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   memberships: vi.fn(),
   profile: vi.fn(),
   aiUsage: vi.fn(),
+  billing: vi.fn(),
 }));
 vi.mock("@/lib/ai/usage-report", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -14,6 +15,7 @@ vi.mock("@/lib/tenant/access", () => ({ listMemberships: mocks.memberships }));
 vi.mock("@/lib/dashboard/profile/service", () => ({
   loadNavigationProfile: mocks.profile,
 }));
+vi.mock("@/lib/billing/service", () => ({ loadBillingUsage: mocks.billing }));
 import { GET } from "./route";
 beforeEach(() => {
   vi.clearAllMocks();
@@ -23,6 +25,7 @@ beforeEach(() => {
   });
   mocks.profile.mockResolvedValue({ enabledModules: ["products", "settings"], navigationItems: ["products", "settings"] });
   mocks.aiUsage.mockResolvedValue(null);
+  mocks.billing.mockResolvedValue({ available: 980 });
 });
 it("requires a verified user before enumerating businesses", async () => {
   mocks.user.mockResolvedValue(null);
@@ -44,6 +47,12 @@ it("returns only allowed businesses and modules without exposing credentials", a
   expect(data.user).toEqual({ id: "owner", email: "owner@example.test", canDeleteAccount: true });
   expect(response.headers.get("cache-control")).toContain("no-store");
   expect(data.businesses[0].aiUsage).toBeNull();
+  expect(data.businesses[0].messagesAvailable).toBe(980);
+});
+it("omits remaining messages when the allowance cannot be read", async () => {
+  mocks.billing.mockRejectedValue(Error("billing"));
+  const data = await (await GET(new Request("https://app.test/api/mobile/bootstrap"))).json();
+  expect(data.businesses[0].messagesAvailable).toBeUndefined();
 });
 it("includes monthly AI usage only as authorised by the usage report", async () => {
   mocks.aiUsage.mockResolvedValue({ calls: 7, inputTokens: 100, outputTokens: 20 });
