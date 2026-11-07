@@ -38,8 +38,8 @@ export function AppShell({
   navigationItems: NavItem[];
   mobileNavigationItems: NavItem[];
   nativeHost?: boolean;
-  /** This month's OpenAI requests, present only for business owners and platform administrators. */
-  aiUsage?: number;
+  /** This month's OpenAI usage, present only for business owners and platform administrators. */
+  aiUsage?: { calls: number; tokens: number };
 }) {
   const [nativeHost, setNativeHost] = useState(embedded);
   useEffect(() => { if (/AgjentiNative\/2\.0/.test(navigator.userAgent)) setNativeHost(true); }, []);
@@ -418,10 +418,13 @@ export function AppShell({
           </div>
           </div>
           {!admin && aiUsage !== undefined && (
-            <p className="ai-usage-pill" title={t("Thirrjet te OpenAI për këtë biznes që nga fillimi i muajit")}>
+            <p
+              className="ai-usage-pill"
+              title={`${aiUsage.calls.toLocaleString(language === "en" ? "en-GB" : "sq-AL")} ${t("thirrje te OpenAI për këtë biznes që nga fillimi i muajit")}`}
+            >
               <Icon name="spark" size={16} />
-              <strong>{aiUsage.toLocaleString(language === "en" ? "en-GB" : "sq-AL")}</strong>
-              <span>{t("mesazhe AI këtë muaj")}</span>
+              <strong>{aiUsage.tokens.toLocaleString(language === "en" ? "en-GB" : "sq-AL")}</strong>
+              <span>{t("tokena këtë muaj")}</span>
             </p>
           )}
           {!admin && slug && <div id="personal-assistant-slot" className="personal-assistant-slot" />}

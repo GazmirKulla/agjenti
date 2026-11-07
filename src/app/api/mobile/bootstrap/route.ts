@@ -6,7 +6,7 @@ import {
   navigationOrder,
 } from "@/lib/dashboard/modules/registry";
 import { dashboardLanguage, translator } from "@/lib/dashboard/language/core";
-import { loadAiUsage } from "@/lib/ai/usage-report";
+import { aiUsageSummary, loadAiUsage } from "@/lib/ai/usage-report";
 export async function GET(request: Request) {
   const headers = { "Cache-Control": "private, no-store", Vary: "X-Agjenti-Language" };
   const t = translator(dashboardLanguage(request.headers.get("x-agjenti-language")));
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
         ]);
         return {
           ...business,
-          aiUsage: aiUsage && { calls: aiUsage.calls },
+          aiUsage: aiUsage && aiUsageSummary(aiUsage),
           modules: profile.enabledModules,
           navigation: navigationOrder
             .filter((id) => profile.navigationItems.includes(id))

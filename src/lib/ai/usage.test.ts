@@ -3,6 +3,7 @@ const mocks = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock("next/server", () => ({ after: () => { throw new Error("outside request"); } }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: mocks.rpc }) }));
 import { attributeAiUsage, meteredFetch, meteredRoute, usageFrom, withAiUsage } from "./usage";
+import { aiUsageSummary } from "./usage-report";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -11,6 +12,13 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.rpc.mockResolvedValue({ error: null });
+});
+
+it("summarises billed tokens as prompt plus completion", () => {
+  expect(aiUsageSummary({ calls: 7, inputTokens: 100, outputTokens: 20 })).toEqual({
+    calls: 7,
+    tokens: 120,
+  });
 });
 
 it("reads usage from Responses, Chat Completions and Embeddings bodies", () => {

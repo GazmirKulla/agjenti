@@ -2,6 +2,14 @@ import { cache } from "react";
 import { createServiceSupabase } from "@/lib/supabase/service";
 
 export type AiUsageMonth = { calls: number; inputTokens: number; outputTokens: number };
+/** Tokens billed by OpenAI for the month: prompt plus completion. */
+export function totalTokens(usage: Pick<AiUsageMonth, "inputTokens" | "outputTokens">) {
+  return usage.inputTokens + usage.outputTokens;
+}
+export type AiUsageSummary = { calls: number; tokens: number };
+export function aiUsageSummary(usage: AiUsageMonth): AiUsageSummary {
+  return { calls: usage.calls, tokens: totalTokens(usage) };
+}
 
 /** This month's OpenAI requests for a business. Only its owners and platform administrators may read it. */
 export const loadAiUsage = cache(async function loadAiUsage(

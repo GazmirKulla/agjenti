@@ -5,7 +5,10 @@ const mocks = vi.hoisted(() => ({
   profile: vi.fn(),
   aiUsage: vi.fn(),
 }));
-vi.mock("@/lib/ai/usage-report", () => ({ loadAiUsage: mocks.aiUsage }));
+vi.mock("@/lib/ai/usage-report", async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadAiUsage: mocks.aiUsage,
+}));
 vi.mock("@/lib/auth/request", () => ({ getRequestUser: mocks.user }));
 vi.mock("@/lib/tenant/access", () => ({ listMemberships: mocks.memberships }));
 vi.mock("@/lib/dashboard/profile/service", () => ({
@@ -46,7 +49,7 @@ it("includes monthly AI usage only as authorised by the usage report", async () 
   mocks.aiUsage.mockResolvedValue({ calls: 7, inputTokens: 100, outputTokens: 20 });
   const data = await (await GET(new Request("https://app.test/api/mobile/bootstrap"))).json();
   expect(mocks.aiUsage).toHaveBeenCalledWith("owner", "b1", undefined);
-  expect(data.businesses[0].aiUsage).toEqual({ calls: 7 });
+  expect(data.businesses[0].aiUsage).toEqual({ calls: 7, tokens: 120 });
 });
 it("reports backend failures instead of fabricating an empty workspace", async () => {
   mocks.profile.mockRejectedValue(Error("db"));

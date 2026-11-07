@@ -15,7 +15,7 @@ import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import { loadBillingUsage } from "@/lib/billing/service";
 import { BillingUsageNotice } from "@/components/dashboard/billing-usage-notice";
 import { isNativeEmbed } from "@/lib/native/embedded";
-import { loadAiUsage } from "@/lib/ai/usage-report";
+import { aiUsageSummary, loadAiUsage } from "@/lib/ai/usage-report";
 export default async function BusinessLayout({
   children,
   params,
@@ -61,7 +61,7 @@ export default async function BusinessLayout({
       navigationItems={navigationItems}
       mobileNavigationItems={mobileNavigationItems}
       nativeHost={nativeHost}
-      aiUsage={aiUsage?.calls}
+      aiUsage={aiUsage ? aiUsageSummary(aiUsage) : undefined}
     >
       {settings.announcement && (
         <div
