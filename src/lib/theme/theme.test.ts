@@ -10,18 +10,22 @@ function boot(search: string, stored: string | null, systemDark = false) {
     () => ({ matches: systemDark }),
     { documentElement: root },
   );
-  return { stored: storage.get(THEME_STORAGE_KEY), resolved: root.dataset.resolved };
+  return {
+    stored: storage.get(THEME_STORAGE_KEY),
+    resolved: root.dataset.resolved,
+    background: root.style.backgroundColor,
+  };
 }
 
 describe("theme boot script", () => {
   it("applies and keeps a theme passed by the native app", () => {
-    expect(boot("?theme=dark", "light")).toEqual({ stored: "dark", resolved: "dark" });
-    expect(boot("?next=1&theme=light", "dark")).toEqual({ stored: "light", resolved: "light" });
+    expect(boot("?theme=dark", "light")).toEqual({ stored: "dark", resolved: "dark", background: "#0F172A" });
+    expect(boot("?next=1&theme=light", "dark")).toEqual({ stored: "light", resolved: "light", background: "#F8FAFC" });
   });
 
   it("ignores missing or invalid theme parameters", () => {
-    expect(boot("", "dark")).toEqual({ stored: "dark", resolved: "dark" });
-    expect(boot("?theme=sepia", "dark")).toEqual({ stored: "dark", resolved: "dark" });
+    expect(boot("", "dark")).toEqual({ stored: "dark", resolved: "dark", background: "#0F172A" });
+    expect(boot("?theme=sepia", "dark")).toEqual({ stored: "dark", resolved: "dark", background: "#0F172A" });
   });
 });
 

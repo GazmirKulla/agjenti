@@ -127,6 +127,7 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
     scroll-behavior: smooth;
     width: 100%;
     overflow-x: clip;
+    background-color: var(--paper);
   }
 
   body {
@@ -136,9 +137,7 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
     overflow-x: clip;
     color: var(--ink);
     font-family: var(--font-body);
-    background:
-      var(--paper);
-    background-attachment: fixed;
+    background: var(--paper);
   }
 
   h1,
@@ -4331,7 +4330,21 @@ html[data-resolved="dark"] .business-assistant .onboarding-next { color: var(--o
 .dashboard-language-switch button:disabled { cursor: wait; opacity: .65; }
 
 /* Embedded business pages keep their controls; navigation belongs to the native host. */
-.native-business-content { min-height: 100dvh; padding: 16px; width: 100%; min-width: 0; }
+.native-business-content { min-height: 100dvh; padding: 16px; width: 100%; min-width: 0; background: var(--paper); }
+.native-business-content .page-heading > :first-child,
+.native-business-content .product-page-heading > :first-child,
+.native-business-content .account-page-title {
+  display: none;
+}
+.native-business-content .page-heading:not(:has(> :nth-child(2))),
+.native-business-content .product-page-heading:not(:has(> :nth-child(2))) {
+  display: none;
+}
+.native-business-content .page-heading,
+.native-business-content .product-page-heading {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
 
 /* Inbox fills the native WebView; the host already owns back, title and safe areas. */
 html:has(.native-business-content:has(.inbox-workspace)),
@@ -4349,7 +4362,6 @@ html:has(.native-business-content:has(.inbox-workspace)) body.min-h-screen {
   overflow: hidden;
   background: var(--paper);
 }
-.native-business-content:has(.inbox-workspace) > .page-heading,
 .native-business-content:has(.inbox-workspace) > .billing-notice,
 .native-business-content:has(.inbox-workspace) > [role="status"].panel {
   display: none;
