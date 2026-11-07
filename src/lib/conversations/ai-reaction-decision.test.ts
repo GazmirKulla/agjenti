@@ -4,6 +4,7 @@ vi.mock("openai", () => ({ default: class { constructor(options: unknown) { mode
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "existing-test-model" }));
 import { decideAiReaction, hasUnfinishedWork } from "./ai-reaction-decision";
 import { emptyState } from "@/lib/workflows/engine";
+import { initialSnapshot, type InstanceStatus } from "@/lib/orchestration/contracts";
 const context = { history: [{ role: "user" as const, content: "Ku është dyqani?" }, { role: "assistant" as const, content: "Adresa është Rruga Test 1." }], preparedReply: "Me kënaqësi!", pendingWork: false };
 const base = { channel: "instagram", autoReplyEnabled: true, humanTakeover: false, text: "je i madh rrofsh", context };
 const positive = { classification: "positive_closure", unresolvedWork: false, emoji: "🙏", confidence: .99, evidence: base.text };
@@ -75,6 +76,17 @@ describe("contextual classifier contract (synthetic model, not semantic certific
 });
 
 describe("existing state remains authoritative over positive model judgement", () => {
+  it.each(["waiting_input", "waiting_approval", "waiting_effect", "suspended", "handoff"] as InstanceStatus[])("blocks native %s work without changing it", status => {
+    const runtime = initialSnapshot("business", "conversation", "live");
+    runtime.instances.request = { id: "request", definitionId: "d", versionId: "v", stepId: "step", status, facts: {} };
+    const before = structuredClone(runtime);
+    expect(hasUnfinishedWork({ ...emptyState(), runtime })).toBe(true);
+    expect(runtime).toEqual(before);
+    runtime.instances.request.status = "completed";
+    expect(hasUnfinishedWork({ ...emptyState(), runtime })).toBe(false);
+    runtime.offers.offer = { id: "offer", definitionId: "d", versionId: "v", expiresAt: Date.now() + 60000 };
+    expect(hasUnfinishedWork({ ...emptyState(), runtime })).toBe(true);
+  });
   it("does not mistake an acknowledgement pause for unfinished work", () => {
     expect(hasUnfinishedWork({ ...emptyState(), conversationPaused: true })).toBe(false);
   });

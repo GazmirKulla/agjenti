@@ -43,7 +43,7 @@ export function businessProvisionAdapter(scope?: {
       if (invitation.error || !invitation.data) return null;
       const data = invitation.data, origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
       const pending = data.status === "pending" && Date.parse(data.expires_at) > Date.now();
-      return { status: "succeeded", output: { businessId: data.target_business_id, expiresAt: data.expires_at, invitationStatus: pending ? "pending" : data.status,
+      return { status: "succeeded", output: { businessId: data.target_business_id, expiresAt: data.expires_at, invitationStatus: data.status === "pending" && !pending ? "expired" : data.status,
         ...(pending && origin ? { invitationUrl: `${origin}/join?request=${decryptSecret(data.token_ciphertext)}` } : {}) } };
     },
     async simulate(action) {

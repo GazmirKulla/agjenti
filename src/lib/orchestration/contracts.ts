@@ -65,6 +65,8 @@ export type Instance = {
   wait?: Wait;
   approval?: Approval;
   action?: Action;
+  /** Latest durable receipt per authored effect step, preserved across later effects. */
+  results?: Record<string, { actionId: string; tool: string; status: Action["status"]; output: Record<string, Value> }>;
   lastError?: string;
 };
 export type Action = {

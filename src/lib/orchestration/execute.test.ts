@@ -18,6 +18,27 @@ function setup() {
   return { state, env, instanceId: "instance", actionId: "action", adapters: [adapter], store, deadline: Date.now() + 5000, adapter };
 }
 describe("durable effect boundary", () => {
+  it("preserves the first domain receipt when a second effect completes", async () => {
+    const input = setup();
+    input.env.mode = "live"; input.state.mode = "live";
+    const first = input.env.definitions[0].steps[0];
+    if (first.kind !== "effect") throw new Error("fixture");
+    first.next = "second";
+    input.env.definitions[0].steps.push({ id: "second", kind: "effect", tool: "request.read", toolVersion: 1, inputs: {}, next: "done", failed: "staff" });
+    input.env.tools.push({ key: "request.read", version: 1, effect: "read", approval: "none", allowed: true, inputs: [] });
+    input.adapter.execute = vi.fn(async () => ({ status: "succeeded" as const, output: { savedId: "first-record" } }));
+    input.adapters.push({ key: "request.read", version: 1, execute: vi.fn(async () => ({ status: "succeeded" as const, output: { detail: "verified" } })) });
+    const saved = await executePreparedAction(input);
+    const next = saved.state.instances.instance.action!;
+    expect(next.stepId).toBe("second");
+    const finished = await executePreparedAction({ ...input, state: saved.state, actionId: next.id });
+    expect(finished.state.instances.instance.status).toBe("completed");
+    expect(finished.state.instances.instance.results).toMatchObject({
+      send: { actionId: "action", status: "succeeded", output: { savedId: "first-record" } },
+      second: { actionId: next.id, status: "succeeded", output: { detail: "verified" } },
+    });
+    expect(input.adapter.execute).toHaveBeenCalledOnce();
+  });
   it("test execution calls only the simulation adapter and labels its result", async () => {
     const input = setup();
     const result = await executePreparedAction(input);

@@ -443,6 +443,8 @@ export function transitionActionResult(snapshot: Snapshot, receipt: {
   if (receipt.status === "simulated" && env.mode !== "test") fail("simulation_in_live_mode");
   action.status = receipt.status;
   action.output = structuredClone(receipt.output);
+  instance.results ??= {};
+  instance.results[action.stepId] = { actionId: action.id, tool: action.tool, status: receipt.status, output: structuredClone(receipt.output) };
   const notices: RuntimeNotice[] = [];
   const actions: Action[] = [];
   if (receipt.status === "unknown") notices.push({ kind: "blocked", instanceId: instance.id, reason: "action_result_unknown" });

@@ -27,6 +27,7 @@ import { bookingToolPolicy, bookingFields } from "./booking-definition";
 import { availableSlots } from "@/lib/calendar/service";
 import { loadCurrentLinearVersions, loadProcessVersion, compileProcessVersion } from "./version-store";
 import { linearProcessVersion, type ProcessVersion } from "./linear-definition";
+import { processTrainingContext } from "./training-context";
 
 /** One process runtime for authenticated live channels and isolated previews. */
 export async function processConversation(params: AgentTurnParams): Promise<AgentTurnResult> {
@@ -147,7 +148,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       }
     }
   }
-  const composed = await composeProcessReply({ message: params.message, history, state, env, notices, context: { ...context, availability }, deadline });
+  const training = await processTrainingContext(state, versions, params.message);
+  const composed = await composeProcessReply({ message: params.message, history, state, env, notices, context: { ...context, availability, training }, deadline });
   // The isolated session token is issued together with this reply. Live channels require the SQL delivery receipt.
   const expectedRevision = state.revision;
   delete state.pendingTurn;
@@ -174,7 +176,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     externalActions: snapshotExternalActions(),
     ...(handoff ? { handoff: true, advisoryHandoff: mode === "test" } : {}),
     debug: { model: agentModel(), source: "ai", fallbackReason: null, agentConfigured: !!agent?.instructions, knowledgeCount: grounding.knowledge.records.length,
-      productCount: grounding.products.records.length, workflowSteps: definition?.steps.map(s => s.id) ?? [], elapsedMs: Date.now() - started },
+      productCount: grounding.products.records.length, trainingMemoryIds: training.rules.map(r => r.id), workflowSteps: definition?.steps.map(s => s.id) ?? [], elapsedMs: Date.now() - started },
   };
 }
 

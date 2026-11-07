@@ -23,6 +23,7 @@ export function verifyProcessOrder({ sql, literal, json, root, business, convers
     end $$;`);
   sql(readFileSync(path.join(root, 'supabase/migrations/20261106160000_process_order_submission.sql'), 'utf8'));
   sql(readFileSync(path.join(root, 'supabase/migrations/20261106170000_process_linear_orders.sql'), 'utf8'));
+  sql(readFileSync(path.join(root, 'supabase/migrations/20261107011000_process_order_review_receipts.sql'), 'utf8'));
   const product = randomUUID(), version = randomUUID(), actionId = randomUUID(), user = randomUUID();
   const action = { id: actionId, tool: 'order.create', toolVersion: 1, status: 'running', inputDigest: 'test-digest', approval: { waitId: randomUUID(), expiresAt: Date.now() + 600000 },
     input: { productId: product, productName: 'Product', productTypeId: 'none', unitAmount: 25, currency: 'EUR', quantity: 1,
@@ -38,15 +39,23 @@ export function verifyProcessOrder({ sql, literal, json, root, business, convers
   setState(state);
   assert.equal(JSON.parse(sql(call())).status, 'awaiting_staff');
   assert.equal(sql('select count(*) from orders;'), '0');
+  assert.equal(sql('select count(*) from process_order_reviews;'), '1');
+  sql('update business_automation_policies set local_orders=true;');
+  assert.equal(JSON.parse(sql(call())).status, 'awaiting_staff');
+  assert.equal(sql('select count(*) from orders;'), '0');
+  // Subsequent independent requests use their own durable action identity.
+  action.id = randomUUID();
+  const freshCall = () => call(action.id);
+  setState(state);
   sql('update products set price_amount=30;');
-  assert.throws(() => sql(call()), /commercial_terms_changed/);
+  assert.throws(() => sql(freshCall()), /commercial_terms_changed/);
   sql('update products set price_amount=25;');
   setState({ ...state, instances: { instance: { ...state.instances.instance, action: { ...action, approval: { ...action.approval, expiresAt: 0 } } } } });
-  assert.throws(() => sql(call()), /confirmation_required/);
+  assert.throws(() => sql(freshCall()), /confirmation_required/);
   setState(state);
   sql('update business_automation_policies set local_orders=true;');
-  assert.equal(JSON.parse(sql(call())).status, 'local_only');
-  assert.equal(JSON.parse(sql(call())).dispatch, false);
+  assert.equal(JSON.parse(sql(freshCall())).status, 'local_only');
+  assert.equal(JSON.parse(sql(freshCall())).dispatch, false);
   assert.equal(sql('select count(*) from orders;'), '1');
   assert.equal(sql('select count(*) from order_items;'), '1');
   assert.equal(sql('select count(*) from customers;'), '1');

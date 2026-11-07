@@ -14,6 +14,9 @@ export async function runProcessTurn(input: {
   let state = structuredClone(input.state);
   const live = input.env.mode === "live";
   if (live && !input.lease) throw new TransitionError("process_lease_required");
+  const messageDigest = digest(input.event.message);
+  if (state.pendingTurn && (state.pendingTurn.eventId !== input.event.id || state.pendingTurn.messageDigest !== messageDigest))
+    throw new TransitionError("unfinished_process_turn");
   const recoveryNotices: Transition["notices"] = [];
   if (live) for (const instance of Object.values(state.instances)) {
     const action = instance.action;
@@ -24,10 +27,10 @@ export async function runProcessTurn(input: {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const receipt = await Promise.race([
-        adapter.reconcile(action, { businessId: state.businessId, conversationId: state.conversationId, revision: state.revision, signal: controller.signal }),
+        Promise.resolve().then(() => adapter.reconcile!(structuredClone(action), { businessId: state.businessId, conversationId: state.conversationId, revision: state.revision, signal: controller.signal })).catch(() => null),
         new Promise<null>(resolve => { timer = setTimeout(() => { controller.abort(); resolve(null); }, Math.min(5000, input.deadline - Date.now())); }),
       ]);
-      if (!receipt || receipt.status === "unknown" || !validOutput(receipt.output)) continue;
+      if (!receipt || receipt.status !== "succeeded" && receipt.status !== "failed" || !validOutput(receipt.output)) continue;
       const next = transitionActionResult(state, { instanceId: instance.id, actionId: action.id, ...receipt }, { ...input.env, now: Date.now() });
       if (next.state.pendingTurn) next.state.pendingTurn.notices.push(...next.notices);
       await processExecutionStore({ businessId: state.businessId, conversationId: state.conversationId, lease: input.lease! })
@@ -35,7 +38,6 @@ export async function runProcessTurn(input: {
       state = next.state; if (!state.pendingTurn) recoveryNotices.push(...next.notices); input.onState?.(state);
     } finally { if (timer) clearTimeout(timer); }
   }
-  const messageDigest = digest(input.event.message);
   let result: Transition;
   if (state.pendingTurn) {
     if (state.pendingTurn.eventId !== input.event.id || state.pendingTurn.messageDigest !== messageDigest) throw new TransitionError("unfinished_process_turn");

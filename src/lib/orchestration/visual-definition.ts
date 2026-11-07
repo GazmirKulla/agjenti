@@ -19,6 +19,12 @@ export function visualNodeForStep(version: VisualVersion, stepId: string): strin
   const graph = upgradeVisualGraph(version.graph);
   const selectedFlow = graph.flows.find(f => orderFields(f.id).key("select") === stepId);
   if (selectedFlow) return selectedFlow.entryNodeId;
+  for (const flow of graph.flows) {
+    const order = orderFields(flow.id), service = serviceFields(flow.id);
+    if ([order.key("resolve"), service.key("select"), service.key("resolve")].includes(stepId)) return flow.entryNodeId;
+    const product = graph.nodes.find(n => n.kind === "product" && order.key(`resolve_${digest(n.id).slice(0, 8)}`) === stepId);
+    if (product) return product.id;
+  }
   for (const flow of graph.flows) for (const node of graph.nodes.filter(n => n.kind === "end")) {
     if (finishOrder(flow.id, node.id, node.label, [], false).some(s => s.id === stepId)) return node.id;
   }
@@ -112,7 +118,9 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
           : { id: node.id, kind: "end", label: node.config.prompt || node.label };
         case "handoff": return { id: node.id, kind: "handoff", label: node.config.prompt || node.label };
         case "action": {
-          if (collectionOnly) return { id: node.id, kind: "end", label: "The request details were collected. The configured business action was not executed in collection-only mode." };
+          const owner = graph.flows.find(f => f.nodeIds.includes(node.id));
+          if (collectionOnly || policy?.scopes.some(s => s.versionId === version.id && s.flowId === owner?.id && s.mode === "collection_only"))
+            return { id: node.id, kind: "end", label: "The request details were collected. The configured business action was not executed in collection-only mode." };
           const binding = node.config.action;
           if (!binding) throw new TransitionError("invalid_effect_definition");
           return { id: node.id, kind: "effect", tool: binding.actionKey, toolVersion: binding.actionVersion, inputs: binding.inputs, next: target(node, "yes"), failed: target(node, "no") };

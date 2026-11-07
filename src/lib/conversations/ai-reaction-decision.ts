@@ -19,6 +19,9 @@ export type AiReactionContext = {
 /** Read existing ownership only. An acknowledgement pause is not staff takeover
  * or completion of a suspended task. Never mutate facts, cursors or approvals. */
 export function hasUnfinishedWork(state: ConversationStatePayload): boolean {
+  if (state.runtime) return Boolean(state.runtime.handoffRequested || Object.keys(state.runtime.offers).length
+    || Object.values(state.runtime.instances).some(instance => !["completed", "cancelled", "failed"].includes(instance.status)
+      || instance.action?.status === "running" || instance.action?.status === "unknown"));
   const p = state.processes, execution = state.context?.execution;
   const cursors = [state.visual, p?.actionFlow?.visual, p?.auxiliary?.visual];
   return Boolean(state.staffHandoff || state.pendingCustomerQuestion || p?.pendingChoice || p?.pendingClarification || p?.pendingServiceSelection

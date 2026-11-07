@@ -384,7 +384,7 @@ export async function handleInboundMessage(
   const resumedHandoff = inboundState.staffHandoff || inboundState.visual?.status === "handoff" && !inboundState.visual.advisory;
   // Fresh threads and explicit AI resume start clean. Only a live staff takeover
   // (or an unfinished handoff still marked in state) should arm the clarify guard.
-  if (!createdFresh && (resumedHandoff || staffReplied) && inboundState.conversationPaused !== false) {
+  if (!inboundState.runtime && !createdFresh && (resumedHandoff || staffReplied) && inboundState.conversationPaused !== false) {
     delete inboundState.staffHandoff;
     inboundState.conversationPaused = true;
     suspendProcesses(inboundState);
@@ -420,7 +420,8 @@ export async function handleInboundMessage(
     // (staff resume, delete, or abandoned) and must not force the clarify prompt.
     unconfirmedPrompt = Boolean(attempted && ["prepared", "sending", "uncertain"].includes(attempted.status));
     if (unconfirmedPrompt || (attempted && attempted.reply !== deliveredReply)) deliveredReply = null;
-    if (unconfirmedPrompt) {
+    if (unconfirmedPrompt && inboundState.runtime) throw new Error("delivery_unverified");
+    if (unconfirmedPrompt && !inboundState.runtime) {
       inboundState.conversationPaused = true;
       suspendProcesses(inboundState);
       if (inboundState.processes) {

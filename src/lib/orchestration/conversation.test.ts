@@ -8,6 +8,7 @@ const { load, interpret } = vi.hoisted(() => ({ load: vi.fn(), interpret: vi.fn(
 vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: load }));
 vi.mock("./version-store", async original => ({ ...await original<object>(), loadCurrentLinearVersions: async () => [] }));
 vi.mock("./interpret", () => ({ interpretCustomer: interpret }));
+vi.mock("./training-context", () => ({ processTrainingContext: async () => ({ rules: [] }) }));
 vi.mock("./persistence", () => ({
   commitProcessCheckpoint: async (input: { transition: { state: unknown } }) => ({ state: input.transition.state, replayed: false }),
   processExecutionStore: () => ({ claim: vi.fn(), finish: vi.fn() }),
@@ -39,8 +40,8 @@ it("rejects a foreign preview before loading configuration or interpreting the m
   await expect(runIsolated(() => tryProcessConversation(input))).rejects.toThrow("definition_scope_mismatch");
   expect(interpret).not.toHaveBeenCalled();
 });
-it("keeps an unconverted live session on its existing transport during construction", async () => {
-  await expect(tryProcessConversation({ ...params(), state: emptyState(), mode: "production" })).resolves.toBeNull();
+it("requires durable transport even for a new live session", async () => {
+  await expect(tryProcessConversation({ ...params(), state: emptyState(), mode: "production" })).rejects.toThrow("process_transport_cutover_required");
   expect(load).not.toHaveBeenCalled();
 });
 it("handles information without a configured workflow through the new engine", async () => {

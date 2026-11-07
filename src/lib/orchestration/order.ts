@@ -35,7 +35,15 @@ export function orderAdapter(scope?: { businessId: string; conversationId: strin
       if (isIsolatedExecution() || !scope || scope.businessId !== context.businessId || scope.conversationId !== context.conversationId) return null;
       const { data, error } = await createServiceSupabase().from("order_submissions").select("order_id,status,confirmation")
         .eq("business_id", scope.businessId).eq("conversation_id", scope.conversationId).eq("confirmation_id", action.id).maybeSingle();
-      if (error || !data || data.confirmation?.inputDigest !== action.inputDigest) return null;
+      if (error) return null;
+      if (!data) {
+        const review = await createServiceSupabase().from("process_order_reviews").select("confirmation")
+          .eq("business_id", scope.businessId).eq("conversation_id", scope.conversationId).eq("action_id", action.id).maybeSingle();
+        if (review.error || review.data?.confirmation?.inputDigest !== action.inputDigest
+          || digest(review.data.confirmation.approval) !== digest(action.approval)) return null;
+        return { status: "succeeded", output: { submissionStatus: "awaiting_staff", localOrderCreated: false, externalOrderSent: false } };
+      }
+      if (data.confirmation?.inputDigest !== action.inputDigest) return null;
       return { status: "succeeded", output: { orderId: data.order_id, submissionStatus: data.status, localOrderCreated: true, externalOrderSent: data.status === "accepted" } };
     },
     async simulate() { recordExternalAction({ kind: "order.create", disposition: "SIMULATED", detail: "no_order_created_or_sent" }); return { status: "simulated", localOrderCreated: false, externalOrderSent: false }; },
