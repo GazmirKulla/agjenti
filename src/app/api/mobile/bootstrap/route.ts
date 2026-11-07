@@ -5,8 +5,10 @@ import {
   moduleRegistry,
   navigationOrder,
 } from "@/lib/dashboard/modules/registry";
+import { dashboardLanguage, translator } from "@/lib/dashboard/language/core";
 export async function GET(request: Request) {
-  const headers = { "Cache-Control": "private, no-store" };
+  const headers = { "Cache-Control": "private, no-store", Vary: "X-Agjenti-Language" };
+  const t = translator(dashboardLanguage(request.headers.get("x-agjenti-language")));
   try {
     const user = await getRequestUser(request);
     if (!user)
@@ -25,8 +27,8 @@ export async function GET(request: Request) {
             .filter((id) => profile.navigationItems.includes(id))
             .map((id) => ({
               id,
-              label: moduleRegistry[id].label,
-              description: moduleRegistry[id].description,
+              label: t(moduleRegistry[id].label),
+              description: t(moduleRegistry[id].description),
               path: `/b/${encodeURIComponent(business.slug)}${moduleRegistry[id].path ? `/${moduleRegistry[id].path}` : ""}`,
             })),
         };

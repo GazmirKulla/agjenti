@@ -44,6 +44,13 @@ it("marks the web session as opened inside the native app", async () => {
   expect(cookie).toMatch(/HttpOnly/i);
   expect(cookie).not.toMatch(/Max-Age|Expires/i);
 });
+it("carries the app language into the dashboard, defaulting unknown values to Albanian", async () => {
+  const language = async (value: unknown) => (await request({}, JSON.stringify({ access_token: "access", refresh_token: "refresh", language: value })))
+    .cookies.get("agjenti_dashboard_language")?.value;
+  expect(await language("en")).toBe("en");
+  expect(await language("de")).toBe("sq");
+  expect((await request()).cookies.get("agjenti_dashboard_language")).toBeUndefined();
+});
 it("redirects without credentials in the URL only after authentication", async () => {
   const response = await request();
   expect(response.status).toBe(303);

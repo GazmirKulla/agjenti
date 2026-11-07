@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import { NATIVE_EMBED_COOKIE } from "@/lib/native/embedded";
+import { dashboardLanguage, LANGUAGE_COOKIE } from "@/lib/dashboard/language/core";
 
 export const runtime = "nodejs";
 const failure = (status: number) => NextResponse.json({ error: "Hyrja në aplikacion nuk përfundoi. Provo përsëri." }, { status, headers: { "Cache-Control": "no-store" } });
@@ -46,6 +47,8 @@ export async function POST(request: Request) {
     const session = await supabase.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token });
     if (session.error || session.data.user?.id !== verified.data.user.id) return failure(401);
     response.cookies.set(NATIVE_EMBED_COOKIE, "1", { httpOnly: true, path: "/", sameSite: "lax", secure: new URL(request.url).protocol === "https:" });
+    if (body.language !== undefined)
+      response.cookies.set(LANGUAGE_COOKIE, dashboardLanguage(body.language), { path: "/", maxAge: 31536000, sameSite: "lax", secure: new URL(request.url).protocol === "https:" });
     return response;
   } catch { return failure(400); }
 }
