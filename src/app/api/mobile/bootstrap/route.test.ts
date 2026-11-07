@@ -15,7 +15,10 @@ vi.mock("@/lib/tenant/access", () => ({ listMemberships: mocks.memberships }));
 vi.mock("@/lib/dashboard/profile/service", () => ({
   loadNavigationProfile: mocks.profile,
 }));
-vi.mock("@/lib/billing/service", () => ({ loadBillingUsage: mocks.billing }));
+vi.mock("@/lib/billing/service", async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadBillingUsage: mocks.billing,
+}));
 import { GET } from "./route";
 beforeEach(() => {
   vi.clearAllMocks();
@@ -25,7 +28,7 @@ beforeEach(() => {
   });
   mocks.profile.mockResolvedValue({ enabledModules: ["products", "settings"], navigationItems: ["products", "settings"] });
   mocks.aiUsage.mockResolvedValue(null);
-  mocks.billing.mockResolvedValue({ available: 980 });
+  mocks.billing.mockResolvedValue({ available: 980, plan: "free" });
 });
 it("requires a verified user before enumerating businesses", async () => {
   mocks.user.mockResolvedValue(null);
@@ -48,6 +51,7 @@ it("returns only allowed businesses and modules without exposing credentials", a
   expect(response.headers.get("cache-control")).toContain("no-store");
   expect(data.businesses[0].aiUsage).toBeNull();
   expect(data.businesses[0].messagesAvailable).toBe(980);
+  expect(data.businesses[0].planName).toBe("Free");
 });
 it("omits remaining messages when the allowance cannot be read", async () => {
   mocks.billing.mockRejectedValue(Error("billing"));
