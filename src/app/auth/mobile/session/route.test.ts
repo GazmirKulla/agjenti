@@ -51,6 +51,13 @@ it("carries the app language into the dashboard, defaulting unknown values to Al
   expect(await language("de")).toBe("sq");
   expect((await request()).cookies.get("agjenti_dashboard_language")).toBeUndefined();
 });
+it("does not refresh an expired access token, so the phone keeps its refresh token", async () => {
+  const payload = Buffer.from(JSON.stringify({ exp: 1, sub: "a" })).toString("base64url");
+  const expired = `eyJhbGciOiJub25lIn0.${payload}.x`;
+  const response = await request({}, JSON.stringify({ access_token: expired, refresh_token: "refresh" }));
+  expect(response.status).toBe(401);
+  expect(m.session).not.toHaveBeenCalled();
+});
 it("redirects without credentials in the URL only after authentication", async () => {
   const response = await request();
   expect(response.status).toBe(303);

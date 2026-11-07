@@ -5,6 +5,17 @@ import { dashboardLanguage, LANGUAGE_COOKIE } from "@/lib/dashboard/language/cor
 
 export const runtime = "nodejs";
 const failure = (status: number) => NextResponse.json({ error: "Hyrja në aplikacion nuk përfundoi. Provo përsëri." }, { status, headers: { "Cache-Control": "no-store" } });
+/** Seconds until `exp`, or 0 when the value is not a JWT. Test tokens have no expiry claim. */
+function accessTokenTtl(token: string) {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return Number.POSITIVE_INFINITY;
+    const payload = JSON.parse(Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")) as { exp?: unknown };
+    return typeof payload.exp === "number" ? payload.exp - Date.now() / 1000 : Number.POSITIVE_INFINITY;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
 
 /** Exchange the native OAuth session for this origin's normal SSR cookies.
  * JSON-only + no CORS prevents cross-site form login. No credentials in URLs.
@@ -42,6 +53,9 @@ export async function POST(request: Request) {
     const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
       cookies: { getAll: () => [], setAll: values => { for (const { name, value, options } of values) response.cookies.set(name, value, { ...options, secure: new URL(request.url).protocol === "https:", sameSite: "lax" }); } },
     });
+    // An expired access token would make setSession rotate the refresh token and
+    // sign the phone out. The app must send a still-valid access token.
+    if (accessTokenTtl(body.access_token) <= 20) return failure(401);
     const verified = await supabase.auth.getUser(body.access_token);
     if (verified.error || !verified.data.user) return failure(401);
     const session = await supabase.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token });
