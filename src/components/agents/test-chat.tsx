@@ -1,5 +1,5 @@
 "use client";
-import { blockedByFailedTurn, needsTestChatPolling, TestChatPolling } from "./test-chat-polling";
+import { blockedByFailedTurn, hasInFlightTurns, needsTestChatPolling, TestChatPolling } from "./test-chat-polling";
 import { TestConfiguration } from "./test-configuration";
 import { AssistantComposer } from "@/components/business-assistant/composer";
 import { MessageRoutingView } from "@/components/workflows/message-routing";
@@ -69,7 +69,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   const messages = chat.entries;
   const last = messages.at(-1)?.result ?? null;
   const preparing = pending !== null || trainingBusy || voiceBusy || changingMode;
-  const busy = preparing || Boolean(chat.outbox?.length);
+  const busy = preparing || hasInFlightTurns(chat);
   const waiting = needsTestChatPolling(chat);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
@@ -192,9 +192,9 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
       finally { setChangingMode(false); }
     }
     const all = [next, ...chats.filter(x => x.entries.length || x.outbox?.length)];
-    if (all.slice(8).some(c => c.outbox?.length)) { setError("Ruajmë bisedat në proces. Fshi një bisedë të përfunduar për të hapur një të re."); return; }
+    if (all.slice(8).some(hasInFlightTurns)) { setError("Ruajmë bisedat në proces. Fshi një bisedë të përfunduar për të hapur një të re."); return; }
     clearComposer(); setTrainingFeedback(null); setTrainingRequest(null); setWaitStopped(false);
-    if (chat.outbox?.length) setStorageNotice("Biseda e mëparshme ruhet në historik. Puna e saj nuk është anuluar.");
+    if (hasInFlightTurns(chat)) setStorageNotice("Biseda e mëparshme ruhet në historik. Puna e saj nuk është anuluar.");
     window.speechSynthesis?.cancel(); setSpeaking(null);
     setChats(all.slice(0,8)); setActiveId(next.id); setShowJump(false);
   }
@@ -277,7 +277,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         session: replaySession(currentEntries, Math.min(index, currentEntries.length)), status: "queued" };
       const nextChat = { ...base, outbox: [...(base.outbox ?? []), operation], title: index ? base.title : (text || attachments[0]?.name || "Provë me foto").slice(0,65), updatedAt: Date.now() };
       const allChats = [nextChat, ...chatsRef.current.filter(c => c.id !== targetId && (chat.id !== "initial" || c.id !== "initial"))];
-      if (allChats.slice(8).some(c => c.outbox?.length)) throw new Error("Nuk mund të hiqet një bisedë në proces. Fshi një bisedë të përfunduar.");
+      if (allChats.slice(8).some(hasInFlightTurns)) throw new Error("Nuk mund të hiqet një bisedë në proces. Fshi një bisedë të përfunduar.");
       const nextChats = allChats.slice(0,8);
       // Persist identity BEFORE any request. Without storage, do not submit an
       // operation that this browser cannot reconcile after reload.
@@ -325,7 +325,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
       <div><span className="agent-test-label"><span /> {advanced ? "CHATLAB" : "AGJENTI YT"} · {real ? "REAL" : "PROVË"}</span><h2>{businessName}</h2></div>
       <nav aria-label="Veprimet e bisedës">
         {advanced && <button className={`chat-toolbar-button ${real ? "real-chat-active" : ""}`} type="button" role="switch" aria-checked={real}
-          disabled={preparing || busy || Boolean(configurationDraft)} title={configurationDraft ? "Real chat përdor vetëm konfigurimin e publikuar." : "Hap një bisedë të re në mënyrën e zgjedhur"}
+          disabled={preparing || Boolean(configurationDraft)} title={configurationDraft ? "Real chat përdor vetëm konfigurimin e publikuar." : "Hap një bisedë të re në mënyrën e zgjedhur"}
           onClick={() => void reset(real ? "test" : "real")}>Real chat <span aria-hidden="true">{real ? "●" : "○"}</span></button>}
         <button className="chat-icon" type="button" title="Historiku" aria-label="Historiku i bisedave" aria-expanded={showHistory} onClick={() => setShowHistory(v=>!v)}><Icon name="history" /></button>
         {advanced && <button className="chat-icon" type="button" title="Eksporto bisedën" aria-label="Eksporto bisedën" disabled={!messages.length || busy} onClick={download}><Icon name="download" /></button>}
@@ -344,8 +344,8 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         <p>8 bisedat e fundit në këtë skedë të shfletuesit.</p>
         {chats.filter(c => (c.title + c.entries.map(e=>e.text+e.result.reply).join(" ")).toLocaleLowerCase().includes(search.toLocaleLowerCase())).map(c => <div className={`chat-history-row ${c.id===chat.id ? "active" : ""}`} key={c.id}>
           {renaming?.id === c.id ? <input autoFocus aria-label="Emri i bisedës" maxLength={80} value={renaming.title} onChange={e=>setRenaming({...renaming,title:e.target.value})} onBlur={saveTitle} onKeyDown={e=>{if(e.key==="Enter")saveTitle();if(e.key==="Escape")setRenaming(null);}}/> : <button disabled={preparing || voice} onClick={()=>selectChat(c.id)} type="button" aria-current={c.id===chat.id ? "true" : undefined}><span>{c.mode === "real" ? "REAL · " : ""}{c.title}</span><small>{c.entries.length} mesazhe</small></button>}
-          <button className="chat-icon" type="button" title="Riemërto bisedën" aria-label={`Riemërto ${c.title}`} disabled={busy || voice} onClick={()=>setRenaming({id:c.id,title:c.title})}><Icon name="edit" size={14}/></button>
-          <button className="chat-icon" type="button" title="Fshi bisedën" aria-label={`Fshi ${c.title}`} disabled={busy || voice} onClick={()=>{
+          <button className="chat-icon" type="button" title="Riemërto bisedën" aria-label={`Riemërto ${c.title}`} disabled={hasInFlightTurns(c) || voice} onClick={()=>setRenaming({id:c.id,title:c.title})}><Icon name="edit" size={14}/></button>
+          <button className="chat-icon" type="button" title="Fshi bisedën" aria-label={`Fshi ${c.title}`} disabled={hasInFlightTurns(c) || voice} onClick={()=>{
             const next=chats.filter(x=>x.id!==c.id); const fallback=next.length ? next : [newConversation()]; setChats(fallback); if(c.id===activeId) { clearComposer(); setActiveId(fallback[0].id); setTrainingFeedback(null); setTrainingRequest(null); window.speechSynthesis?.cancel(); setSpeaking(null); }
           }}><Icon name="trash" size={14}/></button>
         </div>)}

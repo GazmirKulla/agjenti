@@ -11,6 +11,17 @@ import { readTestSession, sealTestSession, MAX_TEST_TURNS } from "./session";
 import { issueTrainingReceipt } from "@/lib/agents/training/receipt";
 import { readAttachment } from "./attachments";
 import { collectTestConfiguration } from "./provenance";
+import { TransitionError } from "@/lib/orchestration/contracts";
+import { CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
+
+const composeFailureCodes = new Set(["reply_unavailable", "invalid_reply_targets", "empty_process_reply", "reply_incomplete"]);
+
+function labTurnFailureCode(error: unknown) {
+  if (error instanceof TransitionError) return error.code;
+  if (error instanceof CapabilityEnforcementError) return error.code;
+  if (error instanceof Error && composeFailureCodes.has(error.message)) return error.message;
+  return "turn_failed";
+}
 
 function customerComplete(customer: {
   name: string | null;
@@ -178,7 +189,8 @@ async function runTestTurn(
       autoReplyEnabled: access.business.auto_reply,
       trainingReceipt: issueTrainingReceipt(userId, access.business.id, text || "[Foto e simuluar]", turn.reply, turn.workflowId, turn.nextState.step_key),
     };
-  } catch {
+  } catch (error) {
+    observation?.onTrace({ stage: "ai", label: "Process turn failed", status: "error", data: { code: labTurnFailureCode(error) } });
     const failedObservation = observation?.finish();
     return {
       ...(failedObservation ? { labObservation: failedObservation } : {}),

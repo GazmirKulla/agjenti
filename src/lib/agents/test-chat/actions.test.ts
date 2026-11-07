@@ -418,5 +418,22 @@ it("retains sanitized failed-turn evidence for admins without a new checkpoint",
   const result = await simulateAgentTurn(input);
   expect(result).toHaveProperty("error");
   expect(result).not.toHaveProperty("session");
-  expect(result).toMatchObject({ labObservation: { trace: [{ status: "error", data: { api_key: "[REDACTED]" } }] } });
+  expect(result).toMatchObject({ labObservation: { trace: [
+    { status: "error", data: { api_key: "[REDACTED]" } },
+    { label: "Process turn failed", status: "error", data: { code: "turn_failed" } },
+  ] } });
+});
+
+it("records a safe compose failure code without leaking unknown throw text", async () => {
+  mocks.access.mockResolvedValue({ admin: true, business: { id: "business-a", auto_reply: false } });
+  mocks.process.mockRejectedValue(new Error("invalid_reply_targets"));
+  const composed = await simulateAgentTurn(input);
+  expect(composed).toMatchObject({
+    error: "Prova nuk u përfundua. Kontrollo konfigurimin e agjentit dhe provo përsëri.",
+    labObservation: { trace: [{ label: "Process turn failed", data: { code: "invalid_reply_targets" } }] },
+  });
+  mocks.process.mockRejectedValue(new Error("secret internal dump"));
+  const hidden = await simulateAgentTurn(input);
+  expect(hidden).toMatchObject({ labObservation: { trace: [{ data: { code: "turn_failed" } }] } });
+  expect(JSON.stringify(hidden)).not.toContain("secret internal dump");
 });
