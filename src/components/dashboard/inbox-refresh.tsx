@@ -3,9 +3,18 @@
 import { useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-export function InboxRefresh() {
+export function InboxRefresh({ title }: { title: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  useEffect(() => {
+    const native = (
+      window as Window & {
+        ReactNativeWebView?: { postMessage: (value: string) => void };
+      }
+    ).ReactNativeWebView;
+    if (!native || !/AgjentiNative\/2\.0/.test(navigator.userAgent)) return;
+    native.postMessage(JSON.stringify({ type: "chrome", title }));
+  }, [title]);
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === "visible" && !pending) {

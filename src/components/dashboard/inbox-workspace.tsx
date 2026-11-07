@@ -87,7 +87,7 @@ export async function InboxWorkspace({
     return (
       <>
         {heading}
-        <InboxRefresh />
+        <InboxRefresh title="Inbox" />
         <div className="inbox-workspace inbox-list-home">
           <InboxList rows={inboxRows} slug={slug} channels={channels} />
           <section className="panel chat-panel">
@@ -182,7 +182,7 @@ export async function InboxWorkspace({
   return (
     <>
       {heading}
-        <InboxRefresh />
+        <InboxRefresh title={name} />
       <div
         className={`inbox-workspace ${conversationId ? "has-selection" : "inbox-list-home"} ${view === "customer" ? "is-mobile-customer" : ""}`}
       >

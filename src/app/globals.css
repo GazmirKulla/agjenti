@@ -3437,6 +3437,9 @@ html.drawer-scroll-lock body {
     line-height: 1;
     color: var(--ink);
   }
+  .chat-header > .btn.chat-close {
+    display: none;
+  }
   .chat-header .profile-avatar {
     width: 44px;
     height: 44px;
@@ -3483,7 +3486,7 @@ html.drawer-scroll-lock body {
     margin-top: 7px;
   }
   .composer-footer span {
-    margin-right: auto;
+    display: none;
   }
   .inbox-workspace.is-mobile-customer .inbox-customer {
     display: grid;
@@ -4329,3 +4332,82 @@ html[data-resolved="dark"] .business-assistant .onboarding-next { color: var(--o
 
 /* Embedded business pages keep their controls; navigation belongs to the native host. */
 .native-business-content { min-height: 100dvh; padding: 16px; width: 100%; min-width: 0; }
+
+/* Inbox fills the native WebView; the host already owns back, title and safe areas. */
+html:has(.native-business-content:has(.inbox-workspace)),
+html:has(.native-business-content:has(.inbox-workspace)) body.min-h-screen {
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+.native-business-content:has(.inbox-workspace) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: var(--paper);
+}
+.native-business-content:has(.inbox-workspace) > .page-heading,
+.native-business-content:has(.inbox-workspace) > .billing-notice,
+.native-business-content:has(.inbox-workspace) > [role="status"].panel {
+  display: none;
+}
+.native-business-content .inbox-workspace {
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+  height: 100%;
+}
+.native-business-content .inbox-list,
+.native-business-content .chat-panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  background: var(--paper);
+}
+.native-business-content .inbox-workspace.inbox-list-home .inbox-list,
+.native-business-content .inbox-workspace.has-selection .chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.native-business-content .inbox-rows {
+  flex: 1;
+  max-height: none;
+}
+.native-business-content .inbox-list-foot {
+  display: none;
+}
+.native-business-content .chat-header > .chat-mobile-back,
+.native-business-content .chat-header > .btn.chat-close,
+.native-business-content .chat-header .chat-contact-link,
+.native-business-content .inbox-customer-mobile-header {
+  display: none;
+}
+.native-business-content .chat-header {
+  justify-content: flex-end;
+  padding: 4px 8px;
+  min-height: 44px;
+  background: var(--paper);
+}
+.native-business-content .inbox-workspace.has-selection,
+.native-business-content .inbox-workspace.inbox-list-home,
+.native-business-content .inbox-workspace.is-mobile-customer {
+  height: 100%;
+}
+.native-business-content .chat-messages {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  background: var(--paper);
+}
+.native-business-content .chat-composer {
+  padding: 10px 12px 12px;
+}
+.native-business-content .inbox-workspace.is-mobile-customer .inbox-customer {
+  padding: 12px 14px 16px;
+}

@@ -145,7 +145,7 @@ export function ThreadClient(props: {
         />
         <Link
           href={`/b/${props.slug}/inbox`}
-          className="btn btn-ghost"
+          className="btn btn-ghost chat-close"
           aria-label={t("Mbyll pamjen e bisedës")}
           title={t("Mbyll pamjen e bisedës")}
         >
