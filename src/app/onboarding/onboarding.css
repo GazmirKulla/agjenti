@@ -294,13 +294,13 @@
   border-radius: 6px;
 }
 .onboarding-option:has(input:checked) .onboarding-choice,
-.onboarding-option:has(input:indeterminate) .onboarding-choice {
+.onboarding-option:has(input[type="checkbox"]:indeterminate) .onboarding-choice {
   background: var(--primary);
   border-color: var(--accent);
   box-shadow: 0 1px 3px color-mix(in srgb, var(--brand-secondary) 14.1%, transparent);
 }
 .onboarding-option:has(input:checked) .onboarding-choice::after,
-.onboarding-option:has(input:indeterminate) .onboarding-choice::after {
+.onboarding-option:has(input[type="checkbox"]:indeterminate) .onboarding-choice::after {
   content: "";
   display: block;
 }
@@ -328,7 +328,7 @@
   border-width: 0 2px 2px 0;
   transform: translateY(-1px) rotate(45deg);
 }
-.onboarding-option:has(input:indeterminate) .onboarding-choice::after {
+.onboarding-option:has(input[type="checkbox"]:indeterminate) .onboarding-choice::after {
   width: 10px;
   height: 2px;
   border-radius: 2px;
@@ -1367,9 +1367,9 @@
 @media (forced-colors: active) {
   .onboarding-choice { forced-color-adjust: none; background: Canvas; border-color: ButtonText; }
   .onboarding-option:has(input:checked) .onboarding-choice,
-  .onboarding-option:has(input:indeterminate) .onboarding-choice { background: Highlight; border-color: Highlight; }
+  .onboarding-option:has(input[type="checkbox"]:indeterminate) .onboarding-choice { background: Highlight; border-color: Highlight; }
   .onboarding-option:has(input[type="radio"]:checked) .onboarding-choice::after,
-  .onboarding-option:has(input:indeterminate) .onboarding-choice::after { background: HighlightText; }
+  .onboarding-option:has(input[type="checkbox"]:indeterminate) .onboarding-choice::after { background: HighlightText; }
   .onboarding-option:has(input[type="checkbox"]:checked) .onboarding-choice::after { border-color: HighlightText; }
   .onboarding-detail-input .onboarding-boolean-choice input,
   .onboarding-review-confirm input[type="checkbox"] { appearance: auto; }
