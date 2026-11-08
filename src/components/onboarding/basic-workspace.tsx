@@ -70,7 +70,7 @@ export function AgentWorkspaceForm({ initialName = "", initialType = "" }: { ini
       <div className="onboarding-note">
         <Icon name="spark" />
         <p>
-          Pasi të krijohet hapësira, Agjenti në panel të bën disa pyetje për ta
+          Pasi të krijohet hapësira, Asistenti në panel të bën disa pyetje për ta
           përshtatur me biznesin tënd. Ti vendos kur të aktivizosh përgjigjet
           automatike.
         </p>

@@ -312,12 +312,7 @@ export function OnboardingWizard({
                           />
                           <Icon name={icon} size={25} />
                           <span>{label}{question.key === "useCases" && <small className="onboarding-goal-description">{useCaseDescriptions[value]}</small>}</span>
-                          <span
-                            className="onboarding-choice"
-                            aria-hidden="true"
-                          >
-                            {checked ? "✓" : ""}
-                          </span>
+                          <span className="onboarding-choice" aria-hidden="true" />
                         </label>
                       );
                     })}

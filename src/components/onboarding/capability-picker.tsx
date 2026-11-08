@@ -20,7 +20,7 @@ export function CapabilityPicker({ options, selected, onChange }: {
         <span>{group.label}<small className="onboarding-goal-description">{group.description}</small>
           {partial && <small className="onboarding-goal-description">Disa veprime të këtij grupi janë zgjedhur.</small>}
         </span>
-        <span className="onboarding-choice" aria-hidden="true">{checked ? "✓" : partial ? "−" : ""}</span>
+        <span className="onboarding-choice" aria-hidden="true" />
       </label>
     );
   });

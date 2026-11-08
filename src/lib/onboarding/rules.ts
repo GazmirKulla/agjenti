@@ -26,11 +26,11 @@ export function offerMode(offerings: readonly string[]) {
 }
 
 export const useCaseChoices: readonly Choice[] = [
-  ["support", "T’u përgjigjet klientëve", "inbox"],
-  ["sales", "T’i ndihmojë klientët të zgjedhin", "spark"],
-  ["orders", "Të ndihmojë klientin të përfundojë porosinë", "orders"],
-  ["booking", "Të marrë kërkesa për rezervime", "calendar"],
-  ["leads", "Të mbledhë kontaktet e klientëve", "customers"],
+  ["support", "T’u përgjigjet klientëve", "chat"],
+  ["sales", "T’i ndihmojë klientët të zgjedhin", "recommend"],
+  ["orders", "Të ndihmojë klientin të përfundojë porosinë", "cart"],
+  ["booking", "Të marrë kërkesa për rezervime", "booking"],
+  ["leads", "Të mbledhë kontaktet e klientëve", "lead"],
 ];
 export const useCaseDescriptions: Record<string, string> = {
   support: "Për ofertën, çmimet, përdorimin dhe politikat e biznesit.",
