@@ -26,7 +26,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileCard } from "./file-card";
-import { OnboardingContinuation } from "./onboarding-continuation";
+import { OnboardingQuickReplies } from "./onboarding-quick-replies";
+import { parseQuestionMeta, type OnboardingQuickReply } from "@/lib/onboarding/assistant-chat-model";
 import { AudioRecorder, primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import { AssistantComposer } from "./composer";
 import { Icon } from "@/components/dashboard/icon";
@@ -162,6 +163,27 @@ export function BusinessAssistant({
   refreshHistory.current = archive.refreshThreads;
   useEffect(() => { if (historyOpen) void refreshHistory.current(); }, [historyOpen]);
   const { history, setHistory } = archive;
+  const lastMessage = history.at(-1);
+  const pendingOnboarding = lastMessage?.kind === "onboarding" && archive.view && !archive.view.conversation.pending_request
+    ? parseQuestionMeta(lastMessage.meta) : null;
+  // Onboarding continues in the conversation: on Home, with nothing open yet,
+  // the assistant opens its profile conversation and asks the next question.
+  const onboardingOpened = useRef(false);
+  // Set once the person acts, so a late response never replaces their conversation.
+  const onboardingStale = useRef(false);
+  useEffect(() => {
+    if (context.page !== "home" || onboardingOpened.current || archive.loading || archive.view || history.length) return;
+    onboardingOpened.current = true;
+    void fetch(`/api/business-onboarding?slug=${encodeURIComponent(slug)}`, { method: "POST", cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data?.conversation || onboardingStale.current) return;
+        // Opened for this page, so no "page changed" notice on the first question.
+        lastContext.current = assistantContextKey(slug, context);
+        archive.accept(data);
+      })
+      .catch(() => { /* The assistant stays usable without onboarding questions. */ });
+  }, [context, archive, history.length, slug]);
   const [result, setResult] = useState<Result | null>(null);
   const [recovered, setRecovered] = useState(false);
   const sendAttempt = useRef<{ key: string; id: string } | null>(null);
@@ -305,9 +327,10 @@ export function BusinessAssistant({
     if (data.persistence) archive.accept(data.persistence, Boolean(data.recovered));
     return data;
   }
-  async function analyze(event?: React.FormEvent, requestText?: string) {
+  async function analyze(event?: React.FormEvent, requestText?: string, onboarding?: OnboardingQuickReply) {
     event?.preventDefault();
     if (locked.current || (!(requestText ?? text).trim() && !materials.length)) return;
+    onboardingStale.current = true;
     locked.current = true;
     archive.inFlight.current = true;
     setWorkOpen(false);
@@ -355,6 +378,7 @@ export function BusinessAssistant({
         history: pin ? workflowRequestHistory(pin.history) : lastContext.current === contextKey ? history.slice(-6) : [],
         context: effectiveContext,
         assistantName: agentName,
+        ...(onboarding ? { onboarding } : {}),
         ...(lastContext.current === contextKey && (result?.workflow?.proposed || result?.editableFlow || result?.linear) && result.token ? { pendingToken: result.token } : {}),
       });
       if (generation !== requestGeneration.current) return;
@@ -492,6 +516,7 @@ export function BusinessAssistant({
     workflowRequest.current = null;
     lastContext.current = "";
     setRequestContext(null);
+    onboardingStale.current = true;
     archive.newThread();
     setResult(null);
     setText("");
@@ -601,7 +626,6 @@ export function BusinessAssistant({
               <p>
                 {inline ? "Jam këtu për të të ndihmuar me biznesin. Pyet ose kërko një ndryshim." : "Menaxho produktet, shërbimet, njohuritë dhe takimet me një kërkesë."}
               </p>
-              {inline && <OnboardingContinuation key={`${userId}:${slug}`} slug={slug} agentName={agentName} disabled={Boolean(busy)} />}
               <div className="assistant-examples">
                 {businessGoals(context, modules, external).map(
                   ({ text: example, label }) => (
@@ -654,6 +678,10 @@ export function BusinessAssistant({
             )}
             {busy === "plan" && <div className="chat-typing" role="status" aria-label="Po shkruan"><i /><i /><i /></div>}
           </div>
+          {pendingOnboarding && !busy && !outgoing && (
+            <OnboardingQuickReplies question={pendingOnboarding} disabled={Boolean(busy) || archive.loading}
+              onReply={(label, reply) => void analyze(undefined, label, reply)} />
+          )}
           {result?.slots && (
             <div className="assistant-slots" aria-label="Oraret e lira">
               {result.slots.map((time) => (

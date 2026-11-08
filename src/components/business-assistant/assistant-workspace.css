@@ -34,24 +34,15 @@
   .assistant-workspace .chat-typing i { animation: none; }
 }
 
-/* Onboarding continues with the agent on Home, one open question at a time. */
-.onboarding-continuation { margin: 20px 0 0; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--ink); text-align: left; }
-.onboarding-continuation-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.onboarding-continuation-head > span { color: var(--ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.onboarding-continuation-eyebrow { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--accent); font-size: 12px; font-weight: 650; }
-.onboarding-continuation progress { display: block; width: 100%; height: 4px; margin: 10px 0 14px; accent-color: var(--accent); }
-.onboarding-continuation-title { margin: 0 0 6px; font-size: 16px; font-weight: 600; line-height: 1.4; }
-.onboarding-continuation-hint { margin: 0 0 12px; color: var(--ink-muted); font-size: 13px; line-height: 1.55; }
-.onboarding-continuation-error { margin: 10px 0 0; color: var(--danger, #b42318); font-size: 13px; }
-.onboarding-continuation-options { display: flex; flex-wrap: wrap; gap: 8px; }
-.onboarding-continuation-options > button { min-height: 40px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; cursor: pointer; }
-.onboarding-continuation-options > button:hover:not(:disabled), .onboarding-continuation-options > button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-.onboarding-continuation-options > button[aria-pressed="true"] { background: var(--paper); font-weight: 600; }
-.onboarding-continuation textarea { display: block; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; resize: vertical; }
-.onboarding-continuation-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; }
-.onboarding-continuation-skip { min-height: 40px; padding: 8px 10px; border: 0; background: none; color: var(--ink-muted); font-size: 13px; cursor: pointer; }
-.onboarding-continuation-skip:hover:not(:disabled) { color: var(--ink); text-decoration: underline; }
-.onboarding-continuation button:focus-visible, .onboarding-continuation textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (max-width: 760px) {
-  .onboarding-continuation-actions > .btn { flex: 1; }
-}
+/* Onboarding questions asked in the conversation: quick replies under the last message. */
+.onboarding-quick-replies { display: grid; gap: 8px; margin: 4px 0 16px; }
+.onboarding-quick-replies .assistant-quick-actions { margin-top: 0; }
+.onboarding-quick-replies .assistant-quick-actions button { color: var(--ink); }
+.onboarding-quick-replies .assistant-quick-actions button:hover:not(:disabled),
+.onboarding-quick-replies .assistant-quick-actions button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.onboarding-quick-replies .assistant-quick-actions button[aria-pressed="true"] { background: var(--accent-soft); font-weight: 600; }
+.onboarding-quick-replies .assistant-quick-actions button.is-primary { border-color: var(--accent); background: var(--primary); color: var(--on-primary); font-weight: 600; }
+.onboarding-quick-replies .assistant-quick-actions button.is-primary:disabled { opacity: .5; }
+.onboarding-quick-replies .assistant-quick-actions button.is-quiet { border-style: dashed; color: var(--ink-muted); }
+.onboarding-quick-replies .assistant-quick-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.onboarding-quick-replies > small { color: var(--ink-muted); font-size: 12px; }

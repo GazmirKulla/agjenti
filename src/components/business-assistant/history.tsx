@@ -5,7 +5,7 @@ import type { ConversationView, StoredConversation, PlanningPreferences, StoredM
 import type { FileCardItem } from "./file-card";
 export { AssistantHistoryDrawer as AssistantHistory } from "./history-drawer";
 
-export type ChatMessage = HistoryMessage & { materials?: FileCardItem[]; kind?: StoredMessage["kind"] };
+export type ChatMessage = HistoryMessage & { materials?: FileCardItem[]; kind?: StoredMessage["kind"]; meta?: StoredMessage["meta"] };
 type View = ConversationView & { recovery?: { verified: boolean; message: string } };
 export function useAssistantHistory(userId: string, slug: string) {
   const [history, setHistory] = useState<ChatMessage[]>([]);

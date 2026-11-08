@@ -1,50 +1,50 @@
-import { getRequestUser, permittedWrite } from "@/lib/auth/request";
+import { bearerToken, getRequestUser, permittedWrite } from "@/lib/auth/request";
 import { requireBusinessAccess } from "@/lib/tenant/access";
-import { ContinuationError } from "@/lib/onboarding/continuation";
-import { answerContinuation, loadContinuation } from "@/lib/onboarding/continuation-service";
+import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { meteredRoute } from "@/lib/ai/usage";
+import { PersistenceError } from "@/lib/business-assistant/persistence";
+import { loadContinuation } from "@/lib/onboarding/continuation-service";
+import { openOnboardingConversation } from "@/lib/onboarding/assistant-chat";
 
 export const runtime = "nodejs";
 const json = (value: unknown, status = 200) =>
-  Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
+  Response.json(value, { status, headers: { "Cache-Control": "private, no-store" } });
 
-async function access(request: Request) {
+async function accessFor(request: Request) {
   const user = await getRequestUser(request);
-  if (!user) return { response: json({ error: "Hyr përsëri në llogari." }, 401) };
-  const slug = new URL(request.url).searchParams.get("slug") ?? "";
-  const membership = await requireBusinessAccess(user.id, slug);
-  if (!membership) return { response: json({ error: "Nuk ke qasje në këtë biznes." }, 403) };
-  return { businessId: membership.business.id };
+  if (!user) throw new PersistenceError("Hyr përsëri në llogari.", 401);
+  const membership = await requireBusinessAccess(user.id, new URL(request.url).searchParams.get("slug") ?? "");
+  if (!membership) throw new PersistenceError("Nuk ke qasje në këtë biznes.", 403);
+  return { membership, user };
 }
+const failure = (error: unknown, fallback: string) =>
+  json({ error: error instanceof PersistenceError ? error.message : fallback }, error instanceof PersistenceError ? error.status : 503);
 
-/** The next onboarding question the dashboard agent should ask, if any. */
-export async function GET(request: Request) {
+/** Progress of the onboarding questions, if any are left. */
+async function handleGET(request: Request) {
   try {
-    const result = await access(request);
-    if ("response" in result) return result.response;
-    return json({ continuation: await loadContinuation(result.businessId) });
-  } catch {
-    return json({ error: "Pyetjet e konfigurimit nuk u ngarkuan." }, 503);
+    const { membership } = await accessFor(request);
+    return json({ continuation: await loadContinuation(membership.business.id) });
+  } catch (error) {
+    return failure(error, "Pyetjet e konfigurimit nuk u ngarkuan.");
   }
 }
 
-export async function POST(request: Request) {
+/** Opens the onboarding conversation, with the next question asked by the
+ * assistant as its last message. `{ conversation: null }` when nothing is left. */
+async function handlePOST(request: Request) {
   if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   try {
-    const result = await access(request);
-    if ("response" in result) return result.response;
-    if (Number(request.headers.get("content-length") ?? 0) > 16000)
-      return json({ error: "Përgjigjja është shumë e gjatë." }, 400);
-    const raw = await request.text();
-    if (raw.length > 16000) return json({ error: "Përgjigjja është shumë e gjatë." }, 400);
-    let body: { field?: unknown; answer?: unknown };
-    try {
-      body = JSON.parse(raw);
-    } catch {
-      return json({ error: "Kërkesa nuk është e vlefshme." }, 400);
-    }
-    return json({ continuation: await answerContinuation(result.businessId, body?.field, body?.answer) });
+    const { membership, user } = await accessFor(request);
+    const profile = await loadDashboardProfile(membership.business.id);
+    const view = await openOnboardingConversation({
+      accessToken: bearerToken(request), userId: user.id, businessId: membership.business.id,
+      modules: profile.enabledModules, catalogSource: membership.business.catalog_source,
+    });
+    return json(view ?? { conversation: null });
   } catch (error) {
-    if (error instanceof ContinuationError) return json({ error: error.message }, error.status);
-    return json({ error: "Përgjigjja nuk u ruajt. Provo përsëri." }, 503);
+    return failure(error, "Biseda e konfigurimit nuk u hap.");
   }
 }
+export const GET = meteredRoute(handleGET);
+export const POST = meteredRoute(handlePOST);

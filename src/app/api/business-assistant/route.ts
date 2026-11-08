@@ -20,6 +20,9 @@ import { briefingAnswer } from "@/lib/business-assistant/briefing-model";
 import { dashboardLanguage } from "@/lib/dashboard/language/core";
 import { revalidatePath } from "next/cache";
 import { meteredRoute } from "@/lib/ai/usage";
+import { onboardingTurn, remindOnboarding } from "@/lib/onboarding/assistant-chat";
+import { parseQuickReply } from "@/lib/onboarding/assistant-chat-model";
+import { ContinuationError } from "@/lib/onboarding/continuation";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 const json = (value: unknown, status = 200) =>
@@ -128,6 +131,25 @@ async function handlePOST(request: Request) {
         "Biseda është shumë e gjatë. Fillo një kërkesë të re.",
       );
     const context = parseUIContext(body.context);
+    // A reply to an open onboarding question is stored as an answer; anything
+    // else in that conversation continues to the normal assistant below.
+    if (body.conversationId && !body.attachments?.length && !body.links?.length && !linksInText(body.text).length && body.pendingToken === undefined) {
+      let quickReply;
+      try { quickReply = parseQuickReply(body.onboarding); } catch { throw new AssistantError("Përgjigje e pavlefshme."); }
+      try {
+        const answered = await onboardingTurn(access, { ...body, onboarding: quickReply });
+        if (answered) {
+          if (answered.profileChanged) {
+            try { revalidatePath(`/b/${slug}`, "layout"); } catch { /* The answer is saved; navigation refreshes later. */ }
+          }
+          return json(answered);
+        }
+      } catch (error) {
+        if (error instanceof ContinuationError) throw new PersistenceError(error.message, error.status);
+        throw error;
+      }
+      if (quickReply) throw new PersistenceError("Kjo pyetje nuk është më e hapur. Rifresko bisedën.", 409);
+    }
     const briefingPeriod = await briefingQuestion(body.text);
     if (briefingPeriod && !body.attachments?.length && !body.links?.length) {
       const answer = async () => {
@@ -137,8 +159,8 @@ async function handlePOST(request: Request) {
       // Explicit user questions may join the existing history. Automatic Home reads use GET
       // and never touch persistence. Read-only questions do not reassess/execute old plans.
       return json(body.conversationId
-        ? await persistedTurn(access, body, { content: body.text.trim(), context, mode: "plan" },
-          async (_history, prior) => ({ ...await answer(), recoveryContext: prior?.context ?? context }))
+        ? await remindOnboarding(access, body.conversationId, await persistedTurn(access, body, { content: body.text.trim(), context, mode: "plan" },
+          async (_history, prior) => ({ ...await answer(), recoveryContext: prior?.context ?? context })))
         : await answer());
     }
     const assistantName = body.assistantName === undefined ? undefined : readPersonalAssistantName(body.assistantName);
@@ -147,7 +169,7 @@ async function handlePOST(request: Request) {
     if (body.links !== undefined && !Array.isArray(body.links)) throw new AssistantError("Linke të pavlefshme.");
     const links = [...new Set([...(body.links ?? []), ...linksInText(body.text)])];
     const materials = await resolveMaterials(body.attachments ?? [], links, user.id, membership.business.id);
-    if (body.conversationId) return json(await persistedTurn(access, body, {
+    if (body.conversationId) return json(await remindOnboarding(access, body.conversationId, await persistedTurn(access, body, {
       content: body.text.trim(), context, mode: "plan",
       fingerprintData: [body.attachments ?? [], links],
     }, async (history, prior, preferences) => {
@@ -176,7 +198,7 @@ async function handlePOST(request: Request) {
         catch { /* The acknowledged write remains successful if refresh fails. */ }
       }
       return { ...result, recoveryContext: effectiveContext };
-    }));
+    })));
     if (assistantName !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials, assistantName));
     if (materials.length) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials));
     if (body.pendingToken !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken));

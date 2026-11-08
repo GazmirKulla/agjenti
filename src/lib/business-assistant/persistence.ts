@@ -136,7 +136,7 @@ export async function reassessPlan(access: Access, plan: StoredPlan | null) {
 export type DurableRequest = { conversationId?: unknown; requestId?: unknown; revision?: unknown };
 export async function persistedTurn(
   access: Access, body: DurableRequest, input: { content: string; context?: unknown; mode: string; fingerprintData?: unknown },
-  run: (history: ReturnType<typeof modelHistory>, prior: RecoverablePlan | undefined, preferences: PlanningPreferences) => Promise<PlanResult & { saved?: boolean; outcome?: unknown; recoveryContext?: AssistantUIContext }>,
+  run: (history: ReturnType<typeof modelHistory>, prior: RecoverablePlan | undefined, preferences: PlanningPreferences) => Promise<PlanResult & { saved?: boolean; outcome?: unknown; recoveryContext?: AssistantUIContext; onboarding?: { question?: unknown } }>,
 ) {
   if (!isUuid(body.conversationId) || !isUuid(body.requestId) || !Number.isInteger(body.revision) || Number(body.revision) < 0)
     throw new PersistenceError("Kërkesa e bisedës është e pavlefshme.", 400);
@@ -160,7 +160,9 @@ export async function persistedTurn(
     const ticket = data.token ? openTicket(data.token, access) : undefined;
     const targetKind = ticket?.action.split("_")[0];
     const retained = retainedPlanForReply(view.plan?.snapshot, data);
-    const snapshot = data.briefing ? undefined : safePlanSnapshot({
+    // Briefings and onboarding answers are informational: no plan revision.
+    const informational = Boolean(data.briefing || data.onboarding);
+    const snapshot = informational ? undefined : safePlanSnapshot({
       ...retained, version: 1, request: retained?.request ?? input.content, context: data.recoveryContext ?? context, message: data.message,
       ...(data.actionPlan ? { actionPlan: data.actionPlan } : {}),
       ...(data.preview ? { preview: data.preview } : {}),
@@ -180,7 +182,8 @@ export async function persistedTurn(
     const finished = await writeConversation(access, id, "finish", null, requestId, {
       content: (data.message || "Kontrollo propozimin.").slice(0, 12000),
       // An informational briefing appends messages, not a replacement plan/revision.
-      ...(!data.briefing ? { snapshot, preferences: retained ? view.plan?.preferences ?? {} : {} } : {}),
+      ...(!informational ? { snapshot, preferences: retained ? view.plan?.preferences ?? {} : {} } : {}),
+      ...(data.onboarding?.question ? { question: data.onboarding.question } : {}),
       ...(data.saved ? { outcome: data.outcome } : {}),
     });
     const persistence = await readConversation(access, id);

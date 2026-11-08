@@ -26,8 +26,10 @@ export type StoredConversation = {
 };
 export type StoredMessage = {
   seq: number; request_id: string; role: "user" | "assistant";
-  kind: "user" | "assistant" | "backend_outcome" | "interrupted";
+  kind: "user" | "assistant" | "backend_outcome" | "interrupted" | "onboarding";
   content: string; context: AssistantUIContext; created_at: string;
+  /** Structured choices of an onboarding question (kind "onboarding" only). */
+  meta?: import("@/lib/onboarding/assistant-chat-model").OnboardingQuestionMeta | null;
   outcome?: { action: string; reference: { table: string; id?: string; request_key?: string }; status: string;
     configurationEffect?: import("@/lib/agents/configuration-contract").AgentConfigurationEffect } | null;
 };
