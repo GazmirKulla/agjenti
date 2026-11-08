@@ -26,6 +26,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileCard } from "./file-card";
+import { OnboardingContinuation } from "./onboarding-continuation";
 import { AudioRecorder, primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import { AssistantComposer } from "./composer";
 import { Icon } from "@/components/dashboard/icon";
@@ -600,6 +601,7 @@ export function BusinessAssistant({
               <p>
                 {inline ? "Jam këtu për të të ndihmuar me biznesin. Pyet ose kërko një ndryshim." : "Menaxho produktet, shërbimet, njohuritë dhe takimet me një kërkesë."}
               </p>
+              {inline && <OnboardingContinuation key={`${userId}:${slug}`} slug={slug} agentName={agentName} disabled={Boolean(busy)} />}
               <div className="assistant-examples">
                 {businessGoals(context, modules, external).map(
                   ({ text: example, label }) => (

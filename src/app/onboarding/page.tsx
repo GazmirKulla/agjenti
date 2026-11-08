@@ -6,8 +6,7 @@ import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { homeForAccess } from "@/lib/auth/destination";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { emptyAnswers, parseAnswers } from "@/lib/onboarding/model";
-import { ConversationOnboarding } from "@/components/onboarding/conversation";
-import { OnboardingExperience } from "@/components/onboarding/experience";
+import { OnboardingWizard } from "@/components/onboarding/wizard";
 import { getAppSettings } from "@/lib/platform/settings";
 import { BasicWorkspaceForm } from "@/components/onboarding/basic-workspace";
 import { signOut } from "@/lib/auth/actions";
@@ -53,7 +52,10 @@ export default async function OnboardingPage() {
       </main>
     );
   const settings = await getAppSettings();
-  if (!settings.onboarding_enabled)
+  // The agent mode starts from the name only; the dashboard agent asks the
+  // remaining questions one by one after the workspace exists.
+  const agent = settings.onboarding_enabled && settings.onboarding_mode === "agent";
+  if (!settings.onboarding_enabled || agent)
     return (
       <main className="onboarding-page">
         <div className="onboarding-shell">
@@ -88,7 +90,9 @@ export default async function OnboardingPage() {
               <span className="onboarding-eyebrow">NJË FILLIM I THJESHTË</span>
               <h1>Krijo hapësirën e biznesit</h1>
               <p>
-                Vendos emrin për të krijuar hapësirën. Konfigurimin mund ta plotësosh nga paneli.
+                {agent
+                  ? "Vendos emrin për të krijuar hapësirën. Pastaj Agjenti në panel të bën disa pyetje për ta përshtatur me biznesin tënd."
+                  : "Vendos emrin për të krijuar hapësirën. Konfigurimin mund ta plotësosh nga paneli."}
               </p>
             </div>
             <BasicWorkspaceForm initialName={typeof draft?.answers?.name === "string" ? draft.answers.name : ""} />
@@ -98,22 +102,18 @@ export default async function OnboardingPage() {
     );
   let initial = emptyAnswers;
   try {
-    if (draft)
+    if (draft) {
+      // Drafts from the retired audio flow keep their answers, without the
+      // pending audio review that only that flow could confirm.
       initial = parseAnswers(draft.answers, false, settings.onboarding_steps);
+      delete initial.audioReview;
+      delete initial.guidedOnboardingMode;
+    }
   } catch {
     /* A malformed old draft can be safely restarted. */
   }
-  if (settings.onboarding_mode === "agent") return <ConversationOnboarding initial={initial} email={user.email || ""} enabledSteps={settings.onboarding_steps} />;
-  const { data: audioHistory } = await db
-    .from("onboarding_audio_attempts")
-    .select("id,transcript")
-    .eq("user_id", user.id)
-    .not("transcript", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(12);
   return (
-    <OnboardingExperience
-      history={(audioHistory ?? []).reverse()}
+    <OnboardingWizard
       initial={initial}
       initialStep={draft?.step ?? 0}
       email={user.email || ""}

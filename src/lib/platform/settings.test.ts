@@ -73,7 +73,7 @@ it("loads persisted values and defaults only for a missing migration", async () 
     onboarding_steps: ["businessType", "aiMode"],
   };
   m.read.mockResolvedValue({ data, error: null });
-  expect(await getAppSettings()).toEqual({...data, onboarding_mode: "guided"});
+  expect(await getAppSettings()).toEqual({...data, onboarding_mode: "manual"});
   m.read.mockResolvedValue({ data: null, error: { code: "42P01" } });
   expect(await getAppSettings()).toEqual(defaultAppSettings);
   m.read.mockResolvedValue({

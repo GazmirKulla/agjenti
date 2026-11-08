@@ -37,14 +37,14 @@ export default async function AppSettingsPage() {
           </div>
           <fieldset className="grid gap-3">
             <legend className="form-label">Si kryhet onboarding-u?</legend>
-            <label className="toggle-label"><span>Me Agjentin<small>Bisedë me tekst ose audio, pyetje sipas biznesit dhe konfirmim i profilit.</small></span><input type="radio" name="onboarding_mode" value="agent" defaultChecked={settings.onboarding_mode === "agent"} /></label>
-            <label className="toggle-label"><span>Me hapat e udhëzuar<small>Përvoja ekzistuese e plotësimit të profilit.</small></span><input type="radio" name="onboarding_mode" value="guided" defaultChecked={settings.onboarding_mode === "guided"} /></label>
+            <label className="toggle-label"><span>Manual<small>Pyetjet hap pas hapi para krijimit të hapësirës. Pyetjet e kaluara i bën më pas Agjenti në panel.</small></span><input type="radio" name="onboarding_mode" value="manual" defaultChecked={settings.onboarding_mode === "manual"} /></label>
+            <label className="toggle-label"><span>Me Agjentin në panel<small>Hapësira krijohet vetëm me emrin. Agjenti bën pyetjet një nga një brenda panelit.</small></span><input type="radio" name="onboarding_mode" value="agent" defaultChecked={settings.onboarding_mode === "agent"} /></label>
             <p className="muted-copy">Zbatohet kur konfigurimi automatik është aktiv. Përgjigjet e ruajtura vazhdojnë edhe kur ndryshon mënyra.</p>
           </fieldset>
           <div>
             <p className="form-label">Pyetjet e konfigurimit</p>
             <p className="muted-copy mb-3">
-              Zgjidh cilat pyetje shfaqen gjatë konfigurimit me hapa ose me Agjentin. Emri i biznesit
+              Zgjidh cilat pyetje shfaqen gjatë konfigurimit manual ose bën Agjenti në panel. Emri i biznesit
               mbetet gjithmonë i detyrueshëm. Hiq check-un për ta fshehur një
               hap.
             </p>

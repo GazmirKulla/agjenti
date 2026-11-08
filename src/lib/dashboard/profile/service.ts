@@ -138,6 +138,28 @@ export async function persistGeneratedProfile(
   return saveDashboardProfile(businessId, profile);
 }
 
+/** Regenerates the module profile from newer onboarding answers, but only while
+ * it is still the generated one: a profile the owner adjusted is never replaced. */
+export async function refreshGeneratedProfile(
+  businessId: string,
+  answers: Record<string, unknown>,
+): Promise<boolean> {
+  const db = createServiceSupabase();
+  const { data, error } = await db
+    .from("businesses")
+    .select("dashboard_profile")
+    .eq("id", businessId)
+    .maybeSingle();
+  if (error) throw new Error("Nuk u ngarkua profili i panelit.");
+  const current = parseDashboardProfile(data?.dashboard_profile);
+  if (current && current.source !== "generated") return false;
+  const signals = signalsFromOnboardingAnswers(answers);
+  if (!signals) return false;
+  const next = generateDashboardProfile(signals, "generated");
+  await saveDashboardProfile(businessId, current?.hiddenModules?.length ? { ...next, hiddenModules: current.hiddenModules } : next);
+  return true;
+}
+
 async function applyModuleEntitlements(businessId: string, profile: DashboardProfile) {
   const allowed = new Set(await loadAllowedModules(businessId));
   return { ...profile, enabledModules: [...allowed],
