@@ -294,10 +294,7 @@ export function parseEntities(
     if (!facts.length) return [];
     return [{ id: crypto.randomUUID(), target, facts }];
   });
-  if (!entities.length)
-    throw new Error(
-      "Nuk u gjetën të dhëna të mbështetura për këtë seksion. Provo një faqe tjetër, ndrysho seksionin, ose plotëso manualisht.",
-    );
+  if (!entities.length) throw new NoSupportedFactsError();
   return normalizeDraftCurrencies({ ...emptyDraft(), entities }).entities;
 }
 export type EntityValidationIssue = { entityId: string; field: string; message: string };
@@ -342,6 +339,15 @@ export function normalizeDraftCurrencies(draft: Draft): Draft {
   });
   normalized.conflicts = normalized.conflicts.map(conflict => ({ ...conflict, current: normalize(conflict.current), incoming: normalize(conflict.incoming) })).filter(conflict => !equivalent(conflict.current.value, conflict.incoming.value));
   return withMissing(normalized);
+}
+
+/** The source was read successfully but contained no supported facts. Callers branch on the type, never on the message. */
+export class NoSupportedFactsError extends Error {
+  readonly code = "no_supported_facts";
+  constructor() {
+    super("Nuk u gjetën të dhëna të mbështetura për këtë seksion. Provo një faqe tjetër, ndrysho seksionin, ose plotëso manualisht.");
+    this.name = "NoSupportedFactsError";
+  }
 }
 
 export class EntityValidationError extends Error {

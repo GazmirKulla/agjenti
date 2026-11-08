@@ -2,7 +2,7 @@ import { withAiUsage } from "@/lib/ai/usage";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { extractInstagram, extractWebsite } from "@/lib/business-intelligence/ingestion";
 import { normalizeSource } from "@/lib/business-intelligence/normalization";
-import { emptyDraft, mergeDraft, type Entity, type Draft } from "@/lib/business-intelligence/model";
+import { emptyDraft, mergeDraft, NoSupportedFactsError, type Entity, type Draft } from "@/lib/business-intelligence/model";
 import { classifyBusiness, meaningfulEntities, mergedReview } from "./proposal";
 import { automaticSetup, businessContext, contextDraft, manualContextSignals, profileKnowledge } from "./context";
 import { scanKnowledge, withoutScanKnowledge } from "@/lib/business-intelligence/scan-routing";
@@ -80,7 +80,7 @@ export async function processDiscoveryStep(job: Job) {
     try { entities = businessContext(meaningfulEntities(await normalizeSource(batch.text, job.source, data.reference!, "knowledge", [], "onboarding"))); }
     catch (error) {
       // Empty captions are common. Images can still provide the first useful facts.
-      if (!(error instanceof Error && error.message.startsWith("Nuk u gjetën"))) throw error;
+      if (!(error instanceof NoSupportedFactsError)) throw error;
     }
     const merged = mergeDraft(contextDraft(data.draft ?? { ...emptyDraft(), entities: data.entities ?? [] }), entities);
     return checkpoint(job, { ...data, entities: merged.entities, draft: merged, nextText: batch.next }, !batch.done ? "text" : data.images?.length ? "images" : "finish");
@@ -97,7 +97,7 @@ export async function processDiscoveryStep(job: Job) {
       const merged = mergeDraft(contextDraft(data.draft ?? { ...emptyDraft(), entities: data.entities ?? [] }), extracted);
       return checkpoint(job, { ...data, entities: merged.entities, draft: merged, nextImage: offset + batch.length }, offset + batch.length < (data.images?.length ?? 0) ? "images" : "finish");
     } catch (error) {
-      if (!(error instanceof Error && error.message.startsWith("Nuk u gjetën"))) {
+      if (!(error instanceof NoSupportedFactsError)) {
         // Retry provider failures; the successful text/previous images are checkpointed.
         if (job.attempts < 3) throw error;
         warnings = [...warnings, "Një grup fotosh nuk u analizua pas tri provash. Rezultati përfshin tekstet dhe fotot e tjera."];

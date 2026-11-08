@@ -68,9 +68,11 @@ export async function GET(request: Request) {
 				after(async () => { await runDiscoveryQueue(state.businessId).catch(() => console.error("[discovery] worker unavailable")); });
 			}
 		} catch { console.error("[discovery] analysis could not be queued"); }
-		return NextResponse.redirect(
-			new URL(`/b/${business?.slug ?? "zana"}/${discovery ? "sources" : "instagram"}?${connectedQuery}`, url.origin),
-		);
+		// Without a slug the business destination is unknown; let the role-based router choose it.
+		const destination = business?.slug
+			? `/b/${encodeURIComponent(business.slug)}/${discovery ? "sources" : "instagram"}?${connectedQuery}`
+			: `/auth/continue?ig=connected`;
+		return NextResponse.redirect(new URL(destination, url.origin));
 	} catch (error) {
 		console.error("[instagram oauth]", error);
 		return NextResponse.redirect(new URL(`/auth/continue?ig=error`, url.origin));

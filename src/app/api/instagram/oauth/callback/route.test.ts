@@ -30,6 +30,10 @@ describe("Instagram discovery handoff", () => {
     expect((await GET(request())).headers.get("location")).toBe("http://localhost/b/studio/instagram?connected=1");
     expect(m.enqueue).not.toHaveBeenCalled();
   });
+  it("never falls back to another business when the connected business has no slug", async () => {
+    m.from.mockImplementation(() => { const q = { update: () => q, eq: () => q, neq: async () => ({ error: null }), upsert: async () => m.saved, select: () => q, maybeSingle: async () => ({ data: null }) }; return q; });
+    expect((await GET(request())).headers.get("location")).toBe("http://localhost/auth/continue?ig=connected");
+  });
   it("does not queue work or report success when connection storage fails", async () => {
     m.saved.error = { code: "database_error" };
     expect((await GET(request())).headers.get("location")).toBe("http://localhost/auth/continue?ig=error");

@@ -6,7 +6,7 @@ vi.mock("@/lib/business-intelligence/ingestion", () => ({ extractInstagram: m.in
 vi.mock("./proposal", async (original) => ({ ...await original<typeof import("./proposal")>(), classifyBusiness: m.classify }));
 vi.mock("./business-process", async (original) => ({ ...await original<typeof import("./business-process")>(), prepareBusinessProcess: m.process }));
 import { processDiscoveryStep, enqueueDiscovery, runDiscoveryQueue } from "./queue";
-import { emptyDraft, parseEntities } from "@/lib/business-intelligence/model";
+import { emptyDraft, NoSupportedFactsError, parseEntities } from "@/lib/business-intelligence/model";
 import { signalsFor } from "./proposal";
 import { generateDashboardProfile } from "@/lib/dashboard/profile/generate";
 
@@ -74,7 +74,7 @@ describe("resumable discovery worker", () => {
     m.read.mockResolvedValue({ data: { id: "connection" }, error: null });
     await processDiscoveryStep({ ...job, source: "instagram", input: { connectionId: "connection", generation: "gen" } });
     expect(m.rpc).toHaveBeenCalledWith("checkpoint_business_discovery", expect.objectContaining({ p_stage: "text", p_checkpoint: expect.objectContaining({ images: [{ id: "photo", url: "https://cdn.test/1.jpg" }] }) }));
-    m.normalize.mockRejectedValue(new Error("Nuk u gjetën të dhëna"));
+    m.normalize.mockRejectedValue(new NoSupportedFactsError());
     await processDiscoveryStep({ ...job, stage: "text", checkpoint: { text: "", reference: "ig:test", images: [{ id: "photo", url: "https://cdn.test/1.jpg", caption: "", postUrl: null }] } });
     expect(m.rpc).toHaveBeenLastCalledWith("checkpoint_business_discovery", expect.objectContaining({ p_stage: "images" }));
   });
