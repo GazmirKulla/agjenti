@@ -21,7 +21,7 @@ export default async function AppSettingsPage() {
         <ActionForm action={saveAppSettings} className="grid gap-6">
           <div>
             <label className="toggle-label">
-              <span>Aktivizo konfigurimin automatik të biznesit</span>
+              <span>Aktivizo analizën automatike të Instagram-it</span>
               <input
                 className="switch-input"
                 type="checkbox"
@@ -30,16 +30,16 @@ export default async function AppSettingsPage() {
               />
             </label>
             <p className="muted-copy mt-2">
-              Pas emrit, përdoruesi lidh Instagram-in dhe mund të shtojë website-in.
-              Analiza përgatit një konfigurim për rishikim. Kur është i fikur,
-              përdoruesi vazhdon konfigurimin nga paneli dhe lidhja e Instagram-it nuk nis analizë automatike.
+              Kur biznesi lidh Instagram-in, analiza përgatit automatikisht profilin
+              dhe njohuritë për rishikim. Kur është i fikur, lidhja e Instagram-it nuk
+              nis analizë. Nuk ndikon te mënyra e onboarding-ut më poshtë.
             </p>
           </div>
           <fieldset className="grid gap-3">
             <legend className="form-label">Si kryhet onboarding-u?</legend>
             <label className="toggle-label"><span>Manual<small>Pyetjet hap pas hapi para krijimit të hapësirës. Pyetjet e kaluara i bën më pas Agjenti në panel.</small></span><input type="radio" name="onboarding_mode" value="manual" defaultChecked={settings.onboarding_mode === "manual"} /></label>
             <label className="toggle-label"><span>Me Agjentin në panel<small>Hapësira krijohet vetëm me emrin. Agjenti bën pyetjet një nga një brenda panelit.</small></span><input type="radio" name="onboarding_mode" value="agent" defaultChecked={settings.onboarding_mode === "agent"} /></label>
-            <p className="muted-copy">Zbatohet kur konfigurimi automatik është aktiv. Përgjigjet e ruajtura vazhdojnë edhe kur ndryshon mënyra.</p>
+            <p className="muted-copy">Mënyra e zgjedhur vendos çfarë sheh përdoruesi i ri. Përgjigjet e ruajtura vazhdojnë edhe kur ndryshon mënyra.</p>
           </fieldset>
           <div>
             <p className="form-label">Pyetjet e konfigurimit</p>

@@ -21,12 +21,6 @@ export default async function AdminOnboardingPage() {
           Cilësimet e App
         </Link>
       </PageHeading>
-      {!settings.onboarding_enabled && (
-        <p className="muted-copy mb-4">
-          Konfigurimi automatik është i fikur. Harta më poshtë tregon hapat e
-          alternativës manuale/audio kur ajo aktivizohet te App.
-        </p>
-      )}
       <OnboardingLinks enabledSteps={settings.onboarding_steps} />
     </>
   );

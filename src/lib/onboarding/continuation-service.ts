@@ -23,10 +23,9 @@ async function loadRow(businessId: string) {
   return data;
 }
 
-/** Null when onboarding is off or this business never went through it. */
+/** Null when this business never went through onboarding. */
 export async function loadContinuation(businessId: string): Promise<ContinuationView | null> {
   const settings = await getAppSettings();
-  if (!settings.onboarding_enabled) return null;
   const row = await loadRow(businessId);
   if (!row) return null;
   let answers: Answers;
@@ -44,8 +43,6 @@ export async function answerContinuation(
   answer: unknown,
 ): Promise<ContinuationView> {
   const settings = await getAppSettings();
-  if (!settings.onboarding_enabled)
-    throw new ContinuationError("Konfigurimi me pyetje nuk është aktiv.", 404);
   const row = await loadRow(businessId);
   if (!row) throw new ContinuationError("Ky biznes nuk ka pyetje konfigurimi.", 404);
   let current: Answers;

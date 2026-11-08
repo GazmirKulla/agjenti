@@ -76,7 +76,7 @@ it("creates a workspace with the selected type for the verified owner", async ()
       businessType: "beauty",
       user_id: "victim",
     }),
-  ).toEqual({ ok: true });
+  ).toEqual({ ok: true, slug: expect.any(String) });
   expect(mocks.rpc).toHaveBeenCalledWith(
     "complete_business_onboarding",
     expect.objectContaining({

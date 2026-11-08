@@ -8,7 +8,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { emptyAnswers, parseAnswers } from "@/lib/onboarding/model";
 import { OnboardingWizard } from "@/components/onboarding/wizard";
 import { getAppSettings } from "@/lib/platform/settings";
-import { BasicWorkspaceForm } from "@/components/onboarding/basic-workspace";
+import { AgentWorkspaceForm } from "@/components/onboarding/basic-workspace";
 import { signOut } from "@/lib/auth/actions";
 import "./onboarding.css";
 export const metadata = { title: "Konfiguro biznesin | Agjenti.app" };
@@ -52,10 +52,9 @@ export default async function OnboardingPage() {
       </main>
     );
   const settings = await getAppSettings();
-  // The agent mode starts from the name only; the dashboard agent asks the
-  // remaining questions one by one after the workspace exists.
-  const agent = settings.onboarding_enabled && settings.onboarding_mode === "agent";
-  if (!settings.onboarding_enabled || agent)
+  // Only the mode decides the flow. Agent mode starts from the name and the
+  // business type; the dashboard agent asks the remaining questions.
+  if (settings.onboarding_mode === "agent")
     return (
       <main className="onboarding-page">
         <div className="onboarding-shell">
@@ -80,12 +79,13 @@ export default async function OnboardingPage() {
               <span className="onboarding-eyebrow">NJË FILLIM I THJESHTË</span>
               <h1>Krijo hapësirën e biznesit</h1>
               <p>
-                {agent
-                  ? "Vendos emrin për të krijuar hapësirën. Pastaj Agjenti në panel të bën disa pyetje për ta përshtatur me biznesin tënd."
-                  : "Vendos emrin për të krijuar hapësirën. Konfigurimin mund ta plotësosh nga paneli."}
+                Vendos emrin dhe tipin e biznesit për të krijuar hapësirën.
               </p>
             </div>
-            <BasicWorkspaceForm initialName={typeof draft?.answers?.name === "string" ? draft.answers.name : ""} />
+            <AgentWorkspaceForm
+              initialName={typeof draft?.answers?.name === "string" ? draft.answers.name : ""}
+              initialType={typeof draft?.answers?.businessType === "string" ? draft.answers.businessType : ""}
+            />
           </section>
         </div>
       </main>

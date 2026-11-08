@@ -12,7 +12,7 @@ const starterCapabilities = {
 };
 
 export type StarterWorkspaceResult =
-  | { ok: true }
+  | { ok: true; slug: string }
   | { error: string; status: 400 | 409 | 503 };
 type ParsedStarter =
   | { error: string }
@@ -122,7 +122,7 @@ export async function createStarterWorkspace(
     } catch (error) {
       console.error("[dashboard profile]", error);
     }
-    return { ok: true };
+    return { ok: true, slug: data };
   } catch {
     return {
       error: "Nuk u lidhëm me shërbimin. Provo përsëri.",

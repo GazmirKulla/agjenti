@@ -3,7 +3,8 @@ import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { homeForAccess } from "@/lib/auth/destination";
 import { getAppSettings } from "@/lib/platform/settings";
-import { emptyAnswers, parseAnswers, initialInstructions, basicInstructions } from "./model";
+import { parseAnswers, initialInstructions } from "./model";
+import { createStarterWorkspace } from "./starter";
 import { persistGeneratedProfile } from "@/lib/dashboard/profile/service";
 type OnboardingResult = {
   error?: string;
@@ -18,7 +19,7 @@ export async function saveOnboarding(
   return persistOnboarding(input, step, complete);
 }
 
-async function persistOnboarding(input: unknown, step: number, complete: boolean, basic = false): Promise<OnboardingResult> {
+async function persistOnboarding(input: unknown, step: number, complete: boolean): Promise<OnboardingResult> {
   try {
     const user = await getSessionUser();
     if (!user)
@@ -33,19 +34,13 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
     const settings = await getAppSettings();
     let parsedAnswers: ReturnType<typeof parseAnswers>;
     try {
-      parsedAnswers = parseAnswers(
-        input,
-        complete && settings.onboarding_enabled && !basic,
-        settings.onboarding_steps,
-      );
+      parsedAnswers = parseAnswers(input, complete, settings.onboarding_steps);
     } catch (e) {
       return {
         error: e instanceof Error ? e.message : "Kontrollo përgjigjet.",
       };
     }
-    const answers = settings.onboarding_enabled && !basic
-      ? parsedAnswers
-      : { ...emptyAnswers, name: parsedAnswers.name };
+    const answers = parsedAnswers;
     if (complete && answers.name.length < 2)
       return { error: "Vendos emrin e biznesit (të paktën 2 karaktere)." };
     const access = await listMemberships(user.id);
@@ -68,9 +63,7 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
       const { data, error } = await db.rpc("complete_business_onboarding", {
         p_user_id: user.id,
         p_answers: answers,
-        p_instructions: settings.onboarding_enabled && !basic
-          ? initialInstructions(answers)
-          : basicInstructions(answers.name),
+        p_instructions: initialInstructions(answers),
       });
       if (error) {
         console.error("[onboarding complete]", error.code);
@@ -90,13 +83,13 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
         if (business?.id) {
           await persistGeneratedProfile(
             business.id,
-            (basic ? { ...answers, businessType: "other", useCases: ["messages", "support"], agentCapabilities: ["reply_messages", "answer_questions", "handoff"] } : answers) as unknown as Record<string, unknown>,
+            answers as unknown as Record<string, unknown>,
           );
         }
       } catch (error) {
         console.error("[dashboard profile]", error);
       }
-      return { destination: settings.onboarding_enabled && !basic ? `/b/${data}` : `/b/${data}?welcome=1` };
+      return { destination: `/b/${data}` };
     }
     return { saved: true };
   } catch {
@@ -106,11 +99,23 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
   }
 }
 
-export async function createBasicWorkspace(form: FormData) {
-  return persistOnboarding(
-    { ...emptyAnswers, name: String(form.get("name") ?? "") },
-    7,
-    true,
-    true,
-  );
+/** Agent mode: the workspace starts from the name and business type; the
+ * dashboard agent asks the remaining questions afterwards. */
+export async function createAgentWorkspace(form: FormData): Promise<OnboardingResult> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri për të vazhduar." };
+    const access = await listMemberships(user.id);
+    if (access.admin || access.businesses.length)
+      return { destination: homeForAccess(access) };
+    const result = await createStarterWorkspace(user.id, {
+      name: String(form.get("name") ?? ""),
+      businessType: String(form.get("businessType") ?? ""),
+      categoryDescription: String(form.get("categoryDescription") ?? ""),
+    });
+    if ("error" in result) return { error: result.error };
+    return { destination: `/b/${encodeURIComponent(result.slug)}` };
+  } catch {
+    return { error: "Nuk u lidhëm me shërbimin. Provo përsëri pa mbyllur faqen." };
+  }
 }

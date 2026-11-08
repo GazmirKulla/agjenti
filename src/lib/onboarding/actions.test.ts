@@ -4,7 +4,9 @@ const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   memberships: vi.fn(),
   rpc: vi.fn(),
+  starter: vi.fn(),
 }));
+vi.mock("./starter", () => ({ createStarterWorkspace: mocks.starter }));
 vi.mock("@/lib/tenant/access", () => ({
   getSessionUser: mocks.user,
   listMemberships: mocks.memberships,
@@ -32,17 +34,22 @@ beforeEach(() => {
   mocks.rpc.mockResolvedValue({ data: null, error: null });
 });
 describe("self-service onboarding boundary", () => {
-  it("creates a basic workspace with only a name and a verified owner", async () => {
-    mocks.rpc.mockResolvedValue({ data: "biznes-basic", error: null });
-    const { createBasicWorkspace } = await import("./actions");
+  it("creates an agent-mode workspace from the name and business type for the verified owner", async () => {
+    mocks.starter.mockResolvedValue({ ok: true, slug: "biznes-agent" });
+    const { createAgentWorkspace } = await import("./actions");
     const form = new FormData();
     form.set("name", "Studio");
+    form.set("businessType", "beauty");
     form.set("user_id", "victim");
-    expect(await createBasicWorkspace(form)).toEqual({ destination: "/b/biznes-basic?welcome=1" });
-    expect(mocks.rpc).toHaveBeenCalledWith("complete_business_onboarding", expect.objectContaining({
-      p_user_id: "verified-user", p_answers: expect.objectContaining({ name: "Studio", businessType: "", useCases: [] }),
-    }));
-    expect(mocks.rpc.mock.calls.find(([name]) => name === "complete_business_onboarding")?.[1].p_answers).not.toHaveProperty("onboardingMode");
+    expect(await createAgentWorkspace(form)).toEqual({ destination: "/b/biznes-agent" });
+    expect(mocks.starter).toHaveBeenCalledWith("verified-user", { name: "Studio", businessType: "beauty", categoryDescription: "" });
+  });
+  it("returns the starter validation error for a missing business type", async () => {
+    mocks.starter.mockResolvedValue({ error: "Zgjidh llojin e biznesit.", status: 400 });
+    const { createAgentWorkspace } = await import("./actions");
+    const form = new FormData();
+    form.set("name", "Studio");
+    expect(await createAgentWorkspace(form)).toEqual({ error: "Zgjidh llojin e biznesit." });
   });
   it("rejects unauthenticated requests without a database write", async () => {
     mocks.user.mockResolvedValue(null);
@@ -121,19 +128,15 @@ describe("self-service onboarding boundary", () => {
   });
 });
 
-it("creates a basic workspace without fabricated questionnaire answers when onboarding is off", async () => {
+it("keeps the manual answers even when the Instagram analysis switch is off", async () => {
   mocks.settings.mockResolvedValue({ onboarding_enabled: false });
-  mocks.rpc.mockResolvedValue({ data: "biznes-basic", error: null });
+  mocks.rpc.mockResolvedValue({ data: "biznes-manual", error: null });
   const { emptyAnswers } = await import("./model");
-  expect(
-    await saveOnboarding({ ...emptyAnswers, name: "Biznesi" }, 7, true),
-  ).toEqual({ destination: "/b/biznes-basic?welcome=1" });
+  const result = await saveOnboarding(answers, 7, true);
+  expect(result).toEqual({ destination: "/b/biznes-manual" });
   expect(mocks.rpc).toHaveBeenCalledWith(
     "complete_business_onboarding",
-    expect.objectContaining({
-      p_answers: { ...emptyAnswers, name: "Biznesi" },
-      p_instructions: expect.stringContaining("Mos shpik"),
-    }),
+    expect.objectContaining({ p_answers: expect.objectContaining({ name: "Dyqani", businessType: "fashion" }) }),
   );
   expect((await saveOnboarding(emptyAnswers, 7, true)).error).toBeTruthy();
 });

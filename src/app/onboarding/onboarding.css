@@ -345,7 +345,8 @@
   display: block;
   margin-bottom: 10px;
 }
-.onboarding-intro input {
+.onboarding-intro input,
+.onboarding-intro select {
   border: 1px solid var(--line);
   padding: 15px;
   border-radius: 10px;
