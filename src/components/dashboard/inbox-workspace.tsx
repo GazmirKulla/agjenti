@@ -3,21 +3,13 @@ import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { InboxRefresh } from "./inbox-refresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { conversationDisplayName } from "@/lib/conversations/ensure-customer";
+import { loadInboxRows, loadThreadConversation, loadThreadMessages, type InboxRow, type ThreadConversation } from "@/lib/conversations/inbox-read";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { ThreadClient } from "@/app/b/[slug]/inbox/[conversationId]/thread-client";
 import { getSessionUser } from "@/lib/tenant/access";
 import { AddCustomerButton } from "./add-customer-button";
 import { InboxList } from "./inbox-list";
 import { EmptyState, PageHeading, formatDate, money } from "./ui";
-
-type CustomerJoin = {
-  business_id: string;
-  display_name: string | null;
-  username: string | null;
-  phone: string | null;
-  created_at: string;
-} | null;
 
 export async function InboxWorkspace({
   businessId,
@@ -47,35 +39,9 @@ export async function InboxWorkspace({
       status: result.error ? t("Statusi nuk u ngarkua") : expired ? t("Kërkon rilidhje") : result.data?.status === "connected" ? t("I lidhur") : t("I palidhur"),
     };
   });
-  const { data: rows, error } = await db
-    .from("conversations")
-    .select(
-      "id,channel,status,last_message_preview,unread_count,participant_display_name,participant_username,customers(business_id,display_name,username)",
-    )
-    .eq("business_id", businessId)
-    .eq("customers.business_id", businessId)
-    .order("last_message_at", { ascending: false })
-    .limit(100);
-  if (error) throw new Error(t("Nuk u ngarkuan bisedat."));
-  const inboxRows = (rows ?? []).map((r) => {
-    const c = r.customers as unknown as {
-      business_id: string;
-      display_name: string | null;
-      username: string | null;
-    } | null;
-    return {
-      id: r.id,
-      channel: r.channel,
-      status: r.status,
-      name: conversationDisplayName({
-        participant_display_name: r.participant_display_name,
-        participant_username: r.participant_username,
-        customers: c?.business_id === businessId ? c : null,
-      }),
-      preview: r.last_message_preview,
-      unread: r.unread_count,
-    };
-  });
+  let inboxRows: InboxRow[];
+  try { inboxRows = await loadInboxRows(db, businessId); }
+  catch { throw new Error(t("Nuk u ngarkuan bisedat.")); }
   const selected = conversationId;
   const heading = (
     <PageHeading
@@ -112,16 +78,9 @@ export async function InboxWorkspace({
         </div>
       </>
     );
-  const { data: conversation, error: conversationError } = await db
-    .from("conversations")
-    .select(
-      "id,channel,status,last_inbound_at,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(business_id,display_name,username,phone,created_at)",
-    )
-    .eq("business_id", businessId)
-    .eq("customers.business_id", businessId)
-    .eq("id", selected)
-    .maybeSingle();
-  if (conversationError) throw new Error(t("Nuk u ngarkua biseda."));
+  let conversation: ThreadConversation | null;
+  try { conversation = await loadThreadConversation(db, businessId, selected); }
+  catch { throw new Error(t("Nuk u ngarkua biseda.")); }
   if (!conversation) notFound();
 
   const orderQuery = conversation.customer_id
@@ -144,15 +103,10 @@ export async function InboxWorkspace({
       });
 
   const [messageResult, orderResult, logResult] = await Promise.all([
-    db
-      .from("messages")
-      .select(
-        "id,direction,source,body,media,created_at,delivery_status,delivery_error,external_message_id,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)",
-      )
-      .eq("business_id", businessId)
-      .eq("conversation_id", selected)
-      .order("created_at", { ascending: false })
-      .limit(200),
+    loadThreadMessages(db, businessId, selected).then(
+      (data) => ({ data, error: null }),
+      (error: unknown) => ({ data: null, error }),
+    ),
     orderQuery,
     db
       .from("integration_logs")
@@ -164,19 +118,7 @@ export async function InboxWorkspace({
   if (messageResult.error || orderResult.error || logResult.error)
     throw new Error(t("Nuk u ngarkuan detajet e bisedës."));
 
-  // The service-role client bypasses RLS; a parent tenant filter alone does not
-  // authorize its FK target. Keep unmatched conversations, never foreign PII.
-  const joinedCustomer = conversation.customers as unknown as CustomerJoin;
-  const customer = joinedCustomer?.business_id === businessId ? joinedCustomer : null;
-  const name = conversationDisplayName({
-    participant_display_name: conversation.participant_display_name,
-    participant_username: conversation.participant_username,
-    customers: customer,
-  });
-  const handle =
-    customer?.username || conversation.participant_username
-      ? `@${customer?.username || conversation.participant_username}`
-      : conversation.channel === "whatsapp" ? "WhatsApp" : "Instagram";
+  const { customer, name, handle } = conversation;
   const linkedCustomer = Boolean(customer);
 
   return (
@@ -202,7 +144,7 @@ export async function InboxWorkspace({
           channel={conversation.channel}
           lastInboundAt={conversation.last_inbound_at}
           customerName={name}
-          messages={(messageResult.data ?? []).reverse()}
+          messages={messageResult.data ?? []}
           logs={logResult.data ?? []}
         />
         <aside className="inbox-customer">

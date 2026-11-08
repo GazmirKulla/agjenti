@@ -7,7 +7,7 @@ export const maxDuration = 180;
 type Context = { params: Promise<{ id: string; conversationId: string }> };
 export async function POST(request: Request, context: Context) {
   const { id: businessId, conversationId } = await context.params;
-  const access = await transportAccess(businessId);
+  const access = await transportAccess(businessId, request);
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
     const raw = await request.text();
@@ -32,7 +32,7 @@ export async function POST(request: Request, context: Context) {
 }
 export async function GET(request: Request, context: Context) {
   const { id: businessId, conversationId } = await context.params;
-  const access = await transportAccess(businessId);
+  const access = await transportAccess(businessId, request);
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { data: conversation, error: lookupError } = await access.db.from("conversations").select("id").eq("business_id", businessId).eq("id", conversationId).maybeSingle();
   if (lookupError) return NextResponse.json({ error: "Statusi nuk u ngarkua." }, { status: 503 });
