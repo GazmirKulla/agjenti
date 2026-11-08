@@ -8,6 +8,7 @@ import {
 import { dashboardLanguage, translator } from "@/lib/dashboard/language/core";
 import { aiUsageSummary, loadAiUsage } from "@/lib/ai/usage-report";
 import { loadBillingUsage, plans } from "@/lib/billing/service";
+import { publicBusinessCategories } from "@/lib/onboarding/starter";
 export async function GET(request: Request) {
   const headers = { "Cache-Control": "private, no-store", Vary: "X-Agjenti-Language" };
   const t = translator(dashboardLanguage(request.headers.get("x-agjenti-language")));
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
       {
         user: { id: user.id, email: user.email, canDeleteAccount: !membership.admin },
         businesses,
+        businessCategories: publicBusinessCategories(t),
       },
       { headers },
     );

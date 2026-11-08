@@ -52,6 +52,28 @@ it("returns only allowed businesses and modules without exposing credentials", a
   expect(data.businesses[0].aiUsage).toBeNull();
   expect(data.businesses[0].messagesAvailable).toBe(980);
   expect(data.businesses[0].planName).toBe("Free");
+  expect(data.businessCategories).toEqual(
+    expect.arrayContaining([
+      { id: "retail", label: "Dyqan / Tregti" },
+      { id: "other", label: "Tjetër" },
+    ]),
+  );
+  expect(data.businessCategories.map((item: { id: string }) => item.id)).not.toContain("fashion");
+});
+it("translates public business categories for the requested language", async () => {
+  const data = await (
+    await GET(
+      new Request("https://app.test/api/mobile/bootstrap", {
+        headers: { "X-Agjenti-Language": "en" },
+      }),
+    )
+  ).json();
+  expect(data.businessCategories).toEqual(
+    expect.arrayContaining([
+      { id: "retail", label: "Shop / Retail" },
+      { id: "other", label: "Other" },
+    ]),
+  );
 });
 it("omits remaining messages when the allowance cannot be read", async () => {
   mocks.billing.mockRejectedValue(Error("billing"));
