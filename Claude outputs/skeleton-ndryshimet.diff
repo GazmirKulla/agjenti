@@ -1,0 +1,129 @@
+diff --git a/App.tsx b/App.tsx
+index 6298ace..d23a7aa 100644
+--- a/App.tsx
++++ b/App.tsx
+@@ -231,8 +231,8 @@ function MobileApp({
+     business?.navigation.find(
+       (item) => item.id !== "dashboard" && item.id !== "inbox",
+     )?.path ?? "/account";
++  // BusinessBrowser reports its cover in a layout effect, before paint; presetting it here would stick when the page is already loaded.
+   const openWeb = useCallback((path: string) => {
+-    setModuleCover(true);
+     setModulePath(path);
+     setWeb(path);
+   }, []);
+@@ -509,12 +509,10 @@ function MobileApp({
+   }
+   function openInbox() {
+     if (navigationLocked || !inboxPath) return;
+-    setInboxCover(true);
+     navigate("inbox");
+   }
+   function openInboxConversation(id: string) {
+     if (navigationLocked || !inboxPath) return;
+-    setInboxCover(true);
+     setInboxOpenPath(inboxConversationPath(inboxPath, id));
+     navigate("inbox");
+   }
+diff --git a/src/components/business-browser.tsx b/src/components/business-browser.tsx
+index 160c2c6..2a201f3 100644
+--- a/src/components/business-browser.tsx
++++ b/src/components/business-browser.tsx
+@@ -71,6 +71,8 @@ export function BusinessBrowser({
+   const [source, setSource] = useState<WebViewProps["source"]>();
+   const [error, setError] = useState("");
+   const [handshake, setHandshake] = useState(true);
++  /** True while the WebView loads a document, so the skeleton covers blank or half-streamed pages. */
++  const [loading, setLoading] = useState(true);
+   const [attempt, setAttempt] = useState(0);
+   const [pathname, setPathname] = useState(() => new URL(path, origin).pathname);
+   const [chromeTitle, setChromeTitle] = useState("");
+@@ -124,7 +126,13 @@ export function BusinessBrowser({
+     };
+   }, [attempt, language]);
+   const stale = coversStalePage(pathname, path);
+-  const cover = !error && (handshake || stale);
++  const cover = !error && (handshake || stale || loading);
++  useEffect(() => {
++    if (!loading) return;
++    // Never trap the user behind the skeleton if a load end event is lost.
++    const timer = setTimeout(() => setLoading(false), 15000);
++    return () => clearTimeout(timer);
++  }, [loading]);
+   useLayoutEffect(() => {
+     pathRef.current = path;
+     themeRef.current = theme;
+@@ -153,6 +161,7 @@ export function BusinessBrowser({
+     web.current?.injectJavaScript(pageVisibility(active));
+   }, [active]);
+   const loadEnded = () => {
++    setLoading(false);
+     if (!shown.current) web.current?.injectJavaScript(pageVisibility(false));
+     if (!navUrl.current) return;
+     try {
+@@ -335,8 +344,12 @@ export function BusinessBrowser({
+                 /* Reject malformed bridge messages. */
+               }
+             }}
++            onLoadStart={() => setLoading(true)}
+             onLoadEnd={loadEnded}
+-            onError={() => setError("Faqja nuk u ngarkua. Kontrollo lidhjen.")}
++            onError={() => {
++              setLoading(false);
++              setError("Faqja nuk u ngarkua. Kontrollo lidhjen.");
++            }}
+             onHttpError={(event) => {
+               if (
+                 event.nativeEvent.statusCode >= 500 ||
+diff --git a/src/components/business-browser.web.tsx b/src/components/business-browser.web.tsx
+index 068c3d5..b6d42cf 100644
+--- a/src/components/business-browser.web.tsx
++++ b/src/components/business-browser.web.tsx
+@@ -1,8 +1,8 @@
+ import { useEffect, useState } from "react";
+-import { ActivityIndicator, View } from "react-native";
++import { StyleSheet, View } from "react-native";
+ import { nativeSession, origin } from "../client";
+ import { hidePlansStyles, pageTitle, themedPath } from "../navigation";
+-import { Notice, PageHeader, styles, useResolvedTheme, useTheme } from "./ui";
++import { Notice, PageHeader, PageSkeleton, styles, useResolvedTheme, useTheme } from "./ui";
+ import { useLanguage, useT } from "../language";
+ import type { BusinessBrowser as NativeBusinessBrowser } from "./business-browser";
+ import type { ComponentProps } from "react";
+@@ -15,6 +15,9 @@ export function BusinessBrowser({ path, close, title, pages = [], onCovered }: C
+   const [ready, setReady] = useState(false);
+   const [error, setError] = useState("");
+   const [pathname, setPathname] = useState(() => new URL(path, origin).pathname);
++  /** The `next` page the iframe last finished loading; any other value means it is still loading. */
++  const [loaded, setLoaded] = useState("");
++  const loading = loaded !== next;
+   useEffect(() => {
+     const controller = new AbortController();
+     async function connect() {
+@@ -32,11 +35,13 @@ export function BusinessBrowser({ path, close, title, pages = [], onCovered }: C
+     return () => controller.abort();
+   }, [next, language]);
+   useEffect(() => {
+-    onCovered?.(!ready && !error);
+-  }, [ready, error, onCovered]);
++    onCovered?.(!error && (!ready || loading));
++  }, [ready, loading, error, onCovered]);
+   return <View style={[styles.page, { backgroundColor: c.bg }]}>
+     <PageHeader title={pageTitle(pathname, pages) ?? title} back={close} />
+-    {error ? <Notice>{t(error)}</Notice> : ready ? <iframe title={title} src={origin + next} style={{ flex: 1, width: "100%", border: 0 }} onLoad={(event) => {
++    {error ? <Notice>{t(error)}</Notice> : <View style={{ flex: 1 }}>
++    {ready && <iframe title={title} src={origin + next} style={{ flex: 1, width: "100%", border: 0, visibility: loading ? "hidden" : "visible" }} onLoad={(event) => {
++      setLoaded(next);
+       try {
+         const frame = event.currentTarget.contentWindow;
+         const page = event.currentTarget.contentDocument;
+@@ -47,6 +52,8 @@ export function BusinessBrowser({ path, close, title, pages = [], onCovered }: C
+         style.textContent = hidePlansStyles;
+         page.head.appendChild(style);
+       } catch { /* Cross-origin previews cannot be styled. */ }
+-    }} /> : <ActivityIndicator />}
++    }} />}
++    {(!ready || loading) && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.bg }]}><PageSkeleton /></View>}
++    </View>}
+   </View>;
+ }
