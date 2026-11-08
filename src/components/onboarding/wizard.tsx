@@ -4,6 +4,7 @@ import { CapabilityPicker } from "./capability-picker";
 import { useMemo, useRef, useState } from "react";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "@/components/dashboard/icon";
+import { OnboardingWelcome } from "@/components/onboarding/channels-art";
 import { signOut } from "@/lib/auth/actions";
 import { saveOnboarding } from "@/lib/onboarding/actions";
 import {
@@ -164,23 +165,7 @@ export function OnboardingWizard({
             <BrandLogo size={34} />
           </Link>
           {step === 0 ? (
-            <div className="onboarding-welcome">
-              <h2>
-                Mirë se erdhe!
-                <br />
-                Le të fillojmë.
-              </h2>
-              <p>
-                Lidh Instagram-in, organizo produktet dhe kujdesu për klientët
-                nga një vend.
-              </p>
-              <div className="onboarding-art">
-                <Icon name="instagram" size={62} />
-                <span>
-                  <Icon name="spark" size={30} />
-                </span>
-              </div>
-            </div>
+            <OnboardingWelcome />
           ) : (
             <ol aria-label="Pyetjet e personalizimit">
               {active.map((q, i) => (

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
-import { Icon } from "@/components/dashboard/icon";
+import { OnboardingWelcome } from "@/components/onboarding/channels-art";
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { homeForAccess } from "@/lib/auth/destination";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -63,17 +63,7 @@ export default async function OnboardingPage() {
             <Link href="/" className="onboarding-brand">
               <BrandLogo size={34} />
             </Link>
-            <div className="onboarding-welcome">
-              <h2>Mirë se erdhe!<br />Le të fillojmë.</h2>
-              <p>
-                Lidh Instagram-in, organizo produktet dhe kujdesu për klientët
-                nga një vend.
-              </p>
-              <div className="onboarding-art">
-                <Icon name="instagram" size={62} />
-                <span><Icon name="spark" size={30} /></span>
-              </div>
-            </div>
+            <OnboardingWelcome />
             <div className="onboarding-user">
               <span>{user.email}</span>
               <form action={signOut}>
