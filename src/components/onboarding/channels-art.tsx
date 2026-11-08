@@ -16,19 +16,15 @@ export function OnboardingWelcome() {
       </p>
       <div className="onboarding-art" role="img" aria-label="Instagram dhe WhatsApp">
         <span className="onboarding-art-tile is-instagram">
-          <Icon name="instagram" size={48} />
+          <Icon name="instagram" size={38} />
         </span>
         <span className="onboarding-art-tile is-whatsapp">
-          <Icon name="whatsapp" size={46} />
+          <Icon name="whatsapp" size={36} />
         </span>
         <span className="onboarding-art-spark">
-          <Icon name="spark" size={24} />
+          <Icon name="spark" size={20} />
         </span>
       </div>
-      <ul className="onboarding-channels" aria-label="Kanalet që mund të lidhësh">
-        <li><Icon name="instagram" size={16} /> Instagram</li>
-        <li><Icon name="whatsapp" size={16} /> WhatsApp</li>
-      </ul>
     </div>
   );
 }

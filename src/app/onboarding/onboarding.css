@@ -52,29 +52,29 @@
 }
 .onboarding-art {
   position: relative;
-  width: 176px;
-  height: 150px;
-  margin: 44px auto 28px;
+  width: 144px;
+  height: 124px;
+  margin: 44px auto 0;
 }
 .onboarding-art-tile {
   position: absolute;
   display: grid;
   place-items: center;
-  width: 104px;
-  height: 112px;
-  border-radius: 26px;
+  width: 84px;
+  height: 90px;
+  border-radius: 22px;
   color: #fff;
 }
 .onboarding-art-tile.is-instagram {
   left: 0;
-  top: 10px;
+  top: 8px;
   background: linear-gradient(135deg, #feda75 0%, #fa7e1e 28%, #d62976 58%, #962fbf 82%, #4f5bd5 100%);
   transform: rotate(-9deg);
   box-shadow: 0 18px 36px rgb(214 41 118 / 0.24);
 }
 .onboarding-art-tile.is-whatsapp {
   right: 0;
-  top: 32px;
+  top: 26px;
   background: #25d366;
   transform: rotate(8deg);
   box-shadow: 0 18px 36px rgb(18 140 126 / 0.26);
@@ -83,39 +83,16 @@
 .onboarding-art-spark {
   position: absolute;
   left: 50%;
-  top: -14px;
+  top: -12px;
   display: grid;
   place-items: center;
-  padding: 11px;
-  border-radius: 16px;
+  padding: 9px;
+  border-radius: 14px;
   background: var(--surface);
   color: var(--accent);
   transform: translateX(-50%) rotate(12deg);
   box-shadow: 0 10px 24px color-mix(in srgb, var(--brand-secondary) 14%, transparent);
 }
-.onboarding-channels {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.onboarding-channels li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 600;
-}
-.onboarding-channels li:first-child svg { color: #d62976; }
-.onboarding-channels li:last-child svg { color: #1faa53; }
 .onboarding-sidebar ol {
   display: grid;
   gap: 24px;
@@ -532,8 +509,8 @@
     padding: 24px 18px;
   }
   .onboarding-art {
-    transform: scale(0.8);
-    margin: 28px auto 12px;
+    transform: scale(0.85);
+    margin: 28px auto 0;
   }
   .onboarding-body {
     padding: 30px 24px;
