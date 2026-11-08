@@ -1,6 +1,6 @@
 import { resumeConversation, stopConversation } from "@/lib/conversations/control";
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { requestUserId } from "@/lib/conversations/transport-access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
 
@@ -17,17 +17,15 @@ async function canAccess(userId: string, businessId: string) {
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: {
     params: Promise<{ id: string; conversationId: string; action: string }>;
   },
 ) {
   const { id: businessId, conversationId, action } = await context.params;
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !(await canAccess(user.id, businessId))) {
+  // Browser cookies or the native app's bearer token; membership is checked the same way for both.
+  const userId = await requestUserId(request);
+  if (!userId || !(await canAccess(userId, businessId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const service = createServiceSupabase();
@@ -49,7 +47,7 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
   if (action === "resume") {
-    const result = await resumeConversation(businessId, user.id, conversationId);
+    const result = await resumeConversation(businessId, userId, conversationId);
     return NextResponse.json("error" in result ? { error: result.error } : { ok: true }, { status: result.status });
   }
 

@@ -6,7 +6,7 @@ vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from:
   const q = { select: () => q, eq: () => q, maybeSingle: table === "business_users" ? m.member : m.admin };
   return q;
 } }) }));
-import { transportAccess } from "./transport-access";
+import { requestUserId, transportAccess } from "./transport-access";
 const business = "10000000-0000-4000-8000-000000000001";
 const request = (authorization?: string) => new Request("https://agjenti.test", authorization ? { headers: { authorization } } : undefined);
 beforeEach(() => {
@@ -31,4 +31,9 @@ it("keeps cookie identity for browser requests and refuses non-members", async (
   m.member.mockResolvedValueOnce({ data: null, error: null });
   expect(await transportAccess(business, request())).toBeNull();
   expect(await transportAccess("not-a-uuid", request())).toBeNull();
+});
+it("exposes the same identity rule to conversation actions", async () => {
+  expect(await requestUserId(request("Bearer good.token"))).toBe("native-user");
+  expect(await requestUserId(request("Bearer"))).toBeNull();
+  expect(await requestUserId(request())).toBe("cookie-user");
 });

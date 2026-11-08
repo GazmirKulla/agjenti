@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensureCustomerForConversation } from "@/lib/conversations/ensure-customer";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { requestUserId } from "@/lib/conversations/transport-access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
@@ -22,11 +22,8 @@ export async function POST(
 	context: { params: Promise<{ id: string; conversationId: string }> },
 ) {
 	const { id: businessId, conversationId } = await context.params;
-	const supabase = await createServerSupabase();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-	if (!user || !(await canAccess(user.id, businessId))) {
+	const userId = await requestUserId(request);
+	if (!userId || !(await canAccess(userId, businessId))) {
 		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 	}
 

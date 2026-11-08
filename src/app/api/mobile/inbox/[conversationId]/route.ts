@@ -1,5 +1,5 @@
 import { isTransportId } from "@/lib/conversations/transport-access";
-import { InboxReadError, loadThreadConversation, loadThreadMessages } from "@/lib/conversations/inbox-read";
+import { InboxReadError, loadCustomerOrders, loadThreadConversation, loadThreadMessages } from "@/lib/conversations/inbox-read";
 import { mobileInboxAccess, mobileInboxError, mobileInboxHeaders, mobileThread } from "@/lib/mobile/inbox";
 
 export const runtime = "nodejs";
@@ -13,8 +13,11 @@ export async function GET(request: Request, context: Context) {
   try {
     const conversation = await loadThreadConversation(access.db, access.businessId, conversationId);
     if (!conversation) return mobileInboxError(404);
-    const messages = await loadThreadMessages(access.db, access.businessId, conversationId);
-    return Response.json({ businessId: access.businessId, ...mobileThread(conversation, messages) }, { headers: mobileInboxHeaders });
+    const [messages, orders] = await Promise.all([
+      loadThreadMessages(access.db, access.businessId, conversationId),
+      loadCustomerOrders(access.db, access.businessId, conversation.customer_id),
+    ]);
+    return Response.json({ businessId: access.businessId, ...mobileThread(conversation, messages, orders) }, { headers: mobileInboxHeaders });
   } catch (error) {
     if (error instanceof InboxReadError) return mobileInboxError(503);
     throw error;

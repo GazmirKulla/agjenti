@@ -3,7 +3,7 @@ import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { InboxRefresh } from "./inbox-refresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { loadInboxRows, loadThreadConversation, loadThreadMessages, type InboxRow, type ThreadConversation } from "@/lib/conversations/inbox-read";
+import { loadCustomerOrders, loadInboxRows, loadThreadConversation, loadThreadMessages, type InboxRow, type ThreadConversation } from "@/lib/conversations/inbox-read";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { ThreadClient } from "@/app/b/[slug]/inbox/[conversationId]/thread-client";
 import { getSessionUser } from "@/lib/tenant/access";
@@ -83,31 +83,15 @@ export async function InboxWorkspace({
   catch { throw new Error(t("Nuk u ngarkua biseda.")); }
   if (!conversation) notFound();
 
-  const orderQuery = conversation.customer_id
-    ? db
-        .from("orders")
-        .select("id,status,total_amount,currency,created_at")
-        .eq("business_id", businessId)
-        .eq("customer_id", conversation.customer_id)
-        .order("created_at", { ascending: false })
-        .limit(5)
-    : Promise.resolve({
-        data: [] as Array<{
-          id: string;
-          status: string;
-          total_amount: number | null;
-          currency: string | null;
-          created_at: string;
-        }>,
-        error: null,
-      });
-
   const [messageResult, orderResult, logResult] = await Promise.all([
     loadThreadMessages(db, businessId, selected).then(
       (data) => ({ data, error: null }),
       (error: unknown) => ({ data: null, error }),
     ),
-    orderQuery,
+    loadCustomerOrders(db, businessId, conversation.customer_id).then(
+      (data) => ({ data, error: null }),
+      (error: unknown) => ({ data: null, error }),
+    ),
     db
       .from("integration_logs")
       .select("id,target,status,error,created_at")
@@ -217,7 +201,7 @@ export async function InboxWorkspace({
                   </div>
                   <p>
                     {formatDate(o.created_at, t("sq-AL"))}
-                    <strong>{money(o.total_amount, o.currency)}</strong>
+                    <strong>{money(o.total_amount, o.currency ?? undefined)}</strong>
                   </p>
                 </Link>
               ))

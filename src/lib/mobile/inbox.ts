@@ -3,7 +3,7 @@ import { requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { instagramReplyWindow } from "@/lib/instagram/window";
 import type { NormalizedAttachment } from "@/lib/instagram/types";
-import type { ThreadConversation, loadThreadMessages } from "@/lib/conversations/inbox-read";
+import type { CustomerOrder, ThreadConversation, loadThreadMessages } from "@/lib/conversations/inbox-read";
 
 export const mobileInboxHeaders = { "Cache-Control": "private, no-store" };
 
@@ -47,7 +47,7 @@ function attachments(media: unknown): MobileAttachment[] {
 }
 
 type ThreadMessage = Awaited<ReturnType<typeof loadThreadMessages>>[number];
-export function mobileThread(conversation: ThreadConversation, messages: ThreadMessage[]) {
+export function mobileThread(conversation: ThreadConversation, messages: ThreadMessage[], orders: CustomerOrder[] = []) {
   return {
     conversation: {
       id: conversation.id,
@@ -57,6 +57,20 @@ export function mobileThread(conversation: ThreadConversation, messages: ThreadM
       channel: conversation.channel,
       replyWindow: conversation.channel === "instagram" ? instagramReplyWindow(conversation.last_inbound_at) : "standard",
     },
+    // Only a customer of this business; never foreign PII from the join.
+    customer: {
+      linked: Boolean(conversation.customer),
+      name: conversation.customer?.display_name || conversation.participant_display_name || null,
+      phone: conversation.customer?.phone ?? null,
+      since: conversation.customer?.created_at ?? null,
+    },
+    orders: orders.map((order) => ({
+      id: order.id,
+      status: order.status,
+      total: order.total_amount,
+      currency: order.currency,
+      createdAt: order.created_at,
+    })),
     messages: messages.map((m) => ({
       id: m.id,
       direction: m.direction === "outbound" ? "outbound" : "inbound",

@@ -120,3 +120,25 @@ export async function loadThreadMessages(db: SupabaseClient, businessId: string,
   if (error) throw new InboxReadError("thread_unavailable");
   return (data ?? []).reverse();
 }
+
+export type CustomerOrder = {
+  id: string;
+  status: string;
+  total_amount: number | null;
+  currency: string | null;
+  created_at: string;
+};
+
+/** The customer's five latest orders in this business; none for an unlinked conversation. */
+export async function loadCustomerOrders(db: SupabaseClient, businessId: string, customerId: string | null): Promise<CustomerOrder[]> {
+  if (!customerId) return [];
+  const { data, error } = await db
+    .from("orders")
+    .select("id,status,total_amount,currency,created_at")
+    .eq("business_id", businessId)
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (error) throw new InboxReadError("thread_unavailable");
+  return data ?? [];
+}

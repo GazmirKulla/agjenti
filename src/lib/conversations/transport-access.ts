@@ -3,7 +3,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { bearerClient, bearerToken } from "@/lib/auth/request";
 export const isTransportId = (id: unknown): id is string => typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 /** Browser cookie identity, or the native app's bearer token. An Authorization header never falls back to cookies. */
-async function requestUserId(request?: Request) {
+export async function requestUserId(request?: Request) {
   if (request?.headers.has("authorization")) {
     const token = bearerToken(request);
     if (!token) return null;

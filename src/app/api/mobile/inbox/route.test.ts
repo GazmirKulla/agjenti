@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ identity: vi.fn(), access: vi.fn(), rpc: vi.fn(), rows: vi.fn(), conversation: vi.fn(), messages: vi.fn() }));
+const m = vi.hoisted(() => ({ identity: vi.fn(), access: vi.fn(), rpc: vi.fn(), rows: vi.fn(), conversation: vi.fn(), messages: vi.fn(), orders: vi.fn() }));
 vi.mock("@/lib/auth/read-client", () => ({ authenticatedReadClient: m.identity }));
 vi.mock("@/lib/tenant/access", () => ({ requireBusinessAccess: m.access }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ service: true }) }));
 vi.mock("@/lib/conversations/inbox-read", async (original) => ({
   ...await original<typeof import("@/lib/conversations/inbox-read")>(),
-  loadInboxRows: m.rows, loadThreadConversation: m.conversation, loadThreadMessages: m.messages,
+  loadInboxRows: m.rows, loadThreadConversation: m.conversation, loadThreadMessages: m.messages, loadCustomerOrders: m.orders,
 }));
 import { GET as list } from "./route";
 import { GET as thread } from "./[conversationId]/route";
@@ -24,6 +24,7 @@ beforeEach(() => {
   m.rows.mockResolvedValue([{ id: conversationId, name: "Ana" }]);
   m.conversation.mockResolvedValue({ id: conversationId, name: "Ana", handle: "@ana", status: "active", channel: "whatsapp", last_inbound_at: null, customer: null });
   m.messages.mockResolvedValue([]);
+  m.orders.mockResolvedValue([]);
 });
 
 describe("native inbox access", () => {
@@ -66,5 +67,17 @@ describe("native inbox access", () => {
     expect(body.conversation.replyWindow).toBe("human_agent");
     expect(body.messages[0].attachments).toEqual([{ kind: "image", url: "https://cdn.test/a.jpg", filename: null, caption: null }]);
     expect(m.messages).toHaveBeenCalledWith({ service: true }, business, conversationId);
+  });
+  it("shares customer details and orders only for a customer of this business", async () => {
+    m.conversation.mockResolvedValueOnce({ id: conversationId, name: "Ana", handle: "@ana", status: "active", channel: "whatsapp", last_inbound_at: null, customer_id: "c1", participant_display_name: "Ana P",
+      customer: { business_id: business, display_name: "Ana Kola", username: "ana", phone: "+355 69", created_at: "2026-01-02T00:00:00Z" } });
+    m.orders.mockResolvedValueOnce([{ id: "o1", status: "confirmed", total_amount: 20, currency: "EUR", created_at: "2026-11-01T00:00:00Z" }]);
+    const body = await (await thread(req(), ctx())).json();
+    expect(m.orders).toHaveBeenCalledWith({ service: true }, business, "c1");
+    expect(body.customer).toEqual({ linked: true, name: "Ana Kola", phone: "+355 69", since: "2026-01-02T00:00:00Z" });
+    expect(body.orders).toEqual([{ id: "o1", status: "confirmed", total: 20, currency: "EUR", createdAt: "2026-11-01T00:00:00Z" }]);
+    m.conversation.mockResolvedValueOnce({ id: conversationId, name: "Ana", handle: "@ana", status: "active", channel: "whatsapp", last_inbound_at: null, customer_id: null, participant_display_name: "Ana P", customer: null });
+    const unlinked = await (await thread(req(), ctx())).json();
+    expect(unlinked.customer).toEqual({ linked: false, name: "Ana P", phone: null, since: null });
   });
 });
