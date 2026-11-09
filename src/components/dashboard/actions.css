@@ -92,3 +92,18 @@
 .policy-package-limit { display: grid; gap: 6px; font-size: 12px; max-width: 240px; }
 .policy-package-form button { justify-self: start; min-width: 110px; }
 @media (max-width: 600px) { .policy-package-row { flex-wrap: wrap; gap: 12px; } }
+
+/* Admin "Modulet dhe aftësitë": modules first, special capabilities below. */
+.admin-modules, .admin-capabilities { margin-bottom: 28px; }
+.admin-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
+.admin-section-head h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -0.3px; }
+.admin-section-head .muted-copy { margin: 0; max-width: 680px; font-size: 13px; line-height: 1.6; }
+.admin-module-totals { display: flex; gap: 10px; margin: 0; }
+.admin-module-totals div { min-width: 84px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.admin-module-totals dt { color: var(--ink-muted); font-size: 11px; }
+.admin-module-totals dd { margin: 2px 0 0; font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.module-business-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+@media (max-width: 760px) {
+  .admin-section-head { flex-direction: column; align-items: stretch; }
+  .admin-module-totals div { flex: 1; min-width: 0; }
+}

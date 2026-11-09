@@ -104,7 +104,7 @@ it("keeps denied capabilities visible without exposing the invitation form", asy
 it("loads global policies independently and scopes exceptions to one business", async () => {
   fixture(); m.from.mockClear();
   await AdminPage({});
-  expect(m.from.mock.calls.map(([table]) => table)).toEqual(["platform_actions", "plan_actions"]);
+  expect(m.from.mock.calls.map(([table]) => table)).toEqual(["platform_actions", "plan_actions", "businesses"]);
   const html = renderToStaticMarkup(await PermissionsPage({ params: Promise.resolve({ id: "source" }) }));
   expect(html).toContain("Agjenti");
   expect(html).toContain('name="target" value="source"');
