@@ -17,8 +17,8 @@ export default async function AdminOnboardingPage() {
         title="Onboarding Flow"
         description="Kupto se si përgjigjet e onboarding formojnë profilin e biznesit dhe konfigurimin e Agjentit."
       >
-        <Link className="btn btn-ghost" href="/admin/app">
-          Cilësimet e App
+        <Link className="btn btn-ghost" href="/admin/settings">
+          Cilësimet
         </Link>
       </PageHeading>
       <OnboardingLinks enabledSteps={settings.onboarding_steps} />

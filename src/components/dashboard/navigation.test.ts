@@ -33,7 +33,7 @@ it("keeps admin actions and pricing reachable on mobile", () => {
     "conversations",
     "pricing",
     "actions",
-    "app",
+    "settings",
   ]);
 });
 
@@ -49,7 +49,7 @@ it("includes onboarding map in admin desktop nav", () => {
     "actions",
     "chat-lab",
     "onboarding",
-    "app",
+    "settings",
   ]);
 });
 
