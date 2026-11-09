@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { after } from "next/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { agentModel } from "@/lib/agents/model";
+import { effectiveModel, requestModel, rewriteRequestModel } from "./model-choice";
 
 const scope = new AsyncLocalStorage<{ businessId?: string }>();
 
@@ -63,6 +65,9 @@ async function record(businessId: string, response: Response, path: string) {
 /** Counts successful OpenAI requests without delaying or failing the caller. */
 export function meteredFetch(inner: typeof fetch = fetch): typeof fetch {
   return async (input, init) => {
+    // The administrator's model choice (per business, else platform) replaces the standard model.
+    const standard = agentModel();
+    if (requestModel(init) === standard) init = rewriteRequestModel(init, standard, await effectiveModel(aiUsageBusiness()));
     const response = await inner(input, init);
     if (!response.ok) return response;
     const path = new URL(

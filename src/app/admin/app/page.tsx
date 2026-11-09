@@ -5,6 +5,8 @@ import { saveAppSettings } from "@/lib/platform/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { PageHeading } from "@/components/dashboard/ui";
 import { questions } from "@/lib/onboarding/model";
+import { agentModel } from "@/lib/agents/model";
+import { MODEL_SUGGESTIONS } from "@/lib/ai/model-choice";
 export default async function AppSettingsPage() {
   const user = await getSessionUser();
   if (!user || !(await isPlatformAdmin(user.id))) redirect("/auth/continue");
@@ -33,6 +35,16 @@ export default async function AppSettingsPage() {
               Kur biznesi lidh Instagram-in, analiza përgatit automatikisht profilin
               dhe njohuritë për rishikim. Kur është i fikur, lidhja e Instagram-it nuk
               nis analizë. Nuk ndikon te mënyra e onboarding-ut më poshtë.
+            </p>
+          </div>
+          <div>
+            <label className="form-label" htmlFor="ai-model">Modeli i AI për të gjitha bizneset</label>
+            <input className="field" id="ai-model" name="ai_model" list="ai-model-suggestions" maxLength={80}
+              defaultValue={settings.ai_model ?? ""} placeholder={`Bosh = ${agentModel()}`} autoComplete="off" spellCheck={false} />
+            <datalist id="ai-model-suggestions">{MODEL_SUGGESTIONS.map((model) => <option key={model} value={model} />)}</datalist>
+            <p className="muted-copy mt-2">
+              Përdoret nga agjenti, asistenti dhe analizat. Një biznes mund të ketë modelin e vet te Bizneset.
+              Modeli kontrollohet te OpenAI para ruajtjes. Bosh përdor parazgjedhjen e serverit ({agentModel()}).
             </p>
           </div>
           <fieldset className="grid gap-3">

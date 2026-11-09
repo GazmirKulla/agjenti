@@ -2,6 +2,9 @@ import { ActionForm } from "@/components/dashboard/action-form";
 import { BusinessNameField } from "@/components/dashboard/business-name-field";
 import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { loadPlatformUsage } from "@/lib/admin/usage";
+import { agentModel } from "@/lib/agents/model";
+import { clearModelChoiceCache, MODEL_SUGGESTIONS, verifyModel } from "@/lib/ai/model-choice";
+import { getAppSettings } from "@/lib/platform/settings";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import {
@@ -26,7 +29,7 @@ export default async function AdminBusinessesPage() {
   ] = await Promise.all([
     service
       .from("businesses")
-      .select("id,name,slug,auto_reply,allow_multiple_agents")
+      .select("id,name,slug,auto_reply,allow_multiple_agents,ai_model")
       .order("name"),
     service
       .from("integrations")
@@ -60,6 +63,7 @@ export default async function AdminBusinessesPage() {
     allow_multiple_agents: Boolean(
       "allow_multiple_agents" in b && b.allow_multiple_agents,
     ),
+    ai_model: "ai_model" in b && typeof b.ai_model === "string" && b.ai_model ? (b.ai_model as string) : null,
   }));
   const linkedIds = new Set(
     (integrations ?? [])
@@ -189,6 +193,33 @@ export default async function AdminBusinessesPage() {
     return { success: "Aksesi u hoq." };
   }
 
+  async function saveBusinessModel(formData: FormData) {
+    "use server";
+    const session = await getSessionUser();
+    if (!session || !(await isPlatformAdmin(session.id)))
+      return { error: "Kërkohet qasja e administratorit." };
+    const businessId = String(formData.get("business_id") ?? "");
+    if (!businessId) return { error: "Biznesi nuk u gjet." };
+    const model = String(formData.get("ai_model") ?? "").trim();
+    if (model) {
+      const problem = await verifyModel(model);
+      if (problem) return { error: problem };
+    }
+    const { error } = await createServiceSupabase()
+      .from("businesses")
+      .update({ ai_model: model || null })
+      .eq("id", businessId);
+    if (error)
+      return {
+        error: ["42703", "PGRST204"].includes(error.code)
+          ? "Duhet aplikuar migrimi ai_model në databazë."
+          : "Modeli nuk u ruajt. Provo përsëri.",
+      };
+    clearModelChoiceCache();
+    revalidatePath("/admin/businesses");
+    return { success: model ? `Ky biznes përdor tani ${model}.` : "Ky biznes përdor tani modelin e platformës." };
+  }
+
   async function saveBusinessSettings(formData: FormData) {
     "use server";
     const session = await getSessionUser();
@@ -213,8 +244,10 @@ export default async function AdminBusinessesPage() {
     return { success: "Cilësimet e klientit u ruajtën." };
   }
 
+  const platformModel = (await getAppSettings()).ai_model || agentModel();
   return (
     <>
+      <datalist id="business-ai-models">{MODEL_SUGGESTIONS.map((model) => <option key={model} value={model} />)}</datalist>
       <PageHeading
         eyebrow="PLATFORMA"
         title="Bizneset"
@@ -338,6 +371,23 @@ export default async function AdminBusinessesPage() {
                     <button className="btn btn-ghost" type="submit">
                       Ruaj cilësimet
                     </button>
+                  </ActionForm>
+                </div>
+                <div className="detail-block">
+                  <h3>Modeli i AI</h3>
+                  <p className="muted-copy">
+                    Aktualisht: <strong>{b.ai_model || platformModel}</strong>
+                    {b.ai_model ? " · specifik për këtë biznes" : " · modeli i platformës"}
+                  </p>
+                  <ActionForm action={saveBusinessModel} className="grid gap-3 mt-2">
+                    <input type="hidden" name="business_id" value={b.id} />
+                    <label className="form-label">
+                      Model specifik
+                      <input className="field" name="ai_model" list="business-ai-models" maxLength={80}
+                        defaultValue={b.ai_model ?? ""} placeholder={`Bosh = ${platformModel}`} autoComplete="off" spellCheck={false} />
+                    </label>
+                    <p className="muted-copy">Bosh përdor modelin e platformës. Modeli kontrollohet te OpenAI para ruajtjes.</p>
+                    <button className="btn btn-ghost" type="submit">Ruaj modelin</button>
                   </ActionForm>
                 </div>
                 <div className="detail-block">

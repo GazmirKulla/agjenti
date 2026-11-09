@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { normalizeOnboardingSteps } from "@/lib/onboarding/model";
+import { clearModelChoiceCache, verifyModel } from "@/lib/ai/model-choice";
 export async function saveAppSettings(form: FormData) {
   const user = await getSessionUser();
   if (!user || !(await isPlatformAdmin(user.id)))
@@ -10,6 +11,11 @@ export async function saveAppSettings(form: FormData) {
   const announcement = String(form.get("announcement") ?? "").trim();
   if (announcement.length > 500)
     return { error: "Njoftimi duhet të ketë deri në 500 karaktere." };
+  const aiModel = String(form.get("ai_model") ?? "").trim();
+  if (aiModel) {
+    const problem = await verifyModel(aiModel);
+    if (problem) return { error: problem };
+  }
   const onboarding_steps = normalizeOnboardingSteps(
     form.getAll("onboarding_steps"),
   );
@@ -22,6 +28,7 @@ export async function saveAppSettings(form: FormData) {
       checklist_enabled: form.get("checklist_enabled") === "on",
       onboarding_steps,
       announcement,
+      ai_model: aiModel || null,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
     });
@@ -31,6 +38,7 @@ export async function saveAppSettings(form: FormData) {
         ? "Duhet aplikuar migrimi i cilësimeve App në databazë përpara ruajtjes."
         : "Cilësimet nuk u ruajtën. Provo përsëri.",
     };
+  clearModelChoiceCache();
   revalidatePath("/", "layout");
   return {
     success:

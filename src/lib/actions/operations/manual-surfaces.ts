@@ -15,6 +15,7 @@ export const manualSurfaces = {
   "src/app/admin/businesses/page.tsx#addMember": {"exception": "Membership changes are security administration."},
   "src/app/admin/businesses/page.tsx#removeMember": {"exception": "Membership revocation is security administration."},
   "src/app/admin/businesses/page.tsx#saveBusinessSettings": {"exception": "Administrator-only tenant limits and integration settings."},
+  "src/app/admin/businesses/page.tsx#saveBusinessModel": {"exception": "Administrator-only choice of the AI model a business uses; platform cost policy."},
   "src/app/b/[slug]/agents/page.tsx#configure": {"operation": "agent.communication"},
   "src/app/b/[slug]/agents/page.tsx#save": {"operation": "agent.manage"},
   "src/app/b/[slug]/settings/business/page.tsx#saveBusiness": {"operation": "business.autoreply"},
