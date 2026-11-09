@@ -49,6 +49,7 @@ export const manualSurfaces = {
   "src/lib/chat-lab/actions.ts#loadLabSetup": {"exception": "Read-only platform test-lab context."},
   "src/lib/chat-lab/actions.ts#runLabTurn": {"exception": "Isolated platform simulation with no production side effects."},
   "src/lib/dashboard/modules/actions.ts#saveModules": {"exception": "Navigation preferences do not grant or remove runtime capabilities."},
+  "src/lib/dashboard/modules/actions.ts#showModule": {"exception": "Navigation preferences do not grant or remove runtime capabilities."},
   "src/lib/discovery/process-actions.ts#saveBusinessProcess": {"exception": "Onboarding discovery draft has its own reviewed setup contract."},
   "src/lib/knowledge/actions.ts#saveKnowledgeEntry": {"operation": "knowledge.save"},
   "src/lib/onboarding/actions.ts#saveOnboarding": {"exception": "Initial workspace onboarding must preserve the setup contract."},

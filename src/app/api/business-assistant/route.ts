@@ -7,7 +7,8 @@ import { resolveMaterials, linksInText } from "@/lib/business-assistant/material
 import { simulateVisualWorkflow } from "@/lib/workflows/visual/test-actions";
 import { parseUIContext } from "@/lib/business-assistant/context";
 import { requireBusinessAccess } from "@/lib/tenant/access";
-import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { loadDashboardProfile, loadNavigationProfile } from "@/lib/dashboard/profile/service";
+import { hiddenModuleHint } from "@/lib/dashboard/modules/visibility";
 import { transcribeAudio } from "@/lib/business-intelligence/transcription";
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
 import { executeTicket, openTicket, planRequest } from "@/lib/business-assistant/service";
@@ -96,6 +97,14 @@ async function handlePOST(request: Request) {
       const execute = async () => {
         const ticket = openTicket(body.token, access);
         const result = await executeTicket(access, body.token);
+        // Saved into a section the owner hid: say so and offer to show it.
+        const navigation = await loadNavigationProfile(membership.business.id).catch(() => null);
+        const operationKey = ticket.action === "operation" ? (ticket.values.operation as { key?: string } | undefined)?.key : undefined;
+        const moduleHint = navigation ? hiddenModuleHint(ticket.action, navigation.hiddenModules ?? [], operationKey) : null;
+        if (moduleHint) Object.assign(result, {
+          moduleHint,
+          message: `${result.message ?? "Ndryshimi u ruajt."} Seksioni “${moduleHint.label}” është i fshehur në menu; mund ta shfaqësh te Cilësimet → Modulet.`,
+        });
         const tables: Record<string, string> = { operation: "business_operation_receipts", product: "products", service: "booking_services", knowledge: "knowledge_entries", agent: "ai_agents", profile: "businesses", booking: "bookings", workflow: "assistant_visual_requests", orderflow: "assistant_workflow_changes", linear: "products" };
         return { ...result, saved: true, outcome: { status: "backend_acknowledged", action: ticket.action,
           ...("configurationEffect" in result && result.configurationEffect ? { configurationEffect: result.configurationEffect } : {}),

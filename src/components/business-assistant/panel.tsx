@@ -27,6 +27,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileCard } from "./file-card";
 import { OnboardingQuickReplies } from "./onboarding-quick-replies";
+import { showModule } from "@/lib/dashboard/modules/actions";
 import { parseQuestionMeta, type OnboardingQuickReply } from "@/lib/onboarding/assistant-chat-model";
 import { AudioRecorder, primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import { AssistantComposer } from "./composer";
@@ -65,6 +66,8 @@ function MessageCopy({ text }: { text: string }) {
   );
 }
 type Result = {
+  /** The change was saved in a section the owner hid from the menu. */
+  moduleHint?: { id: string; label: string };
   configuration?: import("@/lib/business-assistant/service").PlanResult["configuration"];
   configurationEffect?: import("@/lib/agents/configuration-contract").AgentConfigurationEffect;
   briefing?: import("@/lib/business-assistant/briefing-model").Briefing;
@@ -159,6 +162,7 @@ export function BusinessAssistant({
   const [launcherTarget, setLauncherTarget] = useState<HTMLElement | null>(null);
   useEffect(() => { setLauncherTarget(document.getElementById("personal-assistant-slot")); }, []);
   const archive = useAssistantHistory(userId, slug);
+  const [moduleShown, setModuleShown] = useState<string | null>(null);
   const refreshHistory = useRef(archive.refreshThreads);
   refreshHistory.current = archive.refreshThreads;
   useEffect(() => { if (historyOpen) void refreshHistory.current(); }, [historyOpen]);
@@ -185,6 +189,7 @@ export function BusinessAssistant({
       .catch(() => { /* The assistant stays usable without onboarding questions. */ });
   }, [context, archive, history.length, slug]);
   const [result, setResult] = useState<Result | null>(null);
+  useEffect(() => { setModuleShown(null); }, [result]);
   const [recovered, setRecovered] = useState(false);
   const sendAttempt = useRef<{ key: string; id: string } | null>(null);
   const [error, setError] = useState("");
@@ -678,6 +683,17 @@ export function BusinessAssistant({
             )}
             {busy === "plan" && <div className="chat-typing" role="status" aria-label="Po shkruan"><i /><i /><i /></div>}
           </div>
+          {result?.moduleHint && !busy && (
+            <div className="assistant-module-hint" role="status">
+              <p>{moduleShown ?? `Seksioni “${result.moduleHint.label}” është i fshehur në menu.`}</p>
+              {!moduleShown && <button type="button" onClick={async () => {
+                const hint = result.moduleHint!;
+                const outcome = await showModule(slug, hint.id);
+                setModuleShown(outcome.error ?? outcome.success ?? null);
+                if (outcome.success) router.refresh();
+              }}>Shfaq “{result.moduleHint.label}” në menu</button>}
+            </div>
+          )}
           {pendingOnboarding && !busy && !outgoing && (
             <OnboardingQuickReplies question={pendingOnboarding} disabled={Boolean(busy) || archive.loading}
               onReply={(label, reply) => void analyze(undefined, label, reply)} />

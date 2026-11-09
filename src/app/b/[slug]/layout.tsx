@@ -45,7 +45,7 @@ export default async function BusinessLayout({
   );
   return (
     <DashboardLanguageProvider language={language}>
-    <AssistantWorkspaceProvider key={`${user.id}:${business.slug}`} userId={user.id} userName={typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : typeof user.user_metadata?.name === "string" ? user.user_metadata.name : undefined} slug={business.slug} name={business.name} modules={dashboardProfile.enabledModules} external={business.catalog_source === "external"}>
+    <AssistantWorkspaceProvider key={`${user.id}:${business.slug}`} userId={user.id} userName={typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : typeof user.user_metadata?.name === "string" ? user.user_metadata.name : undefined} slug={business.slug} name={business.name} modules={dashboardProfile.navigationItems} external={business.catalog_source === "external"}>
         <AppShell
       name={business.name}
       slug={business.slug}
