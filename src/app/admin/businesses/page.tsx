@@ -2,9 +2,8 @@ import { ActionForm } from "@/components/dashboard/action-form";
 import { BusinessNameField } from "@/components/dashboard/business-name-field";
 import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
 import { loadPlatformUsage } from "@/lib/admin/usage";
-import { agentModel } from "@/lib/agents/model";
-import { clearModelChoiceCache, MODEL_SUGGESTIONS, verifyModel } from "@/lib/ai/model-choice";
-import { getAppSettings } from "@/lib/platform/settings";
+import { MODEL_ROLES } from "@/lib/agents/model";
+import { clearModelChoiceCache, loadModelTiers, ROLE_LABELS, tierModel } from "@/lib/ai/model-choice";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import {
@@ -29,7 +28,7 @@ export default async function AdminBusinessesPage() {
   ] = await Promise.all([
     service
       .from("businesses")
-      .select("id,name,slug,auto_reply,allow_multiple_agents,ai_model")
+      .select("id,name,slug,auto_reply,allow_multiple_agents,model_tier")
       .order("name"),
     service
       .from("integrations")
@@ -63,7 +62,7 @@ export default async function AdminBusinessesPage() {
     allow_multiple_agents: Boolean(
       "allow_multiple_agents" in b && b.allow_multiple_agents,
     ),
-    ai_model: "ai_model" in b && typeof b.ai_model === "string" && b.ai_model ? (b.ai_model as string) : null,
+    model_tier: "model_tier" in b && typeof b.model_tier === "string" && b.model_tier ? (b.model_tier as string) : null,
   }));
   const linkedIds = new Set(
     (integrations ?? [])
@@ -200,24 +199,23 @@ export default async function AdminBusinessesPage() {
       return { error: "Kërkohet qasja e administratorit." };
     const businessId = String(formData.get("business_id") ?? "");
     if (!businessId) return { error: "Biznesi nuk u gjet." };
-    const model = String(formData.get("ai_model") ?? "").trim();
-    if (model) {
-      const problem = await verifyModel(model);
-      if (problem) return { error: problem };
-    }
+    const tier = String(formData.get("model_tier") ?? "");
+    const { tiers: available } = await loadModelTiers();
+    if (tier && !available.some((t) => t.id === tier)) return { error: "Zgjidh një grup modelesh ekzistues." };
     const { error } = await createServiceSupabase()
       .from("businesses")
-      .update({ ai_model: model || null })
+      .update({ model_tier: tier || null })
       .eq("id", businessId);
     if (error)
       return {
         error: ["42703", "PGRST204"].includes(error.code)
-          ? "Duhet aplikuar migrimi ai_model në databazë."
-          : "Modeli nuk u ruajt. Provo përsëri.",
+          ? "Duhet aplikuar migrimi i grupeve të modeleve."
+          : "Grupi nuk u ruajt. Provo përsëri.",
       };
     clearModelChoiceCache();
     revalidatePath("/admin/businesses");
-    return { success: model ? `Ky biznes përdor tani ${model}.` : "Ky biznes përdor tani modelin e platformës." };
+    const label = available.find((t) => t.id === tier)?.label;
+    return { success: label ? `Ky biznes përdor tani grupin ${label}.` : "Ky biznes përdor tani grupin e platformës." };
   }
 
   async function saveBusinessSettings(formData: FormData) {
@@ -244,10 +242,10 @@ export default async function AdminBusinessesPage() {
     return { success: "Cilësimet e klientit u ruajtën." };
   }
 
-  const platformModel = (await getAppSettings()).ai_model || agentModel();
+  const { tiers, platformTier } = await loadModelTiers();
+  const platformGroup = tiers.find((t) => t.id === platformTier);
   return (
     <>
-      <datalist id="business-ai-models">{MODEL_SUGGESTIONS.map((model) => <option key={model} value={model} />)}</datalist>
       <PageHeading
         eyebrow="PLATFORMA"
         title="Bizneset"
@@ -374,20 +372,29 @@ export default async function AdminBusinessesPage() {
                   </ActionForm>
                 </div>
                 <div className="detail-block">
-                  <h3>Modeli i AI</h3>
+                  <h3>Modelet e AI</h3>
                   <p className="muted-copy">
-                    Aktualisht: <strong>{b.ai_model || platformModel}</strong>
-                    {b.ai_model ? " · specifik për këtë biznes" : " · modeli i platformës"}
+                    Grupi: <strong>{(tiers.find((t) => t.id === (b.model_tier ?? platformTier)) ?? platformGroup)?.label ?? "—"}</strong>
+                    {b.model_tier ? " · specifik për këtë biznes" : " · grupi i platformës"}
                   </p>
-                  <ActionForm action={saveBusinessModel} className="grid gap-3 mt-2">
+                  <dl className="detail-fields">
+                    {MODEL_ROLES.map((role) => (
+                      <div key={role}>
+                        <dt>{ROLE_LABELS[role]}</dt>
+                        <dd>{tierModel(tiers.find((t) => t.id === (b.model_tier ?? platformTier)) ?? platformGroup, role)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <ActionForm action={saveBusinessModel} className="grid gap-3 mt-3">
                     <input type="hidden" name="business_id" value={b.id} />
                     <label className="form-label">
-                      Model specifik
-                      <input className="field" name="ai_model" list="business-ai-models" maxLength={80}
-                        defaultValue={b.ai_model ?? ""} placeholder={`Bosh = ${platformModel}`} autoComplete="off" spellCheck={false} />
+                      Grupi i modeleve
+                      <select className="field" name="model_tier" defaultValue={b.model_tier ?? ""}>
+                        <option value="">Si platforma ({platformGroup?.label ?? "—"})</option>
+                        {tiers.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                      </select>
                     </label>
-                    <p className="muted-copy">Bosh përdor modelin e platformës. Modeli kontrollohet te OpenAI para ruajtjes.</p>
-                    <button className="btn btn-ghost" type="submit">Ruaj modelin</button>
+                    <button className="btn btn-ghost" type="submit">Ruaj grupin</button>
                   </ActionForm>
                 </div>
                 <div className="detail-block">

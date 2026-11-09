@@ -3,7 +3,7 @@ vi.mock("@/lib/business-assistant/briefing-intent", () => ({ briefingQuestion: a
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ response: vi.fn(), profile: vi.fn(), from: vi.fn(), rpc: vi.fn(), user: vi.fn(), access: vi.fn(), write: vi.fn(), revalidate: vi.fn() }));
 vi.mock("openai", () => ({ default: class { responses = { create: m.response }; } }));
-vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "synthetic-test" }));
+vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "synthetic-test", modelFor: () => "synthetic-test" }));
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }) }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access }));

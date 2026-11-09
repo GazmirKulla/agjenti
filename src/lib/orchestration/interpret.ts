@@ -1,5 +1,5 @@
 import OpenAI from "@/lib/ai/openai";
-import { agentModel } from "@/lib/agents/model";
+import { modelFor } from "@/lib/agents/model";
 import { type Observation, type Snapshot } from "./contracts";
 import { observationContext, observationInstructions, observationSchema, parseObservation } from "./observation";
 import { type Environment } from "./transition";
@@ -32,7 +32,7 @@ export async function interpretCustomer(input: {
   const remaining = input.deadline - startedAt;
   if (remaining < 1000) throw new InterpretationUnavailable("budget");
   if (!process.env.OPENAI_API_KEY?.trim()) throw new InterpretationUnavailable("configuration");
-  const model = agentModel();
+  const model = modelFor("customer");
   try {
     const response = await new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: Math.min(15000, remaining), maxRetries: 0 }).responses.create({
       model, store: false, max_output_tokens: 3000,
@@ -46,7 +46,7 @@ export async function interpretCustomer(input: {
     let observation: Observation;
     try { observation = parseObservation(JSON.parse(response.output_text)); }
     catch { throw new InterpretationUnavailable("invalid_output"); }
-    return { observation, model, responseId: response.id, elapsedMs: Date.now() - startedAt,
+    return { observation, model: typeof response.model === "string" ? response.model : model, responseId: response.id, elapsedMs: Date.now() - startedAt,
       inputTokens: response.usage?.input_tokens ?? 0, outputTokens: response.usage?.output_tokens ?? 0 };
   } catch (error) {
     if (error instanceof InterpretationUnavailable) throw error;

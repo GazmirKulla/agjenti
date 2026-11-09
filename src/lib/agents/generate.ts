@@ -1,1 +1,1 @@
-export { agentModel, DEFAULT_AGENT_MODEL } from "./model";
+export { agentModel, DEFAULT_AGENT_MODEL, modelFor } from "./model";

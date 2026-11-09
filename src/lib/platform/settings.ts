@@ -14,8 +14,8 @@ export const defaultAppSettings = {
   checklist_enabled: true,
   announcement: "",
   onboarding_steps: [...allQuestionKeys] as AnswerKey[],
-  /** Platform AI model; null uses the AGENT_MODEL environment default. */
-  ai_model: null as string | null,
+  /** The model group every business uses unless it has its own. */
+  model_tier: "high",
 };
 export type AppSettings = typeof defaultAppSettings;
 function normalizeSettings(data: Record<string, unknown> | null): AppSettings {
@@ -34,7 +34,7 @@ function normalizeSettings(data: Record<string, unknown> | null): AppSettings {
       typeof data.announcement === "string"
         ? data.announcement
         : defaultAppSettings.announcement,
-    ai_model: typeof data.ai_model === "string" && data.ai_model.trim() ? data.ai_model.trim() : null,
+    model_tier: typeof data.model_tier === "string" && data.model_tier ? data.model_tier : defaultAppSettings.model_tier,
     onboarding_steps: normalizeOnboardingSteps(
       data.onboarding_steps ?? defaultAppSettings.onboarding_steps,
     ),

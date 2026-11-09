@@ -7,6 +7,7 @@ vi.mock("openai", () => ({
 }));
 vi.mock("@/lib/agents/generate", () => ({
   agentModel: () => "test-model",
+  modelFor: () => "test-model",
 }));
 import { completeText } from "./complete";
 

@@ -1,5 +1,5 @@
 import OpenAI from "@/lib/ai/openai";
-import { agentModel } from "@/lib/agents/generate";
+import { modelFor } from "@/lib/agents/generate";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { fetchPublicDocument } from "@/lib/products/import-url";
 import { extractWebsite } from "@/lib/business-intelligence/ingestion";
@@ -80,7 +80,7 @@ export async function indexCatalog(catalog: Catalog) {
     note = "Dokument nga linku. Maksimumi 100,000 karaktere për tekst.";
   }
   const response = await client.responses.create({
-    model: agentModel(),
+    model: modelFor("assistant"),
     store: false,
     max_output_tokens: 20000,
     instructions:

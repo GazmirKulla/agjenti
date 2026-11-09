@@ -18,7 +18,7 @@ vi.mock("@/lib/calendar/service", () => ({
   persistBooking: m.persist,
   bookingColumns: "id,revision",
 }));
-vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test" }));
+vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test", modelFor: () => "test" }));
 import { encryptSecret } from "@/lib/crypto/tokens";
 import {
   searchContext,

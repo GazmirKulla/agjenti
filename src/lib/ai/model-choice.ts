@@ -1,42 +1,66 @@
-import { agentModel } from "@/lib/agents/model";
+import { agentModel, roleOf, type ModelRole } from "@/lib/agents/model";
 import { createServiceSupabase } from "@/lib/supabase/service";
 
 /** Valid OpenAI model id shape; the database enforces the same pattern. */
 export const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,79}$/;
 /** Suggestions in the admin form; any model the OpenAI account can use is accepted. */
-export const MODEL_SUGGESTIONS = ["gpt-5.6-luna", "gpt-5.5", "gpt-5.5-mini", "gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"];
+export const MODEL_SUGGESTIONS = ["gpt-5.6-luna", "gpt-5.5", "gpt-5.5-mini", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"];
+export const ROLE_LABELS: Record<ModelRole, string> = {
+  customer: "Përgjigjet për klientët",
+  assistant: "Asistenti",
+  utility: "Kontrollet e brendshme",
+};
+export const DEFAULT_TIER = "high";
+
+export type ModelTier = { id: string; label: string; position: number } & Record<`${ModelRole}_model`, string | null>;
 
 const TTL = 30_000;
-let platform: { model: string | null; at: number } | null = null;
-const perBusiness = new Map<string, { model: string | null; at: number }>();
+let tiersCache: { tiers: ModelTier[]; platformTier: string; at: number } | null = null;
+const businessTier = new Map<string, { tier: string | null; at: number }>();
 
 export function clearModelChoiceCache() {
-  platform = null;
-  perBusiness.clear();
+  tiersCache = null;
+  businessTier.clear();
 }
 
-async function platformModel() {
-  if (platform && Date.now() - platform.at < TTL) return platform.model;
-  const { data, error } = await createServiceSupabase().from("app_settings").select("ai_model").eq("id", true).maybeSingle();
-  // Before the migration the column is missing: keep the environment default.
-  const model = !error && typeof data?.ai_model === "string" && MODEL_PATTERN.test(data.ai_model) ? data.ai_model : null;
-  platform = { model, at: Date.now() };
-  return model;
+const validModel = (value: unknown) => (typeof value === "string" && MODEL_PATTERN.test(value) ? value : null);
+
+export async function loadModelTiers(): Promise<{ tiers: ModelTier[]; platformTier: string }> {
+  if (tiersCache && Date.now() - tiersCache.at < TTL) return tiersCache;
+  const db = createServiceSupabase();
+  const [tiers, settings] = await Promise.all([
+    db.from("model_tiers").select("id,label,position,customer_model,assistant_model,utility_model").order("position"),
+    db.from("app_settings").select("model_tier").eq("id", true).maybeSingle(),
+  ]);
+  const list = (tiers.error ? [] : tiers.data ?? []).map((t) => ({
+    id: String(t.id), label: String(t.label), position: Number(t.position) || 0,
+    customer_model: validModel(t.customer_model), assistant_model: validModel(t.assistant_model), utility_model: validModel(t.utility_model),
+  }));
+  const platformTier = !settings.error && typeof settings.data?.model_tier === "string" ? settings.data.model_tier : DEFAULT_TIER;
+  tiersCache = { tiers: list, platformTier, at: Date.now() };
+  return tiersCache;
 }
 
-async function businessModel(businessId: string) {
-  const cached = perBusiness.get(businessId);
-  if (cached && Date.now() - cached.at < TTL) return cached.model;
-  const { data, error } = await createServiceSupabase().from("businesses").select("ai_model").eq("id", businessId).maybeSingle();
-  const model = !error && typeof data?.ai_model === "string" && MODEL_PATTERN.test(data.ai_model) ? data.ai_model : null;
-  perBusiness.set(businessId, { model, at: Date.now() });
-  return model;
+async function tierOfBusiness(businessId: string) {
+  const cached = businessTier.get(businessId);
+  if (cached && Date.now() - cached.at < TTL) return cached.tier;
+  const { data, error } = await createServiceSupabase().from("businesses").select("model_tier").eq("id", businessId).maybeSingle();
+  const tier = !error && typeof data?.model_tier === "string" ? data.model_tier : null;
+  businessTier.set(businessId, { tier, at: Date.now() });
+  return tier;
 }
 
-/** The model a business's AI requests use: its override, else the platform setting, else the environment default. */
-export async function effectiveModel(businessId?: string) {
+/** The model for a kind of work in a group; an empty slot uses the server default. */
+export function tierModel(tier: ModelTier | undefined, role: ModelRole) {
+  return tier?.[`${role}_model`] ?? agentModel();
+}
+
+/** The group a business uses (its own, else the platform's) and that group's model for `role`. */
+export async function effectiveModel(businessId: string | undefined, role: ModelRole) {
   try {
-    return (businessId ? await businessModel(businessId) : null) ?? (await platformModel()) ?? agentModel();
+    const { tiers, platformTier } = await loadModelTiers();
+    const id = (businessId ? await tierOfBusiness(businessId) : null) ?? platformTier;
+    return tierModel(tiers.find((t) => t.id === id) ?? tiers.find((t) => t.id === platformTier), role);
   } catch {
     return agentModel();
   }
@@ -53,23 +77,22 @@ export function requestModel(init: RequestInit | undefined): string | null {
   }
 }
 
-/** Swaps the standard chat model in an OpenAI request body for the chosen one.
- * Requests that name a specific model (embeddings, transcription, vision) are untouched. */
-export function rewriteRequestModel(init: RequestInit | undefined, standard: string, chosen: string): RequestInit | undefined {
-  if (!init || typeof init.body !== "string" || chosen === standard) return init;
+/** Replaces the placeholder model of a request with the chosen model. */
+export function rewriteRequestModel(init: RequestInit | undefined, chosen: string): RequestInit | undefined {
+  if (!init || typeof init.body !== "string") return init;
   let body: Record<string, unknown>;
   try {
     body = JSON.parse(init.body);
   } catch {
     return init;
   }
-  if (!body || typeof body !== "object" || body.model !== standard) return init;
+  if (!body || typeof body !== "object" || !roleOf(body.model)) return init;
   return { ...init, body: JSON.stringify({ ...body, model: chosen }) };
 }
 
 /** Checks with OpenAI that the account can use a model, before an admin saves it. */
 export async function verifyModel(model: string): Promise<string | null> {
-  if (!MODEL_PATTERN.test(model)) return "Emri i modelit nuk është i vlefshëm.";
+  if (!MODEL_PATTERN.test(model)) return `"${model}" nuk është emër i vlefshëm modeli.`;
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) return null;
   try {
@@ -77,9 +100,9 @@ export async function verifyModel(model: string): Promise<string | null> {
       headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000),
     });
     if (response.status === 404) return `Modeli "${model}" nuk ekziston ose nuk është i disponueshëm për këtë llogari OpenAI.`;
-    if (!response.ok) return "Modeli nuk u verifikua te OpenAI. Provo përsëri.";
+    if (!response.ok) return `Modeli "${model}" nuk u verifikua te OpenAI. Provo përsëri.`;
     return null;
   } catch {
-    return "Modeli nuk u verifikua te OpenAI. Provo përsëri.";
+    return `Modeli "${model}" nuk u verifikua te OpenAI. Provo përsëri.`;
   }
 }

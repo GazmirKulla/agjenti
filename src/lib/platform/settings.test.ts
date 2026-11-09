@@ -11,6 +11,12 @@ vi.mock("@/lib/tenant/access", () => ({
   isPlatformAdmin: m.admin,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: m.revalidate }));
+vi.mock("@/lib/ai/model-choice", () => ({
+  loadModelTiers: async () => ({ tiers: [{ id: "normal" }, { id: "high" }], platformTier: "high" }),
+  clearModelChoiceCache: () => {},
+  verifyModel: async () => null,
+  MODEL_PATTERN: /^[A-Za-z0-9][A-Za-z0-9._:-]{1,79}$/,
+}));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({
     from: () => ({
@@ -73,7 +79,7 @@ it("loads persisted values and defaults only for a missing migration", async () 
     onboarding_steps: ["businessType", "aiMode"],
   };
   m.read.mockResolvedValue({ data, error: null });
-  expect(await getAppSettings()).toEqual({...data, onboarding_mode: "manual", ai_model: null});
+  expect(await getAppSettings()).toEqual({...data, onboarding_mode: "manual", model_tier: "high"});
   m.read.mockResolvedValue({ data: null, error: { code: "42P01" } });
   expect(await getAppSettings()).toEqual(defaultAppSettings);
   m.read.mockResolvedValue({

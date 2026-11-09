@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ response: vi.fn() }));
 vi.mock("openai", () => ({ default: class { responses = { create: m.response }; } }));
-vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test" }));
+vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test", modelFor: () => "test" }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({from: () => { const q = { select:vi.fn().mockReturnThis(), eq:vi.fn().mockReturnThis(), order:vi.fn().mockReturnThis(), limit:vi.fn().mockReturnThis(), returns:vi.fn().mockResolvedValue({data:[],error:null}) };return q; }}) }));
 import { planRequest } from "./service";
 import { readProposal } from "./model";

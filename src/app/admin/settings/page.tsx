@@ -2,13 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { getAppSettings } from "@/lib/platform/settings";
-import { saveAppSettings } from "@/lib/platform/actions";
+import { saveAppSettings, saveModelTiers } from "@/lib/platform/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { Icon } from "@/components/dashboard/icon";
 import { PageHeading } from "@/components/dashboard/ui";
 import { questions } from "@/lib/onboarding/model";
-import { agentModel } from "@/lib/agents/model";
-import { MODEL_SUGGESTIONS } from "@/lib/ai/model-choice";
+import { agentModel, MODEL_ROLES } from "@/lib/agents/model";
+import { loadModelTiers, MODEL_SUGGESTIONS, ROLE_LABELS, tierModel } from "@/lib/ai/model-choice";
 import "./settings.css";
 
 function SectionHead({ icon, title, description }: { icon: string; title: string; description: string }) {
@@ -29,6 +29,7 @@ export default async function PlatformSettingsPage() {
   const settings = await getAppSettings();
   const enabled = new Set(settings.onboarding_steps);
   const steps = questions.filter((q) => !["aiMode", "teamSize"].includes(q.key));
+  const { tiers } = await loadModelTiers();
   return (
     <>
       <PageHeading
@@ -38,17 +39,25 @@ export default async function PlatformSettingsPage() {
       />
       <ActionForm action={saveAppSettings} className="settings-layout">
         <section className="panel settings-section" aria-labelledby="settings-ai">
-          <SectionHead icon="spark" title="Inteligjenca artificiale" description="Modeli që përdorin agjenti, asistenti dhe analizat." />
-          <div className="settings-field">
-            <label className="form-label" htmlFor="ai-model" id="settings-ai">Modeli i AI për të gjitha bizneset</label>
-            <input className="field" id="ai-model" name="ai_model" list="ai-model-suggestions" maxLength={80}
-              defaultValue={settings.ai_model ?? ""} placeholder={`Bosh = ${agentModel()}`} autoComplete="off" spellCheck={false} />
-            <datalist id="ai-model-suggestions">{MODEL_SUGGESTIONS.map((model) => <option key={model} value={model} />)}</datalist>
+          <SectionHead icon="spark" title="Inteligjenca artificiale" description="Grupi i modeleve që përdorin të gjitha bizneset, përveç atyre me grup të vetin." />
+          <fieldset className="settings-field">
+            <legend className="form-label" id="settings-ai">Grupi i platformës</legend>
+            {tiers.length ? <div className="settings-choice-grid settings-choice-grid-3">
+              {tiers.map((tier) => (
+                <label className="settings-choice" key={tier.id}>
+                  <input type="radio" name="model_tier" value={tier.id} defaultChecked={settings.model_tier === tier.id} />
+                  <span>
+                    <strong>{tier.label}</strong>
+                    {MODEL_ROLES.map((role) => <small key={role}>{ROLE_LABELS[role]}: {tierModel(tier, role)}</small>)}
+                  </span>
+                </label>
+              ))}
+            </div> : <p className="settings-hint">Duhet aplikuar migrimi i grupeve të modeleve.</p>}
             <p className="settings-hint">
-              Bosh përdor parazgjedhjen e serverit ({agentModel()}). Modeli kontrollohet te OpenAI para ruajtjes.
-              Një biznes mund të ketë modelin e vet te <Link className="soft-link" href="/admin/businesses">Bizneset</Link>.
+              Një biznes mund të vendoset në një grup tjetër te <Link className="soft-link" href="/admin/businesses">Bizneset</Link>.
+              Modelet e secilit grup ndryshohen te <a className="soft-link" href="#model-groups">Grupet e modeleve</a>.
             </p>
-          </div>
+          </fieldset>
         </section>
 
         <section className="panel settings-section" aria-labelledby="settings-onboarding">
@@ -123,6 +132,35 @@ export default async function PlatformSettingsPage() {
           <p>Ndryshimet vlejnë për të gjitha bizneset në hapjen ose rifreskimin e ardhshëm të faqeve.</p>
           <button className="btn btn-primary" type="submit">Ruaj cilësimet</button>
         </div>
+      </ActionForm>
+
+      <ActionForm action={saveModelTiers} className="settings-layout settings-groups">
+        <section className="panel settings-section" id="model-groups" aria-labelledby="settings-groups">
+          <SectionHead icon="settings" title="Grupet e modeleve" description="Çdo grup ka një model për secilin lloj pune. Bosh përdor parazgjedhjen e serverit." />
+          <datalist id="model-suggestions">{MODEL_SUGGESTIONS.map((model) => <option key={model} value={model} />)}</datalist>
+          <p className="settings-hint" id="settings-groups">
+            Parazgjedhja e serverit: <strong>{agentModel()}</strong>. Modelet e reja kontrollohen te OpenAI para ruajtjes.
+          </p>
+          <div className="settings-group-grid">
+            {tiers.map((tier) => (
+              <fieldset className="settings-group" key={tier.id}>
+                <legend className="sr-only">{tier.label}</legend>
+                <label className="form-label">Emri i grupit
+                  <input className="field" name={`${tier.id}:label`} defaultValue={tier.label} maxLength={40} required />
+                </label>
+                {MODEL_ROLES.map((role) => (
+                  <label className="form-label" key={role}>{ROLE_LABELS[role]}
+                    <input className="field" name={`${tier.id}:${role}`} list="model-suggestions" maxLength={80}
+                      defaultValue={tier[`${role}_model`] ?? ""} placeholder={agentModel()} autoComplete="off" spellCheck={false} />
+                  </label>
+                ))}
+              </fieldset>
+            ))}
+          </div>
+          <div className="settings-group-actions">
+            <button className="btn btn-ghost" type="submit">Ruaj grupet</button>
+          </div>
+        </section>
       </ActionForm>
     </>
   );

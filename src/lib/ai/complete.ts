@@ -1,5 +1,5 @@
 import OpenAI from "@/lib/ai/openai";
-import { agentModel } from "@/lib/agents/generate";
+import { modelFor } from "@/lib/agents/generate";
 
 export async function completeText(params: {
   instructions: string;
@@ -19,7 +19,7 @@ export async function completeText(params: {
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const response = await client.responses.create({
-      model: agentModel(),
+      model: modelFor("assistant"),
       instructions: params.instructions,
       input: params.input,
     });

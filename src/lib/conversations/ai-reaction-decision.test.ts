@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const model = vi.hoisted(() => ({ create: vi.fn(), options: vi.fn() }));
 vi.mock("openai", () => ({ default: class { constructor(options: unknown) { model.options(options); } responses = { create: model.create }; } }));
-vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "existing-test-model" }));
+vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "existing-test-model", modelFor: () => "existing-test-model" }));
 import { decideAiReaction, hasUnfinishedWork } from "./ai-reaction-decision";
 import { emptyState } from "@/lib/workflows/engine";
 import { initialSnapshot, type InstanceStatus } from "@/lib/orchestration/contracts";

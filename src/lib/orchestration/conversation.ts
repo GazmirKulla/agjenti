@@ -7,7 +7,7 @@ import { agentConfigurationColumns, configurationRead } from "@/lib/agents/confi
 import { readBusinessGrounding } from "@/lib/agents/business-grounding";
 import { runtimeModules, CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
 import { isIsolatedExecution, recordExternalAction, snapshotExternalActions } from "@/lib/runtime/execution-context";
-import { agentModel } from "@/lib/agents/model";
+import { modelFor } from "@/lib/agents/model";
 import { initialSnapshot, TransitionError, type Snapshot, type ToolPolicy } from "./contracts";
 import { visualNodeForStep } from "./visual-definition";
 import { interpretCustomer } from "./interpret";
@@ -232,7 +232,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
         visited: [...new Set((active.visited ?? []).map(id => editorStep(version, id)))], values: Object.fromEntries(Object.values(active.facts).map(f => [f.fieldId, String(f.value)])), awaiting: !!active.wait } } } : {}),
     externalActions: snapshotExternalActions(),
     ...(handoff ? { handoff: true, advisoryHandoff: mode === "test" } : {}),
-    debug: { model: agentModel(), source: "ai", fallbackReason: null, agentConfigured: !!agent?.instructions, knowledgeCount: grounding.knowledge.records.length,
+    debug: { model: modelFor("customer"), source: "ai", fallbackReason: null, agentConfigured: !!agent?.instructions, knowledgeCount: grounding.knowledge.records.length,
       productCount: grounding.products.records.length, trainingMemoryIds: training.rules.map(r => r.id), workflowSteps: definition?.steps.map(s => s.id) ?? [], elapsedMs: Date.now() - started },
   };
 }

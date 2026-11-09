@@ -3,7 +3,7 @@ const m = vi.hoisted(() => ({ response: vi.fn(), load: vi.fn(), prepare: vi.fn()
 vi.mock("@/lib/capabilities/assessment", () => ({ assessBusinessCapabilities: m.assess, summarizeCapabilityAssessments: (v: unknown) => v }));
 vi.mock("./orderflow-service", () => ({ loadOrderFlows:m.orderLoad, prepareOrderFlow:m.orderPrepare, executeOrderFlow:vi.fn(), refineOrderFlowProposal:vi.fn(), orderFlowInstructions:"orderflow instructions" }));
 vi.mock("openai", () => ({ default: class { responses = { create: m.response }; } }));
-vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test" }));
+vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test", modelFor: () => "test" }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({}) }));
 vi.mock("./workflow-service", async importOriginal => ({ ...await importOriginal<typeof import("./workflow-service")>(), loadAssistantWorkflow: m.load, prepareWorkflow: m.prepare, executeWorkflow: vi.fn() }));
 import { planRequest, type Access } from "./service";
