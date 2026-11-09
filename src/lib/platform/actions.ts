@@ -77,8 +77,14 @@ export async function saveModelTiers(form: FormData) {
     if (error)
       return { error: ["42P01", "PGRST205"].includes(error.code) ? "Duhet aplikuar migrimi i grupeve të modeleve." : "Grupet nuk u ruajtën. Provo përsëri." };
   }
+  const platformTier = String(form.get("model_tier") ?? "");
+  if (platformTier) {
+    if (!tiers.some((tier) => tier.id === platformTier)) return { error: "Zgjidh një grup modelesh ekzistues." };
+    const { error } = await db.from("app_settings").update({ model_tier: platformTier, updated_by: user.id, updated_at: new Date().toISOString() }).eq("id", true);
+    if (error) return { error: "Grupi i platformës nuk u ruajt. Provo përsëri." };
+  }
   clearModelChoiceCache();
   revalidatePath("/admin/settings");
   revalidatePath("/admin/businesses");
-  return { success: "Modelet e grupeve u ruajtën. Vlejnë menjëherë për thirrjet e reja." };
+  return { success: "Modelet u ruajtën. Vlejnë menjëherë për thirrjet e reja." };
 }

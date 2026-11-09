@@ -8,8 +8,15 @@ import { Icon } from "@/components/dashboard/icon";
 import { PageHeading } from "@/components/dashboard/ui";
 import { questions } from "@/lib/onboarding/model";
 import { agentModel, MODEL_ROLES } from "@/lib/agents/model";
-import { loadModelTiers, MODEL_SUGGESTIONS, ROLE_LABELS, tierModel } from "@/lib/ai/model-choice";
+import { loadModelTiers, MODEL_SUGGESTIONS, ROLE_LABELS } from "@/lib/ai/model-choice";
+import { createServiceSupabase } from "@/lib/supabase/service";
 import "./settings.css";
+
+const ROLE_HINTS = {
+  customer: "Kuptimi i mesazhit, katalogu dhe përgjigjja te klienti.",
+  assistant: "Planet, ndryshimet, importet dhe analizat për pronarin.",
+  utility: "Klasifikime të shkurtra që ndodhin shpesh.",
+} as const;
 
 function SectionHead({ icon, title, description }: { icon: string; title: string; description: string }) {
   return (
@@ -30,6 +37,10 @@ export default async function PlatformSettingsPage() {
   const enabled = new Set(settings.onboarding_steps);
   const steps = questions.filter((q) => !["aiMode", "teamSize"].includes(q.key));
   const { tiers } = await loadModelTiers();
+  // How many businesses chose each group themselves (the rest follow the platform).
+  const { data: chosen } = await createServiceSupabase().from("businesses").select("model_tier").not("model_tier", "is", null);
+  const businessesByTier = new Map<string, number>();
+  for (const row of chosen ?? []) businessesByTier.set(row.model_tier, (businessesByTier.get(row.model_tier) ?? 0) + 1);
   return (
     <>
       <PageHeading
@@ -37,29 +48,60 @@ export default async function PlatformSettingsPage() {
         title="Cilësimet"
         description="Cilësimet që vlejnë për të gjitha bizneset në Agjenti.app."
       />
-      <ActionForm action={saveAppSettings} className="settings-layout">
+      <ActionForm action={saveModelTiers} className="settings-layout settings-ai-form">
         <section className="panel settings-section" aria-labelledby="settings-ai">
-          <SectionHead icon="spark" title="Inteligjenca artificiale" description="Grupi i modeleve që përdorin të gjitha bizneset, përveç atyre me grup të vetin." />
-          <fieldset className="settings-field">
-            <legend className="form-label" id="settings-ai">Grupi i platformës</legend>
-            {tiers.length ? <div className="settings-choice-grid settings-choice-grid-3">
-              {tiers.map((tier) => (
-                <label className="settings-choice" key={tier.id}>
-                  <input type="radio" name="model_tier" value={tier.id} defaultChecked={settings.model_tier === tier.id} />
-                  <span>
-                    <strong>{tier.label}</strong>
-                    {MODEL_ROLES.map((role) => <small key={role}>{ROLE_LABELS[role]}: {tierModel(tier, role)}</small>)}
-                  </span>
-                </label>
-              ))}
-            </div> : <p className="settings-hint">Duhet aplikuar migrimi i grupeve të modeleve.</p>}
+          <SectionHead icon="spark" title="Modelet e AI" description="Çdo grup ka një model për secilin lloj pune. Platforma përdor një grup; një biznes mund të ketë grupin e vet." />
+          <datalist id="model-suggestions">{MODEL_SUGGESTIONS.map((model) => <option key={model} value={model} />)}</datalist>
+          {tiers.length ? <div className="model-matrix-scroll">
+            <table className="model-matrix">
+              <caption className="sr-only" id="settings-ai">Modelet sipas grupit dhe llojit të punës</caption>
+              <thead>
+                <tr>
+                  <th scope="col" className="model-matrix-corner">Lloji i punës</th>
+                  {tiers.map((tier) => (
+                    <th scope="col" key={tier.id} className={settings.model_tier === tier.id ? "is-platform" : undefined}>
+                      <input className="field model-matrix-name" name={`${tier.id}:label`} defaultValue={tier.label} maxLength={40} required aria-label={`Emri i grupit ${tier.label}`} />
+                      <label className="model-matrix-platform">
+                        <input type="radio" name="model_tier" value={tier.id} defaultChecked={settings.model_tier === tier.id} />
+                        <span>Grupi i platformës</span>
+                      </label>
+                      <small className="model-matrix-count">
+                        {(businessesByTier.get(tier.id) ?? 0) === 0 ? "Asnjë biznes specifik" : `${businessesByTier.get(tier.id)} biznes${businessesByTier.get(tier.id) === 1 ? "" : "e"} specifik${businessesByTier.get(tier.id) === 1 ? "" : "e"}`}
+                      </small>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {MODEL_ROLES.map((role) => (
+                  <tr key={role}>
+                    <th scope="row">
+                      {ROLE_LABELS[role]}
+                      <small>{ROLE_HINTS[role]}</small>
+                    </th>
+                    {tiers.map((tier) => (
+                      <td key={tier.id} className={settings.model_tier === tier.id ? "is-platform" : undefined}>
+                        <input className="field" name={`${tier.id}:${role}`} list="model-suggestions" maxLength={80}
+                          defaultValue={tier[`${role}_model`] ?? ""} placeholder={agentModel()} autoComplete="off" spellCheck={false}
+                          aria-label={`${ROLE_LABELS[role]} · ${tier.label}`} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div> : <p className="settings-hint">Duhet aplikuar migrimi i grupeve të modeleve.</p>}
+          <div className="settings-inline-actions">
             <p className="settings-hint">
-              Një biznes mund të vendoset në një grup tjetër te <Link className="soft-link" href="/admin/businesses">Bizneset</Link>.
-              Modelet e secilit grup ndryshohen te <a className="soft-link" href="#model-groups">Grupet e modeleve</a>.
+              Bosh përdor parazgjedhjen e serverit (<strong>{agentModel()}</strong>). Modelet e reja kontrollohen te OpenAI para ruajtjes.
+              Grupin e një biznesi e zgjedh te <Link className="settings-text-link" href="/admin/businesses">Bizneset</Link>.
             </p>
-          </fieldset>
+            <button className="btn btn-primary" type="submit">Ruaj modelet</button>
+          </div>
         </section>
+      </ActionForm>
 
+      <ActionForm action={saveAppSettings} className="settings-layout">
         <section className="panel settings-section" aria-labelledby="settings-onboarding">
           <SectionHead icon="businesses" title="Onboarding i bizneseve të reja" description="Si krijohet hapësira dhe cilat pyetje bëhen." />
           <fieldset className="settings-field">
@@ -134,34 +176,6 @@ export default async function PlatformSettingsPage() {
         </div>
       </ActionForm>
 
-      <ActionForm action={saveModelTiers} className="settings-layout settings-groups">
-        <section className="panel settings-section" id="model-groups" aria-labelledby="settings-groups">
-          <SectionHead icon="settings" title="Grupet e modeleve" description="Çdo grup ka një model për secilin lloj pune. Bosh përdor parazgjedhjen e serverit." />
-          <datalist id="model-suggestions">{MODEL_SUGGESTIONS.map((model) => <option key={model} value={model} />)}</datalist>
-          <p className="settings-hint" id="settings-groups">
-            Parazgjedhja e serverit: <strong>{agentModel()}</strong>. Modelet e reja kontrollohen te OpenAI para ruajtjes.
-          </p>
-          <div className="settings-group-grid">
-            {tiers.map((tier) => (
-              <fieldset className="settings-group" key={tier.id}>
-                <legend className="sr-only">{tier.label}</legend>
-                <label className="form-label">Emri i grupit
-                  <input className="field" name={`${tier.id}:label`} defaultValue={tier.label} maxLength={40} required />
-                </label>
-                {MODEL_ROLES.map((role) => (
-                  <label className="form-label" key={role}>{ROLE_LABELS[role]}
-                    <input className="field" name={`${tier.id}:${role}`} list="model-suggestions" maxLength={80}
-                      defaultValue={tier[`${role}_model`] ?? ""} placeholder={agentModel()} autoComplete="off" spellCheck={false} />
-                  </label>
-                ))}
-              </fieldset>
-            ))}
-          </div>
-          <div className="settings-group-actions">
-            <button className="btn btn-ghost" type="submit">Ruaj grupet</button>
-          </div>
-        </section>
-      </ActionForm>
     </>
   );
 }

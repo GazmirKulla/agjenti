@@ -11,10 +11,10 @@
 .settings-hint { margin: 0; color: var(--ink-muted); font-size: 12px; line-height: 1.6; }
 .settings-hint-top { margin-bottom: 4px; }
 .settings-link { justify-self: start; font-size: 13px; margin-top: 4px; }
+.settings-text-link { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Mode: two selectable cards, using the shared radio button. */
 .settings-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.settings-choice-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .settings-choice { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); cursor: pointer; transition: border-color .15s, background .15s; }
 .settings-choice input { margin-top: 2px; }
 .settings-choice span { display: grid; gap: 4px; }
@@ -30,29 +30,36 @@
 .settings-toggle small { display: block; margin-top: 3px; color: var(--ink-muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
 .settings-toggle-wide { padding: 14px 16px; }
 
-.settings-groups { margin-top: 16px; }
-.settings-group-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.settings-group { display: grid; gap: 10px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
-.settings-group .form-label { display: grid; gap: 6px; font-size: 12px; }
-.settings-group .field { width: 100%; box-sizing: border-box; }
-.settings-group-actions { display: flex; justify-content: flex-end; }
+/* AI models: kinds of work (rows) × groups (columns). */
+.settings-ai-form { margin-bottom: 16px; }
+.model-matrix-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.model-matrix { width: 100%; min-width: 640px; border-collapse: separate; border-spacing: 0; }
+.model-matrix th, .model-matrix td { padding: 10px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.model-matrix tbody tr:last-child th, .model-matrix tbody tr:last-child td { border-bottom: 0; }
+.model-matrix thead th { vertical-align: bottom; font-weight: 500; }
+.model-matrix-corner { width: 26%; color: var(--ink-muted); font-size: 12px; }
+.model-matrix tbody th { font-size: 13px; font-weight: 600; color: var(--ink); }
+.model-matrix tbody th small { display: block; margin-top: 3px; color: var(--ink-muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
+.model-matrix .field { width: 100%; box-sizing: border-box; min-height: 38px; padding: 8px 10px; font-size: 13px; }
+.model-matrix-name.field { font-weight: 650; font-size: 14px; }
+.model-matrix-platform { display: inline-flex; align-items: center; gap: 7px; margin-top: 8px; font-size: 12px; color: var(--ink-muted); cursor: pointer; }
+.model-matrix-platform:has(input:checked) { color: var(--accent); font-weight: 600; }
+.model-matrix-count { display: block; margin-top: 4px; color: var(--ink-muted); font-size: 11px; }
+.model-matrix th.is-platform, .model-matrix td.is-platform { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.model-matrix thead th.is-platform { border-radius: 12px 12px 0 0; }
+.model-matrix tbody tr:last-child td.is-platform { border-radius: 0 0 12px 12px; }
+.settings-inline-actions { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.settings-inline-actions .btn { flex-shrink: 0; }
+
 .settings-savebar { position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px 12px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-soft); }
 .settings-savebar p { margin: 0; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
 .settings-savebar .btn { flex-shrink: 0; }
 .settings-layout .form-feedback { margin: 0; }
 
-@media (max-width: 980px) {
-  .settings-choice-grid-3, .settings-group-grid { grid-template-columns: 1fr; }
-}
 @media (max-width: 760px) {
   .settings-section { padding: 18px 16px; }
-  .settings-choice-grid, .settings-choice-grid-3, .settings-toggle-grid, .settings-group-grid { grid-template-columns: 1fr; }
-  .settings-groups { margin-top: 16px; }
-.settings-group-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.settings-group { display: grid; gap: 10px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
-.settings-group .form-label { display: grid; gap: 6px; font-size: 12px; }
-.settings-group .field { width: 100%; box-sizing: border-box; }
-.settings-group-actions { display: flex; justify-content: flex-end; }
-.settings-savebar { flex-direction: column; align-items: stretch; bottom: 8px; }
+  .settings-choice-grid, .settings-toggle-grid { grid-template-columns: 1fr; }
+  .settings-savebar { flex-direction: column; align-items: stretch; bottom: 8px; }
   .settings-savebar p { display: none; }
+  .settings-inline-actions { flex-direction: column; align-items: stretch; }
 }
