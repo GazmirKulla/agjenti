@@ -1,6 +1,7 @@
 import { ActionForm } from "@/components/dashboard/action-form";
 import { BusinessNameField } from "@/components/dashboard/business-name-field";
 import { DeleteBusinessPanel } from "@/components/dashboard/delete-business";
+import { loadPlatformUsage } from "@/lib/admin/usage";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import {
@@ -21,7 +22,7 @@ export default async function AdminBusinessesPage() {
     { data: businesses, error: loadError },
     { data: integrations },
     { data: memberships },
-    { data: aiUsageRows },
+    usage,
   ] = await Promise.all([
     service
       .from("businesses")
@@ -35,20 +36,11 @@ export default async function AdminBusinessesPage() {
       .from("business_users")
       .select("business_id,user_id,role,created_at")
       .order("created_at"),
-    // Token cost is a platform statistic, shown only here to administrators.
-    service
-      .from("ai_usage_daily")
-      .select("business_id,calls,input_tokens,output_tokens")
-      .gte("day", new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Tirane", year: "numeric", month: "2-digit" }).format(new Date()) + "-01"),
+    // Messages and token cost this month; tokens are shown only to administrators.
+    loadPlatformUsage().catch(() => null),
   ]);
-  const tokensByBusiness = new Map<string, { calls: number; tokens: number }>();
-  for (const row of aiUsageRows ?? []) {
-    const current = tokensByBusiness.get(row.business_id) ?? { calls: 0, tokens: 0 };
-    tokensByBusiness.set(row.business_id, {
-      calls: current.calls + (Number(row.calls) || 0),
-      tokens: current.tokens + (Number(row.input_tokens) || 0) + (Number(row.output_tokens) || 0),
-    });
-  }
+  const usageByBusiness = new Map((usage?.businesses ?? []).map((b) => [b.businessId, b] as const));
+  const num = (value: number) => value.toLocaleString("sq-AL");
   const businessesFallback =
     loadError && ["42P01", "PGRST205", "42703"].includes(loadError.code)
       ? await service
@@ -231,7 +223,7 @@ export default async function AdminBusinessesPage() {
       <RecordBrowser
         listTitle="Të gjitha bizneset"
         placeholder="Kërko biznes ose slug…"
-        columns={["Biznesi", "Katalogu", "Përgjigje automatike", "Dy agjentë", "Tokena këtë muaj", "Onboarding"]}
+        columns={["Biznesi", "Pronari", "Përgjigje automatike", "Mesazhe / tokena (muaji)"]}
         createLabel="Shto biznes"
         createAsModal
         createForm={
@@ -257,21 +249,16 @@ export default async function AdminBusinessesPage() {
             title: b.name,
             subtitle: `/${b.slug}`,
             cells: [
-              linkedIds.has(b.id) ? "Lidhur me API" : "Produkte në panel",
+              team.find((member) => member.role === "owner")?.display_name ||
+                team.find((member) => member.role === "owner")?.email ||
+                "Pa pronar",
               <StatusBadge
                 key="ai"
                 status={b.auto_reply ? "connected" : "paused"}
               />,
-              b.allow_multiple_agents ? "Po" : "Jo",
-              (tokensByBusiness.get(b.id)?.tokens ?? 0).toLocaleString("sq-AL"),
-              <Link
-                key="onboarding"
-                className="btn btn-ghost"
-                href={`/b/${b.slug}/setup`}
-                aria-label={`Onboarding për ${b.name}`}
-              >
-                Onboarding
-              </Link>,
+              usage
+                ? `${num(usageByBusiness.get(b.id)?.messages ?? 0)} · ${num(usageByBusiness.get(b.id)?.tokens ?? 0)} tokena`
+                : "Nuk u ngarkua",
             ],
             detail: (
               <>
@@ -304,13 +291,22 @@ export default async function AdminBusinessesPage() {
                       <dd>{b.allow_multiple_agents ? "Të lejuar" : "Jo"}</dd>
                     </div>
                     <div>
-                      <dt>AI këtë muaj</dt>
-                      <dd>{(tokensByBusiness.get(b.id)?.tokens ?? 0).toLocaleString("sq-AL")} tokena · {(tokensByBusiness.get(b.id)?.calls ?? 0).toLocaleString("sq-AL")} thirrje</dd>
+                      <dt>Mesazhe AI këtë muaj</dt>
+                      <dd>{num(usageByBusiness.get(b.id)?.messages ?? 0)}</dd>
+                    </div>
+                    <div>
+                      <dt>Tokena këtë muaj</dt>
+                      <dd>{num(usageByBusiness.get(b.id)?.tokens ?? 0)} · {num(usageByBusiness.get(b.id)?.calls ?? 0)} thirrje</dd>
                     </div>
                   </dl>
-                  <Link className="soft-link" href={`/b/${b.slug}`}>
-                    Hap panelin e biznesit →
-                  </Link>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <Link className="btn btn-ghost" href={`/b/${b.slug}`}>
+                      Hap panelin e biznesit →
+                    </Link>
+                    <Link className="btn btn-ghost" href={`/b/${b.slug}/setup`} aria-label={`Onboarding për ${b.name}`}>
+                      Onboarding
+                    </Link>
+                  </div>
                 </div>
                 <div className="detail-block">
                   <h3>Cilësimet e klientit</h3>

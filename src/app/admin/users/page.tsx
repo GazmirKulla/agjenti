@@ -52,17 +52,16 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
       <label className="form-label">Biznesi<select className="field" name="business" defaultValue={business}><option value="">Të gjitha bizneset</option>{options.data?.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
       <button className="btn btn-ghost self-end" type="submit">Kërko / filtro</button>
     </form>
-    <RecordBrowser hideSearch serverPage={{ page, pageSize: 25, total, search: q, path: "/admin/users", filters: { filter, business } }} listTitle="Përdoruesit" placeholder="Kërko në rezultatet e kësaj faqeje…" columns={["Përdoruesi", "Email-i", "Bizneset", "Aksesi", "Mesazhe / tokena (muaji)", "Regjistruar", "Hyrja e fundit"]}
+    <RecordBrowser hideSearch serverPage={{ page, pageSize: 25, total, search: q, path: "/admin/users", filters: { filter, business } }} listTitle="Përdoruesit" placeholder="Kërko në rezultatet e kësaj faqeje…" columns={["Përdoruesi", "Bizneset", "Mesazhe / tokena (muaji)", "Hyrja e fundit"]}
       emptyTitle="Nuk u gjetën përdorues" emptyDescription="Ndrysho kërkimin ose krijo një llogari të re."
       createLabel="Krijo përdorues" createAsModal createForm={<UserForm action="create" businesses={options.data ?? []} />}
       records={users.map(u => ({ id: u.id, title: u.name, subtitle: u.email ?? "Pa email", cells: [
-        <StatusBadge key="status" status={u.email_confirmed_at ? "connected" : "paused"} label={u.email_confirmed_at ? "I verifikuar" : "I paverifikuar"} />,
-        u.businesses.map(b => b.name).join(", ") || "Pa biznes", u.admin ? "Administrator" : "Përdorues",
+        u.admin ? "Administrator platforme" : u.businesses.map(b => b.name).join(", ") || "Pa biznes",
         usageByUser.get(u.id) ? `${num(usageByUser.get(u.id)!.messages)} / ${num(usageByUser.get(u.id)!.limit)} · ${num(usageByUser.get(u.id)!.tokens)} tokena` : usage ? "—" : "Nuk u ngarkua",
-        formatDate(u.created_at), formatDate(u.last_sign_in_at),
+        formatDate(u.last_sign_in_at),
       ], detail: <>
         <div className="detail-header"><div><h2>{u.name}</h2><p>{u.email}</p></div></div>
-        <div className="detail-block"><h3>Llogaria</h3><dl className="detail-fields"><div><dt>Statusi</dt><dd>{deletions.get(u.id) ? `Fshirje e kërkuar · fshihet përfundimisht më ${formatDate(deletions.get(u.id)!.purge_after)}` : u.banned ? "E pezulluar" : "E papezulluar"}</dd></div><div><dt>Email-i</dt><dd>{u.email_confirmed_at ? `Verifikuar më ${formatDate(u.email_confirmed_at)}` : "I paverifikuar"}</dd></div><div><dt>Aksesi</dt><dd>{u.admin ? "Administrator platforme" : "Përdorues"}</dd></div></dl></div>
+        <div className="detail-block"><h3>Llogaria</h3><dl className="detail-fields"><div><dt>Statusi</dt><dd>{deletions.get(u.id) ? `Fshirje e kërkuar · fshihet përfundimisht më ${formatDate(deletions.get(u.id)!.purge_after)}` : u.banned ? "E pezulluar" : "E papezulluar"}</dd></div><div><dt>Email-i</dt><dd>{u.email_confirmed_at ? `Verifikuar më ${formatDate(u.email_confirmed_at)}` : "I paverifikuar"}</dd></div><div><dt>Aksesi</dt><dd>{u.admin ? "Administrator platforme" : "Përdorues"}</dd></div><div><dt>Regjistruar</dt><dd>{formatDate(u.created_at)}</dd></div><div><dt>Hyrja e fundit</dt><dd>{formatDate(u.last_sign_in_at)}</dd></div></dl><StatusBadge status={u.email_confirmed_at ? "connected" : "paused"} label={u.email_confirmed_at ? "Email i verifikuar" : "Email i paverifikuar"} /></div>
         <div className="detail-block"><h3>Konsumi këtë muaj</h3>{usageByUser.get(u.id) ? <dl className="detail-fields">
           <div><dt>Paketa</dt><dd>{plans[usageByUser.get(u.id)!.plan].name} · {num(usageByUser.get(u.id)!.limit)} mesazhe/muaj</dd></div>
           <div><dt>Mesazhe AI</dt><dd>{num(usageByUser.get(u.id)!.messages)} nga {num(usageByUser.get(u.id)!.limit)}</dd></div>
