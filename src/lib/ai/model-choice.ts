@@ -4,7 +4,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 /** Valid OpenAI model id shape; the database enforces the same pattern. */
 export const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,79}$/;
 /** Suggestions in the admin form; any model the OpenAI account can use is accepted. */
-export const MODEL_SUGGESTIONS = ["gpt-5.6-luna", "gpt-5.5", "gpt-5.5-mini", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"];
+export const MODEL_SUGGESTIONS = ["gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini"];
 export const ROLE_LABELS: Record<ModelRole, string> = {
   customer: "Përgjigjet për klientët",
   assistant: "Asistenti",

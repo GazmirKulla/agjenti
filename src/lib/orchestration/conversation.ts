@@ -69,6 +69,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   if (!existing && leftoverSession(params.state)) throw new TransitionError("process_session_restart_required");
   if (existing && (existing.businessId !== params.businessId || existing.mode !== mode || transport && existing.conversationId !== transport.conversationId)) throw new TransitionError("event_scope_mismatch");
   const started = Date.now(), deadline = started + 38000;
+  // The model that actually answered, as reported by OpenAI (not the placeholder).
+  let modelUsed: string | null = null;
   const trace = params.onTrace;
   trace?.({ stage: "overview", label: "Process runtime v4", data: { mode, businessId: params.businessId, versionIds: [...versions.keys()] } });
   const db = createServiceSupabase();
@@ -168,6 +170,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       if (hasBookings) await booking.prepare(state, definitions, interpretation.observation);
       if (hasOrders) await orders.prepare(state, definitions, interpretation.observation);
       await services.prepare(state, definitions, interpretation.observation);
+      modelUsed = interpretation.model;
       trace?.({ stage: "ai", label: "Process observation validated", data: { ...interpretation.observation, model: interpretation.model,
         responseId: interpretation.responseId, usage: { input_tokens: interpretation.inputTokens, output_tokens: interpretation.outputTokens } } });
       return interpretation.observation;
@@ -232,7 +235,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
         visited: [...new Set((active.visited ?? []).map(id => editorStep(version, id)))], values: Object.fromEntries(Object.values(active.facts).map(f => [f.fieldId, String(f.value)])), awaiting: !!active.wait } } } : {}),
     externalActions: snapshotExternalActions(),
     ...(handoff ? { handoff: true, advisoryHandoff: mode === "test" } : {}),
-    debug: { model: modelFor("customer"), source: "ai", fallbackReason: null, agentConfigured: !!agent?.instructions, knowledgeCount: grounding.knowledge.records.length,
+    debug: { model: modelUsed ?? modelFor("customer"), source: "ai", fallbackReason: null, agentConfigured: !!agent?.instructions, knowledgeCount: grounding.knowledge.records.length,
       productCount: grounding.products.records.length, trainingMemoryIds: training.rules.map(r => r.id), workflowSteps: definition?.steps.map(s => s.id) ?? [], elapsedMs: Date.now() - started },
   };
 }
