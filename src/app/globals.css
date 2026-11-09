@@ -608,6 +608,7 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
 .billing-notice-urgent { border-color: #efb7a9; background: #fff1ed; color: #872915; }
 .billing-notice-exhausted { border-color: #e29180; background: #ffebe6; color: #7a2012; }
 .billing-notice .btn { flex: none; color: inherit; border-color: currentColor; white-space: nowrap; }
+.billing-notice .btn.btn-primary { color: #fff; border-color: transparent; }
 .billing-summary { display: grid; grid-template-columns: 1fr auto; gap: 14px 32px; align-items: end; }
 .billing-breakdown { margin-top: 16px; }
 .usage-section { margin-bottom: 16px; }

@@ -6,7 +6,6 @@ export const MODULE_IDS = [
   "orders",
   "bookings",
   "calendar",
-  "staff",
   "catalogs",
   "leads",
   "customers",

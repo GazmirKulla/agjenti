@@ -154,7 +154,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const result = await runProcessTurn({ state, event, env, deadline, lease: transport, adapters,
     onState: currentState => { state = currentState; },
     validate: transition => {
-      if (transition.notices.some(n => n.kind === "handoff") && modules && !modules.includes("staff")) throw new CapabilityEnforcementError("module_disabled", "Kalimi te stafi është çaktivizuar.");
+      if (transition.notices.some(n => n.kind === "handoff") && modules && !modules.includes("inbox")) throw new CapabilityEnforcementError("module_disabled", "Kalimi te stafi është çaktivizuar.");
     },
     interpret: async () => {
       const presented = visibleCatalogPresentation(state, env.now, params.deliveredReply);
@@ -179,7 +179,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   state = result.state;
   const notices = result.notices;
   const handoff = notices.some(n => n.kind === "handoff");
-  if (handoff && modules && !modules.includes("staff")) throw new CapabilityEnforcementError("module_disabled", "Kalimi te stafi është çaktivizuar.");
+  if (handoff && modules && !modules.includes("inbox")) throw new CapabilityEnforcementError("module_disabled", "Kalimi te stafi është çaktivizuar.");
   if (handoff && mode === "test") recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "process_runtime_no_staff_notification" });
   const availability: { instanceId: string; serviceId: string; date: string; starts: string[]; status: string }[] = [];
   if (hasBookings && mode === "live") {

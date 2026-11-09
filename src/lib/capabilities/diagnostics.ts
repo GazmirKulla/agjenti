@@ -26,7 +26,7 @@ const requirements: Record<string, string> = {
   action_catalog_unavailable: "Verifiko disponueshmërinë e katalogut të veprimeve në server.",
   capability_assessment: "Riprovo vlerësimin pasi të verifikohen qasja dhe konfigurimi i biznesit.",
 };
-const moduleKeys = new Set(["products", "orders", "workflows", "knowledge", "bookings", "services", "staff", "inbox"]);
+const moduleKeys = new Set(["products", "orders", "workflows", "knowledge", "bookings", "services", "inbox"]);
 const remediations: Record<string, string> = {
   semantic_review_unavailable: "Kërko rivlerësimin nga asistenti kur shërbimi AI të jetë i disponueshëm. Versioni aktiv mbetet i pandryshuar.",
   publication_limits: "Lexo kufijtë e provës dhe mirato publikimin vetëm nëse konfigurimi përputhet me qëllimin tënd. Mund ta provosh më parë në bisedën e provës.",

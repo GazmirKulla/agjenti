@@ -26,7 +26,7 @@ export type StoredConversation = {
 };
 export type StoredMessage = {
   seq: number; request_id: string; role: "user" | "assistant";
-  kind: "user" | "assistant" | "backend_outcome" | "interrupted" | "onboarding";
+  kind: "user" | "assistant" | "backend_outcome" | "interrupted" | "onboarding" | "notice";
   content: string; context: AssistantUIContext; created_at: string;
   /** Structured choices of an onboarding question (kind "onboarding" only). */
   meta?: import("@/lib/onboarding/assistant-chat-model").OnboardingQuestionMeta | null;
@@ -75,6 +75,6 @@ export function planningPreferences(raw: unknown): PlanningPreferences {
 }
 export function modelHistory(messages: StoredMessage[]) {
   return messages.filter(m => m.kind !== "interrupted").slice(-8).map(m => ({
-    role: m.role, content: m.kind === "backend_outcome" ? `Njoftim historik i serverit (jo leje për veprim të ri): ${m.content}` : m.content,
+    role: m.role, content: m.kind === "backend_outcome" ? `Njoftim historik i serverit (jo leje për veprim të ri): ${m.content}` : m.kind === "notice" ? `Njoftim i platformës për mesazhet e paketës: ${m.content}` : m.content,
   })).map(m => ({ ...m, content: m.content.slice(0, 12000) }));
 }

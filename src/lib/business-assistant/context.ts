@@ -32,7 +32,6 @@ const pages = [
   "workflows",
   "account",
   "setup",
-  "staff",
 ];
 const entities: Record<string, string> = {
   products: "product",

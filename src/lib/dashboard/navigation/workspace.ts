@@ -10,7 +10,7 @@ export function workspaceLabel(item: WorkspaceLink) { return workspaceLabels[ite
 export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "settings" | "integrations" | "business" | "products" | "services" | "orders" | "leads" | "customers";
 const standaloneIds = ["products", "services", "orders", "leads", "customers"] as const;
 const agentIds = new Set(["agents", "knowledge", "workflows", "sources"]);
-const settingsIds = new Set(["settings", "staff"]);
+const settingsIds = new Set(["settings"]);
 const integrationIds = new Set(["instagram", "whatsapp"]);
 
 /** Presentation only: keep module permissions, URLs and page implementations intact. */

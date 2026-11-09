@@ -37,7 +37,7 @@ export default async function ActionsPage({ searchParams }: { searchParams?: Pro
   // Only modules that store their own records can show usage.
   const measured = new Set<ModuleId>(["products", "services", "orders", "bookings", "calendar", "catalogs", "knowledge", "customers", "workflows"]);
   const withData = (id: ModuleId) => (businesses ?? []).filter((b) => usedBy.get(b.id)?.has(id));
-  const modules = navigationOrder.filter((id) => id !== "staff");
+  const modules = navigationOrder;
   const requirement = (id: ModuleId) => {
     const rule = moduleDependencies[id];
     const names = (rule.requires ?? rule.requiresAny ?? []).map((dep) => moduleRegistry[dep].label);

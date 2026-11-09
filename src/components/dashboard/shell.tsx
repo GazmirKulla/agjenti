@@ -424,10 +424,10 @@ export function AppShell({
           {!admin && aiUsage !== undefined && (
             <p
               className="ai-usage-pill"
-              title={`${aiUsage.calls.toLocaleString(language === "en" ? "en-GB" : "sq-AL")} ${t("thirrje te OpenAI për këtë biznes që nga fillimi i muajit")}`}
+              title={`${groupDigits(aiUsage.calls, language)} ${t("thirrje te OpenAI për këtë biznes që nga fillimi i muajit")}`}
             >
               <Icon name="spark" size={16} />
-              <strong>{aiUsage.tokens.toLocaleString(language === "en" ? "en-GB" : "sq-AL")}</strong>
+              <strong>{groupDigits(aiUsage.tokens, language)}</strong>
               <span>{t("tokena këtë muaj")}</span>
             </p>
           )}
@@ -470,3 +470,9 @@ export function AppShell({
 
 // Compatibility for the independent administrator layout.
 export { AppShell as DashboardShell };
+
+/** Same text on the server and in the browser: Node and browsers ship different
+ * locale data for "sq-AL" (3232 vs 3,232), which breaks hydration. */
+function groupDigits(value: number, language: string) {
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, language === "en" ? "," : "\u00a0");
+}

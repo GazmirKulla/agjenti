@@ -4,10 +4,11 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { billingState, loadBillingUsage, loadUsageBreakdown, plans } from "@/lib/billing/service";
 
 const planFeatures = {
-  free: ["1,000 mesazhe AI në muaj", "Biznese pa kufi", "Rinovim më datë 1 të muajit"],
-  starter: ["10,000 mesazhe AI në muaj", "Biznese pa kufi", "Analitika bazë"],
-  professional: ["50,000 mesazhe AI në muaj", "WhatsApp, Instagram dhe Messenger", "AI e avancuar dhe webhook-e"],
-  enterprise: ["200,000 mesazhe AI në muaj", "Të gjitha platformat", "Trajnim i pakufizuar dhe suport prioritar"],
+  // Every plan has every feature; plans differ only in AI messages per month.
+  free: ["1,000 mesazhe AI në muaj", "Të gjitha modulet dhe kanalet", "Biznese pa kufi", "Rinovim më datë 1 të muajit"],
+  starter: ["10,000 mesazhe AI në muaj", "Të gjitha modulet dhe kanalet", "Biznese pa kufi", "Rinovim në datën e abonimit"],
+  professional: ["50,000 mesazhe AI në muaj", "Të gjitha modulet dhe kanalet", "Biznese pa kufi", "Rinovim në datën e abonimit"],
+  enterprise: ["200,000 mesazhe AI në muaj", "Të gjitha modulet dhe kanalet", "Biznese pa kufi", "Suport prioritar"],
 } as const;
 
 function dateLabel(value: string) {

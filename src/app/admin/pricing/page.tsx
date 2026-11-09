@@ -18,11 +18,11 @@ export default async function AdminPricingPage() {
     <PageHeading
       eyebrow="MONETIZIMI"
       title="Çmimet"
-      description="Paketat vendosen për çdo biznes. Një përdorues mund të menaxhojë disa biznese me paketa të ndryshme."
+      description="Paketa i përket përdoruesit që paguan dhe vlen për të gjitha bizneset e tij. Të gjitha funksionet janë në çdo paketë; paketat ndryshojnë vetëm në mesazhet AI."
     />
     <section className="panel section-pad admin-pricing-note">
       <strong>Matja e përdorimit</strong>
-      <p>Numërohen vetëm përgjigjet automatike të dërguara nga agjenti. Mesazhet hyrëse dhe përgjigjet manuale të stafit nuk konsumojnë kapacitet.</p>
+      <p>Çdo përgjigje AI numërohet si një mesazh: përgjigjet automatike te klientët dhe përgjigjet e asistentit për pronarin. Mesazhet hyrëse dhe përgjigjet manuale të stafit nuk numërohen.</p>
     </section>
     <section className="billing-plans" aria-label="Paketat e platformës">
       {(Object.keys(plans) as Array<keyof typeof plans>).map((key) => {
@@ -33,7 +33,7 @@ export default async function AdminPricingPage() {
             {plan.monthlyPrice === 0 ? "Falas" : `${plan.monthlyPrice.toLocaleString("sq-AL")} lekë`}
             <small>{plan.monthlyPrice === 0 ? "" : " / muaj"}</small>
           </p>
-          <p className="muted-copy">{plan.monthlyLimit.toLocaleString("sq-AL")} mesazhe automatike / muaj</p>
+          <p className="muted-copy">{plan.monthlyLimit.toLocaleString("sq-AL")} mesazhe AI / muaj · të gjitha modulet</p>
           <p className="billing-plan-status">{details[key]}</p>
         </article>;
       })}

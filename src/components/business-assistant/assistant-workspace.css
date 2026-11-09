@@ -55,3 +55,4 @@
 .assistant-module-hint-actions button.is-primary { border-color: var(--accent); background: var(--primary); color: var(--on-primary); }
 .assistant-module-hint-actions button:focus-visible, .assistant-module-hint-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .assistant-module-hint-all { justify-self: start; color: var(--accent); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.assistant-message .assistant-notice-link { display: inline-flex; margin-top: 8px; min-height: 32px; padding: 6px 12px; font-size: 13px; }

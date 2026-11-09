@@ -666,6 +666,7 @@ export function BusinessAssistant({
                 <p>{message.content}</p>
                 {message.kind === "backend_outcome" && <small>Njoftim historik i backend-it · jo miratim për veprim të ri</small>}
                 {message.kind === "interrupted" && <small>Rezultat i pakonfirmuar</small>}
+                {message.kind === "notice" && <Link className="btn btn-ghost assistant-notice-link" href={`/b/${slug}/billing`}>Shiko paketat</Link>}
                 {message.materials?.length ? <div className="unified-attachments">{message.materials.map((item, index) => <FileCard key={index} item={item}/>)}</div> : null}
                 {message.role === "user" && <small className="chat-receipt">seen</small>}
                 {message.role === "assistant" && (

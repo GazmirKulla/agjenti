@@ -94,7 +94,9 @@ export async function deliverMobileNotifications() {
                   ? "Veprimi yt ka një rezultat të konfirmuar."
                   : event.kind === "interrupted"
                     ? "Një kërkesë ka nevojë për kontroll."
-                    : "Asistenti ka një përgjigje për ty.",
+                    : event.kind === "notice"
+                      ? "Njoftim për mesazhet e paketës."
+                      : "Asistenti ka një përgjigje për ty.",
               sound: "default",
               channelId: "assistant",
               data: {

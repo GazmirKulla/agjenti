@@ -58,13 +58,6 @@ export const moduleRegistry: Record<ModuleId, ModuleDefinition> = {
     icon: "calendar",
     description: "Orari dhe slotet",
   },
-  staff: {
-    id: "staff",
-    path: "staff",
-    label: "Stafi",
-    icon: "businesses",
-    description: "Anëtarët e ekipit",
-  },
   catalogs: {
     id: "catalogs",
     path: "catalogs",
@@ -166,7 +159,6 @@ export const moduleDependencies: Record<ModuleId, ModuleDependencyRule> = {
   orders: { requiresAny: ["products"] },
   bookings: { requires: ["services"] },
   calendar: { requiresAny: ["bookings"] },
-  staff: { independent: true },
   catalogs: { independent: true },
   leads: { independent: true },
   customers: { independent: true },

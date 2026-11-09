@@ -72,7 +72,8 @@ export default async function BusinessLayout({
           {settings.announcement}
         </div>
       )}
-      <BillingUsageNotice slug={business.slug} usage={billingUsage} />
+      <BillingUsageNotice slug={business.slug} usage={billingUsage}
+        canUpgrade={billingUsage.scope !== "account" || billingUsage.billingUserId === user.id} />
       <BusinessIntelligencePanel slug={business.slug} />
       {children}
         </AppShell>
