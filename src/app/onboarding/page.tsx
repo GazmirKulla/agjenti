@@ -12,24 +12,22 @@ import { AgentWorkspaceForm } from "@/components/onboarding/basic-workspace";
 import { signOut } from "@/lib/auth/actions";
 import "./onboarding.css";
 export const metadata = { title: "Konfiguro biznesin | Agjenti.app" };
-export default async function OnboardingPage() {
+export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
   const user = await getSessionUser();
   if (!user) redirect("/login?mode=signup");
   const access = await listMemberships(user.id);
-  if (access.admin || access.businesses.length) redirect(homeForAccess(access));
+  // People with a business come here only to create another one.
+  const creatingAnother = (await searchParams).new === "1";
+  if (access.admin || (access.businesses.length && !creatingAnother)) redirect(homeForAccess(access));
+  const backHref = access.businesses.length ? homeForAccess(access) : undefined;
   const db = createServiceSupabase();
-  const { data, error } = await db
+  // Only the open draft; every completed onboarding belongs to its business.
+  const { data: draft, error } = await db
     .from("business_onboarding")
-    .select("answers,step,completed_at")
+    .select("answers,step")
     .eq("user_id", user.id)
+    .is("completed_at", null)
     .maybeSingle();
-  // Completed onboarding without a membership is an orphan (business deleted
-  // or membership lost). Clear it so the user can create a new workspace.
-  let draft = data;
-  if (!error && draft?.completed_at) {
-    await db.from("business_onboarding").delete().eq("user_id", user.id);
-    draft = null;
-  }
   if (error)
     return (
       <main className="onboarding-page">
@@ -64,6 +62,7 @@ export default async function OnboardingPage() {
             </Link>
             <OnboardingWelcome />
             <div className="onboarding-user">
+              {backHref && <Link className="onboarding-back-link" href={backHref}>← Kthehu te biznesi</Link>}
               <span>{user.email}</span>
               <form action={signOut}>
                 <button type="submit">Dil nga llogaria</button>
@@ -108,6 +107,7 @@ export default async function OnboardingPage() {
       initialStep={draft?.step ?? 0}
       email={user.email || ""}
       enabledSteps={settings.onboarding_steps}
+      backHref={backHref}
     />
   );
 }

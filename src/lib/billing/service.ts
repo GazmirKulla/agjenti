@@ -4,6 +4,9 @@ import { cache } from "react";
 export type BillingPlan = "free" | "starter" | "professional" | "enterprise";
 
 export type BillingUsage = {
+  /** "account": the billing owner's plan, shared by all their businesses. */
+  scope: "account" | "business";
+  billingUserId: string | null;
   plan: BillingPlan;
   limit: number;
   used: number;
@@ -32,6 +35,8 @@ export const loadBillingUsage = cache(async function loadBillingUsage(businessId
   }
   const value = data as Record<string, unknown>;
   return {
+    scope: value.scope === "account" ? "account" : "business",
+    billingUserId: typeof value.billingUserId === "string" ? value.billingUserId : null,
     plan: value.plan as BillingPlan,
     limit: Number(value.limit),
     used: Number(value.used),
@@ -43,6 +48,30 @@ export const loadBillingUsage = cache(async function loadBillingUsage(businessId
     periodEnd: String(value.periodEnd),
   };
 });
+
+/** Messages each of the payer's businesses used in the current period. */
+export async function loadUsageBreakdown(billingUserId: string, periodStart: string) {
+  const db = createServiceSupabase();
+  const { data: businesses, error } = await db.from("businesses").select("id,name,slug").eq("billing_user_id", billingUserId).order("name");
+  if (error) throw new Error("Nuk u ngarkua ndarja sipas biznesit.");
+  const ids = (businesses ?? []).map((b) => b.id);
+  const { data: usage } = ids.length
+    ? await db.from("business_usage").select("business_id,used").in("business_id", ids).eq("period_start", periodStart)
+    : { data: [] };
+  const used = new Map((usage ?? []).map((row) => [row.business_id as string, Number(row.used) || 0]));
+  return (businesses ?? []).map((b) => ({ id: b.id as string, name: b.name as string, slug: b.slug as string, used: used.get(b.id) ?? 0 }));
+}
+
+/** An assistant reply to the owner counts as one message of the payer's plan.
+ * Returns false when the plan has no messages left. */
+export async function consumeAssistantMessage(businessId: string): Promise<boolean> {
+  const { data, error } = await createServiceSupabase().rpc("consume_assistant_message", { p_business: businessId });
+  if (error) {
+    console.error("[billing] assistant message", error.message);
+    return true;
+  }
+  return data === true;
+}
 
 export function billingState(usage: BillingUsage) {
   const counted = usage.used + usage.reserved;

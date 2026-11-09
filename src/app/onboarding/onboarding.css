@@ -130,6 +130,13 @@
   border-color: var(--line);
   color: var(--accent);
 }
+.onboarding-back-link {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
 .onboarding-user {
   margin-top: auto;
   border-top: 1px solid var(--line);

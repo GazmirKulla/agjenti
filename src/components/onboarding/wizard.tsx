@@ -26,7 +26,9 @@ export function OnboardingWizard({
   enabledSteps = allQuestionKeys,
   onSave = saveOnboarding,
   onAudio,
+  backHref,
 }: {
+  backHref?: string;
   initial: Answers;
   initialStep: number;
   email: string;
@@ -181,6 +183,7 @@ export function OnboardingWizard({
             </ol>
           )}
           <div className="onboarding-user">
+            {backHref && <Link className="onboarding-back-link" href={backHref}>← Kthehu te biznesi</Link>}
             <span>{email}</span>
             <form action={signOut}>
               <button disabled={busy} type="submit">

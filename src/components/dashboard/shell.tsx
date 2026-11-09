@@ -273,9 +273,13 @@ export function AppShell({
                 {b.name}
               </Link>
             ))}
-            {admin && (
+            {admin ? (
               <Link href="/admin/businesses" onClick={() => setOpen(false)}>
                 + Menaxho bizneset
+              </Link>
+            ) : !platformAdmin && (
+              <Link href="/onboarding?new=1" prefetch={false} onClick={() => setOpen(false)}>
+                + {t("Krijo biznes të ri")}
               </Link>
             )}
           </div>
@@ -345,7 +349,7 @@ export function AppShell({
           >
             <Icon name="menu" size={28} />
           </button>
-          {!admin && mobile ? <label className="mobile-business-selector"><span className="sr-only">Biznesi aktiv</span><select value={slug} onChange={event => { window.location.assign(`/b/${encodeURIComponent(event.target.value)}`); }} aria-label="Biznesi aktiv">{businesses.map(b => <option key={b.id} value={b.slug}>{b.name}</option>)}</select><small>Agjenti.app</small></label> : <Link className="mobile-workspace-title" href={base}>
+          {!admin && mobile ? <label className="mobile-business-selector"><span className="sr-only">Biznesi aktiv</span><select value={slug} onChange={event => { window.location.assign(event.target.value === "__new" ? "/onboarding?new=1" : `/b/${encodeURIComponent(event.target.value)}`); }} aria-label="Biznesi aktiv">{businesses.map(b => <option key={b.id} value={b.slug}>{b.name}</option>)}{!platformAdmin && <option value="__new">+ {t("Krijo biznes të ri")}</option>}</select><small>Agjenti.app</small></label> : <Link className="mobile-workspace-title" href={base}>
             <strong>{name}</strong>
             <small>{admin ? "Administrimi" : "Agjenti.app"}</small>
           </Link>}

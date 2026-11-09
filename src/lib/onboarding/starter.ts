@@ -60,9 +60,10 @@ export async function createStarterWorkspace(
 ): Promise<StarterWorkspaceResult> {
   const parsed = parseStarterWorkspace(input);
   if ("error" in parsed) return { error: parsed.error, status: 400 };
+  // Any number of businesses per person; platform administrators use the admin workspace.
   const access = await listMemberships(userId);
-  if (access.admin || access.businesses.length)
-    return { error: "Ke tashmë një hapësirë.", status: 409 };
+  if (access.admin)
+    return { error: "Administratorët e platformës krijojnë bizneset nga paneli i administrimit.", status: 409 };
   const answers = {
     ...emptyAnswers,
     name: parsed.name,

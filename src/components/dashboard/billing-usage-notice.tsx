@@ -6,7 +6,7 @@ export function BillingUsageNotice({ slug, usage }: { slug: string; usage: Billi
   if (state.level === "normal") return null;
   const plan = plans[usage.plan];
   const message = state.exhausted
-    ? "Ke arritur kapacitetin e paketës. Përgjigjet automatike janë ndalur; mesazhet hyrëse dhe përgjigjet e stafit vazhdojnë normalisht."
+    ? "Mesazhet e paketës mbaruan. Përgjigjet automatike dhe asistenti janë ndalur; mesazhet hyrëse dhe përgjigjet e stafit vazhdojnë normalisht."
     : state.level === "urgent"
       ? `Ke përdorur ${state.percentage}% të kapacitetit mujor.`
       : `Ke përdorur ${state.percentage}% të kapacitetit mujor.`;

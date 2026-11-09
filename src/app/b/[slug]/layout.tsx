@@ -35,7 +35,8 @@ export default async function BusinessLayout({
     loadNavigationProfile(business.id),
     loadBillingUsage(business.id),
     isNativeEmbed(),
-    loadAiUsage(user.id, business.id, access.admin),
+    // Tokens are a platform cost statistic: only platform administrators see them.
+    access.admin ? loadAiUsage(user.id, business.id, true) : null,
   ]);
   const navigationItems = buildNavigationItems(dashboardProfile, "desktop");
   const mobileNavigationItems = buildNavigationItems(

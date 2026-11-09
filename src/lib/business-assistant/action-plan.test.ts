@@ -8,6 +8,7 @@ vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.prof
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }) }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access }));
 vi.mock("next/cache", () => ({ revalidatePath: m.revalidate }));
+vi.mock("@/lib/billing/service", () => ({ loadBillingUsage: async () => ({ available: 100 }), consumeAssistantMessage: async () => true }));
 import { POST } from "@/app/api/business-assistant/route";
 import { buildAutomationProposal, recheckAutomation } from "./automation-proposal";
 import { readProposal } from "./model";

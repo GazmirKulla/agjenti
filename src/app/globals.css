@@ -609,6 +609,12 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
 .billing-notice-exhausted { border-color: #e29180; background: #ffebe6; color: #7a2012; }
 .billing-notice .btn { flex: none; color: inherit; border-color: currentColor; white-space: nowrap; }
 .billing-summary { display: grid; grid-template-columns: 1fr auto; gap: 14px 32px; align-items: end; }
+.billing-breakdown { margin-top: 16px; }
+.billing-breakdown h2 { font-size: 15px; font-weight: 650; margin: 0 0 10px; }
+.billing-breakdown ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.billing-breakdown li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.billing-breakdown li:first-child { border-top: 0; }
+.billing-breakdown li strong { font-variant-numeric: tabular-nums; }
 .billing-summary h2 { margin: 0; font-size: 26px; }
 .billing-summary-copy .page-eyebrow { margin: 0 0 6px; }
 .billing-total { text-align: right; }

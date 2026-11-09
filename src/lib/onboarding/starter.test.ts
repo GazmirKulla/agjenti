@@ -98,20 +98,16 @@ it("creates a workspace with the selected type for the verified owner", async ()
   );
 });
 
-it("does not create a workspace for admins or existing members", async () => {
+it("does not create a workspace for platform admins, but does for people who already have one", async () => {
   mocks.memberships.mockResolvedValue({ admin: true, businesses: [] });
-  expect(await createStarterWorkspace("admin", { name: "Studio", businessType: "retail" })).toEqual({
-    error: "Ke tashmë një hapësirë.",
-    status: 409,
-  });
+  expect(await createStarterWorkspace("admin", { name: "Studio", businessType: "retail" })).toMatchObject({ status: 409 });
+  expect(mocks.rpc).not.toHaveBeenCalled();
   mocks.memberships.mockResolvedValue({
     admin: false,
     businesses: [{ slug: "existing" }],
   });
-  expect(
-    await createStarterWorkspace("member", { name: "Studio", businessType: "retail" }),
-  ).toMatchObject({ status: 409 });
-  expect(mocks.rpc).not.toHaveBeenCalled();
+  await createStarterWorkspace("member", { name: "Studio", businessType: "retail" });
+  expect(mocks.rpc).toHaveBeenCalledWith("complete_business_onboarding", expect.objectContaining({ p_user_id: "member" }));
 });
 
 it("returns a recoverable error when the workspace write fails", async () => {

@@ -56,19 +56,21 @@ describe("self-service onboarding boundary", () => {
     expect((await saveOnboarding(answers, 7, true)).error).toBeTruthy();
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
-  it("keeps admins in admin and invited members in their workspace", async () => {
+  it("keeps admins in admin and lets people with a business create another one", async () => {
     mocks.memberships.mockResolvedValue({ admin: true, businesses: [] });
     expect(await saveOnboarding(answers, 7, true)).toEqual({
       destination: "/admin",
     });
+    expect(mocks.rpc).not.toHaveBeenCalled();
     mocks.memberships.mockResolvedValue({
       admin: false,
       businesses: [{ slug: "existing" }],
     });
+    mocks.rpc.mockResolvedValue({ data: "biznes-second", error: null });
     expect(await saveOnboarding(answers, 7, true)).toEqual({
-      destination: "/b/existing",
+      destination: "/b/biznes-second",
     });
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledWith("complete_business_onboarding", expect.objectContaining({ p_user_id: "verified-user" }));
   });
   it("cannot spoof the owner identity", async () => {
     mocks.rpc.mockResolvedValue({ data: "biznes-123", error: null });

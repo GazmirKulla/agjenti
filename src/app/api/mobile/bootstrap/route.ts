@@ -24,13 +24,17 @@ export async function GET(request: Request) {
       membership.businesses.map(async (business) => {
         const [profile, aiUsage, billing] = await Promise.all([
           loadNavigationProfile(business.id),
-          loadAiUsage(user.id, business.id, membership.admin),
+          // Tokens are a platform cost statistic: only platform administrators see them.
+          membership.admin ? loadAiUsage(user.id, business.id, true) : null,
           loadBillingUsage(business.id).catch(() => null),
         ]);
         return {
           ...business,
           aiUsage: aiUsage && aiUsageSummary(aiUsage),
           messagesAvailable: billing?.available,
+          messagesUsed: billing ? billing.used + billing.reserved : undefined,
+          messagesLimit: billing?.limit,
+          sharedPlan: billing?.scope === "account",
           planName: billing ? plans[billing.plan]?.name : undefined,
           modules: profile.enabledModules,
           navigation: navigationOrder

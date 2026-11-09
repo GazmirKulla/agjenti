@@ -102,6 +102,7 @@ export const english: Record<string, string> = {
   "Menuja kryesore": "Main menu",
   "Mbyll menunë": "Close menu",
   "Menuja e biznesit": "Business menu",
+  "Krijo biznes të ri": "Create a new business",
   "Hap ose mbyll menunë": "Toggle menu",
   "Shfaq vetëm ikonat": "Show icons only",
   "Shfaq menunë me tekst": "Show menu labels",

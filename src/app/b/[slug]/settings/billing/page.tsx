@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import { PageHeading } from "@/components/dashboard/ui";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { billingState, loadBillingUsage, plans } from "@/lib/billing/service";
+import { billingState, loadBillingUsage, loadUsageBreakdown, plans } from "@/lib/billing/service";
 
 const planFeatures = {
-  free: ["1,000 mesazhe automatike", "Inbox dhe përgjigje manuale", "Rinovim më datë 1 të muajit"],
-  starter: ["10,000 mesazhe automatike", "1 platformë", "Analitika bazë"],
-  professional: ["50,000 mesazhe automatike", "WhatsApp, Instagram dhe Messenger", "AI e avancuar dhe webhook-e"],
-  enterprise: ["200,000 mesazhe automatike", "Të gjitha platformat", "Trajnim i pakufizuar dhe suport prioritar"],
+  free: ["1,000 mesazhe AI në muaj", "Biznese pa kufi", "Rinovim më datë 1 të muajit"],
+  starter: ["10,000 mesazhe AI në muaj", "Biznese pa kufi", "Analitika bazë"],
+  professional: ["50,000 mesazhe AI në muaj", "WhatsApp, Instagram dhe Messenger", "AI e avancuar dhe webhook-e"],
+  enterprise: ["200,000 mesazhe AI në muaj", "Të gjitha platformat", "Trajnim i pakufizuar dhe suport prioritar"],
 } as const;
 
 function dateLabel(value: string) {
@@ -22,18 +22,23 @@ export default async function BillingPage({ params }: { params: Promise<{ slug: 
   if (!access) redirect("/auth/continue");
   const usage = await loadBillingUsage(access.business.id);
   const state = billingState(usage);
+  const payer = usage.scope === "account" && usage.billingUserId === user.id;
+  const breakdown = payer && usage.billingUserId ? await loadUsageBreakdown(usage.billingUserId, usage.periodStart).catch(() => []) : [];
   const currentPlan = plans[usage.plan];
 
   return <>
     <PageHeading
       eyebrow="Paketa dhe përdorimi"
-      title="Kapaciteti i agjentit"
-      description="Numërohen vetëm përgjigjet automatike të dërguara nga agjenti. Mesazhet hyrëse dhe përgjigjet manuale nuk konsumojnë kapacitet."
+      title="Mesazhet e paketës"
+      description="Çdo përgjigje AI numërohet si një mesazh: përgjigjet automatike te klientët dhe përgjigjet e asistentit për ty. Mesazhet hyrëse dhe përgjigjet manuale nuk numërohen."
     />
     <section className="panel section-pad billing-summary">
       <div className="billing-summary-copy">
-        <p className="page-eyebrow">Paketa aktuale</p>
+        <p className="page-eyebrow">{usage.scope === "account" ? (payer ? "Paketa jote" : "Paketa e pronarit të biznesit") : "Paketa e biznesit"}</p>
         <h2>{currentPlan.name}</h2>
+        {usage.scope === "account" && <p className="muted-copy">{payer
+          ? "Paketa vlen për të gjitha bizneset e tua. Mesazhet e çdo biznesi zbriten nga e njëjta kuotë."
+          : "Mesazhet e këtij biznesi zbriten nga paketa e pronarit që e krijoi."}</p>}
         <p className="muted-copy">Rinovimi i kapacitetit: {dateLabel(usage.periodEnd)}</p>
       </div>
       <div className="billing-total" aria-label={`${state.counted} nga ${usage.limit} mesazhe të përdorura`}>
@@ -43,11 +48,16 @@ export default async function BillingPage({ params }: { params: Promise<{ slug: 
       <div className="billing-meter" aria-hidden="true"><span style={{ width: `${state.percentage}%` }} /></div>
       <p className="billing-availability">
         {state.exhausted
-          ? "Kapaciteti i paketës është përdorur. Përgjigjet automatike janë në pauzë."
+          ? "Mesazhet e paketës janë përdorur. Përgjigjet automatike dhe asistenti janë në pauzë deri në rinovim."
           : `Kanë mbetur ${state.monthlyRemaining.toLocaleString("sq-AL")} mesazhe në këtë periudhë.`}
         {usage.extra > 0 && ` Ke ${Math.max(0, usage.extra - usage.extraReserved).toLocaleString("sq-AL")} mesazhe shtesë.`}
       </p>
     </section>
+
+    {breakdown.length > 1 && <section className="panel section-pad billing-breakdown" aria-label="Mesazhet sipas biznesit">
+      <h2>Sipas biznesit</h2>
+      <ul>{breakdown.map((row) => <li key={row.id}><span>{row.name}</span><strong>{row.used.toLocaleString("sq-AL")}</strong></li>)}</ul>
+    </section>}
 
     <section className="billing-plans" aria-label="Paketat e disponueshme">
       {(Object.keys(plans) as Array<keyof typeof plans>).map((key) => {

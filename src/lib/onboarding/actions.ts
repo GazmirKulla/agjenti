@@ -43,9 +43,9 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
     const answers = parsedAnswers;
     if (complete && answers.name.length < 2)
       return { error: "Vendos emrin e biznesit (të paktën 2 karaktere)." };
+    // A person may create any number of businesses; messages are billed per person.
     const access = await listMemberships(user.id);
-    if (access.admin || access.businesses.length)
-      return { destination: homeForAccess(access) };
+    if (access.admin) return { destination: homeForAccess(access) };
     const db = createServiceSupabase();
     const { error } = await db.rpc("save_onboarding_draft", {
       p_user_id: user.id,
@@ -106,8 +106,7 @@ export async function createAgentWorkspace(form: FormData): Promise<OnboardingRe
     const user = await getSessionUser();
     if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri për të vazhduar." };
     const access = await listMemberships(user.id);
-    if (access.admin || access.businesses.length)
-      return { destination: homeForAccess(access) };
+    if (access.admin) return { destination: homeForAccess(access) };
     const result = await createStarterWorkspace(user.id, {
       name: String(form.get("name") ?? ""),
       businessType: String(form.get("businessType") ?? ""),

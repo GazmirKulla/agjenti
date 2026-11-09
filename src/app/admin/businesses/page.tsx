@@ -21,6 +21,7 @@ export default async function AdminBusinessesPage() {
     { data: businesses, error: loadError },
     { data: integrations },
     { data: memberships },
+    { data: aiUsageRows },
   ] = await Promise.all([
     service
       .from("businesses")
@@ -34,7 +35,20 @@ export default async function AdminBusinessesPage() {
       .from("business_users")
       .select("business_id,user_id,role,created_at")
       .order("created_at"),
+    // Token cost is a platform statistic, shown only here to administrators.
+    service
+      .from("ai_usage_daily")
+      .select("business_id,calls,input_tokens,output_tokens")
+      .gte("day", new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Tirane", year: "numeric", month: "2-digit" }).format(new Date()) + "-01"),
   ]);
+  const tokensByBusiness = new Map<string, { calls: number; tokens: number }>();
+  for (const row of aiUsageRows ?? []) {
+    const current = tokensByBusiness.get(row.business_id) ?? { calls: 0, tokens: 0 };
+    tokensByBusiness.set(row.business_id, {
+      calls: current.calls + (Number(row.calls) || 0),
+      tokens: current.tokens + (Number(row.input_tokens) || 0) + (Number(row.output_tokens) || 0),
+    });
+  }
   const businessesFallback =
     loadError && ["42P01", "PGRST205", "42703"].includes(loadError.code)
       ? await service
@@ -217,7 +231,7 @@ export default async function AdminBusinessesPage() {
       <RecordBrowser
         listTitle="Të gjitha bizneset"
         placeholder="Kërko biznes ose slug…"
-        columns={["Biznesi", "Katalogu", "Përgjigje automatike", "Dy agjentë", "Onboarding"]}
+        columns={["Biznesi", "Katalogu", "Përgjigje automatike", "Dy agjentë", "Tokena këtë muaj", "Onboarding"]}
         createLabel="Shto biznes"
         createAsModal
         createForm={
@@ -249,6 +263,7 @@ export default async function AdminBusinessesPage() {
                 status={b.auto_reply ? "connected" : "paused"}
               />,
               b.allow_multiple_agents ? "Po" : "Jo",
+              (tokensByBusiness.get(b.id)?.tokens ?? 0).toLocaleString("sq-AL"),
               <Link
                 key="onboarding"
                 className="btn btn-ghost"
@@ -287,6 +302,10 @@ export default async function AdminBusinessesPage() {
                     <div>
                       <dt>Dy agjentë</dt>
                       <dd>{b.allow_multiple_agents ? "Të lejuar" : "Jo"}</dd>
+                    </div>
+                    <div>
+                      <dt>AI këtë muaj</dt>
+                      <dd>{(tokensByBusiness.get(b.id)?.tokens ?? 0).toLocaleString("sq-AL")} tokena · {(tokensByBusiness.get(b.id)?.calls ?? 0).toLocaleString("sq-AL")} thirrje</dd>
                     </div>
                   </dl>
                   <Link className="soft-link" href={`/b/${b.slug}`}>

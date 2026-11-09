@@ -45,6 +45,7 @@ vi.mock("@/lib/business-intelligence/transcription", () => ({
 }));
 vi.mock("@/lib/workflows/visual/test-actions", () => ({ simulateVisualWorkflow: m.simulate }));
 vi.mock("next/cache", () => ({ revalidatePath: m.revalidate }));
+vi.mock("@/lib/billing/service", () => ({ loadBillingUsage: async () => ({ available: 100 }), consumeAssistantMessage: async () => true }));
 import { POST } from "./route";
 import { AssistantError } from "@/lib/business-assistant/model";
 beforeEach(() => {

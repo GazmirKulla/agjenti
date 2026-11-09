@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { billingState, type BillingUsage } from "./service";
 
 const usage = (changes: Partial<BillingUsage> = {}): BillingUsage => ({
-  plan: "free", limit: 1_000, used: 0, reserved: 0, extra: 0, extraReserved: 0,
+  scope: "account", billingUserId: "u1", plan: "free", limit: 1_000, used: 0, reserved: 0, extra: 0, extraReserved: 0,
   available: 1_000, periodStart: "2026-10-01T00:00:00.000Z", periodEnd: "2026-11-01T00:00:00.000Z", ...changes,
 });
 

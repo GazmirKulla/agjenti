@@ -20,6 +20,7 @@ import { briefingAnswer } from "@/lib/business-assistant/briefing-model";
 import { dashboardLanguage } from "@/lib/dashboard/language/core";
 import { revalidatePath } from "next/cache";
 import { meteredRoute } from "@/lib/ai/usage";
+import { consumeAssistantMessage, loadBillingUsage } from "@/lib/billing/service";
 import { onboardingTurn, remindOnboarding } from "@/lib/onboarding/assistant-chat";
 import { parseQuickReply } from "@/lib/onboarding/assistant-chat-model";
 import { ContinuationError } from "@/lib/onboarding/continuation";
@@ -150,6 +151,15 @@ async function handlePOST(request: Request) {
       }
       if (quickReply) throw new PersistenceError("Kjo pyetje nuk është më e hapur. Rifresko bisedën.", 409);
     }
+    // Every assistant reply is one message of the payer's plan, like a reply to a customer.
+    const allowance = await loadBillingUsage(access.businessId).catch(() => null);
+    if (allowance && allowance.available <= 0)
+      throw new AssistantError("Mesazhet e paketës për këtë muaj mbaruan. Asistenti rifillon me rinovimin e paketës ose me një paketë më të madhe.");
+    const counted = async <T,>(work: Promise<T>) => {
+      const value = await work;
+      await consumeAssistantMessage(access.businessId);
+      return value;
+    };
     const briefingPeriod = await briefingQuestion(body.text);
     if (briefingPeriod && !body.attachments?.length && !body.links?.length) {
       const answer = async () => {
@@ -158,10 +168,10 @@ async function handlePOST(request: Request) {
       };
       // Explicit user questions may join the existing history. Automatic Home reads use GET
       // and never touch persistence. Read-only questions do not reassess/execute old plans.
-      return json(body.conversationId
+      return json(await counted((async () => body.conversationId
         ? await remindOnboarding(access, body.conversationId, await persistedTurn(access, body, { content: body.text.trim(), context, mode: "plan" },
           async (_history, prior) => ({ ...await answer(), recoveryContext: prior?.context ?? context })))
-        : await answer());
+        : await answer())()));
     }
     const assistantName = body.assistantName === undefined ? undefined : readPersonalAssistantName(body.assistantName);
     if (assistantName === null) throw new AssistantError("Emri i asistentit duhet të ketë 1–32 karaktere në një rresht.");
@@ -169,7 +179,7 @@ async function handlePOST(request: Request) {
     if (body.links !== undefined && !Array.isArray(body.links)) throw new AssistantError("Linke të pavlefshme.");
     const links = [...new Set([...(body.links ?? []), ...linksInText(body.text)])];
     const materials = await resolveMaterials(body.attachments ?? [], links, user.id, membership.business.id);
-    if (body.conversationId) return json(await remindOnboarding(access, body.conversationId, await persistedTurn(access, body, {
+    if (body.conversationId) return json(await counted(remindOnboarding(access, body.conversationId, await persistedTurn(access, body, {
       content: body.text.trim(), context, mode: "plan",
       fingerprintData: [body.attachments ?? [], links],
     }, async (history, prior, preferences) => {
@@ -198,11 +208,11 @@ async function handlePOST(request: Request) {
         catch { /* The acknowledged write remains successful if refresh fails. */ }
       }
       return { ...result, recoveryContext: effectiveContext };
-    })));
-    if (assistantName !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials, assistantName));
-    if (materials.length) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken, materials));
-    if (body.pendingToken !== undefined) return json(await planRequest(access, body.text.trim(), history, context, body.pendingToken));
-    return json(context ? await planRequest(access, body.text.trim(), history, context) : await planRequest(access, body.text.trim(), history));
+    }))));
+    if (assistantName !== undefined) return json(await counted(planRequest(access, body.text.trim(), history, context, body.pendingToken, materials, assistantName)));
+    if (materials.length) return json(await counted(planRequest(access, body.text.trim(), history, context, body.pendingToken, materials)));
+    if (body.pendingToken !== undefined) return json(await counted(planRequest(access, body.text.trim(), history, context, body.pendingToken)));
+    return json(await counted(context ? planRequest(access, body.text.trim(), history, context) : planRequest(access, body.text.trim(), history)));
   } catch (error) {
     return json(
       {

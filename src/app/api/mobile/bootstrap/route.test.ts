@@ -80,11 +80,11 @@ it("omits remaining messages when the allowance cannot be read", async () => {
   const data = await (await GET(new Request("https://app.test/api/mobile/bootstrap"))).json();
   expect(data.businesses[0].messagesAvailable).toBeUndefined();
 });
-it("includes monthly AI usage only as authorised by the usage report", async () => {
+it("never sends AI token usage to business users: tokens are a platform statistic", async () => {
   mocks.aiUsage.mockResolvedValue({ calls: 7, inputTokens: 100, outputTokens: 20 });
   const data = await (await GET(new Request("https://app.test/api/mobile/bootstrap"))).json();
-  expect(mocks.aiUsage).toHaveBeenCalledWith("owner", "b1", undefined);
-  expect(data.businesses[0].aiUsage).toEqual({ calls: 7, tokens: 120 });
+  expect(mocks.aiUsage).not.toHaveBeenCalled();
+  expect(data.businesses[0].aiUsage).toBeNull();
 });
 it("reports backend failures instead of fabricating an empty workspace", async () => {
   mocks.profile.mockRejectedValue(Error("db"));
