@@ -61,32 +61,35 @@ export default async function ActionsPage({ searchParams }: { searchParams?: Pro
         <div>
           <h2 id="admin-modules-title">Modulet</h2>
           <p className="muted-copy">
-            Të gjitha modulet janë të lejuara për çdo biznes. Modulet bazë shfaqen gjithmonë; modulet opsionale
-            pronari i fsheh ose i shfaq te Cilësimet → Modulet. Fshehja ndryshon vetëm menunë, jo aftësitë e asistentit.
+            Të gjitha modulet janë të lejuara për çdo biznes. Modulet bazë shfaqen gjithmonë. Një biznes i ri sheh
+            modulet opsionale që i duhen sipas onboarding-ut; pronari i fsheh ose i shfaq te Cilësimet → Modulet.
+            Fshehja ndryshon vetëm menunë, jo aftësitë e asistentit.
           </p>
         </div>
         <dl className="admin-module-totals">
           <div><dt>Gjithsej</dt><dd>{modules.length}</dd></div>
           <div><dt>Bazë</dt><dd>{modules.filter((id) => moduleRegistry[id].core).length}</dd></div>
           <div><dt>Opsionale</dt><dd>{modules.filter((id) => toggleableModules.includes(id)).length}</dd></div>
+          <div><dt>Së shpejti</dt><dd>{modules.filter((id) => moduleRegistry[id].preview).length}</dd></div>
         </dl>
       </header>
       <RecordBrowser
         listTitle="Të gjitha modulet"
         placeholder="Kërko modul…"
         columns={["Moduli", "Lloji", "Varësitë", "Me të dhëna", "E fshehur te"]}
-        facets={[{ key: "type", label: "Lloji", options: [{ value: "core", label: "Bazë" }, { value: "optional", label: "Opsional" }] }]}
+        facets={[{ key: "type", label: "Lloji", options: [{ value: "core", label: "Bazë" }, { value: "optional", label: "Opsional" }, { value: "preview", label: "Së shpejti" }] }]}
         records={modules.map((id) => {
           const mod = moduleRegistry[id];
           const optional = toggleableModules.includes(id);
+          const preview = Boolean(mod.preview);
           const dependents = dependentsOf(id);
           return {
             id,
             title: mod.label,
             subtitle: mod.description,
-            facets: { type: optional ? "optional" : "core" },
+            facets: { type: preview ? "preview" : optional ? "optional" : "core" },
             cells: [
-              <StatusBadge key="type" status={optional ? "paused" : "connected"} label={optional ? "Opsional" : "Bazë"} />,
+              <StatusBadge key="type" status={preview ? "pending" : optional ? "paused" : "connected"} label={preview ? "Së shpejti" : optional ? "Opsional" : "Bazë"} />,
               requirement(id),
               measured.has(id) ? `${withData(id).length} biznese` : "—",
               optional ? `${hiddenIn(id).length} biznese` : "—",
@@ -103,7 +106,7 @@ export default async function ActionsPage({ searchParams }: { searchParams?: Pro
               <div className="detail-block">
                 <h3>Si funksionon</h3>
                 <dl className="detail-fields">
-                  <div><dt>Lloji</dt><dd>{optional ? "Opsional: pronari mund ta fshehë" : "Bazë: shfaqet gjithmonë"}</dd></div>
+                  <div><dt>Lloji</dt><dd>{preview ? "Së shpejti: ende nuk shfaqet në menu" : optional ? "Opsional: pronari mund ta fshehë; bizneset e reja e shohin kur u duhet sipas onboarding-ut" : "Bazë: shfaqet gjithmonë"}</dd></div>
                   <div><dt>Leja</dt><dd>E lejuar për të gjitha bizneset</dd></div>
                   <div><dt>Varësitë</dt><dd>{requirement(id)}</dd></div>
                   <div><dt>Varen prej tij</dt><dd>{dependents.length ? dependents.map((d) => moduleRegistry[d].label).join(", ") : "Asnjë"}</dd></div>

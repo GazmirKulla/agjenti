@@ -11,7 +11,7 @@ import {
   rebuildProfileFromModules,
 } from "./generate";
 import { legacyDashboardProfile } from "./legacy";
-import { moduleRegistry, navigationOrder } from "../modules/registry";
+import { moduleRegistry, navigationOrder, previewModules } from "../modules/registry";
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
@@ -156,7 +156,10 @@ export async function refreshGeneratedProfile(
   const signals = signalsFromOnboardingAnswers(answers);
   if (!signals) return false;
   const next = generateDashboardProfile(signals, "generated");
-  await saveDashboardProfile(businessId, current?.hiddenModules?.length ? { ...next, hiddenModules: current.hiddenModules } : next);
+  // Never hide a module that already holds the business's records.
+  const { data: used } = await db.rpc("business_used_modules", { p_business: businessId });
+  const inUse = new Set(Array.isArray(used) ? used : []);
+  await saveDashboardProfile(businessId, { ...next, hiddenModules: (next.hiddenModules ?? []).filter((id) => !inUse.has(id)) });
   return true;
 }
 
@@ -171,7 +174,8 @@ async function applyModuleEntitlements(businessId: string, profile: DashboardPro
  * server entitlements remain the source of authorization. */
 export async function loadNavigationProfile(businessId: string): Promise<DashboardProfile> {
   const profile = await loadDashboardProfile(businessId);
-  const hidden = new Set(profile.hiddenModules ?? []);
+  // Modules that are not built yet never appear in navigation.
+  const hidden = new Set([...(profile.hiddenModules ?? []), ...previewModules]);
   const visible = profile.enabledModules.filter(id => !hidden.has(id));
   // No dependency between showing two navigation links: execution validates its
   // own prerequisites. The builder is used only for ordering/widgets here.

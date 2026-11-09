@@ -30,6 +30,8 @@ export type ModuleDefinition = {
   core?: boolean;
   /** Prefer in mobile bottom nav when enabled. */
   mobilePriority?: number;
+  /** Not built yet: kept out of navigation and module settings until it is. */
+  preview?: boolean;
   description: string;
 };
 

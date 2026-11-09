@@ -1,4 +1,4 @@
-import { moduleRegistry, navigationOrder } from "../modules/registry";
+import { moduleRegistry, navigationOrder, toggleableModules } from "../modules/registry";
 import { normalizeEnabledModules } from "../modules/dependencies";
 import type {
   DashboardProfile,
@@ -99,11 +99,10 @@ function inferModules(signals: DashboardSignals): ModuleId[] {
   }
 
 
+  // Leads is not built yet; lead-oriented businesses still get catalogs.
   if (catalogFlow) {
     enabled.add("catalogs");
-    enabled.add("leads");
   } else if (leadFlow) {
-    enabled.add("leads");
     if (!products && !services) enabled.add("catalogs");
   }
 
@@ -408,6 +407,9 @@ export function generateDashboardProfile(
     version: 1,
     source,
     enabledModules,
+    // A new business starts with the optional modules its answers point to;
+    // the owner can show any other one in Settings → Modules.
+    hiddenModules: toggleableModules.filter((id) => !enabled.has(id)),
     navigationItems: buildNavigation(enabledModules),
     mobileNavigationItems: buildMobileNavigation(enabledModules),
     widgets: resolveWidgets(enabled, signals),

@@ -46,7 +46,7 @@ describe("generateDashboardProfile", () => {
     expect(profile.primaryActions[0]?.id).toBe("add_product");
   });
 
-  it("enables catalog/lead modules for B2B-style signals", () => {
+  it("enables catalogs for B2B-style signals, not the unbuilt Leads module", () => {
     const profile = generateDashboardProfile({
       businessType: "other",
       offeringTypes: [],
@@ -56,7 +56,9 @@ describe("generateDashboardProfile", () => {
       teamSize: "solo",
     });
     expect(profile.enabledModules).toContain("catalogs");
-    expect(profile.enabledModules).toContain("leads");
+    expect(profile.enabledModules).not.toContain("leads");
+    expect(profile.hiddenModules).toEqual(expect.arrayContaining(["products", "orders", "bookings"]));
+    expect(profile.hiddenModules).not.toContain("catalogs");
     expect(profile.enabledModules).not.toContain("products");
     expect(profile.enabledModules).not.toContain("orders");
     expect(profile.primaryActions.some((a) => a.id === "add_catalog")).toBe(
@@ -131,5 +133,16 @@ describe("parseDashboardProfile", () => {
     expect(parsed?.enabledModules).toContain("sources");
     expect(parsed?.navigationItems).toContain("services");
     expect(parsed?.navigationItems).toContain("sources");
+  });
+  it("starts a new business with only the optional modules its answers need", () => {
+    const profile = generateDashboardProfile({
+      businessType: "beauty",
+      offeringTypes: ["services"],
+      selectedUseCases: ["booking", "support"],
+      agentCapabilities: ["handle_bookings", "answer_questions"],
+    });
+    expect(profile.enabledModules).toEqual(expect.arrayContaining(["services", "bookings", "calendar", "knowledge"]));
+    expect(profile.hiddenModules).toEqual(expect.arrayContaining(["products", "orders", "catalogs"]));
+    for (const id of profile.enabledModules) expect(profile.hiddenModules).not.toContain(id);
   });
 });

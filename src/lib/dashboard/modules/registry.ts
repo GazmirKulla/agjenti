@@ -78,7 +78,7 @@ export const moduleRegistry: Record<ModuleId, ModuleDefinition> = {
     path: "leads",
     label: "Leads",
     icon: "customers",
-    mobilePriority: 4,
+    preview: true,
     description: "Kërkesa dhe lead-e",
   },
   customers: {
@@ -187,8 +187,10 @@ export const toggleableModules: ModuleId[] = [
   "bookings",
   "calendar",
   "catalogs",
-  "leads",
   "customers",
   "knowledge",
   "workflows",
 ];
+
+/** Modules that are not built yet ("Së shpejti"). */
+export const previewModules: ModuleId[] = (Object.keys(moduleRegistry) as ModuleId[]).filter((id) => moduleRegistry[id].preview);

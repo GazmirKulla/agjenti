@@ -70,7 +70,7 @@ describe("inclusive onboarding", () => {
 
   it("uses offers and goals, independently of sector and employee count, to configure modules", () => {
     const examples = [
-      { businessType: "technical", offeringTypes: ["services"], useCases: ["leads"], expected: ["services", "leads"] },
+      { businessType: "technical", offeringTypes: ["services"], useCases: ["leads"], expected: ["services"] },
       { businessType: "beauty", offeringTypes: ["mixed"], useCases: ["booking", "orders"], expected: ["services", "products", "bookings", "orders"] },
       { businessType: "electronics", offeringTypes: ["mixed"], useCases: ["booking", "orders"], expected: ["services", "products", "bookings", "orders"] },
       { businessType: "education", offeringTypes: ["mixed"], useCases: ["booking", "orders"], expected: ["services", "products", "bookings", "orders"] },
