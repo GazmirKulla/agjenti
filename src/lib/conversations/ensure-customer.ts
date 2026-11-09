@@ -82,15 +82,15 @@ export async function ensureCustomerForConversation(
 			if (linkError || !linked) {
 				return { ok: false, error: "Klienti nuk u lidh me bisedën.", status: 500 };
 			}
+			// Registering an archived customer again brings them back to the list.
 			const patch: Record<string, unknown> = {
 				updated_at: new Date().toISOString(),
+				archived_at: null,
 			};
 			if (input.phone?.trim()) patch.phone = input.phone.trim();
 			if (displayName) patch.display_name = displayName;
 			if (username) patch.username = username;
-			if (Object.keys(patch).length > 1) {
-				await supabase.from("customers").update(patch).eq("id", existing.id).eq("business_id", input.businessId);
-			}
+			await supabase.from("customers").update(patch).eq("id", existing.id).eq("business_id", input.businessId);
 			return { ok: true, customerId: existing.id as string, created: false };
 		}
 	}

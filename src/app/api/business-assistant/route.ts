@@ -103,7 +103,7 @@ async function handlePOST(request: Request) {
         const moduleHint = navigation ? hiddenModuleHint(ticket.action, navigation.hiddenModules ?? [], operationKey) : null;
         if (moduleHint) Object.assign(result, {
           moduleHint,
-          message: `${result.message ?? "Ndryshimi u ruajt."} Seksioni “${moduleHint.label}” është i fshehur në menu; mund ta shfaqësh te Cilësimet → Modulet.`,
+          message: `${result.message ?? "Ndryshimi u ruajt."} Seksioni “${moduleHint.label}” është i fshehur në menu.`,
         });
         const tables: Record<string, string> = { operation: "business_operation_receipts", product: "products", service: "booking_services", knowledge: "knowledge_entries", agent: "ai_agents", profile: "businesses", booking: "bookings", workflow: "assistant_visual_requests", orderflow: "assistant_workflow_changes", linear: "products" };
         return { ...result, saved: true, outcome: { status: "backend_acknowledged", action: ticket.action,

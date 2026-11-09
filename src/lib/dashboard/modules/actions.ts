@@ -7,7 +7,7 @@ import { loadDashboardProfile } from "../profile/service";
 import { rebuildProfileFromModules } from "../profile/generate";
 import { moduleRegistry, toggleableModules } from "./registry";
 import type { ModuleId } from "./types";
-import { withRequiredModules } from "./visibility";
+import { showModuleFor } from "./show";
 
 export async function saveModules(slug: string, formData: FormData) {
   const user = await getSessionUser();
@@ -45,20 +45,7 @@ export async function showModule(slug: string, moduleId: string) {
   const user = await getSessionUser();
   const access = user ? await requireBusinessAccess(user.id, slug) : null;
   if (!user || !access) return { error: "Nuk ke qasje në këtë biznes." };
-  if (!toggleableModules.includes(moduleId as ModuleId)) return { error: "Ky seksion nuk mund të ndryshohet." };
-  try {
-    const profile = await loadDashboardProfile(access.business.id);
-    const show = new Set(withRequiredModules(moduleId as ModuleId));
-    const hidden = (profile.hiddenModules ?? []).filter((id) => !show.has(id));
-    const visible = profile.enabledModules.filter((id) => !hidden.includes(id));
-    const preferences = { ...rebuildProfileFromModules(visible, profile.signals), enabledModules: visible, hiddenModules: hidden };
-    const { error } = await createServiceSupabase().rpc("save_business_modules", {
-      p_business: access.business.id, p_user: user.id, p_profile: preferences,
-    });
-    if (error) return { error: "Seksioni nuk u shfaq. Vetëm pronari ose administratori mund ta ndryshojë." };
-    revalidatePath(`/b/${access.business.slug}`, "layout");
-    return { success: `Seksioni “${moduleRegistry[moduleId as ModuleId].label}” shfaqet tani në menu.` };
-  } catch {
-    return { error: "Seksioni nuk u shfaq. Rifresko faqen dhe provo përsëri." };
-  }
+  const result = await showModuleFor(user.id, access.business.id, moduleId);
+  if (result.success) revalidatePath(`/b/${access.business.slug}`, "layout");
+  return result;
 }

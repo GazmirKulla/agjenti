@@ -683,15 +683,18 @@ export function BusinessAssistant({
             )}
             {busy === "plan" && <div className="chat-typing" role="status" aria-label="Po shkruan"><i /><i /><i /></div>}
           </div>
-          {result?.moduleHint && !busy && (
+          {result?.moduleHint && !busy && moduleShown !== "dismissed" && (
             <div className="assistant-module-hint" role="status">
-              <p>{moduleShown ?? `Seksioni “${result.moduleHint.label}” është i fshehur në menu.`}</p>
-              {!moduleShown && <button type="button" onClick={async () => {
-                const hint = result.moduleHint!;
-                const outcome = await showModule(slug, hint.id);
-                setModuleShown(outcome.error ?? outcome.success ?? null);
-                if (outcome.success) router.refresh();
-              }}>Shfaq “{result.moduleHint.label}” në menu</button>}
+              <p>{moduleShown ?? <>Seksioni <strong>“{result.moduleHint.label}”</strong> është i fshehur në menu. Do ta shfaqësh?</>}</p>
+              {!moduleShown && <div className="assistant-module-hint-actions">
+                <button type="button" className="is-primary" onClick={async () => {
+                  const outcome = await showModule(slug, result.moduleHint!.id);
+                  setModuleShown(outcome.error ?? outcome.success ?? null);
+                  if (outcome.success) router.refresh();
+                }}>Po, shfaqe</button>
+                <button type="button" onClick={() => setModuleShown("dismissed")}>Jo</button>
+              </div>}
+              <Link className="assistant-module-hint-all" href={`/b/${encodeURIComponent(slug)}/settings/modules`}>Shiko të gjitha modulet →</Link>
             </div>
           )}
           {pendingOnboarding && !busy && !outgoing && (
