@@ -37,13 +37,16 @@ vi.mock("@/lib/conversations/understanding/context", async original => {
     return actual.hasUnderstandingContext() ? actual.messageUnderstanding(message) : meaning(message);
   } };
 });
-vi.mock("@/lib/conversations/fragment-observation", () => ({
+vi.mock("@/lib/conversations/fragment-observation", async original => ({
+ ...await original<typeof import("@/lib/conversations/fragment-observation")>(),
  interpretFragment: async (text: string) => lookup(fragments, text),
 }));
 
 // Workflow authoring tests isolate interpretation from server policy. Provider
 // contract tests unmock this boundary; semantic cases set explicit observations.
-vi.mock("@/lib/capabilities/workflow-semantics", () => ({
+vi.mock("@/lib/capabilities/workflow-semantics", async original => ({
+  // The prompt text stays real for the admin prompt catalog.
+  WORKFLOW_CAPABILITY_REVIEW_PROMPT: (await original<typeof import("@/lib/capabilities/workflow-semantics")>()).WORKFLOW_CAPABILITY_REVIEW_PROMPT,
   reviewWorkflowSemantics: vi.fn(async () => ({ capabilityKeys: [], evidence: [] })),
   withWorkflowSemanticReviews: <T>(run: () => Promise<T>) => run(),
   WorkflowSemanticReviewError: class extends Error {},

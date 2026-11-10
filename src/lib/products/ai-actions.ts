@@ -1,10 +1,12 @@
 "use server";
+import { PRODUCT_DESCRIPTION_PROMPT } from "./prompts";
 import { withAiUsage } from "@/lib/ai/usage";
 import { requireModuleAllowed } from "@/lib/dashboard/modules/entitlements";
 
 import { completeText } from "@/lib/ai/complete";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+
 
 /** Counts the AI requests of this action against the business it authorizes. */
 export async function generateProductDescription(...args: Parameters<typeof generateProductDescriptionUnmetered>) {
@@ -36,13 +38,7 @@ async function generateProductDescriptionUnmetered(slug: string, form: FormData)
 
   const result = await completeText({
     maxChars: 220,
-    instructions: [
-      "Je copywriter për katalog produktesh në shqip (Shqipëri/Kosovë).",
-      "Shkruaj një përshkrim të shkurtër, 1–2 fjali, maksimumi ~200 karaktere.",
-      "Ton profesional dhe i qartë. Pa emoji. Pa çmime. Pa premtime të ekzagjeruara.",
-      "Mos shpik specifikime teknike të pasigurta; qëndro i përgjithshëm por i dobishëm.",
-      "Kthe vetëm përshkrimin, pa titull dhe pa thonjëza.",
-    ].join(" "),
+    instructions: PRODUCT_DESCRIPTION_PROMPT,
     input: [
       `Biznesi: ${access.business.name}`,
       `Emri i produktit: ${name}`,

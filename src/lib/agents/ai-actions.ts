@@ -1,9 +1,11 @@
 "use server";
+import { AGENT_INSTRUCTIONS_WRITER_PROMPT } from "./prompts";
 import { withAiUsage } from "@/lib/ai/usage";
 
 import { completeText } from "@/lib/ai/complete";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+
 
 /** Counts the AI requests of this action against the business it authorizes. */
 export async function generateAgentInstructions(...args: Parameters<typeof generateAgentInstructionsUnmetered>) {
@@ -59,14 +61,7 @@ async function generateAgentInstructionsUnmetered(slug: string, _form?: FormData
 
   const result = await completeText({
     maxChars: 1800,
-    instructions: [
-      "Je arkitekt promptesh për një agjent shitjesh / support në Instagram DM.",
-      "Shkruaj udhëzime operative në shqip për agjentin e biznesit.",
-      "Përfshi: tonin, gjuhën, rregulla (mos shpik çmime/stok/politika), si të përdorë katalogun,",
-      "si të ndihmojë zgjedhjen e produktit ose shërbimit, dhe si të ndjekë workflow-n e porosisë pa thënë se u krye pa konfirmim.",
-      "Përshtat udhëzimet me produktet dhe shërbimet reale të biznesit (çfarë shet, si t’i përshkruajë).",
-      "3–6 paragrafë të shkurtër. Pa markdown headings. Pa emoji. Kthe vetëm tekstin e udhëzimeve.",
-    ].join(" "),
+    instructions: AGENT_INSTRUCTIONS_WRITER_PROMPT,
     input: [
       `Biznesi: ${access.business.name}`,
       "Produkte aktive:",
