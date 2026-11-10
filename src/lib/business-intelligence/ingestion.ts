@@ -1,13 +1,13 @@
 import { fetchPublicInstagram, PUBLIC_POST_LIMIT } from "@/lib/instagram/public-profile";
 import { fetchPublicPage } from "@/lib/products/import-url";
 import { extractProductFromHtml } from "@/lib/products/page-extract";
-import { fetchInstagramMedia } from "@/lib/instagram/media";
+import { fetchInstagramMedia, type InstagramPost } from "@/lib/instagram/media";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { fetchInstagramBusinessProfile } from "@/lib/instagram/business-profile";
+import { fetchInstagramBusinessProfile, type InstagramBusinessProfile } from "@/lib/instagram/business-profile";
 import { selectDiscoveryImages } from "@/lib/discovery/images";
 
-export async function extractWebsite(url: string, purpose: "catalog" | "onboarding" = "catalog") {
+export async function extractWebsite(url: string, purpose: "catalog" | "onboarding" = "catalog", maxPages = 8) {
   const first = await fetchPublicPage(url);
   if ("error" in first) throw new Error(first.error);
   const base = new URL(first.url);
@@ -33,7 +33,7 @@ export async function extractWebsite(url: string, purpose: "catalog" | "onboardi
     const priority = (url: string) => /faq|how-it-works|si-funksionon|terms|payment|delivery|download|shkarko|porosi|booking|rezerv|shipping|return|policy|transport/i.test(new URL(url).pathname) ? 0 : /about|contact|rreth/i.test(new URL(url).pathname) ? 1 : 2;
     candidates.sort((a, b) => priority(a) - priority(b));
   }
-  const selected = candidates.slice(0, 7);
+  const selected = candidates.slice(0, Math.max(0, Math.min(8, maxPages) - 1));
   const pages = [first];
   let skipped = 0;
   for (let i = 0; i < selected.length; i += 3) {
@@ -65,7 +65,7 @@ export async function extractWebsite(url: string, purpose: "catalog" | "onboardi
     reference: base.href,
     previews: captured.map(page => page.preview),
     pageCount: pages.length,
-    note: `U lexuan ${pages.length} faqe publike (maksimumi 8 për skanim). ${skipped ? `${skipped} faqe nuk u lexuan.` : ""} Informacioni përfshin faqet e përzgjedhura të biznesit.`,
+    note: `U lexuan ${pages.length} faqe publike (maksimumi ${Math.min(8, Math.max(1, maxPages))} për skanim). ${skipped ? `${skipped} faqe nuk u lexuan.` : ""} Informacioni përfshin faqet e përzgjedhura të biznesit.`,
   };
 }
 export async function extractInstagram(businessId: string) {
@@ -110,8 +110,9 @@ export async function extractInstagram(businessId: string) {
 
 /** Same result as extractInstagram, from a public account read by username
  * (no connection of the business needed). */
-export async function extractInstagramPublic(username: string) {
-  const { profile, posts } = await fetchPublicInstagram(username);
+export async function extractInstagramPublic(username: string, read?: { profile: InstagramBusinessProfile; posts: InstagramPost[] } | null) {
+  const { profile, posts: all } = read ?? await fetchPublicInstagram(username);
+  const posts = all.slice(0, PUBLIC_POST_LIMIT);
   const text = [Object.entries(profile).map(([field, value]) => `${field}: ${value}`).join("\n"), ...posts
     .map((p) => `Post: ${p.permalink ?? ""}\nCaption: ${p.caption ?? ""}\nImage: ${p.imageUrl ?? ""}`)]
     .join("\n").slice(0, 65000);

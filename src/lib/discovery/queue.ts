@@ -9,6 +9,7 @@ import { scanKnowledge, withoutScanKnowledge } from "@/lib/business-intelligence
 import { IMAGE_BATCH_SIZE, type DiscoveryImage } from "./images";
 import type { ScanPreview } from "./previews";
 import type { InstagramBusinessProfile } from "@/lib/instagram/business-profile";
+import type { InstagramPost } from "@/lib/instagram/media";
 import { parseBusinessProcess, prepareBusinessProcess, processSources, type BusinessProcess } from "./business-process";
 import { rebuildProfileFromModules } from "@/lib/dashboard/profile/generate";
 import { discoveryTextBatch } from "./text-batches";
@@ -26,12 +27,18 @@ type Job = {
   id: string; business_id: string; source: "instagram" | "website";
   user_id?: string | null;
   /** Instagram is read through the business's connection or, publicly, by username. */
-  input: { url?: string; connectionId?: string; generation?: string; username?: string };
+  input: { url?: string; connectionId?: string; generation?: string; username?: string;
+    /** Ends as a proposal the owner confirms, instead of applying itself. */
+    review?: boolean;
+    /** Website pages to read (the first page counts). */
+    pages?: number };
   stage: string; checkpoint: Checkpoint; lease_token: string;
   attempts: number; created_at?: string;
 };
 
-export async function enqueueDiscovery(businessId: string, userId: string, source: "instagram" | "website", website?: string, force = false) {
+export type ScanOptions = { review?: boolean; pages?: number };
+
+export async function enqueueDiscovery(businessId: string, userId: string, source: "instagram" | "website", website?: string, force = false, options: ScanOptions = {}) {
   const db = createServiceSupabase();
   let input: Job["input"];
   if (source === "instagram") {
@@ -42,16 +49,18 @@ export async function enqueueDiscovery(businessId: string, userId: string, sourc
     const url = new URL(website?.trim() ?? "");
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.href.length > 2000) throw new Error("Vendos një website të vlefshëm.");
     url.hash = "";
-    input = { url: url.href };
+    input = { url: url.href, ...(options.pages ? { pages: Math.max(1, Math.min(8, Math.floor(options.pages))) } : {}) };
   }
+  if (options.review) input.review = true;
   const { data, error } = await db.rpc("enqueue_business_discovery", { p_business: businessId, p_user: userId, p_source: source, p_input: input, p_force: force });
   if (error) throw new Error(error.message);
   return data as string;
 }
 
 /** A public Instagram read by username: needs no connection of the business. */
-export async function enqueuePublicInstagram(businessId: string, userId: string, username: string, force = false) {
-  const { data, error } = await createServiceSupabase().rpc("enqueue_business_discovery", { p_business: businessId, p_user: userId, p_source: "instagram", p_input: { username }, p_force: force });
+export async function enqueuePublicInstagram(businessId: string, userId: string, username: string, force = false, options: ScanOptions = {}) {
+  const input = { username, ...(options.review ? { review: true } : {}) };
+  const { data, error } = await createServiceSupabase().rpc("enqueue_business_discovery", { p_business: businessId, p_user: userId, p_source: "instagram", p_input: input, p_force: force });
   if (error) throw new Error(error.message);
   return data as string;
 }
@@ -74,8 +83,9 @@ export async function processDiscoveryStep(job: Job) {
   const data = job.checkpoint;
   await validConnection(job);
   if (job.stage === "capture") {
-    const captured = job.source === "website" ? await extractWebsite(job.input.url!, "onboarding")
-      : job.input.username ? await extractInstagramPublic(job.input.username) : await extractInstagram(job.business_id);
+    const captured = job.source === "website" ? await extractWebsite(job.input.url!, "onboarding", job.input.pages)
+      : job.input.username ? await extractInstagramPublic(job.input.username, await previewedInstagram(job.business_id, job.input.username))
+      : await extractInstagram(job.business_id);
     // Do not persist the decrypted token, fetch Request, or provider errors.
     const ig = job.source === "instagram" ? captured as Awaited<ReturnType<typeof extractInstagram>> : null;
     const web = job.source === "website" ? captured as Awaited<ReturnType<typeof extractWebsite>> : null;
@@ -136,6 +146,15 @@ export async function processDiscoveryStep(job: Job) {
   const knowledge = scanKnowledge(draft);
   draft = withoutScanKnowledge(draft, knowledge);
   await validConnection(job);
+  if (job.input.review) {
+    // Knowledge waits inactive; the panel, agent and process wait for the owner.
+    const proposal = await db.rpc("finish_discovery_review", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: knowledge, p_review: { profile: setup.profile, agent: setup.agent, process } });
+    if (proposal.error) throw new Error(["PGRST202", "42883"].includes(proposal.error.code) ? "scan_migration_required" : proposal.error.message);
+    if (!proposal.data) return checkpoint(job, data, "finish");
+    if (job.source === "instagram" && data.website && job.user_id && !(await websiteReadSince(job)))
+      await enqueueDiscovery(job.business_id, job.user_id, "website", data.website, false, { review: true, pages: 1 }).catch(() => console.error("[discovery] optional website was not queued"));
+    return;
+  }
   const finished = await db.rpc("finish_discovery_with_process", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: knowledge, p_profile: setup.profile, p_answers: setup.answers, p_agent: setup.agent, p_process: process, p_process_revision: state.process_revision ?? 0, p_source_profile: data.profile ?? null, p_warnings: (data.warnings ?? []).slice(-20) });
   if (finished.error) throw new Error(["PGRST202", "42883"].includes(finished.error.code) ? "scan_migration_required" : finished.error.message);
   if (!finished.data) return checkpoint(job, data, "finish");
@@ -145,6 +164,17 @@ export async function processDiscoveryStep(job: Job) {
     // but never replaces a website the owner gave (or that was read) since.
     await enqueueDiscovery(job.business_id, job.user_id, "website", data.website, true).catch(() => console.error("[discovery] optional website was not queued"));
   }
+}
+
+/** The profile and posts read moments ago for the onboarding preview, so the
+ * analysis does not pay for the same read twice. */
+async function previewedInstagram(businessId: string, username: string) {
+  const { data } = await createServiceSupabase().from("business_source_previews").select("instagram").eq("business_id", businessId).maybeSingle();
+  const saved = data?.instagram as { username?: string; fetchedAt?: string; profile?: InstagramBusinessProfile; posts?: InstagramPost[] } | null;
+  if (!saved?.profile || !Array.isArray(saved.posts) || saved.username !== username) return null;
+  // Instagram image links expire; an old read is fetched again.
+  if (!saved.fetchedAt || Date.now() - new Date(saved.fetchedAt).getTime() > 6 * 3600_000) return null;
+  return { profile: saved.profile, posts: saved.posts };
 }
 
 /** A website scan that is still going, or finished after this Instagram scan began. */

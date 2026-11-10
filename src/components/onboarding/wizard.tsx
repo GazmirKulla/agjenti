@@ -49,9 +49,6 @@ export function OnboardingWizard({
   });
   const step = stepKey ? active.findIndex((q) => q.key === stepKey) + 1 : 0;
   const [busy, setBusy] = useState(false);
-  // Optional public Instagram, read by username after the workspace is created.
-  const [instagram, setInstagram] = useState("");
-  const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -130,7 +127,7 @@ export function OnboardingWizard({
     setError("");
     try {
       const result = await onSave(
-        { ...answers, ...(instagram.trim() ? { instagramUsername: instagram } : {}), ...(website.trim() ? { website } : {}) },
+        answers,
         complete
           ? wizardStepToStored(total, active)
           : target
@@ -257,34 +254,6 @@ export function OnboardingWizard({
                       setSaved(false);
                     }}
                   />
-                  <fieldset className="onboarding-sources">
-                    <legend>Nga ku të mësojë Agjenti <small>(opsionale)</small></legend>
-                    <label htmlFor="business-instagram">Instagram i biznesit</label>
-                    <input
-                      id="business-instagram"
-                      maxLength={80}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      placeholder="@dyqani.im"
-                      value={instagram}
-                      onChange={(e) => setInstagram(e.target.value)}
-                    />
-                    <label htmlFor="business-website">Website</label>
-                    <input
-                      id="business-website"
-                      type="text"
-                      inputMode="url"
-                      maxLength={2000}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      placeholder="zana.al"
-                      value={website}
-                      onChange={(e) => setWebsite(e.target.value)}
-                    />
-                    <small className="onboarding-hint">Agjenti lexon profilin publik dhe website-in që të njohë ofertën. Lidhja e Instagram-it për bisedat bëhet në fund.</small>
-                  </fieldset>
                   <div className="onboarding-note">
                     <Icon name="spark" />
                     <p>
@@ -356,8 +325,8 @@ export function OnboardingWizard({
               {step > 0 && step === total && (
                 <p className="onboarding-final-note">
                   Hapësira do të krijohet në emër të{" "}
-                  <strong>{answers.name}</strong>. Pas kësaj rishiko rekomandimet;
-                  lidhja e Instagram-it për bisedat është hapi i fundit.
+                  <strong>{answers.name}</strong>. Në hapin tjetër shton
+                  Instagram-in dhe website-in që Agjenti të mësojë.
                 </p>
               )}
               {step > 0 && step === total && (

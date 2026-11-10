@@ -23,7 +23,7 @@ export async function startOnboardingSources(businessId: string, userId: string,
   const instagram = sources.instagramUsername
     ? await saveInstagramUsername(businessId, userId, sources.instagramUsername).catch(() => null) : null;
   const website = sources.website
-    ? await enqueueDiscovery(businessId, userId, "website", sources.website).catch(() => null) : null;
+    ? await enqueueDiscovery(businessId, userId, "website", sources.website, false, { review: true, pages: 1 }).catch(() => null) : null;
   // Start working right away; nobody needs to keep a page open.
   if ((instagram && "scanning" in instagram && instagram.scanning) || website) {
     const origin = workerOrigin();

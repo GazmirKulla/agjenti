@@ -9,6 +9,7 @@ export const manualSurfaces = {
   "src/app/api/agent-real/turns/route.ts#POST": { "exception": "Owner-only panel transport; effects pass the existing workflow action guards and explicit real-session confirmation." },
 
   "src/app/admin/users/actions.ts#manageUser": {"exception": "Platform-administrator-only account creation, password changes and manual email verification; unavailable to the business-owner assistant."},
+  "src/app/api/business-sources/route.ts#POST": { exception: "Onboarding step 2: the owner previews and confirms what the agent learns from their own public Instagram and website." },
   "src/app/api/cron/business-discovery/route.ts#POST": { exception: "Internal worker hand-off authenticated by CRON_SECRET; it only continues scans the owner already started." },
   "src/app/api/account/deletion/route.ts#POST": { exception: "Account deletion is a personal decision of the signed-in person and is never delegated to the business assistant." },
   "src/app/auth/mobile/session/route.ts#POST": { exception: "Mobile session establishment requires the signed-in person and OAuth boundary." },

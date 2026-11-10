@@ -32,7 +32,7 @@ export async function saveInstagramUsername(businessId: string, userId: string, 
   if (!publicScanAvailable()) return { username, scanning: false, waiting: true };
   if (await usernameScanUsed(businessId)) return { username, scanning: false, waiting: false };
   try {
-    await enqueuePublicInstagram(businessId, userId, username);
+    await enqueuePublicInstagram(businessId, userId, username, false, { review: true });
     return { username, scanning: true, waiting: false };
   } catch {
     return { username, scanning: false, waiting: true };
@@ -54,7 +54,7 @@ export async function queuePendingUsernameScans(limit = 10) {
       db.from("business_discovery_jobs").select("id").eq("business_id", business.id).eq("source", "instagram").limit(1).maybeSingle(),
     ]);
     if (connection || job) continue;
-    try { await enqueuePublicInstagram(business.id, business.billing_user_id, business.instagram_username); queued++; }
+    try { await enqueuePublicInstagram(business.id, business.billing_user_id, business.instagram_username, false, { review: true }); queued++; }
     catch { /* The next run tries again. */ }
   }
   return queued;

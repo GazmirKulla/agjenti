@@ -20,7 +20,7 @@ export function AgentWorkspaceForm({ initialName = "", initialType = "" }: { ini
         if (result.destination) {
           router.replace(result.destination);
           router.refresh();
-          return { success: "Hapësira u krijua. Duke hapur panelin…" };
+          return { success: "Hapësira u krijua." };
         }
         return { error: result.error || "Hapësira nuk u krijua." };
       }}
@@ -67,38 +67,12 @@ export function AgentWorkspaceForm({ initialName = "", initialType = "" }: { ini
           />
         </div>
       )}
-      <fieldset className="onboarding-sources">
-        <legend>Nga ku të mësojë Asistenti <small>(opsionale)</small></legend>
-        <label htmlFor="workspace-instagram">Instagram i biznesit</label>
-        <input
-          id="workspace-instagram"
-          name="instagramUsername"
-          maxLength={80}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder="@dyqani.im"
-        />
-        <label htmlFor="workspace-website">Website</label>
-        <input
-          id="workspace-website"
-          name="website"
-          type="text"
-          inputMode="url"
-          maxLength={2000}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder="zana.al"
-        />
-        <small className="onboarding-hint">Asistenti lexon profilin publik dhe website-in që të njohë ofertën. Lidhja e Instagram-it për bisedat bëhet në fund.</small>
-      </fieldset>
       <div className="onboarding-note">
         <Icon name="spark" />
         <p>
-          Pasi të krijohet hapësira, Asistenti në panel të bën disa pyetje për ta
-          përshtatur me biznesin tënd. Ti vendos kur të aktivizosh përgjigjet
-          automatike.
+          Në hapin tjetër shton Instagram-in dhe website-in që Agjenti të mësojë
+          për biznesin. Pastaj Asistenti në panel të bën disa pyetje. Ti vendos
+          kur të aktivizosh përgjigjet automatike.
         </p>
       </div>
       <div className="onboarding-actions">

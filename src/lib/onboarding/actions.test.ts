@@ -41,8 +41,8 @@ describe("self-service onboarding boundary", () => {
     form.set("name", "Studio");
     form.set("businessType", "beauty");
     form.set("user_id", "victim");
-    expect(await createAgentWorkspace(form)).toEqual({ destination: "/b/biznes-agent" });
-    expect(mocks.starter).toHaveBeenCalledWith("verified-user", { name: "Studio", businessType: "beauty", categoryDescription: "", instagramUsername: "", website: "" });
+    expect(await createAgentWorkspace(form)).toEqual({ destination: "/onboarding/sources?slug=biznes-agent" });
+    expect(mocks.starter).toHaveBeenCalledWith("verified-user", { name: "Studio", businessType: "beauty", categoryDescription: "" });
   });
   it("returns the starter validation error for a missing business type", async () => {
     mocks.starter.mockResolvedValue({ error: "Zgjidh llojin e biznesit.", status: 400 });
@@ -68,7 +68,7 @@ describe("self-service onboarding boundary", () => {
     });
     mocks.rpc.mockResolvedValue({ data: "biznes-second", error: null });
     expect(await saveOnboarding(answers, 7, true)).toEqual({
-      destination: "/b/biznes-second",
+      destination: "/onboarding/sources?slug=biznes-second",
     });
     expect(mocks.rpc).toHaveBeenCalledWith("complete_business_onboarding", expect.objectContaining({ p_user_id: "verified-user" }));
   });
@@ -76,7 +76,7 @@ describe("self-service onboarding boundary", () => {
     mocks.rpc.mockResolvedValue({ data: "biznes-123", error: null });
     expect(
       await saveOnboarding({ ...answers, p_user_id: "victim" }, 7, true),
-    ).toEqual({ destination: "/b/biznes-123" });
+    ).toEqual({ destination: "/onboarding/sources?slug=biznes-123" });
     const completion = mocks.rpc.mock.calls.find(
       ([name]) => name === "complete_business_onboarding",
     );
@@ -135,7 +135,7 @@ it("keeps the manual answers even when the Instagram analysis switch is off", as
   mocks.rpc.mockResolvedValue({ data: "biznes-manual", error: null });
   const { emptyAnswers } = await import("./model");
   const result = await saveOnboarding(answers, 7, true);
-  expect(result).toEqual({ destination: "/b/biznes-manual" });
+  expect(result).toEqual({ destination: "/onboarding/sources?slug=biznes-manual" });
   expect(mocks.rpc).toHaveBeenCalledWith(
     "complete_business_onboarding",
     expect.objectContaining({ p_answers: expect.objectContaining({ name: "Dyqani", businessType: "fashion" }) }),

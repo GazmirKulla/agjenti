@@ -122,7 +122,7 @@ describe("discovery API boundary", () => {
   });
   it("uses session identity and authorized business rather than submitted IDs", async () => {
     expect((await POST(request({ action: "start", source: "instagram", businessId: "victim", userId: "victim", connectionId: "spoof" }))).status).toBe(200);
-    expect(m.enqueue).toHaveBeenCalledWith("server-business", "verified-user", "instagram", undefined, false);
+    expect(m.enqueue).toHaveBeenCalledWith("server-business", "verified-user", "instagram", undefined, false, {});
     expect(m.after).toHaveBeenCalled();
   });
   it("rejects oversized bodies and stale edits before writes", async () => {

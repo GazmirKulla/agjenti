@@ -1425,3 +1425,24 @@
 .onboarding-sources label:first-of-type { margin-top: 6px; }
 .onboarding-sources input { border: 1px solid var(--line); padding: 13px 14px; border-radius: 10px; width: 100%; font-size: 16px; outline-color: var(--accent); background: var(--paper); color: var(--ink); }
 .onboarding-hint { display: block; margin-top: 8px; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
+
+/* Step 2: where the agent learns from. */
+a.onboarding-next, a.onboarding-back { display: inline-flex; align-items: center; text-decoration: none; }
+a.onboarding-back { color: var(--ink); }
+a.onboarding-skip { text-decoration: none; }
+.onboarding-sources-step .onboarding-sources { margin-top: 24px; }
+.onboarding-found { display: grid; gap: 12px; margin-top: 24px; }
+.onboarding-found-card { display: flex; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
+.onboarding-found-card > div { display: grid; gap: 4px; min-width: 0; }
+.onboarding-found-card h2 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink); overflow-wrap: anywhere; }
+.onboarding-found-card p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
+.onboarding-found-card .onboarding-found-meta { color: var(--ink-muted); font-size: 12px; }
+.onboarding-found-card .onboarding-found-error { color: var(--ink-muted); }
+.onboarding-found-icon { display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-muted); }
+.onboarding-found-icon.is-instagram { background: linear-gradient(135deg, #8134af, #dd2a7b 55%, #f58529); color: #fff; }
+.onboarding-found-question { padding: 14px 16px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+.onboarding-found-question p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink); }
+.onboarding-learning { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 14px; color: var(--ink); line-height: 1.5; }
+.onboarding-spinner { width: 18px; height: 18px; flex-shrink: 0; border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: onboarding-spin 0.9s linear infinite; }
+@keyframes onboarding-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .onboarding-spinner { animation: none; } }

@@ -101,7 +101,8 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
       } catch (error) {
         console.error("[dashboard profile]", error);
       }
-      return { destination: `/b/${data}` };
+      // Step 2: where the agent learns from.
+      return { destination: `/onboarding/sources?slug=${encodeURIComponent(data)}` };
     }
     return { saved: true };
   } catch {
@@ -123,11 +124,9 @@ export async function createAgentWorkspace(form: FormData): Promise<OnboardingRe
       name: String(form.get("name") ?? ""),
       businessType: String(form.get("businessType") ?? ""),
       categoryDescription: String(form.get("categoryDescription") ?? ""),
-      instagramUsername: String(form.get("instagramUsername") ?? ""),
-      website: String(form.get("website") ?? ""),
     });
     if ("error" in result) return { error: result.error };
-    return { destination: `/b/${encodeURIComponent(result.slug)}` };
+    return { destination: `/onboarding/sources?slug=${encodeURIComponent(result.slug)}` };
   } catch {
     return { error: "Nuk u lidhëm me shërbimin. Provo përsëri pa mbyllur faqen." };
   }

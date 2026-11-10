@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./icon";
+import { SourcesReview } from "./sources-review";
+import type { SourcesState } from "@/lib/discovery/sources-step";
 import "./knowledge-sources.css";
 
 type Job = { id: string; source: "instagram" | "website"; status: string; created_at?: string; website?: string | null; error?: string | null; postCount?: number; canResume?: boolean };
@@ -30,11 +32,15 @@ export function KnowledgeSources({ slug }: { slug: string }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
 
+  const [review, setReview] = useState<SourcesState["review"]>(null);
   const resuming = useRef(false);
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: "no-store" });
     const data = await response.json().catch(() => null) as State | null;
     if (response.ok && data) setState(data);
+    // What a scan found waits here for the owner's confirmation.
+    const sources = await fetch(`/api/business-sources?slug=${encodeURIComponent(slug)}`, { cache: "no-store" }).then((r) => r.ok ? r.json() as Promise<SourcesState> : null).catch(() => null);
+    setReview(sources?.review ?? null);
     // A step whose worker stopped is picked up again while the page is open.
     if (data?.jobs?.some((job) => job.canResume) && !resuming.current) {
       resuming.current = true;
@@ -42,7 +48,7 @@ export function KnowledgeSources({ slug }: { slug: string }) {
         .catch(() => null).finally(() => { resuming.current = false; });
     }
     return data;
-  }, [endpoint]);
+  }, [endpoint, slug]);
   useEffect(() => { void load(); }, [load]);
   const instagramJob = state?.jobs.find((j) => j.source === "instagram");
   const websiteJob = state?.jobs.find((j) => j.source === "website");
@@ -79,6 +85,12 @@ export function KnowledgeSources({ slug }: { slug: string }) {
         <h2 id="knowledge-sources-title">Nga ku mëson Agjenti</h2>
         <p>Agjenti lexon Instagram-in dhe website-in e biznesit dhe i shton njohuritë këtu. Ndryshimet që bën ti nuk mbishkruhen.</p>
       </header>
+      {review && <SourcesReview slug={slug} review={review} onDone={(published) => {
+        setReview(null);
+        setMessage({ text: published ? `${published} njohuri u publikuan.` : "Propozimi u mbyll." });
+        // The confirmed entries appear in the list below.
+        window.location.reload();
+      }} />}
       <div className="knowledge-source-grid">
         <article className="knowledge-source">
           <span className="knowledge-source-icon is-instagram"><Icon name="instagram" size={20} /></span>
@@ -92,12 +104,12 @@ export function KnowledgeSources({ slug }: { slug: string }) {
                 {instagramJob ? "Analizo përsëri" : "Analizo postimet"}
               </button>
             </> : <>
-              <p>{saved ? `@${saved} · profili publik` : "Shkruaj username-in që Agjenti të mësojë nga profili dhe 10 postimet e fundit publike."}</p>
+              <p>{saved ? `@${saved} · profili publik` : "Shkruaj username-in që Agjenti të mësojë nga profili dhe 5 postimet e fundit publike."}</p>
               {saved && <p className="knowledge-source-status">{instagramJob ? status(instagramJob) : state.publicScanAvailable ? "Ende pa analizuar" : "Do të analizohet sapo leximi me username të aktivizohet"}</p>}
               {state.publicScanUsed ? (
                 <p className="knowledge-source-hint">Profili publik analizohet vetëm një herë.</p>
               ) : <>
-                <form className="knowledge-source-form" onSubmit={(e) => { e.preventDefault(); void post({ action: "instagram_username", username }, state.publicScanAvailable ? "Username u ruajt dhe analiza nisi." : "Username u ruajt."); }}>
+                <form className="knowledge-source-form" onSubmit={(e) => { e.preventDefault(); void post({ action: "instagram_username", username }, state.publicScanAvailable ? "Username u ruajt dhe analiza nisi. Kur të mbarojë, të tregojmë çfarë gjeti për ta konfirmuar." : "Username u ruajt."); }}>
                   <input className="field" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={saved ? `@${saved}` : "@dyqani.im"}
                     aria-label="Username i Instagram-it" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={80} />
                   <button className="btn btn-primary" type="submit" disabled={busy || !username.trim()}>{saved ? "Ndrysho" : "Ruaj"}</button>
@@ -118,8 +130,8 @@ export function KnowledgeSources({ slug }: { slug: string }) {
             <h3>Website</h3>
             <p>{websiteJob?.website ?? "Shto faqen e biznesit që Agjenti të lexojë ofertën dhe kontaktet."}</p>
             {websiteJob && <p className="knowledge-source-status">{status(websiteJob)}</p>}
-            <form className="knowledge-source-form" onSubmit={(e) => { e.preventDefault(); void post({ action: "start", source: "website", website, force: true }, "Analiza e website-it nisi."); }}>
-              <input className="field" type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder={websiteJob?.website ?? "https://"}
+            <form className="knowledge-source-form" onSubmit={(e) => { e.preventDefault(); void post({ action: "start", source: "website", website: /^https?:\/\//i.test(website.trim()) ? website.trim() : `https://${website.trim()}`, force: true, review: true }, "Analiza e website-it nisi. Kur të mbarojë, të tregojmë çfarë gjeti për ta konfirmuar."); }}>
+              <input className="field" inputMode="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder={websiteJob?.website ?? "https://"}
                 aria-label="Adresa e website-it" maxLength={2000} />
               <button className="btn btn-primary" type="submit" disabled={busy || !website.trim() || !!running(websiteJob)}>Analizo</button>
             </form>

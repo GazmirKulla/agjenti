@@ -94,7 +94,7 @@ async function handlePOST(request: Request) {
     }
     if (body.action === "start") {
       if (!["instagram", "website"].includes(String(body.source))) throw new Error("invalid_request");
-      const id = await enqueueDiscovery(business.id, user.id, body.source as "instagram" | "website", typeof body.website === "string" ? body.website : undefined, body.force === true);
+      const id = await enqueueDiscovery(business.id, user.id, body.source as "instagram" | "website", typeof body.website === "string" ? body.website : undefined, body.force === true, body.review === true ? { review: true } : {});
       wake(business.id, request);
       return json({ id });
     }

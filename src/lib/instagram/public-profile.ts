@@ -3,7 +3,7 @@ import { cleanBusinessProfile, type InstagramBusinessProfile } from "./business-
 import type { InstagramPost } from "./media";
 
 /** How many recent posts a scan by username reads. */
-export const PUBLIC_POST_LIMIT = 10;
+export const PUBLIC_POST_LIMIT = 5;
 
 /** Reading a public Instagram account by username. Meta's Business Discovery
  * (on Agjenti.app's own account, Facebook Login) is preferred once configured;

@@ -54,7 +54,7 @@ it("prefers Meta and otherwise reads through Apify", () => {
   expect(publicScanProvider()).toBe("meta");
 });
 
-it("reads the profile and only the last 10 posts through Apify", async () => {
+it("reads the profile and only the last 5 posts through Apify", async () => {
   vi.stubEnv("META_DISCOVERY_TOKEN", "");
   vi.stubEnv("APIFY_TOKEN", "apify");
   const latestPosts = Array.from({ length: 12 }, (_, i) => ({ id: String(i), type: i === 1 ? "Video" : "Image", caption: `Post ${i}`,
@@ -69,7 +69,7 @@ it("reads the profile and only the last 10 posts through Apify", async () => {
   });
   const result = await fetchPublicInstagram("zana", fetcher as unknown as typeof fetch);
   expect(result.profile).toMatchObject({ name: "Zana Store", website: "https://zana.al/" });
-  expect(result.posts).toHaveLength(10);
+  expect(result.posts).toHaveLength(5);
   expect(result.posts[1].mediaType).toBe("VIDEO");
   expect(result.posts[2].images).toEqual([{ id: "c1", url: "https://cdn.test/c1.jpg" }]);
 });
