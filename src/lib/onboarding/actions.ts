@@ -7,6 +7,7 @@ import { homeForAccess } from "@/lib/auth/destination";
 import { getAppSettings } from "@/lib/platform/settings";
 import { parseAnswers, initialInstructions } from "./model";
 import { createStarterWorkspace } from "./starter";
+import { syncProfileKnowledge } from "@/lib/knowledge/profile-knowledge";
 import { persistGeneratedProfile } from "@/lib/dashboard/profile/service";
 type OnboardingResult = {
   error?: string;
@@ -96,6 +97,7 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
             business.id,
             answers as unknown as Record<string, unknown>,
           );
+          await syncProfileKnowledge(business.id, answers.details).catch(() => null);
           await startOnboardingSources(business.id, user.id, { instagramUsername: instagramUsername || null, website: normalizeWebsite(website) });
         }
       } catch (error) {

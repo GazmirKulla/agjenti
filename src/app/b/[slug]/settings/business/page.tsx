@@ -5,7 +5,7 @@ import { ActionForm } from "@/components/dashboard/action-form";
 import { saveItemSetup } from "@/lib/items/actions";
 import { loadItemSetup } from "@/lib/items/business";
 import { ITEM_KINDS } from "@/lib/items/kinds";
-import { BusinessProfile } from "@/components/dashboard/business-profile";
+import Link from "next/link";
 import { PageHeading } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -50,29 +50,18 @@ export default async function SettingsPage({
   const autoReplyBlocked = access.business.auto_reply
     ? null
     : setupGateMessage(await loadSetupStatus(access.business.id));
-  const { data: onboarding, error: onboardingError } = await createServiceSupabase()
-    .from("business_onboarding")
-    .select("answers")
-    .eq("business_id", access.business.id)
-    .maybeSingle();
-
-  const prepared = !onboarding?.answers ? await createServiceSupabase()
-    .from("business_invitations").select("details").eq("target_business_id",access.business.id).eq("status","accepted").maybeSingle() : null;
-  const profileAnswers = onboarding?.answers ?? (prepared?.data ? { name:prepared.data.details?.name, details:{businessDescription:prepared.data.details?.description} } : undefined);
-
   return (
     <>
       <PageHeading
         eyebrow="Cilësimet"
         title={access.business.name}
-        description="Profili i biznesit dhe përgjigjet automatike për klientët."
+        description="Të dhënat e biznesit dhe përgjigjet automatike për klientët."
       />
       <div className="grid gap-6">
-            <BusinessProfile
-              answers={profileAnswers}
-              slug={slug}
-              failed={!!onboardingError || !!prepared?.error}
-            />
+            <p className="muted-copy">
+              Përshkrimi i biznesit, oferta dhe pyetjet e shpeshta ruhen te{" "}
+              <Link className="soft-link" href={`/b/${slug}/knowledge`}>Njohuritë</Link>, ku i lexon Agjenti.
+            </p>
             <ActionForm
               action={saveBusiness}
               className="panel section-pad grid gap-5"

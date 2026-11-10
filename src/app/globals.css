@@ -1841,52 +1841,6 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
 .settings-tab-panels > [hidden] {
   display: none;
 }
-.profile-groups {
-  display: grid;
-  gap: 16px;
-}
-.profile-group {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 16px 18px;
-}
-.profile-group h3 {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 14px;
-  color: var(--ink-muted);
-  letter-spacing: 0.01em;
-}
-.profile-fields {
-  display: grid;
-  gap: 14px;
-}
-.profile-fields > div {
-  display: grid;
-  grid-template-columns: minmax(140px, 0.9fr) minmax(0, 1.4fr);
-  gap: 12px 20px;
-  align-items: start;
-  font-size: 13px;
-}
-.profile-fields dt {
-  color: var(--ink-muted);
-  line-height: 1.45;
-}
-.profile-fields dd {
-  color: var(--ink);
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-.profile-fields > div.profile-field-wide {
-  grid-template-columns: 1fr;
-  gap: 6px;
-}
-@media (max-width: 640px) {
-  .profile-fields > div {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-}
 @media (max-width: 1000px) {
   .configuration-layout {
     grid-template-columns: 1fr;

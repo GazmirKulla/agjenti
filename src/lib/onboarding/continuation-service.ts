@@ -1,6 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getAppSettings } from "@/lib/platform/settings";
 import { refreshGeneratedProfile } from "@/lib/dashboard/profile/service";
+import { syncProfileKnowledge } from "@/lib/knowledge/profile-knowledge";
 import { parseAnswers, type Answers } from "./model";
 import {
   applyContinuationAnswer,
@@ -63,6 +64,9 @@ export async function answerContinuation(
   if (error) throw new Error("onboarding_save_failed");
   if (!data?.length)
     throw new ContinuationError("Përgjigjet ndryshuan në një dritare tjetër. Rifresko panelin.", 409);
+  // What the owner tells about the business is kept in Knowledge, where the agent reads it.
+  try { await syncProfileKnowledge(businessId, next.details); }
+  catch (error) { console.error("[onboarding continuation knowledge]", error); }
   let profileChanged = false;
   if (changesDashboardSignals(current, next)) {
     try {
