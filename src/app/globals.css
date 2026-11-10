@@ -4514,3 +4514,21 @@ html:has(.native-business-content:has(.inbox-workspace)) body.min-h-screen {
 .item-kind-choice span { display: grid; gap: 3px; }
 .item-kind-choice strong { font-size: 14px; color: var(--ink); }
 .item-kind-choice small { color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
+/* Agent instructions: facts move to Knowledge. */
+.instruction-facts { display: grid; gap: 14px; margin-bottom: 20px; }
+.instruction-facts-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.instruction-facts-head h2 { font-size: 15px; font-weight: 650; margin: 0 0 4px; }
+.instruction-facts-head > div { flex: 1 1 280px; min-width: 0; }
+.instruction-facts-proposal { display: grid; gap: 10px; }
+.instruction-facts-proposal > p { margin: 0; font-size: 14px; line-height: 1.55; }
+.instruction-facts-proposal ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.instruction-facts-proposal li { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); font-size: 13px; }
+.instruction-facts-proposal li span { color: var(--ink-muted); white-space: pre-line; overflow-wrap: anywhere; }
+.instruction-facts-preview { margin: 0; padding: 12px; max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); font: inherit; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.instruction-facts-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.instruction-facts-ok { margin: 0; color: var(--accent); font-size: 13px; font-weight: 600; }
+.instruction-facts-error { margin: 0; color: var(--danger); font-size: 13px; }
+.instruction-facts-more { justify-self: start; padding: 0; border: 0; background: none; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
+.chat-knowledge-used { margin: 4px 0 0 44px; color: var(--ink-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.chat-knowledge-used span { font-weight: 600; }
+.instruction-facts-notes { margin: 0; padding: 10px 12px 10px 28px; border-radius: 10px; background: color-mix(in srgb, #f5a524 12%, var(--surface)); color: var(--ink); font-size: 13px; line-height: 1.5; }

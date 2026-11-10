@@ -1,3 +1,4 @@
+import { InstructionFacts } from "@/components/agents/instruction-facts";
 import { CommunicationEditor, type CommunicationEditorAgent } from "@/components/agents/communication-editor";
 import { prepareCommunicationConfiguration, saveCommunicationConfiguration, communicationConfigurationColumns } from "@/lib/agents/communication-configuration";
 import { prepareManagedAgent, saveManagedAgent } from "@/lib/agents/manage";
@@ -168,6 +169,7 @@ export default async function AgentsPage({
           Provo Agjentin →
         </Link>
       </div>
+      {!!agents?.length && <InstructionFacts slug={slug} />}
       <div className="configuration-layout">
         <div className="space-y-5">
           {(agents ?? []).map((a) => (

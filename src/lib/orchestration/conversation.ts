@@ -236,6 +236,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     externalActions: snapshotExternalActions(),
     ...(handoff ? { handoff: true, advisoryHandoff: mode === "test" } : {}),
     debug: { model: modelUsed ?? modelFor("customer"), source: "ai", fallbackReason: null, agentConfigured: !!agent?.instructions, knowledgeCount: grounding.knowledge.records.length,
+      knowledgeTitles: grounding.knowledge.records.map(record => record.title).slice(0, 12),
       productCount: grounding.products.records.length, trainingMemoryIds: training.rules.map(r => r.id), workflowSteps: definition?.steps.map(s => s.id) ?? [], elapsedMs: Date.now() - started },
   };
 }

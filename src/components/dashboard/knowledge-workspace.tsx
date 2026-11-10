@@ -75,17 +75,19 @@ export async function KnowledgeWorkspace({
       }>;
     };
     const db = createServiceSupabase();
+    // A repeated import updates the same questions instead of adding copies.
+    const { data: current } = await db.from("knowledge_entries").select("id,title")
+      .eq("business_id", acc.business.id).or("intent_key.is.null,intent_key.neq.service");
+    const byTitle = new Map((current ?? []).map((row) => [row.title.trim().toLocaleLowerCase(), row.id]));
     for (const entry of json.entries ?? []) {
-      await db
-        .from("knowledge_entries")
-        .insert({
-          business_id: acc.business.id,
-          title: entry.question,
-          body: entry.answer,
-          intent_key: entry.intent_key,
-          sort_order: entry.sort_order ?? 0,
-        })
-        .throwOnError();
+      if (typeof entry.question !== "string" || typeof entry.answer !== "string" || !entry.question.trim()) continue;
+      const values = { title: entry.question.trim(), body: entry.answer, intent_key: entry.intent_key === "service" ? null : entry.intent_key, sort_order: entry.sort_order ?? 0 };
+      const existing = byTitle.get(values.title.toLocaleLowerCase());
+      if (existing) await db.from("knowledge_entries").update({ ...values, updated_at: new Date().toISOString() }).eq("id", existing).eq("business_id", acc.business.id).throwOnError();
+      else {
+        const { data: created } = await db.from("knowledge_entries").insert({ business_id: acc.business.id, ...values }).select("id").single().throwOnError();
+        if (created) byTitle.set(values.title.toLocaleLowerCase(), created.id);
+      }
     }
     revalidatePath(`/b/${slug}`, "layout");
   }

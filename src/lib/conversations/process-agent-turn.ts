@@ -28,6 +28,8 @@ export type AgentTurnResult = {
     fallbackReason: string | null;
     agentConfigured: boolean;
     knowledgeCount: number;
+    /** Titles of the knowledge given to the agent for this reply (the most relevant ones). */
+    knowledgeTitles?: string[];
     productCount: number;
     workflowSteps: string[];
     elapsedMs: number;
