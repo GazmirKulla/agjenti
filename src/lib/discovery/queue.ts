@@ -159,6 +159,7 @@ export async function runDiscoveryQueue(businessId: string | null = null, budget
     if (!job) break;
     try { await withAiUsage(job.business_id, () => processDiscoveryStep(job)); }
     catch (error) {
+      console.error("[discovery]", job.source, job.stage, error instanceof Error ? error.message.slice(0, 300) : "unknown");
       const message = error instanceof Error && error.message === "scan_migration_required" ? "Konfigurimi automatik kërkon migrimin 20261008160000_business_process.sql në databazë, pas migrimeve ekzistuese. Kontakto administratorin." : "Analiza u ndërpre. Do të provohet përsëri; mund të vazhdosh edhe manualisht.";
       await checkpoint(job, job.checkpoint, job.stage, message).catch(() => {});
     }

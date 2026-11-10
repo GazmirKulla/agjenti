@@ -46,15 +46,20 @@ beforeEach(() => {
   m.rpc.mockResolvedValue({ error: null });
   m.upsert.mockResolvedValue({ error: null });
 });
-it("always guides in the same five-step order and never includes customers or orders", () => {
+it("learns from the sources first, connects the channel last, and never includes customers or orders", () => {
   expect(setupSteps(ready).map((s) => s.key)).toEqual([
-    "instagram",
+    "sources",
     "products",
     "agents",
     "workflows",
     "test",
+    "instagram",
   ]);
+  // Reading Instagram or the website helps but never blocks starting.
   expect(isReady(ready)).toBe(true);
+  expect(setupSteps(ready)[0].done).toBe(false);
+  expect(setupSteps({ ...ready, sourcesRead: true })[0].done).toBe(true);
+  expect(setupGateMessage({ ...ready, connected: false })).toContain("Lidh Instagram-in");
   for (const partial of [
     { connected: false },
     { usableProducts: 0 },
@@ -126,10 +131,11 @@ it("allows catalog/service-only workspaces without artificial products or order 
   for (const extra of [{ catalogCount: 1 }, { serviceCount: 1 }, { knowledgeCount: 1 }]) {
     const s = { ...ready, productCount: 0, usableProducts: 0, ...extra };
     expect(setupSteps(s).map((step) => step.key)).toEqual([
-      "instagram",
+      "sources",
       "products",
       "agents",
       "test",
+      "instagram",
     ]);
     expect(isReady(s)).toBe(true);
     expect(isReady({ ...s, tested: false })).toBe(false);

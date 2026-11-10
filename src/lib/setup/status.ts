@@ -24,6 +24,9 @@ export async function loadSetupStatus(
     throw new Error("Nuk u ngarkua progresi i konfigurimit.");
   }
   if (!data) throw new Error("Nuk u ngarkua progresi i konfigurimit.");
-  return { ...data, available: true } as SetupStatus;
+  // Any scan that was not a failure counts: it runs on its own afterwards.
+  const { data: read } = await createServiceSupabase().from("business_discovery_jobs").select("id")
+    .eq("business_id", businessId).neq("status", "failed").limit(1).maybeSingle();
+  return { ...data, available: true, sourcesRead: Boolean(read) } as SetupStatus;
 }
 export const getSetupStatus = cache(loadSetupStatus);

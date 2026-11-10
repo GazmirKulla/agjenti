@@ -1,7 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { listMemberships } from "@/lib/tenant/access";
 import { normalizeInstagramUsername } from "@/lib/instagram/public-profile";
-import { saveInstagramUsername } from "@/lib/discovery/instagram-username";
+import { normalizeWebsite, startOnboardingSources } from "@/lib/discovery/onboarding-sources";
 import { persistGeneratedProfile } from "@/lib/dashboard/profile/service";
 import { emptyDetails } from "./audio-fields";
 import { businessCategories } from "./categories";
@@ -18,7 +18,7 @@ export type StarterWorkspaceResult =
   | { error: string; status: 400 | 409 | 503 };
 type ParsedStarter =
   | { error: string }
-  | { name: string; businessType: string; categoryDescription: string; instagramUsername: string | null };
+  | { name: string; businessType: string; categoryDescription: string; instagramUsername: string | null; website: string | null };
 
 export function publicBusinessCategories(translate: (label: string) => string) {
   return businessCategories.map(([id, label]) => ({
@@ -54,11 +54,17 @@ export function parseStarterWorkspace(input: unknown): ParsedStarter {
   const instagramUsername = rawInstagram ? normalizeInstagramUsername(rawInstagram) : null;
   if (rawInstagram && !instagramUsername)
     return { error: "Username i Instagram-it nuk është i vlefshëm. Lëre bosh ose shkruaj p.sh. @dyqani.im" };
+  // Optional: the business website, read the same way.
+  const rawWebsite = typeof raw.website === "string" ? raw.website.trim() : "";
+  const website = rawWebsite ? normalizeWebsite(rawWebsite) : null;
+  if (rawWebsite && !website)
+    return { error: "Website nuk është i vlefshëm. Lëre bosh ose shkruaj p.sh. zana.al" };
   return {
     name,
     businessType,
     categoryDescription: businessType === "other" ? description : "",
     instagramUsername,
+    website,
   };
 }
 
@@ -127,8 +133,7 @@ export async function createStarterWorkspace(
           ...answers,
           ...starterCapabilities,
         });
-        if (parsed.instagramUsername)
-          await saveInstagramUsername(business.id, userId, parsed.instagramUsername).catch(() => null);
+        await startOnboardingSources(business.id, userId, parsed);
       }
     } catch (error) {
       console.error("[dashboard profile]", error);

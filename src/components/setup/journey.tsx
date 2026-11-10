@@ -44,6 +44,7 @@ export function SetupJourney({
     };
   }, [router]);
   const steps = setupSteps(status);
+  // Optional steps are still suggested in order; only launching ignores them.
   const next = steps.find((s) => !s.done) ?? steps[steps.length - 1];
   const [chosen, setChosen] = useState<string | null>(null);
   const active = steps.find((s) => s.key === chosen) ?? next;
@@ -76,7 +77,7 @@ export function SetupJourney({
       <aside className="setup-strip">
         <div>
           <strong>
-            {!status.connected
+            {!status.connected && next.key === "instagram"
               ? "Lidh Instagram-in për përdorimin real"
               : status.launched
                 ? "Konfigurimi ndryshoi — rekomandohet një provë e re"
@@ -85,7 +86,7 @@ export function SetupJourney({
                   : `Konfigurimi · ${count}/${steps.length} hapa`}
           </strong>
           <p>
-            {status.connected
+            {status.connected || next.key !== "instagram"
               ? next.title
               : "Përgatitja ruhet. Bisedat reale kërkojnë një lidhje aktive."}
           </p>
@@ -120,7 +121,7 @@ export function SetupJourney({
           <p>
             {isReady(status)
               ? "Zgjidh si dëshiron të fillosh. Mund ta ndryshosh më vonë nga cilësimet."
-              : "Lidh Instagram-in, përgatit katalogun dhe provo agjentin përpara përdorimit real."}
+              : "Mëso Agjentin nga Instagram-i dhe website-i, përgatit ofertën, provoje dhe në fund lidh kanalin e bisedave."}
           </p>
         </div>
         <button className="btn btn-ghost" onClick={() => router.refresh()}>
@@ -174,7 +175,9 @@ export function SetupJourney({
                       <small>
                         {step.done
                           ? "Përfunduar"
-                          : i === 0
+                          : step.optional
+                            ? "Opsional"
+                            : step.key === "instagram"
                             ? "I detyrueshëm"
                             : next.key === step.key
                               ? "Hapi i radhës"

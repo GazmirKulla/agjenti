@@ -42,7 +42,7 @@ describe("self-service onboarding boundary", () => {
     form.set("businessType", "beauty");
     form.set("user_id", "victim");
     expect(await createAgentWorkspace(form)).toEqual({ destination: "/b/biznes-agent" });
-    expect(mocks.starter).toHaveBeenCalledWith("verified-user", { name: "Studio", businessType: "beauty", categoryDescription: "", instagramUsername: "" });
+    expect(mocks.starter).toHaveBeenCalledWith("verified-user", { name: "Studio", businessType: "beauty", categoryDescription: "", instagramUsername: "", website: "" });
   });
   it("returns the starter validation error for a missing business type", async () => {
     mocks.starter.mockResolvedValue({ error: "Zgjidh llojin e biznesit.", status: 400 });

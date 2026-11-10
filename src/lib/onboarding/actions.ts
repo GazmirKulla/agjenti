@@ -1,6 +1,6 @@
 "use server";
 import { normalizeInstagramUsername } from "@/lib/instagram/public-profile";
-import { saveInstagramUsername } from "@/lib/discovery/instagram-username";
+import { normalizeWebsite, startOnboardingSources } from "@/lib/discovery/onboarding-sources";
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { homeForAccess } from "@/lib/auth/destination";
@@ -48,6 +48,10 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
       ? String((input as Record<string, unknown>).instagramUsername).trim() : "";
     if (complete && instagramUsername && !normalizeInstagramUsername(instagramUsername))
       return { error: "Username i Instagram-it nuk është i vlefshëm. Lëre bosh ose shkruaj p.sh. @dyqani.im" };
+    const website = input && typeof input === "object" && typeof (input as Record<string, unknown>).website === "string"
+      ? String((input as Record<string, unknown>).website).trim() : "";
+    if (complete && website && !normalizeWebsite(website))
+      return { error: "Website nuk është i vlefshëm. Lëre bosh ose shkruaj p.sh. zana.al" };
     if (complete && answers.name.length < 2)
       return { error: "Vendos emrin e biznesit (të paktën 2 karaktere)." };
     // A person may create any number of businesses; messages are billed per person.
@@ -92,7 +96,7 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
             business.id,
             answers as unknown as Record<string, unknown>,
           );
-          if (instagramUsername) await saveInstagramUsername(business.id, user.id, instagramUsername).catch(() => null);
+          await startOnboardingSources(business.id, user.id, { instagramUsername: instagramUsername || null, website: normalizeWebsite(website) });
         }
       } catch (error) {
         console.error("[dashboard profile]", error);
@@ -120,6 +124,7 @@ export async function createAgentWorkspace(form: FormData): Promise<OnboardingRe
       businessType: String(form.get("businessType") ?? ""),
       categoryDescription: String(form.get("categoryDescription") ?? ""),
       instagramUsername: String(form.get("instagramUsername") ?? ""),
+      website: String(form.get("website") ?? ""),
     });
     if ("error" in result) return { error: result.error };
     return { destination: `/b/${encodeURIComponent(result.slug)}` };

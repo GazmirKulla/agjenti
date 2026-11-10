@@ -67,8 +67,9 @@ export function AgentWorkspaceForm({ initialName = "", initialType = "" }: { ini
           />
         </div>
       )}
-      <div className="onboarding-intro">
-        <label htmlFor="workspace-instagram">Instagram i biznesit <small>(opsional)</small></label>
+      <fieldset className="onboarding-sources">
+        <legend>Nga ku të mësojë Asistenti <small>(opsionale)</small></legend>
+        <label htmlFor="workspace-instagram">Instagram i biznesit</label>
         <input
           id="workspace-instagram"
           name="instagramUsername"
@@ -78,8 +79,20 @@ export function AgentWorkspaceForm({ initialName = "", initialType = "" }: { ini
           spellCheck={false}
           placeholder="@dyqani.im"
         />
-        <small className="onboarding-hint">Asistenti mëson nga profili dhe postimet publike. Mund ta shtosh edhe më vonë te Njohuritë.</small>
-      </div>
+        <label htmlFor="workspace-website">Website</label>
+        <input
+          id="workspace-website"
+          name="website"
+          type="text"
+          inputMode="url"
+          maxLength={2000}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="zana.al"
+        />
+        <small className="onboarding-hint">Asistenti lexon profilin publik dhe website-in që të njohë ofertën. Lidhja e Instagram-it për bisedat bëhet në fund.</small>
+      </fieldset>
       <div className="onboarding-note">
         <Icon name="spark" />
         <p>

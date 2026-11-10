@@ -205,7 +205,7 @@ describe("onboarding answers", () => {
       agentCapabilities: parsed.agentCapabilities,
       recommendedConfiguration: {
         workflow: "personalized-order",
-        checklist: expect.arrayContaining(["Lidh Instagram-in"]),
+        checklist: expect.arrayContaining(["Shto Instagram-in dhe website-in që Agjenti të mësojë", "Lidh Instagram-in për bisedat"]),
       },
     });
   });

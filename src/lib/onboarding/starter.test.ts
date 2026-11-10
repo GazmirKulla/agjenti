@@ -48,7 +48,17 @@ it("accepts a public business type and a name", () => {
     businessType: "retail",
     categoryDescription: "",
     instagramUsername: null,
+    website: null,
   });
+});
+
+it("accepts an optional website with or without https", () => {
+  const parse = (website: string) => parseStarterWorkspace({ name: "Studio", businessType: "retail", website });
+  expect(parse("studio-lule.al")).toMatchObject({ website: "https://studio-lule.al/" });
+  expect(parse("http://www.studio-lule.al/rreth#top")).toMatchObject({ website: "http://www.studio-lule.al/rreth" });
+  expect(parse("")).toMatchObject({ website: null });
+  expect(parse("jo website")).toHaveProperty("error");
+  expect(parse("ftp://studio.al")).toHaveProperty("error");
 });
 
 it("accepts an optional Instagram username in any common form", () => {

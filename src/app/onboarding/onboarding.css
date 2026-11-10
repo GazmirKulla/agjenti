@@ -1416,5 +1416,12 @@
 .onboarding-chat-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; padding:18px 28px; background:var(--surface); color:var(--ink-muted); font-size:12px; }
 @media(max-width:600px) { .conversation-page{padding:12px 8px;} .onboarding-chat{border-radius:20px;} .onboarding-chat-header{padding:20px 16px;gap:12px;} .onboarding-chat-avatar{width:48px;height:48px;} .onboarding-chat-thread{padding:20px 16px;max-height:50dvh;} .onboarding-chat-composer,.onboarding-chat-summary{padding:18px 16px;} .onboarding-chat-bubble{max-width:94%;} .onboarding-chat-options button{flex:1 1 42%;} }
 .onboarding-intro label small { font-weight: 400; color: var(--ink-muted); }
-.onboarding-intro .onboarding-secondary-label { margin-top: 22px; }
+/* Optional sources the agent learns from (public Instagram, website). */
+.onboarding-sources { margin: 26px 0; padding: 16px 16px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
+.onboarding-intro .onboarding-sources { margin: 24px 0 0; }
+.onboarding-sources legend { padding: 0 6px; margin-left: -6px; font-size: 13px; font-weight: 650; }
+.onboarding-sources legend small { font-weight: 400; color: var(--ink-muted); }
+.onboarding-sources label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 8px; }
+.onboarding-sources label:first-of-type { margin-top: 6px; }
+.onboarding-sources input { border: 1px solid var(--line); padding: 13px 14px; border-radius: 10px; width: 100%; font-size: 16px; outline-color: var(--accent); background: var(--paper); color: var(--ink); }
 .onboarding-hint { display: block; margin-top: 8px; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }

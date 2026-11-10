@@ -313,13 +313,14 @@ export function buildBusinessProfile(answers: {
     ).map(([value]) => value),
   );
   const checklist = [
-    "Lidh Instagram-in",
+    "Shto Instagram-in dhe website-in që Agjenti të mësojë",
     answers.offeringTypes.some((item) => item !== "services")
       ? "Shto produktet kryesore"
       : "Shto shërbimet kryesore",
     "Rishiko udhëzimet e Agjentit AI",
     "Përshtat workflow-t sipas ofertës",
     "Provo një bisedë para aktivizimit",
+    "Lidh Instagram-in për bisedat",
   ];
   return {
     ...answers.details,
