@@ -3,7 +3,7 @@ import type { NavItem } from "./builder";
 export type WorkspaceLink = { id: string; path: string; label: string; icon: string };
 const workspaceLabels: Record<string, string> = {
   products: "Produktet", services: "Shërbimet", catalogs: "Katalogët",
-  orders: "Porositë", bookings: "Rezervimet", leads: "Kërkesat",
+  orders: "Porositë", bookings: "Rezervimet", leads: "Leads",
   agents: "Udhëzimet", knowledge: "Njohuritë", sources: "Burimet", workflows: "Workflow Designer",
 };
 export function workspaceLabel(item: WorkspaceLink) { return workspaceLabels[item.id] ?? item.label; }

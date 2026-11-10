@@ -38,6 +38,7 @@ export function DailyBriefing({ slug, active }: { slug: string; active: boolean 
   const attention = data ? [
     { label: "Biseda aktualisht të kaluara te stafi", reading: data.attention.handoffs },
     { label: "Dështime integrimi të regjistruara", reading: data.attention.integrationFailures },
+    ...(data.attention.waitingLeads ? [{ label: "Leads që presin përgjigje", reading: data.attention.waitingLeads }] : []),
   ].filter(item => item.reading.status === "unavailable" || (item.reading.count ?? 0) > 0) : [];
   return <section className="daily-briefing" hidden={!active} aria-label={t("Përmbledhja e biznesit")} aria-busy={loading}>
     <header>

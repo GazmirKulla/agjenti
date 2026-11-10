@@ -46,7 +46,7 @@ describe("generateDashboardProfile", () => {
     expect(profile.primaryActions[0]?.id).toBe("add_product");
   });
 
-  it("enables catalogs for B2B-style signals, not the unbuilt Leads module", () => {
+  it("enables catalogs and Leads for B2B-style signals", () => {
     const profile = generateDashboardProfile({
       businessType: "other",
       offeringTypes: [],
@@ -56,7 +56,8 @@ describe("generateDashboardProfile", () => {
       teamSize: "solo",
     });
     expect(profile.enabledModules).toContain("catalogs");
-    expect(profile.enabledModules).not.toContain("leads");
+    expect(profile.enabledModules).toContain("leads");
+    expect(profile.hiddenModules).not.toContain("leads");
     expect(profile.hiddenModules).toEqual(expect.arrayContaining(["products", "orders", "bookings"]));
     expect(profile.hiddenModules).not.toContain("catalogs");
     expect(profile.enabledModules).not.toContain("products");

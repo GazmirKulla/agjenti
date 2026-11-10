@@ -21,7 +21,7 @@ export type Briefing = {
   range: { from: string; to: string; startDate: string; endDate: string } | null;
   configurationError?: "timezone_invalid";
   metrics: Record<MetricId, Reading>;
-  attention: { handoffs: Reading; integrationFailures: Reading };
+  attention: { handoffs: Reading; integrationFailures: Reading; waitingLeads?: Reading };
   unavailableMetrics: MetricId[];
 };
 export const metricLabels: Record<MetricId, string> = {
@@ -80,6 +80,7 @@ export function briefingAnswer(data: Briefing, language: DashboardLanguage) {
   const attention = [
     ["Biseda aktualisht të kaluara te stafi", data.attention.handoffs],
     ["Dështime integrimi të regjistruara", data.attention.integrationFailures],
+    ...(data.attention.waitingLeads ? [["Leads që presin përgjigje", data.attention.waitingLeads] as const] : []),
   ] as const;
   return [t(periodLabels[data.period]), range, briefingSummary(data, language), ...metrics,
     ...attention.filter(([, m]) => m.status !== "disabled").map(([label, m]) => `${t(label)}: ${m.status === "available" ? m.count : t("Nuk disponohet për momentin")}`),

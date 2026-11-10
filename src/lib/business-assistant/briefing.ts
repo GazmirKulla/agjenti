@@ -1,11 +1,12 @@
 import { authenticatedReadClient } from "@/lib/auth/read-client";
 import { requireBusinessAccess } from "@/lib/tenant/access";
+import { leadSettings } from "@/lib/leads/model";
 import { reportingRange, type Briefing, type BriefingPeriod, type MetricId, type Reading } from "./briefing-model";
 
 export class BriefingError extends Error {
   constructor(public status: number) { super("Briefing unavailable"); }
 }
-const modules = ["inbox", "orders", "customers", "bookings"] as const;
+const modules = ["inbox", "orders", "customers", "bookings", "leads"] as const;
 type Permission = "allowed" | "disabled" | "unavailable";
 
 /** No business writes or provider calls. All metric reads use the user's JWT/RLS.
@@ -18,7 +19,7 @@ export async function loadBriefing(slug: string, period: BriefingPeriod, now = n
   if (!access) throw new BriefingError(403);
   const id = access.business.id;
   async function configuration() {
-    const { data, error } = await db.from("businesses").select("id,name,slug,timezone,dashboard_profile").eq("id", id).maybeSingle();
+    const { data, error } = await db.from("businesses").select("id,name,slug,timezone,dashboard_profile,lead_settings").eq("id", id).maybeSingle();
     if (error) throw new BriefingError(503);
     // RLS rechecks live membership, independent of the access helper's request cache.
     if (!data) throw new BriefingError(403);
@@ -55,7 +56,7 @@ export async function loadBriefing(slug: string, period: BriefingPeriod, now = n
   }
   const count = (table: string) => db.from(table).select("id", { count: "exact", head: true })
     .eq("business_id", id).gte("created_at", range!.from).lt("created_at", cutoff!);
-  const [messages, orders, customers, bookings, handoffs, integrationFailures] = await Promise.all([
+  const [messages, orders, customers, bookings, handoffs, integrationFailures, waitingLeads] = await Promise.all([
     // Unique channel-connection/external_message_id constraints deduplicate inbound retries.
     // created_at means DB recording time, not the provider's event timestamp.
     read("inbox", "inbox", () => count("messages").eq("direction", "inbound").eq("source", "customer")),
@@ -68,6 +69,10 @@ export async function loadBriefing(slug: string, period: BriefingPeriod, now = n
       .eq("business_id", id).eq("conversations.business_id", id).eq("conversations.status", "paused")
       .or("collected->>staffHandoff.eq.true,and(collected->visual->>status.eq.handoff,or(collected->visual->>advisory.is.null,collected->visual->>advisory.eq.false))"), false),
     read("inbox", "activity", () => count("integration_logs").eq("status", "failed")),
+    // Current snapshot: new leads nobody has answered within the owner's follow-up time.
+    read("leads", "leads?view=waiting", () => db.from("leads").select("id", { count: "exact", head: true })
+      .eq("business_id", id).eq("status", "new")
+      .lt("last_interest_at", new Date(now.getTime() - leadSettings(business.lead_settings).followUpHours * 3_600_000).toISOString()), false),
   ]);
   // Discard the result after membership/config changes; RLS-denied empty rows must not become zero.
   const latest = await configuration();
@@ -75,7 +80,7 @@ export async function loadBriefing(slug: string, period: BriefingPeriod, now = n
     throw new BriefingError(409);
   const currentPermissions = await permissions();
   const readings: [string, Reading][] = [["inbox", messages], ["orders", orders], ["customers", customers],
-    ["bookings", bookings], ["inbox", handoffs], ["inbox", integrationFailures]];
+    ["bookings", bookings], ["inbox", handoffs], ["inbox", integrationFailures], ["leads", waitingLeads]];
   for (const [module, reading] of readings) {
     if (currentPermissions[module] !== "allowed") {
       reading.count = null;
@@ -86,6 +91,6 @@ export async function loadBriefing(slug: string, period: BriefingPeriod, now = n
   const metrics = { messages, orders, customers, bookings };
   return { businessId: id, businessName: business.name, timezone: business.timezone, period, range,
     ...(!range ? { configurationError: "timezone_invalid" as const } : {}),
-    generatedAt: new Date().toISOString(), recordedBefore: cutoff, metrics, attention: { handoffs, integrationFailures },
+    generatedAt: new Date().toISOString(), recordedBefore: cutoff, metrics, attention: { handoffs, integrationFailures, waitingLeads },
     unavailableMetrics: (Object.keys(metrics) as MetricId[]).filter(key => metrics[key].status === "unavailable") };
 }

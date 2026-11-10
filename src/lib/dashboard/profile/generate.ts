@@ -101,7 +101,8 @@ function inferModules(signals: DashboardSignals): ModuleId[] {
   }
 
 
-  // Leads is not built yet; lead-oriented businesses still get catalogs.
+  if (leadFlow) enabled.add("leads");
+  // Lead-oriented businesses without products or services also get catalogs.
   if (catalogFlow) {
     enabled.add("catalogs");
   } else if (leadFlow) {

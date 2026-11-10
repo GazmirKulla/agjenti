@@ -49,6 +49,8 @@ export const manualSurfaces = {
   "src/lib/chat-lab/actions.ts#loadLabSetup": {"exception": "Read-only platform test-lab context."},
   "src/lib/chat-lab/actions.ts#runLabTurn": {"exception": "Isolated platform simulation with no production side effects."},
   "src/lib/customers/actions.ts#manageCustomer": {"exception": "Removing or permanently deleting customer records is an owner decision about personal data, not an assistant action."},
+  "src/lib/leads/actions.ts#updateLeadStatus": {"exception": "Moving a lead along is the owner's own sales bookkeeping, not a business operation."},
+  "src/lib/leads/actions.ts#saveLeadSettings": {"exception": "Lead rules only decide which conversations are listed; they grant no capability."},
   "src/lib/dashboard/modules/actions.ts#saveModules": {"exception": "Navigation preferences do not grant or remove runtime capabilities."},
   "src/lib/dashboard/modules/actions.ts#showModule": {"exception": "Navigation preferences do not grant or remove runtime capabilities."},
   "src/app/api/business-modules/route.ts#POST": {"exception": "Navigation preferences do not grant or remove runtime capabilities."},
