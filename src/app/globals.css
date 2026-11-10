@@ -4548,3 +4548,7 @@ html:has(.native-business-content:has(.inbox-workspace)) body.min-h-screen {
 .customer-actions-confirm { display: grid; gap: 10px; padding: 12px; border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line)); border-radius: 12px; background: var(--danger-soft); }
 .customer-actions-confirm p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink); }
 .customer-actions-error { margin: 0; color: var(--danger); font-size: 13px; }
+/* A channel needs the owner's attention (expired, expiring or failing). */
+.dashboard-nav { position: relative; }
+.nav-attention { width: 8px; height: 8px; margin-left: auto; border-radius: 999px; background: #d92d20; box-shadow: 0 0 0 2px var(--surface); flex-shrink: 0; }
+.dashboard-shell.is-icons .nav-attention { position: absolute; top: 8px; right: 8px; margin: 0; }

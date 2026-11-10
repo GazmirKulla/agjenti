@@ -13,7 +13,7 @@ it("retains a reachable destination and search result for every existing module"
     expect(destinations.some(destination => destination.path === item.path), item.id).toBe(true);
     expect(navigation.search.some(destination => destination.path === item.path && destination.label === item.label), item.id).toBe(true);
   }
-  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Produkte", "Shërbime", "Porosi", "Leads", "Klientë", "Agjenti i klientëve", "Aktiviteti", "Raportet", "Integrimet", "Cilësimet"]);
+  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Produkte", "Shërbime", "Porosi", "Leads", "Klientë", "Agjenti i klientëve", "Aktiviteti", "Raportet", "Kanalet", "Cilësimet"]);
 });
 
 it("groups workflow and its deep links under the agent while keeping the original URL", () => {
@@ -53,7 +53,7 @@ it("keeps manual offers, knowledge, channels, behavior and operations in task gr
   expect(groups.map(group => group.id)).toEqual(["offer", "knowledge", "channels", "behavior", "operations"]);
   const paths = groups.flatMap(group => group.items.map(item => item.path));
   expect(new Set(paths).size).toBe(paths.length);
-  for (const path of ["products", "services", "catalogs", "knowledge", "sources", "instagram", "whatsapp", "agents", "agents/test", "orders", "bookings", "calendar", "leads"])
+  for (const path of ["products", "services", "catalogs", "knowledge", "sources", "integrations", "agents", "agents/test", "orders", "bookings", "calendar", "leads"])
     expect(paths).toContain(path);
   expect(paths).not.toContain("workflows"); // Still reachable in Advanced, never removed.
   const limited = organizeWorkspace(allItems.filter(item => ["dashboard", "inbox", "services"].includes(item.id)));
@@ -61,17 +61,14 @@ it("keeps manual offers, knowledge, channels, behavior and operations in task gr
 });
 
 
-it("groups channels under Integrimet using available existing destinations", () => {
-  for (const path of ["instagram", "whatsapp"]) {
+it("keeps Instagram and WhatsApp in the one Kanalet section, old pages included", () => {
+  for (const path of ["integrations", "instagram", "whatsapp"]) {
     expect(workspaceSection(`/b/shop/${path}`, "/b/shop", navigation)).toBe("integrations");
     expect(navigation.settings.some(item => item.path === path)).toBe(false);
     expect(navigation.business.some(item => item.path === path)).toBe(false);
   }
-  expect(workspaceSection("/b/shop/integrations", "/b/shop", navigation)).toBe("integrations");
-  const whatsappOnly = organizeWorkspace(allItems.filter(item => item.id !== "instagram"));
-  expect(workspaceSection("/b/shop/instagram", "/b/shop", whatsappOnly)).toBe("integrations");
-  expect(whatsappOnly.primary.find(item => item.id === "integrations")?.path).toBe("integrations");
-  const noChannels = organizeWorkspace(allItems.filter(item => !["instagram", "whatsapp"].includes(item.id)));
+  expect(navigation.primary.find(item => item.id === "integrations")).toMatchObject({ path: "integrations", label: "Kanalet" });
+  const noChannels = organizeWorkspace(allItems.filter(item => item.id !== "channels"));
   expect(noChannels.primary.some(item => item.id === "integrations")).toBe(false);
 });
 

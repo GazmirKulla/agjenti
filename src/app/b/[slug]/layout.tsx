@@ -13,6 +13,7 @@ import { getAppSettings } from "@/lib/platform/settings";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
 import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import { loadBillingUsage } from "@/lib/billing/service";
+import { channelsNeedAttention } from "@/lib/channels/service";
 import { BillingUsageNotice } from "@/components/dashboard/billing-usage-notice";
 import { isNativeEmbed } from "@/lib/native/embedded";
 import { aiUsageSummary, loadAiUsage } from "@/lib/ai/usage-report";
@@ -30,13 +31,14 @@ export default async function BusinessLayout({
   const access = await listMemberships(user.id);
   const business = (await requireBusinessAccess(user.id, slug))?.business;
   if (!business) redirect("/auth/continue");
-  const [settings, dashboardProfile, billingUsage, nativeHost, aiUsage] = await Promise.all([
+  const [settings, dashboardProfile, billingUsage, nativeHost, aiUsage, channelsAttention] = await Promise.all([
     getAppSettings(),
     loadNavigationProfile(business.id),
     loadBillingUsage(business.id),
     isNativeEmbed(),
     // Tokens are a platform cost statistic: only platform administrators see them.
     access.admin ? loadAiUsage(user.id, business.id, true) : null,
+    channelsNeedAttention(business.id),
   ]);
   const navigationItems = buildNavigationItems(dashboardProfile, "desktop");
   const mobileNavigationItems = buildNavigationItems(
@@ -63,6 +65,7 @@ export default async function BusinessLayout({
       mobileNavigationItems={mobileNavigationItems}
       nativeHost={nativeHost}
       aiUsage={aiUsage ? aiUsageSummary(aiUsage) : undefined}
+      channelsAttention={channelsAttention}
     >
       {settings.announcement && (
         <div

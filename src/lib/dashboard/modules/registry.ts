@@ -124,15 +124,14 @@ export const moduleRegistry: Record<ModuleId, ModuleDefinition> = {
     core: true,
     description: "Instagram, website dhe analiza e biznesit",
   },
-  instagram: {
-    id: "instagram",
-    path: "instagram",
-    label: "Instagram",
-    icon: "instagram",
+  channels: {
+    id: "channels",
+    path: "integrations",
+    label: "Kanalet",
+    icon: "integrations",
     core: true,
-    description: "Lidhja me Instagram",
+    description: "Instagram, WhatsApp dhe gjendja e secilit kanal",
   },
-  whatsapp: { id: "whatsapp", path: "whatsapp", label: "WhatsApp", icon: "inbox", core: true, description: "Lidhja me WhatsApp Business" },
   settings: {
     id: "settings",
     path: "settings",
@@ -161,8 +160,7 @@ export const navigationOrder: ModuleId[] = [
   "knowledge",
   "workflows",
   "sources",
-  "instagram",
-  "whatsapp",
+  "channels",
   "settings",
 ];
 
@@ -183,8 +181,7 @@ export const moduleDependencies: Record<ModuleId, ModuleDependencyRule> = {
   knowledge: { independent: true },
   workflows: { independent: true },
   sources: { independent: true },
-  instagram: { independent: true },
-  whatsapp: { independent: true },
+  channels: { independent: true },
   settings: { independent: true },
 };
 

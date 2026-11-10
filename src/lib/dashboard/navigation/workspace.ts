@@ -11,7 +11,9 @@ export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" |
 const standaloneIds = ["products", "services", "orders", "leads", "customers"] as const;
 const agentIds = new Set(["agents", "knowledge", "workflows", "sources"]);
 const settingsIds = new Set(["settings"]);
-const integrationIds = new Set(["instagram", "whatsapp"]);
+const integrationIds = new Set(["channels"]);
+/** Pages that belong to the channels section (the old per-channel pages included). */
+const channelPaths = ["integrations", "instagram", "whatsapp"];
 /** Modules shown as their own top-level entry, never inside a group. */
 const ownEntryIds = new Set(["activity", "reports"]);
 
@@ -46,7 +48,7 @@ export function organizeWorkspace(items: NavItem[]) {
     ...(agent.some(item => item.id === "agents") ? [{ id: "agent", section: "agent" as const, path: "agents", label: "Agjenti i klientëve", icon: "agents" }] : []),
     ...(items.some(item => item.id === "activity") ? [{ id: "activity", section: "activity" as const, path: "activity", label: "Aktiviteti", icon: "history" }] : []),
     ...(items.some(item => item.id === "reports") ? [{ id: "reports", section: "reports" as const, path: "reports", label: "Raportet", icon: "reports" }] : []),
-    ...(integrations.length ? [{ id: "integrations", section: "integrations" as const, path: "integrations", label: "Integrimet", icon: "integrations" }] : []),
+    ...(integrations.length ? [{ id: "integrations", section: "integrations" as const, path: "integrations", label: "Kanalet", icon: "integrations" }] : []),
     { id: "settings", section: "settings", path: "settings", label: "Cilësimet", icon: "settings" },
   ];
   const search: WorkspaceLink[] = [...primary, ...items, ...agent, ...settings, ...integrations].filter((item, index, all) => all.findIndex(other => other.path === item.path && other.label === item.label) === index);
@@ -64,7 +66,7 @@ export function businessWorkspaceGroups(navigation: ReturnType<typeof organizeWo
   const definitions = [
     { id: "offer", label: "Produkte dhe shërbime", description: "Oferta që u prezanton klientëve.", paths: ["products", "services", "catalogs"] },
     { id: "knowledge", label: "Njohuritë dhe burimet", description: "Informacioni që përdor agjenti për t'u përgjigjur.", paths: ["knowledge", "sources"] },
-    { id: "channels", label: "Kanalet", description: "Lidhjet me Instagram dhe WhatsApp.", paths: ["instagram", "whatsapp"] },
+    { id: "channels", label: "Kanalet", description: "Lidhjet me Instagram dhe WhatsApp.", paths: ["integrations"] },
     { id: "behavior", label: "Konfigurimi i agjentit", description: "Udhëzimet, memoria dhe provat e agjentit të klientëve.", paths: ["agents", "agents/memory", "agents/test"] },
     { id: "operations", label: "Porosi dhe rezervime", description: "Puna e përditshme dhe kërkesat e klientëve.", paths: ["orders", "bookings", "calendar", "leads"] },
   ];
@@ -87,7 +89,7 @@ export function workspaceSection(pathname: string, base: string, navigation: Ret
   for (const id of standaloneIds) {
     if (navigation.primary.some(item => item.id === id) && (pathname === `${base}/${id}` || pathname.startsWith(`${base}/${id}/`))) return id;
   }
-  if (navigation.integrations.length && ["integrations", ...integrationIds].some(path => pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`))) return "integrations";
+  if (navigation.integrations.length && channelPaths.some(path => pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`))) return "integrations";
   if (pathname === `${base}/activity`) return "activity";
   if (pathname === `${base}/reports`) return "reports";
   if (pathname === `${base}/inbox` || pathname.startsWith(`${base}/inbox/`)) return "conversations";

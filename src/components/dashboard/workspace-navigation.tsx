@@ -7,7 +7,9 @@ import { Icon } from "./icon";
 import { activeWorkspaceLink, workspaceLabel, type WorkspaceLink, type organizeWorkspace, type WorkspaceSection } from "@/lib/dashboard/navigation/workspace";
 import s from "./workspace-navigation.module.css";
 
-type Props = { navigation: ReturnType<typeof organizeWorkspace>; section?: WorkspaceSection; base: string; pathname: string; onNavigate: () => void; iconsOnly?: boolean; assistantName?: string };
+type Props = { navigation: ReturnType<typeof organizeWorkspace>; section?: WorkspaceSection; base: string; pathname: string; onNavigate: () => void; iconsOnly?: boolean; assistantName?: string;
+  /** A connected channel needs attention (expired, expiring or failing). */
+  channelsAttention?: boolean };
 
 function NavigationGroup({ id, label, icon, href, links, base, pathname, iconsOnly, onNavigate }: {
   id: string; label: string; icon: string; href: string; links: WorkspaceLink[];
@@ -41,7 +43,7 @@ function NavigationGroup({ id, label, icon, href, links, base, pathname, iconsOn
   </section>;
 }
 
-export function WorkspaceNavigation({ navigation, section, base, pathname, onNavigate, iconsOnly = false, assistantName }: Props) {
+export function WorkspaceNavigation({ navigation, section, base, pathname, onNavigate, iconsOnly = false, assistantName, channelsAttention = false }: Props) {
   const t = useDashboardTranslator();
   return <>
     {navigation.main.map(item => {
@@ -56,8 +58,11 @@ export function WorkspaceNavigation({ navigation, section, base, pathname, onNav
       base={base} pathname={pathname} iconsOnly={iconsOnly} onNavigate={onNavigate}/>
     {navigation.agent.length > 0 && <NavigationGroup id="agent" label="Agjenti" icon="agents" href={`${base}/${navigation.agent[0].path}`}
       links={navigation.agent} base={base} pathname={pathname} iconsOnly={iconsOnly} onNavigate={onNavigate}/>}
-    {navigation.integrations.length > 0 && <NavigationGroup id="channels" label="Kanalet" icon="integrations" href={`${base}/integrations`}
-      links={navigation.integrations} base={base} pathname={pathname} iconsOnly={iconsOnly} onNavigate={onNavigate}/>}
+    {navigation.integrations.length > 0 && <Link href={`${base}/integrations`} className={`dashboard-nav ${section === "integrations" ? "active" : ""}`}
+      aria-current={section === "integrations" ? "page" : undefined} data-tip={iconsOnly ? t("Kanalet") : undefined} onClick={onNavigate}>
+      <Icon name="integrations"/><span className="nav-label">{t("Kanalet")}</span>
+      {channelsAttention && <span className="nav-attention" role="img" aria-label={t("Një kanal ka nevojë për vëmendje")} />}
+    </Link>}
     <Link href={`${base}/settings`} className={`dashboard-nav ${section === "settings" ? "active" : ""}`}
       aria-current={pathname === `${base}/settings` ? "page" : undefined} data-tip={iconsOnly ? t("Cilësimet") : undefined} onClick={onNavigate}>
       <Icon name="settings"/><span className="nav-label">{t("Cilësimet")}</span>
@@ -67,7 +72,7 @@ export function WorkspaceNavigation({ navigation, section, base, pathname, onNav
 
 export function WorkspaceSectionNavigation({ navigation, section, base, pathname }: Omit<Props, "onNavigate">) {
   const t = useDashboardTranslator();
-  if (section === "integrations") return pathname === `${base}/integrations` ? null : <div className={s.context}><Link className="soft-link" href={`${base}/integrations`}>{t("← Integrimet")}</Link></div>;
+  if (section === "integrations") return pathname === `${base}/integrations` ? null : <div className={s.context}><Link className="soft-link" href={`${base}/integrations`}>{t("← Kanalet")}</Link></div>;
   const links = section === "agent" ? navigation.agent : section === "settings" ? navigation.settings : section === "business" ? navigation.business : [];
   if (!links.length) return null;
   const title = section === "agent" ? "Agjenti i klientëve" : section === "settings" ? "Cilësimet" : "Biznesi";

@@ -16,9 +16,12 @@ type Props = {
   loadError?: boolean;
   needsAttention?: boolean;
   whatsapp?: { appId: string; configId: string; version: string };
+  /** How the channel is doing: last customer message and the 7-day count, already worded. */
+  activity?: { lastInbound: string | null; weekInbound: number | null } | null;
+  health?: { level: "off" | "ok" | "warning" | "error"; notes: string[]; info: string[] };
 };
 
-export function IntegrationCard({ channel, businessId, slug, status, identity, loadError, needsAttention, whatsapp }: Props) {
+export function IntegrationCard({ channel, businessId, slug, status, identity, loadError, needsAttention, whatsapp, activity, health }: Props) {
   const t = useDashboardTranslator();
   const router = useRouter();
   const [disconnected, setDisconnected] = useState(false);
@@ -67,6 +70,10 @@ export function IntegrationCard({ channel, businessId, slug, status, identity, l
           <span className={styles.statusDot} aria-hidden="true" />
           {loadError ? t("Statusi nuk u ngarkua") : connected ? t("E lidhur") : reconnect ? t("Kërkon rilidhje") : t("E palidhur")}
         </p>
+        {connected && !loadError && activity && <p className={styles.activity}>
+          {activity.lastInbound ? `${t("Mesazhi i fundit")}: ${activity.lastInbound}` : t("Ende pa mesazhe nga klientët")}
+          {activity.weekInbound !== null && ` · ${activity.weekInbound} ${t("mesazhe në 7 ditë")}`}
+        </p>}
       </div>
     </div>
     <div className={styles.actions}>
@@ -80,7 +87,9 @@ export function IntegrationCard({ channel, businessId, slug, status, identity, l
           : whatsapp && <WhatsAppConnect businessId={businessId} {...whatsapp} connected={false} compact />
       )}
     </div>
-    {needsAttention && !disconnected && !loadError && <p className={styles.notice}>{connected ? t("Lidhja kërkon vëmendje. Shiko detajet.") : t("Lidhja kërkon vëmendje. Rilidhe llogarinë.")}</p>}
+    {!disconnected && !loadError && health?.notes.map((note) => <p key={note} className={`${styles.notice} ${styles.warning}`}>{t(note)}</p>)}
+    {!disconnected && !loadError && health?.info.map((note) => <p key={note} className={styles.notice}>{t(note)}</p>)}
+    {needsAttention && !health?.notes.length && !disconnected && !loadError && <p className={styles.notice}>{connected ? t("Lidhja kërkon vëmendje. Shiko detajet.") : t("Lidhja kërkon vëmendje. Rilidhe llogarinë.")}</p>}
     {busy && <p className={styles.notice} role="status">{t("Duke shkëputur…")}</p>}
     {error && <p className={`${styles.notice} ${styles.error}`} role="alert">{t(error)}</p>}
   </article>;

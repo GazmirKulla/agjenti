@@ -13,6 +13,8 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { whatsappGraphVersion } from "@/lib/whatsapp/api";
 import styles from "@/components/dashboard/integration-card.module.css";
+import { channelHealth, effectiveStatus, timeAgo } from "@/lib/channels/health";
+import { loadChannelActivity } from "@/lib/channels/service";
 
 export default async function IntegrationsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ detail?: string }> }) {
   const t = await getDashboardTranslator();
@@ -32,20 +34,32 @@ export default async function IntegrationsPage({ params, searchParams }: { param
   ]);
   const ig = instagram.data;
   const wa = whatsapp.data;
-  const igStatus = ig?.status === "connected" && ig.expires_at && Date.parse(ig.expires_at) <= Date.now() ? "expired" : ig?.status ?? "disconnected";
+  const igConnection = ig ? { status: ig.status, expiresAt: ig.expires_at, lastError: ig.last_error } : null;
+  const waConnection = wa ? { status: wa.status, lastError: wa.last_error } : null;
+  const igStatus = effectiveStatus(igConnection);
+  const [igActivity, waActivity] = await Promise.all([
+    igStatus === "connected" ? loadChannelActivity(access.business.id, "instagram") : null,
+    wa?.status === "connected" ? loadChannelActivity(access.business.id, "whatsapp") : null,
+  ]);
+  const worded = (a: Awaited<ReturnType<typeof loadChannelActivity>>) => a && { lastInbound: timeAgo(a.lastInboundAt), weekInbound: a.weekInbound };
   const connectedCount = Number(!instagram.error && igStatus === "connected") + Number(!whatsapp.error && wa?.status === "connected");
   return <div className={styles.overview}>
-    <PageHeading title={t("Integrimet")} description={t("Lidh kanalet e komunikimit dhe webin e klientit.")}>
+    <PageHeading title={t("Kanalet")} description={t("Kanalet ku klientët të shkruajnë dhe ku u përgjigjet agjenti. Shiko nëse secili po merr mesazhe.")}>
       {!instagram.error && !whatsapp.error && <span className={styles.count}>{connectedCount} {t("nga 2 kanale të lidhura")}</span>}
     </PageHeading>
     <div className={styles.grid}>
       <IntegrationCard key={`instagram:${ig?.updated_at ?? "empty"}`} channel="instagram" businessId={access.business.id} slug={slug}
         status={igStatus} identity={ig?.username ? `@${ig.username}` : ig?.ig_user_id}
-        loadError={Boolean(instagram.error)} needsAttention={Boolean(ig?.last_error)} />
+        loadError={Boolean(instagram.error)} needsAttention={Boolean(ig?.last_error)}
+        activity={worded(igActivity)} health={channelHealth("instagram", igConnection, igActivity)} />
       <IntegrationCard key={`whatsapp:${wa?.updated_at ?? "empty"}`} channel="whatsapp" businessId={access.business.id} slug={slug}
         status={wa?.status ?? "disconnected"} identity={wa?.display_phone_number || wa?.verified_name}
         loadError={Boolean(whatsapp.error)} needsAttention={Boolean(wa?.last_error)}
+        activity={worded(waActivity)} health={channelHealth("whatsapp", waConnection, waActivity)}
         whatsapp={{ appId: process.env.META_APP_ID ?? "", configId: process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID ?? "", version: whatsappGraphVersion() }} />
+    </div>
+    <h2 className={styles.section}>{t("Lidhje të tjera")}</h2>
+    <div className={styles.grid}>
       <article className={styles.row} aria-label={t("Webi i klientit")}>
         <div className={styles.heading}>
           <span className={`${styles.icon} ${styles.inactiveIcon}`}><Icon name="display" size={28} /></span>

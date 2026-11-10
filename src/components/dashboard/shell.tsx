@@ -26,6 +26,7 @@ export function AppShell({
   mobileNavigationItems,
   nativeHost: embedded = false,
   aiUsage,
+  channelsAttention = false,
 }: {
   children: React.ReactNode;
   name: string;
@@ -40,6 +41,7 @@ export function AppShell({
   nativeHost?: boolean;
   /** This month's OpenAI usage, present only for business owners and platform administrators. */
   aiUsage?: { calls: number; tokens: number };
+  channelsAttention?: boolean;
 }) {
   const [nativeHost, setNativeHost] = useState(embedded);
   useEffect(() => { if (/AgjentiNative\/2\.0/.test(navigator.userAgent)) setNativeHost(true); }, []);
@@ -303,7 +305,7 @@ export function AppShell({
                 <span className="nav-label">{admin ? item.label : t(item.label)}</span>
               </Link>
             );
-          }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} assistantName={assistant?.assistantName} iconsOnly={iconRail} onNavigate={() => { setOpen(false); if (mobile) assistant?.setOpen(false); }} />}
+          }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} assistantName={assistant?.assistantName} channelsAttention={channelsAttention} iconsOnly={iconRail} onNavigate={() => { setOpen(false); if (mobile) assistant?.setOpen(false); }} />}
         </nav>
         <footer className="dashboard-sidebar-footer">
           {!admin ? <ProfilePopover key={pathname} base={base} name={userName || email || name} email={email} compact={iconRail} onNavigate={() => { setOpen(false); assistant?.setOpen(false); }} /> : <Link

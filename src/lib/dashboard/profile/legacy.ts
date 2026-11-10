@@ -16,7 +16,7 @@ export const legacyDashboardProfile: DashboardProfile = {
     "knowledge",
     "workflows",
     "sources",
-    "instagram",
+    "channels",
     "settings",
   ],
   navigationItems: [
@@ -31,7 +31,7 @@ export const legacyDashboardProfile: DashboardProfile = {
     "knowledge",
     "workflows",
     "sources",
-    "instagram",
+    "channels",
     "settings",
   ],
   mobileNavigationItems: ["dashboard", "inbox", "products", "orders"],
@@ -89,7 +89,7 @@ export const legacyDashboardProfile: DashboardProfile = {
     {
       id: "manage_instagram",
       label: "Menaxho Instagram",
-      href: "instagram",
+      href: "integrations",
       icon: "instagram",
     },
   ],
