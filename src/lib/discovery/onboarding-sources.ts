@@ -1,4 +1,6 @@
+import { after } from "next/server";
 import { enqueueDiscovery } from "./queue";
+import { continueDiscovery, workerOrigin } from "./continue";
 import { saveInstagramUsername } from "./instagram-username";
 
 /** "zana.al", "www.zana.al/", "https://zana.al" → an http(s) address, or null. */
@@ -18,6 +20,13 @@ export function normalizeWebsite(input: unknown): string | null {
  * (by username) and its website. Both are optional; a failure never blocks
  * creating the business, and both can be added later from Knowledge. */
 export async function startOnboardingSources(businessId: string, userId: string, sources: { instagramUsername?: string | null; website?: string | null }) {
-  if (sources.instagramUsername) await saveInstagramUsername(businessId, userId, sources.instagramUsername).catch(() => null);
-  if (sources.website) await enqueueDiscovery(businessId, userId, "website", sources.website).catch(() => null);
+  const instagram = sources.instagramUsername
+    ? await saveInstagramUsername(businessId, userId, sources.instagramUsername).catch(() => null) : null;
+  const website = sources.website
+    ? await enqueueDiscovery(businessId, userId, "website", sources.website).catch(() => null) : null;
+  // Start working right away; nobody needs to keep a page open.
+  if ((instagram && "scanning" in instagram && instagram.scanning) || website) {
+    const origin = workerOrigin();
+    after(() => continueDiscovery(businessId, origin));
+  }
 }

@@ -28,7 +28,7 @@ type Job = {
   /** Instagram is read through the business's connection or, publicly, by username. */
   input: { url?: string; connectionId?: string; generation?: string; username?: string };
   stage: string; checkpoint: Checkpoint; lease_token: string;
-  attempts: number;
+  attempts: number; created_at?: string;
 };
 
 export async function enqueueDiscovery(businessId: string, userId: string, source: "instagram" | "website", website?: string, force = false) {
@@ -139,12 +139,21 @@ export async function processDiscoveryStep(job: Job) {
   const finished = await db.rpc("finish_discovery_with_process", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: knowledge, p_profile: setup.profile, p_answers: setup.answers, p_agent: setup.agent, p_process: process, p_process_revision: state.process_revision ?? 0, p_source_profile: data.profile ?? null, p_warnings: (data.warnings ?? []).slice(-20) });
   if (finished.error) throw new Error(["PGRST202", "42883"].includes(finished.error.code) ? "scan_migration_required" : finished.error.message);
   if (!finished.data) return checkpoint(job, data, "finish");
-  if (job.source === "instagram" && data.website && job.user_id) {
+  if (job.source === "instagram" && data.website && job.user_id && !(await websiteReadSince(job))) {
     // A public website supplied by the profile enriches context without a form.
-    // A rescan must enrich from a fresh website read, not reuse an older result.
-    // Enqueue still deduplicates an already-active scan of the same URL.
+    // A rescan must enrich from a fresh website read, not reuse an older result,
+    // but never replaces a website the owner gave (or that was read) since.
     await enqueueDiscovery(job.business_id, job.user_id, "website", data.website, true).catch(() => console.error("[discovery] optional website was not queued"));
   }
+}
+
+/** A website scan that is still going, or finished after this Instagram scan began. */
+async function websiteReadSince(job: Job) {
+  const { data } = await createServiceSupabase().from("business_discovery_jobs").select("status,updated_at")
+    .eq("business_id", job.business_id).eq("source", "website").in("status", ["queued", "running", "completed"])
+    .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+  if (!data) return false;
+  return data.status !== "completed" || !job.created_at || new Date(data.updated_at) >= new Date(job.created_at);
 }
 
 export async function runDiscoveryQueue(businessId: string | null = null, budgetMs = 110000) {

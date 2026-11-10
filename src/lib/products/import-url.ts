@@ -238,6 +238,8 @@ async function fetchChecked(
   resolveHost: (hostname: string) => Promise<string[]>,
   maxBytes: number,
   headers?: Record<string, string>,
+  /** Keep the first maxBytes of a larger page instead of refusing it. */
+  truncate = false,
 ): Promise<Fetched | { error: string }> {
   let current = raw;
   for (let hop = 0; hop < 4; hop += 1) {
@@ -276,7 +278,7 @@ async function fetchChecked(
     ) {
       return { error: "Ky link nuk është faqe produkti." };
     }
-    const body = await readLimited(response, maxBytes);
+    const body = await readLimited(response, maxBytes, truncate);
     if (typeof body !== "string") return body;
     return { url: checked.url, body, contentType };
   }
@@ -361,15 +363,16 @@ function isBlockedIp(address: string): boolean {
 async function readLimited(
   response: Response,
   maxBytes: number,
+  truncate = false,
 ): Promise<string | { error: string }> {
   const declared = Number(response.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > maxBytes) {
+  if (!truncate && Number.isFinite(declared) && declared > maxBytes) {
     return { error: "Faqja është shumë e madhe për t'u skanuar." };
   }
   if (!response.body) {
     const text = await response.text();
     if (text.length > maxBytes)
-      return { error: "Faqja është shumë e madhe për t'u skanuar." };
+      return truncate ? text.slice(0, maxBytes) : { error: "Faqja është shumë e madhe për t'u skanuar." };
     return text;
   }
   const reader = response.body.getReader();
@@ -379,11 +382,15 @@ async function readLimited(
     const { done, value } = await reader.read();
     if (done) break;
     if (!value) continue;
-    total += value.byteLength;
-    if (total > maxBytes) {
+    if (total + value.byteLength > maxBytes) {
       await reader.cancel();
-      return { error: "Faqja është shumë e madhe për t'u skanuar." };
+      if (!truncate) return { error: "Faqja është shumë e madhe për t'u skanuar." };
+      // Modern sites put large script payloads after the visible content.
+      chunks.push(value.subarray(0, maxBytes - total));
+      total = maxBytes;
+      break;
     }
+    total += value.byteLength;
     chunks.push(value);
   }
   const buffer = new Uint8Array(total);
@@ -414,6 +421,8 @@ export async function fetchPublicPage(url: string, deps: ImportDeps = {}) {
     deps.fetch ?? fetch,
     deps.resolveHost ?? defaultResolveHost,
     1_200_000,
+    undefined,
+    true,
   );
 }
 

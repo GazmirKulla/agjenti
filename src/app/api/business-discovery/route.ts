@@ -2,7 +2,8 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { enqueueDiscovery, runDiscoveryQueue } from "@/lib/discovery/queue";
+import { enqueueDiscovery } from "@/lib/discovery/queue";
+import { continueDiscovery, workerOrigin } from "@/lib/discovery/continue";
 import { answersFor, mergedReview, signalsFor, withSetupRecommendations } from "@/lib/discovery/proposal";
 import { discoveryConflictGroups, editDiscoveryDraft, editReviewPreferences, jobProgress, reviewDashboardProfile, reviewEntityEnabled } from "@/lib/discovery/review";
 import { emptyDraft, EntityValidationError, labels, validateForApply, value, type Draft } from "@/lib/business-intelligence/model";
@@ -28,8 +29,9 @@ async function authorize(request: Request) {
   if (!user || !access) throw new Error("unauthorized");
   return { user, business: access.business };
 }
-function wake(businessId: string) {
-  after(async () => { await runDiscoveryQueue(businessId).catch(() => console.error("[discovery] worker unavailable")); });
+function wake(businessId: string, request: Request) {
+  const origin = workerOrigin(new URL(request.url).origin);
+  after(() => continueDiscovery(businessId, origin));
 }
 async function readBody(request: Request) {
   const reader = request.body?.getReader();
@@ -83,17 +85,17 @@ async function handlePOST(request: Request) {
     if (request.headers.get("origin") !== new URL(request.url).origin) throw new Error("unauthorized");
     const { user, business } = await authorize(request);
     const body = await readBody(request);
-    if (body.action === "resume") { wake(business.id); return json({ success: "Analiza vazhdon në background." }); }
+    if (body.action === "resume") { wake(business.id, request); return json({ success: "Analiza vazhdon në background." }); }
     if (body.action === "instagram_username") {
       const result = await saveInstagramUsername(business.id, user.id, body.username);
       if ("error" in result) return json({ error: result.error }, 400);
-      if (result.scanning) wake(business.id);
+      if (result.scanning) wake(business.id, request);
       return json(result);
     }
     if (body.action === "start") {
       if (!["instagram", "website"].includes(String(body.source))) throw new Error("invalid_request");
       const id = await enqueueDiscovery(business.id, user.id, body.source as "instagram" | "website", typeof body.website === "string" ? body.website : undefined, body.force === true);
-      wake(business.id);
+      wake(business.id, request);
       return json({ id });
     }
     const db = createServiceSupabase();

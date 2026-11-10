@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ rpc: vi.fn(), read: vi.fn(), normalize: vi.fn(), classify: vi.fn(), instagram: vi.fn(), website: vi.fn(), process: vi.fn() }));
-vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: m.rpc, from: () => { const chain = { select: () => chain, eq: () => chain, single: m.read, maybeSingle: m.read }; return chain; } }) }));
+vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: m.rpc, from: () => { const chain = { select: () => chain, eq: () => chain, in: () => chain, order: () => chain, limit: () => chain, single: m.read, maybeSingle: m.read }; return chain; } }) }));
 vi.mock("@/lib/business-intelligence/normalization", () => ({ normalizeSource: m.normalize }));
 vi.mock("@/lib/business-intelligence/ingestion", () => ({ extractInstagram: m.instagram, extractWebsite: m.website }));
 vi.mock("./proposal", async (original) => ({ ...await original<typeof import("./proposal")>(), classifyBusiness: m.classify }));
@@ -52,11 +52,20 @@ describe("resumable discovery worker", () => {
     const signals = signalsFor("services", ["services"]);
     m.read.mockResolvedValueOnce({ data: { id: "connection" }, error: null })
       .mockResolvedValueOnce({ data: { draft: emptyDraft(), revision: 1, signals_source: "generated", baseline: { business: { name: "Studio", dashboard_profile: generateDashboardProfile(signals, "manual") }, agents: [] } }, error: null })
-      .mockResolvedValueOnce({ data: { id: "connection" }, error: null });
+      .mockResolvedValueOnce({ data: { id: "connection" }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
     await processDiscoveryStep({ ...job, source: "instagram", user_id: "verified-user", input: { connectionId: "connection", generation: "generation" }, stage: "finish", checkpoint: { entities: [], website: "https://shop.test/#contact" } });
     expect(m.classify).not.toHaveBeenCalled();
     expect(m.rpc).toHaveBeenCalledWith("finish_discovery_with_process", expect.objectContaining({ p_signals: signals }));
     expect(m.rpc).toHaveBeenLastCalledWith("enqueue_business_discovery", { p_business: "business", p_user: "verified-user", p_source: "website", p_input: { url: "https://shop.test/" }, p_force: true });
+  });
+  it("never replaces a website scan the owner started", async () => {
+    const signals = signalsFor("services", ["services"]);
+    m.read.mockResolvedValueOnce({ data: { draft: emptyDraft(), revision: 1, signals_source: "generated", baseline: { business: { name: "Studio", dashboard_profile: generateDashboardProfile(signals, "manual") }, agents: [] } }, error: null })
+      .mockResolvedValueOnce({ data: { status: "running", updated_at: new Date().toISOString() }, error: null });
+    await processDiscoveryStep({ ...job, source: "instagram", user_id: "verified-user", input: { username: "studio" }, stage: "finish", checkpoint: { entities: [], website: "http://shop.test/" } });
+    expect(m.rpc).toHaveBeenCalledWith("finish_discovery_with_process", expect.anything());
+    expect(m.rpc).not.toHaveBeenCalledWith("enqueue_business_discovery", expect.anything());
   });
   it("scopes both caption and photo analysis to context even if a provider returns offers", async () => {
     const entries = parseEntities([{ target: "product", facts: [{ field: "name", value: "Monday" }] }, { target: "profile", facts: [{ field: "description", value: "Educational activities" }] }], "manual", "test", "");

@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./icon";
 import "./knowledge-sources.css";
 
-type Job = { id: string; source: "instagram" | "website"; status: string; created_at?: string; website?: string | null; error?: string | null; postCount?: number };
+type Job = { id: string; source: "instagram" | "website"; status: string; created_at?: string; website?: string | null; error?: string | null; postCount?: number; canResume?: boolean };
 type State = {
   available: boolean; error?: string;
   connection: { username: string | null } | null;
@@ -30,10 +30,17 @@ export function KnowledgeSources({ slug }: { slug: string }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
 
+  const resuming = useRef(false);
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: "no-store" });
     const data = await response.json().catch(() => null) as State | null;
     if (response.ok && data) setState(data);
+    // A step whose worker stopped is picked up again while the page is open.
+    if (data?.jobs?.some((job) => job.canResume) && !resuming.current) {
+      resuming.current = true;
+      void fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resume" }) })
+        .catch(() => null).finally(() => { resuming.current = false; });
+    }
     return data;
   }, [endpoint]);
   useEffect(() => { void load(); }, [load]);
