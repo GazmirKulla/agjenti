@@ -1,4 +1,4 @@
-import { fetchPublicInstagram } from "@/lib/instagram/public-profile";
+import { fetchPublicInstagram, PUBLIC_POST_LIMIT } from "@/lib/instagram/public-profile";
 import { fetchPublicPage } from "@/lib/products/import-url";
 import { extractProductFromHtml } from "@/lib/products/page-extract";
 import { fetchInstagramMedia } from "@/lib/instagram/media";
@@ -119,10 +119,11 @@ export async function extractInstagramPublic(username: string) {
   return {
     text,
     reference: `instagram:${username}`,
-    images: selectDiscoveryImages(posts),
+    // One image per post, at most PUBLIC_POST_LIMIT: each one is billed by the analysis.
+    images: selectDiscoveryImages(posts).slice(0, PUBLIC_POST_LIMIT),
     website: profile.website ?? null,
     profile,
     postCount: posts.length,
-    note: `U lexuan ${posts.length} postime publike të @${username}. Komentet nuk lexohen pa lidhjen e llogarisë; videot përfaqësohen vetëm nga thumbnail-i.`,
+    note: `U lexuan ${posts.length} postimet e fundit publike të @${username}. Komentet nuk lexohen pa lidhjen e llogarisë; videot përfaqësohen vetëm nga thumbnail-i.`,
   };
 }

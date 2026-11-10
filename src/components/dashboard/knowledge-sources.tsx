@@ -8,7 +8,7 @@ type Job = { id: string; source: "instagram" | "website"; status: string; create
 type State = {
   available: boolean; error?: string;
   connection: { username: string | null } | null;
-  instagramUsername: string | null; publicScanAvailable: boolean;
+  instagramUsername: string | null; publicScanAvailable: boolean; publicScanUsed?: boolean;
   knowledgeCount?: number; jobs: Job[];
 };
 
@@ -85,18 +85,22 @@ export function KnowledgeSources({ slug }: { slug: string }) {
                 {instagramJob ? "Analizo përsëri" : "Analizo postimet"}
               </button>
             </> : <>
-              <p>{saved ? `@${saved} · profili publik` : "Shkruaj username-in që Agjenti të mësojë nga profili dhe postimet publike."}</p>
+              <p>{saved ? `@${saved} · profili publik` : "Shkruaj username-in që Agjenti të mësojë nga profili dhe 10 postimet e fundit publike."}</p>
               {saved && <p className="knowledge-source-status">{instagramJob ? status(instagramJob) : state.publicScanAvailable ? "Ende pa analizuar" : "Do të analizohet sapo leximi me username të aktivizohet"}</p>}
-              <form className="knowledge-source-form" onSubmit={(e) => { e.preventDefault(); void post({ action: "instagram_username", username, rescan: true }, "Username u ruajt dhe analiza nisi."); }}>
-                <input className="field" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={saved ? `@${saved}` : "@dyqani.im"}
-                  aria-label="Username i Instagram-it" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={80} />
-                <button className="btn btn-primary" type="submit" disabled={busy || !username.trim()}>{saved ? "Ndrysho" : "Ruaj"}</button>
-              </form>
-              {saved && state.publicScanAvailable && !running(instagramJob) && (
-                <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void post({ action: "instagram_username", username: saved, rescan: true }, "Analiza nisi.")}>
-                  {instagramJob ? "Analizo përsëri" : "Analizo tani"}
-                </button>
-              )}
+              {state.publicScanUsed ? (
+                <p className="knowledge-source-hint">Profili publik analizohet vetëm një herë.</p>
+              ) : <>
+                <form className="knowledge-source-form" onSubmit={(e) => { e.preventDefault(); void post({ action: "instagram_username", username }, state.publicScanAvailable ? "Username u ruajt dhe analiza nisi." : "Username u ruajt."); }}>
+                  <input className="field" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={saved ? `@${saved}` : "@dyqani.im"}
+                    aria-label="Username i Instagram-it" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={80} />
+                  <button className="btn btn-primary" type="submit" disabled={busy || !username.trim()}>{saved ? "Ndrysho" : "Ruaj"}</button>
+                </form>
+                {saved && state.publicScanAvailable && !running(instagramJob) && (
+                  <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void post({ action: "instagram_username", username: saved }, "Analiza nisi.")}>
+                    {instagramJob ? "Provo përsëri" : "Analizo tani"}
+                  </button>
+                )}
+              </>}
               <p className="knowledge-source-hint">Për analizë më të plotë dhe për bisedat, <Link href={`/b/${slug}/integrations`}>lidhe Instagram-in te Kanalet</Link>.</p>
             </>}
           </div>

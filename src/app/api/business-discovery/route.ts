@@ -71,7 +71,8 @@ async function handleGET(request: Request) {
     // Routing requires a persisted discovery draft and its revision. Existing
     // intelligence alone must not trigger writes before onboarding is started.
     return json({ available: true, connection: connection.data,
-      instagramUsername: publicAccount.data?.instagram_username ?? null, publicScanAvailable: publicScanAvailable(), sourceProfile: profile, businessProcess: process ? { name: process.name, stepCount: process.steps.length, enabled: process.enabled } : null, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null, knowledgeCount: knowledge.count ?? 0, pendingKnowledgeCount: state.data ? scanKnowledge(draft).length : 0,
+      instagramUsername: publicAccount.data?.instagram_username ?? null, publicScanAvailable: publicScanAvailable(),
+      publicScanUsed: (jobs.data ?? []).some((job) => job.source === "instagram" && job.input?.username && job.status !== "failed"), sourceProfile: profile, businessProcess: process ? { name: process.name, stepCount: process.steps.length, enabled: process.enabled } : null, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null, knowledgeCount: knowledge.count ?? 0, pendingKnowledgeCount: state.data ? scanKnowledge(draft).length : 0,
       jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length, job.checkpoint?.nextText, job.checkpoint?.text?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, nextImage: job.checkpoint?.nextImage ?? 0, previews: discoveryPreviews(job.source, job.checkpoint), pageCount: job.checkpoint?.pageCount ?? 0, knowledgeCount: job.checkpoint?.knowledgeCount ?? 0, inactiveKnowledgeCount: job.checkpoint?.inactiveKnowledgeCount ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
     });
   } catch (error) { return failure(error); }
@@ -84,7 +85,7 @@ async function handlePOST(request: Request) {
     const body = await readBody(request);
     if (body.action === "resume") { wake(business.id); return json({ success: "Analiza vazhdon në background." }); }
     if (body.action === "instagram_username") {
-      const result = await saveInstagramUsername(business.id, user.id, body.username, body.rescan === true);
+      const result = await saveInstagramUsername(business.id, user.id, body.username);
       if ("error" in result) return json({ error: result.error }, 400);
       if (result.scanning) wake(business.id);
       return json(result);

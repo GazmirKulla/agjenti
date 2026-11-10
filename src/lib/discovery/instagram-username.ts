@@ -6,10 +6,19 @@ export type UsernameResult =
   | { error: string }
   | { username: string | null; scanning: boolean; waiting: boolean };
 
+/** A business is read by username only once: a scan that completed, or is
+ * still going, is not repeated. Only a failed one may be tried again. */
+async function usernameScanUsed(businessId: string) {
+  const { data } = await createServiceSupabase().from("business_discovery_jobs").select("id")
+    .eq("business_id", businessId).eq("source", "instagram").not("input->>username", "is", null)
+    .in("status", ["queued", "running", "completed"]).limit(1).maybeSingle();
+  return Boolean(data);
+}
+
 /** Saves the business's public @username and, when reading by username is
- * enabled and the account is not connected, starts the public scan. An empty
- * value removes the username. */
-export async function saveInstagramUsername(businessId: string, userId: string, raw: unknown, rescan = false): Promise<UsernameResult> {
+ * enabled, the account is not connected and it was never read by username,
+ * starts the one public scan. An empty value removes the username. */
+export async function saveInstagramUsername(businessId: string, userId: string, raw: unknown): Promise<UsernameResult> {
   const empty = typeof raw !== "string" || !raw.trim();
   const username = empty ? null : normalizeInstagramUsername(raw);
   if (!empty && !username) return { error: "Shkruaj një username të vlefshëm Instagram-i, p.sh. @dyqani.im" };
@@ -21,8 +30,9 @@ export async function saveInstagramUsername(businessId: string, userId: string, 
   const { data: connection } = await db.from("instagram_connections").select("id").eq("business_id", businessId).eq("status", "connected").maybeSingle();
   if (connection) return { username, scanning: false, waiting: false };
   if (!publicScanAvailable()) return { username, scanning: false, waiting: true };
+  if (await usernameScanUsed(businessId)) return { username, scanning: false, waiting: false };
   try {
-    await enqueuePublicInstagram(businessId, userId, username, rescan);
+    await enqueuePublicInstagram(businessId, userId, username);
     return { username, scanning: true, waiting: false };
   } catch {
     return { username, scanning: false, waiting: true };

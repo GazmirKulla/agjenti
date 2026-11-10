@@ -2,11 +2,20 @@ import { graphVersion } from "./oauth";
 import { cleanBusinessProfile, type InstagramBusinessProfile } from "./business-profile";
 import type { InstagramPost } from "./media";
 
-/** Reading a public Instagram Business/Creator account by username, through
- * Meta's Business Discovery on Agjenti.app's own Instagram account (Facebook
- * Login). Off until both values are configured. */
+/** How many recent posts a scan by username reads. */
+export const PUBLIC_POST_LIMIT = 10;
+
+/** Reading a public Instagram account by username. Meta's Business Discovery
+ * (on Agjenti.app's own account, Facebook Login) is preferred once configured;
+ * until then Apify's Instagram scraper reads the public profile. Off when
+ * neither is configured. */
+export function publicScanProvider(): "meta" | "apify" | null {
+  if (process.env.META_DISCOVERY_TOKEN && process.env.META_DISCOVERY_IG_USER_ID) return "meta";
+  if (process.env.APIFY_TOKEN) return "apify";
+  return null;
+}
 export function publicScanAvailable() {
-  return Boolean(process.env.META_DISCOVERY_TOKEN && process.env.META_DISCOVERY_IG_USER_ID);
+  return publicScanProvider() !== null;
 }
 
 /** "@shop.al", "instagram.com/shop.al/", "https://www.instagram.com/shop.al?igsh=…" → "shop.al". */
@@ -28,11 +37,20 @@ type DiscoveryMedia = { id: string; caption?: string; media_type?: string; media
   children?: { data?: { id: string; media_type?: string; media_url?: string }[] } };
 type DiscoveryResponse = { business_discovery?: Record<string, unknown> & { media?: { data?: DiscoveryMedia[] } }; error?: { code?: number; message?: string } };
 
-/** Profile and recent posts of a public Business or Creator account. */
-export async function fetchPublicInstagram(username: string, fetcher: typeof fetch = fetch): Promise<{ profile: InstagramBusinessProfile; posts: InstagramPost[] }> {
+type PublicInstagram = { profile: InstagramBusinessProfile; posts: InstagramPost[] };
+
+/** Profile and the last PUBLIC_POST_LIMIT posts of a public account. */
+export async function fetchPublicInstagram(username: string, fetcher: typeof fetch = fetch): Promise<PublicInstagram> {
+  const provider = publicScanProvider();
+  if (provider === "apify") return fetchWithApify(username, fetcher);
+  if (provider === null) throw new PublicInstagramError("Leximi i Instagram-it me username nuk është aktivizuar ende.", "unavailable");
+  return fetchWithMeta(username, fetcher);
+}
+
+async function fetchWithMeta(username: string, fetcher: typeof fetch): Promise<PublicInstagram> {
   const token = process.env.META_DISCOVERY_TOKEN, account = process.env.META_DISCOVERY_IG_USER_ID;
   if (!token || !account) throw new PublicInstagramError("Leximi i Instagram-it me username nuk është aktivizuar ende.", "unavailable");
-  const fields = `business_discovery.username(${username}){username,name,biography,website,profile_picture_url,media.limit(50){id,caption,media_type,media_url,thumbnail_url,permalink,children{id,media_type,media_url}}}`;
+  const fields = `business_discovery.username(${username}){username,name,biography,website,profile_picture_url,media.limit(${PUBLIC_POST_LIMIT}){id,caption,media_type,media_url,thumbnail_url,permalink,children{id,media_type,media_url}}}`;
   const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(account)}`);
   url.searchParams.set("fields", fields);
   url.searchParams.set("access_token", token);
@@ -54,4 +72,41 @@ export async function fetchPublicInstagram(username: string, fetcher: typeof fet
     };
   });
   return { profile: cleanBusinessProfile(found), posts };
+}
+
+type ApifyPost = { id?: string; type?: string; caption?: string; url?: string; displayUrl?: string; images?: string[];
+  childPosts?: { id?: string; type?: string; displayUrl?: string }[] };
+type ApifyProfile = { username?: string; fullName?: string; biography?: string; externalUrl?: string; profilePicUrl?: string;
+  private?: boolean; error?: string; latestPosts?: ApifyPost[] };
+
+/** One "details" result of apify/instagram-scraper: the profile with its latest
+ * posts, billed as a single result. */
+async function fetchWithApify(username: string, fetcher: typeof fetch): Promise<PublicInstagram> {
+  const url = new URL("https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items");
+  url.searchParams.set("timeout", "150");
+  url.searchParams.set("clean", "true");
+  let response: Response;
+  try {
+    response = await fetcher(url, {
+      method: "POST", cache: "no-store", signal: AbortSignal.timeout(160000),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.APIFY_TOKEN}` },
+      body: JSON.stringify({ directUrls: [`https://www.instagram.com/${username}/`], resultsType: "details", resultsLimit: 1, addParentData: false }),
+    });
+  } catch { throw new PublicInstagramError("Instagram nuk u lexua. Provo përsëri më vonë.", "failed"); }
+  const items = await response.json().catch(() => null) as ApifyProfile[] | null;
+  if (!response.ok || !Array.isArray(items)) throw new PublicInstagramError("Instagram nuk u lexua. Provo përsëri më vonë.", "failed");
+  const found = items.find((item) => item && !item.error && item.username?.toLowerCase() === username);
+  if (!found || found.private) throw new PublicInstagramError("Kjo llogari nuk u gjet ose nuk është publike.", "not_found");
+  const posts: InstagramPost[] = (found.latestPosts ?? []).slice(0, PUBLIC_POST_LIMIT).map((p, index) => {
+    const children = (p.childPosts ?? []).filter((c) => c.displayUrl && c.type !== "Video").map((c, i) => ({ id: c.id ?? `${p.id ?? index}-${i}`, url: c.displayUrl! }));
+    return {
+      id: p.id ?? String(index), caption: p.caption ?? null, permalink: p.url ?? null,
+      mediaType: p.type === "Video" ? "VIDEO" : p.type === "Sidecar" ? "CAROUSEL_ALBUM" : "IMAGE",
+      imageUrl: p.displayUrl ?? null,
+      ...(children.length ? { images: children } : {}),
+    };
+  });
+  const profile = cleanBusinessProfile({ username: found.username, name: found.fullName, biography: found.biography,
+    website: found.externalUrl, profile_picture_url: found.profilePicUrl });
+  return { profile, posts };
 }
