@@ -15,13 +15,19 @@ export const loadChannelConnections = cache(async (businessId: string) => {
 });
 
 /** For the menu: does any connected channel need the owner? Never throws. */
-export async function channelsNeedAttention(businessId: string) {
+/** Which connected channels need attention (expired, expiring or failing). */
+export async function channelAttention(businessId: string): Promise<Record<"instagram" | "whatsapp", boolean>> {
   try {
     const { instagram, whatsapp } = await loadChannelConnections(businessId);
-    return needsAttention("instagram", instagram) || needsAttention("whatsapp", whatsapp);
+    return { instagram: needsAttention("instagram", instagram), whatsapp: needsAttention("whatsapp", whatsapp) };
   } catch {
-    return false;
+    return { instagram: false, whatsapp: false };
   }
+}
+
+export async function channelsNeedAttention(businessId: string) {
+  const attention = await channelAttention(businessId);
+  return attention.instagram || attention.whatsapp;
 }
 
 /** Last customer message and the number of customer messages in the last 7 days, per channel. */

@@ -192,6 +192,7 @@ export const english: Record<string, string> = {
   "Lidh kanalet e komunikimit dhe webin e klientit.": "Connect messaging channels and the business website.",
   "nga 2 kanale të lidhura": "of 2 channels connected",
   "Webi i klientit": "Business website",
+  "Ky kanal ka nevojë për vëmendje": "This channel needs attention",
   "Nuk u ngarkua konfigurimi i webit.": "Could not load website configuration.",
   "Lidh katalogun dhe porositë e webit përmes API-së": "Connect the website catalog and orders via API",
   "E konfiguruar · testo lidhjen te detajet": "Configured · test the connection in details",

@@ -26,7 +26,7 @@ export function AppShell({
   mobileNavigationItems,
   nativeHost: embedded = false,
   aiUsage,
-  channelsAttention = false,
+  channelsAttention,
 }: {
   children: React.ReactNode;
   name: string;
@@ -41,7 +41,7 @@ export function AppShell({
   nativeHost?: boolean;
   /** This month's OpenAI usage, present only for business owners and platform administrators. */
   aiUsage?: { calls: number; tokens: number };
-  channelsAttention?: boolean;
+  channelsAttention?: { instagram: boolean; whatsapp: boolean };
 }) {
   const [nativeHost, setNativeHost] = useState(embedded);
   useEffect(() => { if (/AgjentiNative\/2\.0/.test(navigator.userAgent)) setNativeHost(true); }, []);

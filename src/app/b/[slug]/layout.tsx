@@ -14,7 +14,7 @@ import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
 import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import { loadBillingUsage } from "@/lib/billing/service";
 import { loadItemSetup } from "@/lib/items/business";
-import { channelsNeedAttention } from "@/lib/channels/service";
+import { channelAttention } from "@/lib/channels/service";
 import { BillingUsageNotice } from "@/components/dashboard/billing-usage-notice";
 import { isNativeEmbed } from "@/lib/native/embedded";
 import { aiUsageSummary, loadAiUsage } from "@/lib/ai/usage-report";
@@ -39,7 +39,7 @@ export default async function BusinessLayout({
     isNativeEmbed(),
     // Tokens are a platform cost statistic: only platform administrators see them.
     access.admin ? loadAiUsage(user.id, business.id, true) : null,
-    channelsNeedAttention(business.id),
+    channelAttention(business.id),
   ]);
   const items = await loadItemSetup(business.id);
   const sectionLabels = { products: items.names.plural };
