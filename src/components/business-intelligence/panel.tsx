@@ -167,6 +167,8 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
   });
   if (
     !initialTarget ||
+    // Knowledge has its own sources section (Instagram, website) and the assistant.
+    section === "knowledge" ||
     section === "products" ||
     section === "agents" ||
       section === "workflows" ||

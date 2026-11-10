@@ -17,6 +17,13 @@ import { saveKnowledgeEntry } from "@/lib/knowledge/actions";
 import { AssistantRecordContext } from "@/components/business-assistant/workspace";
 import { OperationButton } from "@/components/dashboard/operation-button";
 
+/** Where an entry came from, in words: never the internal key. */
+function knowledgeOrigin(intent: string | null, services: boolean) {
+  if (services || intent === "service") return "Shërbim";
+  if (intent?.startsWith("profile:") || intent === "business_profile") return "Nga profili i biznesit";
+  return "Informacion i biznesit";
+}
+
 export async function KnowledgeWorkspace({
   slug,
   services = false,
@@ -107,8 +114,8 @@ export async function KnowledgeWorkspace({
   return (
     <>
       <PageHeading
-        eyebrow={services ? "Shërbime" : "Njohuria"}
-        title={access.business.name}
+        eyebrow={access.business.name}
+        title={services ? "Shërbimet" : "Njohuritë"}
         description={
           services
             ? "Përshkruaj shërbimet, kërkesat dhe çmimet e verifikuara që Agjenti përdor për t’iu përgjigjur klientëve."
@@ -126,21 +133,18 @@ export async function KnowledgeWorkspace({
       {!services && <KnowledgeSources slug={slug} />}
       <RecordBrowser
         listTitle={services ? "Shërbimet" : "Njohuritë"}
+        facets={[{ key: "status", label: "Statusi", options: [{ value: "active", label: "Aktive" }, { value: "inactive", label: "Joaktive" }] }]}
         placeholder="Kërko në njohuri…"
         createLabel={services ? "Shto shërbim" : "Shto njohuri"}
         createForm={
           <ActionForm action={add} className="grid gap-4">
             <label className="form-label">
               Titulli
-              <input name="title" className="field" required />
-            </label>
-            <label className="form-label">
-              Identifikuesi i qëllimit (opsional)
-              <input name="intent_key" className="field" />
+              <input name="title" className="field" required maxLength={500} placeholder="p.sh. Dërgesa" />
             </label>
             <label className="form-label">
               Përmbajtja
-              <textarea name="body" className="field" rows={10} required />
+              <textarea name="body" className="field" rows={8} required maxLength={8000} placeholder="Si e merr klienti porosinë, sa kushton dërgesa, sa zgjat…" />
             </label>
             <button className="btn btn-primary" type="submit">
               {services ? "Shto shërbimin" : "Shto njohurinë"}
@@ -152,28 +156,35 @@ export async function KnowledgeWorkspace({
           title: e.title,
           subtitle: e.body,
           badge: (
-            <span key={e.id} className="status-badge">
-              {services ? "Shërbim" : "Njohuri"} · {e.is_active ? "Aktive" : "Joaktive"}
+            <span key={e.id} className={`status-badge ${e.is_active ? "status-connected" : "status-paused"}`}>
+              {e.is_active ? "Aktive" : "Joaktive"}
             </span>
           ),
+          facets: { status: e.is_active ? "active" : "inactive" },
           detail: (
             <>
               {!services && <AssistantRecordContext entityType="knowledge" entityId={e.id} selectionLabel={e.title} />}
               <div className="detail-header">
                 <div>
                   <h2>{e.title}</h2>
-                  <p>{e.intent_key || "Informacion i biznesit"}</p>
+                  <p>{knowledgeOrigin(e.intent_key, services)}</p>
                 </div>
                 {!services && <OperationButton slug={slug} operation="knowledge.delete" input={{ id: e.id }}>Fshi njohurinë</OperationButton>}
               </div>
-              {!e.is_active && <p className="muted-copy">Kjo njohuri nuk përdoret nga Agjenti. Kontrolloje përpara aktivizimit.</p>}
+              {!e.is_active && <p className="knowledge-inactive-note">Kjo njohuri nuk përdoret nga Agjenti. Kontrolloje dhe aktivizoje kur është e saktë.</p>}
               <ActionForm action={saveKnowledgeEntry.bind(null, slug)} className="grid gap-4 detail-block">
                 <input type="hidden" name="id" value={e.id} />
                 <input type="hidden" name="updated_at" value={e.updated_at} />
-                <label className="form-label">Titulli<input name="title" className="field" defaultValue={e.title} required maxLength={8000} /></label>
+                <label className="form-label">Titulli<input name="title" className="field" defaultValue={e.title} required maxLength={500} /></label>
                 <label className="form-label">Përmbajtja<textarea name="body" className="field" rows={10} defaultValue={e.body} required maxLength={8000} /></label>
-                <label className="form-label flex items-center gap-2"><input name="is_active" type="checkbox" defaultChecked={e.is_active} /> Përdore në përgjigjet e Agjentit</label>
-                <button className="btn btn-primary" type="submit">Ruaj ndryshimet</button>
+                <label className="toggle-label knowledge-active-toggle">
+                  <span>
+                    Përdore në përgjigjet e Agjentit
+                    <small>Kur është fikur, njohuria ruhet këtu por Agjenti nuk e lexon.</small>
+                  </span>
+                  <input name="is_active" type="checkbox" className="switch-input" defaultChecked={e.is_active} />
+                </label>
+                <button className="btn btn-primary justify-self-start" type="submit">Ruaj ndryshimet</button>
               </ActionForm>
             </>
           ),
