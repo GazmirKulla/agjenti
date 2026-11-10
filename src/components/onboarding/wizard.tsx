@@ -49,6 +49,8 @@ export function OnboardingWizard({
   });
   const step = stepKey ? active.findIndex((q) => q.key === stepKey) + 1 : 0;
   const [busy, setBusy] = useState(false);
+  // Optional public Instagram, read by username after the workspace is created.
+  const [instagram, setInstagram] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -127,7 +129,7 @@ export function OnboardingWizard({
     setError("");
     try {
       const result = await onSave(
-        answers,
+        instagram.trim() ? { ...answers, instagramUsername: instagram } : answers,
         complete
           ? wizardStepToStored(total, active)
           : target
@@ -254,6 +256,20 @@ export function OnboardingWizard({
                       setSaved(false);
                     }}
                   />
+                  <label htmlFor="business-instagram" className="onboarding-secondary-label">
+                    Instagram i biznesit <small>(opsional)</small>
+                  </label>
+                  <input
+                    id="business-instagram"
+                    maxLength={80}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="@dyqani.im"
+                    value={instagram}
+                    onChange={(e) => setInstagram(e.target.value)}
+                  />
+                  <small className="onboarding-hint">Agjenti mëson nga profili dhe postimet publike. Mund ta shtosh edhe më vonë te Njohuritë.</small>
                   <div className="onboarding-note">
                     <Icon name="spark" />
                     <p>

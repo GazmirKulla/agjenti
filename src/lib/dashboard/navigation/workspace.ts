@@ -18,7 +18,9 @@ const channelPaths = ["integrations", "instagram", "whatsapp"];
 const ownEntryIds = new Set(["activity", "reports"]);
 
 /** Presentation only: keep module permissions, URLs and page implementations intact. */
-export function organizeWorkspace(items: NavItem[]) {
+export function organizeWorkspace(allItems: NavItem[]) {
+  // Sources live inside Knowledge ("Nga ku mëson Agjenti"); the page stays reachable from there.
+  const items = allItems.filter(item => item.id !== "sources");
   const agent: WorkspaceLink[] = items.filter(item => agentIds.has(item.id)).map(item => ({ ...item, label: item.id === "agents" ? "Identiteti dhe udhëzimet" : item.label }));
   if (items.some(item => item.id === "agents")) agent.push(
     { id: "agent-memory", path: "agents/memory", label: "Memoria", icon: "history" },

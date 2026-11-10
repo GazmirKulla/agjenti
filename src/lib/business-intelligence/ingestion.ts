@@ -1,3 +1,4 @@
+import { fetchPublicInstagram } from "@/lib/instagram/public-profile";
 import { fetchPublicPage } from "@/lib/products/import-url";
 import { extractProductFromHtml } from "@/lib/products/page-extract";
 import { fetchInstagramMedia } from "@/lib/instagram/media";
@@ -104,5 +105,24 @@ export async function extractInstagram(businessId: string) {
     profile: profile.data,
     postCount: posts.length,
     note: `U lexuan ${posts.length} postime${!("error" in result) && result.truncated ? " (lexim i pjesshëm)" : ""}. ${"error" in result ? "Postimet nuk u kthyen; përdorim informacionin e profilit. " : ""}${profile.note} Videot përfaqësohen vetëm nga thumbnail-i.`,
+  };
+}
+
+/** Same result as extractInstagram, from a public account read by username
+ * (no connection of the business needed). */
+export async function extractInstagramPublic(username: string) {
+  const { profile, posts } = await fetchPublicInstagram(username);
+  const text = [Object.entries(profile).map(([field, value]) => `${field}: ${value}`).join("\n"), ...posts
+    .map((p) => `Post: ${p.permalink ?? ""}\nCaption: ${p.caption ?? ""}\nImage: ${p.imageUrl ?? ""}`)]
+    .join("\n").slice(0, 65000);
+  if (!text.trim()) throw new Error("Nuk u gjet përmbajtje për analizë.");
+  return {
+    text,
+    reference: `instagram:${username}`,
+    images: selectDiscoveryImages(posts),
+    website: profile.website ?? null,
+    profile,
+    postCount: posts.length,
+    note: `U lexuan ${posts.length} postime publike të @${username}. Komentet nuk lexohen pa lidhjen e llogarisë; videot përfaqësohen vetëm nga thumbnail-i.`,
   };
 }

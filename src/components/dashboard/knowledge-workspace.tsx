@@ -2,6 +2,7 @@ import { createKnowledgeEntry } from "@/lib/knowledge/commands";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading } from "@/components/dashboard/ui";
+import { KnowledgeSources } from "@/components/dashboard/knowledge-sources";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -120,6 +121,7 @@ export async function KnowledgeWorkspace({
           </ActionForm>
         )}
       </PageHeading>
+      {!services && <KnowledgeSources slug={slug} />}
       <RecordBrowser
         listTitle={services ? "Shërbimet" : "Njohuritë"}
         placeholder="Kërko në njohuri…"

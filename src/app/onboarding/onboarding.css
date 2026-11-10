@@ -1415,3 +1415,6 @@
 .onboarding-chat-error { margin:10px 28px; padding:12px; border-radius:10px; background:#fff0f0; color:#a32232; }
 .onboarding-chat-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; padding:18px 28px; background:var(--surface); color:var(--ink-muted); font-size:12px; }
 @media(max-width:600px) { .conversation-page{padding:12px 8px;} .onboarding-chat{border-radius:20px;} .onboarding-chat-header{padding:20px 16px;gap:12px;} .onboarding-chat-avatar{width:48px;height:48px;} .onboarding-chat-thread{padding:20px 16px;max-height:50dvh;} .onboarding-chat-composer,.onboarding-chat-summary{padding:18px 16px;} .onboarding-chat-bubble{max-width:94%;} .onboarding-chat-options button{flex:1 1 42%;} }
+.onboarding-intro label small { font-weight: 400; color: var(--ink-muted); }
+.onboarding-intro .onboarding-secondary-label { margin-top: 22px; }
+.onboarding-hint { display: block; margin-top: 8px; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }

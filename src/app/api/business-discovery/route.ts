@@ -15,6 +15,8 @@ import { discoveryPreviews } from "@/lib/discovery/previews";
 import { capturedInstagramProfile } from "@/lib/instagram/captured-profile";
 import { parseBusinessProcess } from "@/lib/discovery/business-process";
 import { meteredRoute } from "@/lib/ai/usage";
+import { saveInstagramUsername } from "@/lib/discovery/instagram-username";
+import { publicScanAvailable } from "@/lib/instagram/public-profile";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -50,12 +52,13 @@ async function handleGET(request: Request) {
   try {
     const { business } = await authorize(request);
     const db = createServiceSupabase();
-    const [state, jobs, connection, intelligence, knowledge] = await Promise.all([
+    const [state, jobs, connection, intelligence, knowledge, publicAccount] = await Promise.all([
       db.from("business_discovery").select("draft,signals,baseline,revision,intelligence_revision,confirmed_at,source_profile,operating_workflow").eq("business_id", business.id).maybeSingle(),
       db.from("business_discovery_jobs").select("id,source,status,stage,checkpoint,error,input,created_at,next_attempt_at,leased_until").eq("business_id", business.id).order("created_at", { ascending: false }).limit(24),
       db.from("instagram_connections").select("id,username,status,discovery_generation").eq("business_id", business.id).eq("status", "connected").maybeSingle(),
       db.from("business_intelligence").select("data,revision").eq("business_id", business.id).maybeSingle(),
       db.from("knowledge_entries").select("id", { count: "exact", head: true }).eq("business_id", business.id).eq("is_active", true),
+      db.from("businesses").select("instagram_username").eq("id", business.id).maybeSingle(),
     ]);
     if (state.error || jobs.error) return json({ available: false, error: "Konfigurimi automatik kërkon përditësimin e databazës. Mund të vazhdosh nga paneli." });
     if (connection.error || intelligence.error || knowledge.error) throw new Error("discovery_unavailable");
@@ -67,7 +70,8 @@ async function handleGET(request: Request) {
     const process = parseBusinessProcess(state.data?.operating_workflow, state.data?.operating_workflow?.source === "manual");
     // Routing requires a persisted discovery draft and its revision. Existing
     // intelligence alone must not trigger writes before onboarding is started.
-    return json({ available: true, connection: connection.data, sourceProfile: profile, businessProcess: process ? { name: process.name, stepCount: process.steps.length, enabled: process.enabled } : null, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null, knowledgeCount: knowledge.count ?? 0, pendingKnowledgeCount: state.data ? scanKnowledge(draft).length : 0,
+    return json({ available: true, connection: connection.data,
+      instagramUsername: publicAccount.data?.instagram_username ?? null, publicScanAvailable: publicScanAvailable(), sourceProfile: profile, businessProcess: process ? { name: process.name, stepCount: process.steps.length, enabled: process.enabled } : null, draft, dashboardProfile, signals: state.data?.signals ?? null, revision: state.data?.revision ?? 0, intelligenceRevision: intelligence.data?.revision ?? 0, confirmedAt: state.data?.confirmed_at ?? null, knowledgeCount: knowledge.count ?? 0, pendingKnowledgeCount: state.data ? scanKnowledge(draft).length : 0,
       jobs: (jobs.data ?? []).map((job) => ({ id: job.id, source: job.source, status: job.status, stage: job.stage, progress: jobProgress(job.stage, job.checkpoint?.nextImage, job.checkpoint?.images?.length, job.checkpoint?.nextText, job.checkpoint?.text?.length), error: job.error, note: job.checkpoint?.note ?? "", warnings: job.checkpoint?.warnings ?? [], postCount: job.checkpoint?.postCount ?? 0, imageCount: job.checkpoint?.images?.length ?? 0, nextImage: job.checkpoint?.nextImage ?? 0, previews: discoveryPreviews(job.source, job.checkpoint), pageCount: job.checkpoint?.pageCount ?? 0, knowledgeCount: job.checkpoint?.knowledgeCount ?? 0, inactiveKnowledgeCount: job.checkpoint?.inactiveKnowledgeCount ?? 0, website: job.source === "website" ? job.input?.url : job.checkpoint?.website, canResume: job.status === "queued" && new Date(job.next_attempt_at).getTime() <= Date.now() || job.status === "running" && new Date(job.leased_until).getTime() <= Date.now() })),
     });
   } catch (error) { return failure(error); }
@@ -79,6 +83,12 @@ async function handlePOST(request: Request) {
     const { user, business } = await authorize(request);
     const body = await readBody(request);
     if (body.action === "resume") { wake(business.id); return json({ success: "Analiza vazhdon në background." }); }
+    if (body.action === "instagram_username") {
+      const result = await saveInstagramUsername(business.id, user.id, body.username, body.rescan === true);
+      if ("error" in result) return json({ error: result.error }, 400);
+      if (result.scanning) wake(business.id);
+      return json(result);
+    }
     if (body.action === "start") {
       if (!["instagram", "website"].includes(String(body.source))) throw new Error("invalid_request");
       const id = await enqueueDiscovery(business.id, user.id, body.source as "instagram" | "website", typeof body.website === "string" ? body.website : undefined, body.force === true);

@@ -67,6 +67,19 @@ export function AgentWorkspaceForm({ initialName = "", initialType = "" }: { ini
           />
         </div>
       )}
+      <div className="onboarding-intro">
+        <label htmlFor="workspace-instagram">Instagram i biznesit <small>(opsional)</small></label>
+        <input
+          id="workspace-instagram"
+          name="instagramUsername"
+          maxLength={80}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="@dyqani.im"
+        />
+        <small className="onboarding-hint">Asistenti mëson nga profili dhe postimet publike. Mund ta shtosh edhe më vonë te Njohuritë.</small>
+      </div>
       <div className="onboarding-note">
         <Icon name="spark" />
         <p>

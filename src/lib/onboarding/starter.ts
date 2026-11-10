@@ -1,5 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { listMemberships } from "@/lib/tenant/access";
+import { normalizeInstagramUsername } from "@/lib/instagram/public-profile";
+import { saveInstagramUsername } from "@/lib/discovery/instagram-username";
 import { persistGeneratedProfile } from "@/lib/dashboard/profile/service";
 import { emptyDetails } from "./audio-fields";
 import { businessCategories } from "./categories";
@@ -16,7 +18,7 @@ export type StarterWorkspaceResult =
   | { error: string; status: 400 | 409 | 503 };
 type ParsedStarter =
   | { error: string }
-  | { name: string; businessType: string; categoryDescription: string };
+  | { name: string; businessType: string; categoryDescription: string; instagramUsername: string | null };
 
 export function publicBusinessCategories(translate: (label: string) => string) {
   return businessCategories.map(([id, label]) => ({
@@ -47,10 +49,16 @@ export function parseStarterWorkspace(input: unknown): ParsedStarter {
     return { error: "Përshkruaje shkurt biznesin." };
   if (description.length > 500)
     return { error: "Përshkrimi i biznesit është shumë i gjatë." };
+  // Optional: the public Instagram the agent may learn from.
+  const rawInstagram = typeof raw.instagramUsername === "string" ? raw.instagramUsername.trim() : "";
+  const instagramUsername = rawInstagram ? normalizeInstagramUsername(rawInstagram) : null;
+  if (rawInstagram && !instagramUsername)
+    return { error: "Username i Instagram-it nuk është i vlefshëm. Lëre bosh ose shkruaj p.sh. @dyqani.im" };
   return {
     name,
     businessType,
     categoryDescription: businessType === "other" ? description : "",
+    instagramUsername,
   };
 }
 
@@ -119,6 +127,8 @@ export async function createStarterWorkspace(
           ...answers,
           ...starterCapabilities,
         });
+        if (parsed.instagramUsername)
+          await saveInstagramUsername(business.id, userId, parsed.instagramUsername).catch(() => null);
       }
     } catch (error) {
       console.error("[dashboard profile]", error);

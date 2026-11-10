@@ -1,0 +1,20 @@
+.knowledge-sources { display: grid; gap: 14px; margin-bottom: 18px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.knowledge-sources header h2 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink); }
+.knowledge-sources header p { margin: 3px 0 0; color: var(--ink-muted); font-size: 13px; line-height: 1.5; }
+.knowledge-source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.knowledge-source { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+.knowledge-source-icon { display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-muted); }
+.knowledge-source-icon.is-instagram { background: linear-gradient(135deg, #8134af, #dd2a7b 55%, #f58529); color: #fff; }
+.knowledge-source-body { display: grid; gap: 6px; min-width: 0; flex: 1; }
+.knowledge-source-body h3 { margin: 0; font-size: 14px; font-weight: 650; color: var(--ink); }
+.knowledge-source-body p { margin: 0; color: var(--ink-muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.knowledge-source-body .btn { justify-self: start; min-height: 34px; padding: 6px 12px; font-size: 13px; }
+.knowledge-source-status { color: var(--ink) !important; font-weight: 600; font-size: 12px !important; }
+.knowledge-source-form { display: flex; gap: 8px; }
+.knowledge-source-form .field { flex: 1; min-width: 0; min-height: 36px; padding: 7px 10px; font-size: 13px; }
+.knowledge-source-form .btn { flex-shrink: 0; }
+.knowledge-source-hint { font-size: 12px !important; }
+.knowledge-source-hint a { color: var(--accent); font-weight: 600; }
+.knowledge-source-message { margin: 0; color: var(--ink); font-size: 13px; }
+.knowledge-source-error { margin: 0; color: #b42318; font-size: 13px; }
+.knowledge-source-more { justify-self: start; font-size: 13px; }

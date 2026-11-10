@@ -10,6 +10,6 @@ describe("scheduled discovery worker", () => {
     expect(m.run).not.toHaveBeenCalled();
     m.run.mockResolvedValue(3);
     const response = await GET(new Request("http://localhost/api/cron/business-discovery", { headers: { authorization: "Bearer configured-secret" } }));
-    expect(await response.json()).toEqual({ processed: 3 });
+    expect(await response.json()).toEqual({ queued: 0, processed: 3 });
   });
 });

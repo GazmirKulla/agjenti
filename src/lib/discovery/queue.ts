@@ -1,6 +1,6 @@
 import { withAiUsage } from "@/lib/ai/usage";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { extractInstagram, extractWebsite } from "@/lib/business-intelligence/ingestion";
+import { extractInstagram, extractInstagramPublic, extractWebsite } from "@/lib/business-intelligence/ingestion";
 import { normalizeSource } from "@/lib/business-intelligence/normalization";
 import { emptyDraft, mergeDraft, NoSupportedFactsError, type Entity, type Draft } from "@/lib/business-intelligence/model";
 import { classifyBusiness, meaningfulEntities, mergedReview } from "./proposal";
@@ -25,7 +25,8 @@ type Checkpoint = {
 type Job = {
   id: string; business_id: string; source: "instagram" | "website";
   user_id?: string | null;
-  input: { url?: string; connectionId?: string; generation?: string };
+  /** Instagram is read through the business's connection or, publicly, by username. */
+  input: { url?: string; connectionId?: string; generation?: string; username?: string };
   stage: string; checkpoint: Checkpoint; lease_token: string;
   attempts: number;
 };
@@ -48,8 +49,15 @@ export async function enqueueDiscovery(businessId: string, userId: string, sourc
   return data as string;
 }
 
+/** A public Instagram read by username: needs no connection of the business. */
+export async function enqueuePublicInstagram(businessId: string, userId: string, username: string, force = false) {
+  const { data, error } = await createServiceSupabase().rpc("enqueue_business_discovery", { p_business: businessId, p_user: userId, p_source: "instagram", p_input: { username }, p_force: force });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
 async function validConnection(job: Job) {
-  if (job.source !== "instagram") return;
+  if (job.source !== "instagram" || job.input.username) return;
   const db = createServiceSupabase();
   const { data, error } = await db.from("instagram_connections").select("id").eq("id", job.input.connectionId!).eq("business_id", job.business_id).eq("discovery_generation", job.input.generation!).eq("status", "connected").maybeSingle();
   if (error || !data) throw new Error("connection_changed");
@@ -66,7 +74,8 @@ export async function processDiscoveryStep(job: Job) {
   const data = job.checkpoint;
   await validConnection(job);
   if (job.stage === "capture") {
-    const captured = job.source === "instagram" ? await extractInstagram(job.business_id) : await extractWebsite(job.input.url!, "onboarding");
+    const captured = job.source === "website" ? await extractWebsite(job.input.url!, "onboarding")
+      : job.input.username ? await extractInstagramPublic(job.input.username) : await extractInstagram(job.business_id);
     // Do not persist the decrypted token, fetch Request, or provider errors.
     const ig = job.source === "instagram" ? captured as Awaited<ReturnType<typeof extractInstagram>> : null;
     const web = job.source === "website" ? captured as Awaited<ReturnType<typeof extractWebsite>> : null;

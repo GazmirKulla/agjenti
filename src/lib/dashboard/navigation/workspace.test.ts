@@ -9,7 +9,8 @@ const navigation = organizeWorkspace(allItems);
 
 it("retains a reachable destination and search result for every existing module", () => {
   const destinations = [...navigation.primary, ...navigation.agent, ...navigation.settings, ...navigation.integrations, ...navigation.business];
-  for (const item of allItems) {
+  // Sources are reached from Knowledge, not from the menu.
+  for (const item of allItems.filter(item => item.id !== "sources")) {
     expect(destinations.some(destination => destination.path === item.path), item.id).toBe(true);
     expect(navigation.search.some(destination => destination.path === item.path && destination.label === item.label), item.id).toBe(true);
   }
@@ -53,7 +54,7 @@ it("keeps manual offers, knowledge, channels, behavior and operations in task gr
   expect(groups.map(group => group.id)).toEqual(["offer", "knowledge", "channels", "behavior", "operations"]);
   const paths = groups.flatMap(group => group.items.map(item => item.path));
   expect(new Set(paths).size).toBe(paths.length);
-  for (const path of ["products", "services", "catalogs", "knowledge", "sources", "integrations", "agents", "agents/test", "orders", "bookings", "calendar", "leads"])
+  for (const path of ["products", "services", "catalogs", "knowledge", "integrations", "agents", "agents/test", "orders", "bookings", "calendar", "leads"])
     expect(paths).toContain(path);
   expect(paths).not.toContain("workflows"); // Still reachable in Advanced, never removed.
   const limited = organizeWorkspace(allItems.filter(item => ["dashboard", "inbox", "services"].includes(item.id)));

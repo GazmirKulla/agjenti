@@ -47,7 +47,16 @@ it("accepts a public business type and a name", () => {
     name: "Studio Lule",
     businessType: "retail",
     categoryDescription: "",
+    instagramUsername: null,
   });
+});
+
+it("accepts an optional Instagram username in any common form", () => {
+  const parse = (instagramUsername: string) => parseStarterWorkspace({ name: "Studio", businessType: "retail", instagramUsername });
+  expect(parse("@Studio.Lule")).toMatchObject({ instagramUsername: "studio.lule" });
+  expect(parse("https://www.instagram.com/studio.lule/?igsh=abc")).toMatchObject({ instagramUsername: "studio.lule" });
+  expect(parse("")).toMatchObject({ instagramUsername: null });
+  expect(parse("not a username!")).toHaveProperty("error");
 });
 
 it("rejects legacy types, missing names and other without a description", () => {
