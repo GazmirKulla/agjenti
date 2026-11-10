@@ -1446,3 +1446,25 @@ a.onboarding-skip { text-decoration: none; }
 .onboarding-spinner { width: 18px; height: 18px; flex-shrink: 0; border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: onboarding-spin 0.9s linear infinite; }
 @keyframes onboarding-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .onboarding-spinner { animation: none; } }
+
+/* Step 2: a bar per source while Instagram and the website are read. */
+.sources-progress { display: grid; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.sources-progress-total { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--ink-muted); }
+.sources-progress-total strong { font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sources-progress ul { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.sources-progress li { display: flex; gap: 12px; align-items: center; }
+.sources-progress li.is-waiting { opacity: .55; }
+.sources-progress-icon { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-muted); }
+.sources-progress-icon.is-instagram { background: linear-gradient(135deg, #8134af, #dd2a7b 55%, #f58529); color: #fff; }
+.sources-progress-body { display: grid; gap: 7px; flex: 1; min-width: 0; }
+.sources-progress-line { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.sources-progress-line strong { color: var(--ink); font-weight: 650; }
+.sources-progress-line span { color: var(--ink-muted); text-align: right; overflow-wrap: anywhere; }
+.sources-progress li.is-done .sources-progress-line span { color: var(--accent); font-weight: 600; }
+.sources-progress li.is-failed .sources-progress-line span { color: var(--danger); }
+.sources-progress-bar { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; }
+.sources-progress-bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .6s ease; }
+.sources-progress li.is-failed .sources-progress-bar span { background: var(--danger); }
+.sources-progress-bar span.is-running { background-image: linear-gradient(90deg, transparent 0, color-mix(in srgb, #fff 45%, transparent) 50%, transparent 100%); background-size: 200% 100%; animation: sources-shimmer 1.4s linear infinite; }
+@keyframes sources-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .sources-progress-bar span { transition: none; } .sources-progress-bar span.is-running { animation: none; } }

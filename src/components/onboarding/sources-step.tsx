@@ -4,7 +4,41 @@ import { Icon } from "@/components/dashboard/icon";
 import { SourcesReview } from "@/components/dashboard/sources-review";
 import type { SourcesPreview, SourcesState } from "@/lib/discovery/sources-step";
 
-type Stage = "form" | "preview" | "learning";
+type Stage = "form" | "reading" | "preview" | "learning";
+type Row = { source: "instagram" | "website"; label: string; progress: number; step: string; state: "waiting" | "running" | "done" | "failed" };
+
+const sourceLabel = { instagram: "Instagram", website: "Website" } as const;
+
+/** One line per source with its own bar, so the owner sees what is happening. */
+function ProgressRows({ rows }: { rows: Row[] }) {
+  const total = rows.length ? Math.round(rows.reduce((sum, row) => sum + row.progress, 0) / rows.length) : 0;
+  return (
+    <div className="sources-progress" role="status" aria-live="polite">
+      <div className="sources-progress-total">
+        <span>{total < 100 ? "Duke punuar…" : "Gati"}</span>
+        <strong>{total}%</strong>
+      </div>
+      <ul>
+        {rows.map((row) => (
+          <li key={row.source} className={`is-${row.state}`}>
+            <span className={`sources-progress-icon${row.source === "instagram" ? " is-instagram" : ""}`}>
+              <Icon name={row.source === "instagram" ? "instagram" : "display"} size={18} />
+            </span>
+            <div className="sources-progress-body">
+              <div className="sources-progress-line">
+                <strong>{row.label}</strong>
+                <span>{row.state === "done" ? "✓ " : ""}{row.step}</span>
+              </div>
+              <div className="sources-progress-bar" aria-hidden="true">
+                <span style={{ width: `${Math.max(row.state === "running" ? 8 : 0, row.progress)}%` }} className={row.state === "running" ? "is-running" : undefined} />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /** Onboarding step 2: where the agent learns from. A quick look at the public
  * Instagram and website, then (if the owner agrees) a deeper read of the last
@@ -16,6 +50,7 @@ export function SourcesStep({ slug }: { slug: string }) {
   const [username, setUsername] = useState("");
   const [website, setWebsite] = useState("");
   const [preview, setPreview] = useState<SourcesPreview | null>(null);
+  const [reading, setReading] = useState<Row[]>([]);
   const [state, setState] = useState<SourcesState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -40,9 +75,31 @@ export function SourcesStep({ slug }: { slug: string }) {
 
   async function look() {
     setBusy(true); setError("");
-    try { setPreview(await post({ action: "preview", username, website })); setStage("preview"); }
-    catch (e) { setError(e instanceof Error ? e.message : "Nuk u lexua."); }
-    finally { setBusy(false); }
+    // The website first (seconds), then Instagram (a little longer): each line
+    // moves on its own as its read finishes.
+    const order = ([website.trim() && "website", username.trim() && "instagram"].filter(Boolean)) as Row["source"][];
+    const rows: Row[] = order.map((source, index) => ({ source, label: sourceLabel[source], progress: 0, state: index ? "waiting" : "running",
+      step: index ? "Në radhë" : source === "website" ? "Po hapet faqja" : "Po lexohet profili" }));
+    setReading(rows); setStage("reading");
+    const update = (source: Row["source"], change: Partial<Row>) => setReading((current) => current.map((row) => row.source === source ? { ...row, ...change } : row));
+    const found: SourcesPreview = { instagram: null, website: null, about: null };
+    try {
+      for (const source of order) {
+        update(source, { state: "running", progress: 35, step: source === "website" ? "Po hapet faqja" : "Po lexohet profili dhe postimet e fundit" });
+        const result = await post({ action: "preview", username, website, only: source }) as SourcesPreview;
+        found[source] = result[source] as never;
+        found.about = result.about ?? found.about;
+        const failed = !!result[source] && "error" in result[source]!;
+        update(source, { state: failed ? "failed" : "done", progress: 100, step: failed ? "Nuk u lexua" : "U lexua" });
+      }
+      setPreview(found);
+      // A short pause so the finished bars are seen before the results.
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      setStage("preview");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Nuk u lexua.");
+      setStage("form");
+    } finally { setBusy(false); }
   }
   async function learn() {
     setBusy(true); setError("");
@@ -64,10 +121,11 @@ export function SourcesStep({ slug }: { slug: string }) {
       </div>
       <div className="onboarding-question">
         <span className="onboarding-eyebrow">NGA KU TË MËSOJË AGJENTI</span>
-        <h1>{stage === "form" ? "Ku e gjejnë klientët biznesin tënd?" : stage === "preview" ? "Kjo është ajo që gjetëm" : state?.review ? "Agjenti mbaroi së mësuari" : "Agjenti po mëson"}</h1>
+        <h1>{stage === "form" ? "Ku e gjejnë klientët biznesin tënd?" : stage === "reading" ? "Po lexojmë profilin tënd" : stage === "preview" ? "Kjo është ajo që gjetëm" : state?.review ? "Agjenti mbaroi së mësuari" : "Agjenti po mëson"}</h1>
         <p>
           {stage === "form"
             ? "Shkruaj Instagram-in dhe website-in. Agjenti lexon vetëm atë që është publike; nuk kërkohet lidhja e llogarisë."
+            : stage === "reading" ? "Zakonisht zgjat 10–20 sekonda."
             : stage === "preview"
               ? "Përshkrimi i përgjithshëm u ruajt te Njohuritë si \"Rreth biznesit\"."
               : state?.review ? "Shiko çfarë gjeti dhe konfirmo çfarë të përdorë në përgjigje."
@@ -97,6 +155,8 @@ export function SourcesStep({ slug }: { slug: string }) {
           </div>
         </form>
       )}
+
+      {stage === "reading" && <div className="onboarding-found"><ProgressRows rows={reading} /></div>}
 
       {stage === "preview" && preview && (
         <div className="onboarding-found">
@@ -146,11 +206,17 @@ export function SourcesStep({ slug }: { slug: string }) {
           {state?.review ? (
             <SourcesReview slug={slug} review={state.review} onDone={() => window.location.assign(home)} />
           ) : (
-            <div className="onboarding-learning" role="status">
-              {running || !state ? <><span className="onboarding-spinner" aria-hidden="true" /> Po lexohen postimet dhe website-i… zakonisht 1–2 minuta.</>
-                : failed.length ? "Analiza nuk përfundoi. Mund ta provosh përsëri më vonë te Njohuritë."
-                : "Analiza mbaroi pa gjetur informacion të ri."}
-            </div>
+            state && state.scans.length && running ? (
+              <ProgressRows rows={state.scans.map((scan) => ({ source: scan.source, label: sourceLabel[scan.source],
+                progress: scan.progress, step: scan.step,
+                state: scan.status === "completed" ? "done" : scan.status === "failed" ? "failed" : scan.status === "queued" && scan.progress <= 5 ? "waiting" : "running" }))} />
+            ) : (
+              <div className="onboarding-learning" role="status">
+                {running || !state ? <><span className="onboarding-spinner" aria-hidden="true" /> Po nis analiza…</>
+                  : failed.length ? "Analiza nuk përfundoi. Mund ta provosh përsëri më vonë te Njohuritë."
+                  : "Analiza mbaroi pa gjetur informacion të ri."}
+              </div>
+            )
           )}
           <div className="onboarding-actions">
             <span />

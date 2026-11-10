@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: m.rpc }) }));
 vi.mock("./queue", () => ({ enqueueDiscovery: vi.fn(), enqueuePublicInstagram: vi.fn() }));
-import { aboutText, pageSummary, reviewSources } from "./sources-step";
+import { aboutText, pageSummary, reviewSources, scanProgress } from "./sources-step";
 
 it("reads the first page's name and description without AI", () => {
   const html = `<html><head><title>Zana Store | Bluza</title><meta property="og:site_name" content="Zana Store"><meta name="description" content="Bluza me printim &amp; dhurata të personalizuara."></head></html>`;
@@ -30,4 +30,13 @@ it("confirms only well-formed choices and dismisses with null", async () => {
   expect(m.rpc).toHaveBeenLastCalledWith("review_discovery", { p_business: "b", p_user: "u", p_keep: [id] });
   await reviewSources("b", "u", null);
   expect(m.rpc).toHaveBeenLastCalledWith("review_discovery", { p_business: "b", p_user: "u", p_keep: null });
+});
+
+it("describes where each scan is for its progress bar", () => {
+  expect(scanProgress({ source: "instagram", status: "queued", stage: "capture" })).toEqual({ progress: 5, step: "Në radhë" });
+  expect(scanProgress({ source: "instagram", status: "running", stage: "capture" })).toEqual({ progress: 5, step: "Po merren postimet" });
+  expect(scanProgress({ source: "instagram", status: "running", stage: "images", checkpoint: { images: [1, 2, 3, 4, 5], nextImage: 2 } }))
+    .toEqual({ progress: 54, step: "Po shihen fotot (2 nga 5)" });
+  expect(scanProgress({ source: "website", status: "queued", stage: "finish" })).toEqual({ progress: 95, step: "Po përgatitet propozimi" });
+  expect(scanProgress({ source: "website", status: "completed", stage: "done" })).toEqual({ progress: 100, step: "Gati" });
 });
