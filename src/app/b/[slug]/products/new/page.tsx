@@ -43,7 +43,8 @@ export default async function NewProductPage({
     <>
       <ProductHeading
         slug={slug}
-        title="Shto produkt të ri"
+        names={data.items.names}
+        title={data.items.titles.create}
         description="Shto produktet dorazi, nga CSV ose Instagram. Për tekst dhe audio, përdor Agjentin."
       />
       <ProductMethods slug={slug} active={method} />
@@ -52,6 +53,7 @@ export default async function NewProductPage({
           slug={slug}
           types={data.types}
           workflows={data.workflows}
+          kind={data.items.kind.id}
         />
       ) : (
         <div className="products-workspace">

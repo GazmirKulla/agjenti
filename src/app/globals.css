@@ -4552,3 +4552,11 @@ html:has(.native-business-content:has(.inbox-workspace)) body.min-h-screen {
 .dashboard-nav { position: relative; }
 .nav-attention { width: 8px; height: 8px; margin-left: auto; border-radius: 999px; background: #d92d20; box-shadow: 0 0 0 2px var(--surface); flex-shrink: 0; }
 .dashboard-shell.is-icons .nav-attention { position: absolute; top: 8px; right: 8px; margin: 0; }
+/* Settings: what the business lists. */
+.item-kind-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.item-kind-choice { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.item-kind-choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.item-kind-choice input { margin-top: 3px; }
+.item-kind-choice span { display: grid; gap: 3px; }
+.item-kind-choice strong { font-size: 14px; color: var(--ink); }
+.item-kind-choice small { color: var(--ink-muted); font-size: 12px; line-height: 1.5; }

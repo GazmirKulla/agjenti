@@ -70,6 +70,10 @@ const categoryGuides: Record<BusinessType, { offering: string; process: string }
     offering: "Çfarë pronash dhe shërbimesh ofron?",
     process: "Si e kupton kërkesën dhe organizon një vizitë ose konsultë?",
   },
+  automotive: {
+    offering: "Çfarë automjetesh shet ose jep me qira: marka, vitet dhe çmimet kryesore?",
+    process: "Si organizon provën e makinës, ofertën dhe dokumentet e shitjes?",
+  },
   manufacturing: {
     offering: "Çfarë prodhon ose shpërndan dhe për kë?",
     process: "Si trajton kërkesën për ofertë ose porosi?",

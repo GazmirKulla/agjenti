@@ -108,12 +108,26 @@ it("read adapter keeps tenant/active filters and exact count, never invokes a wr
   const from = vi.fn((table: string) => {
     const call = { table, filters: [] as unknown[][], select: undefined as unknown[] | undefined, limit: undefined as number | undefined }; calls.push(call);
     const query = { select: (...args: unknown[]) => { call.select = args; return query; },
-      eq: (...args: unknown[]) => { call.filters.push(args); return query; }, order: () => query,
+      eq: (...args: unknown[]) => { call.filters.push(args); return query; },
+      neq: (...args: unknown[]) => { call.filters.push(["neq", ...args]); return query; }, order: () => query,
       limit: async (limit: number) => { call.limit = limit; return { data: products, count: 2000, error: null }; } };
     return query;
   });
   const r = await readBusinessGrounding({ from } as unknown as SupabaseClient, "synthetic-tenant", ["products"]);
-  expect(calls).toEqual([{ table: "products", filters: [["business_id", "synthetic-tenant"], ["is_active", true]], select: [expect.any(String), { count: "exact" }], limit: 1000 }]);
+  expect(calls).toEqual([{ table: "products", filters: [["business_id", "synthetic-tenant"], ["is_active", true], ["neq", "availability", "sold"]], select: [expect.any(String), { count: "exact" }], limit: 1000 }]);
   expect(r.products).toMatchObject({ status: "partial", total: 2000, businessId: "synthetic-tenant" });
   expect(r.services).toMatchObject({ status: "unavailable", reason: "module_disabled" });
+});
+
+it("gives the agent an item's own fields in words and hides sold items", async () => {
+  const rows = [{ id: "p1", name: "Apartament 2+1", price_amount: 120000, currency: "EUR", item_kind: "property",
+    attributes: { deal: "sale", city: "Tiranë", size_m2: 95, rooms: "2+1" }, availability: "reserved" }];
+  const filters: unknown[][] = [];
+  const query: Record<string, unknown> = {};
+  Object.assign(query, { select: () => query, eq: () => query, neq: (...args: unknown[]) => { filters.push(args); return query; }, order: () => query,
+    limit: async () => ({ data: rows, count: 1, error: null }) });
+  const r = await readBusinessGrounding({ from: () => query } as unknown as SupabaseClient, "t", ["products"]);
+  expect(filters).toContainEqual(["availability", "sold"]);
+  expect(r.products.records[0]).toMatchObject({ details: "Shitje apo qira: Shitje; Qyteti: Tiranë; Sipërfaqja: 95 m²; Dhomat: 2+1", availability: "reserved" });
+  expect(r.products.records[0]).not.toHaveProperty("attributes");
 });

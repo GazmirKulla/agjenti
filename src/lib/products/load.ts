@@ -5,13 +5,14 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { productCatalogColumns, type ProductRow, type Option } from "./catalog";
 import { loadVisualBindings } from "@/lib/workflows/visual/bindings";
+import { loadItemSetup } from "@/lib/items/business";
 export const loadProducts = cache(async (slug: string) => {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const [products, types, workflows, bindings, choices] = await Promise.all([
+  const [products, types, workflows, bindings, choices, items] = await Promise.all([
     db
       .from("products")
       .select(productCatalogColumns)
@@ -29,11 +30,13 @@ export const loadProducts = cache(async (slug: string) => {
       .order("name"),
     loadVisualBindings(access.business.id),
     loadVisualFlowChoices(access.business.id),
+    loadItemSetup(access.business.id),
   ]);
   if (products.error || types.error || workflows.error)
     throw new Error("Nuk u ngarkua katalogu.");
   return {
     business: access.business,
+    items,
     products: ((products.data ?? []) as ProductRow[]).map(product => {
       const binding = bindings.enabled && bindings.versionId ? bindings.products.find(item => item.id === product.id) : undefined;
       const draft = choices.flows.find(f => f.productIds.includes(product.id));

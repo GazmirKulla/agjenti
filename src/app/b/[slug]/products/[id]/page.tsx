@@ -15,7 +15,8 @@ export default async function ProductDetailPage({
     <>
       <ProductHeading
         slug={slug}
-        title="Detajet e produktit"
+        names={data.items.names}
+        title={data.items.titles.detail}
         description="Shiko dhe ndrysho informacionin, çmimin dhe procesin e porosisë."
       />
       <ProductEditor
@@ -24,6 +25,7 @@ export default async function ProductDetailPage({
         product={product}
         types={data.types}
         workflows={data.workflows}
+        kind={product.item_kind ?? data.items.kind.id}
       />
     </>
   );

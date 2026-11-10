@@ -388,6 +388,7 @@ export const english: Record<string, string> = {
   "Teknologji / Shërbime digjitale": "Technology / Digital services",
   "Riparime / Shërbime teknike": "Repairs / Technical services",
   "Pasuri të paluajtshme": "Real estate",
+  "Automjete": "Vehicles",
   "Prodhim / Distribucion": "Manufacturing / Distribution",
   "Tjetër": "Other",
 };

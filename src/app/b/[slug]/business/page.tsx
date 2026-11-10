@@ -6,6 +6,7 @@ import { loadManagementSummary } from "@/lib/dashboard/management-summary";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
 import { businessWorkspaceGroups, organizeWorkspace, workspaceLabel } from "@/lib/dashboard/navigation/workspace";
 import { Icon } from "@/components/dashboard/icon";
+import { loadItemSetup } from "@/lib/items/business";
 import { Overview } from "@/components/dashboard/overview";
 import { ManagementSummary } from "@/components/dashboard/management-summary";
 import s from "@/components/dashboard/management.module.css";
@@ -19,14 +20,15 @@ export default async function BusinessHub({ params }: { params: Promise<{ slug: 
   const profile = await loadDashboardProfile(access.business.id);
   const modules = profile.enabledModules;
   // The directory includes permitted destinations even if the owner hides sidebar links.
-  const navigation = organizeWorkspace(buildNavigationItems({ ...profile, navigationItems: modules }));
+  const items = await loadItemSetup(access.business.id);
+  const navigation = organizeWorkspace(buildNavigationItems({ ...profile, navigationItems: modules }, "desktop", { products: items.names.plural }));
   const groups = businessWorkspaceGroups(navigation);
   const summary = await loadManagementSummary(access.business.id, modules);
   const base = `/b/${access.business.slug}`;
   return <div className={s.page}>
     <header className={s.header}><small>{access.business.name}</small><h1>Menaxhimi</h1><p>Puna e përditshme, oferta dhe konfigurimi i biznesit.</p>
       <nav className={s.actions} aria-label="Veprime të shpejta">
-        {modules.includes("products") && access.business.catalog_source !== "external" && <Link className="btn btn-primary" href={`${base}/products/new`}>＋ Shto produkt</Link>}
+        {modules.includes("products") && access.business.catalog_source !== "external" && <Link className="btn btn-primary" href={`${base}/products/new`}>＋ Shto {items.names.singular}</Link>}
         {modules.includes("services") && <Link className="btn btn-ghost" href={`${base}/services`}>Menaxho shërbimet</Link>}
         {modules.includes("bookings") && <Link className="btn btn-ghost" href={`${base}/bookings`}>Hap rezervimet</Link>}
       </nav>

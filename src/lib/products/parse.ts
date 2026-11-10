@@ -1,3 +1,5 @@
+import { itemKind as kindOf, parseAttributes, parseAvailability, type Availability } from "@/lib/items/kinds";
+
 export type ParsedProductFields = {
   name: string;
   description: string | null;
@@ -8,6 +10,10 @@ export type ParsedProductFields = {
   productTypeId: string | null;
   workflowId: string | null;
   isActive: boolean;
+  /** Null when the form does not carry the kind (e.g. an assistant edit): keep what is stored. */
+  itemKind: string | null;
+  attributes: Record<string, string | number | boolean>;
+  availability: Availability;
 };
 
 export function parseProductForm(
@@ -54,6 +60,10 @@ export function parseProductForm(
   const productTypeId = String(form.get("product_type_id") ?? "").trim() || null;
   const workflowId = String(form.get("workflow_id") ?? "").trim() || null;
   const isActive = form.get("is_active") === "on";
+  const itemKind = form.has("item_kind") ? kindOf(String(form.get("item_kind"))).id : null;
+  const parsedAttributes = itemKind ? parseAttributes(itemKind, form) : { attributes: {} };
+  if ("error" in parsedAttributes && parsedAttributes.error) return { error: parsedAttributes.error };
+  const availability = parseAvailability(itemKind ?? "product", form.get("availability"));
 
   return {
     name,
@@ -65,6 +75,9 @@ export function parseProductForm(
     productTypeId,
     workflowId,
     isActive,
+    itemKind,
+    attributes: parsedAttributes.attributes,
+    availability,
   };
 }
 

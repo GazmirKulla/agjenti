@@ -17,11 +17,15 @@ export type ProductRow = {
   visual_draft?: { id: string; name: string; status: string } | null;
   business_workflow?: BusinessWorkflow | null;
   is_active: boolean;
+  /** What kind of item this is (product, property, vehicle…) and its own fields. */
+  item_kind?: string;
+  attributes?: Record<string, string | number | boolean>;
+  availability?: "available" | "reserved" | "sold" | "rented";
   archived_at?: string | null;
   created_at?: string;
   updated_at?: string;
 };
-export const productCatalogColumns = "id,name,description,sku,image_url,source,external_id,price_amount,currency,product_type_id,workflow_id,is_active,archived_at,created_at,updated_at";
+export const productCatalogColumns = "id,name,description,sku,image_url,source,external_id,price_amount,currency,product_type_id,workflow_id,is_active,item_kind,attributes,availability,archived_at,created_at,updated_at";
 export type Option = { id: string; name: string; description?: string | null; businessWorkflow?: BusinessWorkflow };
 export function isMapped(p: ProductRow) {
   return Boolean(p.product_type_id && (p.workflow_id || p.visual_workflow || p.business_workflow?.active));

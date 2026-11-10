@@ -6,11 +6,14 @@ export type NavItem = {
   path: string;
   label: string;
   icon: string;
+  /** The business's own name for this section (e.g. "Listimet"); wins over presentation labels. */
+  custom?: true;
 };
 
 export function buildNavigationItems(
   profile: DashboardProfile,
   variant: "desktop" | "mobile" = "desktop",
+  labels: Partial<Record<ModuleId, string>> = {},
 ): NavItem[] {
   const ids =
     variant === "mobile"
@@ -21,8 +24,9 @@ export function buildNavigationItems(
     return {
       id,
       path: mod.path,
-      label: variant === "mobile" && id === "dashboard" ? "Kreu" : mod.label,
+      label: labels[id] ?? (variant === "mobile" && id === "dashboard" ? "Kreu" : mod.label),
       icon: mod.icon,
+      ...(labels[id] ? { custom: true as const } : {}),
     };
   });
 }

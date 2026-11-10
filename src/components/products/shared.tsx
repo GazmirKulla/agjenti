@@ -7,11 +7,14 @@ export function ProductHeading({
   title,
   description,
   back = true,
+  names = { plural: "Produktet", singular: "produkt" },
 }: {
   slug: string;
   title: string;
   description: string;
   back?: boolean;
+  /** What the business calls its items (e.g. "Listimet" / "listim"). */
+  names?: { plural: string; singular: string };
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreDialog = useRef<HTMLDialogElement>(null);
@@ -31,7 +34,7 @@ export function ProductHeading({
       <div>
         {back && (
           <Link className="muted-copy" href={`/b/${slug}/products`}>
-            ‹ Produkte
+            ‹ {names.plural}
           </Link>
         )}
         <h1>{title}</h1>
@@ -46,7 +49,7 @@ export function ProductHeading({
           Më shumë
         </button>
         <Link className="btn btn-primary" href={`/b/${slug}/products/new`}>
-          ＋ Shto produkt
+          ＋ Shto {names.singular}
         </Link>
       </div>
       <dialog

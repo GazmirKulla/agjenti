@@ -13,6 +13,7 @@ import { getAppSettings } from "@/lib/platform/settings";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
 import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import { loadBillingUsage } from "@/lib/billing/service";
+import { loadItemSetup } from "@/lib/items/business";
 import { channelsNeedAttention } from "@/lib/channels/service";
 import { BillingUsageNotice } from "@/components/dashboard/billing-usage-notice";
 import { isNativeEmbed } from "@/lib/native/embedded";
@@ -40,10 +41,13 @@ export default async function BusinessLayout({
     access.admin ? loadAiUsage(user.id, business.id, true) : null,
     channelsNeedAttention(business.id),
   ]);
-  const navigationItems = buildNavigationItems(dashboardProfile, "desktop");
+  const items = await loadItemSetup(business.id);
+  const sectionLabels = { products: items.names.plural };
+  const navigationItems = buildNavigationItems(dashboardProfile, "desktop", sectionLabels);
   const mobileNavigationItems = buildNavigationItems(
     dashboardProfile,
     "mobile",
+    sectionLabels,
   );
   return (
     <DashboardLanguageProvider language={language}>

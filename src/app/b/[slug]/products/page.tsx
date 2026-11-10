@@ -13,8 +13,9 @@ export default async function ProductsPage({
       <ProductHeading
         slug={slug}
         back={false}
-        title="Produktet"
-        description="Shto dhe menaxho produktet që përdor Agjenti."
+        names={data.items.names}
+        title={data.items.names.plural}
+        description={data.items.kind.id === "product" ? "Shto dhe menaxho produktet që përdor Agjenti." : `${data.items.kind.description} Agjenti i përdor për t’u përgjigjur klientëve.`}
       />
       <ProductCatalog
         slug={slug}

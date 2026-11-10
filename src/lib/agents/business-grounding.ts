@@ -3,6 +3,7 @@ import { messageUnderstanding } from "@/lib/conversations/understanding/context"
 import { matchingCatalogNames } from "@/lib/products/match-name";
 import type { ReferenceProduct } from "@/lib/products/entity-bridge";
 import { rankKnowledge } from "@/lib/catalogs/source-ranking";
+import { attributeDetails } from "@/lib/items/kinds";
 
 export type ReadStatus = "complete" | "partial" | "no_match" | "unavailable" | "unsupported" | "unverified";
 /** Evidence from a server-authorized read, never an execution permission or a cache. */
@@ -15,7 +16,18 @@ export type GroundedRead<T> = {
   total: number | null;
   records: T[];
 };
-export type GroundedProduct = ReferenceProduct & { description?: string | null; product_type_id?: string | null; workflow_id?: string | null };
+export type GroundedProduct = ReferenceProduct & { description?: string | null; product_type_id?: string | null; workflow_id?: string | null;
+  /** The item's own fields in words, e.g. "Sipërfaqja: 120 m²; Dhomat: 2+1". */
+  details?: string;
+  /** Present only when the item is not simply available (reserved or rented); sold items are never read. */
+  availability?: "reserved" | "rented" };
+const productColumns = "id,name,sku,description,product_type_id,workflow_id,price_amount,currency,item_kind,attributes,availability";
+/** Turns the stored kind fields into words the agent can match a request against. */
+function withItemDetails(row: GroundedProduct & { item_kind?: string; attributes?: unknown; availability?: string }): GroundedProduct {
+  const { item_kind, attributes, availability, ...rest } = row;
+  const details = item_kind && item_kind !== "product" ? attributeDetails(item_kind, attributes) : "";
+  return { ...rest, ...(details ? { details } : {}), ...(availability === "reserved" || availability === "rented" ? { availability } : {}) };
+}
 export type GroundedService = ReferenceProduct & { description?: string; duration_minutes?: number; price_mode?: "fixed" | "from" | "request"; booking_enabled?: boolean };
 export type GroundedKnowledge = { id: string; title: string; body: string; intent_key?: string | null; updated_at?: string };
 export type BusinessGrounding = {
@@ -47,14 +59,15 @@ export async function readBusinessGrounding(db: SupabaseClient, businessId: stri
   const enabled = (module: string) => !modules || modules.includes(module);
   const absent = { data: [], error: null, count: 0 };
   const [p, s, k] = await Promise.all([
-    enabled("products") ? db.from("products").select("id,name,sku,description,product_type_id,workflow_id,price_amount,currency", { count: "exact" })
-      .eq("business_id", businessId).eq("is_active", true).order("id").limit(1000) : absent,
+    enabled("products") ? db.from("products").select(productColumns, { count: "exact" })
+      .eq("business_id", businessId).eq("is_active", true).neq("availability", "sold").order("id").limit(1000) : absent,
     enabled("services") ? db.from("booking_services").select("id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled", { count: "exact" })
       .eq("business_id", businessId).eq("is_active", true).order("id").limit(500) : absent,
     enabled("knowledge") ? db.from("knowledge_entries").select("id,title,body,intent_key,updated_at", { count: "exact" })
       .eq("business_id", businessId).eq("is_active", true).order("sort_order").limit(1000) : absent,
   ]);
   const products = readResult<GroundedProduct>("products", businessId, p, enabled("products"));
+  products.records = products.records.map(withItemDetails);
   const services = readResult<GroundedService>("booking_services", businessId, s, enabled("services"));
   // A coordinator-resolved relative reference can lie outside the bounded read.
   // Fetch its current facts using the SAME active/tenant restrictions, not its
@@ -64,10 +77,10 @@ export async function readBusinessGrounding(db: SupabaseClient, businessId: stri
     const result = item.kind === "product" ? products : services;
     if (result.status === "unavailable" || result.records.some(row => row.id === item.id)) continue;
     const extra = await db.from(item.kind === "product" ? "products" : "booking_services")
-      .select(item.kind === "product" ? "id,name,sku,description,product_type_id,workflow_id,price_amount,currency" : "id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled")
+      .select(item.kind === "product" ? productColumns : "id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled")
       .eq("business_id", businessId).eq("is_active", true).eq("id", item.id).maybeSingle();
     if (extra.error) { result.status = "unavailable"; result.reason = "reference_read_failed"; result.records = []; result.total = null; break; }
-    if (extra.data && "id" in extra.data && extra.data.id === item.id) { result.records.push(extra.data as GroundedProduct & GroundedService); result.status = "partial"; result.reason = "selected_entity_outside_snapshot"; }
+    if (extra.data && "id" in extra.data && extra.data.id === item.id) { result.records.push((item.kind === "product" ? withItemDetails(extra.data as unknown as GroundedProduct) : extra.data) as GroundedProduct & GroundedService); result.status = "partial"; result.reason = "selected_entity_outside_snapshot"; }
   }
   return { products, services,
     knowledge: readResult("knowledge_entries", businessId, k, enabled("knowledge")),

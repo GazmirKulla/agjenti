@@ -2,6 +2,9 @@ import { setupGateMessage } from "@/lib/setup/model";
 import { loadSetupStatus } from "@/lib/setup/status";
 import { setBusinessAutoReply } from "@/lib/agents/auto-reply";
 import { ActionForm } from "@/components/dashboard/action-form";
+import { saveItemSetup } from "@/lib/items/actions";
+import { loadItemSetup } from "@/lib/items/business";
+import { ITEM_KINDS } from "@/lib/items/kinds";
 import { BusinessProfile } from "@/components/dashboard/business-profile";
 import { PageHeading } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
@@ -43,6 +46,7 @@ export default async function SettingsPage({
   if (integrationError) throw new Error("Nuk u ngarkua integrimi i biznesit.");
 
   const linked = Boolean(integration?.catalog_url?.trim());
+  const items = await loadItemSetup(access.business.id);
   const autoReplyBlocked = access.business.auto_reply
     ? null
     : setupGateMessage(await loadSetupStatus(access.business.id));
@@ -121,6 +125,34 @@ export default async function SettingsPage({
                   </a>
                 </p>
               )}
+            </ActionForm>
+            <ActionForm action={saveItemSetup.bind(null, slug)} className="panel section-pad grid gap-5">
+              <div className="section-title">
+                <h2>Çfarë shet biznesi</h2>
+                <button className="btn btn-primary" type="submit">Ruaj</button>
+              </div>
+              <p className="muted-copy">
+                Lloji vendos fushat e secilit artikull (p.sh. m² dhe dhoma për pronat) dhe emrin në menu.
+                Artikujt ekzistues e ruajnë llojin e tyre.
+              </p>
+              <div className="item-kind-choices">
+                {Object.values(ITEM_KINDS).map((kind) => (
+                  <label key={kind.id} className="item-kind-choice">
+                    <input type="radio" name="item_kind" value={kind.id} defaultChecked={items.kind.id === kind.id} />
+                    <span><strong>{kind.plural}</strong><small>{kind.description}</small></span>
+                  </label>
+                ))}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="form-label">
+                  Emri në menu (opsional)
+                  <input className="field" name="item_plural" maxLength={30} defaultValue={items.custom.plural ?? ""} placeholder={items.kind.plural} />
+                </label>
+                <label className="form-label">
+                  Një artikull quhet (opsional)
+                  <input className="field" name="item_singular" maxLength={30} defaultValue={items.custom.singular ?? ""} placeholder={items.kind.singular} />
+                </label>
+              </div>
             </ActionForm>
       </div>
     </>

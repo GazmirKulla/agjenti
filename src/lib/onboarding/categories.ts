@@ -11,6 +11,7 @@ export const businessCategories = [
   ["digital", "Teknologji / Shërbime digjitale", "display"],
   ["technical", "Riparime / Shërbime teknike", "wrench"],
   ["realestate", "Pasuri të paluajtshme", "home"],
+  ["automotive", "Automjete", "car"],
   ["manufacturing", "Prodhim / Distribucion", "factory"],
   ["other", "Tjetër", "businesses"],
 ] as const;

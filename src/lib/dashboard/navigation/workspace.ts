@@ -6,7 +6,7 @@ const workspaceLabels: Record<string, string> = {
   orders: "Porositë", bookings: "Rezervimet", leads: "Leads",
   agents: "Udhëzimet", knowledge: "Njohuritë", sources: "Burimet", workflows: "Workflow Designer",
 };
-export function workspaceLabel(item: WorkspaceLink) { return workspaceLabels[item.id] ?? item.label; }
+export function workspaceLabel(item: WorkspaceLink & { custom?: true }) { return item.custom ? item.label : workspaceLabels[item.id] ?? item.label; }
 export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "reports" | "settings" | "integrations" | "business" | "products" | "services" | "orders" | "leads" | "customers";
 const standaloneIds = ["products", "services", "orders", "leads", "customers"] as const;
 const agentIds = new Set(["agents", "knowledge", "workflows", "sources"]);
