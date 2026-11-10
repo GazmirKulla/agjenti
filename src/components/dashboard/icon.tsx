@@ -12,6 +12,7 @@ const paths: Record<string, string> = {
   up: "M12 19V5 M5 12l7-7 7 7",
   down: "M12 5v14 M5 12l7 7 7-7",
   download: "M12 3v12 M7 10l5 5 5-5 M4 16v5h16v-5",
+  reports: "M4 20h16 M7 16v-5 M12 16V6 M17 16v-8",
   history: "M3 10a9 9 0 1 1 2 8 M3 4v6h6 M12 7v5l3 2",
   volume: "M3 9h4l5-5v16l-5-5H3z M16 8a6 6 0 0 1 0 8 M19 5a10 10 0 0 1 0 14",
   trash: "M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7",

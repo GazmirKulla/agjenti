@@ -47,11 +47,12 @@ it("guards the whole nested workspace and derives identity from server access", 
 });
 it("makes only supported destinations primary and retains optional modules in manual navigation", () => {
   const limited = organizeWorkspace(buildNavigationItems({ ...legacyDashboardProfile, navigationItems: ["dashboard", "inbox", "agents", "services", "settings"] }));
-  expect(limited.main.map(item => item.path)).toEqual(["", "inbox", "activity"]);
+  // Activity and Reports are modules: a profile without them has no such entries.
+  expect(limited.main.map(item => item.path)).toEqual(["", "inbox"]);
   expect(limited.search.some(item => item.path === "services")).toBe(true);
   expect(limited.search.some(item => item.path === "products" || item.path === "customers" || item.path === "workflows")).toBe(false);
-  const withCustomers = organizeWorkspace(buildNavigationItems({ ...legacyDashboardProfile, navigationItems: ["dashboard", "inbox", "customers", "settings"] }));
-  expect(withCustomers.main.map(item => item.path)).toEqual(["", "inbox", "activity", "customers"]);
+  const withCustomers = organizeWorkspace(buildNavigationItems({ ...legacyDashboardProfile, navigationItems: ["dashboard", "inbox", "activity", "reports", "customers", "settings"] }));
+  expect(withCustomers.main.map(item => item.path)).toEqual(["", "inbox", "activity", "reports", "customers"]);
 });
 it("has one distinct route per settings section", () => {
   const routes = settingsGroups.flatMap(group => group.items.map(item => item.path));

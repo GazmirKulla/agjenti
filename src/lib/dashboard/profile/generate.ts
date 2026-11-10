@@ -62,6 +62,8 @@ function inferModules(signals: DashboardSignals): ModuleId[] {
   const enabled = new Set<ModuleId>([
     "dashboard",
     "inbox",
+    "activity",
+    "reports",
     "agents",
     "sources",
     "instagram",

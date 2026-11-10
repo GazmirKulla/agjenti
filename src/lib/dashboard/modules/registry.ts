@@ -19,6 +19,20 @@ export const moduleRegistry: Record<ModuleId, ModuleDefinition> = {
     mobilePriority: 2,
     description: "Bisedat me klientët",
   },
+  activity: {
+    id: "activity",
+    path: "activity",
+    label: "Aktiviteti",
+    icon: "history",
+    description: "Punët e asistentit dhe regjistrimet e kanaleve",
+  },
+  reports: {
+    id: "reports",
+    path: "reports",
+    label: "Raportet",
+    icon: "reports",
+    description: "Mesazhet, porositë, rezervimet dhe klientët me kalimin e kohës",
+  },
   products: {
     id: "products",
     path: "products",
@@ -134,6 +148,8 @@ export const moduleRegistry: Record<ModuleId, ModuleDefinition> = {
 export const navigationOrder: ModuleId[] = [
   "dashboard",
   "inbox",
+  "activity",
+  "reports",
   "products",
   "services",
   "catalogs",
@@ -154,6 +170,8 @@ export const navigationOrder: ModuleId[] = [
 export const moduleDependencies: Record<ModuleId, ModuleDependencyRule> = {
   dashboard: { independent: true },
   inbox: { independent: true },
+  activity: { independent: true },
+  reports: { independent: true },
   products: { independent: true },
   services: { independent: true },
   orders: { requiresAny: ["products"] },
@@ -173,6 +191,8 @@ export const moduleDependencies: Record<ModuleId, ModuleDependencyRule> = {
 
 /** Modules admins can toggle in Settings → Modules. */
 export const toggleableModules: ModuleId[] = [
+  "activity",
+  "reports",
   "products",
   "services",
   "orders",

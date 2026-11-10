@@ -13,7 +13,7 @@ it("retains a reachable destination and search result for every existing module"
     expect(destinations.some(destination => destination.path === item.path), item.id).toBe(true);
     expect(navigation.search.some(destination => destination.path === item.path && destination.label === item.label), item.id).toBe(true);
   }
-  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Produkte", "Shërbime", "Porosi", "Leads", "Klientë", "Agjenti i klientëve", "Aktiviteti", "Integrimet", "Cilësimet"]);
+  expect(navigation.primary.map(item => item.label)).toEqual(["Kreu", "Bisedat", "Produkte", "Shërbime", "Porosi", "Leads", "Klientë", "Agjenti i klientëve", "Aktiviteti", "Raportet", "Integrimet", "Cilësimet"]);
 });
 
 it("groups workflow and its deep links under the agent while keeping the original URL", () => {
@@ -31,6 +31,7 @@ it("keeps operational details, channel settings, onboarding and accounts reachab
   expect(navigation.settings.some(item => item.path === "account")).toBe(false);
   expect(workspaceSection("/b/shop/account", "/b/shop", navigation)).toBeUndefined();
   expect(workspaceSection("/b/shop/activity", "/b/shop", navigation)).toBe("activity");
+  expect(workspaceSection("/b/shop/reports", "/b/shop", navigation)).toBe("reports");
   expect(workspaceSection("/b/other/workflows", "/b/shop", navigation)).toBeUndefined();
   expect(workspaceSection("/b/shop/workflows-other", "/b/shop", navigation)).toBeUndefined();
 });

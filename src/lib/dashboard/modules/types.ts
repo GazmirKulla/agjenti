@@ -1,6 +1,8 @@
 export const MODULE_IDS = [
   "dashboard",
   "inbox",
+  "activity",
+  "reports",
   "products",
   "services",
   "orders",

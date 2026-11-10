@@ -7,11 +7,13 @@ const workspaceLabels: Record<string, string> = {
   agents: "Udhëzimet", knowledge: "Njohuritë", sources: "Burimet", workflows: "Workflow Designer",
 };
 export function workspaceLabel(item: WorkspaceLink) { return workspaceLabels[item.id] ?? item.label; }
-export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "settings" | "integrations" | "business" | "products" | "services" | "orders" | "leads" | "customers";
+export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "reports" | "settings" | "integrations" | "business" | "products" | "services" | "orders" | "leads" | "customers";
 const standaloneIds = ["products", "services", "orders", "leads", "customers"] as const;
 const agentIds = new Set(["agents", "knowledge", "workflows", "sources"]);
 const settingsIds = new Set(["settings"]);
 const integrationIds = new Set(["instagram", "whatsapp"]);
+/** Modules shown as their own top-level entry, never inside a group. */
+const ownEntryIds = new Set(["activity", "reports"]);
 
 /** Presentation only: keep module permissions, URLs and page implementations intact. */
 export function organizeWorkspace(items: NavItem[]) {
@@ -27,7 +29,7 @@ export function organizeWorkspace(items: NavItem[]) {
     { id: "billing", path: "billing", label: "Paketa dhe përdorimi", icon: "billing" },
   );
   const integrations: WorkspaceLink[] = items.filter(item => integrationIds.has(item.id));
-  const business = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !["dashboard", "inbox", ...standaloneIds].includes(item.id));
+  const business = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !ownEntryIds.has(item.id) && !["dashboard", "inbox", ...standaloneIds].includes(item.id));
   const groups = [
     { label: "Oferta", items: business.filter(item => ["products", "services", "catalogs"].includes(item.id)) },
     { label: "Operacionet", items: business.filter(item => ["orders", "bookings", "calendar"].includes(item.id)) },
@@ -42,16 +44,17 @@ export function organizeWorkspace(items: NavItem[]) {
       return item ? [{ ...item, section: id }] : [];
     }),
     ...(agent.some(item => item.id === "agents") ? [{ id: "agent", section: "agent" as const, path: "agents", label: "Agjenti i klientëve", icon: "agents" }] : []),
-    { id: "activity", section: "activity", path: "activity", label: "Aktiviteti", icon: "history" },
+    ...(items.some(item => item.id === "activity") ? [{ id: "activity", section: "activity" as const, path: "activity", label: "Aktiviteti", icon: "history" }] : []),
+    ...(items.some(item => item.id === "reports") ? [{ id: "reports", section: "reports" as const, path: "reports", label: "Raportet", icon: "reports" }] : []),
     ...(integrations.length ? [{ id: "integrations", section: "integrations" as const, path: "integrations", label: "Integrimet", icon: "integrations" }] : []),
     { id: "settings", section: "settings", path: "settings", label: "Cilësimet", icon: "settings" },
   ];
   const search: WorkspaceLink[] = [...primary, ...items, ...agent, ...settings, ...integrations].filter((item, index, all) => all.findIndex(other => other.path === item.path && other.label === item.label) === index);
-  const main = ["home", "conversations", "activity", "customers"].flatMap(id => {
+  const main = ["home", "conversations", "activity", "reports", "customers"].flatMap(id => {
     const item = primary.find(item => item.id === id);
     return item ? [{ ...item, label: id === "home" ? "Asistenti AI" : item.label }] : [];
   });
-  const management = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !["dashboard", "inbox", "customers"].includes(item.id));
+  const management = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !ownEntryIds.has(item.id) && !["dashboard", "inbox", "customers"].includes(item.id));
   search.push({ id: "management", path: "business", label: "Menaxhimi", icon: "briefcase" });
   return { primary, main, agent, settings, integrations, business, groups, search, management };
 }
@@ -86,6 +89,7 @@ export function workspaceSection(pathname: string, base: string, navigation: Ret
   }
   if (navigation.integrations.length && ["integrations", ...integrationIds].some(path => pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`))) return "integrations";
   if (pathname === `${base}/activity`) return "activity";
+  if (pathname === `${base}/reports`) return "reports";
   if (pathname === `${base}/inbox` || pathname.startsWith(`${base}/inbox/`)) return "conversations";
   if (activeWorkspaceLink(pathname, base, navigation.agent) !== undefined) return "agent";
   if (activeWorkspaceLink(pathname, base, navigation.integrations) !== undefined) return "integrations";
