@@ -6,6 +6,7 @@ import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { answerContinuation, loadContinuation } from "@/lib/onboarding/continuation-service";
 import { ContinuationError } from "@/lib/onboarding/continuation";
 import { instructionsFromAnswers } from "@/lib/onboarding/finish";
+import { suggestProfileAnswers } from "@/lib/onboarding/suggest";
 import { openOnboardingConversation } from "@/lib/onboarding/assistant-chat";
 
 export const runtime = "nodejs";
@@ -22,10 +23,17 @@ async function accessFor(request: Request) {
 const failure = (error: unknown, fallback: string) =>
   json({ error: error instanceof PersistenceError ? error.message : fallback }, error instanceof PersistenceError ? error.status : 503);
 
-/** Progress of the onboarding questions, if any are left. */
+/** Progress of the onboarding questions, if any are left; or, with
+ * `?suggest=1`, answers prefilled from the knowledge. */
 async function handleGET(request: Request) {
   try {
     const { membership } = await accessFor(request);
+    // `?suggest=1`: the questions answered from the confirmed knowledge, for the owner to confirm.
+    if (new URL(request.url).searchParams.get("suggest") === "1")
+      return json({ suggestions: await suggestProfileAnswers(membership.business.id).catch((error) => {
+        console.error("[onboarding suggest]", error instanceof Error ? error.message.slice(0, 200) : "failed");
+        return {};
+      }) });
     return json({ continuation: await loadContinuation(membership.business.id) });
   } catch (error) {
     return failure(error, "Pyetjet e konfigurimit nuk u ngarkuan.");

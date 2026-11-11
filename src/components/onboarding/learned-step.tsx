@@ -4,21 +4,30 @@ import { SourcesReview } from "@/components/dashboard/sources-review";
 import { DiscoveryScanDialog } from "@/components/setup/scan-dialog";
 import type { SourcesState } from "@/lib/discovery/sources-step";
 import { onboardingChannelPath } from "@/lib/onboarding/steps";
+import { ProfileReview } from "./profile-review";
 import { ProgressRows, sourceLabel } from "./sources-step";
 
-/** Onboarding step 3: what the agent learned from the confirmed sources,
- * merged into one list the owner accepts, rejects or edits. Without sources
- * there is nothing to review and the channel comes next. */
+const isRunning = (state: SourcesState | null) => state?.scans.some((scan) => ["queued", "running"].includes(scan.status)) ?? true;
+
+/** Onboarding step 3: the scan of the confirmed sources goes on, shown large
+ * (the owner can minimize it); then what it found, merged into one list to
+ * accept, reject or edit; then the profile questions prefilled from it.
+ * Without sources the channel comes next. */
 export function LearnedStep({ slug }: { slug: string }) {
   const endpoint = `/api/business-sources?slug=${encodeURIComponent(slug)}`;
   const next = onboardingChannelPath(slug);
   const [state, setState] = useState<SourcesState | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  // Shown large while the scan runs; null until the first read says whether it does.
+  const [dialogOpen, setDialogOpen] = useState<boolean | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: "no-store" }).catch(() => null);
-    if (response?.ok) setState(await response.json());
+    if (!response?.ok) return;
+    const data = await response.json() as SourcesState;
+    setState(data);
+    setDialogOpen((open) => open ?? isRunning(data));
   }, [endpoint]);
-  const running = state?.scans.some((scan) => ["queued", "running"].includes(scan.status)) ?? true;
+  const running = isRunning(state);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (state && !running) return;
@@ -28,19 +37,24 @@ export function LearnedStep({ slug }: { slug: string }) {
   const nothing = !!state && !state.scans.length && !state.review;
   useEffect(() => { if (nothing) window.location.replace(next); }, [nothing, next]);
 
-  const review = !running && state?.review ? state.review : null;
+  // After the review (or when it was done earlier), the profile prefilled from the scan.
+  const profile = confirmed || (!!state && !running && !state.review && state.scans.length > 0);
+  const review = !running && !profile && state?.review ? state.review : null;
   return (
     <>
       <div className="onboarding-question">
         <span className="onboarding-eyebrow">ÇFARË MËSOI AGJENTI</span>
-        <h1>{review ? "Çfarë mësoi Agjenti" : running ? "Agjenti po mbaron leximin" : "Agjenti mbaroi së lexuari"}</h1>
-        <p>{review ? "Agjenti bashkoi në një listë atë që gjeti."
-          : running ? "Edhe pak. Mund të vazhdosh ndërkohë dhe t'i konfirmosh më vonë nga paneli."
-          : "Nuk u gjet informacion i ri për njohuritë."}</p>
+        <h1>{profile ? "Profili i biznesit" : review ? "Çfarë mësoi Agjenti" : running ? "Agjenti po lexon faqet" : "Agjenti mbaroi së lexuari"}</h1>
+        <p>{profile ? ""
+          : review ? "Agjenti bashkoi në një listë atë që gjeti."
+          : running ? "Edhe pak. Mund ta zvogëlosh pamjen dhe të vazhdosh ndërkohë; i konfirmon më vonë nga paneli."
+          : ""}</p>
       </div>
       <div className="onboarding-found">
-        {review ? (
-          <SourcesReview slug={slug} review={review} onDone={() => window.location.assign(next)} />
+        {profile ? (
+          <ProfileReview slug={slug} onDone={() => window.location.assign(next)} />
+        ) : review ? (
+          <SourcesReview slug={slug} review={review} onDone={(kept) => (kept ? setConfirmed(true) : window.location.assign(next))} />
         ) : state?.scans.length ? (
           <>
             <ProgressRows rows={state.scans.map((scan) => ({ source: scan.source, label: sourceLabel[scan.source], progress: scan.progress, step: scan.step,
@@ -50,13 +64,15 @@ export function LearnedStep({ slug }: { slug: string }) {
         ) : (
           <div className="onboarding-learning" role="status"><span className="onboarding-spinner" aria-hidden="true" /> Duke ngarkuar…</div>
         )}
-        <div className="onboarding-actions">
-          <span />
-          <div className="onboarding-actions-end">
-            <a className={review ? "onboarding-skip" : "onboarding-next"} href={next}>{review ? "Konfirmo më vonë" : running ? "Vazhdo ndërkohë" : "Vazhdo"}</a>
+        {!profile && (
+          <div className="onboarding-actions">
+            <span />
+            <div className="onboarding-actions-end">
+              <a className={review ? "onboarding-skip" : "onboarding-next"} href={next}>{review ? "Konfirmo më vonë" : running ? "Vazhdo ndërkohë" : "Vazhdo"}</a>
+            </div>
           </div>
-        </div>
-        <DiscoveryScanDialog open={dialogOpen && running} jobs={state?.scans ?? []} startingSource="" error=""
+        )}
+        <DiscoveryScanDialog open={!!dialogOpen && !!state?.scans.length && !profile} jobs={state?.scans ?? []} startingSource="" error=""
           onClose={() => setDialogOpen(false)} onReview={() => setDialogOpen(false)} />
       </div>
     </>

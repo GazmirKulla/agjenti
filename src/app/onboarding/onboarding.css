@@ -1506,3 +1506,21 @@ a.onboarding-skip { text-decoration: none; }
 .onboarding-scan-strip-bar { display: block; width: 90px; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; }
 .onboarding-scan-strip-bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .4s ease; }
 .onboarding-questions { max-width: 680px; }
+
+/* Step 3: the profile prefilled from what the agent learned. */
+.profile-review { display: grid; gap: 14px; }
+.profile-review h2 { margin: 0; font-size: 18px; font-weight: 650; color: var(--ink); }
+.profile-review-lead { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+.profile-review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.profile-review-list li { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.profile-review-list li.is-suggested { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); }
+.profile-review-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 14px; color: var(--ink); }
+.profile-review-head strong { font-weight: 600; }
+.profile-review-tag { flex-shrink: 0; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 650; }
+.profile-review-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.profile-review-options button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.profile-review-options button.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.profile-review-list textarea { width: 100%; resize: vertical; font-size: 14px; }
+.profile-review-hint { margin: 0; font-size: 13px; color: var(--ink-muted); }
+.profile-review-hint em { font-style: normal; color: var(--ink); }
+.profile-review-use { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
