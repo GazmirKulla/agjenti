@@ -22,7 +22,6 @@ export async function saveAppSettings(form: FormData) {
     .from("app_settings")
     .upsert({
       id: true,
-      onboarding_mode: form.get("onboarding_mode") === "agent" ? "agent" : "manual",
       onboarding_enabled: form.get("onboarding_enabled") === "on",
       checklist_enabled: form.get("checklist_enabled") === "on",
       onboarding_steps,

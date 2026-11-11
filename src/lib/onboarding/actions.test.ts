@@ -34,23 +34,6 @@ beforeEach(() => {
   mocks.rpc.mockResolvedValue({ data: null, error: null });
 });
 describe("self-service onboarding boundary", () => {
-  it("creates an agent-mode workspace from the name and business type for the verified owner", async () => {
-    mocks.starter.mockResolvedValue({ ok: true, slug: "biznes-agent" });
-    const { createAgentWorkspace } = await import("./actions");
-    const form = new FormData();
-    form.set("name", "Studio");
-    form.set("businessType", "beauty");
-    form.set("user_id", "victim");
-    expect(await createAgentWorkspace(form)).toEqual({ destination: "/onboarding/sources?slug=biznes-agent" });
-    expect(mocks.starter).toHaveBeenCalledWith("verified-user", { name: "Studio", businessType: "beauty", categoryDescription: "" });
-  });
-  it("returns the starter validation error for a missing business type", async () => {
-    mocks.starter.mockResolvedValue({ error: "Zgjidh llojin e biznesit.", status: 400 });
-    const { createAgentWorkspace } = await import("./actions");
-    const form = new FormData();
-    form.set("name", "Studio");
-    expect(await createAgentWorkspace(form)).toEqual({ error: "Zgjidh llojin e biznesit." });
-  });
   it("rejects unauthenticated requests without a database write", async () => {
     mocks.user.mockResolvedValue(null);
     expect((await saveOnboarding(answers, 7, true)).error).toBeTruthy();

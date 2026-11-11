@@ -79,7 +79,7 @@ it("loads persisted values and defaults only for a missing migration", async () 
     onboarding_steps: ["businessType", "aiMode"],
   };
   m.read.mockResolvedValue({ data, error: null });
-  expect(await getAppSettings()).toEqual({...data, onboarding_mode: "manual", model_tier: "high"});
+  expect(await getAppSettings()).toEqual({...data, model_tier: "high"});
   m.read.mockResolvedValue({ data: null, error: { code: "42P01" } });
   expect(await getAppSettings()).toEqual(defaultAppSettings);
   m.read.mockResolvedValue({
@@ -96,11 +96,4 @@ it("loads persisted values and defaults only for a missing migration", async () 
   });
   m.read.mockResolvedValue({ data: null, error: { code: "OTHER" } });
   await expect(getAppSettings()).rejects.toThrow();
-});
-it('persists and loads the administrator-selected agent mode', async () => {
-  const form = new FormData(); form.set('onboarding_mode','agent');
-  await saveAppSettings(form);
-  expect(m.upsert).toHaveBeenCalledWith(expect.objectContaining({onboarding_mode:'agent'}));
-  m.read.mockResolvedValue({data:{onboarding_mode:'agent'},error:null});
-  expect((await getAppSettings()).onboarding_mode).toBe('agent');
 });

@@ -63,7 +63,6 @@ export const manualSurfaces = {
   "src/lib/discovery/process-actions.ts#saveBusinessProcess": {"exception": "Onboarding discovery draft has its own reviewed setup contract."},
   "src/lib/knowledge/actions.ts#saveKnowledgeEntry": {"operation": "knowledge.save"},
   "src/lib/onboarding/actions.ts#saveOnboarding": {"exception": "Initial workspace onboarding must preserve the setup contract."},
-  "src/lib/onboarding/actions.ts#createAgentWorkspace": {"exception": "Account onboarding precedes the business-owner assistant."},
   "src/lib/platform/actions.ts#saveAppSettings": {"exception": "Platform secrets and settings remain administrator-only."},
   "src/lib/platform/actions.ts#saveModelTiers": {"exception": "Administrator-only model groups; platform cost policy."},
   "src/lib/product-types/actions.ts#createGlobalProductType": {"exception": "Global product type administration affects every business."},

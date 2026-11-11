@@ -5,12 +5,8 @@ import {
   normalizeOnboardingSteps,
   type AnswerKey,
 } from "@/lib/onboarding/model";
-/** `manual`: step-by-step questions before the workspace. `agent`: the
- * workspace starts from the name and the dashboard agent asks the rest. */
-export type OnboardingMode = "manual" | "agent";
 export const defaultAppSettings = {
   onboarding_enabled: true,
-  onboarding_mode: "manual" as OnboardingMode,
   checklist_enabled: true,
   announcement: "",
   onboarding_steps: [...allQuestionKeys] as AnswerKey[],
@@ -21,7 +17,6 @@ export type AppSettings = typeof defaultAppSettings;
 function normalizeSettings(data: Record<string, unknown> | null): AppSettings {
   if (!data) return { ...defaultAppSettings };
   return {
-    onboarding_mode: data.onboarding_mode === "agent" ? "agent" : "manual",
     onboarding_enabled:
       typeof data.onboarding_enabled === "boolean"
         ? data.onboarding_enabled

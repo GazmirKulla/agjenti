@@ -6,7 +6,6 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { homeForAccess } from "@/lib/auth/destination";
 import { getAppSettings } from "@/lib/platform/settings";
 import { parseAnswers, initialInstructions } from "./model";
-import { createStarterWorkspace } from "./starter";
 import { syncProfileKnowledge } from "@/lib/knowledge/profile-knowledge";
 import { persistGeneratedProfile } from "@/lib/dashboard/profile/service";
 type OnboardingResult = {
@@ -114,22 +113,3 @@ async function persistOnboarding(input: unknown, step: number, complete: boolean
   }
 }
 
-/** Agent mode: the workspace starts from the name and business type; the
- * dashboard agent asks the remaining questions afterwards. */
-export async function createAgentWorkspace(form: FormData): Promise<OnboardingResult> {
-  try {
-    const user = await getSessionUser();
-    if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri për të vazhduar." };
-    const access = await listMemberships(user.id);
-    if (access.admin) return { destination: homeForAccess(access) };
-    const result = await createStarterWorkspace(user.id, {
-      name: String(form.get("name") ?? ""),
-      businessType: String(form.get("businessType") ?? ""),
-      categoryDescription: String(form.get("categoryDescription") ?? ""),
-    });
-    if ("error" in result) return { error: result.error };
-    return { destination: `/onboarding/sources?slug=${encodeURIComponent(result.slug)}` };
-  } catch {
-    return { error: "Nuk u lidhëm me shërbimin. Provo përsëri pa mbyllur faqen." };
-  }
-}

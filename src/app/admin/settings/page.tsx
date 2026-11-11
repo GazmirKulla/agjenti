@@ -103,30 +103,10 @@ export default async function PlatformSettingsPage() {
 
       <ActionForm action={saveAppSettings} className="settings-layout">
         <section className="panel settings-section" aria-labelledby="settings-onboarding">
-          <SectionHead icon="businesses" title="Onboarding i bizneseve të reja" description="Si krijohet hapësira dhe cilat pyetje bëhen." />
+          <SectionHead icon="businesses" title="Onboarding i bizneseve të reja" description="Cilat pyetje bëhen kur krijohet një biznes i ri." />
           <fieldset className="settings-field">
-            <legend className="form-label" id="settings-onboarding">Mënyra</legend>
-            <div className="settings-choice-grid">
-              <label className="settings-choice">
-                <input type="radio" name="onboarding_mode" value="manual" defaultChecked={settings.onboarding_mode === "manual"} />
-                <span>
-                  <strong>Manuale</strong>
-                  <small>Pyetjet hap pas hapi para krijimit të hapësirës. Pyetjet e kaluara i bën më pas Asistenti në panel.</small>
-                </span>
-              </label>
-              <label className="settings-choice">
-                <input type="radio" name="onboarding_mode" value="agent" defaultChecked={settings.onboarding_mode === "agent"} />
-                <span>
-                  <strong>Me Asistent</strong>
-                  <small>Emri dhe tipi i biznesit, pastaj Asistenti bën pyetjet e tjera një nga një brenda panelit.</small>
-                </span>
-              </label>
-            </div>
-            <p className="settings-hint">Përgjigjet e ruajtura vazhdojnë edhe kur ndryshon mënyra. Në mobile përdoret gjithmonë Asistenti.</p>
-          </fieldset>
-          <fieldset className="settings-field">
-            <legend className="form-label">Pyetjet e konfigurimit</legend>
-            <p className="settings-hint settings-hint-top">Emri i biznesit kërkohet gjithmonë. Pyetjet e fikura nuk bëhen as nga Asistenti.</p>
+            <legend className="form-label" id="settings-onboarding">Pyetjet e konfigurimit</legend>
+            <p className="settings-hint settings-hint-top">Emri i biznesit kërkohet gjithmonë. Pyetjet e fikura nuk bëhen as te karta «Gati për klientët» në panel.</p>
             <div className="settings-toggle-grid">
               {steps.map((q) => (
                 <label key={q.key} className="settings-toggle">
