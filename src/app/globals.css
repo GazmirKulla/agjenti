@@ -4535,3 +4535,42 @@ html:has(.native-business-content:has(.inbox-workspace)) body.min-h-screen {
 /* Knowledge entry editor. */
 .knowledge-active-toggle { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
 .knowledge-inactive-note { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #f5a524 12%, var(--surface)); color: var(--ink); font-size: 13px; line-height: 1.5; }
+/* Agent instructions page: editor first, status and checks beside it. */
+.agent-heading-actions { display: flex; flex-shrink: 0; gap: 8px; }
+@media (max-width: 640px) { .agent-heading-actions { flex-shrink: 1; flex-wrap: wrap; } }
+.agent-page { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.agent-page-main, .agent-page-side { display: grid; gap: 16px; min-width: 0; }
+.agent-page-side { position: sticky; top: 16px; }
+.agent-editor { display: grid; gap: 16px; }
+.agent-editor-head h2 { margin: 0; font-size: 17px; font-weight: 650; }
+.agent-editor-head p { margin: 2px 0 0; }
+.agent-callout { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, #f5a524 12%, var(--surface)); font-size: 13px; line-height: 1.5; }
+.agent-callout p { margin: 0; }
+.agent-callout-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.agent-editor-form { display: grid; gap: 18px; }
+.agent-instructions { display: grid; gap: 6px; }
+.agent-editor-label { font-size: 14px; font-weight: 650; color: var(--ink); }
+.agent-instructions small { color: var(--ink-muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
+.agent-instructions textarea { min-height: 280px; font-size: 14px; line-height: 1.6; resize: vertical; }
+.agent-style { margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.agent-style legend { padding: 0 6px; margin-left: -6px; font-size: 14px; font-weight: 650; color: var(--ink); }
+.agent-style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.agent-editor-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.agent-editor-footer p { margin: 0; flex: 1 1 260px; font-size: 12px; }
+.agent-versions > summary { cursor: pointer; color: var(--ink-muted); font-size: 13px; font-weight: 600; width: fit-content; }
+.agent-versions-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 10px; }
+.agent-versions-form .form-label { min-width: 180px; }
+.agent-create > summary { cursor: pointer; font-weight: 650; }
+.agent-status { display: grid; gap: 10px; }
+.agent-status h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.agent-status dl { display: grid; gap: 8px; margin: 0; }
+.agent-status dl div { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+.agent-status dt { color: var(--ink-muted); }
+.agent-status dd { margin: 0; }
+.agent-status > p { margin: 0; font-size: 12px; line-height: 1.5; }
+.agent-identity { border-top: 1px solid var(--line); padding-top: 10px; }
+.agent-identity > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink); }
+.agent-identity-form { margin-top: 10px; }
+.instruction-facts-link { color: var(--accent); font-weight: 600; }
+.agent-page-side .instruction-facts { margin-bottom: 0; }
+@media (max-width: 1000px) { .agent-page { grid-template-columns: 1fr; } .agent-page-side { position: static; } }

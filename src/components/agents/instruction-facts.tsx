@@ -38,7 +38,7 @@ export function InstructionFacts({ slug }: { slug: string }) {
           <h2 id="instruction-facts-title">Faktet mbahen te Njohuritë</h2>
           <p className="muted-copy">
             Udhëzimet tregojnë si sillet Agjenti. Çmimet, oferta, dërgesa dhe pagesa ruhen te{" "}
-            <Link className="soft-link" href={`/b/${slug}/knowledge`}>Njohuritë</Link>, ku i përditëson në një vend.
+            <Link className="instruction-facts-link" href={`/b/${slug}/knowledge`}>Njohuritë</Link>, ku i përditëson në një vend.
           </p>
         </div>
         {!proposal && (

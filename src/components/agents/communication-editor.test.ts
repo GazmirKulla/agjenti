@@ -13,7 +13,8 @@ it("separates unsaved editing from publishing the persisted draft and blocks sta
   const html = render(agent);
   expect(html).toContain('name="mode" value="draft"');
   expect(html).toContain('name="mode" value="publish"');
-  expect(html).toContain("Publiko draftin e ruajtur");
+  expect(html).toContain("Publiko draftin");
+  expect(html.indexOf("Udhëzimet")).toBeLessThan(html.indexOf("Mënyra e komunikimit"));
   expect(html).toContain("Rikthe si draft");
   const stale = render({ ...agent, configuration_revision: 3 });
   expect(stale).toMatch(/disabled="">Publiko draftin/);

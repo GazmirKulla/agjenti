@@ -5,7 +5,6 @@ import { prepareManagedAgent, saveManagedAgent } from "@/lib/agents/manage";
 import { ActionForm } from "@/components/dashboard/action-form";
 import Link from "next/link";
 import { PageHeading } from "@/components/dashboard/ui";
-import { Icon } from "@/components/dashboard/icon";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -92,13 +91,7 @@ export default async function AgentsPage({
     is_active: boolean;
     updated_at: string;
   }) => (
-    <ActionForm action={save} className="panel section-pad grid gap-5">
-      <div className="section-title">
-        <h2>{a ? a.name : "Agjent i ri"}</h2>
-        <span className="icon-tile">
-          <Icon name="agents" />
-        </span>
-      </div>
+    <ActionForm action={save} className={a ? "grid gap-4 agent-identity-form" : "grid gap-5"}>
       {a && <input type="hidden" name="id" value={a.id} />}
       {a && <input type="hidden" name="updated_at" value={a.updated_at} />}
       <label className="form-label">
@@ -146,80 +139,48 @@ export default async function AgentsPage({
       </button>
     </ActionForm>
   );
+  const active = (agents ?? []).find((agent) => agent.is_active) ?? null;
   return (
     <>
       <PageHeading
-        title="Agjenti i klientëve"
-        description={`Instagram / WhatsApp · Konfiguro mënyrën si agjenti komunikon me klientët e ${access.business.name}. Asistenti yt të ndihmon me konfigurimin; bisedat me klientët mbeten veç.`}
+        title="Udhëzimet"
+        description={`Si flet Agjenti me klientët e ${access.business.name} në Instagram dhe WhatsApp. Faktet (çmimet, oferta, dërgesa) i lexon nga Njohuritë.`}
       >
-        <Link href={`/b/${slug}/agents/memory`} className="soft-link">
-          Memoria e Agjentit →
-        </Link>
-      </PageHeading>
-      <div className="panel section-pad mb-5 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="font-semibold">
-            Provo përgjigjet para dërgimit automatik
-          </h2>
-          <p className="muted-copy">
-            Bisedë e përkohshme, pa Instagram dhe pa porosi reale.
-          </p>
+        <div className="agent-heading-actions">
+          <Link href={`/b/${slug}/agents/memory`} className="btn btn-ghost">Memoria</Link>
+          <Link href={`/b/${slug}/agents/test`} className="btn btn-primary">Provo Agjentin →</Link>
         </div>
-        <Link href={`/b/${slug}/agents/test`} className="btn btn-ghost">
-          Provo Agjentin →
-        </Link>
-      </div>
-      {!!agents?.length && <InstructionFacts slug={slug} />}
-      <div className="configuration-layout">
-        <div className="space-y-5">
+      </PageHeading>
+      <div className="agent-page">
+        <div className="agent-page-main">
           {(agents ?? []).map((a) => (
-            <div key={a.id} className="grid gap-4">
-              <CommunicationEditor agent={a as CommunicationEditorAgent} slug={slug} versions={(history.data ?? []).filter(v => v.agent_id === a.id).map(v => v.revision)} action={configure} />
-              <details><summary>Emri dhe aktivizimi</summary>{agentForm(a)}</details>
-            </div>
+            <CommunicationEditor key={a.id} agent={a as CommunicationEditorAgent} slug={slug} versions={(history.data ?? []).filter(v => v.agent_id === a.id).map(v => v.revision)} action={configure} />
           ))}
-          {canCreate ? (
-            <details className="panel section-pad" open={!agents?.length}>
-              <summary className="cursor-pointer font-semibold">
-                + Krijo një agjent të ri
-              </summary>
+          {canCreate && (
+            <details className="panel section-pad agent-create" open={!agents?.length}>
+              <summary>+ Krijo një agjent të ri</summary>
               <div className="mt-5">{agentForm()}</div>
             </details>
-          ) : (
-            <div className="panel section-pad">
-              <p className="muted-copy">
-                {limit.allowMultiple
-                  ? "Ky biznes ka arritur limitin e dy agjentëve."
-                  : "Ky biznes lejon vetëm një agjent. Për një konfigurim të dytë, kërko aktivizimin te administratori i platformës."}
-              </p>
-            </div>
           )}
         </div>
-        <aside className="space-y-5">
-          <div className="panel section-pad">
-            <div className="agent-illustration">
-              <Icon name="agents" size={66} />
-            </div>
-            <h2 className="text-lg mt-5">Agjenti që u përgjigjet klientëve</h2>
-            <p className="muted-copy">
-              Përcakto tonin, rregullat dhe mënyrën e komunikimit në udhëzimet e
-              agjentit. Përgjigjet mbështeten te produktet dhe njohuritë e
-              biznesit.
-            </p>
-            <Link href={`/b/${slug}/knowledge`} className="soft-link">
-              Menaxho njohuritë →
-            </Link>
-          </div>
-          <div className="panel section-pad">
-            <h2 className="text-lg">Përgjigjet automatike</h2>
-            <p className="muted-copy">
-              Aktivizimi i agjentit zgjedh konfigurimin. Dërgimi automatik
-              kontrollohet edhe nga cilësimi i biznesit dhe statusi i bisedës.
-            </p>
-            <Link href={`/b/${slug}/settings/business`} className="soft-link">
-              Hap cilësimet →
-            </Link>
-          </div>
+        <aside className="agent-page-side">
+          <section className="panel section-pad agent-status" aria-labelledby="agent-status-title">
+            <h2 id="agent-status-title">Gjendja</h2>
+            <dl>
+              <div><dt>Agjenti</dt><dd><span className={`status-badge ${active ? "status-connected" : "status-paused"}`}>{active ? `${active.name} · aktiv` : "Asnjë agjent aktiv"}</span></dd></div>
+              <div><dt>Përgjigjet automatike</dt><dd><span className={`status-badge ${access.business.auto_reply ? "status-connected" : "status-paused"}`}>{access.business.auto_reply ? "Të ndezura" : "Të fikura"}</span></dd></div>
+            </dl>
+            <p className="muted-copy">Agjenti u përgjigjet vetë klientëve vetëm kur është aktiv dhe përgjigjet automatike janë të ndezura.</p>
+            <Link href={`/b/${slug}/settings/business`} className="soft-link">Përgjigjet automatike te Cilësimet →</Link>
+            {(agents ?? []).map((a) => (
+              <details key={a.id} className="agent-identity">
+                <summary>Emri dhe aktivizimi{agents!.length > 1 ? ` · ${a.name}` : ""}</summary>
+                {agentForm(a)}
+              </details>
+            ))}
+            {!canCreate && limit.allowMultiple && <p className="muted-copy">Ky biznes ka arritur limitin e dy agjentëve.</p>}
+          </section>
+          {!!agents?.length && <InstructionFacts slug={slug} />}
         </aside>
       </div>
     </>
