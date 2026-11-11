@@ -3,20 +3,35 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { launchBusiness } from "@/lib/setup/actions";
-import type { Readiness } from "@/lib/setup/readiness";
+import type { Readiness, ReadinessStep } from "@/lib/setup/readiness";
+import { ProfileQuestions } from "./profile-questions";
 import "./ready-strip.css";
 
-/** "Gati për klientët": what is left before the agent answers customers,
- * above the assistant on the home page until the agent is live. */
+const ABOUT: Record<ReadinessStep["key"], string> = {
+  profile: "Disa pyetje të shkurtra që Agjenti ta njohë biznesin. Mund t'i lësh edhe për më vonë.",
+  knowledge: "Agjenti përgjigjet vetëm me atë që di: shto njohuritë ose produktet.",
+  agent: "Si flet Agjenti me klientët dhe kur t'ia kalojë stafit.",
+  test: "Shkruaji Agjentit si të ishe klient para se ta aktivizosh. E rekomanduar.",
+  channel: "Lidh Instagram-in ose WhatsApp-in ku të shkruajnë klientët.",
+  live: "Agjenti fillon t'u përgjigjet klientëve vetë. Mund ta ndalosh kur të duash.",
+};
+const SHORT: Record<ReadinessStep["key"], string> = {
+  profile: "Profili", knowledge: "Njohuritë", agent: "Udhëzimet", test: "Prova", channel: "Kanali", live: "Aktivizo",
+};
+
+/** "Gati për klientët": the steps left before the agent answers customers, one
+ * card above the assistant on Home until the agent is live. The profile
+ * questions are answered in the card itself. */
 export function ReadyStrip({ slug, readiness }: { slug: string; readiness: Readiness }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
   const required = readiness.steps.filter((step) => !step.recommended);
   const done = required.filter((step) => step.done).length;
   const next = readiness.steps.find((step) => !step.done && !step.recommended) ?? readiness.steps.find((step) => !step.done);
+  const [chosen, setChosen] = useState<ReadinessStep["key"] | null>(null);
   if (readiness.live || !next) return null;
+  const active = readiness.steps.find((step) => step.key === chosen) ?? next;
 
   function activate() {
     setError("");
@@ -28,37 +43,44 @@ export function ReadyStrip({ slug, readiness }: { slug: string; readiness: Readi
       else router.refresh();
     });
   }
-  const canActivate = next.key === "live" && !readiness.blocked;
 
   return (
     <section className="ready-strip" aria-labelledby="ready-strip-title">
-      <div className="ready-strip-main">
-        <div className="ready-strip-text">
-          <h2 id="ready-strip-title">Gati për klientët · {done} nga {required.length}</h2>
-          <p>Hapi tjetër: <strong>{next.title}</strong>{next.key === "live" && !readiness.tested ? " · rekomandohet një provë e Agjentit më parë" : ""}</p>
-        </div>
-        <div className="ready-strip-actions">
-          {canActivate
-            ? <button type="button" className="btn btn-primary" disabled={pending} onClick={activate}>{pending ? "Duke aktivizuar…" : "Aktivizo përgjigjet"}</button>
-            : next.href ? <Link className="btn btn-primary" href={next.href}>{next.action}</Link> : null}
-          <button type="button" className="ready-strip-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Fshih hapat" : "Shiko hapat"}</button>
-        </div>
+      <div className="ready-strip-head">
+        <h2 id="ready-strip-title">Gati për klientët</h2>
+        <span>{done} nga {required.length}</span>
       </div>
-      <div className="ready-strip-bar" aria-hidden="true"><span style={{ width: `${Math.round((done / required.length) * 100)}%` }} /></div>
+      <ol className="ready-strip-steps" style={{ gridTemplateColumns: `repeat(${readiness.steps.length}, minmax(0, 1fr))` }}>
+        {readiness.steps.map((step) => (
+          <li key={step.key}>
+            <button type="button" aria-current={step.key === active.key ? "step" : undefined} onClick={() => setChosen(step.key)}
+              className={`${step.done ? "is-done" : ""} ${step.key === active.key ? "is-active" : ""} ${step.recommended ? "is-optional" : ""}`}>
+              <span className="ready-strip-bar" aria-hidden="true" />
+              <span className="ready-strip-label">{step.done ? "✓ " : ""}{SHORT[step.key]}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div className="ready-strip-body">
+        {active.key === "profile" ? (
+          <ProfileQuestions slug={slug} onFinished={() => { setChosen(null); router.refresh(); }} />
+        ) : (
+          <div className="ready-strip-step">
+            <div>
+              <h3>{active.title}{active.recommended ? <small> · i rekomanduar</small> : null}</h3>
+              <p>{active.done ? "✓ U krye. " : ""}{ABOUT[active.key]}</p>
+              {active.key === "live" && readiness.blocked && !active.done ? <p className="ready-strip-wait">{readiness.blocked}</p> : null}
+              {active.key === "live" && !readiness.tested && !readiness.blocked ? <p className="ready-strip-wait">Rekomandohet një provë e Agjentit më parë.</p> : null}
+            </div>
+            <div className="ready-strip-actions">
+              {active.key === "live"
+                ? <button type="button" className="btn btn-primary" disabled={pending || !!readiness.blocked} onClick={activate}>{pending ? "Duke aktivizuar…" : "Aktivizo përgjigjet"}</button>
+                : active.href ? <Link className={`btn ${active.done ? "btn-ghost" : "btn-primary"}`} href={active.href}>{active.done ? "Hap" : active.action}</Link> : null}
+            </div>
+          </div>
+        )}
+      </div>
       {error && <p className="ready-strip-error" role="alert">{error}</p>}
-      {open && (
-        <ol className="ready-strip-steps">
-          {readiness.steps.map((step) => (
-            <li key={step.key} className={step.done ? "is-done" : undefined}>
-              <span className="ready-strip-mark" aria-hidden="true">{step.done ? "✓" : ""}</span>
-              <span className="ready-strip-step">{step.title}{step.recommended ? <small> · i rekomanduar</small> : null}</span>
-              {!step.done && (step.key === "live"
-                ? (canActivate ? <button type="button" className="ready-strip-link" disabled={pending} onClick={activate}>Aktivizo</button> : <span className="ready-strip-wait">pas hapave të mësipërm</span>)
-                : step.href ? <Link className="ready-strip-link" href={step.href}>{step.action} →</Link> : null)}
-            </li>
-          ))}
-        </ol>
-      )}
     </section>
   );
 }

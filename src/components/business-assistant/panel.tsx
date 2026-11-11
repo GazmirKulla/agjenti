@@ -170,24 +170,8 @@ export function BusinessAssistant({
   const lastMessage = history.at(-1);
   const pendingOnboarding = lastMessage?.kind === "onboarding" && archive.view && !archive.view.conversation.pending_request
     ? parseQuestionMeta(lastMessage.meta) : null;
-  // Onboarding continues in the conversation: on Home, with nothing open yet,
-  // the assistant opens its profile conversation and asks the next question.
-  const onboardingOpened = useRef(false);
-  // Set once the person acts, so a late response never replaces their conversation.
-  const onboardingStale = useRef(false);
-  useEffect(() => {
-    if (context.page !== "home" || onboardingOpened.current || archive.loading || archive.view || history.length) return;
-    onboardingOpened.current = true;
-    void fetch(`/api/business-onboarding?slug=${encodeURIComponent(slug)}`, { method: "POST", cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!data?.conversation || onboardingStale.current) return;
-        // Opened for this page, so no "page changed" notice on the first question.
-        lastContext.current = assistantContextKey(slug, context);
-        archive.accept(data);
-      })
-      .catch(() => { /* The assistant stays usable without onboarding questions. */ });
-  }, [context, archive, history.length, slug]);
+  // Profile questions are answered in the "Gati për klientët" card; an older
+  // onboarding conversation still shows its quick replies here.
   const [result, setResult] = useState<Result | null>(null);
   useEffect(() => { setModuleShown(null); }, [result]);
   const [recovered, setRecovered] = useState(false);
@@ -335,7 +319,6 @@ export function BusinessAssistant({
   async function analyze(event?: React.FormEvent, requestText?: string, onboarding?: OnboardingQuickReply) {
     event?.preventDefault();
     if (locked.current || (!(requestText ?? text).trim() && !materials.length)) return;
-    onboardingStale.current = true;
     locked.current = true;
     archive.inFlight.current = true;
     setWorkOpen(false);
@@ -521,7 +504,6 @@ export function BusinessAssistant({
     workflowRequest.current = null;
     lastContext.current = "";
     setRequestContext(null);
-    onboardingStale.current = true;
     archive.newThread();
     setResult(null);
     setText("");

@@ -4,6 +4,7 @@ import {
   applyContinuationAnswer,
   changesDashboardSignals,
   continuationQuestions,
+  continuationOverview,
   continuationState,
   ContinuationError,
 } from "./continuation";
@@ -69,5 +70,26 @@ describe("onboarding continuation in the dashboard", () => {
 
   it("respects questions disabled by the platform", () => {
     expect(continuationQuestions(nameOnly, []).some((q) => q.field === "businessType")).toBe(false);
+  });
+
+  it("lists every question with its state and answer for the setup card", () => {
+    const answered = applyContinuationAnswer(nameOnly, allQuestionKeys, "businessType", { values: ["retail"] });
+    const skipped = applyContinuationAnswer(answered, allQuestionKeys, continuationState(answered, allQuestionKeys).question!.field, { skip: true });
+    const { question, items } = continuationOverview(skipped, allQuestionKeys);
+    const type = items.find((item) => item.field === "businessType")!;
+    expect(type).toMatchObject({ status: "answered", value: ["retail"] });
+    expect(type.answer).toBe(type.options.find((o) => o.value === "retail")!.label);
+    expect(items.filter((item) => item.status === "skipped")).toHaveLength(1);
+    expect(items.find((item) => item.field === question?.field)?.status).toBe("open");
+  });
+
+  it("asks yes/no questions with Po and Jo and stores a boolean", () => {
+    for (const item of continuationOverview(nameOnly, allQuestionKeys).items.filter((entry) => entry.kind === "boolean"))
+      expect(item.options.map((o) => o.label)).toEqual(["Po", "Jo"]);
+    const products = parseAnswers({ ...emptyAnswers, name: "Zana", businessType: "retail", offeringTypes: ["personalized"], useCases: ["orders"] });
+    const yesNo = continuationOverview(products, allQuestionKeys).items.find((item) => item.kind === "boolean");
+    if (!yesNo) return;
+    const next = applyContinuationAnswer(products, allQuestionKeys, yesNo.field, { values: ["true"] });
+    expect(continuationOverview(next, allQuestionKeys).items.find((item) => item.field === yesNo.field)).toMatchObject({ status: "answered", value: ["true"], answer: "Po" });
   });
 });

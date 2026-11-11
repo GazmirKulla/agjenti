@@ -3,7 +3,8 @@ import { requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { meteredRoute } from "@/lib/ai/usage";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
-import { loadContinuation } from "@/lib/onboarding/continuation-service";
+import { answerContinuation, loadContinuation } from "@/lib/onboarding/continuation-service";
+import { ContinuationError } from "@/lib/onboarding/continuation";
 import { openOnboardingConversation } from "@/lib/onboarding/assistant-chat";
 
 export const runtime = "nodejs";
@@ -46,5 +47,20 @@ async function handlePOST(request: Request) {
     return failure(error, "Biseda e konfigurimit nuk u hap.");
   }
 }
+/** Answers one profile question from the setup card: `{ field, answer }`, where
+ * answer is `{ values }`, `{ text }` or `{ skip: true }`. The server checks it. */
+async function handlePATCH(request: Request) {
+  if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
+  try {
+    const { membership } = await accessFor(request);
+    const body = await request.json().catch(() => null) as { field?: unknown; answer?: unknown } | null;
+    if (!body || typeof body.field !== "string") return json({ error: "Pyetja mungon." }, 400);
+    return json({ continuation: await answerContinuation(membership.business.id, body.field, body.answer) });
+  } catch (error) {
+    if (error instanceof ContinuationError) return json({ error: error.message }, error.status);
+    return failure(error, "Përgjigjja nuk u ruajt. Provo përsëri.");
+  }
+}
 export const GET = meteredRoute(handleGET);
+export const PATCH = meteredRoute(handlePATCH);
 export const POST = meteredRoute(handlePOST);

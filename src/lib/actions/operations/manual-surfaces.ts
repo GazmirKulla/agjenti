@@ -118,6 +118,7 @@ export const manualSurfaces = {
   "src/app/api/catalogs/route.ts#POST": {"exception": "Document upload/indexing requires an explicit source attachment."},
   "src/app/api/meta/data-deletion/route.ts#POST": {"exception": "Provider privacy and account-deauthorization callbacks."},
   "src/app/api/meta/deauthorize/route.ts#POST": {"exception": "Provider privacy and account-deauthorization callbacks."},
+  "src/app/api/business-onboarding/route.ts#PATCH": {"exception": "Saves the owner's answer to one onboarding profile question from the setup card; executes no business operation."},
   "src/app/api/business-onboarding/route.ts#POST": {"exception": "Opens the owner's onboarding conversation and asks the next profile question; executes no business operation and grants the assistant nothing."},
   "src/app/api/mobile/businesses/route.ts#POST": {"exception": "Initial account/workspace onboarding must preserve the setup contract."},
   "src/app/api/mobile/devices/route.ts#POST": {"exception": "Device enrollment and notification tokens are bound to the current device."},

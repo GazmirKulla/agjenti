@@ -24,6 +24,7 @@ export class ContinuationError extends Error {
 }
 
 const booleanFields = new Set(["hasVariants", "isPersonalized", "sellsProducts"]);
+const yesNo = [{ value: "true", label: "Po" }, { value: "false", label: "Jo" }];
 // Collected before the workspace exists, or only meaningful for the retired audio review.
 const excluded = new Set(["name", "businessCategory", "supplement"]);
 
@@ -38,7 +39,8 @@ export function continuationQuestions(
       field: q.field,
       title: q.title,
       hint: q.hint,
-      options: q.options,
+      // Yes/no questions read from the profile carry no options of their own.
+      options: booleanFields.has(q.field) && !q.options.length ? yesNo : q.options,
       kind: booleanFields.has(q.field)
         ? "boolean"
         : q.field === "offeringsSummary"
@@ -62,6 +64,32 @@ export function continuationState(answers: Answers, enabled: readonly AnswerKey[
       total: questions.length,
     } satisfies ContinuationProgress,
   };
+}
+
+/** Every profile question with its state and current answer, for the setup
+ * card: the next one to ask, the ones answered (to change) and the progress. */
+export type ContinuationItem = ContinuationQuestion & {
+  status: "answered" | "skipped" | "open";
+  /** Chosen option values, or the written text (a list is one item per line). */
+  value: string[] | string | null;
+  /** The answer as the owner reads it. */
+  answer: string;
+};
+
+export function continuationOverview(answers: Answers, enabled: readonly AnswerKey[]) {
+  const skipped = new Set(answers.conversationSkipped ?? []);
+  const items: ContinuationItem[] = continuationQuestions(answers, enabled).map((q) => {
+    const raw = fieldValue(answers, q.field);
+    if (!hasValue(raw)) return { ...q, status: skipped.has(q.field) ? "skipped" : "open", value: null, answer: "" };
+    const value = q.kind === "text" || q.kind === "list"
+      ? (Array.isArray(raw) ? raw.map(String).join("\n") : String(raw))
+      : Array.isArray(raw) ? raw.map(String) : [String(raw)];
+    const answer = Array.isArray(value)
+      ? value.map((v) => q.options.find((o) => o.value === v)?.label ?? v).join(", ")
+      : value.split("\n").filter(Boolean).join(", ");
+    return { ...q, status: "answered", value, answer: answer.slice(0, 300) };
+  });
+  return { ...continuationState(answers, enabled), items };
 }
 
 export function applyContinuationAnswer(

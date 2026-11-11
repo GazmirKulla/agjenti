@@ -76,7 +76,7 @@ describe("answering in the conversation", () => {
   const body = { conversationId: "c1", requestId: "r1", revision: 3 };
   it("stores a quick reply and asks the next question in the same turn", async () => {
     vi.mocked(readConversation).mockResolvedValue(view as never);
-    vi.mocked(answerContinuation).mockResolvedValue({ question: { field: "offeringTypes", title: "Çfarë ofron?", hint: "", kind: "single", options: [] }, progress: { answered: 1, total: 6 } });
+    vi.mocked(answerContinuation).mockResolvedValue({ question: { field: "offeringTypes", title: "Çfarë ofron?", hint: "", kind: "single", options: [] }, progress: { answered: 1, total: 6 }, items: [] });
     vi.mocked(persistedTurn).mockImplementation(async (_a, _b, _input, run) => ({ ...(await run([], undefined, {})), persistence: {} }) as never);
     const result = await onboardingTurn(access, { ...body, onboarding: { field: "businessType", values: ["food"] } });
     expect(vi.mocked(persistedTurn).mock.calls[0][2]).toMatchObject({ content: "Restorant / Bar" });

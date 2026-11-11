@@ -6,11 +6,11 @@ import { parseAnswers, type Answers } from "./model";
 import {
   applyContinuationAnswer,
   changesDashboardSignals,
-  continuationState,
+  continuationOverview,
   ContinuationError,
 } from "./continuation";
 
-export type ContinuationView = ReturnType<typeof continuationState> & {
+export type ContinuationView = ReturnType<typeof continuationOverview> & {
   profileChanged?: boolean;
 };
 
@@ -35,7 +35,7 @@ export async function loadContinuation(businessId: string): Promise<Continuation
   } catch {
     return null;
   }
-  return continuationState(answers, settings.onboarding_steps);
+  return continuationOverview(answers, settings.onboarding_steps);
 }
 
 export async function answerContinuation(
@@ -76,5 +76,5 @@ export async function answerContinuation(
       console.error("[onboarding continuation profile]", error);
     }
   }
-  return { ...continuationState(next, settings.onboarding_steps), profileChanged };
+  return { ...continuationOverview(next, settings.onboarding_steps), profileChanged };
 }
