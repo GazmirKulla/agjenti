@@ -4,6 +4,7 @@ import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { getAppSettings } from "@/lib/platform/settings";
 import { PageHeading } from "@/components/dashboard/ui";
 import { OnboardingLinks } from "@/components/dashboard/onboarding-links";
+import { OnboardingDetails } from "@/components/dashboard/onboarding-details";
 
 export default async function AdminOnboardingPage() {
   const user = await getSessionUser();
@@ -22,6 +23,7 @@ export default async function AdminOnboardingPage() {
         </Link>
       </PageHeading>
       <OnboardingLinks enabledSteps={settings.onboarding_steps} />
+      <OnboardingDetails />
     </>
   );
 }

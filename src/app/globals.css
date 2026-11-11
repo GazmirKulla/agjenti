@@ -3721,6 +3721,10 @@ html[data-resolved="dark"] .account-details div {
   gap: 18px;
   color: var(--ink);
 }
+.ob-details { display: grid; gap: 12px; margin-top: 18px; }
+.ob-details h2 { margin: 0; font-size: 16px; }
+.ob-details .muted-copy { margin: 0; line-height: 1.55; }
+.ob-details td { vertical-align: top; }
 .ob-legend {
   display: flex;
   flex-wrap: wrap;
