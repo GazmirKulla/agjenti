@@ -31,12 +31,12 @@ export const metricLabels: Record<MetricId, string> = {
 export const periodLabels: Record<BriefingPeriod, string> = {
   today: "Sot", yesterday: "Dje", week: "Kjo javë",
 };
-const shiftDate = (date: string, days: number) =>
+export const shiftDate = (date: string, days: number) =>
   new Date(Date.parse(`${date}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 
 /** First real instant of a local date, including midnight DST transitions.
  * Calendar dates are advanced before conversion; a day is not assumed to be 24h. */
-function dayBoundary(date: string, timezone: string) {
+export function dayBoundary(date: string, timezone: string) {
   const naive = Date.parse(`${date}T00:00:00Z`);
   let low = naive - 36 * 3600000, high = naive + 36 * 3600000;
   while (low < high) {

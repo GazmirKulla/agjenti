@@ -1,79 +1,88 @@
-import { Suspense } from "react";
 import Link from "next/link";
-import { DashboardLoading } from "@/components/dashboard/loading";
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { Overview } from "@/components/dashboard/overview";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
-import { DailyBriefing } from "@/components/business-assistant/daily-briefing";
-import { REPORT_METRICS, ReportBars, ReportChange } from "@/components/dashboard/report-parts";
-import { loadBusinessReport } from "@/lib/reports/service";
-import { groupDigits, summarize } from "@/lib/reports/model";
+import { Icon } from "@/components/dashboard/icon";
+import { loadHomeSummary } from "@/lib/home/summary";
+import { HOME_PERIOD_LABELS, HOME_PERIODS, homePeriod, type HomeMessages } from "@/lib/home/model";
+import { groupDigits, shortDate } from "@/lib/reports/model";
 import "./home.css";
 
-const WEEK = 7;
-
-/** The last seven days of the reports, small, under the day's summary. */
-async function WeekReports({ slug, businessId, modules }: { slug: string; businessId: string; modules: string[] }) {
-  const report = await loadBusinessReport(businessId, WEEK).catch(() => null);
-  if (!report) return null;
-  const metrics = REPORT_METRICS.filter((metric) => !metric.module || modules.includes(metric.module));
+function MessagesCard({ messages, href, period }: { messages: HomeMessages; href: string; period: string }) {
+  const max = Math.max(1, ...messages.days.map((day) => day.value));
+  const parts = [`${groupDigits(messages.agentReplies)} përgjigje nga Agjenti`, messages.handoffs ? `${groupDigits(messages.handoffs)} te stafi tani` : ""].filter(Boolean);
   return (
-    <section className="home-reports" aria-labelledby="home-reports-title">
-      <header>
-        <h2 id="home-reports-title">7 ditët e fundit</h2>
-        <Link className="soft-link" href={`/b/${slug}/reports`}>Të gjitha raportet →</Link>
-      </header>
-      <div className="report-grid">
-        {metrics.map(({ metric, label }) => {
-          const summary = summarize(report.days, WEEK, metric);
-          return (
-            <article key={metric} className="panel report-card">
-              <header><h2>{label}</h2></header>
-              <strong className="report-total">{groupDigits(summary.total)}</strong>
-              <ReportChange summary={summary} range={WEEK} />
-              <ReportBars summary={summary} label={label} />
-            </article>
-          );
-        })}
+    <Link href={href} className="panel home-messages">
+      <div className="home-card-main">
+        <span className="home-card-label"><Icon name="inbox" size={16} />Mesazhe hyrëse · {period}</span>
+        <strong className="home-card-value">{groupDigits(messages.inbound)}</strong>
+        <span className="home-card-detail">{parts.join(" · ")}</span>
       </div>
-    </section>
+      {messages.days.length > 0 && (
+        <div className="home-bars" role="img" aria-label={`Mesazhe hyrëse sipas ditëve, deri në ${groupDigits(max)} në ditë`}>
+          {messages.days.map((day) => (
+            <span key={day.day} title={`${shortDate(day.day)}: ${groupDigits(day.value)}`}>
+              <span style={{ height: day.value ? `${Math.max(6, (day.value / max) * 100)}%` : 0 }} />
+            </span>
+          ))}
+        </div>
+      )}
+    </Link>
   );
 }
 
-/** Home: the business summary, a combination of the reports. The assistant
- * opens from the header on every page; until the agent is live, the
- * "Gati për klientët" card sits above this. */
-export default async function BusinessDashboard({
-  params,
-}: {
+/** Kreu: what is happening in the business. Incoming messages, then one card
+ * per module that is on: its count, what was added in the period and one
+ * thing to act on. The assistant opens from the header; until the agent is
+ * live, the "Gati për klientët" card sits above this. */
+export default async function BusinessDashboard({ params, searchParams }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
-  const dashboardProfile = await loadDashboardProfile(access.business.id);
-  const reports = dashboardProfile.enabledModules.includes("reports");
+  const period = homePeriod((await searchParams).period);
+  const profile = await loadDashboardProfile(access.business.id);
+  const summary = await loadHomeSummary(access.business, profile.enabledModules, period);
+  const base = `/b/${encodeURIComponent(access.business.slug)}`;
+  const label = HOME_PERIOD_LABELS[period].toLowerCase();
+
   return (
     <div className="home-summary">
-      <DailyBriefing slug={access.business.slug} active />
-      {reports && (
-        <Suspense fallback={<DashboardLoading />}>
-          <WeekReports slug={access.business.slug} businessId={access.business.id} modules={dashboardProfile.enabledModules} />
-        </Suspense>
+      <header className="home-head">
+        <div>
+          <h1>Përmbledhja e biznesit</h1>
+          <p>Çfarë po ndodh në {access.business.name}.</p>
+        </div>
+        <nav className="home-periods" aria-label="Periudha">
+          {HOME_PERIODS.map((value) => (
+            <Link key={value} href={value === "today" ? base : `${base}?period=${value}`} aria-current={value === period ? "page" : undefined}
+              className={value === period ? "is-active" : undefined}>{HOME_PERIOD_LABELS[value]}</Link>
+          ))}
+        </nav>
+      </header>
+      {summary.messages && <MessagesCard messages={summary.messages} href={`${base}/inbox`} period={label} />}
+      {summary.cards.length > 0 && (
+        <section className="home-cards" aria-label="Modulet">
+          {summary.cards.map((card) => (
+            <article key={card.id} className="panel home-card">
+              <Link href={card.href} className="home-card-main">
+                <span className="home-card-label"><Icon name={card.icon} size={16} />{card.label}</span>
+                <strong className="home-card-value">{groupDigits(card.value)}</strong>
+                <span className="home-card-detail">
+                  {card.caption}
+                  {card.detail ? <> · <span className={card.detailTone === "up" ? "is-up" : undefined}>{card.detail}</span></> : null}
+                </span>
+              </Link>
+              {card.attention && <Link href={card.attention.href} className={`home-card-attention is-${card.attention.tone}`}>{card.attention.text} →</Link>}
+            </article>
+          ))}
+        </section>
       )}
-      <details className="assistant-first-home business-hub-overview">
-        <summary>Pasqyra e biznesit dhe veprimet manuale</summary>
-        <Suspense fallback={<DashboardLoading />}>
-          <Overview
-            compact
-            business={access.business}
-            dashboardProfile={dashboardProfile}
-          />
-        </Suspense>
-      </details>
+      {!summary.messages && !summary.cards.length && <p className="muted-copy">Asnjë modul nuk është aktiv. Zgjidh modulet te Cilësimet.</p>}
     </div>
   );
 }
