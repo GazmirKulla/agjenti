@@ -66,10 +66,11 @@ it("learns from the sources first, connects the channel last, and never includes
     { productCount: 0 },
     { unconfiguredProducts: 1 },
     { agentReady: false },
-    { tested: false },
     { available: false },
   ])
     expect(isReady({ ...ready, ...partial })).toBe(false);
+  // A test is recommended, never required to go live.
+  expect(isReady({ ...ready, tested: false })).toBe(true);
 });
 it("authorizes launch before touching a business", async () => {
   m.user.mockResolvedValue(null);
@@ -105,7 +106,7 @@ it("names the first incomplete setup step in the gate message", () => {
   expect(setupGateMessage(ready)).toBeNull();
   expect(setupGateMessage({ ...ready, connected: false })).toMatch(/Instagram/);
   expect(setupGateMessage({ ...ready, usableProducts: 0 })).toMatch(/produkt/);
-  expect(setupGateMessage({ ...ready, tested: false })).toMatch(/provën/i);
+  expect(setupGateMessage({ ...ready, tested: false })).toBeNull();
 });
 it("reports concurrent launch failure instead of success", async () => {
   m.rpc.mockResolvedValue({ error: { message: "Setup incomplete" } });
@@ -138,7 +139,7 @@ it("allows catalog/service-only workspaces without artificial products or order 
       "instagram",
     ]);
     expect(isReady(s)).toBe(true);
-    expect(isReady({ ...s, tested: false })).toBe(false);
+    expect(isReady({ ...s, tested: false })).toBe(true);
   }
   expect(isReady({ ...ready, catalogCount: 1, unconfiguredProducts: 1 })).toBe(
     false,

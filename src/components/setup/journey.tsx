@@ -175,7 +175,9 @@ export function SetupJourney({
                       <small>
                         {step.done
                           ? "Përfunduar"
-                          : step.optional
+                          : "recommended" in step && step.recommended
+                            ? "I rekomanduar"
+                            : step.optional
                             ? "Opsional"
                             : step.key === "instagram"
                             ? "I detyrueshëm"

@@ -62,14 +62,20 @@ export async function GET(request: Request) {
 		const connectedQuery = subscription.ok ? "connected=1" : "connected=1&webhook_sub=error";
 		let discovery = false;
 		try {
-			if ((await getAppSettings()).onboarding_enabled) {
+			// A business already read through its public profile is not scanned
+			// again in full on connecting; a rescan stays one click away in Burimet.
+			const { data: earlier } = await supabase.from("business_discovery_jobs").select("id")
+				.eq("business_id", state.businessId).eq("source", "instagram").neq("status", "failed").limit(1).maybeSingle();
+			if (!earlier && (await getAppSettings()).onboarding_enabled) {
 				await enqueueDiscovery(state.businessId, state.userId, "instagram");
 				discovery = true;
 				after(async () => { await runDiscoveryQueue(state.businessId).catch(() => console.error("[discovery] worker unavailable")); });
 			}
 		} catch { console.error("[discovery] analysis could not be queued"); }
 		// Without a slug the business destination is unknown; let the role-based router choose it.
-		const destination = business?.slug
+		const destination = business?.slug && state.returnTo === "onboarding"
+			? `/onboarding/channel?slug=${encodeURIComponent(business.slug)}&${connectedQuery}`
+			: business?.slug
 			? `/b/${encodeURIComponent(business.slug)}/${discovery ? "sources" : "instagram"}?${connectedQuery}`
 			: `/auth/continue?ig=connected`;
 		return NextResponse.redirect(new URL(destination, url.origin));

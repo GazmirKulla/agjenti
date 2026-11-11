@@ -2,7 +2,7 @@ import { moduleRegistry } from "../modules/registry";
 import type { DashboardProfile, ModuleId } from "../modules/types";
 
 export type NavItem = {
-  id: ModuleId | "chat-lab" | "pricing" | "actions" | "users" | "usage" | "prompts";
+  id: ModuleId | "chat-lab" | "pricing" | "actions" | "users" | "usage" | "prompts" | "flows";
   path: string;
   label: string;
   icon: string;
@@ -55,6 +55,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
     { id: "actions", path: "actions", label: "Modulet dhe aftësitë", icon: "spark" },
     { id: "chat-lab", path: "chat-lab", label: "Chat Lab", icon: "spark" },
     { id: "prompts", path: "prompts", label: "Promptet", icon: "knowledge" },
+    { id: "flows", path: "flows", label: "Rrjedhat", icon: "workflows" },
     { id: "agents", path: "onboarding", label: "Onboarding", icon: "spark" },
     { id: "settings", path: "settings", label: "Cilësimet", icon: "settings" },
   ];

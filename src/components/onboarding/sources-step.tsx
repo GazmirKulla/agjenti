@@ -45,7 +45,8 @@ function ProgressRows({ rows }: { rows: Row[] }) {
  * posts and the website's first page, which ends in a proposal to confirm. */
 export function SourcesStep({ slug }: { slug: string }) {
   const endpoint = `/api/business-sources?slug=${encodeURIComponent(slug)}`;
-  const home = `/b/${encodeURIComponent(slug)}`;
+  // Step 3 (the channel) comes next; the panel is reachable from there.
+  const home = `/onboarding/channel?slug=${encodeURIComponent(slug)}`;
   const [stage, setStage] = useState<Stage>("form");
   const [username, setUsername] = useState("");
   const [website, setWebsite] = useState("");
@@ -116,8 +117,8 @@ export function SourcesStep({ slug }: { slug: string }) {
   return (
     <>
       <div className="onboarding-progress">
-        <progress max={2} value={stage === "form" ? 1 : 2} aria-label="Progresi i konfigurimit" />
-        <span>Hapi 2 nga 2</span>
+        <progress max={3} value={2} aria-label="Progresi i konfigurimit" />
+        <span>Hapi 2 nga 3</span>
       </div>
       <div className="onboarding-question">
         <span className="onboarding-eyebrow">NGA KU TË MËSOJË AGJENTI</span>
@@ -129,7 +130,7 @@ export function SourcesStep({ slug }: { slug: string }) {
             : stage === "preview"
               ? "Përshkrimi i përgjithshëm u ruajt te Njohuritë si \"Rreth biznesit\"."
               : state?.review ? "Shiko çfarë gjeti dhe konfirmo çfarë të përdorë në përgjigje."
-              : "Kur të mbarojë, të tregojmë çfarë gjeti që ta konfirmosh. Mund të vazhdosh te paneli ndërkohë."}
+              : "Kur të mbarojë, të tregojmë çfarë gjeti që ta konfirmosh. Mund të vazhdosh ndërkohë; propozimi të pret te Njohuritë."}
         </p>
       </div>
 
@@ -194,7 +195,7 @@ export function SourcesStep({ slug }: { slug: string }) {
           <div className="onboarding-actions">
             <button type="button" className="onboarding-back" disabled={busy} onClick={() => { setStage("form"); setError(""); }}>Ndrysho</button>
             <div className="onboarding-actions-end">
-              <a className="onboarding-skip" href={home}>{canLearn ? "Jo, mjafton kaq" : "Vazhdo te paneli"}</a>
+              <a className="onboarding-skip" href={home}>{canLearn ? "Jo, mjafton kaq" : "Vazhdo"}</a>
               {canLearn && <button type="button" className="onboarding-next" disabled={busy} onClick={() => void learn()}>{busy ? "Duke nisur…" : "Po, vazhdo"}</button>}
             </div>
           </div>
@@ -222,7 +223,7 @@ export function SourcesStep({ slug }: { slug: string }) {
             <span />
             <div className="onboarding-actions-end">
               <a className={state?.review ? "onboarding-skip" : "onboarding-next"} href={home}>
-                {state?.review ? "Konfirmo më vonë" : running ? "Vazhdo te paneli ndërkohë" : "Vazhdo te paneli"}
+                {state?.review ? "Konfirmo më vonë" : running ? "Vazhdo ndërkohë" : "Vazhdo"}
               </a>
             </div>
           </div>

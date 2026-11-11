@@ -9,6 +9,7 @@ import { dashboardLanguage, translator } from "@/lib/dashboard/language/core";
 import { aiUsageSummary, loadAiUsage } from "@/lib/ai/usage-report";
 import { loadBillingUsage, plans } from "@/lib/billing/service";
 import { publicBusinessCategories } from "@/lib/onboarding/starter";
+import { loadReadiness, readinessSummary } from "@/lib/setup/readiness";
 export async function GET(request: Request) {
   const headers = { "Cache-Control": "private, no-store", Vary: "X-Agjenti-Language" };
   const t = translator(dashboardLanguage(request.headers.get("x-agjenti-language")));
@@ -22,11 +23,12 @@ export async function GET(request: Request) {
     const membership = await listMemberships(user.id);
     const businesses = await Promise.all(
       membership.businesses.map(async (business) => {
-        const [profile, aiUsage, billing] = await Promise.all([
+        const [profile, aiUsage, billing, readiness] = await Promise.all([
           loadNavigationProfile(business.id),
           // Tokens are a platform cost statistic: only platform administrators see them.
           membership.admin ? loadAiUsage(user.id, business.id, true) : null,
           loadBillingUsage(business.id).catch(() => null),
+          loadReadiness(business),
         ]);
         return {
           ...business,
@@ -36,6 +38,8 @@ export async function GET(request: Request) {
           messagesLimit: billing?.limit,
           sharedPlan: billing?.scope === "account",
           planName: billing ? plans[billing.plan]?.name : undefined,
+          // "Gati për klientët": what is left before the agent answers customers.
+          readiness: readinessSummary(readiness),
           modules: profile.enabledModules,
           navigation: navigationOrder
             .filter((id) => profile.navigationItems.includes(id))

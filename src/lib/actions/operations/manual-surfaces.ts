@@ -18,6 +18,7 @@ export const manualSurfaces = {
   "src/app/admin/businesses/page.tsx#removeMember": {"exception": "Membership revocation is security administration."},
   "src/app/admin/businesses/page.tsx#saveBusinessSettings": {"exception": "Administrator-only tenant limits and integration settings."},
   "src/app/admin/businesses/page.tsx#saveBusinessModel": {"exception": "Administrator-only choice of the model group a business uses; platform cost policy."},
+  "src/lib/setup/auto-reply-actions.ts#setAutoReply": { exception: "The owner's switch for automatic customer replies, behind the same launch gate as the business settings switch." },
   "src/app/b/[slug]/agents/page.tsx#configure": {"operation": "agent.communication"},
   "src/lib/agents/instruction-facts-actions.ts#checkInstructionFacts": { exception: "Read-only review that proposes moving facts out of the instructions; nothing is written." },
   "src/lib/agents/instruction-facts-actions.ts#moveInstructionFacts": { exception: "Applies only a proposal the owner reviewed on screen, through the same versioned draft and publish path as agent.communication." },

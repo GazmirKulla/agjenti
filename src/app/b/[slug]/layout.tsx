@@ -15,6 +15,7 @@ import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import { loadBillingUsage } from "@/lib/billing/service";
 import { loadItemSetup } from "@/lib/items/business";
 import { channelAttention } from "@/lib/channels/service";
+import { loadReadiness } from "@/lib/setup/readiness";
 import { BillingUsageNotice } from "@/components/dashboard/billing-usage-notice";
 import { isNativeEmbed } from "@/lib/native/embedded";
 import { aiUsageSummary, loadAiUsage } from "@/lib/ai/usage-report";
@@ -32,7 +33,7 @@ export default async function BusinessLayout({
   const access = await listMemberships(user.id);
   const business = (await requireBusinessAccess(user.id, slug))?.business;
   if (!business) redirect("/auth/continue");
-  const [settings, dashboardProfile, billingUsage, nativeHost, aiUsage, channelsAttention] = await Promise.all([
+  const [settings, dashboardProfile, billingUsage, nativeHost, aiUsage, channelsAttention, readiness] = await Promise.all([
     getAppSettings(),
     loadNavigationProfile(business.id),
     loadBillingUsage(business.id),
@@ -40,6 +41,7 @@ export default async function BusinessLayout({
     // Tokens are a platform cost statistic: only platform administrators see them.
     access.admin ? loadAiUsage(user.id, business.id, true) : null,
     channelAttention(business.id),
+    loadReadiness(business),
   ]);
   const items = await loadItemSetup(business.id);
   const sectionLabels = { products: items.names.plural };
@@ -70,6 +72,7 @@ export default async function BusinessLayout({
       nativeHost={nativeHost}
       aiUsage={aiUsage ? aiUsageSummary(aiUsage) : undefined}
       channelsAttention={channelsAttention}
+      readiness={readiness}
     >
       {settings.announcement && (
         <div

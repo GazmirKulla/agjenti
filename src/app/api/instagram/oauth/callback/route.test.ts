@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ state: vi.fn(), exchange: vi.fn(), subscribe: vi.fn(), settings: vi.fn(), enqueue: vi.fn(), from: vi.fn(), after: vi.fn(), saved: { error: null as object | null } }));
+const m = vi.hoisted(() => ({ state: vi.fn(), exchange: vi.fn(), subscribe: vi.fn(), settings: vi.fn(), enqueue: vi.fn(), from: vi.fn(), after: vi.fn(), saved: { error: null as object | null }, earlierScan: null as object | null }));
 vi.mock("@/lib/instagram/oauth", () => ({ verifyOAuthState: m.state, exchangeInstagramCode: m.exchange, subscribeInstagramAccountWebhooks: m.subscribe }));
 vi.mock("@/lib/crypto/tokens", () => ({ encryptSecret: () => "encrypted" }));
 vi.mock("@/lib/platform/settings", () => ({ getAppSettings: m.settings }));
@@ -13,7 +13,11 @@ beforeEach(() => {
   m.state.mockReturnValue({ businessId: "business", userId: "verified-user" });
   m.exchange.mockResolvedValue({ userId: "ig-user", accessToken: "SECRET-TOKEN", username: "studio" });
   m.subscribe.mockResolvedValue({ ok: true }); m.settings.mockResolvedValue({ onboarding_enabled: true }); m.enqueue.mockResolvedValue("job");
-  m.from.mockImplementation(() => { const q = { update: () => q, eq: () => q, neq: async () => ({ error: null }), upsert: async () => m.saved, select: () => q, maybeSingle: async () => ({ data: { slug: "studio" } }) }; return q; });
+  m.earlierScan = null;
+  m.from.mockImplementation((table: string) => {
+    if (table === "business_discovery_jobs") { const j = { select: () => j, eq: () => j, neq: () => j, limit: () => j, maybeSingle: async () => ({ data: m.earlierScan }) }; return j; }
+    const q = { update: () => q, eq: () => q, neq: async () => ({ error: null }), upsert: async () => m.saved, select: () => q, maybeSingle: async () => ({ data: { slug: "studio" } }) }; return q;
+  });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 describe("Instagram discovery handoff", () => {
@@ -30,8 +34,17 @@ describe("Instagram discovery handoff", () => {
     expect((await GET(request())).headers.get("location")).toBe("http://localhost/b/studio/instagram?connected=1");
     expect(m.enqueue).not.toHaveBeenCalled();
   });
+  it("returns to the onboarding channel step and does not scan again a business read by username", async () => {
+    m.state.mockReturnValue({ businessId: "business", userId: "verified-user", returnTo: "onboarding" });
+    m.earlierScan = { id: "username-scan" };
+    expect((await GET(request())).headers.get("location")).toBe("http://localhost/onboarding/channel?slug=studio&connected=1");
+    expect(m.enqueue).not.toHaveBeenCalled();
+  });
   it("never falls back to another business when the connected business has no slug", async () => {
-    m.from.mockImplementation(() => { const q = { update: () => q, eq: () => q, neq: async () => ({ error: null }), upsert: async () => m.saved, select: () => q, maybeSingle: async () => ({ data: null }) }; return q; });
+    m.from.mockImplementation((table: string) => {
+      if (table === "business_discovery_jobs") { const j = { select: () => j, eq: () => j, neq: () => j, limit: () => j, maybeSingle: async () => ({ data: null }) }; return j; }
+      const q = { update: () => q, eq: () => q, neq: async () => ({ error: null }), upsert: async () => m.saved, select: () => q, maybeSingle: async () => ({ data: null }) }; return q;
+    });
     expect((await GET(request())).headers.get("location")).toBe("http://localhost/auth/continue?ig=connected");
   });
   it("does not queue work or report success when connection storage fails", async () => {

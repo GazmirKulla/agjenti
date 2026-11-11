@@ -4,6 +4,8 @@ type OAuthState = {
 	businessId: string;
 	userId: string;
 	exp: number;
+	/** Where to come back after connecting: the onboarding channel step. */
+	returnTo?: "onboarding";
 };
 
 function secret(): string {

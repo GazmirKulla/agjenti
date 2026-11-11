@@ -1468,3 +1468,12 @@ a.onboarding-skip { text-decoration: none; }
 .sources-progress-bar span.is-running { background-image: linear-gradient(90deg, transparent 0, color-mix(in srgb, #fff 45%, transparent) 50%, transparent 100%); background-size: 200% 100%; animation: sources-shimmer 1.4s linear infinite; }
 @keyframes sources-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .sources-progress-bar span { transition: none; } .sources-progress-bar span.is-running { animation: none; } }
+
+/* Step 3: the channel. */
+.onboarding-found-card { align-items: center; }
+.onboarding-channel-body { flex: 1; }
+.onboarding-channel-button { flex-shrink: 0; padding: 10px 16px; font-size: 13px; }
+.onboarding-found-icon.is-whatsapp { background: #25d366; color: #fff; }
+.onboarding-success { margin: 16px 0 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--ink); font-size: 13px; }
+.onboarding-found-question .onboarding-hint { margin-top: 8px; }
+.onboarding-found-question .onboarding-hint a { color: var(--accent); font-weight: 600; }

@@ -12,6 +12,8 @@ import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
 import { AssistantWorkspaceSurface, AssistantEntry, useAssistantWorkspace } from "@/components/business-assistant/workspace";
+import { LiveMark, ReadyStrip } from "./ready-strip";
+import type { Readiness } from "@/lib/setup/readiness";
 
 export function AppShell({
   children,
@@ -27,6 +29,7 @@ export function AppShell({
   nativeHost: embedded = false,
   aiUsage,
   channelsAttention,
+  readiness,
 }: {
   children: React.ReactNode;
   name: string;
@@ -42,6 +45,8 @@ export function AppShell({
   /** This month's OpenAI usage, present only for business owners and platform administrators. */
   aiUsage?: { calls: number; tokens: number };
   channelsAttention?: { instagram: boolean; whatsapp: boolean };
+  /** Is the agent live, and what is left: the header mark and the home strip. */
+  readiness?: Readiness | null;
 }) {
   const [nativeHost, setNativeHost] = useState(embedded);
   useEffect(() => { if (/AgjentiNative\/2\.0/.test(navigator.userAgent)) setNativeHost(true); }, []);
@@ -423,6 +428,7 @@ export function AppShell({
             )}
           </div>
           </div>
+          {!admin && readiness && slug && <LiveMark slug={slug} readiness={readiness} />}
           {!admin && aiUsage !== undefined && (
             <p
               className="ai-usage-pill"
@@ -437,6 +443,7 @@ export function AppShell({
         </header>
         <main className="dashboard-content">
           {/* Stable placement retains pending cards and the composer across navigation. */}
+          {!admin && readiness && slug && pathname === base && <ReadyStrip slug={slug} readiness={readiness} />}
           {!admin && <AssistantWorkspaceSurface/>}
           {!admin && pathname !== base && <AssistantEntry/>}
           {children}

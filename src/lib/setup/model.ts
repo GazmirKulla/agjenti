@@ -75,6 +75,9 @@ export function setupSteps(s: SetupStatus) {
       action: "Provo Agjentin",
       path: "agents/test",
       done: s.tested,
+      // Recommended before going live, never required.
+      optional: true,
+      recommended: true,
     },
     {
       key: "instagram",
@@ -86,6 +89,10 @@ export function setupSteps(s: SetupStatus) {
       done: s.connected,
     },
   ].filter((step) => !documentBusiness || step.key !== "workflows");
+}
+/** Steps that are suggested but do not block going live. */
+export function recommendedSteps(s: SetupStatus) {
+  return setupSteps(s).filter((step) => !step.done && "recommended" in step && step.recommended);
 }
 export function isReady(s: SetupStatus) {
   return s.available && setupSteps(s).every((step) => step.done || step.optional);
@@ -108,7 +115,6 @@ export function setupGateMessage(s: SetupStatus): string | null {
     agents: "Aktivizo një agjent me udhëzime te Agjentët përpara aktivizimit.",
     workflows:
       "Lidh llojin dhe workflow-in për çdo produkt te Produktet / Workflow përpara aktivizimit.",
-    test: "Përfundo provën te Provo Agjentin përpara aktivizimit.",
   };
   return (
     tips[next.key] ??

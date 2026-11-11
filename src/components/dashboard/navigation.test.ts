@@ -49,6 +49,7 @@ it("includes onboarding map in admin desktop nav", () => {
     "actions",
     "chat-lab",
     "prompts",
+    "flows",
     "onboarding",
     "settings",
   ]);

@@ -34,7 +34,8 @@ export async function GET(request: Request) {
 		if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 	}
 
-	const state = signOAuthState({ businessId, userId: user.id });
+	const returnTo = new URL(request.url).searchParams.get("return") === "onboarding" ? "onboarding" as const : undefined;
+	const state = signOAuthState({ businessId, userId: user.id, ...(returnTo ? { returnTo } : {}) });
 	const authorizeUrl = instagramAuthorizeUrl(state);
 	// Client-side navigation keeps the #weblink fragment (HTTP Location often drops it).
 	const html = `<!DOCTYPE html>

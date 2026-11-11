@@ -15,6 +15,8 @@ import { whatsappGraphVersion } from "@/lib/whatsapp/api";
 import styles from "@/components/dashboard/integration-card.module.css";
 import { channelHealth, effectiveStatus, timeAgo } from "@/lib/channels/health";
 import { loadChannelActivity } from "@/lib/channels/service";
+import { loadReadiness } from "@/lib/setup/readiness";
+import { AutoReplyPanel } from "@/components/dashboard/auto-reply-panel";
 
 export default async function IntegrationsPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ detail?: string }> }) {
   const t = await getDashboardTranslator();
@@ -42,11 +44,13 @@ export default async function IntegrationsPage({ params, searchParams }: { param
     wa?.status === "connected" ? loadChannelActivity(access.business.id, "whatsapp") : null,
   ]);
   const worded = (a: Awaited<ReturnType<typeof loadChannelActivity>>) => a && { lastInbound: timeAgo(a.lastInboundAt), weekInbound: a.weekInbound };
+  const readiness = await loadReadiness(access.business);
   const connectedCount = Number(!instagram.error && igStatus === "connected") + Number(!whatsapp.error && wa?.status === "connected");
   return <div className={styles.overview}>
     <PageHeading title={t("Kanalet")} description={t("Kanalet ku klientët të shkruajnë dhe ku u përgjigjet agjenti. Shiko nëse secili po merr mesazhe.")}>
       {!instagram.error && !whatsapp.error && <span className={styles.count}>{connectedCount} {t("nga 2 kanale të lidhura")}</span>}
     </PageHeading>
+    {readiness && <AutoReplyPanel slug={access.business.slug} readiness={readiness} />}
     <div className={styles.grid}>
       <IntegrationCard key={`instagram:${ig?.updated_at ?? "empty"}`} channel="instagram" businessId={access.business.id} slug={slug}
         status={igStatus} identity={ig?.username ? `@${ig.username}` : ig?.ig_user_id}
