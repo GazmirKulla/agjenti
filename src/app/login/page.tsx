@@ -7,6 +7,7 @@ import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { BrandLogo } from "@/components/brand/logo";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
 import { DELETED_ACCOUNT_CODE, DELETED_ACCOUNT_MESSAGE } from "@/lib/account/deletion-notice";
+import { EXISTING_ACCOUNT_MESSAGE, isExistingAccount } from "@/lib/auth/existing-account";
 import "./auth.css";
 function LoginForm() {
   const params = useSearchParams();
@@ -69,13 +70,32 @@ function LoginForm() {
         });
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.auth.signUp({
+        const result = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
           },
         });
+        if (isExistingAccount(result)) {
+          // The email already has an account: with the right password the
+          // person is simply signed in, otherwise they continue at sign-in.
+          const attempt = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+          if (!attempt.error) {
+            window.location.assign(next);
+            return;
+          }
+          if (attempt.error.code === DELETED_ACCOUNT_CODE) throw attempt.error;
+          setMode("signin");
+          setPassword("");
+          setMessage(
+            attempt.error.code === "email_not_confirmed"
+              ? "Ky email ka një llogari që pret konfirmimin. Kontrollo email-in, edhe dosjen Spam."
+              : EXISTING_ACCOUNT_MESSAGE,
+          );
+          return;
+        }
+        const { data, error } = result;
         if (error) throw error;
         if (!data.session) {
           setMessage(
