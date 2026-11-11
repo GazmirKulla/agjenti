@@ -4,7 +4,7 @@ import { Icon } from "@/components/dashboard/icon";
 import { launchBusiness } from "@/lib/setup/actions";
 import type { Readiness } from "@/lib/setup/readiness";
 
-/** Onboarding step 3: the channel the agent answers on, then switching the
+/** Onboarding step 4: the channel the agent answers on, then switching the
  * automatic replies on. Both can wait ("Më vonë"); the panel keeps reminding. */
 export function ChannelStep({ slug, businessId, readiness, justConnected }: { slug: string; businessId: string; readiness: Readiness | null; justConnected: boolean }) {
   const home = `/b/${encodeURIComponent(slug)}`;
@@ -28,10 +28,6 @@ export function ChannelStep({ slug, businessId, readiness, justConnected }: { sl
 
   return (
     <>
-      <div className="onboarding-progress">
-        <progress max={3} value={3} aria-label="Progresi i konfigurimit" />
-        <span>Hapi 3 nga 3</span>
-      </div>
       <div className="onboarding-question">
         <span className="onboarding-eyebrow">KANALI I BISEDAVE</span>
         <h1>{live ? "Agjenti është gati" : connected ? "Kanali u lidh" : "Ku të përgjigjet Agjenti?"}</h1>

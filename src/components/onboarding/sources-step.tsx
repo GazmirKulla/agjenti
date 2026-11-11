@@ -1,19 +1,18 @@
 "use client";
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/dashboard/icon";
-import { SourcesReview } from "@/components/dashboard/sources-review";
-import { DiscoveryScanDialog } from "@/components/setup/scan-dialog";
-import type { SourcesPreview, SourcesState } from "@/lib/discovery/sources-step";
+import type { SourcesPreview } from "@/lib/discovery/sources-step";
+import { onboardingQuestionsPath } from "@/lib/onboarding/steps";
 
-type Stage = "form" | "reading" | "confirm" | "learning" | "review";
+type Stage = "form" | "reading" | "confirm";
 type Decision = "yes" | "no" | null;
-type Row = { source: "instagram" | "website"; label: string; progress: number; step: string; state: "waiting" | "running" | "done" | "failed" };
+export type Row = { source: "instagram" | "website"; label: string; progress: number; step: string; state: "waiting" | "running" | "done" | "failed" };
 
-const sourceLabel = { instagram: "Instagram", website: "Website" } as const;
+export const sourceLabel = { instagram: "Instagram", website: "Website" } as const;
 
 /** One line per source with its own bar, so the owner sees what is happening. */
-function ProgressRows({ rows }: { rows: Row[] }) {
+export function ProgressRows({ rows }: { rows: Row[] }) {
   const total = rows.length ? Math.round(rows.reduce((sum, row) => sum + row.progress, 0) / rows.length) : 0;
   return (
     <div className="sources-progress" role="status" aria-live="polite">
@@ -45,23 +44,20 @@ function ProgressRows({ rows }: { rows: Row[] }) {
 
 const count = (value?: number) => typeof value === "number" ? value.toLocaleString("sq-AL") : null;
 
-/** Onboarding step 2: where the agent learns from.
- *  1. The owner gives the Instagram username and the website; both are read at once.
- *  2. Each one is shown (photo, name, numbers / logo, name) and the owner confirms it is theirs.
- *  3. The confirmed Instagram (last posts) and then the website (home, about, contact) are scanned.
- *  4. Everything found is merged by the AI; the owner accepts, rejects or edits each entry.
- *  Then step 3, the channel. */
-export function SourcesStep({ slug }: { slug: string }) {
+/** Onboarding step 1, second screen: the Instagram and website given with the
+ * name are read at once and shown (photo, name, numbers / logo, name); the
+ * owner confirms each is theirs. The confirmed ones are then scanned in the
+ * background (Instagram first, then the website) while the owner answers the
+ * questions of step 2. */
+export function SourcesStep({ slug, initialInstagram = "", initialWebsite = "" }: { slug: string; initialInstagram?: string; initialWebsite?: string }) {
   const endpoint = `/api/business-sources?slug=${encodeURIComponent(slug)}`;
-  const next = `/onboarding/channel?slug=${encodeURIComponent(slug)}`;
+  const next = onboardingQuestionsPath(slug);
   const [stage, setStage] = useState<Stage>("form");
-  const [username, setUsername] = useState("");
-  const [website, setWebsite] = useState("");
+  const [username, setUsername] = useState(initialInstagram);
+  const [website, setWebsite] = useState(initialWebsite);
   const [preview, setPreview] = useState<SourcesPreview | null>(null);
   const [reading, setReading] = useState<Row[]>([]);
   const [decision, setDecision] = useState<{ instagram: Decision; website: Decision }>({ instagram: null, website: null });
-  const [state, setState] = useState<SourcesState | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -71,21 +67,14 @@ export function SourcesStep({ slug }: { slug: string }) {
     if (!response.ok) throw new Error(result.error || "Veprimi nuk u krye. Provo përsëri.");
     return result;
   }, [endpoint]);
-  const load = useCallback(async () => {
-    const response = await fetch(endpoint, { cache: "no-store" });
-    if (response.ok) setState(await response.json());
-  }, [endpoint]);
-
-  const running = state?.scans.some((scan) => ["queued", "running"].includes(scan.status)) ?? true;
+  // What was given with the name is read right away.
+  const started = useRef(false);
   useEffect(() => {
-    if (stage !== "learning" || (state && !running)) return;
-    const timer = setInterval(() => void load(), 3000);
-    return () => clearInterval(timer);
-  }, [stage, state, running, load]);
-  // When the scans end with a proposal, the review takes over.
-  useEffect(() => {
-    if (stage === "learning" && state && !running && state.review && !dialogOpen) setStage("review");
-  }, [stage, state, running, dialogOpen]);
+    if (started.current || (!initialInstagram && !initialWebsite)) return;
+    started.current = true;
+    void look();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function look() {
     setBusy(true); setError("");
@@ -122,9 +111,9 @@ export function SourcesStep({ slug }: { slug: string }) {
     setBusy(true); setError("");
     try {
       await post({ action: "learn", confirmed: { instagram: nextDecision.instagram === "yes", website: nextDecision.website === "yes" } });
-      setStage("learning"); setDialogOpen(true); await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "Analiza nuk nisi."); }
-    finally { setBusy(false); }
+      // The scan goes on in the background; the questions come next.
+      window.location.assign(next);
+    } catch (e) { setError(e instanceof Error ? e.message : "Analiza nuk nisi."); setBusy(false); }
   }
 
   const ig = preview?.instagram;
@@ -132,20 +121,14 @@ export function SourcesStep({ slug }: { slug: string }) {
   const igOk = ig && !("error" in ig) ? ig : null;
   const siteOk = site && !("error" in site) ? site : null;
   const nothingConfirmed = decision.instagram === "no" && decision.website === "no";
-  const title = stage === "form" ? "Ku e gjejnë klientët biznesin tënd?" : stage === "reading" ? "Po lexojmë profilin tënd"
-    : stage === "confirm" ? "A janë këto llogaritë e tua?" : stage === "review" ? "Agjenti mbaroi së mësuari" : "Agjenti po mëson";
+  const title = stage === "form" ? "Ku e gjejnë klientët biznesin tënd?" : stage === "reading" ? "Po kërkojmë llogaritë e tua"
+    : "A janë këto llogaritë e tua?";
   const lead = stage === "form" ? "Shkruaj Instagram-in dhe website-in. Agjenti lexon vetëm atë që është publike; nuk kërkohet lidhja e llogarisë."
     : stage === "reading" ? "Zakonisht zgjat 10–20 sekonda."
-    : stage === "confirm" ? "Kontrollo foton, emrin dhe numrat. Analiza fillon vetëm për llogaritë që konfirmon."
-    : stage === "review" ? "Prano, refuzo ose ndrysho atë që gjeti. Vetëm ato që pranon i përdor Agjenti."
-    : "Po lexohen postimet e Instagram-it dhe faqet e website-it. Zakonisht 1–2 minuta.";
+    : "Kontrollo foton, emrin dhe numrat. Agjenti lexon vetëm llogaritë që konfirmon, ndërsa ti u përgjigjesh disa pyetjeve.";
 
   return (
     <>
-      <div className="onboarding-progress">
-        <progress max={3} value={2} aria-label="Progresi i konfigurimit" />
-        <span>Hapi 2 nga 3</span>
-      </div>
       <div className="onboarding-question">
         <span className="onboarding-eyebrow">NGA KU TË MËSOJË AGJENTI</span>
         <h1>{title}</h1>
@@ -215,7 +198,7 @@ export function SourcesStep({ slug }: { slug: string }) {
               )}
             </article>
           )}
-          {busy && <p className="onboarding-hint" role="status">Po nis analiza…</p>}
+          {busy && <p className="onboarding-hint" role="status">Po nis leximi…</p>}
           {error && <p className="onboarding-error" role="alert">{error}</p>}
           <div className="onboarding-actions">
             <button type="button" className="onboarding-back" disabled={busy} onClick={() => { setStage("form"); setError(""); }}>Ndrysho të dhënat</button>
@@ -226,28 +209,6 @@ export function SourcesStep({ slug }: { slug: string }) {
         </div>
       )}
 
-      {(stage === "learning" || stage === "review") && (
-        <div className="onboarding-found">
-          {stage === "review" && state?.review ? (
-            <SourcesReview slug={slug} review={state.review} onDone={() => window.location.assign(next)} />
-          ) : state?.scans.length ? (
-            <>
-              <ProgressRows rows={state.scans.map((scan) => ({ source: scan.source, label: sourceLabel[scan.source], progress: scan.progress, step: scan.step,
-                state: scan.status === "completed" ? "done" : scan.status === "failed" ? "failed" : scan.id.endsWith("waiting") || (scan.status === "queued" && scan.progress <= 5) ? "waiting" : "running" }))} />
-              <button type="button" className="onboarding-skip" onClick={() => setDialogOpen(true)}>Shiko skanimin</button>
-              {!running && !state.review && <p className="onboarding-hint">Analiza mbaroi pa gjetur informacion të ri.</p>}
-            </>
-          ) : <div className="onboarding-learning" role="status"><span className="onboarding-spinner" aria-hidden="true" /> Po nis analiza…</div>}
-          <div className="onboarding-actions">
-            <span />
-            <div className="onboarding-actions-end">
-              <a className={stage === "review" ? "onboarding-skip" : "onboarding-next"} href={next}>{stage === "review" ? "Konfirmo më vonë" : running ? "Vazhdo ndërkohë" : "Vazhdo"}</a>
-            </div>
-          </div>
-          <DiscoveryScanDialog open={dialogOpen && stage === "learning"} jobs={state?.scans ?? []} startingSource="" error=""
-            onClose={() => setDialogOpen(false)} onReview={() => { setDialogOpen(false); if (state?.review) setStage("review"); }} />
-        </div>
-      )}
     </>
   );
 }

@@ -88,6 +88,11 @@ it("rejects legacy types, missing names and other without a description", () => 
   ).toMatchObject({ businessType: "other", categoryDescription: "Studio fotografike" });
 });
 
+it("creates a business from the name alone; the type is asked afterwards", () => {
+  expect(parseStarterWorkspace({ name: "Studio Lule", instagramUsername: "@studio.lule", website: "studiolule.al" }))
+    .toMatchObject({ name: "Studio Lule", businessType: "", instagramUsername: "studio.lule", website: "https://studiolule.al/" });
+});
+
 it("creates a workspace with the selected type for the verified owner", async () => {
   expect(
     await createStarterWorkspace("verified-user", {
@@ -95,7 +100,7 @@ it("creates a workspace with the selected type for the verified owner", async ()
       businessType: "beauty",
       user_id: "victim",
     }),
-  ).toEqual({ ok: true, slug: expect.any(String) });
+  ).toEqual({ ok: true, slug: expect.any(String), instagramUsername: null, website: null });
   expect(mocks.rpc).toHaveBeenCalledWith(
     "complete_business_onboarding",
     expect.objectContaining({

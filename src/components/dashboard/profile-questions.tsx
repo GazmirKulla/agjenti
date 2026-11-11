@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import type { ContinuationItem, ContinuationQuestion } from "@/lib/onboarding/continuation";
+import "./profile-questions.css";
 
 type View = { question: ContinuationQuestion | null; progress: { answered: number; total: number }; items: ContinuationItem[] };
 type Answer = { values: string[] } | { text: string } | { skip: true };
@@ -8,7 +9,12 @@ type Answer = { values: string[] } | { text: string } | { skip: true };
 /** The onboarding profile questions inside the "Gati për klientët" card: one
  * question at a time, with back, "Më vonë" and the answers given so far. The
  * server checks every answer; the card only shows and sends them. */
-export function ProfileQuestions({ slug, onFinished }: { slug: string; onFinished: () => void }) {
+export function ProfileQuestions({ slug, onFinished, core = false }: {
+  slug: string;
+  onFinished: () => void;
+  /** Onboarding: only the short questions; the details wait for the Home card. */
+  core?: boolean;
+}) {
   const path = `/api/business-onboarding?slug=${encodeURIComponent(slug)}`;
   const [view, setView] = useState<View | null>(null);
   const [field, setField] = useState<string | null>(null);
@@ -18,14 +24,18 @@ export function ProfileQuestions({ slug, onFinished }: { slug: string; onFinishe
   const [error, setError] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const show = useCallback((next: View, at: string | null) => {
+  // The next question: the server's, or in onboarding the first short one still open.
+  const nextField = useCallback((next: View) =>
+    core ? next.items.find((entry) => entry.core && entry.status === "open")?.field ?? null : next.question?.field ?? null, [core]);
+  const show = useCallback((full: View, at: string | null) => {
+    const next = core ? { ...full, items: full.items.filter((entry) => entry.core) } : full;
     setView(next);
     setField(at);
     const item = next.items.find((entry) => entry.field === at);
     setValues(Array.isArray(item?.value) ? item.value : []);
     setText(typeof item?.value === "string" ? item.value : "");
     setError("");
-  }, []);
+  }, [core]);
 
   useEffect(() => {
     let live = true;
@@ -34,11 +44,15 @@ export function ProfileQuestions({ slug, onFinished }: { slug: string; onFinishe
       .then((data: { continuation: View | null }) => {
         if (!live) return;
         if (!data.continuation) { setLoadFailed(true); return; }
-        show(data.continuation, data.continuation.question?.field ?? null);
+        const at = nextField(data.continuation);
+        show(data.continuation, at);
+        if (core && !at) onFinished();
       })
       .catch(() => { if (live) setLoadFailed(true); });
     return () => { live = false; };
-  }, [path, show]);
+    // onFinished is the caller's; loading again for a new callback would repeat the question.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, show, nextField, core]);
 
   async function send(answer: Answer) {
     if (!field) return;
@@ -48,8 +62,9 @@ export function ProfileQuestions({ slug, onFinished }: { slug: string; onFinishe
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.continuation) throw new Error(data.error || "Përgjigjja nuk u ruajt. Provo përsëri.");
       const next = data.continuation as View;
-      show(next, next.question?.field ?? null);
-      if (!next.question) onFinished();
+      const at = nextField(next);
+      show(next, at);
+      if (!at) onFinished();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Përgjigjja nuk u ruajt. Provo përsëri.");
     } finally {

@@ -21,32 +21,7 @@
 .ready-strip-actions .btn { min-height: 38px; padding: 8px 16px; font-size: 13px; }
 .ready-strip-wait { color: var(--ink-muted); font-size: 12px; }
 .ready-strip-error { margin: 0; color: var(--danger); font-size: 13px; }
-.profile-q { display: grid; gap: 12px; }
-.profile-q-card { display: grid; gap: 8px; }
-.profile-q-card h3 { margin: 0; font-size: 16px; font-weight: 650; color: var(--ink); }
-.profile-q-count { margin: 0; font-size: 12px; color: var(--ink-muted); }
-.profile-q-hint, .profile-q-note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
-.profile-q-error { margin: 0; font-size: 13px; color: var(--danger); }
-.profile-q-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-top: 4px; }
-.profile-q-options button { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
-.profile-q-options button:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
-.profile-q-options button.is-on { border: 2px solid var(--accent); padding: 9px 11px; background: var(--accent-soft); }
-.profile-q-mark { display: grid; place-items: center; width: 18px; height: 18px; flex-shrink: 0; border: 1.5px solid var(--line); border-radius: 6px; font-size: 11px; color: #fff; }
-.profile-q-options [role="radio"] .profile-q-mark { border-radius: 50%; }
-.profile-q-options .is-on .profile-q-mark { border-color: var(--accent); background: var(--accent); }
-.profile-q-card textarea { width: 100%; resize: vertical; }
-.profile-q-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
-.profile-q-actions .btn { min-height: 38px; padding: 8px 16px; font-size: 13px; }
-.profile-q-later { margin-left: auto; padding: 0; border: 0; background: none; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
-.profile-q-later:disabled { opacity: .5; cursor: default; }
-.profile-q-answers { border-top: 1px solid var(--line); padding-top: 10px; font-size: 13px; }
-.profile-q-answers summary { cursor: pointer; color: var(--ink-muted); font-weight: 600; }
-.profile-q-answers ul { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
-.profile-q-answers li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.profile-q-answers li span { display: grid; gap: 2px; min-width: 0; color: var(--ink-muted); }
-.profile-q-answers li strong { color: var(--ink); font-weight: 600; }
-.profile-q-answers li .profile-q-later { margin-left: 0; white-space: nowrap; }
-@media (max-width: 640px) { .ready-strip { padding: 14px; } .ready-strip-label { font-size: 11px; } .profile-q-options { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .ready-strip { padding: 14px; } .ready-strip-label { font-size: 11px; } }
 .live-mark { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-muted); font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .live-mark-dot { width: 8px; height: 8px; border-radius: 50%; background: #f5a524; }
 .live-mark.is-live { color: var(--ink); }

@@ -10,6 +10,8 @@ export type ContinuationQuestion = {
   hint: string;
   kind: "single" | "multiple" | "boolean" | "text" | "list";
   options: { value: string; label: string }[];
+  /** Asked during onboarding; the others wait in the "Gati për klientët" card. */
+  core: boolean;
 };
 export type ContinuationAnswer =
   | { skip: true }
@@ -39,6 +41,7 @@ export function continuationQuestions(
       field: q.field,
       title: q.title,
       hint: q.hint,
+      core: !!q.core,
       // Yes/no questions read from the profile carry no options of their own.
       options: booleanFields.has(q.field) && !q.options.length ? yesNo : q.options,
       kind: booleanFields.has(q.field)

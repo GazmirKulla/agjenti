@@ -1,7 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { listMemberships } from "@/lib/tenant/access";
 import { normalizeInstagramUsername } from "@/lib/instagram/public-profile";
-import { normalizeWebsite, startOnboardingSources } from "@/lib/discovery/onboarding-sources";
+import { normalizeWebsite } from "@/lib/discovery/onboarding-sources";
 import { persistGeneratedProfile } from "@/lib/dashboard/profile/service";
 import { emptyDetails } from "./audio-fields";
 import { businessCategories } from "./categories";
@@ -14,7 +14,8 @@ const starterCapabilities = {
 };
 
 export type StarterWorkspaceResult =
-  | { ok: true; slug: string }
+  /** The sources are read only after the owner confirms them (onboarding step 1). */
+  | { ok: true; slug: string; instagramUsername: string | null; website: string | null }
   | { error: string; status: 400 | 409 | 503 };
 type ParsedStarter =
   | { error: string }
@@ -38,9 +39,10 @@ export function parseStarterWorkspace(input: unknown): ParsedStarter {
     return { error: "Vendos emrin e biznesit (të paktën 2 karaktere)." };
   if (name.length > 100)
     return { error: "Emri i biznesit duhet të ketë deri në 100 karaktere." };
-  if (typeof raw.businessType !== "string" || !publicTypes.has(raw.businessType))
+  // Optional: asked in the questions after the business is created.
+  const businessType = typeof raw.businessType === "string" ? raw.businessType : "";
+  if (businessType && !publicTypes.has(businessType))
     return { error: "Zgjidh llojin e biznesit." };
-  const businessType = raw.businessType;
   const description =
     typeof raw.categoryDescription === "string"
       ? raw.categoryDescription.trim()
@@ -133,12 +135,11 @@ export async function createStarterWorkspace(
           ...answers,
           ...starterCapabilities,
         });
-        await startOnboardingSources(business.id, userId, parsed);
       }
     } catch (error) {
       console.error("[dashboard profile]", error);
     }
-    return { ok: true, slug: data };
+    return { ok: true, slug: data, instagramUsername: parsed.instagramUsername, website: parsed.website };
   } catch {
     return {
       error: "Nuk u lidhëm me shërbimin. Provo përsëri.",

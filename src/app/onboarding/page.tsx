@@ -4,9 +4,8 @@ import { BrandLogo } from "@/components/brand/logo";
 import { getSessionUser, listMemberships } from "@/lib/tenant/access";
 import { homeForAccess } from "@/lib/auth/destination";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { emptyAnswers, parseAnswers } from "@/lib/onboarding/model";
-import { OnboardingWizard } from "@/components/onboarding/wizard";
-import { getAppSettings } from "@/lib/platform/settings";
+import { OnboardingShell } from "@/components/onboarding/shell";
+import { BusinessStart } from "@/components/onboarding/business-start";
 import { signOut } from "@/lib/auth/actions";
 import "./onboarding.css";
 export const metadata = { title: "Konfiguro biznesin | Agjenti.app" };
@@ -47,26 +46,11 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         </section>
       </main>
     );
-  const settings = await getAppSettings();
-  let initial = emptyAnswers;
-  try {
-    if (draft) {
-      // Drafts from the retired audio flow keep their answers, without the
-      // pending audio review that only that flow could confirm.
-      initial = parseAnswers(draft.answers, false, settings.onboarding_steps);
-      delete initial.audioReview;
-      delete initial.guidedOnboardingMode;
-    }
-  } catch {
-    /* A malformed old draft can be safely restarted. */
-  }
+  // An open draft from the retired step-by-step flow keeps its business name.
+  const draftName = typeof draft?.answers?.name === "string" ? draft.answers.name : "";
   return (
-    <OnboardingWizard
-      initial={initial}
-      initialStep={draft?.step ?? 0}
-      email={user.email || ""}
-      enabledSteps={settings.onboarding_steps}
-      backHref={backHref}
-    />
+    <OnboardingShell step={1} email={user.email} backHref={backHref}>
+      <BusinessStart initialName={draftName} />
+    </OnboardingShell>
   );
 }

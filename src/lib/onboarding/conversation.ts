@@ -16,6 +16,8 @@ export type ConversationQuestion = {
   options: { value: string; label: string }[];
   multiple?: boolean;
   confirm?: boolean;
+  /** One of the short onboarding questions (not a detail asked later). */
+  core?: boolean;
 };
 export function conversationQuestions(
   answers: Answers,
@@ -36,6 +38,7 @@ export function conversationQuestions(
       optional: !!q.optional,
       options: q.options.map(([value, label]) => ({ value, label })),
       multiple: q.key === "useCases",
+      core: true,
     })),
   ];
   const details = audioGuide(

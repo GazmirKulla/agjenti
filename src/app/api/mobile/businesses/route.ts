@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     }
     const body = JSON.parse(Buffer.concat(chunks).toString());
     const result = await createStarterWorkspace(user.id, body);
-    if ("ok" in result) return Response.json({ ok: true, slug: result.slug }, { headers });
+    if ("ok" in result) return Response.json({ ok: true, slug: result.slug, instagramUsername: result.instagramUsername, website: result.website }, { headers });
     return Response.json(
       { error: result.error },
       { status: result.status, headers },
