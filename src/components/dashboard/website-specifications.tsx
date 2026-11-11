@@ -17,7 +17,7 @@ Qëllimi
 Agjenti lexon katalogun e webit dhe mund të dërgojë porosi në sistemin ekzistues. Inspekto stack-un, routes, modelet e produkteve/varianteve, autorizimin dhe shërbimin e porosive para ndryshimeve. Ripërdor logjikën dhe databazën ekzistuese; ruaj funksionalitetin e webit. Mos krijo katalog ose porosi demonstrimi në prodhim.
 
 1. Autorizimi në server
-Përdor një sekret të ruajtur në konfigurimin e serverit si AGJENTI_APP_SECRET. I njëjti sekret vendoset te Integrimet → Webi i klientit në Agjenti; minimumi është 16 karaktere. Nëse ka një sekret ekzistues, ruaje. Mos e përfshi sekretin në kod, browser, logs, përgjigje ose raportin përfundimtar. Dokumento vetëm emrin e variablës dhe mënyrën e vendosjes së saj.
+Përdor një sekret të ruajtur në konfigurimin e serverit si AGJENTI_APP_SECRET. I njëjti sekret vendoset te Integrimet → Webi i biznesit në Agjenti; minimumi është 16 karaktere. Nëse ka një sekret ekzistues, ruaje. Mos e përfshi sekretin në kod, browser, logs, përgjigje ose raportin përfundimtar. Dokumento vetëm emrin e variablës dhe mënyrën e vendosjes së saj.
 Çdo endpoint verifikon Authorization: Bearer <sekreti>. Kthe HTTP 401 për sekret të munguar ose të gabuar; nëse serveri nuk ka sekret të konfiguruar, refuzo kërkesën. Në një sistem me disa biznese, kufizo katalogun dhe porositë te biznesi që përfaqëson ky sekret.
 Kthe JSON, përdor HTTPS në prodhim dhe përfundo kërkesat brenda 20 sekondave. Ky është komunikim server-me-server.
 
@@ -42,7 +42,7 @@ Kontrata aktuale nuk dërgon një çelës idempotence ose ID unike të kërkesë
 Testo autorizimin e munguar/të gabuar, konfigurimin pa sekret, katalogun bosh dhe katalogun me produkte reale testimi. Nëse implementon porositë, testo payload të pavlefshëm, produkt/variant të panjohur, gabim ruajtjeje dhe porosi të vlefshme në ambient testimi. Mos krijo porosi reale për test pa autorizim.
 Jep përmbledhjen e ndryshimeve, testet e kryera, konfigurimet/migrimet e nevojshme dhe çfarë mbetet për publikim. Dallo kodin lokal nga endpoint-et e publikuara; mos pretendo sukses të integrimit pa provë.
 Dorëzo URL-në e plotë HTTPS të katalogut dhe URL-në e porosive nëse është implementuar. Nëse domeni nuk dihet, përdor placeholder të qartë dhe kërko domenin për URL-në përfundimtare. Mos jep sekretin në raport.
-Udhëzo pronarin t'i vendosë URL-të dhe sekretin te Agjenti → Integrimet → Webi i klientit, të përdorë Testo lidhjen, të ruajë konfigurimin dhe të lidhë produktet nga Produktet. Testi i Agjenti kontrollon vetëm katalogun, nuk ruan konfigurimin dhe nuk verifikon/dërgon porosi.
+Udhëzo pronarin t'i vendosë URL-të dhe sekretin te Agjenti → Integrimet → Webi i biznesit, të përdorë Testo lidhjen, të ruajë konfigurimin dhe të lidhë produktet nga Produktet. Testi i Agjenti kontrollon vetëm katalogun, nuk ruan konfigurimin dhe nuk verifikon/dërgon porosi.
 `;
 
 export function WebsiteSpecifications({ language = "sq" }: { language?: "sq" | "en" }) {

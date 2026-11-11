@@ -60,11 +60,11 @@ export default async function IntegrationsPage({ params, searchParams }: { param
     </div>
     <h2 className={styles.section}>{t("Lidhje të tjera")}</h2>
     <div className={styles.grid}>
-      <article className={styles.row} aria-label={t("Webi i klientit")}>
+      <article className={styles.row} aria-label={t("Webi i biznesit")}>
         <div className={styles.heading}>
           <span className={`${styles.icon} ${styles.inactiveIcon}`}><Icon name="display" size={28} /></span>
           <div className={styles.title}>
-            <h2>{t("Webi i klientit")}</h2>
+            <h2>{t("Webi i biznesit")}</h2>
             <p className={styles.identity}>{website.error ? t("Nuk u ngarkua konfigurimi i webit.") : website.data?.catalog_url || t("Lidh katalogun dhe porositë e webit përmes API-së")}</p>
             <p className={styles.status}>{website.error ? t("Statusi nuk u ngarkua") : website.data?.catalog_url ? t("E konfiguruar · testo lidhjen te detajet") : t("E pakonfiguruar")}</p>
           </div>
@@ -72,7 +72,7 @@ export default async function IntegrationsPage({ params, searchParams }: { param
         <div className={styles.actions}><Link className="btn btn-ghost" href={`/b/${slug}/integrations?detail=website`} scroll={false}>{t("Konfigurimi dhe specifikimet")}</Link></div>
       </article>
     </div>
-    {detail === "website" && <IntegrationDetailsDialog slug={slug} name={t("Webi i klientit")}>
+    {detail === "website" && <IntegrationDetailsDialog slug={slug} name={t("Webi i biznesit")}>
       <Suspense fallback={<p role="status">{t("Duke ngarkuar konfigurimin…")}</p>}><WebsiteIntegration slug={slug} /></Suspense>
     </IntegrationDetailsDialog>}
     {(detail === "instagram" || detail === "whatsapp") && <IntegrationDetailsDialog slug={slug} name={detail === "instagram" ? "Instagram" : "WhatsApp"}>

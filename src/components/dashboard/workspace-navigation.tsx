@@ -21,7 +21,7 @@ function ChannelsGroup({ base, pathname, section, iconsOnly, onNavigate, attenti
   const channels = [
     { id: "instagram", label: "Instagram", icon: "instagram", href: `${base}/instagram`, attention: !!attention?.instagram },
     { id: "whatsapp", label: "WhatsApp", icon: "whatsapp", href: `${base}/whatsapp`, attention: !!attention?.whatsapp },
-    { id: "website", label: "Webi i klientit", icon: "display", href: `${overview}?detail=website`, attention: false },
+    { id: "website", label: "Webi i biznesit", icon: "display", href: `${overview}?detail=website`, attention: false },
   ];
   const onOverview = pathname === overview;
   return <section className={s.group} aria-label={t("Kanalet")}>
