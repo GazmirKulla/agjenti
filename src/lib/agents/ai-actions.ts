@@ -61,7 +61,7 @@ async function generateAgentInstructionsUnmetered(slug: string, _form?: FormData
 
   const result = await completeText({
     maxChars: 1800,
-    instructions: AGENT_INSTRUCTIONS_WRITER_PROMPT,
+    instructions: AGENT_INSTRUCTIONS_WRITER_PROMPT(),
     input: [
       `Biznesi: ${access.business.name}`,
       "Produkte aktive:",

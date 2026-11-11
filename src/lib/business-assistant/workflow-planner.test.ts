@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ response: vi.fn(), load: vi.fn(), prepare: vi.fn(), orderLoad: vi.fn(), orderPrepare: vi.fn(), assess: vi.fn() }));
 vi.mock("@/lib/capabilities/assessment", () => ({ assessBusinessCapabilities: m.assess, summarizeCapabilityAssessments: (v: unknown) => v }));
-vi.mock("./orderflow-service", () => ({ loadOrderFlows:m.orderLoad, prepareOrderFlow:m.orderPrepare, executeOrderFlow:vi.fn(), refineOrderFlowProposal:vi.fn(), orderFlowInstructions:"orderflow instructions" }));
+vi.mock("./orderflow-service", () => ({ loadOrderFlows:m.orderLoad, prepareOrderFlow:m.orderPrepare, executeOrderFlow:vi.fn(), refineOrderFlowProposal:vi.fn(), orderFlowInstructions:() => "orderflow instructions" }));
 vi.mock("openai", () => ({ default: class { responses = { create: m.response }; } }));
 vi.mock("@/lib/agents/generate", () => ({ agentModel: () => "test", modelFor: () => "test" }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({}) }));

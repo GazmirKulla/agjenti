@@ -20,7 +20,7 @@ export default async function AdminPromptsPage() {
     <PageHeading
       eyebrow="PLATFORMA"
       title="Promptet"
-      description={`${prompts.length} prompte që platforma i dërgon AI-së, të grupuara sipas vendit ku përdoren. Teksti është ai që përdoret sot; pjesët ‹…› plotësohen për çdo kërkesë. Vetëm për lexim.`}
+      description={`${prompts.length} prompte dhe pjesë promptesh që platforma i dërgon AI-së, të grupuara sipas vendit ku përdoren. Teksti lexohet nga skedarët në dosjen prompts/ të projektit, të njëjtët që përdor kodi; pjesët {{…}} plotësohen për çdo kërkesë. Për t'i ndryshuar, ndrysho skedarin dhe bëj deploy.`}
     />
     <nav className="prompt-areas" aria-label="Zonat">
       {areas.map((area) => <a key={area} href={`#${area}`}>{PROMPT_AREAS[area].title}<span>{prompts.filter((prompt) => prompt.area === area).length}</span></a>)}
@@ -39,14 +39,16 @@ export default async function AdminPromptsPage() {
               <span className="prompt-card-meta">
                 <span>{modelLabels[prompt.model]}</span>
                 <span>{prompt.text.length.toLocaleString("sq-AL")} karaktere</span>
-                {prompt.dynamic?.length ? <span>Me pjesë dinamike</span> : null}
+                {prompt.part ? <span>Pjesë e një prompti më të madh</span> : null}
+                {prompt.dynamic.length ? <span>Me pjesë dinamike</span> : null}
               </span>
             </summary>
             <dl className="prompt-card-facts">
-              <div><dt>Merr</dt><dd>{prompt.input}</dd></div>
-              <div><dt>Kthen</dt><dd>{prompt.output}</dd></div>
-              {prompt.dynamic?.length ? <div><dt>Plotësohet për çdo kërkesë</dt><dd>{prompt.dynamic.join(" · ")}</dd></div> : null}
-              <div><dt>Në kod</dt><dd><code>{prompt.file}</code></dd></div>
+              {prompt.input && <div><dt>Merr</dt><dd>{prompt.input}</dd></div>}
+              {prompt.output && <div><dt>Kthen</dt><dd>{prompt.output}</dd></div>}
+              {prompt.dynamic.length ? <div><dt>Plotësohet për çdo kërkesë</dt><dd>{prompt.dynamic.map((name) => `{{${name}}}`).join(" · ")}</dd></div> : null}
+              <div><dt>{prompt.file.startsWith("prompts/") ? "Skedari" : "Ndërtohet në kod"}</dt><dd><code>{prompt.file}</code></dd></div>
+              {prompt.code && <div><dt>Përdoret në</dt><dd><code>{prompt.code}</code></dd></div>}
             </dl>
             <pre className="prompt-card-text">{prompt.text}</pre>
           </details>

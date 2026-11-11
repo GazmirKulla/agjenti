@@ -38,7 +38,7 @@ async function generateProductDescriptionUnmetered(slug: string, form: FormData)
 
   const result = await completeText({
     maxChars: 220,
-    instructions: PRODUCT_DESCRIPTION_PROMPT,
+    instructions: PRODUCT_DESCRIPTION_PROMPT(),
     input: [
       `Biznesi: ${access.business.name}`,
       `Emri i produktit: ${name}`,
