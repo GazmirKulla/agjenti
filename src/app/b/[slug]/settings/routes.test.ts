@@ -56,6 +56,6 @@ it("makes only supported destinations primary and retains optional modules in ma
 });
 it("has one distinct route per settings section", () => {
   const routes = settingsGroups.flatMap(group => group.items.map(item => item.path));
-  expect(routes).toEqual(["profile", "preferences", "business", "billing", "modules", "actions", "advanced"]);
+  expect(routes).toEqual(["profile", "preferences", "business", "billing", "modules", "advanced"]);
   expect(new Set(routes).size).toBe(routes.length);
 });

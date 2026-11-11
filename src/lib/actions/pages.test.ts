@@ -78,7 +78,7 @@ it("renders package controls and the complete manual invitation entry point", as
   expect(business).toContain("Përgatit biznesin");
   expect(business).toContain("Ende nuk ka ftesa");
   expect(business).not.toContain("Lejo stafin");
-  expect(business).toContain("I disponueshëm");
+  expect(business).toContain("I disponueshëm për ty");
   const dir = process.env.ACTION_UI_PREVIEW_DIR;
   if (dir) {
     mkdirSync(dir, { recursive: true });
@@ -98,7 +98,6 @@ it("keeps denied capabilities visible without exposing the invitation form", asy
   expect(business).not.toContain('name="email"');
   expect(business).not.toContain('name="automation_allowed"');
   expect(business).toContain("/admin/businesses/source/permissions");
-  expect(business).toContain("Funksionet e biznesit");
 });
 
 it("loads global policies independently and scopes exceptions to one business", async () => {
@@ -122,4 +121,12 @@ it("shows only exceptional capabilities in platform policy settings", async () =
   expect(html.match(/<svg/g)?.length).toBeGreaterThanOrEqual(Object.keys(policyCatalog).length);
   const fallback = renderToStaticMarkup(await AdminPage({ searchParams: Promise.resolve({ module: "unknown" }) }));
   expect(fallback).toContain('name="action_key" value="business.provision"');
+});
+
+it("sends owners without the partner capability to Modulet", async () => {
+  fixture();
+  m.rpc.mockResolvedValue({ data: false, error: null });
+  const access = await import("@/lib/tenant/access");
+  vi.spyOn(access, "requireBusinessAccess").mockResolvedValueOnce({ admin: false, business: { id: "source", slug: "agjenti", name: "Agjenti" } } as never);
+  await expect(BusinessPage({ params: Promise.resolve({ slug: "agjenti" }) })).rejects.toThrow(/NEXT_REDIRECT|settings\/modules/);
 });
