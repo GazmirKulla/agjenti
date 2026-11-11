@@ -14,6 +14,7 @@ import { parseBusinessProcess, prepareBusinessProcess, processSources, type Busi
 import { rebuildProfileFromModules } from "@/lib/dashboard/profile/generate";
 import { discoveryTextBatch } from "./text-batches";
 import { onboardingProcess } from "./process-starter";
+import { oneEntryPerTitle, reorganizeKnowledge } from "./reorganize";
 
 type Checkpoint = {
   text?: string; reference?: string; note?: string; website?: string | null;
@@ -22,6 +23,9 @@ type Checkpoint = {
   nextImage?: number; nextText?: number; warnings?: string[];
   draft?: Draft;
   profile?: InstagramBusinessProfile;
+  /** Onboarding: everything found, merged by the AI, waiting to be proposed. */
+  organized?: Entity[];
+  organizeTried?: boolean;
 };
 type Job = {
   id: string; business_id: string; source: "instagram" | "website";
@@ -31,12 +35,14 @@ type Job = {
     /** Ends as a proposal the owner confirms, instead of applying itself. */
     review?: boolean;
     /** Website pages to read (the first page counts). */
-    pages?: number };
+    pages?: number;
+    /** "company": the about and contact pages, for onboarding. */
+    focus?: "company" };
   stage: string; checkpoint: Checkpoint; lease_token: string;
   attempts: number; created_at?: string;
 };
 
-export type ScanOptions = { review?: boolean; pages?: number };
+export type ScanOptions = { review?: boolean; pages?: number; focus?: "company" };
 
 export async function enqueueDiscovery(businessId: string, userId: string, source: "instagram" | "website", website?: string, force = false, options: ScanOptions = {}) {
   const db = createServiceSupabase();
@@ -52,6 +58,7 @@ export async function enqueueDiscovery(businessId: string, userId: string, sourc
     input = { url: url.href, ...(options.pages ? { pages: Math.max(1, Math.min(8, Math.floor(options.pages))) } : {}) };
   }
   if (options.review) input.review = true;
+  if (options.focus === "company" && source === "website") input.focus = "company";
   const { data, error } = await db.rpc("enqueue_business_discovery", { p_business: businessId, p_user: userId, p_source: source, p_input: input, p_force: force });
   if (error) throw new Error(error.message);
   return data as string;
@@ -83,7 +90,7 @@ export async function processDiscoveryStep(job: Job) {
   const data = job.checkpoint;
   await validConnection(job);
   if (job.stage === "capture") {
-    const captured = job.source === "website" ? await extractWebsite(job.input.url!, "onboarding", job.input.pages)
+    const captured = job.source === "website" ? await extractWebsite(job.input.url!, job.input.focus === "company" ? "company" : "onboarding", job.input.pages)
       : job.input.username ? await extractInstagramPublic(job.input.username, await previewedInstagram(job.business_id, job.input.username))
       : await extractInstagram(job.business_id);
     // Do not persist the decrypted token, fetch Request, or provider errors.
@@ -147,12 +154,19 @@ export async function processDiscoveryStep(job: Job) {
   draft = withoutScanKnowledge(draft, knowledge);
   await validConnection(job);
   if (job.input.review) {
+    // Onboarding: Instagram first, then the website the owner confirmed. The last
+    // source merges everything found into one list before proposing it.
+    const websiteNext = job.source === "instagram" ? await confirmedWebsiteWaiting(job.business_id) : null;
+    if (!websiteNext && !data.organized && !data.organizeTried) {
+      const organized = await reorganizeKnowledge(job.business_id, job.id, job.source, knowledge);
+      return checkpoint(job, { ...data, organizeTried: true, ...(organized ? { organized } : {}) }, "finish");
+    }
     // Knowledge waits inactive; the panel, agent and process wait for the owner.
-    const proposal = await db.rpc("finish_discovery_review", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: knowledge, p_review: { profile: setup.profile, agent: setup.agent, process } });
+    const proposal = await db.rpc("finish_discovery_review", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: oneEntryPerTitle(data.organized ?? knowledge), p_review: { profile: setup.profile, agent: setup.agent, process } });
     if (proposal.error) throw new Error(["PGRST202", "42883"].includes(proposal.error.code) ? "scan_migration_required" : proposal.error.message);
     if (!proposal.data) return checkpoint(job, data, "finish");
-    if (job.source === "instagram" && data.website && job.user_id && !(await websiteReadSince(job)))
-      await enqueueDiscovery(job.business_id, job.user_id, "website", data.website, false, { review: true, pages: 1 }).catch(() => console.error("[discovery] optional website was not queued"));
+    if (websiteNext && job.user_id)
+      await enqueueWebsiteReview(job.business_id, job.user_id, websiteNext).catch(() => console.error("[discovery] confirmed website was not queued"));
     return;
   }
   const finished = await db.rpc("finish_discovery_with_process", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: knowledge, p_profile: setup.profile, p_answers: setup.answers, p_agent: setup.agent, p_process: process, p_process_revision: state.process_revision ?? 0, p_source_profile: data.profile ?? null, p_warnings: (data.warnings ?? []).slice(-20) });
@@ -175,6 +189,23 @@ async function previewedInstagram(businessId: string, username: string) {
   // Instagram image links expire; an old read is fetched again.
   if (!saved.fetchedAt || Date.now() - new Date(saved.fetchedAt).getTime() > 6 * 3600_000) return null;
   return { profile: saved.profile, posts: saved.posts };
+}
+
+/** The confirmed website: its home, about and contact pages, as a proposal. */
+export function enqueueWebsiteReview(businessId: string, userId: string, url: string) {
+  return enqueueDiscovery(businessId, userId, "website", url, true, { review: true, pages: 3, focus: "company" });
+}
+
+/** The website the owner confirmed in onboarding that is not read yet, if any. */
+export async function confirmedWebsiteWaiting(businessId: string) {
+  const db = createServiceSupabase();
+  const [{ data }, { data: job }] = await Promise.all([
+    db.from("business_source_previews").select("website").eq("business_id", businessId).maybeSingle(),
+    db.from("business_discovery_jobs").select("id").eq("business_id", businessId).eq("source", "website")
+      .not("input->>review", "is", null).neq("status", "failed").limit(1).maybeSingle(),
+  ]);
+  const website = data?.website as { url?: string; confirmed?: boolean } | null;
+  return website?.confirmed && website.url && !job ? website.url : null;
 }
 
 /** A website scan that is still going, or finished after this Instagram scan began. */

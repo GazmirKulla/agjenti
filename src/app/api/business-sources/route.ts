@@ -35,12 +35,12 @@ export async function POST(request: Request) {
   try {
     if (body.action === "preview") return json(await previewSources(access.business.id, { username: body.username, website: body.website }));
     if (body.action === "learn") {
-      const started = await learnFromSources(access.business.id, access.user.id);
+      const started = await learnFromSources(access.business.id, access.user.id, body.confirmed && typeof body.confirmed === "object" ? body.confirmed as Record<string, unknown> : {});
       const origin = workerOrigin(new URL(request.url).origin);
       after(() => continueDiscovery(access.business.id, origin));
       return json({ started });
     }
-    if (body.action === "confirm") return json(await reviewSources(access.business.id, access.user.id, Array.isArray(body.keep) ? body.keep : []));
+    if (body.action === "confirm") return json(await reviewSources(access.business.id, access.user.id, Array.isArray(body.keep) ? body.keep : [], body.edits));
     if (body.action === "dismiss") return json(await reviewSources(access.business.id, access.user.id, null));
     return json({ error: "Veprim i panjohur." }, 400);
   } catch (error) {

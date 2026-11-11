@@ -11,6 +11,18 @@ describe("bounded business website ingestion", () => {
     expect(m.fetch.mock.calls.map(([url]) => url).slice(1, 3)).toEqual(["https://shop.test/how-it-works", "https://shop.test/download"]);
     expect(m.fetch).toHaveBeenCalledTimes(8);
   });
+  it("reads the home page, about and contact for the onboarding company view", async () => {
+    const home = `<a href="/products/1">P</a><a href="/kontakt">Kontakt</a><a href="/faq">FAQ</a><a href="/rreth-nesh">Rreth nesh</a><a href="https://other.test/about">X</a>`;
+    m.fetch.mockImplementation(async (url: string) => ({ url, contentType: "text/html", body: url === "https://shop.test/" ? home : "Faqe" }));
+    await extractWebsite("https://shop.test/", "company", 3);
+    expect(m.fetch.mock.calls.map(([url]) => url)).toEqual(["https://shop.test/", "https://shop.test/rreth-nesh", "https://shop.test/kontakt"]);
+  });
+  it("falls back to delivery and FAQ pages when a site has no about or contact page", async () => {
+    const home = `<a href="/products/1">P</a><a href="/dergese">Dërgesa</a><a href="/pyetje">Pyetje</a><a href="/shop">Shop</a>`;
+    m.fetch.mockImplementation(async (url: string) => ({ url, contentType: "text/html", body: url === "https://shop.test/" ? home : "Faqe" }));
+    await extractWebsite("https://shop.test/", "company", 3);
+    expect(m.fetch.mock.calls.map(([url]) => url)).toEqual(["https://shop.test/", "https://shop.test/dergese", "https://shop.test/pyetje"]);
+  });
   it("does not turn website titles into product hints during onboarding", async () => {
     m.fetch.mockResolvedValue({ url: "https://shop.test/", contentType: "text/html", body: '<h1>A new week</h1><p>Learn through play</p>' });
     const context = await extractWebsite("https://shop.test/", "onboarding");

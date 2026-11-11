@@ -7,7 +7,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { fetchInstagramBusinessProfile, type InstagramBusinessProfile } from "@/lib/instagram/business-profile";
 import { selectDiscoveryImages } from "@/lib/discovery/images";
 
-export async function extractWebsite(url: string, purpose: "catalog" | "onboarding" = "catalog", maxPages = 8) {
+export async function extractWebsite(url: string, purpose: "catalog" | "onboarding" | "company" = "catalog", maxPages = 8) {
   const first = await fetchPublicPage(url);
   if ("error" in first) throw new Error(first.error);
   const base = new URL(first.url);
@@ -17,17 +17,25 @@ export async function extractWebsite(url: string, purpose: "catalog" | "onboardi
     try {
       const u = new URL(m[1], base);
       u.hash = "";
-      return u.origin === base.origin &&
+      return u.origin === base.origin && (
         /product|shop|service|faq|about|shipping|return|policy|contact|produkt|transport|rreth|porosi|payment|delivery|download|shkarko|how-it-works|si-funksionon|booking|rezerv|terms/i.test(
           u.pathname,
-        )
+        ) || (purpose === "company" && /kontakt|kush-jemi|who-we-are|our-story|pyetje|dergese|kthim|kushte/i.test(u.pathname)))
         ? [u.href]
         : [];
     } catch {
       return [];
     }
   });
-  const candidates = [...new Set(links)].filter((u) => u !== base.href);
+  let candidates = [...new Set(links)].filter((u) => u !== base.href);
+  if (purpose === "company") {
+    // Onboarding: who the business is and how to reach it, one page of each.
+    const about = candidates.find((u) => /about|rreth|rreth-nesh|kush-jemi|who-we-are|our-story/i.test(new URL(u).pathname));
+    const contact = candidates.find((u) => /contact|kontakt/i.test(new URL(u).pathname));
+    // Without such pages, the pages that say most about how it works.
+    const fallback = candidates.filter((u) => u !== about && u !== contact && /faq|pyetje|shipping|delivery|dergese|transport|returns|kthim|payment|terms|kushte/i.test(new URL(u).pathname));
+    candidates = [about, contact, ...fallback].filter((u): u is string => Boolean(u));
+  }
   if (purpose === "onboarding") {
     // Spend the bounded crawl on how the business operates before item pages.
     const priority = (url: string) => /faq|how-it-works|si-funksionon|terms|payment|delivery|download|shkarko|porosi|booking|rezerv|shipping|return|policy|transport/i.test(new URL(url).pathname) ? 0 : /about|contact|rreth/i.test(new URL(url).pathname) ? 1 : 2;

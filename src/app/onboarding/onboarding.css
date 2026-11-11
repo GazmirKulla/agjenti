@@ -1477,3 +1477,21 @@ a.onboarding-skip { text-decoration: none; }
 .onboarding-success { margin: 16px 0 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--ink); font-size: 13px; }
 .onboarding-found-question .onboarding-hint { margin-top: 8px; }
 .onboarding-found-question .onboarding-hint a { color: var(--accent); font-weight: 600; }
+
+/* Step 2: the owner confirms each account is theirs. */
+.onboarding-confirm-card { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.onboarding-confirm-card.is-yes { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.onboarding-confirm-card.is-no { opacity: .6; }
+.onboarding-confirm-identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.onboarding-confirm-identity > div { display: grid; gap: 2px; min-width: 0; }
+.onboarding-confirm-identity h2 { margin: 0; font-size: 17px; font-weight: 650; color: var(--ink); overflow-wrap: anywhere; }
+.onboarding-confirm-identity .onboarding-found-icon { width: 64px; height: 64px; border-radius: 50%; }
+.onboarding-confirm-photo { width: 64px; height: 64px; flex-shrink: 0; border-radius: 50%; object-fit: cover; border: 1px solid var(--line); background: var(--paper); }
+.onboarding-confirm-logo { width: 64px; height: 64px; flex-shrink: 0; border-radius: 14px; object-fit: contain; padding: 6px; border: 1px solid var(--line); background: #fff; }
+.onboarding-confirm-stats { display: flex; gap: 14px; margin: 2px 0 0; font-size: 13px; color: var(--ink-muted); }
+.onboarding-confirm-stats strong { color: var(--ink); }
+.onboarding-confirm-bio { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
+.onboarding-confirm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.onboarding-confirm-actions .onboarding-next, .onboarding-confirm-actions .onboarding-back { padding: 10px 16px; font-size: 13px; }
+.onboarding-confirm-done { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0; color: var(--accent); font-size: 13px; font-weight: 600; }
+.onboarding-confirm-done.is-no { color: var(--ink-muted); }

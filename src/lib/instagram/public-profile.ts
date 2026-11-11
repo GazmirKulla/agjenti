@@ -37,7 +37,9 @@ type DiscoveryMedia = { id: string; caption?: string; media_type?: string; media
   children?: { data?: { id: string; media_type?: string; media_url?: string }[] } };
 type DiscoveryResponse = { business_discovery?: Record<string, unknown> & { media?: { data?: DiscoveryMedia[] } }; error?: { code?: number; message?: string } };
 
-type PublicInstagram = { profile: InstagramBusinessProfile; posts: InstagramPost[] };
+/** Followers and posts, shown so the owner can recognise their own account. */
+export type PublicStats = { followers?: number; posts?: number };
+type PublicInstagram = { profile: InstagramBusinessProfile; posts: InstagramPost[]; stats?: PublicStats };
 
 /** Profile and the last PUBLIC_POST_LIMIT posts of a public account. */
 export async function fetchPublicInstagram(username: string, fetcher: typeof fetch = fetch): Promise<PublicInstagram> {
@@ -50,7 +52,7 @@ export async function fetchPublicInstagram(username: string, fetcher: typeof fet
 async function fetchWithMeta(username: string, fetcher: typeof fetch): Promise<PublicInstagram> {
   const token = process.env.META_DISCOVERY_TOKEN, account = process.env.META_DISCOVERY_IG_USER_ID;
   if (!token || !account) throw new PublicInstagramError("Leximi i Instagram-it me username nuk është aktivizuar ende.", "unavailable");
-  const fields = `business_discovery.username(${username}){username,name,biography,website,profile_picture_url,media.limit(${PUBLIC_POST_LIMIT}){id,caption,media_type,media_url,thumbnail_url,permalink,children{id,media_type,media_url}}}`;
+  const fields = `business_discovery.username(${username}){username,name,biography,website,profile_picture_url,followers_count,media_count,media.limit(${PUBLIC_POST_LIMIT}){id,caption,media_type,media_url,thumbnail_url,permalink,children{id,media_type,media_url}}}`;
   const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(account)}`);
   url.searchParams.set("fields", fields);
   url.searchParams.set("access_token", token);
@@ -71,13 +73,14 @@ async function fetchWithMeta(username: string, fetcher: typeof fetch): Promise<P
       ...(children.length ? { images: children } : {}),
     };
   });
-  return { profile: cleanBusinessProfile(found), posts };
+  const count = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return { profile: cleanBusinessProfile(found), posts, stats: { followers: count(found.followers_count), posts: count(found.media_count) } };
 }
 
 type ApifyPost = { id?: string; type?: string; caption?: string; url?: string; displayUrl?: string; images?: string[];
   childPosts?: { id?: string; type?: string; displayUrl?: string }[] };
 type ApifyProfile = { username?: string; fullName?: string; biography?: string; externalUrl?: string; profilePicUrl?: string;
-  private?: boolean; error?: string; latestPosts?: ApifyPost[] };
+  private?: boolean; error?: string; latestPosts?: ApifyPost[]; followersCount?: number; postsCount?: number };
 
 /** One "details" result of apify/instagram-scraper: the profile with its latest
  * posts, billed as a single result. */
@@ -108,5 +111,6 @@ async function fetchWithApify(username: string, fetcher: typeof fetch): Promise<
   });
   const profile = cleanBusinessProfile({ username: found.username, name: found.fullName, biography: found.biography,
     website: found.externalUrl, profile_picture_url: found.profilePicUrl });
-  return { profile, posts };
+  const count = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return { profile, posts, stats: { followers: count(found.followersCount), posts: count(found.postsCount) } };
 }
