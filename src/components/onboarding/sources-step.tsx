@@ -49,7 +49,13 @@ const count = (value?: number) => typeof value === "number" ? value.toLocaleStri
  * owner confirms each is theirs. The confirmed ones are then scanned in the
  * background (Instagram first, then the website) while the owner answers the
  * questions of step 2. */
-export function SourcesStep({ slug, initialInstagram = "", initialWebsite = "" }: { slug: string; initialInstagram?: string; initialWebsite?: string }) {
+export function SourcesStep({ slug, initialInstagram = "", initialWebsite = "", compact = false, onLearning }: {
+  slug: string; initialInstagram?: string; initialWebsite?: string;
+  /** Inside the "Gati për klientët" card: no page title, no skip links. */
+  compact?: boolean;
+  /** Called once the scan starts, instead of moving on to the onboarding questions. */
+  onLearning?: () => void;
+}) {
   const endpoint = `/api/business-sources?slug=${encodeURIComponent(slug)}`;
   const next = onboardingQuestionsPath(slug);
   const [stage, setStage] = useState<Stage>("form");
@@ -112,6 +118,7 @@ export function SourcesStep({ slug, initialInstagram = "", initialWebsite = "" }
     try {
       await post({ action: "learn", confirmed: { instagram: nextDecision.instagram === "yes", website: nextDecision.website === "yes" } });
       // The scan goes on in the background; the questions come next.
+      if (onLearning) { onLearning(); setBusy(false); return; }
       window.location.assign(next);
     } catch (e) { setError(e instanceof Error ? e.message : "Analiza nuk nisi."); setBusy(false); }
   }
@@ -129,11 +136,11 @@ export function SourcesStep({ slug, initialInstagram = "", initialWebsite = "" }
 
   return (
     <>
-      <div className="onboarding-question">
+      {!compact && <div className="onboarding-question">
         <span className="onboarding-eyebrow">NGA KU TË MËSOJË AGJENTI</span>
         <h1>{title}</h1>
         <p>{lead}</p>
-      </div>
+      </div>}
 
       {stage === "form" && (
         <form className="onboarding-sources-step" onSubmit={(e) => { e.preventDefault(); void look(); }}>
@@ -144,11 +151,11 @@ export function SourcesStep({ slug, initialInstagram = "", initialWebsite = "" }
             <label htmlFor="sources-website">Website</label>
             <input id="sources-website" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="zana.al" inputMode="url"
               maxLength={2000} autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-            <small className="onboarding-hint">Lidhja e Instagram-it për t&apos;u përgjigjur klientëve bëhet në hapin tjetër.</small>
+            <small className="onboarding-hint">Lidhja e Instagram-it për t&apos;u përgjigjur klientëve bëhet te hapi i kanalit.</small>
           </fieldset>
           {error && <p className="onboarding-error" role="alert">{error}</p>}
           <div className="onboarding-actions">
-            <a className="onboarding-back" href={next}>Anashkalo</a>
+            {compact ? <span /> : <a className="onboarding-back" href={next}>Anashkalo</a>}
             <div className="onboarding-actions-end">
               <button className="onboarding-next" type="submit" disabled={busy || (!username.trim() && !website.trim())}>{busy ? "Duke lexuar…" : "Vazhdo"}</button>
             </div>
@@ -203,7 +210,7 @@ export function SourcesStep({ slug, initialInstagram = "", initialWebsite = "" }
           <div className="onboarding-actions">
             <button type="button" className="onboarding-back" disabled={busy} onClick={() => { setStage("form"); setError(""); }}>Ndrysho të dhënat</button>
             <div className="onboarding-actions-end">
-              {nothingConfirmed && <a className="onboarding-next" href={next}>Vazhdo pa analizë</a>}
+              {nothingConfirmed && !compact && <a className="onboarding-next" href={next}>Vazhdo pa analizë</a>}
             </div>
           </div>
         </div>

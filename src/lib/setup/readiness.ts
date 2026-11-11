@@ -6,7 +6,7 @@ import { loadContinuation } from "@/lib/onboarding/continuation-service";
 /** Is the agent answering customers, and if not, what is missing.
  * Shown as the onboarding channel step, the "Gati për klientët" card and the
  * live mark in the header; the gate itself stays in launch_business. */
-export type ReadinessStep = { key: "profile" | "knowledge" | "agent" | "test" | "channel" | "live"; title: string; done: boolean; recommended?: boolean; href?: string; action: string };
+export type ReadinessStep = { key: "sources" | "profile" | "knowledge" | "agent" | "test" | "channel" | "live"; title: string; done: boolean; recommended?: boolean; href?: string; action: string };
 export type Readiness = {
   live: boolean;
   autoReply: boolean;
@@ -21,9 +21,12 @@ export type Readiness = {
 /** profile: the onboarding questions still waiting (null when the business has none). */
 export function readinessFrom(status: SetupStatus, autoReply: boolean, channel: Readiness["channel"], base: string, profile: { open: boolean } | null = null): Readiness {
   const offer = setupSteps(status).find((step) => step.key === "products");
+  const sources = setupSteps(status).find((step) => step.key === "sources");
   const connected = status.connected;
   const live = autoReply && connected && status.agentReady;
   const steps: ReadinessStep[] = [
+    // Instagram and website: they help a lot, but a business may have neither.
+    { key: "sources", title: "Instagram-i dhe website-i", done: !!sources?.done, recommended: true, href: `${base}/knowledge`, action: "Shto burimet" },
     // Answered or set aside for later in the card itself; it never blocks going live.
     ...(profile ? [{ key: "profile" as const, title: "Profili i biznesit", done: !profile.open, href: base, action: "Përgjigju" }] : []),
     { key: "knowledge", title: offer?.title ?? "Shto njohuritë ose produktet", done: !!offer?.done, href: `${base}/${offer?.path ?? "knowledge"}`, action: offer?.action ?? "Hap" },

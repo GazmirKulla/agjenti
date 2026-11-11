@@ -22,10 +22,11 @@ it("points at the channel first when nothing is connected", () => {
 
 it("starts with the profile questions until they are answered or left for later, without blocking go-live", () => {
   const open = readinessFrom(status, false, { instagram: "zana", whatsapp: false }, "/b/zana", { open: true });
-  expect(open.steps[0]).toMatchObject({ key: "profile", done: false, href: "/b/zana" });
+  expect(open.steps[0]).toMatchObject({ key: "sources", recommended: true, href: "/b/zana/knowledge" });
+  expect(open.steps[1]).toMatchObject({ key: "profile", done: false, href: "/b/zana" });
   expect(open.blocked).toBeNull();
   expect(readinessSummary(open)).toMatchObject({ done: 3, total: 5, next: { key: "profile", path: "/b/zana" } });
-  expect(readinessSummary(open)?.steps.map((step) => step.key)).toEqual(["profile", "knowledge", "agent", "test", "channel", "live"]);
+  expect(readinessSummary(open)?.steps.map((step) => step.key)).toEqual(["sources", "profile", "knowledge", "agent", "test", "channel", "live"]);
   const answered = readinessFrom(status, false, { instagram: "zana", whatsapp: false }, "/b/zana", { open: false });
   expect(readinessSummary(answered)?.next?.key).toBe("live");
 });

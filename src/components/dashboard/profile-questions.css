@@ -1,6 +1,6 @@
 .profile-q { display: grid; gap: 12px; }
 .profile-q-card { display: grid; gap: 8px; }
-.profile-q-card h3 { margin: 0; font-size: 16px; font-weight: 650; color: var(--ink); }
+.profile-q-card h3 { margin: 0; font-size: 17px; font-weight: 650; color: var(--ink); letter-spacing: -0.2px; }
 .profile-q-count { margin: 0; font-size: 12px; color: var(--ink-muted); }
 .profile-q-hint, .profile-q-note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
 .profile-q-error { margin: 0; font-size: 13px; color: var(--danger); }
