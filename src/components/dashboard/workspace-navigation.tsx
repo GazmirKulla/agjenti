@@ -7,7 +7,7 @@ import { Icon } from "./icon";
 import { activeWorkspaceLink, workspaceLabel, type WorkspaceLink, type organizeWorkspace, type WorkspaceSection } from "@/lib/dashboard/navigation/workspace";
 import s from "./workspace-navigation.module.css";
 
-type Props = { navigation: ReturnType<typeof organizeWorkspace>; section?: WorkspaceSection; base: string; pathname: string; onNavigate: () => void; iconsOnly?: boolean; assistantName?: string;
+type Props = { navigation: ReturnType<typeof organizeWorkspace>; section?: WorkspaceSection; base: string; pathname: string; onNavigate: () => void; iconsOnly?: boolean;
   /** Connected channels that need attention (expired, expiring or failing). */
   channelsAttention?: { instagram: boolean; whatsapp: boolean } };
 
@@ -76,11 +76,11 @@ function NavigationGroup({ id, label, icon, href, links, base, pathname, iconsOn
   </section>;
 }
 
-export function WorkspaceNavigation({ navigation, section, base, pathname, onNavigate, iconsOnly = false, assistantName, channelsAttention }: Props) {
+export function WorkspaceNavigation({ navigation, section, base, pathname, onNavigate, iconsOnly = false, channelsAttention }: Props) {
   const t = useDashboardTranslator();
   return <>
     {navigation.main.map(item => {
-      const label = item.id === "home" && assistantName ? assistantName : t(item.label);
+      const label = t(item.label);
       return <Link key={item.id} href={`${base}${item.path ? `/${item.path}` : ""}`} className={`dashboard-nav ${section === item.section ? "active" : ""}`}
         aria-current={section === item.section ? "page" : undefined} data-tip={iconsOnly ? label : undefined} onClick={onNavigate}>
         <Icon name={item.icon}/><span className="nav-label">{label}</span>

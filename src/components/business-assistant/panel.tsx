@@ -6,7 +6,6 @@ import { businessGoals } from "./presentation";
 import { AgentEffectObservation, AgentInstructionNotice } from "./agent-configuration";
 import { AssistantAttention } from "./attention";
 import { ConfirmationDialog } from "./confirmation-dialog";
-import { DailyBriefing } from "./daily-briefing";
 import { useDashboardLanguage } from "@/components/dashboard/language";
 import { AssistantHistory, useAssistantHistory } from "./history";
 import { hasRecoverableWork, type ConversationView } from "@/lib/business-assistant/persistence-model";
@@ -114,7 +113,6 @@ export function BusinessAssistant({
   setPanelWidth,
   requestKey = 0,
   userId,
-  userName,
   historyOpen,
   onHistoryClose,
   onHistoryOpen,
@@ -179,9 +177,8 @@ export function BusinessAssistant({
   const [error, setError] = useState("");
   const [outgoing, setOutgoing] = useState<string | null>(null);
   const [mobile, setMobile] = useState(false);
-  const inline = context.page === "home";
-  const Greeting = inline ? "h1" : "h3";
-  const visible = open || inline || historyOpen;
+  // The assistant opens as a panel on every page; Home shows the business summary.
+  const visible = open || historyOpen;
   const [expanded, setExpanded] = useState(false);
   const [requestContext, setRequestContext] =
     useState<AssistantUIContext | null>(null);
@@ -251,29 +248,27 @@ export function BusinessAssistant({
     const childModals = Array.from(el.querySelectorAll<HTMLDialogElement>("dialog:modal"));
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const retainFocus = wasVisible.current && focused && el.contains(focused);
-    if (visible && !inline && !wasVisible.current) returnFocus.current = focused;
+    if (visible && !wasVisible.current) returnFocus.current = focused;
     childModals.forEach(child => child.close());
     if (el.open) el.close();
     if (visible) {
-      if (mobile && !inline) el.showModal();
+      if (mobile) el.showModal();
       else el.show();
-      // Opening the home surface is not a request to focus an action or keyboard.
-      if (inline && !childModals.length && !retainFocus && document.activeElement instanceof HTMLElement && el.contains(document.activeElement)) document.activeElement.blur();
       childModals.forEach(child => child.showModal());
       if (childModals.some(child => focused && child.contains(focused))) focused?.focus();
       else if (retainFocus) focused.focus({ preventScroll: true });
-      else if (!inline && !wasVisible.current) composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+      else if (!wasVisible.current) composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
     } else if (wasVisible.current && returnFocus.current?.isConnected) {
       returnFocus.current.focus();
     }
     wasVisible.current = visible;
-  }, [visible, mobile, inline]);
+  }, [visible, mobile]);
   useEffect(() => {
-    if (!visible || !mobile || inline) return;
+    if (!visible || !mobile) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {document.body.style.overflow = previous;};
-  }, [visible, mobile, inline]);
+  }, [visible, mobile]);
   useEffect(() => {
     if (visible) {
       const plan = result?.actionPlan ? dialog.current?.querySelector(".action-plan") : null;
@@ -517,13 +512,12 @@ export function BusinessAssistant({
   return (
     <>
       {launcherTarget && createPortal(
-        <PersonalAssistantWidget hidden={visible && !inline}
-          onOpen={() => { onOpen(); if (inline) composerRegion.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(); }} />,
+        <PersonalAssistantWidget hidden={visible} onOpen={onOpen} />,
         launcherTarget,
       )}
       <dialog
         ref={dialog}
-        className={`business-assistant assistant-workspace-panel ${historyOpen ? "history-open" : ""} ${inline ? "assistant-inline-home" : ""} ${context.page === "home" ? "is-home" : ""} ${expanded ? "is-expanded" : ""} ${mode === "audio" ? "is-voice" : ""}`}
+        className={`business-assistant assistant-workspace-panel ${historyOpen ? "history-open" : ""} ${context.page === "home" ? "is-home" : ""} ${expanded ? "is-expanded" : ""} ${mode === "audio" ? "is-voice" : ""}`}
         style={
           {
             "--assistant-panel-width": `${panelWidth}px`,
@@ -532,22 +526,21 @@ export function BusinessAssistant({
             "--assistant-viewport-top": `${typeof window !== "undefined" ? window.visualViewport?.offsetTop ?? 0 : 0}px`,
           } as React.CSSProperties
         }
-        aria-label={inline ? agentName : undefined}
-        aria-labelledby={inline ? undefined : "business-assistant-title"}
+        aria-labelledby="business-assistant-title"
         onCancel={(event) => {
           event.preventDefault();
           if (historyOpen) onHistoryClose();
           else if (mobile && workOpen && result?.preview) { event.preventDefault(); returnToConversation(); }
-          else if (!inline) onClose();
+          else onClose();
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape" && !mobile && event.target instanceof Element && event.target.closest("dialog") === dialog.current) {
-            if (historyOpen) onHistoryClose(); else if (!inline) onClose();
+            if (historyOpen) onHistoryClose(); else onClose();
           }
         }}
       >
-        <header className="assistant-heading" hidden={inline && mobile}>
-          {!inline && <PersonalAssistantAvatar />}
+        <header className="assistant-heading">
+          <PersonalAssistantAvatar />
           <div>
             <h2 id="business-assistant-title">{agentName} <span className="assistant-identity-role">— Asistenti yt</span></h2>
             <p>
@@ -565,16 +558,16 @@ export function BusinessAssistant({
               {expanded ? "↙" : "↗"}
             </button>
           )}
-          {!inline && <button
+          <button
             type="button"
             className="assistant-close"
             onClick={onClose}
             aria-label="Mbyll bisedën"
           >
             ×
-          </button>}
+          </button>
         </header>
-        {!mobile && !inline && (
+        {!mobile && (
           <label className="assistant-panel-resize">
             Gjerësia e panelit
             <input
@@ -605,17 +598,15 @@ export function BusinessAssistant({
             if (locked.current) return;
             reset(); void archive.selectThread({ id }); onOpen();
           }} />
-          <DailyBriefing key={`${userId}:${slug}`} slug={slug} active={inline && mode === "text" && !historyOpen} />
           {mode === "text" && !history.length && !result && (
             <div className="assistant-welcome">
-              {inline && <p className="mobile-assistant-eyebrow">{agentName} — Asistenti yt</p>}
-              <Greeting>{inline ? `Përshëndetje${userName?.trim() ? `, ${userName.trim().split(/\s+/)[0]}` : ""}.` : "Çfarë dëshiron të ndryshosh?"}{inline && <><br/><span>Çfarë bëjmë sot?</span></>}</Greeting>
+              <h3>Çfarë dëshiron të ndryshosh?</h3>
               <p>
-                {inline ? "Jam këtu për të të ndihmuar me biznesin. Pyet ose kërko një ndryshim." : "Menaxho produktet, shërbimet, njohuritë dhe takimet me një kërkesë."}
+                Menaxho produktet, shërbimet, njohuritë dhe takimet me një kërkesë.
               </p>
               <div className="assistant-examples">
                 {businessGoals(context, modules, external).map(
-                  ({ text: example, label }) => (
+                  ({ text: example }) => (
                     <button
                       type="button"
                       key={example}
@@ -627,7 +618,7 @@ export function BusinessAssistant({
                       disabled={Boolean(busy)}
                     >
                       <Icon name="spark" size={16} />
-                      {inline ? label : example}
+                      {example}
                       <span aria-hidden="true">↗</span>
                     </button>
                   ),

@@ -1,0 +1,4 @@
+.home-summary { display: grid; gap: 18px; }
+.home-reports { display: grid; gap: 12px; }
+.home-reports > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.home-reports > header h2 { margin: 0; font-size: 16px; font-weight: 650; color: var(--ink); }

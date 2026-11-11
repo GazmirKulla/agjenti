@@ -51,7 +51,7 @@ describe("Scoped dashboard language", () => {
     const html = render("en", h(WorkspaceNavigation, { navigation, base: "/b/shop", pathname: "/b/shop/inbox", section: "conversations", onNavigate: () => {} }));
     expect(html).toContain("Conversations");
     expect(html).toContain("Management");
-    expect(html).toContain("AI Assistant");
+    expect(html).toContain(">Home<");
     expect(html).toContain("/b/shop/business");
     expect(html).toContain("/b/shop/services"); // Direct access, even before any records exist.
     expect(html).toContain("Services");

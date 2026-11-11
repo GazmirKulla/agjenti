@@ -34,10 +34,10 @@ it("highlights the selected conversation without exposing internal metadata", ()
   for (const secret of ["internal-private-id", "private-request-id", "87654321", "12345678", "<script>"]) expect(html).not.toContain(secret);
   expect(html).toContain("Më shumë biseda");
 });
-it.each(["Migo", "Aria", "Asistenti AI"])("uses the same neutral Home route with the personalized name %s", assistantName => {
+it("names the Home route Kreu: it is the business summary, the assistant opens from the header", () => {
   const html = renderToStaticMarkup(h(WorkspaceNavigation, { navigation: organizeWorkspace([]), base: "/b/shop",
-    pathname: "/b/shop", section: "home", assistantName, onNavigate: vi.fn() }));
-  expect(html).toContain(assistantName);
+    pathname: "/b/shop", section: "home", onNavigate: vi.fn() }));
+  expect(html).toContain("Kreu");
   expect(html).toContain('href="/b/shop"');
   expect(html).toContain('aria-current="page"');
 });

@@ -55,7 +55,8 @@ export function organizeWorkspace(allItems: NavItem[]) {
   const search: WorkspaceLink[] = [...primary, ...items, ...agent, ...settings, ...integrations].filter((item, index, all) => all.findIndex(other => other.path === item.path && other.label === item.label) === index);
   const main = ["home", "conversations", "activity", "reports", "customers"].flatMap(id => {
     const item = primary.find(item => item.id === id);
-    return item ? [{ ...item, label: id === "home" ? "Asistenti AI" : item.label }] : [];
+    // Home is the business summary; the assistant opens from the header.
+    return item ? [item] : [];
   });
   const management = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !ownEntryIds.has(item.id) && !["dashboard", "inbox", "customers"].includes(item.id));
   search.push({ id: "management", path: "business", label: "Menaxhimi", icon: "briefcase" });
