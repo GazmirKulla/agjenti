@@ -28,7 +28,15 @@ export class ContinuationError extends Error {
 const booleanFields = new Set(["hasVariants", "isPersonalized", "sellsProducts"]);
 const yesNo = [{ value: "true", label: "Po" }, { value: "false", label: "Jo" }];
 // Collected before the workspace exists, or only meaningful for the retired audio review.
-const excluded = new Set(["name", "businessCategory", "supplement"]);
+// Not asked either, though answers given earlier are kept: frequent questions
+// (they belong in Knowledge, many pairs, later from real conversations),
+// variants and personalization (they follow from the offer and the scan),
+// whether products are sold (the offer question says it), catalogs (asked
+// when one is uploaded) and the description (the knowledge review covers it).
+const excluded = new Set([
+  "name", "businessCategory", "supplement",
+  "customerQuestions", "hasVariants", "isPersonalized", "sellsProducts", "catalogContext", "businessDescription",
+]);
 
 export function continuationQuestions(
   answers: Answers,

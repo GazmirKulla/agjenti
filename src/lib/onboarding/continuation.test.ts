@@ -57,8 +57,8 @@ describe("onboarding continuation in the dashboard", () => {
     const retail = parseAnswers({ ...emptyAnswers, name: "Barriera", businessType: "retail", offeringTypes: ["standard"], useCases: ["orders"] });
     const listed = applyContinuationAnswer(retail, allQuestionKeys, "offeringsSummary", { text: "Këpucë\nÇanta\n\nÇanta" });
     expect(listed.details?.offeringsSummary).toEqual(["Këpucë", "Çanta"]);
-    const text = applyContinuationAnswer(retail, allQuestionKeys, "customerQuestions", { text: "  Sa kushton dërgesa? 200 lekë.  " });
-    expect(text.details?.customerQuestions).toBe("Sa kushton dërgesa? 200 lekë.");
+    const text = applyContinuationAnswer(retail, allQuestionKeys, "customerProcess", { text: "  Porosia bëhet në DM, dërgesa 200 lekë.  " });
+    expect(text.details?.customerProcess).toBe("Porosia bëhet në DM, dërgesa 200 lekë.");
   });
 
   it("rejects options that do not belong to the question", () => {
@@ -83,13 +83,14 @@ describe("onboarding continuation in the dashboard", () => {
     expect(items.find((item) => item.field === question?.field)?.status).toBe("open");
   });
 
-  it("asks yes/no questions with Po and Jo and stores a boolean", () => {
-    for (const item of continuationOverview(nameOnly, allQuestionKeys).items.filter((entry) => entry.kind === "boolean"))
-      expect(item.options.map((o) => o.label)).toEqual(["Po", "Jo"]);
-    const products = parseAnswers({ ...emptyAnswers, name: "Zana", businessType: "retail", offeringTypes: ["personalized"], useCases: ["orders"] });
-    const yesNo = continuationOverview(products, allQuestionKeys).items.find((item) => item.kind === "boolean");
-    if (!yesNo) return;
-    const next = applyContinuationAnswer(products, allQuestionKeys, yesNo.field, { values: ["true"] });
-    expect(continuationOverview(next, allQuestionKeys).items.find((item) => item.field === yesNo.field)).toMatchObject({ status: "answered", value: ["true"], answer: "Po" });
+  it("no longer asks the retired detail questions, and keeps earlier answers", () => {
+    const products = parseAnswers({ ...emptyAnswers, name: "Zana", businessType: "retail", offeringTypes: ["personalized"], useCases: ["orders"],
+      details: { ...emptyAnswers.details, customerQuestions: "Sa kushton dërgesa? 3 euro.", hasVariants: true } });
+    const fields = continuationOverview(products, allQuestionKeys).items.map((item) => item.field);
+    for (const retired of ["customerQuestions", "hasVariants", "isPersonalized", "sellsProducts", "catalogContext", "businessDescription"])
+      expect(fields).not.toContain(retired);
+    expect(fields).toEqual(expect.arrayContaining(["offeringsSummary", "customerProcess", "handoffRules"]));
+    expect(products.details?.customerQuestions).toBe("Sa kushton dërgesa? 3 euro.");
   });
+
 });
