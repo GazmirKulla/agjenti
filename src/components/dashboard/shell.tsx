@@ -313,18 +313,9 @@ export function AppShell({
           }) : <WorkspaceNavigation navigation={workspace} section={section} base={base} pathname={pathname} assistantName={assistant?.assistantName} channelsAttention={channelsAttention} iconsOnly={iconRail} onNavigate={() => { setOpen(false); if (mobile) assistant?.setOpen(false); }} />}
         </nav>
         <footer className="dashboard-sidebar-footer">
-          {!admin ? <ProfilePopover key={pathname} base={base} name={userName || email || name} email={email} compact={iconRail} onNavigate={() => { setOpen(false); assistant?.setOpen(false); }} /> : <Link
-            href={`${base}/account`}
-            className={`dashboard-nav sidebar-account-link ${isDashboardRoute(pathname, base, "account") ? "active" : ""}`}
-            aria-current={isDashboardRoute(pathname, base, "account") ? "page" : undefined}
-            data-tip={iconRail ? t("Llogaria") : undefined}
-            onClick={() => setOpen(false)}
-          >
-            <span className="profile-avatar" aria-hidden="true">
-              {(userName || email || name).slice(0, 2).toUpperCase()}
-            </span>
-            <span className="nav-label">{t("Llogaria")}</span>
-          </Link>}
+          <ProfilePopover key={pathname} base={base} name={userName || email || name} email={email} compact={iconRail}
+            links={admin ? [{ href: `${base}/account`, label: "Llogaria", icon: "customers" }] : undefined}
+            onNavigate={() => { setOpen(false); assistant?.setOpen(false); }} />
         </footer>
       </aside>
       {tip && (

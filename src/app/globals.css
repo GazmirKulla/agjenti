@@ -3140,11 +3140,6 @@ html[data-resolved="dark"] .dashboard-shell .btn-primary:hover:not(:disabled) {
   padding-top: 16px;
   flex-shrink: 0;
 }
-.dashboard-sidebar .sidebar-account-link .profile-avatar {
-  width: 24px;
-  height: 24px;
-  font-size: 9px;
-}
 .mobile-bottom-nav,
 .mobile-workspace-title,
 .mobile-search-toggle,

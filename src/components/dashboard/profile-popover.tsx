@@ -8,8 +8,12 @@ import { Icon } from "./icon";
 import { useDashboardTranslator } from "./language";
 import s from "./app-shell.module.css";
 
-export function ProfilePopover({ base, name, email, compact, onNavigate }: {
-  base: string; name: string; email?: string; compact: boolean; onNavigate: () => void;
+export type ProfileLink = { href: string; label: string; icon: string };
+
+/** The account menu at the foot of the sidebar: the person's links and sign-out.
+ * Business owners get their settings; platform admins pass their own links. */
+export function ProfilePopover({ base, name, email, compact, onNavigate, links: custom }: {
+  base: string; name: string; email?: string; compact: boolean; onNavigate: () => void; links?: ProfileLink[];
 }) {
   const t = useDashboardTranslator();
   const pathname = usePathname();
@@ -31,12 +35,12 @@ export function ProfilePopover({ base, name, email, compact, onNavigate }: {
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
   }, [open]);
-  const links = [
+  const links: ProfileLink[] = custom ?? [
     { path: "profile", label: "Profili", icon: "customers" },
     { path: "profile", label: "Cilësimet", icon: "settings" },
     { path: "billing", label: "Paketa dhe përdorimi", icon: "billing" },
     { path: "preferences#language", label: "Gjuha / Language", icon: "display" },
-  ];
+  ].map(({ path, ...item }) => ({ ...item, href: `${base}/settings/${path}` }));
   return <div ref={root} className={s.profile} onBlur={event => {
     if (!event.currentTarget.contains(event.relatedTarget)) close();
   }}>
@@ -62,7 +66,7 @@ export function ProfilePopover({ base, name, email, compact, onNavigate }: {
       }}>
       <div className={s.profileHeading} role="presentation"><strong>{name}</strong><span>{email}</span></div>
       {links.map(item => {
-        const href = `${base}/settings${item.path ? `/${item.path}` : ""}`;
+        const href = item.href;
         return <Link role="menuitem" key={item.label} href={href}
           aria-current={item.label !== "Cilësimet" && pathname === href.split("#")[0] ? "page" : undefined}
           onClick={() => { close(); onNavigate(); }}><Icon name={item.icon} size={17}/>{t(item.label)}</Link>;
