@@ -24,7 +24,7 @@ describe("onboarding continuation in the dashboard", () => {
     const manual = parseAnswers({ ...emptyAnswers, name: "Barriera", businessType: "retail", offeringTypes: ["standard"], useCases: ["orders"] });
     const fields = continuationQuestions(manual, allQuestionKeys).map((q) => q.field);
     const { question, progress } = continuationState(manual, allQuestionKeys);
-    expect(fields).toEqual(expect.arrayContaining(["productCount", "messageVolume", "offeringsSummary"]));
+    expect(fields).toEqual(expect.arrayContaining(["productCount", "messageVolume", "customerProcess"]));
     expect(["businessType", "offeringTypes", "useCases"]).not.toContain(question?.field);
     expect(progress.answered).toBeGreaterThanOrEqual(3);
   });
@@ -53,10 +53,8 @@ describe("onboarding continuation in the dashboard", () => {
     expect(parseAnswers(JSON.parse(JSON.stringify(skipped))).conversationSkipped).toContain("offeringTypes");
   });
 
-  it("accepts free text for detail questions and a list for offerings", () => {
+  it("accepts free text for detail questions", () => {
     const retail = parseAnswers({ ...emptyAnswers, name: "Barriera", businessType: "retail", offeringTypes: ["standard"], useCases: ["orders"] });
-    const listed = applyContinuationAnswer(retail, allQuestionKeys, "offeringsSummary", { text: "Këpucë\nÇanta\n\nÇanta" });
-    expect(listed.details?.offeringsSummary).toEqual(["Këpucë", "Çanta"]);
     const text = applyContinuationAnswer(retail, allQuestionKeys, "customerProcess", { text: "  Porosia bëhet në DM, dërgesa 200 lekë.  " });
     expect(text.details?.customerProcess).toBe("Porosia bëhet në DM, dërgesa 200 lekë.");
   });
@@ -87,9 +85,9 @@ describe("onboarding continuation in the dashboard", () => {
     const products = parseAnswers({ ...emptyAnswers, name: "Zana", businessType: "retail", offeringTypes: ["personalized"], useCases: ["orders"],
       details: { ...emptyAnswers.details, customerQuestions: "Sa kushton dërgesa? 3 euro.", hasVariants: true } });
     const fields = continuationOverview(products, allQuestionKeys).items.map((item) => item.field);
-    for (const retired of ["customerQuestions", "hasVariants", "isPersonalized", "sellsProducts", "catalogContext", "businessDescription"])
+    for (const retired of ["offeringsSummary", "customerQuestions", "hasVariants", "isPersonalized", "sellsProducts", "catalogContext", "businessDescription"])
       expect(fields).not.toContain(retired);
-    expect(fields).toEqual(expect.arrayContaining(["offeringsSummary", "customerProcess", "handoffRules"]));
+    expect(fields).toEqual(expect.arrayContaining(["customerProcess", "handoffRules"]));
     expect(products.details?.customerQuestions).toBe("Sa kushton dërgesa? 3 euro.");
   });
 

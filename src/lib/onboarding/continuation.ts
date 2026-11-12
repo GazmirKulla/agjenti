@@ -32,10 +32,11 @@ const yesNo = [{ value: "true", label: "Po" }, { value: "false", label: "Jo" }];
 // (they belong in Knowledge, many pairs, later from real conversations),
 // variants and personalization (they follow from the offer and the scan),
 // whether products are sold (the offer question says it), catalogs (asked
-// when one is uploaded) and the description (the knowledge review covers it).
+// when one is uploaded), the description (the knowledge review covers it) and
+// what is sold in words (products go in the list, the scan writes the rest).
 const excluded = new Set([
   "name", "businessCategory", "supplement",
-  "customerQuestions", "hasVariants", "isPersonalized", "sellsProducts", "catalogContext", "businessDescription",
+  "customerQuestions", "hasVariants", "isPersonalized", "sellsProducts", "catalogContext", "businessDescription", "offeringsSummary",
 ]);
 
 export function continuationQuestions(
