@@ -31,7 +31,8 @@ export function ProfileReview({ slug, onDone }: { slug: string; onDone: () => vo
       fetch(`${path}&suggest=1`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]).then(([view, suggested]) => {
       if (!live) return;
-      const list: ContinuationItem[] = view?.continuation?.items ?? [];
+      // The business profile; the questions about the agent are asked with its instructions.
+      const list: ContinuationItem[] = (view?.continuation?.items ?? []).filter((item: ContinuationItem) => item.step === "profile");
       const found: Record<string, SuggestedAnswer> = suggested?.suggestions ?? {};
       const initial: Record<string, Draft> = {};
       for (const item of list) {

@@ -150,8 +150,8 @@ export function audioGuide(
     },
     {
       id: "handoffRules",
-      title: "Çfarë dëshiron të bëjë Agjenti dhe kur të të kërkojë ndihmë?",
-      hint: "Përmend çfarë mund të trajtojë vetë dhe çfarë kërkon gjithmonë konfirmimin tënd.",
+      title: "Kur duhet Agjenti të ta kalojë bisedën ty?",
+      hint: "P.sh. ankesa, çmime ose ulje speciale, porosi të mëdha, ose kur nuk e di përgjigjen.",
     },
   ];
   if (!answers.audioReview) return core;

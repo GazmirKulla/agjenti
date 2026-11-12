@@ -124,8 +124,10 @@ function stepOptions(key: AnswerKey): readonly Choice[] {
   return questions.find((item) => item.key === key)?.options ?? [];
 }
 
+/** The questions asked, in order. The agent's abilities are not asked: they
+ * follow from what the agent should do (useCases), the business and the offer. */
 export function wizardSteps(): WizardStep[] {
-  return wizardOrder.map((key, index) => {
+  return wizardOrder.filter((key) => key !== "aiMode").map((key, index) => {
     const question = questions.find((item) => item.key === key)!;
     return {
       index: index + 1,

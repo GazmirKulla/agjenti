@@ -3,17 +3,19 @@ import { useCallback, useEffect, useState } from "react";
 import type { ContinuationItem, ContinuationQuestion } from "@/lib/onboarding/continuation";
 import "./profile-questions.css";
 
-type View = { question: ContinuationQuestion | null; progress: { answered: number; total: number }; items: ContinuationItem[] };
+type View = { question: ContinuationQuestion | null; progress: { answered: number; total: number }; items: ContinuationItem[]; instructions?: "updated" | "kept" | "none" };
 type Answer = { values: string[] } | { text: string } | { skip: true };
 
 /** The onboarding profile questions inside the "Gati për klientët" card: one
  * question at a time, with back, "Më vonë" and the answers given so far. The
  * server checks every answer; the card only shows and sends them. */
-export function ProfileQuestions({ slug, onFinished, core = false }: {
+export function ProfileQuestions({ slug, onFinished, core = false, step = "profile" }: {
   slug: string;
   onFinished: () => void;
   /** Onboarding: only the short questions; the details wait for the Home card. */
   core?: boolean;
+  /** Which questions: the business profile, or those about the agent (Udhëzimet). */
+  step?: ContinuationItem["step"];
 }) {
   const path = `/api/business-onboarding?slug=${encodeURIComponent(slug)}`;
   const [view, setView] = useState<View | null>(null);
@@ -23,19 +25,20 @@ export function ProfileQuestions({ slug, onFinished, core = false }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
+  const [kept, setKept] = useState(false);
 
-  // The next question: the server's, or in onboarding the first short one still open.
-  const nextField = useCallback((next: View) =>
-    core ? next.items.find((entry) => entry.core && entry.status === "open")?.field ?? null : next.question?.field ?? null, [core]);
+  // This step's questions (in onboarding only the short ones); the next is the first still open.
+  const mine = useCallback((entry: ContinuationItem) => entry.step === step && (!core || entry.core), [core, step]);
+  const nextField = useCallback((next: View) => next.items.find((entry) => mine(entry) && entry.status === "open")?.field ?? null, [mine]);
   const show = useCallback((full: View, at: string | null) => {
-    const next = core ? { ...full, items: full.items.filter((entry) => entry.core) } : full;
+    const next = { ...full, items: full.items.filter(mine) };
     setView(next);
     setField(at);
     const item = next.items.find((entry) => entry.field === at);
     setValues(Array.isArray(item?.value) ? item.value : []);
     setText(typeof item?.value === "string" ? item.value : "");
     setError("");
-  }, [core]);
+  }, [mine]);
 
   useEffect(() => {
     let live = true;
@@ -62,6 +65,7 @@ export function ProfileQuestions({ slug, onFinished, core = false }: {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.continuation) throw new Error(data.error || "Përgjigjja nuk u ruajt. Provo përsëri.");
       const next = data.continuation as View;
+      if (next.instructions === "kept") setKept(true);
       const at = nextField(next);
       show(next, at);
       if (!at) onFinished();
@@ -116,13 +120,16 @@ export function ProfileQuestions({ slug, onFinished, core = false }: {
         </form>
       ) : (
         <div className="profile-q-card">
-          <h3>Profili u plotësua</h3>
+          <h3>{step === "agent" ? "Gati" : "Profili u plotësua"}</h3>
           <p className="profile-q-hint">
             {view.items.some((entry) => entry.status === "skipped")
               ? "Disa pyetje i le për më vonë. Mund t'u përgjigjesh kur të duash më poshtë."
               : "Faleminderit. Mund të ndryshosh çdo përgjigje më poshtë."}
           </p>
         </div>
+      )}
+      {kept && (
+        <p className="profile-q-note" role="status">Udhëzimet e Agjentit i ke ndryshuar vetë, prandaj nuk u prekën. Shtoje këtë te Udhëzimet nëse do.</p>
       )}
       {(answered.length > 0 || view.items.some((entry) => entry.status === "skipped")) && (
         <details className="profile-q-answers" open={!item}>

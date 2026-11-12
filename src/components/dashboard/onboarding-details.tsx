@@ -8,19 +8,21 @@ export function OnboardingDetails() {
     <section className="panel section-pad ob-details" aria-labelledby="ob-details-title">
       <h2 id="ob-details-title">Pyetjet pas krijimit të biznesit</h2>
       <p className="muted-copy">
-        Rendi i onboarding-ut: {ONBOARDING_STEPS.map((step, index) => `${index + 1}. ${step}`).join(" → ")}. Pyetjet më sipër bëhen te hapi 2.
+        Rendi i onboarding-ut: {ONBOARDING_STEPS.map((step, index) => `${index + 1}. ${step}`).join(" → ")}. Pyetjet më sipër bëhen te hapi 2,
+        përveç «Çfarë dëshiron të bëjë agjenti», që bëhet te hapi Udhëzimet i kartës «Gati për klientët» dhe përditëson udhëzimet e Agjentit.
         Këto më poshtë shtohen automatikisht sipas përgjigjeve: dalin te hapi 3, të plotësuara nga skanimi kur ka të dhëna, dhe te karta
         «Gati për klientët» në panel. Rregullat janë në kod dhe nuk fiken nga Cilësimet.
       </p>
       <div className="table-scroll">
         <table className="data-table">
           <thead>
-            <tr><th scope="col">Pyetja</th><th scope="col">Kur bëhet</th><th scope="col">Ku ruhet përgjigjja</th></tr>
+            <tr><th scope="col">Pyetja</th><th scope="col">Hapi</th><th scope="col">Kur bëhet</th><th scope="col">Ku ruhet përgjigjja</th></tr>
           </thead>
           <tbody>
             {DETAIL_QUESTIONS.map((question) => (
               <tr key={question.field}>
                 <td><strong>{question.title}</strong></td>
+                <td>{question.step}</td>
                 <td>{question.when}</td>
                 <td>{question.savedTo}</td>
               </tr>

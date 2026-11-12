@@ -12,6 +12,9 @@ export type ContinuationQuestion = {
   options: { value: string; label: string }[];
   /** Asked during onboarding; the others wait in the "Gati për klientët" card. */
   core: boolean;
+  /** Where it is asked: the business profile, or the agent's instructions
+   * (what the agent does and when it hands over), which it then updates. */
+  step: "profile" | "agent";
 };
 export type ContinuationAnswer =
   | { skip: true }
@@ -26,6 +29,8 @@ export class ContinuationError extends Error {
 }
 
 const booleanFields = new Set(["hasVariants", "isPersonalized", "sellsProducts"]);
+/** Questions about the agent, asked with its instructions (Udhëzimet). */
+export const AGENT_FIELDS = new Set(["useCases", "handoffRules"]);
 const yesNo = [{ value: "true", label: "Po" }, { value: "false", label: "Jo" }];
 // Collected before the workspace exists, or only meaningful for the retired audio review.
 // Not asked either, though answers given earlier are kept: frequent questions
@@ -51,6 +56,7 @@ export function continuationQuestions(
       title: q.title,
       hint: q.hint,
       core: !!q.core,
+      step: AGENT_FIELDS.has(q.field) ? "agent" as const : "profile" as const,
       // Yes/no questions read from the profile carry no options of their own.
       options: booleanFields.has(q.field) && !q.options.length ? yesNo : q.options,
       kind: booleanFields.has(q.field)

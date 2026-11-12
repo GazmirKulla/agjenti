@@ -91,4 +91,13 @@ describe("onboarding continuation in the dashboard", () => {
     expect(products.details?.customerQuestions).toBe("Sa kushton dërgesa? 3 euro.");
   });
 
+
+  it("asks what the agent does and when it hands over with its instructions, never the abilities", () => {
+    const retail = parseAnswers({ ...emptyAnswers, name: "Zana", businessType: "retail", offeringTypes: ["standard"] });
+    const items = continuationOverview(retail, allQuestionKeys).items;
+    expect(items.filter((item) => item.step === "agent").map((item) => item.field).sort()).toEqual(["handoffRules", "useCases"]);
+    expect(items.find((item) => item.field === "handoffRules")?.title).toBe("Kur duhet Agjenti të ta kalojë bisedën ty?");
+    expect(items.some((item) => item.field === "aiMode")).toBe(false);
+    expect(items.filter((item) => item.step === "profile").every((item) => !["useCases", "handoffRules"].includes(item.field))).toBe(true);
+  });
 });

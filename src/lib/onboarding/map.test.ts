@@ -12,14 +12,11 @@ it("lists wizard steps in dependency order", () => {
     "businessType",
     "productType",
     "useCases",
-    "aiMode",
     "productCount",
     "messageVolume",
   ]);
-  expect(steps.find((step) => step.key === "aiMode")?.influencedBy).toEqual([
-    "productType",
-    "useCases",
-  ]);
+  // The agent's abilities follow from the use cases; they are not asked.
+  expect(steps.some((step) => step.key === "aiMode")).toBe(false);
 });
 
 it("describes conditional links between questions", () => {

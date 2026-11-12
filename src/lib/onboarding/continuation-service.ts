@@ -8,10 +8,14 @@ import {
   changesDashboardSignals,
   continuationOverview,
   ContinuationError,
+  AGENT_FIELDS,
 } from "./continuation";
+import { refreshAgentInstructions } from "./finish";
 
 export type ContinuationView = ReturnType<typeof continuationOverview> & {
   profileChanged?: boolean;
+  /** For an answer about the agent: whether its instructions followed it. */
+  instructions?: "updated" | "kept" | "none";
 };
 
 async function loadRow(businessId: string) {
@@ -76,5 +80,10 @@ export async function answerContinuation(
       console.error("[onboarding continuation profile]", error);
     }
   }
-  return { ...continuationOverview(next, settings.onboarding_steps), profileChanged };
+  let instructions: ContinuationView["instructions"];
+  if (typeof field === "string" && AGENT_FIELDS.has(field)) {
+    try { instructions = await refreshAgentInstructions(businessId, current, next); }
+    catch (error) { console.error("[onboarding continuation instructions]", error); }
+  }
+  return { ...continuationOverview(next, settings.onboarding_steps), profileChanged, instructions };
 }

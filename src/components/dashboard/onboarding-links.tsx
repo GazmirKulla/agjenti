@@ -5,7 +5,6 @@ import { Icon } from "@/components/dashboard/icon";
 import {
   exploreProfileOrder,
   profileLinkRows,
-  stepIndex,
   wizardSteps,
   type ProfileLinkRow,
   type WizardStep,
@@ -359,7 +358,7 @@ export function OnboardingLinks({
   const steps = useMemo(() => wizardSteps(), []);
   const profiles = useMemo(() => profileLinkRows(), []);
   const enabled = useMemo(() => new Set(enabledSteps), [enabledSteps]);
-  const [selectedKey, setSelectedKey] = useState<AnswerKey>("aiMode");
+  const [selectedKey, setSelectedKey] = useState<AnswerKey>("useCases");
   const [exploreType, setExploreType] = useState<BusinessType>("retail");
   const [matrixFilter, setMatrixFilter] = useState<BusinessType | "all">("all");
 
@@ -368,7 +367,6 @@ export function OnboardingLinks({
     const pairs: Array<[AnswerKey, AnswerKey]> = [
       ["businessType", "productType"],
       ["productType", "useCases"],
-      ["useCases", "aiMode"],
     ];
     return pairs;
   }, []);
@@ -399,7 +397,6 @@ export function OnboardingLinks({
               dependencyPairs.some(
                 ([from, to]) => from === step.key && to === next.key,
               );
-            const showDependencyArc = step.key === "useCases" && next?.key === "aiMode";
             return (
               <div key={step.key} className="ob-stepper-item" role="listitem">
                 <StepCard
@@ -414,12 +411,6 @@ export function OnboardingLinks({
                     aria-hidden
                   >
                     <span className="ob-connector-line" />
-                    {showDependencyArc && (
-                      <span
-                        className="ob-connector-back"
-                        title={`Varësi nga hapi ${String(stepIndex("useCases")).padStart(2, "0")}`}
-                      />
-                    )}
                   </div>
                 )}
               </div>

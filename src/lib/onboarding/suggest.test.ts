@@ -7,7 +7,7 @@ import { validSuggestions } from "./suggest";
 import type { ContinuationItem } from "./continuation";
 
 const item = (field: string, kind: ContinuationItem["kind"], options: string[] = []): ContinuationItem => ({
-  field, title: field, hint: "", kind, core: false, status: "open", value: null, answer: "",
+  field, title: field, hint: "", kind, core: false, step: "profile", status: "open", value: null, answer: "",
   options: options.map((value) => ({ value, label: value })),
 });
 const items = [item("businessType", "single", ["retail", "food"]), item("useCases", "multiple", ["orders", "support"]),

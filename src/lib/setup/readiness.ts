@@ -50,7 +50,7 @@ export async function loadReadiness(business: { id: string; slug: string; auto_r
     ]);
     if (!status.available) return null;
     const channel = { instagram: ig.data ? ig.data.username ?? "" : null, whatsapp: wa.data?.status === "connected" };
-    return readinessFrom(status, Boolean(row.data?.auto_reply), channel, `/b/${business.slug}`, profile ? { open: profile.question !== null } : null);
+    return readinessFrom(status, Boolean(row.data?.auto_reply), channel, `/b/${business.slug}`, profile ? { open: profile.items.some((item) => item.step === "profile" && item.status === "open") } : null);
   } catch {
     return null;
   }

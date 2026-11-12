@@ -14,7 +14,7 @@ const ABOUT: Record<ReadinessStep["key"], string> = {
   sources: "Agjenti lexon profilin publik të Instagram-it dhe faqet e website-it, dhe krijon njohuritë e para. Pa lidhur llogarinë.",
   profile: "Disa pyetje të shkurtra që Agjenti ta njohë biznesin. Mund t'i lësh edhe për më vonë.",
   knowledge: "Agjenti përgjigjet vetëm me atë që di: shto njohuritë ose produktet.",
-  agent: "Si flet Agjenti me klientët dhe kur t'ia kalojë stafit.",
+  agent: "Çfarë bën Agjenti për klientët dhe kur ta kalojë bisedën te ti. Përgjigjet shkojnë te udhëzimet e tij.",
   test: "Shkruaji Agjentit si të ishe klient para se ta aktivizosh.",
   channel: "Lidh Instagram-in ose WhatsApp-in ku të shkruajnë klientët.",
   live: "Agjenti fillon t'u përgjigjet klientëve vetë. Mund ta ndalosh kur të duash.",
@@ -83,6 +83,11 @@ export function ReadyStrip({ slug, readiness }: { slug: string; readiness: Readi
         </div>
         {active.key === "profile" ? (
           <ProfileQuestions slug={slug} onFinished={() => { setChosen(null); router.refresh(); }} />
+        ) : active.key === "agent" ? (
+          <>
+            <ProfileQuestions slug={slug} step="agent" onFinished={() => router.refresh()} />
+            {active.href && <div className="ready-actions"><Link className="btn btn-ghost" href={active.href}>Hap udhëzimet</Link></div>}
+          </>
         ) : active.key === "sources" && !active.done && !learning ? (
           <div className="ready-sources"><SourcesStep slug={slug} compact onLearning={() => { setLearning(true); router.refresh(); }} /></div>
         ) : active.key === "sources" ? (

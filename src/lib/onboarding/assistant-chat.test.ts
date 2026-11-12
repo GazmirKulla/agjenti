@@ -64,7 +64,7 @@ describe("onboarding questions in the assistant conversation", () => {
   });
 
   it("asks with the title and hint and carries the choices as metadata", () => {
-    const question = { field: "businessType", title: "Çfarë biznesi ke?", hint: "Do ta përshtatim.", kind: "single" as const, options: choice.options, core: true };
+    const question = { field: "businessType", title: "Çfarë biznesi ke?", hint: "Do ta përshtatim.", kind: "single" as const, options: choice.options, core: true, step: "profile" as const };
     expect(questionContent(question, "Faleminderit.\n\n")).toBe("Faleminderit.\n\nÇfarë biznesi ke?\nDo ta përshtatim.");
     expect(questionMeta(question, { answered: 1, total: 6 })).toMatchObject({ type: "onboarding_question", field: "businessType", progress: { answered: 1 } });
   });
@@ -76,7 +76,7 @@ describe("answering in the conversation", () => {
   const body = { conversationId: "c1", requestId: "r1", revision: 3 };
   it("stores a quick reply and asks the next question in the same turn", async () => {
     vi.mocked(readConversation).mockResolvedValue(view as never);
-    vi.mocked(answerContinuation).mockResolvedValue({ question: { field: "offeringTypes", title: "Çfarë ofron?", hint: "", kind: "single", options: [], core: true }, progress: { answered: 1, total: 6 }, items: [] });
+    vi.mocked(answerContinuation).mockResolvedValue({ question: { field: "offeringTypes", title: "Çfarë ofron?", hint: "", kind: "single", options: [], core: true, step: "profile" }, progress: { answered: 1, total: 6 }, items: [] });
     vi.mocked(persistedTurn).mockImplementation(async (_a, _b, _input, run) => ({ ...(await run([], undefined, {})), persistence: {} }) as never);
     const result = await onboardingTurn(access, { ...body, onboarding: { field: "businessType", values: ["food"] } });
     expect(vi.mocked(persistedTurn).mock.calls[0][2]).toMatchObject({ content: "Restorant / Bar" });
