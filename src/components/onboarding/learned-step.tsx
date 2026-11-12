@@ -17,7 +17,8 @@ export function LearnedStep({ slug }: { slug: string }) {
   const endpoint = `/api/business-sources?slug=${encodeURIComponent(slug)}`;
   const next = onboardingChannelPath(slug);
   const [state, setState] = useState<SourcesState | null>(null);
-  // Shown large while the scan runs; null until the first read says whether it does.
+  // The scan is shown large when the step opens, running or already finished
+  // ("Gati" with its count); the owner minimizes it or moves on from it.
   const [dialogOpen, setDialogOpen] = useState<boolean | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const load = useCallback(async () => {
@@ -25,7 +26,7 @@ export function LearnedStep({ slug }: { slug: string }) {
     if (!response?.ok) return;
     const data = await response.json() as SourcesState;
     setState(data);
-    setDialogOpen((open) => open ?? isRunning(data));
+    setDialogOpen((open) => open ?? data.scans.length > 0);
   }, [endpoint]);
   const running = isRunning(state);
   useEffect(() => { void load(); }, [load]);
@@ -54,12 +55,12 @@ export function LearnedStep({ slug }: { slug: string }) {
         {profile ? (
           <ProfileReview slug={slug} onDone={() => window.location.assign(next)} />
         ) : review ? (
-          <SourcesReview slug={slug} review={review} onDone={(kept) => (kept ? setConfirmed(true) : window.location.assign(next))} />
+          <SourcesReview slug={slug} review={review} onDone={() => setConfirmed(true)} />
         ) : state?.scans.length ? (
           <>
             <ProgressRows rows={state.scans.map((scan) => ({ source: scan.source, label: sourceLabel[scan.source], progress: scan.progress, step: scan.step,
               state: scan.status === "completed" ? "done" : scan.status === "failed" ? "failed" : scan.id.endsWith("waiting") || (scan.status === "queued" && scan.progress <= 5) ? "waiting" : "running" }))} />
-            {running && <button type="button" className="onboarding-skip" onClick={() => setDialogOpen(true)}>Shiko skanimin</button>}
+            <button type="button" className="onboarding-skip" onClick={() => setDialogOpen(true)}>Shiko skanimin</button>
           </>
         ) : (
           <div className="onboarding-learning" role="status"><span className="onboarding-spinner" aria-hidden="true" /> Duke ngarkuar…</div>
@@ -72,7 +73,7 @@ export function LearnedStep({ slug }: { slug: string }) {
             </div>
           </div>
         )}
-        <DiscoveryScanDialog open={!!dialogOpen && !!state?.scans.length && !profile} jobs={state?.scans ?? []} startingSource="" error=""
+        <DiscoveryScanDialog open={!!dialogOpen && !!state?.scans.length && !confirmed} jobs={state?.scans ?? []} startingSource="" error=""
           onClose={() => setDialogOpen(false)} onReview={() => setDialogOpen(false)} />
       </div>
     </>
