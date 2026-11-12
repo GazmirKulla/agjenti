@@ -1,9 +1,118 @@
-.assistant-confirmation{box-sizing:border-box;font-family:system-ui,sans-serif;width:min(520px,calc(100vw - 32px));max-height:85dvh;overflow:auto;border:1px solid #e2e8f0;border-radius:20px;padding:24px;background:#fff;color:#172b3a;box-shadow:0 24px 80px #10243833}
-.assistant-confirmation::backdrop{background:#10243866;backdrop-filter:blur(3px)}
-.assistant-confirmation h2{font-size:1.25rem;line-height:1.4;margin:0 0 12px}
-.assistant-confirmation p{line-height:1.6;margin:12px 0}.confirmation-subject{font-weight:600}
-.assistant-confirmation dl{display:grid;gap:12px;margin:20px 0}.assistant-confirmation dt{font-size:.8rem;color:#526777}.assistant-confirmation dd{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.confirmation-before{color:#61717d;text-decoration:line-through}.confirmation-notice{font-size:.85rem;color:#526777}
-.assistant-confirmation summary{cursor:pointer;font-weight:600;padding:10px 0}.assistant-confirmation footer{display:flex;justify-content:flex-end;gap:10px;margin-top:24px;position:sticky;bottom:-24px;background:white;padding:12px 0}
-.assistant-confirmation button:focus-visible,.assistant-confirmation summary:focus-visible{outline:3px solid #008575;outline-offset:3px}
-.assistant-confirmation button{padding:10px 18px;border-radius:10px;border:1px solid #dbe5e9;font:inherit;cursor:pointer}.assistant-confirmation .assistant-primary{background:#086c62;color:white;border-color:#086c62}.assistant-confirmation .assistant-secondary{background:#fff;color:#243e4d}.assistant-confirmation button:disabled{opacity:.6;cursor:wait}
+/* Confirmation dialog: uses the app theme tokens so it follows light/dark mode.
+ * `margin: auto` restores native <dialog> centering that the global reset removes. */
+.assistant-confirmation {
+  box-sizing: border-box;
+  margin: auto;
+  width: min(480px, calc(100vw - 32px));
+  max-height: 85dvh;
+  overflow: auto;
+  padding: 24px 24px 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+}
+.assistant-confirmation[open] { animation: assistant-confirmation-in 160ms ease-out; }
+@keyframes assistant-confirmation-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-confirmation[open] { animation: none; }
+}
+.assistant-confirmation::backdrop {
+  background: rgb(15 23 42 / 55%);
+  backdrop-filter: blur(4px);
+}
+
+.assistant-confirmation h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.assistant-confirmation p { margin: 12px 0 0; line-height: 1.55; }
+.assistant-confirmation .confirmation-subject {
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+/* Changes under review: one quiet panel instead of loose label/value pairs. */
+.assistant-confirmation dl {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.assistant-confirmation dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.assistant-confirmation dd {
+  margin: 2px 0 0;
+  font-weight: 500;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.confirmation-before { color: var(--ink-muted); text-decoration: line-through; }
+
+.assistant-confirmation .confirmation-notice {
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+.assistant-confirmation details {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 16px;
+}
+.assistant-confirmation details[open] { padding-bottom: 14px; }
+.assistant-confirmation details dl { margin-top: 4px; padding: 0; border: 0; background: none; }
+.assistant-confirmation summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+.assistant-confirmation .assistant-error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.assistant-confirmation footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 24px -24px 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.assistant-confirmation button {
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.assistant-confirmation .assistant-secondary { background: transparent; color: var(--ink); }
+.assistant-confirmation .assistant-secondary:hover:not(:disabled) { background: var(--hover); border-color: var(--line-strong); }
+.assistant-confirmation .assistant-primary { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+.assistant-confirmation .assistant-primary:hover:not(:disabled) { background: var(--primary-hover); }
+.assistant-confirmation button:disabled { opacity: 0.6; cursor: wait; }
+.assistant-confirmation button:focus-visible,
+.assistant-confirmation summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 480px) {
+  .assistant-confirmation footer button { flex: 1; }
+}

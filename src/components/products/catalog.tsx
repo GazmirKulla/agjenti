@@ -115,6 +115,10 @@ export function ProductCatalog({
   const configProduct =
     catalogProducts.find((p) => p.id === configId) ?? null;
   const removal = useManualOperation(slug, "product.delete");
+  // Multiple delete goes through the same reviewed server operation as the assistant:
+  // the server re-resolves each ID, archives products with history, and previews before confirming.
+  const bulkRemoval = useManualOperation(slug, "product.remove");
+  const removeMany = (ids: string[]) => void bulkRemoval.prepare({ scope: "ids", ids });
   const activeFilters = Number(filter !== defaultFilter) + Number(Boolean(typeFilter));
   const filterItems: RowMenuItem[] = [
     ...STATUS_FILTERS.map(([value, label]) => ({
@@ -142,6 +146,24 @@ export function ProductCatalog({
       disabled: !shown.length,
       onSelect: () => { setSelected(shown.map((p) => p.id)); setBulkOpen(true); },
     },
+    {
+      group: "Veprime",
+      label: `Fshi produktet e kësaj faqeje (${shown.length})`,
+      danger: true,
+      disabled: !shown.length || bulkRemoval.busy,
+      onSelect: () => removeMany(shown.map((p) => p.id)),
+    },
+    ...(filtered.length > shown.length
+      ? [{
+          group: "Veprime",
+          label: filtered.length > 100
+            ? `Fshi të gjitha sipas filtrit (${filtered.length}, maks. 100)`
+            : `Fshi të gjitha sipas filtrit (${filtered.length})`,
+          danger: true,
+          disabled: filtered.length > 100 || bulkRemoval.busy,
+          onSelect: () => removeMany(filtered.map((p) => p.id)),
+        }]
+      : []),
   ];
   function rowActions(p: ProductRow): RowMenuItem[] {
     return [
@@ -417,6 +439,7 @@ export function ProductCatalog({
         </footer>
       </section>
       {removal.dialog}
+      {bulkRemoval.dialog}
 
       <dialog
         ref={configDialog}
