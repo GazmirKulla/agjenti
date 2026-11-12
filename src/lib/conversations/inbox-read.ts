@@ -106,7 +106,7 @@ export async function loadThreadConversation(db: SupabaseClient, businessId: str
 }
 
 export const threadMessageColumns =
-  "id,direction,source,body,media,created_at,delivery_status,delivery_error,external_message_id,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)";
+  "id,direction,source,sent_via,body,media,created_at,delivery_status,delivery_error,external_message_id,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)";
 
 /** The latest 200 messages, oldest first. */
 export async function loadThreadMessages(db: SupabaseClient, businessId: string, conversationId: string) {

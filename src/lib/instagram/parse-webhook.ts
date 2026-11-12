@@ -1,6 +1,7 @@
 import type {
 	NormalizedAttachment,
 	NormalizedAttachmentKind,
+	NormalizedBusinessEcho,
 	NormalizedIncomingMessage,
 } from "@/lib/instagram/types";
 
@@ -57,6 +58,8 @@ export type IgnoredInstagramEvent = {
 
 export type ParsedInstagramWebhook = {
 	messages: NormalizedIncomingMessage[];
+	/** Messages the business sent itself (Instagram app or our own Send API). */
+	echoes: NormalizedBusinessEcho[];
 	ignored: IgnoredInstagramEvent[];
 };
 
@@ -230,10 +233,52 @@ function collectMessagingEvents(
 	return events;
 }
 
+/**
+ * The business wrote to the customer: sender is the business account and the
+ * recipient is the customer. Never routed to the agent; dedupe against our own
+ * Send API messages happens at persistence time.
+ */
+function normalizeEcho(
+	accountId: string,
+	senderId: string,
+	recipientId: string,
+	event: InstagramWebhookMessagingEvent,
+	mid: string,
+): { echo?: NormalizedBusinessEcho; ignored?: IgnoredInstagramEvent } {
+	const msg = event.message;
+	if (!msg || msg.is_deleted === true || msg.is_unsupported === true) {
+		return { ignored: ignore("echo_unsupported", mid || undefined) };
+	}
+	const business = accountId || senderId;
+	if (!mid || !business || !recipientId || recipientId === business) {
+		return { ignored: ignore("echo_missing_id", mid || undefined) };
+	}
+	const { attachments } = buildAttachments(msg.attachments);
+	const text = msg.text?.trim() || null;
+	if (!text && attachments.length === 0) {
+		return { ignored: ignore("echo_empty", mid) };
+	}
+	return {
+		echo: {
+			channel: "instagram",
+			accountId: business,
+			externalParticipantId: recipientId,
+			externalMessageId: mid,
+			text,
+			attachments,
+			timestamp: timestampFrom(event.timestamp),
+		},
+	};
+}
+
 function normalizeMessagingEvent(
 	accountId: string,
 	event: InstagramWebhookMessagingEvent,
-): { message?: NormalizedIncomingMessage; ignored?: IgnoredInstagramEvent } {
+): {
+	message?: NormalizedIncomingMessage;
+	echo?: NormalizedBusinessEcho;
+	ignored?: IgnoredInstagramEvent;
+} {
 	const hasInbound = Boolean(event.message || event.postback);
 	if (event.reaction) {
 		return { ignored: ignore("reaction", event.reaction.mid) };
@@ -261,7 +306,7 @@ function normalizeMessagingEvent(
 	);
 	const testerInbound = msg?.is_self === true;
 	if (!metaDashboardTest && !testerInbound && (fromBusiness || msg?.is_echo === true)) {
-		return { ignored: ignore("echo", mid || undefined) };
+		return normalizeEcho(resolvedAccountId, senderId, recipientId, event, mid);
 	}
 	if (msg?.is_deleted === true) {
 		return { ignored: ignore("deleted", mid || undefined) };
@@ -341,10 +386,11 @@ export function parseInstagramWebhookPayload(
 	payload: InstagramWebhookPayload,
 ): ParsedInstagramWebhook {
 	const messages: NormalizedIncomingMessage[] = [];
+	const echoes: NormalizedBusinessEcho[] = [];
 	const ignored: IgnoredInstagramEvent[] = [];
 
 	if (payload.object !== "instagram") {
-		return { messages, ignored: [ignore("object_not_instagram")] };
+		return { messages, echoes, ignored: [ignore("object_not_instagram")] };
 	}
 
 	for (const entry of payload.entry ?? []) {
@@ -358,8 +404,9 @@ export function parseInstagramWebhookPayload(
 			const result = normalizeMessagingEvent(accountId, event);
 			if (result.ignored) ignored.push(result.ignored);
 			if (result.message) messages.push(result.message);
+			if (result.echo) echoes.push(result.echo);
 		}
 	}
 
-	return { messages, ignored };
+	return { messages, echoes, ignored };
 }

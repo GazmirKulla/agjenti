@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ enqueue: vi.fn(), run: vi.fn(), after: vi.fn(), handle: vi.fn(), receipts: vi.fn(), reactions: vi.fn() }));
+const m = vi.hoisted(() => ({ enqueue: vi.fn(), run: vi.fn(), after: vi.fn(), handle: vi.fn(), receipts: vi.fn(), reactions: vi.fn(), echoes: vi.fn() }));
+vi.mock("@/lib/conversations/business-echo", () => ({ persistBusinessEchoes: m.echoes }));
 vi.mock("@/lib/conversations/provider-reactions", async original => ({ ...await original<typeof import("@/lib/conversations/provider-reactions")>(), persistProviderReactions: m.reactions }));
 vi.mock("@/lib/conversations/provider-receipts", async original => ({ ...await original<typeof import("@/lib/conversations/provider-receipts")>(), persistProviderReceipts: m.receipts }));
 vi.mock("@/lib/conversations/workflow-queue", () => ({ enqueueWorkflowMessage: m.enqueue, runWorkflowQueue: m.run }));
@@ -67,4 +68,26 @@ it.each(["instagram", "whatsapp_business_account"])("%s reactions require a vali
  expect(m.reactions).toHaveBeenCalledWith([expect.objectContaining({messageId:"part",participantId:"customer",emoji:"👍"})]);
  expect(m.enqueue).not.toHaveBeenCalled();expect(m.after).not.toHaveBeenCalled();expect(m.handle).not.toHaveBeenCalled();
  m.reactions.mockRejectedValueOnce(new Error("synthetic outage"));expect((await POST(request(secret))).status).toBe(503);
+});
+
+function signed(body: unknown, secret: string) {
+ const raw = JSON.stringify(body);
+ return new Request("https://app.test/api/webhooks/meta", { method: "POST", body: raw, headers: { "x-hub-signature-256": "sha256=" + createHmac("sha256", secret).update(raw).digest("hex") } });
+}
+it("stores Instagram app echoes after acknowledging, never as an agent turn", async () => {
+ const body = { object: "instagram", entry: [{ id: "account", messaging: [{ sender: { id: "account" }, recipient: { id: "customer" }, timestamp: Date.now(), message: { mid: "echo-mid", text: "Po, e kemi", is_echo: true } }] }] };
+ expect((await POST(signed(body, "ig-secret"))).status).toBe(200);
+ expect(m.enqueue).not.toHaveBeenCalled();
+ expect(m.handle).not.toHaveBeenCalled();
+ expect(m.after).toHaveBeenCalledOnce();
+ await m.after.mock.calls[0][0]();
+ expect(m.echoes).toHaveBeenCalledWith([expect.objectContaining({ channel: "instagram", accountId: "account", externalParticipantId: "customer", externalMessageId: "echo-mid", text: "Po, e kemi" })]);
+ expect(m.run).not.toHaveBeenCalled();
+});
+it("stores WhatsApp Business app echoes without enqueueing an agent turn", async () => {
+ const body = { object: "whatsapp_business_account", entry: [{ id: "waba", changes: [{ field: "smb_message_echoes", value: { messaging_product: "whatsapp", metadata: { phone_number_id: "123456" }, message_echoes: [{ from: "15550783881", to: "355691234567", id: "wamid.echo", timestamp: String(Math.floor(Date.now() / 1000)), type: "text", text: { body: "Mirëdita" } }] } }] }] };
+ expect((await POST(signed(body, "meta-secret"))).status).toBe(200);
+ expect(m.enqueue).not.toHaveBeenCalled();
+ await m.after.mock.calls[0][0]();
+ expect(m.echoes).toHaveBeenCalledWith([expect.objectContaining({ channel: "whatsapp", accountId: "123456", externalParticipantId: "355691234567", externalMessageId: "wamid.echo" })]);
 });

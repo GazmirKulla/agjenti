@@ -1,4 +1,6 @@
-import { parseWhatsAppWebhook } from "@/lib/whatsapp/parse-webhook";
+import { parseWhatsAppEchoes, parseWhatsAppWebhook } from "@/lib/whatsapp/parse-webhook";
+import { persistBusinessEchoes } from "@/lib/conversations/business-echo";
+import type { NormalizedBusinessEcho } from "@/lib/instagram/types";
 import { parseProviderReceipts, persistProviderReceipts } from "@/lib/conversations/provider-receipts";
 import { parseProviderReactions, persistProviderReactions } from "@/lib/conversations/provider-reactions";
 import { verifyMetaSignature } from "@/lib/instagram/meta-webhook";
@@ -17,6 +19,15 @@ import {
 } from "@/lib/instagram/parse-webhook";
 
 export const maxDuration = 180;
+
+/** Echoes are stored after the 200 so Agjenti's own in-flight sends can settle first. */
+function storeEchoesLater(echoes: NormalizedBusinessEcho[]) {
+	if (!echoes.length) return;
+	after(async () => {
+		const outcomes = await persistBusinessEchoes(echoes);
+		console.log("[meta webhook][POST] echoes", outcomes);
+	});
+}
 
 export async function GET(request: Request) {
 	const url = new URL(request.url);
@@ -55,6 +66,8 @@ export async function POST(request: Request) {
             await persistProviderReactions(parseProviderReactions(payload));
             const messages = parseWhatsAppWebhook(payload);
             for (const message of messages) await enqueueWorkflowMessage(message);
+            // Business-app echoes are never enqueued: no agent turn can follow them.
+            storeEchoesLater(parseWhatsAppEchoes(payload));
             if (messages.length) after(async () => { await runWorkflowQueue(); });
             return NextResponse.json({ received: true });
         }
@@ -63,11 +76,13 @@ export async function POST(request: Request) {
 			return NextResponse.json({ received: true, ignored: true });
 		}
 
-		const { messages, ignored } = parseInstagramWebhookPayload(payload);
+		const { messages, echoes, ignored } = parseInstagramWebhookPayload(payload);
+		storeEchoesLater(echoes);
         await persistProviderReceipts(parseProviderReceipts(payload));
         await persistProviderReactions(parseProviderReactions(payload));
 		console.log("[meta webhook][POST]", {
 			accepted: messages.length,
+			echoes: echoes.length,
 			ignored: ignored.length,
 			matchedSecret: verified.matched,
 		});

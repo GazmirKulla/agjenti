@@ -17,6 +17,7 @@ type Message = {
   id: string;
   direction: string;
   source: string;
+  sent_via?: string | null;
   body: string | null;
   media: NormalizedAttachment[] | null;
   created_at: string;
@@ -226,9 +227,13 @@ export function ThreadClient(props: {
               <small>
                 {m.source === "agent"
                   ? t("Agjenti AI")
-                  : m.source === "staff"
-                    ? t("Ekipi")
-                    : t("Klienti")}{" "}
+                  : m.sent_via === "instagram_app"
+                    ? t("Dërguar nga Instagram")
+                    : m.sent_via === "whatsapp_app"
+                      ? t("Dërguar nga WhatsApp")
+                      : m.source === "staff"
+                        ? t("Ekipi")
+                        : t("Klienti")}{" "}
                 ·{" "}
                 <time dateTime={m.created_at} title={date.full} aria-label={date.full}>{date.time}</time>
                 {m.delivery_status ? ` · ${t(m.delivery_status)}` : ""}

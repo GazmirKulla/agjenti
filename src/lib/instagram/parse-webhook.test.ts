@@ -29,10 +29,32 @@ describe("parseInstagramWebhookPayload", () => {
 		});
 	});
 
-	it("ignores echo messages", () => {
-		const { messages, ignored } = parseInstagramWebhookPayload(loadFixture("echo.json"));
+	it("returns echoes as business messages, never as customer messages", () => {
+		const { messages, echoes, ignored } = parseInstagramWebhookPayload(loadFixture("echo.json"));
 		expect(messages).toEqual([]);
-		expect(ignored[0]?.reason).toBe("echo");
+		expect(ignored).toEqual([]);
+		expect(echoes).toEqual([
+			expect.objectContaining({
+				channel: "instagram",
+				accountId: "17841400008460056",
+				externalParticipantId: "1089304595302911",
+				externalMessageId: "aWdfZG1fMTplY2hvX21lc3NhZ2U=",
+				text: "Faleminderit!",
+			}),
+		]);
+	});
+
+	it("skips deleted or empty echoes", () => {
+		const base = loadFixture("echo.json") as InstagramWebhookPayload;
+		const event = base.entry![0].messaging![0];
+		for (const message of [{ ...event.message, is_deleted: true }, { mid: "x", is_echo: true }]) {
+			const { messages, echoes } = parseInstagramWebhookPayload({
+				...base,
+				entry: [{ ...base.entry![0], messaging: [{ ...event, message }] }],
+			});
+			expect(messages).toEqual([]);
+			expect(echoes).toEqual([]);
+		}
 	});
 
 	it("normalises Meta dashboard changes[].messages test payload", () => {

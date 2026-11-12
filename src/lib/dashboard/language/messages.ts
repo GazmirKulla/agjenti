@@ -175,6 +175,8 @@ export const english: Record<string, string> = {
   "Mesazh pa tekst": "Message without text",
   "Agjenti AI": "AI agent",
   "Ekipi": "Staff",
+  "Dërguar nga Instagram": "Sent from Instagram",
+  "Dërguar nga WhatsApp": "Sent from WhatsApp",
   "Klienti": "Customer",
   "Biseda ende nuk ka mesazhe.": "This conversation has no messages yet.",
   "Pas 24 orëve lejohet vetëm përgjigje njerëzore për kërkesën e klientit, deri në 7 ditë. Kërkohet leja Human Agent nga Meta.": "After 24 hours, only a human support reply to the customer's inquiry is allowed, up to 7 days. Meta Human Agent permission is required.",
