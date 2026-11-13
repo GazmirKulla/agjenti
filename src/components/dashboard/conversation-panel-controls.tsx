@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDashboardTranslator } from "@/components/dashboard/language";
 import type { LeadStatus } from "@/lib/leads/model";
 
@@ -83,16 +83,19 @@ function SmartLabel({ label, field, children, wide }: { label: string; field?: P
   );
 }
 
-/** Fills the empty values of a form from the prefill, once per reading. */
-function useApplyPrefill<T extends Record<string, string>>(data: PrefillData | null, map: Partial<Record<keyof T, string>>, setValues: React.Dispatch<React.SetStateAction<T>>) {
+/** Puts each reading into the form, except in fields the owner already changed. */
+function useApplyPrefill<T extends Record<string, string>>(data: PrefillData | null, map: Partial<Record<keyof T, string>>, setValues: React.Dispatch<React.SetStateAction<T>>, initial: T) {
+  const last = useRef(initial);
   useEffect(() => {
     if (!data) return;
     setValues((current) => {
       const next = { ...current };
       for (const [key, source] of Object.entries(map) as [keyof T, string][]) {
         const found = data.fields[source]?.value;
-        if (found && !String(current[key] ?? "").trim()) next[key] = found as T[keyof T];
+        const untouched = !String(current[key] ?? "").trim() || current[key] === last.current[key];
+        if (found && untouched) next[key] = found as T[keyof T];
       }
+      last.current = next;
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applies once per reading
@@ -104,10 +107,11 @@ export function SaveCustomerForm(props: { businessId: string; conversationId: st
   const t = useDashboardTranslator();
   const router = useRouter();
   const base = `/api/businesses/${props.businessId}/conversations/${props.conversationId}`;
-  const [values, setValues] = useState({ name: props.name, phone: props.phone });
+  const [initial] = useState({ name: props.name, phone: props.phone });
+  const [values, setValues] = useState(initial);
   const [asked, setAsked] = useState(false);
   const prefill = usePrefill(base, "customer", asked);
-  useApplyPrefill(prefill.data, { name: "name", phone: "phone" }, setValues);
+  useApplyPrefill(prefill.data, { name: "name", phone: "phone" }, setValues, initial);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fields = prefill.data?.fields ?? {};
@@ -244,7 +248,7 @@ export function ManualOrderForm(props: {
   const prefill = usePrefill(base, "order", open);
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<ProductOption[]>([]);
-  const [values, setValues] = useState({
+  const [initial] = useState({
     productId: props.productId ?? "",
     quantity: props.productId ? String(props.quantity) : "",
     name: props.customer.name,
@@ -253,10 +257,11 @@ export function ManualOrderForm(props: {
     address: props.customer.address,
     note: "",
   });
+  const [values, setValues] = useState(initial);
   const [chosenName, setChosenName] = useState(props.productName);
-  useApplyPrefill(prefill.data, { productId: "product_id", quantity: "quantity", name: "name", phone: "phone", city: "city", address: "address", note: "note" }, setValues);
+  useApplyPrefill(prefill.data, { productId: "product_id", quantity: "quantity", name: "name", phone: "phone", city: "city", address: "address", note: "note" }, setValues, initial);
   useEffect(() => {
-    if (prefill.data?.productName) setChosenName((current) => current ?? prefill.data!.productName);
+    if (prefill.data?.productName) setChosenName((current) => prefill.data!.productName ?? current);
   }, [prefill.data]);
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [pending, setPending] = useState(false);
@@ -375,7 +380,7 @@ export function BookingForm(props: {
   const base = `/api/businesses/${props.businessId}/conversations/${props.conversationId}`;
   const [open, setOpen] = useHashOpen("cakto-takim");
   const prefill = usePrefill(base, "booking", open);
-  const [form, setForm] = useState({
+  const [initial] = useState({
     serviceId: props.serviceId && props.services.some((s) => s.id === props.serviceId) ? props.serviceId : "",
     date: props.date ?? "",
     time: props.time ?? "",
@@ -383,7 +388,8 @@ export function BookingForm(props: {
     contact: props.contact,
     notes: "",
   });
-  useApplyPrefill(prefill.data, { serviceId: "service_id", date: "date", time: "time", name: "name", contact: "phone", notes: "note" }, setForm);
+  const [form, setForm] = useState(initial);
+  useApplyPrefill(prefill.data, { serviceId: "service_id", date: "date", time: "time", name: "name", contact: "phone", notes: "note" }, setForm, initial);
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});

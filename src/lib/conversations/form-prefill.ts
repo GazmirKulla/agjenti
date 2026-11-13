@@ -63,7 +63,7 @@ export function checkValue(key: PrefillKey, raw: unknown, input: { products: Cat
   }
 }
 
-/** What the agent already collected and validated, per form field. */
+/** What is already known, per form field: the agent's validated values, then the saved customer. */
 export function collectedValues(context: ConversationContext, kind: FormKind): Partial<Record<PrefillKey, string>> {
   const profile = context.profile;
   const name = profile.name ?? context.customer.name ?? "";
@@ -81,7 +81,8 @@ export function collectedValues(context: ConversationContext, kind: FormKind): P
   return values;
 }
 
-/** The agent's validated values win; the model fills what is still empty. */
+/** What the customer wrote in the conversation wins (it may be newer or a
+ * correction); what is already known fills the fields the conversation leaves empty. */
 export function mergePrefill(input: {
   kind: FormKind;
   collected: Partial<Record<PrefillKey, string>>;
@@ -91,8 +92,8 @@ export function mergePrefill(input: {
   for (const key of FORM_FIELDS[input.kind]) {
     const agent = input.collected[key]?.trim();
     const found = input.model[key];
-    if (agent) fields[key] = { value: agent, source: "agjenti", evidence: "" };
-    else if (found?.value) fields[key] = { value: found.value, source: "biseda", evidence: found.evidence.slice(0, 120) };
+    if (found?.value) fields[key] = { value: found.value, source: "biseda", evidence: found.evidence.slice(0, 120) };
+    else if (agent) fields[key] = { value: agent, source: "agjenti", evidence: "" };
   }
   const missing = REQUIRED[input.kind].filter(([key]) => !fields[key]).map(([, label]) => label);
   return { fields, missing };

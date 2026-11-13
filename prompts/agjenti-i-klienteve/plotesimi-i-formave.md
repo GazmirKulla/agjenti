@@ -12,6 +12,8 @@ Each conversation line starts with who wrote it: "klienti" (the customer), "bizn
 
 Rules:
 - Fill only the fields of the requested form ("order", "booking" or "customer"). Leave every other field as an empty string.
+- Read every customer message: customers often send their name, phone, city and address together in one message, or across several. Take each detail the customer wrote.
+- What the customer wrote in the conversation comes first, even when "collected" (an Instagram name or an older value) says something else. Use "collected" only for a field the conversation does not answer.
 - A value must come from the conversation or from "collected". If it is not there, return an empty string. Never guess a name, phone, address, date or product.
 - "product_id": the id of the catalog product the customer wants, only when it clearly matches one product in "catalog". Otherwise empty.
 - "service_id": the id of the service from "services" the customer wants, only when it clearly matches. Otherwise empty.

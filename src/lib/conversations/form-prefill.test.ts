@@ -38,13 +38,14 @@ describe("checkValue", () => {
 });
 
 describe("mergePrefill", () => {
-  it("prefers what the agent collected and fills the rest from the conversation", () => {
+  it("prefers what the customer wrote and keeps what is known for the rest", () => {
     const result = mergePrefill({
       kind: "order",
-      collected: { name: "Ana", phone: "" },
-      model: { name: { value: "Anila", evidence: "jam Anila" }, phone: { value: "0691234567", evidence: "0691234567" }, product_id: { value: product, evidence: "fustanin e zi" } },
+      collected: { name: "ana.shop", phone: "", city: "Tiranë" },
+      model: { name: { value: "Anila Hoxha", evidence: "jam Anila Hoxha" }, phone: { value: "0691234567", evidence: "0691234567" }, product_id: { value: product, evidence: "fustanin e zi" } },
     });
-    expect(result.fields.name).toEqual({ value: "Ana", source: "agjenti", evidence: "" });
+    expect(result.fields.name).toEqual({ value: "Anila Hoxha", source: "biseda", evidence: "jam Anila Hoxha" });
+    expect(result.fields.city).toEqual({ value: "Tiranë", source: "agjenti", evidence: "" });
     expect(result.fields.phone?.source).toBe("biseda");
     expect(result.fields.product_id?.value).toBe(product);
     expect(result.missing).toEqual([]);
