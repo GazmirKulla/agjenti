@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const t = translator(dashboardLanguage(request.headers.get("x-agjenti-language")));
   try {
     const profile = await loadDashboardProfile(access.business.id);
-    const home = await loadHomeModules(access.business, profile, period as HomePeriod);
+    const home = await loadHomeModules(access.business, profile, period as HomePeriod, { userId: user.id });
     // Interface copy is translated; counts and business data are not.
     const card = (item: HomeCard): HomeCard => ({
       ...item, label: t(item.label), caption: t(item.caption),

@@ -63,12 +63,12 @@ Të gjitha me `business_id = biznesi aktual`, pas `requireBusinessAccess`. Shumi
 | Shërbimet | `booking_services` aktive | +N të reja | N pa çmim (jo `price_mode=request`) | Shto shërbimin e parë | ekziston |
 | Porositë | porosi jo-draft në periudhë | vlera sipas monedhës | N `failed`/`pending_reconciliation` | "Porositë vijnë nga bisedat"; lidhje te workflow i porosisë | ekziston |
 | Rezervimet (takimet) | sot, jo të anuluara | N nesër | N `pending` në të ardhmen | Shto shërbim / cakto orarin | ekziston |
-| Kalendari | slotet e lira sot (ose "orari i pacaktuar") | — | "Orari nuk është caktuar" | Cakto orarin | **i ri**: `business_calendar_settings` |
+| Kalendari | ditë pune në javë (nga `hours`) | Google Calendar i lidhur | Agjenti nuk rezervon vetë (`agent_booking_enabled`) | Cakto orarin (kur s'ka cilësime) | `business_calendar_settings`, `google_calendar_connections`. Slotet e lira sot u lanë jashtë: kërkojnë llogaritjen e disponueshmërisë për çdo shërbim. |
 | Klientët | `customers` aktivë | +N të rinj | — | "Klientët shtohen nga bisedat" · Shto klient | ekziston |
 | Leads | gjithsej | +N të reja | N presin përgjigje | — | ekziston |
 | Njohuritë | `knowledge_entries` aktive | — | N për konfirmim | Shto njohuri / lexo burimet | ekziston |
 | Katalogët | aktivë | — | N me gabim indeksimi | Ngarko katalog | ekziston |
-| Workflow | të publikuara/aktive | — | draft i papublikuar | Krijo nga shabllon | **i ri**: `visual_workflows`/`workflows` |
+| Workflow | rrjedha (vizuale + lineare të mëparshme) | N aktive | N të papublikuara | Krijo rrjedhën e parë | `visual_workflows` + versioni i publikuar, `workflows` |
 | Ftesat (vetëm partner) | në pritje dhe të vlefshme | N të pranuara në periudhë | N të skaduara | Krijo biznes për klient | **i ri**: `business_invitations` me `source_business_id`; vetëm kur `can_execute_business_action('business.provision')` |
 
 ## Kontrata e përbashkët

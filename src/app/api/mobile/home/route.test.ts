@@ -44,7 +44,7 @@ it("rejects an unknown period", async () => {
 it("returns the same home data as the web page for the verified business", async () => {
   const response = await get("?slug=one&period=7&businessId=attacker");
   const data = await response.json();
-  expect(mocks.home).toHaveBeenCalledWith(business, profile, "7");
+  expect(mocks.home).toHaveBeenCalledWith(business, profile, "7", { userId: "owner" });
   expect(data.businessId).toBe("b1");
   expect(data.messages.inbound).toBe(4);
   expect(data.cards[0].empty.actions[0].href).toBe("/b/one/products/new");
@@ -54,7 +54,7 @@ it("returns the same home data as the web page for the verified business", async
 
 it("defaults to today", async () => {
   await get("?slug=one");
-  expect(mocks.home).toHaveBeenCalledWith(business, profile, "today");
+  expect(mocks.home).toHaveBeenCalledWith(business, profile, "today", { userId: "owner" });
 });
 
 it("shows a controlled failure when the figures cannot be read", async () => {

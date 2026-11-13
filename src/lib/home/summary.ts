@@ -3,6 +3,8 @@ import { leadSettings } from "@/lib/leads/model";
 import { loadBusinessReport } from "@/lib/reports/service";
 import { moduleDependencies, moduleRegistry } from "@/lib/dashboard/modules/registry";
 import type { DashboardProfile, ModuleId } from "@/lib/dashboard/modules/types";
+import { normalizeVisualDraft } from "@/lib/workflows/visual/model";
+import { loadVisualVersion } from "@/lib/workflows/visual/store";
 import { homeModuleSplit } from "./modules";
 import { added, homeRange, money, periodDays, type HomeCard, type HomeMessages, type HomeModuleLink, type HomePeriod } from "./model";
 
@@ -17,17 +19,19 @@ export async function loadHomeModules(
   business: { id: string; slug: string },
   profile: Pick<DashboardProfile, "source" | "signals" | "enabledModules" | "hiddenModules">,
   period: HomePeriod,
-  now = new Date(),
+  { userId, now = new Date() }: { userId: string; now?: Date },
 ) {
   const db = createServiceSupabase();
   const id = business.id;
   const base = `/b/${encodeURIComponent(business.slug)}`;
   const count = (table: string) => db.from(table).select("id", { count: "exact", head: true }).eq("business_id", id);
-  const [{ data: settings }, { data: usedModules }, leadsRecorded] = await Promise.all([
+  const [{ data: settings }, { data: usedModules }, leadsRecorded, provision] = await Promise.all([
     db.from("businesses").select("timezone,lead_settings").eq("id", id).maybeSingle(),
     db.rpc("business_used_modules", { p_business: id }),
     // business_used_modules does not cover leads yet.
     count("leads").limit(1),
+    // Creating businesses for clients is a partner capability: only those who have it see invitations.
+    db.rpc("can_execute_business_action", { p_business: id, p_user: userId, p_action: "business.provision", p_automated: false }),
   ]);
   const used = new Set<string>(Array.isArray(usedModules) ? usedModules : []);
   if (n(leadsRecorded)) used.add("leads");
@@ -137,23 +141,68 @@ export async function loadHomeModules(
         actions: [{ label: "Ngarko katalog", href: `${base}/catalogs` }] } };
   })());
 
+  if (on("calendar")) cards.push((async () => {
+    const [{ data: calendar, error }, { data: google }] = await Promise.all([
+      db.from("business_calendar_settings").select("hours,agent_booking_enabled").eq("business_id", id).maybeSingle(),
+      db.from("google_calendar_connections").select("connected").eq("business_id", id).maybeSingle(),
+    ]);
+    if (error) throw error;
+    const days = new Set((Array.isArray(calendar?.hours) ? calendar.hours : []).map((slot: { day?: unknown }) => slot?.day)).size;
+    return { id: "calendar", label: "Kalendari", icon: moduleRegistry.calendar.icon, href: `${base}/calendar`, value: days, caption: "ditë pune në javë",
+      detail: google?.connected ? "Google Calendar i lidhur" : undefined,
+      attention: calendar && !calendar.agent_booking_enabled ? { text: "Agjenti nuk rezervon vetë", href: `${base}/calendar`, tone: "warning" } : undefined,
+      empty: calendar ? undefined : { text: "Cakto ditët dhe orët kur pranon rezervime.", actions: [{ label: "Cakto orarin", href: `${base}/calendar` }] } };
+  })());
+  if (on("workflows")) cards.push((async () => {
+    const [{ data: row, error }, linear] = await Promise.all([
+      db.from("visual_workflows").select("draft,published_version_id,enabled").eq("business_id", id).maybeSingle(),
+      // Earlier linear workflows still serve products that are bound to them.
+      count("workflows"),
+    ]);
+    if (error) throw error;
+    const draft = row ? normalizeVisualDraft(row.draft) : null;
+    const published = row?.published_version_id ? (await loadVisualVersion(id, row.published_version_id))?.graph ?? null : null;
+    const drafted = draft?.version === 2 ? draft.flows.map((flow) => flow.id) : [];
+    const live = published?.version === 2 ? published.flows.map((flow) => flow.id) : [];
+    const visual = new Set([...drafted, ...live]).size;
+    const total = visual + n(linear);
+    const unpublished = drafted.filter((flowId) => !live.includes(flowId)).length;
+    const active = row?.enabled ? live.length : 0;
+    return { id: "workflows", label: "Workflow", icon: moduleRegistry.workflows.icon, href: `${base}/workflows`, value: total, caption: "rrjedha",
+      detail: visual ? (active ? `${active} aktive` : "asnjë aktive") : undefined,
+      attention: unpublished ? { text: `${unpublished} të papublikuara`, href: `${base}/workflows`, tone: "warning" } : undefined,
+      empty: total ? undefined : { text: "Rrjedhat i tregojnë Agjentit hapat e bisedës: porosi, rezervim ose kërkesë.",
+        actions: [{ label: "Krijo rrjedhën e parë", href: `${base}/workflows` }] } };
+  })());
+  if (provision.data === true) cards.push((async () => {
+    const invitations = () => db.from("business_invitations").select("id", { count: "exact", head: true }).eq("source_business_id", id);
+    const nowIso = now.toISOString();
+    const [waiting, accepted, expired, ever] = await Promise.all([
+      invitations().eq("status", "pending").gt("expires_at", nowIso),
+      invitations().eq("status", "accepted").gte("accepted_at", range.from),
+      invitations().eq("status", "pending").lte("expires_at", nowIso),
+      invitations().limit(1),
+    ]);
+    const href = `${base}/settings/actions`;
+    return { id: "invitations", label: "Ftesat", icon: "customers", href, value: n(waiting), caption: "në pritje",
+      detail: added(n(accepted), "të pranuara"), detailTone: "up",
+      attention: n(expired) ? { text: `${n(expired)} të skaduara`, href, tone: "warning" } : undefined,
+      empty: n(ever) ? undefined : { text: "Përgatit një biznes për një klient dhe dërgoji ftesën e pronësisë me email.",
+        actions: [{ label: "Krijo biznes për klient", href }] } };
+  })());
+
   const link = (id: ModuleId): HomeModuleLink => ({
     id, label: moduleRegistry[id].label, description: moduleRegistry[id].description, icon: moduleRegistry[id].icon,
     href: `${base}/${moduleRegistry[id].path}`,
     requires: [...(moduleDependencies[id].requires ?? []), ...(moduleDependencies[id].requiresAny ?? [])].map((dep) => moduleRegistry[dep].label),
   });
-  // Highlighted modules without figures yet (calendar, workflows) open the module.
-  const counted = new Set(["products", "services", "orders", "bookings", "leads", "customers", "knowledge", "catalogs"]);
-  for (const extra of split.highlighted.filter((m) => !counted.has(m))) {
-    const { label, description, icon, href } = link(extra);
-    cards.push(Promise.resolve({ id: extra, label, icon, href, value: null, caption: description }));
-  }
 
   const [inbox, ...rest] = await Promise.all([
     profile.enabledModules.includes("inbox") ? messages().catch(() => null) : Promise.resolve(null),
     ...cards.map((card) => card.catch(() => null)),
   ]);
-  const order = (card: HomeCard) => split.highlighted.indexOf(card.id as ModuleId);
+  // Module order; invitations, which are not a module, come last.
+  const order = (card: HomeCard) => { const at = split.highlighted.indexOf(card.id as ModuleId); return at < 0 ? split.highlighted.length : at; };
   return {
     period, messages: inbox,
     cards: rest.filter((card): card is HomeCard => !!card).sort((a, b) => order(a) - order(b)),

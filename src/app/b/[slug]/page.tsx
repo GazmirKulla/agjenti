@@ -44,16 +44,14 @@ function ModuleCard({ card }: { card: HomeCard }) {
     </article>
   );
   return (
-    <article className={`panel home-card${card.value === null ? " is-plain" : ""}`}>
+    <article className="panel home-card">
       <Link href={card.href} className="home-card-main">
         <span className="home-card-label"><Icon name={card.icon} size={16} />{card.label}</span>
-        {card.value === null ? <span className="home-card-empty">{card.caption}</span> : <>
-          <strong className="home-card-value">{groupDigits(card.value)}</strong>
-          <span className="home-card-detail">
-            {card.caption}
-            {card.detail ? <> · <span className={card.detailTone === "up" ? "is-up" : undefined}>{card.detail}</span></> : null}
-          </span>
-        </>}
+        <strong className="home-card-value">{groupDigits(card.value)}</strong>
+        <span className="home-card-detail">
+          {card.caption}
+          {card.detail ? <> · <span className={card.detailTone === "up" ? "is-up" : undefined}>{card.detail}</span></> : null}
+        </span>
       </Link>
       {card.attention && <Link href={card.attention.href} className={`home-card-attention is-${card.attention.tone}`}>{card.attention.text} →</Link>}
     </article>
@@ -98,7 +96,7 @@ export default async function BusinessDashboard({ params, searchParams }: {
   if (!access) redirect("/auth/continue");
   const period = homePeriod((await searchParams).period);
   const profile = await loadDashboardProfile(access.business.id);
-  const summary = await loadHomeModules(access.business, profile, period);
+  const summary = await loadHomeModules(access.business, profile, period, { userId: user.id });
   const base = `/b/${encodeURIComponent(access.business.slug)}`;
   const label = HOME_PERIOD_LABELS[period].toLowerCase();
 

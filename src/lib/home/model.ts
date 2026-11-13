@@ -22,8 +22,8 @@ export function homeRange(period: HomePeriod, timezone: string, now: Date) {
 
 export type HomeCard = {
   id: string; label: string; icon: string; href: string;
-  /** The big number and what it counts; null for a module without figures yet. */
-  value: number | null; caption: string;
+  /** The big number and what it counts. */
+  value: number; caption: string;
   /** What was added in the period, or a second figure. */
   detail?: string; detailTone?: "up";
   /** At most one thing to act on. */

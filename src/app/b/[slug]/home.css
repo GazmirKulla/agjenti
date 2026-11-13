@@ -41,4 +41,4 @@
 .home-all-text span { font-size: 12px; }
 .home-all-open { color: var(--accent); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .home-all li a:hover .home-all-text strong { color: var(--accent); }
-@media (max-width: 640px) { .home-cards { grid-auto-flow: row dense; } .home-card.is-empty, .home-card.is-plain { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .home-cards { grid-auto-flow: row dense; } .home-card.is-empty { grid-column: 1 / -1; } }
