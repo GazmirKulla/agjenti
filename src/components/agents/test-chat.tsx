@@ -8,6 +8,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { TestAttachment } from "@/lib/agents/test-chat/attachments";
 import { Icon } from "@/components/dashboard/icon";
+import { TestInputsDialog, type TestInputs } from "./test-inputs";
 import { AudioRecorder, primeVoiceCapture } from "@/components/onboarding/audio-recorder";
 import { TrainingSession, type TrainingFeedback, type TrainingRequest } from "./training-session";
 import { ChatMessage, CopyMessage } from "./chat-message";
@@ -26,11 +27,13 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   renderInspector?: (entry: ChatEntry | undefined, chat: TestConversation) => ReactNode;
 }) {
   const [chats, setChats] = useState<TestConversation[]>([initialChat]);
-  // Chat Lab inputs: the Instagram account the simulated customer writes from.
-  const [senderInstagram, setSenderInstagram] = useState("");
-  // Read at send time, so typing in the field does not restart the polling loop.
-  const senderRef = useRef("");
-  useEffect(() => { senderRef.current = senderInstagram.trim(); }, [senderInstagram]);
+  // Chat Lab inputs: details of the simulated customer (e.g. their Instagram account).
+  const [inputs, setInputs] = useState<TestInputs>({});
+  const [inputsOpen, setInputsOpen] = useState(false);
+  // Read at send time, so changing inputs does not restart the polling loop.
+  const inputsRef = useRef<TestInputs>({});
+  useEffect(() => { inputsRef.current = inputs; }, [inputs]);
+  const inputCount = Object.keys(inputs).length;
   const [activeId, setActiveId] = useState("initial");
   const [ready, setReady] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -144,7 +147,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
           const next = reconciled.outbox?.find(o => !o.accepted && !jobs.some((j: { requestId: string }) => j.requestId === o.id));
           if (!next || next.status !== "queued" || blockedByFailedTurn(reconciled, next)) continue;
           const posted = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]),
-            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: current.mode === "real" ? { message: next.text } : { ...(configurationDraft ? { configurationDraft } : {}), ...(senderRef.current ? { senderInstagram: senderRef.current } : {}), message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
+            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: current.mode === "real" ? { message: next.text } : { ...(configurationDraft ? { configurationDraft } : {}), ...inputsRef.current, message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
           const result = await posted.json();
           if (disposed) return;
           setChats(all => all.map(c => c.id !== current.id ? c : { ...c, outbox: c.outbox?.map(o => o.id !== next.id ? o : { ...o, accepted: posted.ok, status: posted.ok ? "queued" : "failed", error: result.error }) }));
@@ -165,7 +168,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   async function retryOperation(operation: PendingTestTurn) {
     try {
       const response = await fetch(`/api/${real ? "agent-real" : "agent-test"}/turns?slug=${encodeURIComponent(slug)}`, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
-        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: real ? { message: operation.text } : { ...(configurationDraft ? { configurationDraft } : {}), ...(senderRef.current ? { senderInstagram: senderRef.current } : {}), message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
+        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: real ? { message: operation.text } : { ...(configurationDraft ? { configurationDraft } : {}), ...inputsRef.current, message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
       setChats(all => all.map(c => c.id !== chat.id ? c : { ...c, outbox: c.outbox?.map(o => o.id === operation.id ? { ...o, accepted: true, status: "queued", error: undefined } : o) }));
@@ -336,9 +339,13 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         {advanced && <button className="chat-icon" type="button" title="Eksporto bisedën" aria-label="Eksporto bisedën" disabled={!messages.length || busy} onClick={download}><Icon name="download" /></button>}
         {advanced && <button className="chat-icon" type="button" title="Zgjero / zvogëlo" aria-label="Zgjero bisedën" aria-pressed={expanded} onClick={()=>setExpanded(v=>!v)}><Icon name="expand" /></button>}
         {advanced && !renderInspector && <button className="chat-toolbar-button" type="button" aria-expanded={showDetails} aria-controls="agent-test-diagnostics" onClick={()=>setShowDetails(v=>!v)}><Icon name="workflows" size={17}/> Rrjedha</button>}
+        {advanced && !real && <button className={`chat-toolbar-button chat-inputs-button ${inputCount ? "has-inputs" : ""}`} type="button" aria-haspopup="dialog"
+          title={inputCount ? Object.values(inputs).join(" · ") : "Shto të dhëna të klientit që simulon"} onClick={() => setInputsOpen(true)}>
+          <Icon name="lead" size={17}/> Inputs{inputCount > 0 && <span className="chat-inputs-count" aria-label={`${inputCount} të plotësuara`}>{inputCount}</span>}</button>}
         <button className="chat-toolbar-button primary" type="button" disabled={preparing || voice} onClick={() => void reset()}><Icon name="plus" size={17}/> Bisedë e re</button>
       </nav>
     </header>
+    {inputsOpen && <TestInputsDialog inputs={inputs} onClose={() => setInputsOpen(false)} onSave={next => { setInputs(next); setInputsOpen(false); }} />}
     <div className={`chat-safety-note ${real ? "real-chat-note" : ""}`}>{real
       ? "Bisedë reale · Konfigurimi i publikuar. Veprimet e lejuara dhe të konfirmuara ruhen realisht. Përgjigjet mbeten në këtë panel; nuk dërgohen në Instagram/WhatsApp."
       : "Bisedë private prove · Nuk dërgon mesazhe te klientët dhe nuk krijon porosi reale."}</div>
@@ -398,16 +405,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
             items={[...uploads.map(u=>({id:u.id,name:u.file.name,preview:u.preview})), ...retained.map((a,i)=>({id:`retained-${i}`,name:a.name}))]}
             onRemove={id=>{if(id.startsWith("retained-")) setRetained(current=>current.filter((_,i)=>`retained-${i}`!==id)); else setUploads(current=>current.filter(u=>{if(u.id!==id)return true;if(u.preview){URL.revokeObjectURL(u.preview);objectUrls.current.delete(u.preview);}return false;}));}}
           />}
-          <div className="chat-composer-tools"><div>{advanced && !real && <label className="agent-test-photo"><input type="checkbox" checked={photo} disabled={busy || voice} onChange={e=>setPhoto(e.target.checked)}/> Simulo foto</label>}
-            {advanced && !real && <details className="agent-test-inputs">
-              <summary>Inputs{senderInstagram.trim() ? ` · ${senderInstagram.trim().startsWith("@") ? "" : "@"}${senderInstagram.trim()}` : ""}</summary>
-              <div>
-                <label htmlFor="agent-test-sender-instagram">Instagram i klientit</label>
-                <input id="agent-test-sender-instagram" type="text" value={senderInstagram} maxLength={60} placeholder="@username" autoComplete="off" autoCapitalize="none" spellCheck={false}
-                  onChange={event => setSenderInstagram(event.target.value)} />
-                <small>Llogaria nga e cila shkruan klienti. Nëse biznesi ka leje skanimi, agjenti lexon profilin publik (lexim i vërtetë, asgjë nuk ruhet).</small>
-              </div>
-            </details>}</div>
+          <div className="chat-composer-tools"><div>{advanced && !real && <label className="agent-test-photo"><input type="checkbox" checked={photo} disabled={busy || voice} onChange={e=>setPhoto(e.target.checked)}/> Simulo foto</label>}</div>
             <span className="chat-character-count">{draft.length ? `${draft.length}/2000` : ""}</span></div>
           {error && <p className="agent-test-error" role="alert">{error} <button type="button" disabled={busy} onClick={()=>void send(retry.current?.index ?? editing ?? messages.length, retry.current?.original)}>Provo përsëri</button></p>}
           <p className="agent-test-disclaimer">{real ? "Tekst dhe audio · Për të korrigjuar të dhënat, shkruaj një mesazh të ri. Fshirja nga historiku nuk anulon veprimet reale." : !advanced ? "Foto, skedarë dhe audio · Deri në 3 skedarë, 3 MB secili" : "Enter për dërgim · Shift + Enter për rresht të ri · Foto, PDF, TXT, MD, CSV, JSON · 3 skedarë, 3 MB secili. Skedarët dhe audioja përpunohen nga AI; përdor të dhëna prove."}</p>
