@@ -23,6 +23,17 @@ describe("labProspectRead", () => {
     expect(read).toHaveBeenCalledTimes(1);
     expect(later.trace).toMatchObject({ source: "reused" });
   });
+  it("reads the account the simulated customer writes from, without naming it in the text", async () => {
+    const read = vi.fn().mockResolvedValue(ready);
+    const turn = await labProspectRead({ ...base, message: "Përshëndetje, sa kushton?", sender: "@Dyqani.AL" }, { ...deps, read });
+    expect(read).toHaveBeenCalledWith("dyqani.al");
+    expect(turn.context).toMatchObject({ status: "ready" });
+    await labProspectRead({ ...base, message: "a më ndihmoni për @salloni_ana?", sender: "dyqani.al" }, { ...deps, read });
+    expect(read).toHaveBeenLastCalledWith("salloni_ana");
+    read.mockClear();
+    await labProspectRead({ ...base, message: "hello", sender: "agjenti.app" }, { ...deps, read });
+    expect(read).not.toHaveBeenCalled();
+  });
   it("applies the live rules: connected elsewhere, private and empty accounts", async () => {
     const read = vi.fn();
     const taken = await labProspectRead({ ...base, message: "@dyqani.al" }, { ...deps, connected: vi.fn().mockResolvedValue(true), read });

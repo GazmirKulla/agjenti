@@ -60,6 +60,7 @@ async function runTestTurn(
       input.message.length > 2000 ||
       (input.hasMedia !== undefined && typeof input.hasMedia !== "boolean") ||
       (input.session != null && typeof input.session !== "string")
+      || (input.senderInstagram !== undefined && (typeof input.senderInstagram !== "string" || input.senderInstagram.length > 60))
       || (input.attachments !== undefined && (!Array.isArray(input.attachments) || input.attachments.length > 3 || input.attachments.some(token => typeof token !== "string" || token.length > 100000)))
     )
       return {
@@ -122,7 +123,7 @@ async function runTestTurn(
     observation = currentObservation;
     // A business allowed to read prospects' Instagram (Agjenti.app) gets the same real
     // public read here; nothing is stored and no invitation can follow from a test.
-    const prospect = await labProspectRead({ businessId: access.business.id, message: text, previous: session.prospect ?? null });
+    const prospect = await labProspectRead({ businessId: access.business.id, message: text, previous: session.prospect ?? null, sender: input.senderInstagram });
     if (prospect.trace) {
       const event = { stage: "context" as const, label: "Instagram i klientit (skanim)", data: prospect.trace };
       provenance.onTrace(event); currentObservation.onTrace(event);

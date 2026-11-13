@@ -21,11 +21,16 @@ const reasons: Record<string, string> = {
 };
 const initialChat: TestConversation = { id: "initial", title: "Bisedë e re", entries: [], updatedAt: 0 };
 type Upload = { id: string; file: File; preview?: string };
-export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false, renderInspector }: {
+export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false, renderInspector, senderInstagram }: {
   slug: string; businessName: string; userId: string; configurationDraft?: string; advanced?: boolean;
+  /** Chat Lab: the Instagram account the simulated customer writes from. */
+  senderInstagram?: string;
   renderInspector?: (entry: ChatEntry | undefined, chat: TestConversation) => ReactNode;
 }) {
   const [chats, setChats] = useState<TestConversation[]>([initialChat]);
+  // Read at send time, so typing in the field does not restart the polling loop.
+  const senderRef = useRef(senderInstagram?.trim() ?? "");
+  useEffect(() => { senderRef.current = senderInstagram?.trim() ?? ""; }, [senderInstagram]);
   const [activeId, setActiveId] = useState("initial");
   const [ready, setReady] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -139,7 +144,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
           const next = reconciled.outbox?.find(o => !o.accepted && !jobs.some((j: { requestId: string }) => j.requestId === o.id));
           if (!next || next.status !== "queued" || blockedByFailedTurn(reconciled, next)) continue;
           const posted = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]),
-            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: current.mode === "real" ? { message: next.text } : { ...(configurationDraft ? { configurationDraft } : {}), message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
+            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: current.mode === "real" ? { message: next.text } : { ...(configurationDraft ? { configurationDraft } : {}), ...(senderRef.current ? { senderInstagram: senderRef.current } : {}), message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
           const result = await posted.json();
           if (disposed) return;
           setChats(all => all.map(c => c.id !== current.id ? c : { ...c, outbox: c.outbox?.map(o => o.id !== next.id ? o : { ...o, accepted: posted.ok, status: posted.ok ? "queued" : "failed", error: result.error }) }));
@@ -160,7 +165,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   async function retryOperation(operation: PendingTestTurn) {
     try {
       const response = await fetch(`/api/${real ? "agent-real" : "agent-test"}/turns?slug=${encodeURIComponent(slug)}`, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
-        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: real ? { message: operation.text } : { ...(configurationDraft ? { configurationDraft } : {}), message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
+        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: real ? { message: operation.text } : { ...(configurationDraft ? { configurationDraft } : {}), ...(senderRef.current ? { senderInstagram: senderRef.current } : {}), message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
       setChats(all => all.map(c => c.id !== chat.id ? c : { ...c, outbox: c.outbox?.map(o => o.id === operation.id ? { ...o, accepted: true, status: "queued", error: undefined } : o) }));

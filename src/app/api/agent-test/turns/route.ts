@@ -25,7 +25,8 @@ export async function POST(request: Request) {
     const data = JSON.parse(raw);
     if (!isTransportId(data.requestId) || !isTransportId(data.streamId) || !Number.isInteger(data.sequence) || data.sequence < 0 || data.sequence >= 40) throw new Error("Identiteti i kërkesës nuk është i vlefshëm.");
     if (data.input?.configurationDraft !== undefined && (typeof data.input.configurationDraft !== "string" || !/^[0-9a-f-]{36}$/i.test(data.input.configurationDraft))) throw new Error("Draft i pavlefshëm.");
-    const input: TestChatInput = { ...(data.input?.configurationDraft ? { configurationDraft: data.input.configurationDraft } : {}), slug: access.slug, message: data.input?.message, hasMedia: data.input?.hasMedia === true, session: data.input?.session ?? null, attachments: data.input?.attachments ?? [] };
+    const input: TestChatInput = { ...(data.input?.configurationDraft ? { configurationDraft: data.input.configurationDraft } : {}), slug: access.slug, message: data.input?.message, hasMedia: data.input?.hasMedia === true, session: data.input?.session ?? null, attachments: data.input?.attachments ?? [],
+      ...(typeof data.input?.senderInstagram === "string" && data.input.senderInstagram.trim() ? { senderInstagram: data.input.senderInstagram.trim().slice(0, 60) } : {}) };
     if (typeof input.message !== "string" || input.message.length > 2000 || !Array.isArray(input.attachments) || input.attachments.length > 3 || input.attachments.some(t => typeof t !== "string" || t.length > 100000)) throw new Error("Mesazh i pavlefshëm.");
     const session = readTestSession(input.session ?? null, access.userId, access.businessId);
     const { data: prior, error: priorError } = await access.db.from("workflow_inbound_queue").select("id")

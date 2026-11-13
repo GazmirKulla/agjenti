@@ -1,5 +1,6 @@
 import { connectedToAnotherBusiness, emptyPublicProfile } from "@/lib/instagram/account-rules";
 import { ownUsername } from "./turn-context";
+import { normalizeInstagramUsername } from "@/lib/instagram/public-profile";
 import { prospectReplyContext, prospectScanPolicy, prospectUsernameFromMessage, readPublicAccount, type ProspectScan } from "./instagram-scan";
 
 type Deps = {
@@ -22,13 +23,15 @@ export type LabProspect = {
 /** Chat Lab version of the prospect read: the same rules and the same real public
  * read, but nothing is stored, no invitation can follow and the business's
  * monthly allowance is not used. Waits for the read, however slow. */
-export async function labProspectRead(p: { businessId: string; message: string; previous: ProspectScan | null }, deps: Deps = {}): Promise<LabProspect> {
+export async function labProspectRead(p: { businessId: string; message: string; previous: ProspectScan | null; sender?: string | null }, deps: Deps = {}): Promise<LabProspect> {
   const none = { scan: p.previous, context: undefined, trace: null };
   try {
     const policy = await (deps.policy ?? prospectScanPolicy)(p.businessId);
     if (!policy.allowed) return none;
     const own = await (deps.ownUsername ?? ownUsername)(p.businessId);
-    const username = prospectUsernameFromMessage(p.message, own);
+    // An account named in the message wins; otherwise the account the customer writes from.
+    const sender = p.sender ? normalizeInstagramUsername(p.sender) : null;
+    const username = prospectUsernameFromMessage(p.message, own) ?? (sender && sender !== (own ? normalizeInstagramUsername(own) : null) ? sender : null);
     if (!username || username === p.previous?.username) {
       if (!p.previous) return none;
       return { scan: p.previous, context: prospectReplyContext({ kind: "existing", scan: p.previous }, p.previous), trace: labTrace(p.previous, "reused") };

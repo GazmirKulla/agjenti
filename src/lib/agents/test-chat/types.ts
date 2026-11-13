@@ -7,6 +7,8 @@ export type TestChatInput = {
   hasMedia?: boolean;
   session?: string | null;
   attachments?: string[];
+  /** Chat Lab: the Instagram account the simulated customer writes from. */
+  senderInstagram?: string;
 };
 export type TestChatResult =
   | { error: string; labObservation?: { trace: import("@/lib/conversations/trace").TimedTraceEvent[]; timestamp: string } }

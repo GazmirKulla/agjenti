@@ -16,6 +16,7 @@ export function ChatLab({ userId, initialBusiness, initialDraft }: { userId: str
   const [setup, setSetup] = useState<LabSetup | null>(null);
   const [drafts, setDrafts] = useState<{ id: string; name: string }[]>([]);
   const [configurationDraft, setConfigurationDraft] = useState(initialDraft ?? "");
+  const [senderInstagram, setSenderInstagram] = useState("");
   const [loading, setLoading] = useState(false);
   const [reload, setReload] = useState(0);
   const [error, setError] = useState("");
@@ -71,10 +72,14 @@ export function ChatLab({ userId, initialBusiness, initialDraft }: { userId: str
             if (window.confirm("Ndrysho konfigurimin? Bisedat e tij kanë historik të veçantë; teksti i padërguar nuk ruhet.")) setConfigurationDraft(event.target.value);
           }}><option value="">I publikuar</option>{drafts.map(draft => <option key={draft.id} value={draft.id}>Draft · {draft.name}</option>)}</select>
           {configurationDraft && <p className="lab-muted">Drafti nuk ndryshon versionin e publikuar dhe nuk lejon Real chat.</p>}
+          <label htmlFor="lab-sender-instagram">Instagram i klientit (simulim)</label>
+          <input id="lab-sender-instagram" type="text" value={senderInstagram} maxLength={60} placeholder="@username" autoComplete="off" autoCapitalize="none" spellCheck={false}
+            onChange={event => setSenderInstagram(event.target.value)} />
+          <p className="lab-muted">Llogaria nga e cila shkruan klienti. Nëse biznesi ka leje skanimi, agjenti lexon profilin publik (lexim i vërtetë, asgjë nuk ruhet).</p>
           <div className="lab-channels"><h3>Integrimet</h3>{setup.channels.length ? setup.channels.map((channel, index) => <p key={index}>Instagram {channel.username} · {channel.status}</p>) : <p>Pa lidhje Instagram. Prova funksionon pa të.</p>}</div>
         </>}
       </aside>
-      {setup && !loading ? validDraft ? <AgentTestChat key={`${setup.id}:${configurationDraft}`} advanced slug={setup.slug} businessName={setup.name} userId={userId} configurationDraft={configurationDraft || undefined}
+      {setup && !loading ? validDraft ? <AgentTestChat key={`${setup.id}:${configurationDraft}`} advanced slug={setup.slug} businessName={setup.name} userId={userId} configurationDraft={configurationDraft || undefined} senderInstagram={senderInstagram}
         renderInspector={(entry, chat) => <ConversationInspector entry={entry} chat={chat} />} /> : <p role="alert">Drafti nuk është i disponueshëm. Zgjidh versionin e publikuar ose një draft tjetër.</p>
         : <div className="lab-empty"><h2>Zgjidh biznesin për të filluar</h2><p>Skedarët, audioja, historiku, trajnimi dhe inspektori përdorin të njëjtën bisedë.</p></div>}
     </div>
