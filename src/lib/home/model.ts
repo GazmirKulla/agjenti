@@ -22,13 +22,18 @@ export function homeRange(period: HomePeriod, timezone: string, now: Date) {
 
 export type HomeCard = {
   id: string; label: string; icon: string; href: string;
-  /** The big number and what it counts. */
-  value: number; caption: string;
+  /** The big number and what it counts; null for a module without figures yet. */
+  value: number | null; caption: string;
   /** What was added in the period, or a second figure. */
   detail?: string; detailTone?: "up";
   /** At most one thing to act on. */
   attention?: { text: string; href: string; tone: "warning" | "danger" };
+  /** Nothing recorded yet: what the module is for and the first step. */
+  empty?: { text: string; actions: { label: string; href: string }[] };
 };
+
+/** A module that is not highlighted: listed under "all modules". */
+export type HomeModuleLink = { id: string; label: string; description: string; icon: string; href: string; requires: string[] };
 
 export type HomeMessages = { inbound: number; agentReplies: number; handoffs: number; days: { day: string; value: number }[] };
 

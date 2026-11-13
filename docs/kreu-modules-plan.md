@@ -31,7 +31,7 @@ Prek: web (`agjenti`) dhe mobile (`agjenti-mobile`).
 
 4. **Kriteret e pranimit.**
    - Një kontratë serveri e vetme, `loadHomeModules(business, period)` në `src/lib/home/`, e përdorur nga faqja web (direkt) dhe nga `GET /api/mobile/home?slug=&period=`. Asnjë numër apo vendim theksi nuk llogaritet në klient.
-   - Moduli me të dhëna del gjithmonë me theks. Moduli i përshtatshëm pa të dhëna del me theks dhe me hapin e parë. Çdo modul tjetër i lejuar del te "Shiko të gjitha". Fshehja në meny nuk ndryshon asgjë te Kreu.
+   - Moduli me të dhëna del gjithmonë me theks. Moduli i përshtatshëm pa të dhëna del me theks dhe me hapin e parë. Çdo modul tjetër i lejuar del te "Shiko të gjitha". Fshehja në meny ndikon te Kreu vetëm kur pronari e ka zgjedhur menynë me dorë (profil "manual"), dhe kurrë për një modul me të dhëna.
    - Përshtatshmëria vjen vetëm nga sinjalet e strukturuara të onboarding-ut dhe nga të dhënat ekzistuese, pa tekst bisede. Regex-et aktuale mbi çelësat e shablloneve te `inferModules` zëvendësohen me një hartë të qartë çelës → modul.
    - Çdo kartë dështon veçmas (`status: "unavailable"`), jo e gjithë faqja. Izolimi: `requireBusinessAccess` + `business_id` në çdo pyetje.
    - Teste: përshtatshmëria (sinjale të ndryshme, modul me të dhëna por jo i përshtatshëm, profil manual, profil pa sinjale), route-i mobile (401/403/periudhë e pavlefshme, forma e përgjigjes), dhe kontroll vizual në web (desktop + 375px) dhe në simulator.
