@@ -10,24 +10,117 @@ async function post(url: string, body: object) {
   if (!res.ok) throw new Error(json.error || "Veprimi dështoi.");
 }
 
+type PrefillField = { value: string; source: "agjenti" | "biseda"; evidence: string };
+type PrefillData = { fields: Partial<Record<string, PrefillField>>; productName: string | null; missing: string[]; workflowFields: string[]; scanned: number };
+
+/** Reads the conversation for a form (read-only) once it opens; `reload` reads it again. */
+function usePrefill(base: string, form: "order" | "booking" | "customer", active: boolean) {
+  const [state, setState] = useState<{ loading: boolean; data: PrefillData | null; error: string | null }>({ loading: false, data: null, error: null });
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const controller = new AbortController();
+    setState((current) => ({ ...current, loading: true, error: null }));
+    fetch(`${base}/prefill?form=${form}`, { signal: controller.signal })
+      .then(async (res) => {
+        const json = (await res.json().catch(() => ({}))) as PrefillData & { error?: string };
+        if (!res.ok) throw new Error(json.error || "Biseda nuk u lexua.");
+        setState({ loading: false, data: json, error: null });
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setState({ loading: false, data: null, error: error instanceof Error ? error.message : "Biseda nuk u lexua." });
+      });
+    return () => controller.abort();
+  }, [base, form, active, round]);
+  return { ...state, reload: () => setRound((value) => value + 1) };
+}
+
+/** "Po lexoj bisedën…", what was filled and what is still missing. */
+function PrefillStatus({ prefill }: { prefill: ReturnType<typeof usePrefill> }) {
+  const t = useDashboardTranslator();
+  const filled = prefill.data ? Object.keys(prefill.data.fields).length : 0;
+  return (
+    <div className={`smart-form-status${prefill.loading ? " is-loading" : ""}`} role="status" aria-live="polite">
+      <span className="smart-form-status-icon" aria-hidden>✦</span>
+      <div className="smart-form-status-copy">
+        {prefill.loading ? (
+          <strong>{t("Po lexoj bisedën…")}</strong>
+        ) : prefill.error ? (
+          <><strong>{t("Biseda nuk u lexua")}</strong><span>{t("Plotëso formën vetë ose provo përsëri.")}</span></>
+        ) : prefill.data ? (
+          <>
+            <strong>{filled ? t("U plotësua nga biseda") : t("Biseda nuk kishte të dhëna për këtë formë")}</strong>
+            {prefill.data.missing.length > 0 && <span>{t("Mungon")}: {prefill.data.missing.map((label) => t(label)).join(", ")}</span>}
+            {filled > 0 && prefill.data.missing.length === 0 && <span>{t("Kontrolloji të dhënat dhe ruaje.")}</span>}
+          </>
+        ) : null}
+      </div>
+      {!prefill.loading && (
+        <button type="button" className="btn btn-ghost smart-form-reload" onClick={prefill.reload}>
+          {prefill.data || prefill.error ? t("Lexo përsëri") : t("Plotëso nga biseda")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** A form label with a "Nga biseda" mark (and its quote) when the value came from the conversation. */
+function SmartLabel({ label, field, children, wide }: { label: string; field?: PrefillField; children: React.ReactNode; wide?: boolean }) {
+  const t = useDashboardTranslator();
+  return (
+    <label className={wide ? "smart-field is-wide" : "smart-field"}>
+      <span className="smart-field-label">
+        {t(label)}
+        {field && (
+          <span className="smart-field-badge" title={field.evidence ? `«${field.evidence}»` : undefined}>
+            {field.source === "agjenti" ? t("Nga agjenti") : t("Nga biseda")}
+          </span>
+        )}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+/** Fills the empty values of a form from the prefill, once per reading. */
+function useApplyPrefill<T extends Record<string, string>>(data: PrefillData | null, map: Partial<Record<keyof T, string>>, setValues: React.Dispatch<React.SetStateAction<T>>) {
+  useEffect(() => {
+    if (!data) return;
+    setValues((current) => {
+      const next = { ...current };
+      for (const [key, source] of Object.entries(map) as [keyof T, string][]) {
+        const found = data.fields[source]?.value;
+        if (found && !String(current[key] ?? "").trim()) next[key] = found as T[keyof T];
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applies once per reading
+  }, [data]);
+}
+
 /** Creates the CRM customer from the details the agent collected; the owner can correct them first. */
 export function SaveCustomerForm(props: { businessId: string; conversationId: string; name: string; phone: string }) {
   const t = useDashboardTranslator();
   const router = useRouter();
-  const [name, setName] = useState(props.name);
-  const [phone, setPhone] = useState(props.phone);
+  const base = `/api/businesses/${props.businessId}/conversations/${props.conversationId}`;
+  const [values, setValues] = useState({ name: props.name, phone: props.phone });
+  const [asked, setAsked] = useState(false);
+  const prefill = usePrefill(base, "customer", asked);
+  useApplyPrefill(prefill.data, { name: "name", phone: "phone" }, setValues);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fields = prefill.data?.fields ?? {};
   return (
     <form
-      className="conversation-form"
+      className="conversation-form smart-form"
       onSubmit={async (event) => {
         event.preventDefault();
         if (pending) return;
         setPending(true);
         setError(null);
         try {
-          await post(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/customer`, { name: name.trim(), phone: phone.trim() });
+          await post(`${base}/customer`, { name: values.name.trim(), phone: values.phone.trim() });
           router.refresh();
         } catch (e) {
           setError(e instanceof Error ? e.message : "Shtimi i klientit dështoi.");
@@ -36,12 +129,25 @@ export function SaveCustomerForm(props: { businessId: string; conversationId: st
         }
       }}
     >
-      <label>{t("Emri")}<input className="field" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} /></label>
-      <label>{t("Telefoni")}<input className="field" type="tel" value={phone} maxLength={40} onChange={(e) => setPhone(e.target.value)} /></label>
+      {asked ? (
+        <PrefillStatus prefill={prefill} />
+      ) : (
+        <button type="button" className="smart-form-start" onClick={() => setAsked(true)}>
+          <span aria-hidden>✦</span> {t("Plotëso nga biseda")}
+        </button>
+      )}
+      <div className="smart-form-grid">
+        <SmartLabel label="Emri" field={fields.name}>
+          <input className="field" value={values.name} maxLength={120} autoComplete="off" placeholder={t("Emri dhe mbiemri")} onChange={(e) => setValues({ ...values, name: e.target.value })} />
+        </SmartLabel>
+        <SmartLabel label="Telefoni" field={fields.phone}>
+          <input className="field" type="tel" value={values.phone} maxLength={40} autoComplete="off" placeholder="+355…" onChange={(e) => setValues({ ...values, phone: e.target.value })} />
+        </SmartLabel>
+      </div>
       <button type="submit" className="btn btn-primary w-full" disabled={pending}>
         {pending ? t("Duke ruajtur…") : t("Ruaj si klient")}
       </button>
-      {error && <p role="alert" className="muted-copy text-red-600">{t(error)}</p>}
+      {error && <p role="alert" className="smart-form-error">{t(error)}</p>}
     </form>
   );
 }
@@ -135,12 +241,23 @@ export function ManualOrderForm(props: {
   const router = useRouter();
   const base = `/api/businesses/${props.businessId}/conversations/${props.conversationId}`;
   const [open, setOpen] = useHashOpen("krijo-porosi");
-  const [query, setQuery] = useState(props.productName ?? "");
+  const prefill = usePrefill(base, "order", open);
+  const [query, setQuery] = useState("");
   const [products, setProducts] = useState<ProductOption[]>([]);
-  const [productId, setProductId] = useState(props.productId ?? "");
-  const [quantity, setQuantity] = useState(String(props.quantity));
-  const [customer, setCustomer] = useState(props.customer);
-  const [note, setNote] = useState("");
+  const [values, setValues] = useState({
+    productId: props.productId ?? "",
+    quantity: props.productId ? String(props.quantity) : "",
+    name: props.customer.name,
+    phone: props.customer.phone,
+    city: props.customer.city,
+    address: props.customer.address,
+    note: "",
+  });
+  const [chosenName, setChosenName] = useState(props.productName);
+  useApplyPrefill(prefill.data, { productId: "product_id", quantity: "quantity", name: "name", phone: "phone", city: "city", address: "address", note: "note" }, setValues);
+  useEffect(() => {
+    if (prefill.data?.productName) setChosenName((current) => current ?? prefill.data!.productName);
+  }, [prefill.data]);
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
@@ -158,14 +275,17 @@ export function ManualOrderForm(props: {
       controller.abort();
     };
   }, [open, query, base]);
-  const selected = products.find((p) => p.id === productId);
-  const total = selected?.price != null ? selected.price * (Number(quantity) || 0) : null;
-  const set = (key: keyof typeof customer) => (event: React.ChangeEvent<HTMLInputElement>) => setCustomer({ ...customer, [key]: event.target.value });
+  const selected = products.find((p) => p.id === values.productId);
+  const quantity = Number(values.quantity) || 1;
+  const total = selected?.price != null ? selected.price * quantity : null;
+  const fields = prefill.data?.fields ?? {};
+  const set = (key: keyof typeof values) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setValues({ ...values, [key]: event.target.value });
   return (
     <details id="krijo-porosi" className="conversation-action" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>{t("Krijo porosi")}</summary>
       <form
-        className="conversation-form"
+        className="conversation-form smart-form"
         onSubmit={async (event) => {
           event.preventDefault();
           if (pending) return;
@@ -173,10 +293,16 @@ export function ManualOrderForm(props: {
           setPending(true);
           setMessage({});
           try {
-            await post(`${base}/order`, { productId, quantity: Number(quantity), customer, note, requestKey });
+            await post(`${base}/order`, {
+              productId: values.productId,
+              quantity,
+              customer: { name: values.name, phone: values.phone, city: values.city, address: values.address },
+              note: values.note,
+              requestKey,
+            });
             setMessage({ success: "Porosia u ruajt." });
             setRequestKey(crypto.randomUUID());
-            setNote("");
+            setValues((current) => ({ ...current, note: "" }));
             router.refresh();
           } catch (e) {
             setMessage({ error: e instanceof Error ? e.message : "Porosia nuk u ruajt. Provo përsëri." });
@@ -185,29 +311,49 @@ export function ManualOrderForm(props: {
           }
         }}
       >
-        <label>{t("Kërko produktin")}<input className="field" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Emri i produktit")} /></label>
-        <label>
-          {t("Produkti")}
-          <select className="field" value={productId} onChange={(e) => setProductId(e.target.value)} required>
-            <option value="">{t("Zgjidh produktin")}</option>
-            {productId && !selected && <option value={productId}>{props.productName ?? t("Produkti i zgjedhur nga biseda")}</option>}
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}{p.price != null ? ` · ${p.price} ${p.currency ?? ""}` : ""}</option>
-            ))}
-          </select>
-        </label>
-        <label>{t("Sasia")}<input className="field" type="number" min={1} max={999} value={quantity} onChange={(e) => setQuantity(e.target.value)} required /></label>
-        <label>{t("Emri")}<input className="field" value={customer.name} maxLength={120} onChange={set("name")} required /></label>
-        <label>{t("Telefoni")}<input className="field" type="tel" value={customer.phone} maxLength={40} onChange={set("phone")} required /></label>
-        <label>{t("Qyteti")}<input className="field" value={customer.city} maxLength={120} onChange={set("city")} /></label>
-        <label>{t("Adresa")}<input className="field" value={customer.address} maxLength={300} onChange={set("address")} /></label>
-        <label>{t("Shënim")}<input className="field" value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} /></label>
-        {total != null && <p className="muted-copy">{t("Totali")}: {total} {selected?.currency}</p>}
-        <button type="submit" className="btn btn-primary w-full" disabled={pending || !productId}>
+        <PrefillStatus prefill={prefill} />
+        <fieldset className="smart-form-group">
+          <legend>{t("Çfarë porositet")}</legend>
+          <SmartLabel label="Produkti" field={fields.product_id} wide>
+            <input className="field" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Kërko produktin")} aria-label={t("Kërko produktin")} />
+            <select className="field" value={values.productId} onChange={set("productId")} required>
+              <option value="">{t("Zgjidh produktin")}</option>
+              {values.productId && !selected && <option value={values.productId}>{chosenName ?? t("Produkti i zgjedhur nga biseda")}</option>}
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}{p.price != null ? ` · ${p.price} ${p.currency ?? ""}` : ""}</option>
+              ))}
+            </select>
+          </SmartLabel>
+          <SmartLabel label="Sasia" field={fields.quantity}>
+            <input className="field" type="number" inputMode="numeric" min={1} max={999} value={values.quantity} placeholder="1" onChange={set("quantity")} />
+          </SmartLabel>
+          {total != null && <p className="smart-form-total">{t("Totali")}: <strong>{total} {selected?.currency}</strong></p>}
+        </fieldset>
+        <fieldset className="smart-form-group">
+          <legend>{t("Klienti dhe dërgesa")}</legend>
+          <div className="smart-form-grid">
+            <SmartLabel label="Emri" field={fields.name}>
+              <input className="field" value={values.name} maxLength={120} autoComplete="off" onChange={set("name")} required />
+            </SmartLabel>
+            <SmartLabel label="Telefoni" field={fields.phone}>
+              <input className="field" type="tel" value={values.phone} maxLength={40} autoComplete="off" placeholder="+355…" onChange={set("phone")} required />
+            </SmartLabel>
+            <SmartLabel label="Qyteti" field={fields.city}>
+              <input className="field" value={values.city} maxLength={120} autoComplete="off" onChange={set("city")} />
+            </SmartLabel>
+            <SmartLabel label="Adresa" field={fields.address}>
+              <input className="field" value={values.address} maxLength={300} autoComplete="off" onChange={set("address")} />
+            </SmartLabel>
+          </div>
+          <SmartLabel label="Shënim" field={fields.note} wide>
+            <textarea className="field" rows={2} value={values.note} maxLength={1000} placeholder={t("Masa, ngjyra, koha e dërgesës…")} onChange={set("note")} />
+          </SmartLabel>
+        </fieldset>
+        <button type="submit" className="btn btn-primary w-full" disabled={pending || !values.productId}>
           {pending ? t("Duke ruajtur…") : t("Ruaj porosinë")}
         </button>
-        {message.error && <p role="alert" className="muted-copy text-red-600">{t(message.error)}</p>}
-        {message.success && <p role="status" className="muted-copy">{t(message.success)}</p>}
+        {message.error && <p role="alert" className="smart-form-error">{t(message.error)}</p>}
+        {message.success && <p role="status" className="smart-form-success">{t(message.success)}</p>}
       </form>
     </details>
   );
@@ -226,31 +372,36 @@ export function BookingForm(props: {
 }) {
   const t = useDashboardTranslator();
   const router = useRouter();
+  const base = `/api/businesses/${props.businessId}/conversations/${props.conversationId}`;
   const [open, setOpen] = useHashOpen("cakto-takim");
+  const prefill = usePrefill(base, "booking", open);
   const [form, setForm] = useState({
-    serviceId: props.serviceId && props.services.some((s) => s.id === props.serviceId) ? props.serviceId : props.services[0]?.id ?? "",
+    serviceId: props.serviceId && props.services.some((s) => s.id === props.serviceId) ? props.serviceId : "",
     date: props.date ?? "",
     time: props.time ?? "",
     name: props.name,
     contact: props.contact,
     notes: "",
   });
+  useApplyPrefill(prefill.data, { serviceId: "service_id", date: "date", time: "time", name: "name", contact: "phone", notes: "note" }, setForm);
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
-  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [key]: event.target.value });
+  const fields = prefill.data?.fields ?? {};
+  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm({ ...form, [key]: event.target.value });
   return (
     <details id="cakto-takim" className="conversation-action" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>{t("Cakto takim")}</summary>
       <form
-        className="conversation-form"
+        className="conversation-form smart-form"
         onSubmit={async (event) => {
           event.preventDefault();
           if (pending) return;
           setPending(true);
           setMessage({});
           try {
-            const res = await fetch(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/booking`, {
+            const res = await fetch(`${base}/booking`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ ...form, requestKey }),
@@ -267,22 +418,43 @@ export function BookingForm(props: {
           }
         }}
       >
-        <label>
-          {t("Shërbimi")}
-          <select className="field" value={form.serviceId} onChange={set("serviceId")} required>
-            {props.services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </label>
-        <label>{t("Data")}<input className="field" type="date" value={form.date} onChange={set("date")} required /></label>
-        <label>{t("Ora")}<input className="field" type="time" value={form.time} onChange={set("time")} required /></label>
-        <label>{t("Emri")}<input className="field" value={form.name} maxLength={120} onChange={set("name")} required /></label>
-        <label>{t("Kontakti")}<input className="field" value={form.contact} maxLength={200} onChange={set("contact")} /></label>
-        <label>{t("Shënim")}<input className="field" value={form.notes} maxLength={1000} onChange={set("notes")} /></label>
+        <PrefillStatus prefill={prefill} />
+        <fieldset className="smart-form-group">
+          <legend>{t("Takimi")}</legend>
+          <SmartLabel label="Shërbimi" field={fields.service_id} wide>
+            <select className="field" value={form.serviceId} onChange={set("serviceId")} required>
+              <option value="">{t("Zgjidh shërbimin")}</option>
+              {props.services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </SmartLabel>
+          <div className="smart-form-grid">
+            <SmartLabel label="Data" field={fields.date}>
+              <input className="field" type="date" value={form.date} onChange={set("date")} required />
+            </SmartLabel>
+            <SmartLabel label="Ora" field={fields.time}>
+              <input className="field" type="time" value={form.time} onChange={set("time")} required />
+            </SmartLabel>
+          </div>
+        </fieldset>
+        <fieldset className="smart-form-group">
+          <legend>{t("Klienti")}</legend>
+          <div className="smart-form-grid">
+            <SmartLabel label="Emri" field={fields.name}>
+              <input className="field" value={form.name} maxLength={120} autoComplete="off" onChange={set("name")} required />
+            </SmartLabel>
+            <SmartLabel label="Kontakti" field={fields.phone}>
+              <input className="field" value={form.contact} maxLength={200} autoComplete="off" placeholder={t("Telefoni ose email-i")} onChange={set("contact")} />
+            </SmartLabel>
+          </div>
+          <SmartLabel label="Shënim" field={fields.note} wide>
+            <textarea className="field" rows={2} value={form.notes} maxLength={1000} onChange={set("notes")} />
+          </SmartLabel>
+        </fieldset>
         <button type="submit" className="btn btn-primary w-full" disabled={pending || !form.serviceId}>
           {pending ? t("Duke ruajtur…") : t("Ruaj takimin")}
         </button>
-        {message.error && <p role="alert" className="muted-copy text-red-600">{t(message.error)}</p>}
-        {message.success && <p role="status" className="muted-copy">{t(message.success)}</p>}
+        {message.error && <p role="alert" className="smart-form-error">{t(message.error)}</p>}
+        {message.success && <p role="status" className="smart-form-success">{t(message.success)}</p>}
       </form>
     </details>
   );

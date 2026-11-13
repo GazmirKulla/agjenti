@@ -8,7 +8,23 @@ export type RowMenuItem = {
   label: string; href?: string; onSelect?: () => void; danger?: boolean; disabled?: boolean;
   /** Renders as a radio choice; items sharing `group` are shown under that heading. */
   checked?: boolean; group?: string;
+  /** Optional richer entry: a small icon, a one-line explanation and a badge. */
+  icon?: string; hint?: string; badge?: string;
 };
+
+function Face({ item }: { item: RowMenuItem }) {
+  if (!item.icon && !item.hint && !item.badge) return <>{item.label}</>;
+  return (
+    <span className="row-menu-rich">
+      {item.icon && <span className="row-menu-icon" aria-hidden>{item.icon}</span>}
+      <span className="row-menu-copy">
+        <span className="row-menu-label">{item.label}</span>
+        {item.hint && <span className="row-menu-hint">{item.hint}</span>}
+      </span>
+      {item.badge && <span className="row-menu-badge">{item.badge}</span>}
+    </span>
+  );
+}
 
 const ENTRY = "[role^=menuitem]:not([aria-disabled=true])";
 
@@ -76,8 +92,8 @@ export function RowMenu({ label, title, items, trigger: face, triggerClassName }
             const heading = item.group && item.group !== items[index - 1]?.group
               ? <p className="row-menu-group" role="presentation">{item.group}</p> : null;
             const entry = item.href
-              ? <Link role="menuitem" className="row-menu-item" href={item.href} onClick={() => setOpen(false)}>{item.label}</Link>
-              : <button type="button" role={item.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={item.checked} aria-disabled={item.disabled || undefined} className={`row-menu-item${item.danger ? " is-danger" : ""}`} onClick={() => { if (item.disabled) return; close(); item.onSelect?.(); }}>{item.label}</button>;
+              ? <Link role="menuitem" className="row-menu-item" href={item.href} onClick={() => setOpen(false)}><Face item={item} /></Link>
+              : <button type="button" role={item.checked === undefined ? "menuitem" : "menuitemradio"} aria-checked={item.checked} aria-disabled={item.disabled || undefined} className={`row-menu-item${item.danger ? " is-danger" : ""}`} onClick={() => { if (item.disabled) return; close(); item.onSelect?.(); }}><Face item={item} /></button>;
             return <Fragment key={`${item.group ?? ""}:${item.label}`}>{heading}{entry}</Fragment>;
           })}
         </div>

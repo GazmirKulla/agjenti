@@ -126,10 +126,6 @@ export function ThreadClient(props: {
     if (!window.confirm(t("Dërgo porosinë që përgatiti agjenti? Kontrollo produktet dhe të dhënat te paneli i klientit. Ky veprim nuk kthehet mbrapsht."))) return;
     void request("orders");
   }
-  function confirmClose() {
-    if (!window.confirm(t("Mbyll bisedën? Agjenti ndalon dhe mesazhi i ardhshëm i klientit hap një bisedë të re."))) return;
-    void request("complete");
-  }
   function confirmClearMessages() {
     if (!window.confirm(
       "Pastro të gjitha mesazhet e dërguara dhe të marra në këtë bisedë nga Agjenti.app? Biseda, klienti dhe porositë ruhen. Mesazhet në Instagram/WhatsApp nuk fshihen. Ky veprim nuk kthehet mbrapsht.",
@@ -165,17 +161,19 @@ export function ThreadClient(props: {
           triggerClassName="btn btn-ghost chat-options"
           items={[
             {
+              group: t("Veprimet kryesore"),
+              icon: props.status === "active" ? "Ⅱ" : "▶",
               label: props.status === "active" ? t("Pauzo Agjentin AI") : t("Rifillo Agjentin AI"),
+              hint: props.status === "active" ? t("Përgjigju vetë; agjenti nuk shkruan.") : t("Agjenti u përgjigjet sërish automatikisht."),
               disabled: pending,
               onSelect: () => void request(props.status === "active" ? "pause" : "resume"),
             },
-            ...(props.pendingOrder ? [{ label: t("Konfirmo porosinë"), disabled: pending, onSelect: confirmOrder }] : []),
-            ...(props.canOrder ? [{ label: t("Krijo porosi"), href: `/b/${props.slug}/inbox/${props.conversationId}/customer#krijo-porosi` }] : []),
-            ...(props.canBook ? [{ label: t("Cakto takim"), href: `/b/${props.slug}/inbox/${props.conversationId}/customer#cakto-takim` }] : []),
-            { label: t("Detajet e klientit"), href: `/b/${props.slug}/inbox/${props.conversationId}/customer` },
-            { label: t("Mbyll bisedën"), disabled: pending || props.status === "completed", onSelect: confirmClose },
-            { label: t("Pastro mesazhet"), danger: true, disabled: pending || !props.messages.length, onSelect: confirmClearMessages },
-            { label: t("Fshi bisedën"), danger: true, disabled: pending, onSelect: confirmDelete },
+            ...(props.pendingOrder ? [{ group: t("Veprimet kryesore"), icon: "✓", label: t("Konfirmo porosinë"), hint: t("Kontrollo dhe dërgo porosinë që përgatiti agjenti."), badge: t("në pritje"), disabled: pending, onSelect: confirmOrder }] : []),
+            ...(props.canOrder ? [{ group: t("Veprimet kryesore"), icon: "＋", label: t("Krijo porosi"), hint: t("Plotësohet vetë nga biseda."), href: `/b/${props.slug}/inbox/${props.conversationId}/customer#krijo-porosi` }] : []),
+            ...(props.canBook ? [{ group: t("Veprimet kryesore"), icon: "◷", label: t("Cakto takim"), hint: t("Shërbimi, data dhe ora nga biseda."), href: `/b/${props.slug}/inbox/${props.conversationId}/customer#cakto-takim` }] : []),
+            { group: t("Informacioni"), icon: "☺", label: t("Detajet e klientit"), hint: t("Kontakti, porositë dhe takimet."), href: `/b/${props.slug}/inbox/${props.conversationId}/customer` },
+            { group: t("Menaxhimi i bisedës"), icon: "⌫", label: t("Pastro mesazhet"), hint: t("Fshin mesazhet; klienti dhe porositë ruhen."), danger: true, disabled: pending || !props.messages.length, onSelect: confirmClearMessages },
+            { group: t("Menaxhimi i bisedës"), icon: "✕", label: t("Fshi bisedën"), hint: t("Heq bisedën përgjithmonë."), danger: true, disabled: pending, onSelect: confirmDelete },
           ]}
         />
         <Link

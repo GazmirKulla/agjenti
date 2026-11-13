@@ -2212,6 +2212,59 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
   font-size: 11px;
   color: var(--ink-muted);
 }
+/* Smart forms: they read the conversation when they open. */
+.smart-form { gap: 14px; }
+.smart-form-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.smart-form-status-icon { color: var(--accent); font-size: 16px; line-height: 1; }
+.smart-form-status.is-loading .smart-form-status-icon { animation: smart-form-pulse 1.2s ease-in-out infinite; }
+@keyframes smart-form-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .smart-form-status.is-loading .smart-form-status-icon { animation: none; } }
+.smart-form-status-copy { display: grid; gap: 2px; flex: 1 1 140px; min-width: 0; font-size: 13px; }
+.smart-form-status-copy span { color: var(--ink-muted); font-size: 12px; }
+.smart-form-reload { min-height: 32px; padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+.smart-form-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.smart-form-start:hover { background: var(--accent-soft); }
+.smart-form-group { display: grid; gap: 10px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.smart-form-group > legend { font-size: 12px; font-weight: 700; color: var(--ink); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; padding: 0; }
+.smart-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.conversation-form label.smart-field { gap: 6px; font-size: 13px; color: var(--ink); font-weight: 600; }
+.smart-field .field { font-weight: 400; }
+.smart-field-label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.smart-field-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: help;
+}
+.smart-form-total { font-size: 13px; color: var(--ink-muted); }
+.smart-form-total strong { color: var(--ink); }
+.smart-form-error { font-size: 13px; color: var(--danger); }
+.smart-form-success { font-size: 13px; color: var(--success); }
 @media (max-width: 1250px) {
   .inbox-workspace {
     grid-template-columns: minmax(220px, 0.8fr) minmax(300px, 1.2fr);
