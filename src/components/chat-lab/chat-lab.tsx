@@ -4,6 +4,7 @@ import { loadLabSetup, loadLabDrafts, searchLabBusinesses } from "@/lib/chat-lab
 import type { LabBusiness, LabSetup } from "@/lib/chat-lab/model";
 import { AgentTestChat } from "@/components/agents/test-chat";
 import { ConversationInspector } from "./conversation-inspector";
+import { Icon } from "@/components/dashboard/icon";
 import "./chat-lab.css";
 
 export function ChatLab({ userId, initialBusiness, initialDraft }: { userId: string; initialBusiness?: string; initialDraft?: string }) {
@@ -53,30 +54,30 @@ export function ChatLab({ userId, initialBusiness, initialDraft }: { userId: str
     <header className="lab-heading"><div><div className="lab-eyebrow">ADMIN WORKSPACE</div><h1>ChatLab</h1><p>Biseda, mjetet e testimit dhe gjurmët e të njëjtave mesazhe.</p></div></header>
     <div className="lab-unified-layout">
       <aside className={`lab-setup panel ${setupOpen ? "" : "is-collapsed"}`}>
-        <div className="lab-panel-heading"><div><h2>Konfigurimi i provës</h2>{!setupOpen && <p className="lab-muted">{setup?.name ?? "Zgjidh biznesin"}</p>}</div><button type="button" className="lab-setup-toggle" aria-label="Shfaq ose fshih konfigurimin e provës" aria-expanded={setupOpen} onClick={() => setSetupOpen(open => !open)}>{setupOpen ? "−" : "+"}</button></div>
-        <label htmlFor="lab-business-search">Biznesi</label><input id="lab-business-search" type="search" value={query} maxLength={100} placeholder="Kërko biznesin…" onChange={event => setQuery(event.target.value)} />
-        {searchError && <p role="alert">{searchError}</p>}
+        <div className="lab-panel-heading"><div><h2>Prova</h2>{!setupOpen && <p className="lab-muted">{setup?.name ?? "Zgjidh biznesin"}</p>}</div><button type="button" className="lab-setup-toggle" aria-label="Shfaq ose fshih panelin e provës" aria-expanded={setupOpen} onClick={() => setSetupOpen(open => !open)}>{setupOpen ? "−" : "+"}</button></div>
+        <div className="lab-search"><Icon name="search" size={15} /><input id="lab-business-search" type="search" aria-label="Kërko biznesin" value={query} maxLength={100} placeholder="Kërko biznesin…" onChange={event => setQuery(event.target.value)} /></div>
+        {searchError && <p className="lab-muted" role="alert">{searchError}</p>}
         <div className="lab-businesses" aria-busy={searching}>
-          {searching ? <p>Po kërkojmë…</p> : businesses.map(business => <button key={business.id} aria-pressed={businessId === business.id} onClick={() => changeBusiness(business.id)}><span><strong>{business.name}</strong><small>{business.slug}</small></span></button>)}
-          {!searching && !businesses.length && <p>Nuk u gjetën biznese.</p>}
+          {searching ? <p className="lab-muted">Po kërkojmë…</p> : businesses.map(business => <button key={business.id} type="button" aria-pressed={businessId === business.id} title={business.name} onClick={() => changeBusiness(business.id)}>
+            <span className="lab-avatar" aria-hidden="true">{business.name.trim().charAt(0).toUpperCase() || "?"}</span><strong>{business.name}</strong></button>)}
+          {!searching && !businesses.length && <p className="lab-muted">Asnjë biznes.</p>}
         </div>
-        {loading && <p role="status">Po ngarkojmë konfigurimin…</p>}
-        {error && <p role="alert">{error} <button className="btn btn-ghost" onClick={() => setReload(value => value + 1)}>Provo përsëri</button></p>}
-        {setup && <>
-          <h3 className="lab-business-name">{setup.name}</h3>
-          <dl className="lab-counts"><div><dt>Produkte aktive</dt><dd>{setup.products}</dd></div><div><dt>Shërbime aktive</dt><dd>{setup.services}</dd></div><div><dt>Workflow aktiv</dt><dd>{setup.workflows}</dd></div></dl>
-          {setup.workflowName && <p>{setup.workflowName}</p>}
-          <label htmlFor="lab-configuration">Konfigurimi</label>
+        {loading && <p className="lab-muted" role="status">Po ngarkohet…</p>}
+        {error && <p role="alert" className="lab-muted">{error} <button type="button" className="btn btn-ghost" onClick={() => setReload(value => value + 1)}>Provo përsëri</button></p>}
+        {setup && <section className="lab-selected" aria-label={setup.name}>
+          <dl className="lab-counts"><div><dd>{setup.products}</dd><dt>Produkte</dt></div><div><dd>{setup.services}</dd><dt>Shërbime</dt></div><div><dd>{setup.workflows}</dd><dt>Workflow</dt></div></dl>
+          <label htmlFor="lab-configuration">Versioni</label>
           <select id="lab-configuration" value={configurationDraft} onChange={event => {
-            if (window.confirm("Ndrysho konfigurimin? Bisedat e tij kanë historik të veçantë; teksti i padërguar nuk ruhet.")) setConfigurationDraft(event.target.value);
+            if (window.confirm("Ndrysho versionin? Bisedat e tij kanë historik të veçantë; teksti i padërguar nuk ruhet.")) setConfigurationDraft(event.target.value);
           }}><option value="">I publikuar</option>{drafts.map(draft => <option key={draft.id} value={draft.id}>Draft · {draft.name}</option>)}</select>
-          {configurationDraft && <p className="lab-muted">Drafti nuk ndryshon versionin e publikuar dhe nuk lejon Real chat.</p>}
-          <div className="lab-channels"><h3>Integrimet</h3>{setup.channels.length ? setup.channels.map((channel, index) => <p key={index}>Instagram {channel.username} · {channel.status}</p>) : <p>Pa lidhje Instagram. Prova funksionon pa të.</p>}</div>
-        </>}
+          {configurationDraft && <p className="lab-muted">Drafti nuk lejon Real chat.</p>}
+          <ul className="lab-channels">{setup.channels.length ? setup.channels.map((channel, index) => <li key={index}><Icon name="instagram" size={14} /> {channel.username ? `@${channel.username}` : "Instagram"} <span className={`lab-dot ${channel.status === "connected" ? "is-on" : ""}`} title={channel.status} /></li>)
+            : <li><Icon name="instagram" size={14} /> Pa Instagram</li>}</ul>
+        </section>}
       </aside>
       {setup && !loading ? validDraft ? <AgentTestChat key={`${setup.id}:${configurationDraft}`} advanced slug={setup.slug} businessName={setup.name} userId={userId} configurationDraft={configurationDraft || undefined}
         renderInspector={(entry, chat) => <ConversationInspector entry={entry} chat={chat} />} /> : <p role="alert">Drafti nuk është i disponueshëm. Zgjidh versionin e publikuar ose një draft tjetër.</p>
-        : <div className="lab-empty"><h2>Zgjidh biznesin për të filluar</h2><p>Skedarët, audioja, historiku, trajnimi dhe inspektori përdorin të njëjtën bisedë.</p></div>}
+        : <div className="lab-empty"><h2>Zgjidh një biznes</h2><p>Biseda dhe inspektori shfaqen këtu.</p></div>}
     </div>
   </div>;
 }

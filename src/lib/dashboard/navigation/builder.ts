@@ -53,7 +53,7 @@ export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"):
     { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
     { id: "pricing", path: "pricing", label: "Çmimet", icon: "billing" },
     { id: "actions", path: "actions", label: "Modulet dhe aftësitë", icon: "spark" },
-    { id: "chat-lab", path: "chat-lab", label: "Chat Lab", icon: "spark" },
+    { id: "chat-lab", path: "chat-lab", label: "Chat Lab", icon: "lab" },
     { id: "prompts", path: "prompts", label: "Promptet", icon: "knowledge" },
     { id: "flows", path: "flows", label: "Rrjedhat", icon: "workflows" },
     { id: "agents", path: "onboarding", label: "Onboarding", icon: "spark" },
