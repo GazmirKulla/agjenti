@@ -37,6 +37,11 @@ export function ThreadClient(props: {
   lastInboundAt?: string | null;
   customerName: string;
   messages: Message[];
+  /** An order the agent prepared waits for staff confirmation. */
+  pendingOrder?: boolean;
+  /** The owner can record an order / book an appointment from this conversation. */
+  canOrder?: boolean;
+  canBook?: boolean;
   logs: IntegrationActivityLog[];
 }) {
   const t = useDashboardTranslator();
@@ -90,6 +95,8 @@ export function ThreadClient(props: {
       );
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Veprimi dështoi.");
+      // Accepted is not always completed (an order awaiting reconciliation).
+      if (json.ok === false && json.error) setError(json.error);
       if (path === "messages") setText("");
       if (path === "delete") {
         router.push(`/b/${props.slug}/inbox`);
@@ -114,6 +121,14 @@ export function ThreadClient(props: {
       return;
     }
     void request("delete");
+  }
+  function confirmOrder() {
+    if (!window.confirm(t("Dërgo porosinë që përgatiti agjenti? Kontrollo produktet dhe të dhënat te paneli i klientit. Ky veprim nuk kthehet mbrapsht."))) return;
+    void request("orders");
+  }
+  function confirmClose() {
+    if (!window.confirm(t("Mbyll bisedën? Agjenti ndalon dhe mesazhi i ardhshëm i klientit hap një bisedë të re."))) return;
+    void request("complete");
   }
   function confirmClearMessages() {
     if (!window.confirm(
@@ -149,16 +164,17 @@ export function ThreadClient(props: {
           title={props.customerName}
           triggerClassName="btn btn-ghost chat-options"
           items={[
-            { label: t("Rifresko bisedën"), disabled: pending, onSelect: () => router.refresh() },
             {
               label: props.status === "active" ? t("Pauzo Agjentin AI") : t("Rifillo Agjentin AI"),
               disabled: pending,
               onSelect: () => void request(props.status === "active" ? "pause" : "resume"),
             },
-            { label: t("Shëno si të mbyllur"), disabled: pending || props.status === "completed", onSelect: () => void request("complete") },
-            { label: t("Konfirmo porosinë"), disabled: pending, onSelect: () => void request("orders") },
-            { label: t("Hap detajet e klientit"), href: `/b/${props.slug}/inbox/${props.conversationId}/customer` },
-            { label: t("Pastro mesazhet"), disabled: pending || !props.messages.length, onSelect: confirmClearMessages },
+            ...(props.pendingOrder ? [{ label: t("Konfirmo porosinë"), disabled: pending, onSelect: confirmOrder }] : []),
+            ...(props.canOrder ? [{ label: t("Krijo porosi"), href: `/b/${props.slug}/inbox/${props.conversationId}/customer#krijo-porosi` }] : []),
+            ...(props.canBook ? [{ label: t("Cakto takim"), href: `/b/${props.slug}/inbox/${props.conversationId}/customer#cakto-takim` }] : []),
+            { label: t("Detajet e klientit"), href: `/b/${props.slug}/inbox/${props.conversationId}/customer` },
+            { label: t("Mbyll bisedën"), disabled: pending || props.status === "completed", onSelect: confirmClose },
+            { label: t("Pastro mesazhet"), danger: true, disabled: pending || !props.messages.length, onSelect: confirmClearMessages },
             { label: t("Fshi bisedën"), danger: true, disabled: pending, onSelect: confirmDelete },
           ]}
         />

@@ -1,15 +1,15 @@
-import { LocalizedStatusBadge } from "@/components/dashboard/language";
 import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { InboxRefresh } from "./inbox-refresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { loadCustomerOrders, loadInboxRows, loadThreadConversation, loadThreadMessages, type InboxRow, type ThreadConversation } from "@/lib/conversations/inbox-read";
+import { loadInboxRows, loadThreadConversation, loadThreadMessages, type InboxRow, type ThreadConversation } from "@/lib/conversations/inbox-read";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { ThreadClient } from "@/app/b/[slug]/inbox/[conversationId]/thread-client";
 import { getSessionUser } from "@/lib/tenant/access";
-import { AddCustomerButton } from "./add-customer-button";
+import { ConversationPanel } from "./conversation-panel";
+import { loadConversationContext } from "@/lib/conversations/context";
 import { InboxList } from "./inbox-list";
-import { EmptyState, PageHeading, formatDate, money } from "./ui";
+import { EmptyState, PageHeading } from "./ui";
 
 export async function InboxWorkspace({
   businessId,
@@ -83,12 +83,12 @@ export async function InboxWorkspace({
   catch { throw new Error(t("Nuk u ngarkua biseda.")); }
   if (!conversation) notFound();
 
-  const [messageResult, orderResult, logResult] = await Promise.all([
+  const [messageResult, contextResult, logResult] = await Promise.all([
     loadThreadMessages(db, businessId, selected).then(
       (data) => ({ data, error: null }),
       (error: unknown) => ({ data: null, error }),
     ),
-    loadCustomerOrders(db, businessId, conversation.customer_id).then(
+    loadConversationContext(db, businessId, selected).then(
       (data) => ({ data, error: null }),
       (error: unknown) => ({ data: null, error }),
     ),
@@ -99,11 +99,10 @@ export async function InboxWorkspace({
       .order("created_at", { ascending: false })
       .limit(8),
   ]);
-  if (messageResult.error || orderResult.error || logResult.error)
+  if (messageResult.error || logResult.error)
     throw new Error(t("Nuk u ngarkuan detajet e bisedës."));
 
-  const { customer, name, handle } = conversation;
-  const linkedCustomer = Boolean(customer);
+  const { name } = conversation;
 
   return (
     <>
@@ -129,6 +128,9 @@ export async function InboxWorkspace({
           lastInboundAt={conversation.last_inbound_at}
           customerName={name}
           messages={messageResult.data ?? []}
+          pendingOrder={Boolean(contextResult.data?.pendingOrder)}
+          canOrder={Boolean(contextResult.data?.forms.order.enabled)}
+          canBook={Boolean(contextResult.data?.forms.booking.enabled && contextResult.data.forms.booking.services.length)}
           logs={logResult.data ?? []}
         />
         <aside className="inbox-customer">
@@ -139,80 +141,16 @@ export async function InboxWorkspace({
             >
               ‹
             </Link>
-            <strong>{t("Pjesëmarrësi i bisedës")}</strong>
+            <strong>{t("Klienti dhe biseda")}</strong>
             <span aria-hidden="true">⋮</span>
           </div>
-          <section className="panel section-pad">
-            <h2 className="text-base mb-5">
-              {linkedCustomer
-                ? t("Informacioni i klientit")
-                : t("Pjesëmarrësi i bisedës")}
-            </h2>
-            <div className="flex items-center gap-3 mb-6">
-              <span className="profile-avatar">
-                {name.slice(0, 2).toUpperCase()}
-              </span>
-              <div>
-                <h3>{name}</h3>
-                <p className="muted-copy">{handle}</p>
-              </div>
-            </div>
-            <dl className="detail-fields">
-              <div>
-                <dt>{t("Emri")}</dt>
-                <dd>
-                  {customer?.display_name ||
-                    conversation.participant_display_name ||
-                    "—"}
-                </dd>
-              </div>
-              <div>
-                <dt>{t("Telefoni")}</dt>
-                <dd>{customer?.phone || "—"}</dd>
-              </div>
-              <div>
-                <dt>{t("Klient që nga")}</dt>
-                <dd>
-                  {linkedCustomer
-                    ? formatDate(customer?.created_at ?? null, t("sq-AL"))
-                    : t("Ende jo klient CRM")}
-                </dd>
-              </div>
-            </dl>
-            {!linkedCustomer ? (
-              <AddCustomerButton
-                businessId={businessId}
-                conversationId={selected}
-              />
-            ) : null}
-          </section>
-          <section className="panel section-pad">
-            <h2 className="text-base mb-4">{t("Porositë e klientit")}</h2>
-            {orderResult.data?.length ? (
-              orderResult.data.map((o) => (
-                <Link
-                  className="customer-order"
-                  key={o.id}
-                  href={`/b/${slug}/orders`}
-                >
-                  <div>
-                    <strong>#{o.id.slice(0, 8)}</strong>
-                    <LocalizedStatusBadge status={o.status} />
-                  </div>
-                  <p>
-                    {formatDate(o.created_at, t("sq-AL"))}
-                    <strong>{money(o.total_amount, o.currency ?? undefined)}</strong>
-                  </p>
-                </Link>
-              ))
-            ) : (
-              <p className="muted-copy">
-                {linkedCustomer
-                  ? t("Ky klient ende nuk ka porosi.")
-                  : t("Porositë shfaqen pasi biseda lidhet me një klient.")}
-              </p>
-            )}
-          </section>
+          {contextResult.data ? (
+            <ConversationPanel context={contextResult.data} businessId={businessId} slug={slug} />
+          ) : (
+            <section className="panel section-pad">
+              <p className="muted-copy" role="alert">{t("Detajet e bisedës nuk u ngarkuan. Rifresko faqen.")}</p>
+            </section>
+          )}
         </aside>
       </div>
     </>

@@ -3,6 +3,7 @@ import { ensureCustomerForConversation } from "@/lib/conversations/ensure-custom
 import { requestUserId } from "@/lib/conversations/transport-access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
+import { readProcessProfile } from "@/lib/conversations/profile";
 import type { ConversationStatePayload } from "@/lib/workflows/engine";
 
 async function canAccess(userId: string, businessId: string) {
@@ -30,7 +31,7 @@ export async function POST(
 	const service = createServiceSupabase();
 	const { data: conversation } = await service
 		.from("conversations")
-		.select("id,customer_id,instagram_participant_id,participant_username,participant_display_name")
+		.select("id,channel,customer_id,instagram_participant_id,whatsapp_participant_id,participant_username,participant_display_name")
 		.eq("id", conversationId)
 		.eq("business_id", businessId)
 		.maybeSingle();
@@ -64,14 +65,21 @@ export async function POST(
 		address: null,
 	};
 
+	// What the agent collected and validated for this person (current runtime).
+	const participant = conversation.channel === "whatsapp" ? conversation.whatsapp_participant_id : conversation.instagram_participant_id;
+	const memory = participant
+		? await readProcessProfile(businessId, participant, conversation.channel === "whatsapp" ? "whatsapp" : "instagram").catch(() => undefined)
+		: undefined;
+
 	const ensured = await ensureCustomerForConversation({
 		businessId,
 		conversationId,
 		displayName:
 			body.name?.trim() ||
+			memory?.name?.value ||
 			workflowCustomer.name ||
 			conversation.participant_display_name,
-		phone: body.phone?.trim() || workflowCustomer.phone,
+		phone: body.phone?.trim() || memory?.phone?.value || workflowCustomer.phone,
 		username: conversation.participant_username,
 		instagramUserId: conversation.instagram_participant_id,
 	});
