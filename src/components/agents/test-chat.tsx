@@ -401,15 +401,16 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
           {editing !== null && <div className="chat-edit-notice"><span>{messages[editing]?.batchId ? `Po ndryshon grupin e ${messages.filter(e=>e.batchId===messages[editing].batchId).length} mesazheve.` : `Po ndryshon mesazhin ${editing+1}.`} Origjinali ruhet si bisedë më vete.</span><button type="button" className="chat-icon" aria-label="Anulo ndryshimin" disabled={busy} onClick={()=>clearComposer()}><Icon name="close" size={16}/></button></div>}
           {voice ? <AudioRecorder busy={voiceBusy} variant="assistant" purpose="request" onAnalyze={transcribe} onBack={()=>setVoice(false)}/> : <AssistantComposer
             id="agent-test-message" value={draft} onChange={setDraft} maxLength={2000} placeholder="Shkruaj një mesazh si klient…"
-            busy={trainingBusy || voiceBusy} onSubmit={()=>void send()} onVoice={()=>{ primeVoiceCapture(); setVoice(true); }} onFiles={addFiles}
+            busy={trainingBusy || voiceBusy} onSubmit={()=>void send()} onVoice={()=>{ primeVoiceCapture(); setVoice(true); }} onFiles={real ? undefined : addFiles}
+            menuNote={real ? undefined : "Deri në 3 skedarë, 3 MB secili. Foto, PDF, TXT, MD, CSV, JSON."}
             canSubmit={pending === null && Boolean(draft.trim() || photo || uploads.length || retained.length)}
             items={[...uploads.map(u=>({id:u.id,name:u.file.name,preview:u.preview})), ...retained.map((a,i)=>({id:`retained-${i}`,name:a.name}))]}
             onRemove={id=>{if(id.startsWith("retained-")) setRetained(current=>current.filter((_,i)=>`retained-${i}`!==id)); else setUploads(current=>current.filter(u=>{if(u.id!==id)return true;if(u.preview){URL.revokeObjectURL(u.preview);objectUrls.current.delete(u.preview);}return false;}));}}
           />}
-          <div className="chat-composer-tools"><div>{advanced && !real && <label className="agent-test-photo"><input type="checkbox" checked={photo} disabled={busy || voice} onChange={e=>setPhoto(e.target.checked)}/> Simulo foto</label>}</div>
+          <div className="chat-composer-tools"><div />
             <span className="chat-character-count">{draft.length ? `${draft.length}/2000` : ""}</span></div>
           {error && <p className="agent-test-error" role="alert">{error} <button type="button" disabled={busy} onClick={()=>void send(retry.current?.index ?? editing ?? messages.length, retry.current?.original)}>Provo përsëri</button></p>}
-          <p className="agent-test-disclaimer">{real ? "Tekst dhe audio · Për të korrigjuar të dhënat, shkruaj një mesazh të ri. Fshirja nga historiku nuk anulon veprimet reale." : !advanced ? "Foto, skedarë dhe audio · Deri në 3 skedarë, 3 MB secili" : "Enter për dërgim · Shift + Enter për rresht të ri · Foto, PDF, TXT, MD, CSV, JSON · 3 skedarë, 3 MB secili. Skedarët dhe audioja përpunohen nga AI; përdor të dhëna prove."}</p>
+          {real && <p className="agent-test-disclaimer">Tekst dhe audio · Për të korrigjuar të dhënat, shkruaj një mesazh të ri. Fshirja nga historiku nuk anulon veprimet reale.</p>}
         </form>
       </div>
         {advanced && !renderInspector && showDetails && <aside id="agent-test-diagnostics" className="agent-test-debug" aria-label="Detajet e provës">

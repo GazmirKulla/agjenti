@@ -4,10 +4,12 @@ import { FileCard, type FileCardItem } from "./file-card";
 import { Icon } from "@/components/dashboard/icon";
 import "./composer.css";
 export type ComposerItem = FileCardItem & { id: string };
-export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOpen, label = "Shkruaji Agjentit", placeholder = "Pyet ose kërko një ndryshim…", busy = false, items = [], onFiles, onRemove, onLink, maxLength = 12000, canSubmit, onStop, children }: {
+export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOpen, label = "Shkruaji Agjentit", placeholder = "Pyet ose kërko një ndryshim…", busy = false, items = [], onFiles, onRemove, onLink, maxLength = 12000, canSubmit, onStop, children, menuNote }: {
   id: string; value: string; onChange: (value: string) => void; onSubmit: () => void; onVoice: () => void; onOpen?: () => void;
   label?: string; placeholder?: string; busy?: boolean; multiline?: boolean; items?: ComposerItem[]; onFiles?: (files: File[]) => void;
   onRemove?: (id: string) => void; onLink?: (url: string) => void; maxLength?: number; canSubmit?: boolean; onStop?: () => void; children?: ReactNode;
+  /** A short line at the bottom of the attach menu, e.g. file limits. */
+  menuNote?: string;
 }) {
   const menuButton = useRef<HTMLButtonElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -48,6 +50,7 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
       {onFiles && <><button type="button" role="menuitem" onClick={() => { photo.current?.click(); setMenu(false); }}><Icon name="image" size={16} /><span>Shto foto</span></button><button type="button" role="menuitem" onClick={() => { file.current?.click(); setMenu(false); }}><Icon name="paperclip" size={16} /><span>Shto skedar</span></button></>}
       <button type="button" role="menuitem" onClick={() => { setLink(""); setMenu(false); }}><Icon name="link" size={16} /><span>Shto link</span></button>
       {onOpen && <button type="button" role="menuitem" onClick={() => { onOpen(); setMenu(false); }}><Icon name="arrow" size={16} /><span>Hap bisedën</span></button>}
+      {menuNote && <span className="unified-menu-note">{menuNote}</span>}
     </div>}
     {link !== null && <div className="unified-link"><label htmlFor={`${id}-link`}>Linku i faqes</label><input id={`${id}-link`} type="url" value={link} maxLength={2048} placeholder="https://…" onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }} /><button type="button" disabled={busy} onClick={addLink}>Shto</button><button type="button" onClick={() => setLink(null)}>Anulo</button>{linkError && <small role="alert">{linkError}</small>}</div>}
     <input hidden ref={file} type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md,.csv,.json" onChange={e => { onFiles?.(Array.from(e.target.files ?? [])); e.target.value = ""; }} />

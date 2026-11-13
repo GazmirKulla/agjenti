@@ -9,10 +9,12 @@ it("offers ordinary business chat without exposing the platform testing controls
   expect(html).toContain('id="agent-test-message"');
   expect(html).toContain("Bisedë e re");
   expect(html).toContain("Historiku i bisedave");
-  for (const label of ["Real chat", "Rrjedha", "Simulo foto", "Eksporto bisedën", "Mësoji diçka të re"]) expect(html).not.toContain(label);
+  for (const label of ["Real chat", "Rrjedha", "Eksporto bisedën", "Mësoji diçka të re"]) expect(html).not.toContain(label);
 });
 it("retains the removed capabilities in ChatLab with real mode off by default", () => {
   const html = render(true);
-  for (const label of ["Real chat", "Rrjedha", "Simulo foto", "Eksporto bisedën", "Mësoji diçka të re"]) expect(html).toContain(label);
+  for (const label of ["Real chat", "Rrjedha", "Eksporto bisedën", "Mësoji diçka të re"]) expect(html).toContain(label);
   expect(html).toContain('aria-checked="false"');
+  // Real photos come through the attach button; there is no simulated photo any more.
+  expect(html).not.toContain("Simulo foto");
 });

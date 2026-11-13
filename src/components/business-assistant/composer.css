@@ -172,3 +172,4 @@ html[data-resolved="dark"] .dashboard-shell :is(.assistant-home-workspace,.assis
 .unified-composer .assistant-prompt.has-attachments textarea { grid-column: 1 / -1; grid-row: 2; width: 100%; padding: 8px 6px; min-height: 40px; }
 .unified-composer .assistant-prompt.has-attachments > button { grid-column: 1; grid-row: 3; }
 .unified-composer .assistant-prompt.has-attachments .assistant-prompt-actions { grid-column: 2; grid-row: 3; justify-self: end; }
+.unified-menu-note { display: block; padding: 6px 10px 2px; color: var(--ink-muted); font-size: 11px; line-height: 1.4; }
