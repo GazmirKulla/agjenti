@@ -13,6 +13,7 @@ import { readAttachment } from "./attachments";
 import { collectTestConfiguration } from "./provenance";
 import { TransitionError } from "@/lib/orchestration/contracts";
 import { CapabilityEnforcementError } from "@/lib/capabilities/enforcement";
+import { labProspectRead } from "@/lib/prospects/lab";
 
 const composeFailureCodes = new Set(["reply_unavailable", "invalid_reply_targets", "empty_process_reply", "reply_incomplete"]);
 
@@ -119,10 +120,19 @@ async function runTestTurn(
     const provenance = collectTestConfiguration();
     const currentObservation = observeLabTurn(access.admin === true);
     observation = currentObservation;
+    // A business allowed to read prospects' Instagram (Agjenti.app) gets the same real
+    // public read here; nothing is stored and no invitation can follow from a test.
+    const prospect = await labProspectRead({ businessId: access.business.id, message: text, previous: session.prospect ?? null });
+    if (prospect.trace) {
+      const event = { stage: "context" as const, label: "Instagram i klientit (skanim)", data: prospect.trace };
+      provenance.onTrace(event); currentObservation.onTrace(event);
+    }
+    session.prospect = prospect.scan ?? undefined;
     const turn = await processConversationMessage({
       onTrace: event => { provenance.onTrace(event); currentObservation.onTrace(event); },
       ...(configurationPreview ? { configurationPreview } : {}),
       mode: "test",
+      prospectPreview: prospect.context,
       businessId: access.business.id,
       message: text || (attachments.length ? "Çfarë mund të më thuash për skedarin që dërgova?" : text),
       hasPhoto: input.hasMedia === true || attachments.some(a => a.kind === "image"),

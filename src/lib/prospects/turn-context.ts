@@ -11,7 +11,8 @@ type Deps = {
   latest?: (businessId: string, conversationId: string) => Promise<ProspectScan | null>;
 };
 
-async function ownUsername(businessId: string) {
+/** The business's own Instagram username, never read as a prospect. */
+export async function ownUsername(businessId: string) {
   const { data } = await createServiceSupabase().from("businesses").select("instagram_username").eq("id", businessId).maybeSingle();
   return typeof data?.instagram_username === "string" ? data.instagram_username : null;
 }

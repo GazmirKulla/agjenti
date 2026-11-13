@@ -110,18 +110,25 @@ export async function runProspectScan(id: string, deps: RunDeps = {}): Promise<P
   if (claimed.error || !scan?.id) return null;
   const done = (fields: Record<string, unknown>) => db.from("prospect_scans")
     .update({ ...fields, leased_until: null, updated_at: new Date().toISOString() }).eq("id", scan.id).eq("status", "running");
+  const read = await readPublicAccount(scan.username, { ...deps, db });
+  await done(read.status === "ready" ? { status: "ready", profile: read.profile, posts: read.posts, stats: read.stats, error: null, fetched_at: read.fetched_at }
+    : { status: read.status, error: read.error });
+  return read.status;
+}
+
+/** One public read of an account: a recent read is reused, captions are kept
+ * short, and a private or unknown account is told apart from a failure. */
+export async function readPublicAccount(username: string, deps: RunDeps = {}): Promise<Pick<ProspectScan, "status" | "profile" | "posts" | "stats" | "error" | "fetched_at">> {
   try {
     // The same public account read in the last hours (another chat, an onboarding) is reused.
-    const recent = await (deps.recent ?? recentPublicRead)(scan.username, db).catch(() => null);
-    const read = recent ?? await (deps.fetcher ?? fetchPublicInstagram)(scan.username);
+    const recent = await (deps.recent ?? recentPublicRead)(username, deps.db).catch(() => null);
+    const read = recent ?? await (deps.fetcher ?? fetchPublicInstagram)(username);
     const posts = read.posts.map(post => ({ ...post, caption: post.caption?.slice(0, 1500) ?? null }));
-    await done({ status: "ready", profile: read.profile, posts, stats: read.stats ?? null, error: null, fetched_at: recent?.fetchedAt ?? new Date().toISOString() });
-    return "ready";
+    return { status: "ready", profile: read.profile, posts, stats: read.stats ?? null, error: null, fetched_at: recent?.fetchedAt ?? new Date().toISOString() };
   } catch (error) {
     const notFound = error instanceof PublicInstagramError && error.reason === "not_found";
-    const status = notFound ? "not_found" : "failed";
-    await done({ status, error: error instanceof PublicInstagramError ? error.message : "Instagram nuk u lexua." });
-    return status;
+    return { status: notFound ? "not_found" : "failed", profile: null, posts: null, stats: null, fetched_at: null,
+      error: error instanceof PublicInstagramError ? error.message : "Instagram nuk u lexua." };
   }
 }
 

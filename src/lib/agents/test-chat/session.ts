@@ -12,6 +12,8 @@ type TestSession = {
   visualPreviewId?: string;
   attachments?: { name: string; kind: "image" | "document"; text: string }[];
   testConversationId?: string;
+  /** Chat Lab: the prospect Instagram account read in this test conversation. */
+  prospect?: import("@/lib/prospects/instagram-scan").ProspectScan;
   setupSignature?: string | null;
   /** True once any turn in this session got a real AI reply under a stable config. */
   sawAi?: boolean;

@@ -105,8 +105,10 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const agent = params.configurationPreview ?? agentRead.data;
   const configuration = configurationRead(agent);
   trace?.({ stage: "context", label: "Agent configuration read", data: { ...configuration, businessId: params.businessId } });
-  // Only for a business allowed to read prospects' public Instagram (Agjenti.app), on live chats.
-  const prospectRead = mode === "live" && transport ? prospectTurnContext({ businessId: params.businessId, conversationId: transport.conversationId, message: params.message, deadline }) : Promise.resolve(undefined);
+  // Only for a business allowed to read prospects' public Instagram (Agjenti.app), on live chats;
+  // Chat Lab reads the account itself before the isolated turn and hands the result in.
+  const prospectRead = mode === "live" && transport ? prospectTurnContext({ businessId: params.businessId, conversationId: transport.conversationId, message: params.message, deadline })
+    : Promise.resolve(mode === "test" ? params.prospectPreview : undefined);
   const context = {
     businessTimezone: !calendarRead.error ? calendarRead.data?.timezone ?? null : null,
     instructions: agent?.instructions ?? "", communication: agent?.communication,

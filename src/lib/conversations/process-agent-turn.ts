@@ -73,6 +73,8 @@ export type AgentTurnParams = {
   /** Immutable version selected by the server entity router; never accepted from client payloads. */
   entityVersion?: import("@/lib/workflows/visual/types").VisualVersion | null;
   onTrace?: TraceObserver;
+  /** Chat Lab only: the prospect read done before the isolated turn (test mode). */
+  prospectPreview?: unknown;
   actionFlowRequest?: boolean;
   /** Server-resolved navigation options, never effect permission. */
   processOffers?: { flowId: string; label: string; versionId: string }[];
