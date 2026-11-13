@@ -114,7 +114,12 @@ it("read adapter keeps tenant/active filters and exact count, never invokes a wr
     return query;
   });
   const r = await readBusinessGrounding({ from } as unknown as SupabaseClient, "synthetic-tenant", ["products"]);
-  expect(calls).toEqual([{ table: "products", filters: [["business_id", "synthetic-tenant"], ["is_active", true], ["neq", "availability", "sold"]], select: [expect.any(String), { count: "exact" }], limit: 1000 }]);
+  expect(calls.filter(c => c.table === "products")).toEqual([{ table: "products", filters: [["business_id", "synthetic-tenant"], ["is_active", true], ["neq", "availability", "sold"]], select: [expect.any(String), { count: "exact" }], limit: 1000 }]);
+  // The business's own fields and variants are read for the same tenant only.
+  for (const call of calls.filter(c => c.table !== "products")) {
+    expect(["businesses", "product_variants"]).toContain(call.table);
+    expect(call.filters[0]).toEqual([call.table === "businesses" ? "id" : "business_id", "synthetic-tenant"]);
+  }
   expect(r.products).toMatchObject({ status: "partial", total: 2000, businessId: "synthetic-tenant" });
   expect(r.services).toMatchObject({ status: "unavailable", reason: "module_disabled" });
 });
@@ -130,4 +135,21 @@ it("gives the agent an item's own fields in words and hides sold items", async (
   expect(filters).toContainEqual(["availability", "sold"]);
   expect(r.products.records[0]).toMatchObject({ details: "Shitje apo qira: Shitje; Qyteti: Tiranë; Sipërfaqja: 95 m²; Dhomat: 2+1", availability: "reserved" });
   expect(r.products.records[0]).not.toHaveProperty("attributes");
+});
+
+it("gives the agent the business's own fields and each variant with its price", async () => {
+  const tables: Record<string, unknown> = {
+    products: { data: [{ id: "p1", name: "Libri", price_amount: 500, currency: "ALL", item_kind: "product", attributes: { druri: "Ah" } }], count: 1, error: null },
+    businesses: { data: { product_fields: [{ key: "druri", label: "Druri", type: "text" }, { key: "gjatesia", label: "Gjatësia", type: "select", variant: true }] }, error: null },
+    product_variants: { data: [{ product_id: "p1", options: { gjatesia: "80 cm" }, sku: "D80", price_amount: null, is_active: true }, { product_id: "p1", options: { gjatesia: "120 cm" }, sku: "D120", price_amount: 800, is_active: true }], error: null },
+  };
+  const from = (table: string) => {
+    const query: Record<string, unknown> = {};
+    Object.assign(query, { select: () => query, eq: () => query, neq: () => query, order: () => query,
+      limit: async () => tables[table], maybeSingle: async () => tables[table] });
+    return query;
+  };
+  const r = await readBusinessGrounding({ from } as unknown as SupabaseClient, "t", ["products"]);
+  expect(r.products.records[0]).toMatchObject({ details: "Druri: Ah", variants: "Gjatësia 80 cm: 500 ALL; Gjatësia 120 cm: 800 ALL" });
+  expect((await exactBusinessAnswer(r, "Sa kushton Libri?"))?.reply).toContain("120 cm: 800 ALL");
 });

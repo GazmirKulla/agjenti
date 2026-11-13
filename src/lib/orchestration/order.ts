@@ -29,7 +29,9 @@ export function orderAdapter(scope?: { businessId: string; conversationId: strin
         if (!definition || definition.collection || definition.policyKey !== instance.policyKey || step?.kind !== "effect" || step.tool !== "order.create") return { status: "failed", output: { code: "order_definition_unavailable" } };
         const flow = version?.graph.version === 2 ? version.graph.flows.find(f => f.id === instance.definitionId) : undefined;
         if (!version?.linear && flow?.productIds?.length && !flow.productIds.includes(action.input.productId)) return { status: "failed", output: { code: "product_outside_workflow" } };
-        const current = await readOrderTerms(scope.businessId, action.input.productId);
+        let chosen: Record<string, unknown> = {};
+        try { chosen = typeof action.input.options === "string" ? JSON.parse(action.input.options) : {}; } catch { chosen = {}; }
+        const current = await readOrderTerms(scope.businessId, action.input.productId, false, chosen && typeof chosen === "object" ? chosen : {});
         if (digest(current) !== digest(Object.fromEntries(Object.keys(current).map(key => [key, action.input[key]])))) return { status: "failed", output: { code: "commercial_terms_changed" } };
       } catch { return { status: "failed", output: { code: "order_configuration_unverified" } }; }
       if (context.signal.aborted) return { status: "failed", output: { code: "dispatch_cancelled" } };

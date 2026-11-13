@@ -1,5 +1,6 @@
 "use client";
-import { attributeSummary, availabilityLabels } from "@/lib/items/kinds";
+import { attributeSummary, availabilityLabels, type KindField } from "@/lib/items/kinds";
+import { attributeFields, type BusinessField } from "@/lib/items/fields";
 import { useCatalogAssistantContext } from "@/components/business-assistant/workspace";
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
@@ -43,8 +44,9 @@ const SORTS = [
 ] as const;
 
 /** Under the name: the kind's key fields (e.g. "Shitje · Tiranë · 120 m²"), or the SKU for plain products. */
-function itemSubline(p: ProductRow) {
-  const summary = p.item_kind && p.item_kind !== "product" ? attributeSummary(p.item_kind, p.attributes) : "";
+function itemSubline(p: ProductRow, extra: KindField[] = []) {
+  const variants = p.variants?.filter(v => v.is_active).length ?? 0;
+  const summary = [attributeSummary(p.item_kind ?? "product", p.attributes, extra), variants ? `${variants} variante` : ""].filter(Boolean).join(" · ");
   if (summary) return summary;
   return p.sku ? `SKU: ${p.sku}` : p.source === "linked" ? "Katalog i lidhur" : "Pa SKU";
 }
@@ -55,13 +57,17 @@ export function ProductCatalog({
   types,
   workflows,
   mapping = false,
+  fields = [],
 }: {
   slug: string;
   products: ProductRow[];
   types: Option[];
   workflows: Option[];
   mapping?: boolean;
+  /** The business's own product fields, shown under each name. */
+  fields?: BusinessField[];
 }) {
+  const extra = attributeFields(fields);
   const [query, setQuery] = useState("");
   const defaultFilter = mapping ? "unlinked" : "all";
   const [filter, setFilter] = useState(defaultFilter);
@@ -321,7 +327,7 @@ export function ProductCatalog({
                       )}
                       <span className="product-card-text">
                         <strong>{p.name}</strong>
-                        <small>{itemSubline(p)}</small>
+                        <small>{itemSubline(p, extra)}</small>
                         <span className="product-card-meta">
                           <span>{money(p.price_amount, p.currency)}</span>
                           <span className={`product-status is-${status}`}>{STATUS_LABEL[status] ?? status}</span>
@@ -367,7 +373,7 @@ export function ProductCatalog({
                         )}
                         <span>
                           <strong>{p.name}</strong>
-                          <small>{itemSubline(p)}</small>
+                          <small>{itemSubline(p, extra)}</small>
                         </span>
                       </Link>
                       {p.visual_workflow && <Link className="catalog-flow-name" href={entityWorkflowHref(slug, "product", p.id, p.visual_workflow.flowId)}>{p.visual_workflow.name} ↗</Link>}

@@ -21,6 +21,8 @@ export type ProductRow = {
   item_kind?: string;
   attributes?: Record<string, string | number | boolean>;
   availability?: "available" | "reserved" | "sold" | "rented";
+  /** The product's variants (sizes, lengths…), loaded separately. */
+  variants?: import("./variants").ProductVariant[];
   archived_at?: string | null;
   created_at?: string;
   updated_at?: string;

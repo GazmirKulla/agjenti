@@ -12,7 +12,7 @@ export const loadProducts = cache(async (slug: string) => {
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const [products, types, workflows, bindings, choices, items] = await Promise.all([
+  const [products, types, workflows, bindings, choices, items, variants] = await Promise.all([
     db
       .from("products")
       .select(productCatalogColumns)
@@ -31,6 +31,11 @@ export const loadProducts = cache(async (slug: string) => {
     loadVisualBindings(access.business.id),
     loadVisualFlowChoices(access.business.id),
     loadItemSetup(access.business.id),
+    db
+      .from("product_variants")
+      .select("id,product_id,options,sku,price_amount,is_active,position")
+      .eq("business_id", access.business.id)
+      .order("position"),
   ]);
   if (products.error || types.error || workflows.error)
     throw new Error("Nuk u ngarkua katalogu.");
@@ -40,7 +45,9 @@ export const loadProducts = cache(async (slug: string) => {
     products: ((products.data ?? []) as ProductRow[]).map(product => {
       const binding = bindings.enabled && bindings.versionId ? bindings.products.find(item => item.id === product.id) : undefined;
       const draft = choices.flows.find(f => f.productIds.includes(product.id));
-      return { ...product, business_workflow: choices.workflow ?? null, visual_draft: draft ? { id: draft.id, name: draft.name, status: draft.status } : null, visual_workflow: binding && bindings.versionId ? { versionId: bindings.versionId, flowId: binding.flowId, name: binding.flowLabel } : null };
+      const own = (variants.data ?? []).filter(v => v.product_id === product.id)
+        .map(v => ({ id: v.id as string, options: v.options as Record<string, string>, sku: v.sku as string | null, price_amount: v.price_amount as number | null, is_active: v.is_active as boolean }));
+      return { ...product, variants: own, business_workflow: choices.workflow ?? null, visual_draft: draft ? { id: draft.id, name: draft.name, status: draft.status } : null, visual_workflow: binding && bindings.versionId ? { versionId: bindings.versionId, flowId: binding.flowId, name: binding.flowLabel } : null };
     }),
     types: (types.data ?? []) as Option[],
     workflows: [...(choices.workflow ? [{ id: "", name: choices.workflow.name, businessWorkflow: choices.workflow }] : []), ...(workflows.data ?? []).map(w => ({ ...w, name: `${w.name} · Proces i posaçëm` }))] as Option[],

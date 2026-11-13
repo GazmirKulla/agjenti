@@ -216,7 +216,7 @@ export function CopyInvitationLink({ url }: { url: string }) {
   );
 }
 
-type ProductOption = { id: string; name: string; price: number | null; currency: string | null };
+type ProductOption = { id: string; name: string; price: number | null; currency: string | null; variants?: { id: string; label: string; price: number }[] };
 
 /** Opens the form when the menu links to it (#krijo-porosi, #cakto-takim). */
 function useHashOpen(id: string) {
@@ -259,6 +259,7 @@ export function ManualOrderForm(props: {
   });
   const [values, setValues] = useState(initial);
   const [chosenName, setChosenName] = useState(props.productName);
+  const [variantId, setVariantId] = useState("");
   useApplyPrefill(prefill.data, { productId: "product_id", quantity: "quantity", name: "name", phone: "phone", city: "city", address: "address", note: "note" }, setValues, initial);
   useEffect(() => {
     if (prefill.data?.productName) setChosenName((current) => prefill.data!.productName ?? current);
@@ -281,8 +282,10 @@ export function ManualOrderForm(props: {
     };
   }, [open, query, base]);
   const selected = products.find((p) => p.id === values.productId);
+  const variant = selected?.variants?.find((v) => v.id === variantId);
   const quantity = Number(values.quantity) || 1;
-  const total = selected?.price != null ? selected.price * quantity : null;
+  const unit = variant ? variant.price : selected?.variants?.length ? null : selected?.price ?? null;
+  const total = unit != null ? unit * quantity : null;
   const fields = prefill.data?.fields ?? {};
   const set = (key: keyof typeof values) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setValues({ ...values, [key]: event.target.value });
@@ -300,6 +303,7 @@ export function ManualOrderForm(props: {
           try {
             await post(`${base}/order`, {
               productId: values.productId,
+              ...(variant ? { variantId: variant.id } : {}),
               quantity,
               customer: { name: values.name, phone: values.phone, city: values.city, address: values.address },
               note: values.note,
@@ -321,7 +325,7 @@ export function ManualOrderForm(props: {
           <legend>{t("Çfarë porositet")}</legend>
           <SmartLabel label="Produkti" field={fields.product_id} wide>
             <input className="field" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Kërko produktin")} aria-label={t("Kërko produktin")} />
-            <select className="field" value={values.productId} onChange={set("productId")} required>
+            <select className="field" value={values.productId} onChange={(e) => { setVariantId(""); set("productId")(e); }} required>
               <option value="">{t("Zgjidh produktin")}</option>
               {values.productId && !selected && <option value={values.productId}>{chosenName ?? t("Produkti i zgjedhur nga biseda")}</option>}
               {products.map((p) => (
@@ -329,6 +333,14 @@ export function ManualOrderForm(props: {
               ))}
             </select>
           </SmartLabel>
+          {selected?.variants?.length ? (
+            <SmartLabel label="Varianti">
+              <select className="field" value={variantId} onChange={(e) => setVariantId(e.target.value)} required>
+                <option value="">{t("Zgjidh variantin")}</option>
+                {selected.variants.map((v) => <option key={v.id} value={v.id}>{v.label} · {v.price} {selected.currency ?? ""}</option>)}
+              </select>
+            </SmartLabel>
+          ) : null}
           <SmartLabel label="Sasia" field={fields.quantity}>
             <input className="field" type="number" inputMode="numeric" min={1} max={999} value={values.quantity} placeholder="1" onChange={set("quantity")} />
           </SmartLabel>

@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { productCsvConfiguration, confirmProductCsv, evaluateProductCsv, reviewProductCsv, uploadProductCsv } from "@/lib/products/csv-import-actions";
-import { configurationLabels, importFields, importLabels, type ImportOptions, type ImportPreview, type ImportSource } from "@/lib/products/import-model";
+import { autoMapAttributes, configurationLabels, importFields, importLabels, type ImportOptions, type ImportPreview, type ImportSource } from "@/lib/products/import-model";
+import { saveProductFields } from "@/lib/items/actions";
+import type { BusinessField } from "@/lib/items/fields";
 import { FileCard } from "@/components/business-assistant/file-card";
 import { Icon } from "./icon";
 import { ProductCsvDialog } from "./product-csv-dialog";
@@ -22,14 +24,36 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
   const [detail, setDetail] = useState<"settings" | "review" | null>(null);
   const lock = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const [configuration, setConfiguration] = useState<{ types: {id:string;name:string}[]; workflows: {id:string;name:string}[] }>({ types: [], workflows: [] });
+  const [configuration, setConfiguration] = useState<{ types: {id:string;name:string}[]; workflows: {id:string;name:string}[]; fields: BusinessField[] }>({ types: [], workflows: [], fields: [] });
   useEffect(() => {
     let cancelled = false;
     void productCsvConfiguration(slug).then(result => {
-      if (!cancelled && "types" in result && result.types && result.workflows) setConfiguration({ types: result.types, workflows: result.workflows });
+      if (!cancelled && "types" in result && result.types && result.workflows) setConfiguration({ types: result.types, workflows: result.workflows, fields: result.fields ?? [] });
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [slug]);
+  // Columns named like one of the business's own fields (e.g. "Gjatësia") are linked to it.
+  const sourceToken = source?.token, sourceHeaders = source?.headers;
+  useEffect(() => {
+    if (!sourceHeaders || !configuration.fields.length) return;
+    setOptions(o => {
+      const attributes = autoMapAttributes(sourceHeaders, configuration.fields, Object.values(o.mapping).filter((n): n is number => n !== undefined), o.attributes);
+      return JSON.stringify(attributes) === JSON.stringify(o.attributes ?? {}) ? o : { ...o, attributes };
+    });
+  }, [sourceToken, sourceHeaders, configuration.fields]);
+  const fieldLabels = Object.fromEntries(configuration.fields.map(f => [f.key, f.label]));
+  const usedColumns = new Set([...options.fields.flatMap(f => options.mapping[f] === undefined ? [] : [options.mapping[f]!]), ...Object.values(options.attributes ?? {})]);
+  const unmapped = source?.headers.flatMap((h, i) => usedColumns.has(i) ? [] : [{ header: h, index: i }]) ?? [];
+  async function addField(header: string, index: number, variant: boolean) {
+    await run(async () => {
+      const result = await saveProductFields(slug, JSON.stringify([...configuration.fields, { label: header.slice(0, 40), type: "text", variant }]));
+      if ("error" in result) { setNotice(result.error ?? ""); return; }
+      const fields = result.fields ?? [];
+      const added = fields.find(f => !configuration.fields.some(old => old.key === f.key));
+      setConfiguration(c => ({ ...c, fields }));
+      if (added) change({ ...options, attributes: { ...(options.attributes ?? {}), [added.key]: index } });
+    });
+  }
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true; setBusy(true); setNotice("");
@@ -74,6 +98,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
     </header>
     {source && !preview && <div className="csv-ready">
       <p>Gati për vlerësim</p>
+      {unmapped.length > 0 && <p className="muted-copy">Kolonat {unmapped.map(u => `“${u.header}”`).join(", ")} nuk kanë ende vend. <button type="button" className="csv-text-button" onClick={() => setDetail("settings")}>Shtoji si fusha</button></p>}
       <small>Agjenti kontrollon skedarin dhe e krahason me produktet ekzistuese.</small>
       <button type="button" className="btn btn-primary csv-main-action" disabled={busy || !selected.length} onClick={() => void review(true)}><Icon name="spark" size={16}/> Vlerëso me Agjentin</button>
       <small>Përmbajtja analizohet nga AI. Ndryshimet ruhen vetëm me miratimin tënd.</small>
@@ -96,7 +121,14 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
     </div>
       {source && <>
       <div className="csv-customize-body">
-      {source.headers.some((_, i) => !options.fields.some(f => options.mapping[f] === i)) && <p className="muted-copy">Kolona jashtë ndryshimeve: {source.headers.filter((_, i) => !options.fields.some(f => options.mapping[f] === i)).join(", ")}.</p>}
+      {unmapped.length > 0 && <div className="csv-unmapped">
+        <p className="muted-copy">Kolona pa vend: {unmapped.map(u => u.header).join(", ")}. Shtoji si fusha të produkteve që të mos humbasin. <strong>Variant</strong> është ajo që zgjedh klienti (p.sh. gjatësia): rreshtat me të njëjtin emër bëhen një produkt me disa variante.</p>
+        {unmapped.map(u => <div key={u.index} className="csv-buttons">
+          <span>{u.header}</span>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void addField(u.header, u.index, false)}>Shto si të dhënë</button>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void addField(u.header, u.index, true)}>Shto si variant</button>
+        </div>)}
+      </div>}
       <p className="muted-copy">Lidh kolonat dhe zgjidh fushat. Kolonat që mungojnë dhe qelizat bosh ruajnë vlerat ekzistuese. Produktet e reja krijohen draft.</p>
       <fieldset disabled={busy} className="csv-mapping"><legend>Kolonat dhe fushat për import</legend>{importFields.map(f => <div key={f}>
         <label><input type="checkbox" checked={options.fields.includes(f)} onChange={e => change({ ...options, fields: e.target.checked ? [...options.fields, f] : options.fields.filter(k => k !== f) })}/> {importLabels[f]}</label>
@@ -105,6 +137,13 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
           change({ ...options, mapping });
         }}><option value="">Pa kolonë</option>{source.headers.map((h, i) => <option value={i} key={i}>{h}</option>)}</select>
       </div>)}</fieldset>
+      {configuration.fields.length > 0 && <fieldset disabled={busy} className="csv-mapping"><legend>Fushat e produkteve të tua</legend>{configuration.fields.map(f => <div key={f.key}>
+        <span>{f.label}{f.variant ? " (variant)" : ""}</span>
+        <select className="field" aria-label={`Kolona për ${f.label}`} value={options.attributes?.[f.key] ?? ""} onChange={e => {
+          const attributes = { ...(options.attributes ?? {}) }; if (e.target.value === "") delete attributes[f.key]; else attributes[f.key] = Number(e.target.value);
+          change({ ...options, attributes });
+        }}><option value="">Pa kolonë</option>{source.headers.map((h, i) => <option value={i} key={i}>{h}</option>)}</select>
+      </div>)}</fieldset>}
       <fieldset className="csv-mapping" disabled={busy}><legend>Konfigurimi (opsional)</legend>
         <label>Lloji i produktit<select className="field" value={options.productTypeId ?? ""} onChange={e => change({ ...options, productTypeId: e.target.value || undefined })}><option value="">Ruaj konfigurimin ekzistues</option>{configuration.types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
         <label>Workflow i porosisë<select className="field" value={options.workflowId ?? ""} onChange={e => change({ ...options, workflowId: e.target.value || undefined })}><option value="">Ruaj konfigurimin / workflow kryesor</option>{configuration.workflows.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
@@ -141,7 +180,10 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
       <div className="csv-results" tabIndex={0} role="region" aria-label="Detajet e ndryshimeve">{preview.rows.map(row => <details key={row.line} open={row.status === "conflict"}>
         <summary><span className="csv-row-number">{row.line}</span><span className="csv-row-name">{row.name}</span><span className={`csv-row-status is-${row.status}`}>{{ create: "Shtim", update: "Përditësim", unchanged: "Pa ndryshim", conflict: "Konflikt" }[row.status]}</span></summary>
         {row.errors.map(s => <p role="alert" key={s}>{s}</p>)}{row.warnings.map(s => <p key={s}>{s}</p>)}
-        <dl>{Object.entries(row.patch).map(([field, value]) => <div key={field}><dt>{({ ...importLabels, ...configurationLabels })[field as keyof typeof importLabels]}</dt><dd><span>{display(field, row.before?.[field as keyof typeof row.before])}</span> → <strong>{display(field, value)}</strong></dd></div>)}</dl>
+        <dl>{Object.entries(row.patch).flatMap(([field, value]) => field === "attributes" && value && typeof value === "object"
+          ? Object.entries(value).map(([key, item]) => <div key={`a-${key}`}><dt>{fieldLabels[key] ?? key}</dt><dd><span>{String(row.before?.attributes?.[key] ?? "—")}</span> → <strong>{String(item)}</strong></dd></div>)
+          : [<div key={field}><dt>{({ ...importLabels, ...configurationLabels })[field as keyof typeof importLabels]}</dt><dd><span>{display(field, row.before?.[field as keyof typeof row.before])}</span> → <strong>{display(field, value)}</strong></dd></div>])}
+          {row.variants?.map(v => <div key={JSON.stringify(v.options)}><dt>Variant</dt><dd><strong>{Object.entries(v.options).map(([k, val]) => `${fieldLabels[k] ?? k}: ${val}`).join(" · ")}</strong>{v.sku ? ` · ${v.sku}` : ""}{v.price_amount !== null ? ` · ${v.price_amount}` : ""}</dd></div>)}</dl>
       </details>)}</div>
       {preview.advice && <details className="csv-ai-review"><summary><Icon name="spark" size={16}/> Vlerësimi i Agjentit</summary><p className="csv-advice">{preview.advice}</p></details>}
       {preview.rows.some(r => r.status === "conflict") && <p role="alert">Korrigjo CSV-në ose hiq rreshtat me konflikt dhe vlerëso përsëri. Ende nuk është ruajtur asgjë.</p>}

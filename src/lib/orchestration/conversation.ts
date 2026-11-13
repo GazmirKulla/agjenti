@@ -137,7 +137,12 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const traversed: string[] = [];
   const dependencies = productDependencies(versions, currentVersions);
   const env: Environment = { mode, now: Date.now(), definitions, startableVersionIds: new Set((params.visualPreview ? [current!] : currentVersions).map(v => v.id)), tools, promptTtlMs: 15 * 60000,
-    ...dependencies,
+    bindDependencies: (instance, eventId) => {
+      const previous = instance.productWorkflow?.productId;
+      dependencies.bindDependencies(instance, eventId);
+      orders.clearVariants(instance, previous, eventId);
+    },
+    resolveDefinition: (definition, instance) => orders.withVariants(dependencies.resolveDefinition(definition, instance), instance),
     serverFacts: (definition, instance) => ({ ...booking.serverFacts(definition, instance), ...orders.serverFacts(definition, instance), ...services.serverFacts(definition, instance) }), photoReceived: params.hasPhoto,
     onStep: step => {
       const version = versions.get(step.versionId);

@@ -6,6 +6,7 @@ import { evaluateImport } from "./import-evaluation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { revalidatePath } from "next/cache";
+import { loadItemSetup } from "@/lib/items/business";
 import { assertImportAccess, sealImportSource, prepareImport, commitImport } from "./import-service";
 import { withCsvHeaders, type ImportOptions, type ImportPreview } from "./import-model";
 
@@ -54,6 +55,6 @@ export async function productCsvConfiguration(slug: string) {
       db.from("workflows").select("id,name").eq("business_id", access.businessId).order("name"),
     ]);
     if (types.error || workflows.error) throw Error("Konfigurimet nuk u lexuan.");
-    return { types: types.data ?? [], workflows: workflows.data ?? [] };
+    return { types: types.data ?? [], workflows: workflows.data ?? [], fields: (await loadItemSetup(access.businessId)).fields };
   } catch (e) { return { error: (e as Error).message }; }
 }

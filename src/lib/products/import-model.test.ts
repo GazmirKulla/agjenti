@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { buildImportPreview, readImportCsv, importFields, type CatalogProduct } from "./import-model";
+import { autoMapAttributes, buildImportPreview, readImportCsv, importFields, type CatalogProduct } from "./import-model";
 const existing: CatalogProduct = { id: "p1", name: "Libri", sku: "LIB-1", price_amount: 520, currency: "ALL", description: "Ruaje", image_url: "https://example.com/a.jpg", is_active: true, updated_at: "2026-10-11T10:00:00Z" };
 const review = (csv: string, catalog = [existing]) => buildImportPreview(csv, { mapping: readImportCsv(csv).mapping, fields: [...importFields] }, catalog);
 it("updates a matching SKU with exact before/after values while preserving absent and empty fields", () => {
@@ -51,4 +51,28 @@ it("retains headerless CSV support using the established positional columns", as
   const {withCsvHeaders} = await import('./import-model');
   const raw = withCsvHeaders('Një produkt;790;ALL;Përshkrim;NEW');
   expect(review(raw)[0]).toMatchObject({status:"create",patch:{name:"Një produkt",price_amount:790,sku:"NEW"}});
+});
+it("groups rows with the same name into one product with variants and keeps the business's own fields", () => {
+  const fields = [{ key: "druri", label: "Druri", type: "text" as const }, { key: "gjatesia", label: "Gjatësia", type: "select" as const, variant: true }];
+  const csv = "emri,sku,cmimi,Gjatësia,Druri\nDorezë druri,D80,500,80 cm,Ah\nDorezë druri,D120,800,120 cm,Ah\nBisht,B1,300,,Lis";
+  const { mapping, headers } = readImportCsv(csv);
+  const attributes = autoMapAttributes(headers, fields, Object.values(mapping) as number[]);
+  expect(attributes).toEqual({ gjatesia: 3, druri: 4 });
+  const rows = buildImportPreview(csv, { mapping, fields: [...importFields], attributes }, [], fields);
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toMatchObject({ status: "create", name: "Dorezë druri", patch: { price_amount: 500, attributes: { druri: "Ah" } },
+    variants: [{ options: { gjatesia: "80 cm" }, sku: "D80", price_amount: null }, { options: { gjatesia: "120 cm" }, sku: "D120", price_amount: 800 }] });
+  expect(rows[0].patch).not.toHaveProperty("sku");
+  expect(rows[1]).toMatchObject({ status: "create", name: "Bisht", patch: { attributes: { druri: "Lis" } } });
+  expect(rows[1].variants).toBeUndefined();
+});
+it("adds variants to an existing product with the same name and flags a repeated variant", () => {
+  const fields = [{ key: "gjatesia", label: "Gjatësia", type: "select" as const, variant: true }];
+  const csv = "emri,cmimi,gjatesia\nLibri,520,A5\nLibri,520,A5";
+  const { mapping } = readImportCsv(csv);
+  const [row] = buildImportPreview(csv, { mapping, fields: [...importFields], attributes: { gjatesia: 2 } }, [existing], fields);
+  expect(row).toMatchObject({ id: "p1", status: "conflict" });
+  expect(row.errors.join()).toContain("përsëritet");
+  const [ok] = buildImportPreview("emri,cmimi,gjatesia\nLibri,520,A5", { mapping, fields: [...importFields], attributes: { gjatesia: 2 } }, [existing], fields);
+  expect(ok).toMatchObject({ id: "p1", status: "update", variants: [{ options: { gjatesia: "A5" }, price_amount: null }] });
 });

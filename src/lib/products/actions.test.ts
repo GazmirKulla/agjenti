@@ -7,6 +7,7 @@ vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   return { loadAllowedModules: async () => [...MODULE_IDS], requireModuleAllowed: async () => {} };
 });
 import { beforeEach, describe, it, expect, vi } from "vitest";
+vi.mock("@/lib/items/business", () => ({ loadItemSetup: async () => ({ fields: [] }) }));
 const actionAccess = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/actions/access",()=>({requireActionAccess:actionAccess}));
 const businessWorkflow = vi.hoisted(() => vi.fn());

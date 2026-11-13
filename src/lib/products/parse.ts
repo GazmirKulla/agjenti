@@ -1,4 +1,6 @@
 import { itemKind as kindOf, parseAttributes, parseAvailability, type Availability } from "@/lib/items/kinds";
+import { attributeFields, type BusinessField } from "@/lib/items/fields";
+import { parseVariants, type ProductVariant } from "./variants";
 
 export type ParsedProductFields = {
   name: string;
@@ -14,11 +16,13 @@ export type ParsedProductFields = {
   itemKind: string | null;
   attributes: Record<string, string | number | boolean>;
   availability: Availability;
+  /** Null when the form does not carry the variant table: keep the stored variants. */
+  variants: ProductVariant[] | null;
 };
 
 export function parseProductForm(
   form: FormData,
-  opts?: { requirePrice?: boolean },
+  opts?: { requirePrice?: boolean; fields?: BusinessField[] },
 ): ParsedProductFields | { error: string } {
   const name = String(form.get("name") ?? "").trim();
   if (name.length < 2)
@@ -61,9 +65,19 @@ export function parseProductForm(
   const workflowId = String(form.get("workflow_id") ?? "").trim() || null;
   const isActive = form.get("is_active") === "on";
   const itemKind = form.has("item_kind") ? kindOf(String(form.get("item_kind"))).id : null;
-  const parsedAttributes = itemKind ? parseAttributes(itemKind, form) : { attributes: {} };
+  const parsedAttributes = itemKind ? parseAttributes(itemKind, form, attributeFields(opts?.fields ?? [])) : { attributes: {} };
   if ("error" in parsedAttributes && parsedAttributes.error) return { error: parsedAttributes.error };
   const availability = parseAvailability(itemKind ?? "product", form.get("availability"));
+  let variants: ProductVariant[] | null = null;
+  if (form.has("variants_json")) {
+    let raw: unknown;
+    try { raw = JSON.parse(String(form.get("variants_json"))); } catch { return { error: "Variantet nuk janë të vlefshme." }; }
+    const parsedVariants = parseVariants(raw, opts?.fields ?? []);
+    if ("error" in parsedVariants) return parsedVariants;
+    variants = parsedVariants.variants;
+    if (price === null && variants.some(v => v.is_active && v.price_amount === null))
+      return { error: "Vendos çmimin e produktit, ose çmimin e çdo varianti në shitje." };
+  }
 
   return {
     name,
@@ -78,6 +92,7 @@ export function parseProductForm(
     itemKind,
     attributes: parsedAttributes.attributes,
     availability,
+    variants,
   };
 }
 

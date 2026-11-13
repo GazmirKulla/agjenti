@@ -6,6 +6,21 @@ import type { CommandActor } from "@/lib/actions/command-actor";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { batchSummary, optionalUuid, parseProductBatch } from "./batch";
 import { parseProductForm } from "./parse";
+import { loadItemSetup } from "@/lib/items/business";
+import type { ProductVariant } from "./variants";
+
+/** Replaces the product's variant table (rows with an id are updated in place). */
+async function saveVariants(businessId: string, userId: string, productId: string, variants: ProductVariant[] | null) {
+  if (variants === null) return {};
+  const { error } = await createServiceSupabase().rpc("save_product_variants", { p_business: businessId, p_user: userId, p_product: productId, p_variants: variants });
+  if (!error) return {};
+  return { error: error.code === "23505" ? "Dy variante kanë të njëjtin kod/SKU ose të njëjtat vlera." : "Produkti u ruajt, por variantet jo. Provo përsëri." };
+}
+async function newestProductId(businessId: string, name: string) {
+  const { data } = await createServiceSupabase().from("products").select("id").eq("business_id", businessId).eq("name", name)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  return data?.id as string | undefined;
+}
 import { requireCatalogActivation } from "./activation";
 import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 
@@ -67,7 +82,7 @@ export async function createProduct(
   const user = { id: actor.userId }, access = { business: actor.business };
   try { await requireActionAccess(access.business.id,user.id,"product.create"); } catch(e) { return {error:e instanceof Error?e.message:"Veprimi nuk lejohet."}; }
 
-  const parsed = parseProductForm(form);
+  const parsed = parseProductForm(form, { fields: (await loadItemSetup(access.business.id)).fields });
   if ("error" in parsed) return parsed;
   if (form.get("save_mode") === "draft") parsed.isActive = false;
   if (parsed.isActive) {
@@ -81,7 +96,10 @@ export async function createProduct(
       const check = await assertTypeAndWorkflow(access.business.id, parsed.productTypeId, null);
       if ("error" in check) return check;
       const result = await saveProductsWithVisualFlow(access.business.id, user.id, visual, "create", [rowFromParsed(access.business.id, parsed, "manual")]);
-      return result;
+      if (result.error || !parsed.variants?.length) return result;
+      const created = await newestProductId(access.business.id, parsed.name);
+      const saved = created ? await saveVariants(access.business.id, user.id, created, parsed.variants) : { error: "Produkti u ruajt, por variantet jo. Hape produktin dhe shtoji përsëri." };
+      return saved.error ? saved : result;
     }
   } catch { return { error: "Zgjedhja e rrjedhës nuk është e vlefshme." }; }
 
@@ -92,9 +110,11 @@ export async function createProduct(
   );
   if ("error" in check) return check;
 
-  const { error } = await createServiceSupabase()
+  const { data: created, error } = await createServiceSupabase()
     .from("products")
-    .insert(rowFromParsed(access.business.id, parsed, "manual"));
+    .insert(rowFromParsed(access.business.id, parsed, "manual"))
+    .select("id")
+    .maybeSingle();
   if (error) {
     return {
       error:
@@ -102,6 +122,10 @@ export async function createProduct(
           ? "Ky SKU përdoret tashmë nga një produkt tjetër."
           : "Produkti nuk u krijua. Provo përsëri.",
     };
+  }
+  if (parsed.variants?.length) {
+    const saved = created?.id ? await saveVariants(access.business.id, user.id, created.id, parsed.variants) : { error: "Produkti u ruajt, por variantet jo. Hape produktin dhe shtoji përsëri." };
+    if (saved.error) return saved;
   }
   return { success: "Produkti u krijua." };
 }
@@ -117,7 +141,7 @@ export async function updateProduct(
   const expected = String(form.get("updated_at") ?? "");
   if (!Number.isFinite(Date.parse(expected))) return { error: "Rifresko produktin përpara ruajtjes." };
 
-  const parsed = parseProductForm(form);
+  const parsed = parseProductForm(form, { fields: (await loadItemSetup(access.business.id)).fields });
   if ("error" in parsed) return parsed;
   if (form.get("save_mode") === "draft") parsed.isActive = false;
   if (parsed.isActive) {
@@ -131,7 +155,9 @@ export async function updateProduct(
       const check = await assertTypeAndWorkflow(access.business.id, parsed.productTypeId, null);
       if ("error" in check) return check;
       const result = await saveProductsWithVisualFlow(access.business.id, user.id, visual, "update", [{ ...rowFromParsed(access.business.id, parsed), id, expected_updated_at: form.get("updated_at") }]);
-      return result;
+      if (result.error) return result;
+      const saved = await saveVariants(access.business.id, user.id, id, parsed.variants);
+      return saved.error ? saved : result;
     }
   } catch { return { error: "Zgjedhja e rrjedhës nuk është e vlefshme." }; }
 
@@ -160,6 +186,8 @@ export async function updateProduct(
     };
   }
   if (!data) return { error: "Produkti ndryshoi ose u hoq. Rifresko faqen përpara ruajtjes." };
+  const saved = await saveVariants(access.business.id, user.id, id, parsed.variants);
+  if (saved.error) return saved;
   return { success: "Ndryshimet u ruajtën." };
 }
 

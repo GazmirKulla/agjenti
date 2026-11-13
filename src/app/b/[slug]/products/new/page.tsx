@@ -54,6 +54,7 @@ export default async function NewProductPage({
           types={data.types}
           workflows={data.workflows}
           kind={data.items.kind.id}
+        fields={data.items.fields}
         />
       ) : (
         <div className="products-workspace">

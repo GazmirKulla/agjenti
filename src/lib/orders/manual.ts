@@ -7,6 +7,8 @@ export type ManualOrderInput = {
   userId: string;
   conversationId: string;
   productId: string;
+  /** The chosen variant (size, length…); required when the product has variants. */
+  variantId?: string | null;
   quantity: number;
   customer: { name: string; phone: string; city: string; address: string };
   note: string;
@@ -23,6 +25,8 @@ const errors: Record<string, [string, number]> = {
   invalid_conversation: ["Biseda nuk u gjet në këtë biznes.", 404],
   product_unavailable: ["Produkti nuk është aktiv.", 409],
   price_missing: ["Produkti nuk ka çmim. Vendos çmimin te Produktet.", 409],
+  variant_required: ["Zgjidh variantin (p.sh. masën) e produktit.", 400],
+  variant_unavailable: ["Ky variant nuk është më në shitje.", 409],
 };
 
 /** A LOCAL order the owner records from a conversation; the RPC rechecks membership and takes prices from the catalog. */
@@ -39,6 +43,7 @@ export async function createManualOrder(input: ManualOrderInput): Promise<{ orde
     p_customer: input.customer,
     p_note: input.note,
     p_request_key: input.requestKey,
+    p_variant: input.variantId ?? null,
   });
   if (error || typeof data !== "string") {
     const [message, status] = errors[error?.message ?? ""] ?? ["Porosia nuk u ruajt. Provo përsëri.", 500];

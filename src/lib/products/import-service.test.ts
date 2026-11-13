@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+vi.mock("@/lib/items/business", () => ({ loadItemSetup: async () => ({ fields: [] }) }));
 const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => mocks }));
 import { sealImportSource, prepareImport, commitImport, openImportToken } from "./import-service";

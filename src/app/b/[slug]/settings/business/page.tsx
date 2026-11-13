@@ -5,6 +5,7 @@ import { ActionForm } from "@/components/dashboard/action-form";
 import { saveItemSetup } from "@/lib/items/actions";
 import { loadItemSetup } from "@/lib/items/business";
 import { ITEM_KINDS } from "@/lib/items/kinds";
+import { ProductFieldsSettings } from "@/components/products/product-fields-settings";
 import Link from "next/link";
 import { PageHeading } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
@@ -143,6 +144,7 @@ export default async function SettingsPage({
                 </label>
               </div>
             </ActionForm>
+            <ProductFieldsSettings slug={slug} fields={items.fields} />
       </div>
     </>
   );

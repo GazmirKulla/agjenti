@@ -1,7 +1,10 @@
 "use client";
 import { ProductBusinessWorkflow } from "@/components/products/business-workflow";
 import type { Option } from "@/lib/products/catalog";
-import { availabilityLabels, itemKind } from "@/lib/items/kinds";
+import { availabilityLabels, fieldsOf, itemKind } from "@/lib/items/kinds";
+import { attributeFields, variantFields, type BusinessField } from "@/lib/items/fields";
+import type { ProductVariant } from "@/lib/products/variants";
+import { VariantEditor } from "@/components/products/variant-editor";
 
 type ProductFieldValues = {
   id?: string;
@@ -16,6 +19,7 @@ type ProductFieldValues = {
   is_active?: boolean;
   attributes?: Record<string, string | number | boolean>;
   availability?: string;
+  variants?: ProductVariant[];
   visual_draft?: { id: string; name: string; status: string } | null;
   visual_workflow?: { flowId: string; name: string } | null;
 };
@@ -27,6 +31,7 @@ export function ProductFields({
   workflows,
   requireType = false,
   kind,
+  fields = [],
 }: {
   slug: string;
   product?: ProductFieldValues;
@@ -35,8 +40,12 @@ export function ProductFields({
   requireType?: boolean;
   /** The item kind; when given, its own fields and availability are part of the form. */
   kind?: string;
+  /** The business's own product fields and variant choices. */
+  fields?: BusinessField[];
 }) {
-  const itemDefinition = kind ? itemKind(kind) : null;
+  const kindDefinition = kind ? itemKind(kind) : null;
+  const itemDefinition = kindDefinition ? { ...kindDefinition, fields: fieldsOf(kindDefinition.id, attributeFields(fields)) } : null;
+  const choices = variantFields(fields);
   return (
     <>
       {itemDefinition && <input type="hidden" name="item_kind" value={itemDefinition.id} />}
@@ -116,6 +125,10 @@ export function ProductFields({
           </div>
           <p className="muted-copy">Agjenti i përdor këto të dhëna për të gjetur atë që kërkon klienti. Artikujt e shitur nuk u ofrohen klientëve.</p>
         </fieldset>
+      )}
+
+      {itemDefinition && choices.length > 0 && (
+        <VariantEditor fields={choices} variants={product?.variants ?? []} currency={product?.currency ?? "ALL"} />
       )}
 
       <fieldset id="product-media" className="grid gap-3">

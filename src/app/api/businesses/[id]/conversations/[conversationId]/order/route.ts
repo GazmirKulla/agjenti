@@ -17,7 +17,8 @@ export async function POST(request: Request, context: Context) {
   const productId = field(body?.productId, 36);
   const quantity = Number(body?.quantity);
   const requestKey = field(body?.requestKey, 200);
-  if (!isTransportId(productId) || !Number.isInteger(quantity) || requestKey.length < 8)
+  const variantId = field(body?.variantId, 36) || null;
+  if (!isTransportId(productId) || !Number.isInteger(quantity) || requestKey.length < 8 || (variantId && !isTransportId(variantId)))
     return NextResponse.json({ error: "Zgjidh produktin dhe sasinë." }, { status: 400 });
   try {
     const result = await createManualOrder({
@@ -25,6 +26,7 @@ export async function POST(request: Request, context: Context) {
       userId: access.userId,
       conversationId,
       productId,
+      variantId,
       quantity,
       customer: { name: field(customer.name, 120), phone: field(customer.phone, 40), city: field(customer.city, 120), address: field(customer.address, 300) },
       note: field(body?.note, 1000),

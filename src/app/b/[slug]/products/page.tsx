@@ -22,6 +22,7 @@ export default async function ProductsPage({
         products={data.products}
         types={data.types}
         workflows={data.workflows}
+        fields={data.items.fields}
       />
     </>
   );

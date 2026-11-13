@@ -117,10 +117,9 @@ export function itemTitles(kindId: string | null | undefined, custom?: { plural?
 }
 
 /** Reads the kind's fields from a form ("attr_<key>"), dropping anything unknown. */
-export function parseAttributes(kindId: string, form: FormData): { attributes: Record<string, string | number | boolean>; error?: string } {
-  const kind = itemKind(kindId);
+export function parseAttributes(kindId: string, form: FormData, extra: KindField[] = []): { attributes: Record<string, string | number | boolean>; error?: string } {
   const attributes: Record<string, string | number | boolean> = {};
-  for (const field of kind.fields) {
+  for (const field of fieldsOf(kindId, extra)) {
     const raw = form.get(`attr_${field.key}`);
     if (field.type === "boolean") { if (raw === "on") attributes[field.key] = true; continue; }
     const text = String(raw ?? "").trim();
@@ -152,16 +151,22 @@ function formatValue(field: KindField, value: unknown) {
   return field.unit ? `${text} ${field.unit}` : text;
 }
 
+/** The kind's own fields followed by the business's own ones (a business field never replaces a kind field). */
+export function fieldsOf(kindId: string | null | undefined, extra: KindField[] = []): KindField[] {
+  const own = itemKind(kindId).fields;
+  return [...own, ...extra.filter(f => !own.some(o => o.key === f.key))];
+}
+
 /** "Shitje · Apartament · Tiranë · 120 m² · 2+1" — the fields marked for lists. */
-export function attributeSummary(kindId: string | null | undefined, attributes: unknown) {
+export function attributeSummary(kindId: string | null | undefined, attributes: unknown, extra: KindField[] = []) {
   const values = attributes && typeof attributes === "object" ? (attributes as Record<string, unknown>) : {};
-  return itemKind(kindId).fields.filter((f) => f.summary).map((f) => formatValue(f, values[f.key])).filter(Boolean).join(" · ");
+  return fieldsOf(kindId, extra).filter((f) => f.summary).map((f) => formatValue(f, values[f.key])).filter(Boolean).join(" · ");
 }
 
 /** Every filled field with its label, for the agent: "Sipërfaqja: 120 m²; Dhomat: 2+1". */
-export function attributeDetails(kindId: string | null | undefined, attributes: unknown) {
+export function attributeDetails(kindId: string | null | undefined, attributes: unknown, extra: KindField[] = []) {
   const values = attributes && typeof attributes === "object" ? (attributes as Record<string, unknown>) : {};
-  return itemKind(kindId).fields.flatMap((f) => {
+  return fieldsOf(kindId, extra).flatMap((f) => {
     const text = formatValue(f, values[f.key]);
     return text ? [`${f.label}: ${text}`] : [];
   }).join("; ");

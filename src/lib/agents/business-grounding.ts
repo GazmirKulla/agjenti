@@ -4,6 +4,8 @@ import { matchingCatalogNames } from "@/lib/products/match-name";
 import type { ReferenceProduct } from "@/lib/products/entity-bridge";
 import { rankKnowledge } from "@/lib/catalogs/source-ranking";
 import { attributeDetails } from "@/lib/items/kinds";
+import { attributeFields, readBusinessFields, type BusinessField } from "@/lib/items/fields";
+import { variantDetails, type ProductVariant } from "@/lib/products/variants";
 
 export type ReadStatus = "complete" | "partial" | "no_match" | "unavailable" | "unsupported" | "unverified";
 /** Evidence from a server-authorized read, never an execution permission or a cache. */
@@ -19,14 +21,33 @@ export type GroundedRead<T> = {
 export type GroundedProduct = ReferenceProduct & { description?: string | null; product_type_id?: string | null; workflow_id?: string | null;
   /** The item's own fields in words, e.g. "Sipërfaqja: 120 m²; Dhomat: 2+1". */
   details?: string;
+  /** The choices the customer must make, with their prices, e.g. "Gjatësia 80 cm: 500 ALL; Gjatësia 120 cm: 800 ALL". */
+  variants?: string;
   /** Present only when the item is not simply available (reserved or rented); sold items are never read. */
   availability?: "reserved" | "rented" };
 const productColumns = "id,name,sku,description,product_type_id,workflow_id,price_amount,currency,item_kind,attributes,availability";
-/** Turns the stored kind fields into words the agent can match a request against. */
-function withItemDetails(row: GroundedProduct & { item_kind?: string; attributes?: unknown; availability?: string }): GroundedProduct {
+type Extras = { fields: BusinessField[]; variants: Map<string, ProductVariant[]> };
+const noExtras: Extras = { fields: [], variants: new Map() };
+/** Turns the stored kind fields, the business's own fields and the variants into words the agent can match a request against. */
+function withItemDetails(row: GroundedProduct & { item_kind?: string; attributes?: unknown; availability?: string }, extras: Extras = noExtras): GroundedProduct {
   const { item_kind, attributes, availability, ...rest } = row;
-  const details = item_kind && item_kind !== "product" ? attributeDetails(item_kind, attributes) : "";
-  return { ...rest, ...(details ? { details } : {}), ...(availability === "reserved" || availability === "rented" ? { availability } : {}) };
+  const details = attributeDetails(item_kind ?? "product", attributes, attributeFields(extras.fields));
+  const own = extras.variants.get(row.id) ?? [];
+  const variants = own.length ? variantDetails(own, extras.fields, { price: row.price_amount ?? null, currency: row.currency ?? "ALL" }) : "";
+  return { ...rest, ...(details ? { details } : {}), ...(variants ? { variants } : {}), ...(availability === "reserved" || availability === "rented" ? { availability } : {}) };
+}
+/** The business's own fields and the active variants of its products. */
+async function readExtras(db: SupabaseClient, businessId: string): Promise<Extras> {
+  try { return await readExtrasOrThrow(db, businessId); } catch { return noExtras; }
+}
+async function readExtrasOrThrow(db: SupabaseClient, businessId: string): Promise<Extras> {
+  const [business, variants] = await Promise.all([
+    db.from("businesses").select("product_fields").eq("id", businessId).maybeSingle(),
+    db.from("product_variants").select("product_id,options,sku,price_amount,is_active").eq("business_id", businessId).eq("is_active", true).order("position").limit(5000),
+  ]);
+  const map = new Map<string, ProductVariant[]>();
+  for (const v of variants.error ? [] : variants.data ?? []) map.set(v.product_id, [...(map.get(v.product_id) ?? []), { options: v.options, sku: v.sku, price_amount: v.price_amount, is_active: v.is_active }]);
+  return { fields: business.error ? [] : readBusinessFields(business.data?.product_fields), variants: map };
 }
 export type GroundedService = ReferenceProduct & { description?: string; duration_minutes?: number; price_mode?: "fixed" | "from" | "request"; booking_enabled?: boolean };
 export type GroundedKnowledge = { id: string; title: string; body: string; intent_key?: string | null; updated_at?: string };
@@ -58,16 +79,17 @@ export async function readBusinessGrounding(db: SupabaseClient, businessId: stri
   entity?: { kind: "product" | "service"; id: string } | { kind: "product" | "service"; id: string }[]): Promise<BusinessGrounding> {
   const enabled = (module: string) => !modules || modules.includes(module);
   const absent = { data: [], error: null, count: 0 };
-  const [p, s, k] = await Promise.all([
+  const [p, s, k, extras] = await Promise.all([
     enabled("products") ? db.from("products").select(productColumns, { count: "exact" })
       .eq("business_id", businessId).eq("is_active", true).neq("availability", "sold").order("id").limit(1000) : absent,
     enabled("services") ? db.from("booking_services").select("id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled", { count: "exact" })
       .eq("business_id", businessId).eq("is_active", true).order("id").limit(500) : absent,
     enabled("knowledge") ? db.from("knowledge_entries").select("id,title,body,intent_key,updated_at", { count: "exact" })
       .eq("business_id", businessId).eq("is_active", true).order("sort_order").limit(1000) : absent,
+    enabled("products") ? readExtras(db, businessId) : noExtras,
   ]);
   const products = readResult<GroundedProduct>("products", businessId, p, enabled("products"));
-  products.records = products.records.map(withItemDetails);
+  products.records = products.records.map(row => withItemDetails(row, extras));
   const services = readResult<GroundedService>("booking_services", businessId, s, enabled("services"));
   // A coordinator-resolved relative reference can lie outside the bounded read.
   // Fetch its current facts using the SAME active/tenant restrictions, not its
@@ -80,7 +102,7 @@ export async function readBusinessGrounding(db: SupabaseClient, businessId: stri
       .select(item.kind === "product" ? productColumns : "id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled")
       .eq("business_id", businessId).eq("is_active", true).eq("id", item.id).maybeSingle();
     if (extra.error) { result.status = "unavailable"; result.reason = "reference_read_failed"; result.records = []; result.total = null; break; }
-    if (extra.data && "id" in extra.data && extra.data.id === item.id) { result.records.push((item.kind === "product" ? withItemDetails(extra.data as unknown as GroundedProduct) : extra.data) as GroundedProduct & GroundedService); result.status = "partial"; result.reason = "selected_entity_outside_snapshot"; }
+    if (extra.data && "id" in extra.data && extra.data.id === item.id) { result.records.push((item.kind === "product" ? withItemDetails(extra.data as unknown as GroundedProduct, extras) : extra.data) as GroundedProduct & GroundedService); result.status = "partial"; result.reason = "selected_entity_outside_snapshot"; }
   }
   return { products, services,
     knowledge: readResult("knowledge_entries", businessId, k, enabled("knowledge")),
@@ -160,5 +182,5 @@ export async function exactBusinessAnswer(read: BusinessGrounding, message: stri
     return { reply: "Nuk e identifikova me siguri një produkt ose shërbim të vetëm. Cilin emër të plotë ke parasysh?" };
   const selected = matches[0] as GroundedService;
   return { reply: duration ? `${selected.name}: ${selected.duration_minutes ? `${selected.duration_minutes} min. Kjo nuk konfirmon termine të lira.` : "kohëzgjatja nuk është verifikuar."}`
-    : `${selected.name}: ${price(selected)}.`, ...(kind === "product" ? { presentedProducts: [selected] } : { presentedServices: [selected] }) };
+    : (selected as GroundedProduct).variants ? `${selected.name}: ${(selected as GroundedProduct).variants}.` : `${selected.name}: ${price(selected)}.`, ...(kind === "product" ? { presentedProducts: [selected] } : { presentedServices: [selected] }) };
 }

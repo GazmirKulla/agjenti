@@ -19,6 +19,7 @@ export function ProductEditor({
   types,
   workflows,
   kind,
+  fields = [],
 }: {
   slug: string;
   product?: ProductRow;
@@ -26,6 +27,7 @@ export function ProductEditor({
   workflows: Option[];
   /** The item kind (product, property…); adds its own fields to the form. */
   kind?: string;
+  fields?: import("@/lib/items/fields").BusinessField[];
 }) {
   usePageAssistantContext(product ? { entityType: "product", entityId: product.id, selectionLabel: product.name } : {});
   const businessWorkflow = workflows.find(w => w.businessWorkflow)?.businessWorkflow;
@@ -129,6 +131,7 @@ export function ProductEditor({
             types={types}
             workflows={workflows}
             kind={kind}
+            fields={fields}
           />
         </fieldset>
         <aside className="product-side">

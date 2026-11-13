@@ -21,7 +21,7 @@ export async function processGroundingContext(read: BusinessGrounding, message: 
     }
   }
   const [products, services, knowledge] = await Promise.all([
-    project(read.products, 20, row => ({ title: row.name, body: row.description ?? "" }), pin?.productIds ?? []),
+    project(read.products, 20, row => ({ title: row.name, body: [row.description, row.details, row.variants].filter(Boolean).join("\n") }), pin?.productIds ?? []),
     project(read.services, 20, row => ({ title: row.name, body: row.description ?? "" }), pin?.serviceIds ?? []),
     project({ ...read.knowledge, records: read.knowledge.records.filter(row => row.intent_key !== "service") }, 30, row => ({ title: row.title, body: row.body })),
   ]);

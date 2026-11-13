@@ -492,6 +492,8 @@ export const english: Record<string, string> = {
   "Emri i produktit": "Product name",
   "Produkti": "Product",
   "Zgjidh produktin": "Choose the product",
+  "Varianti": "Variant",
+  "Zgjidh variantin": "Choose the variant",
   "Produkti i zgjedhur nga biseda": "Product chosen in the conversation",
   "Sasia": "Quantity",
   "Shënim": "Note",
