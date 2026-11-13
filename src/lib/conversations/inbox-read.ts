@@ -26,18 +26,51 @@ export type InboxRow = {
   updatedAt: string | null;
 };
 
-export async function loadInboxRows(db: SupabaseClient, businessId: string): Promise<InboxRow[]> {
-  const { data, error } = await db
+/**
+ * A page cursor: the sort value and id of the last row the reader has.
+ * Opaque to clients ("<iso time or empty>|<uuid>"); anything malformed means the first page.
+ */
+export type PageCursor = { at: string | null; id: string };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO = /^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:\d{2})$/;
+export function parseCursor(value: string | null | undefined): PageCursor | null {
+  const [at, id] = (value ?? "").split("|");
+  if (!id || !UUID.test(id) || (at && !ISO.test(at))) return null;
+  return { at: at || null, id };
+}
+export const cursorOf = (at: string | null, id: string) => `${at ?? ""}|${id}`;
+export const INBOX_PAGE = 30;
+export const THREAD_PAGE = 50;
+const pageSize = (value: number | undefined, fallback: number, max: number) =>
+  Number.isInteger(value) && value! > 0 ? Math.min(value!, max) : fallback;
+
+/** One page of the Inbox, newest first; `next` reads the page after it. */
+export async function loadInboxPage(
+  db: SupabaseClient,
+  businessId: string,
+  options: { before?: PageCursor | null; limit?: number } = {},
+): Promise<{ rows: InboxRow[]; next: string | null }> {
+  const limit = pageSize(options.limit, INBOX_PAGE, 100);
+  let read = db
     .from("conversations")
     .select(
       "id,channel,status,last_message_preview,last_message_at,unread_count,participant_display_name,participant_username,customers(business_id,display_name,username)",
     )
     .eq("business_id", businessId)
-    .eq("customers.business_id", businessId)
-    .order("last_message_at", { ascending: false })
-    .limit(100);
+    .eq("customers.business_id", businessId);
+  const before = options.before;
+  if (before)
+    read = before.at
+      ? read.or(`last_message_at.lt."${before.at}",and(last_message_at.eq."${before.at}",id.lt.${before.id}),last_message_at.is.null`)
+      : read.is("last_message_at", null).lt("id", before.id);
+  const { data, error } = await read
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
   if (error) throw new InboxReadError("list_unavailable");
-  return (data ?? []).map((row) => {
+  const page = (data ?? []).slice(0, limit);
+  const last = page.at(-1);
+  const rows = page.map((row) => {
     const joined = row.customers as unknown as CustomerJoin;
     return {
       id: row.id,
@@ -53,6 +86,12 @@ export async function loadInboxRows(db: SupabaseClient, businessId: string): Pro
       updatedAt: typeof row.last_message_at === "string" ? row.last_message_at : null,
     };
   });
+  return { rows, next: (data ?? []).length > limit && last ? cursorOf(last.last_message_at ?? null, last.id) : null };
+}
+
+/** The first page of the Inbox. */
+export async function loadInboxRows(db: SupabaseClient, businessId: string, limit = INBOX_PAGE): Promise<InboxRow[]> {
+  return (await loadInboxPage(db, businessId, { limit })).rows;
 }
 
 export type ThreadConversation = {
@@ -108,17 +147,38 @@ export async function loadThreadConversation(db: SupabaseClient, businessId: str
 export const threadMessageColumns =
   "id,direction,source,sent_via,body,media,created_at,delivery_status,delivery_error,external_message_id,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)";
 
-/** The latest 200 messages, oldest first. */
-export async function loadThreadMessages(db: SupabaseClient, businessId: string, conversationId: string) {
-  const { data, error } = await db
+/** A page of messages, oldest first: the latest ones, or those older than `before`.
+ * `older` reads the page before it; null when there is nothing older. */
+export async function loadThreadPage(
+  db: SupabaseClient,
+  businessId: string,
+  conversationId: string,
+  options: { before?: PageCursor | null; limit?: number } = {},
+) {
+  const limit = pageSize(options.limit, THREAD_PAGE, 200);
+  let read = db
     .from("messages")
     .select(threadMessageColumns)
     .eq("business_id", businessId)
-    .eq("conversation_id", conversationId)
+    .eq("conversation_id", conversationId);
+  const before = options.before;
+  if (before?.at) read = read.or(`created_at.lt."${before.at}",and(created_at.eq."${before.at}",id.lt.${before.id})`);
+  const { data, error } = await read
     .order("created_at", { ascending: false })
-    .limit(200);
+    .order("id", { ascending: false })
+    .limit(limit + 1);
   if (error) throw new InboxReadError("thread_unavailable");
-  return (data ?? []).reverse();
+  const page = (data ?? []).slice(0, limit);
+  const oldest = page.at(-1);
+  return {
+    messages: page.reverse(),
+    older: (data ?? []).length > limit && oldest ? cursorOf(oldest.created_at, oldest.id) : null,
+  };
+}
+
+/** The latest messages, oldest first. */
+export async function loadThreadMessages(db: SupabaseClient, businessId: string, conversationId: string, limit = THREAD_PAGE) {
+  return (await loadThreadPage(db, businessId, conversationId, { limit })).messages;
 }
 
 export type CustomerOrder = {

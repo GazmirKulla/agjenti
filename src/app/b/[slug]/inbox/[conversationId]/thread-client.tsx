@@ -2,7 +2,7 @@
 import { LocalizedStatusBadge } from "@/components/dashboard/language";
 import { useDashboardTranslator } from "@/components/dashboard/language";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
 import type { NormalizedAttachment } from "@/lib/instagram/types";
 import { Icon } from "@/components/dashboard/icon";
@@ -37,6 +37,8 @@ export function ThreadClient(props: {
   lastInboundAt?: string | null;
   customerName: string;
   messages: Message[];
+  /** Reads the messages before the first one shown; null when there are none. */
+  older?: string | null;
   /** An order the agent prepared waits for staff confirmation. */
   pendingOrder?: boolean;
   /** The owner can record an order / book an appointment from this conversation. */
@@ -48,6 +50,38 @@ export function ThreadClient(props: {
   const replyWindow = props.channel === "instagram" ? instagramReplyWindow(props.lastInboundAt) : "standard";
   const router = useRouter();
   const messageList = useRef<HTMLDivElement>(null);
+  // Older messages the owner loaded; the latest page refreshes from the server on its own.
+  const [earlier, setEarlier] = useState<{ messages: Message[]; older: string | null } | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState(false);
+  const keepScroll = useRef<number | null>(null);
+  const latestIds = new Set(props.messages.map((m) => m.id));
+  // Cleared messages leave nothing older to show either.
+  const messages = props.messages.length ? [...(earlier?.messages ?? []).filter((m) => !latestIds.has(m.id)), ...props.messages] : [];
+  const older = !props.messages.length ? null : earlier ? earlier.older : props.older ?? null;
+  async function loadOlder() {
+    if (!older || loadingOlder) return;
+    setLoadingOlder(true);
+    setOlderError(false);
+    try {
+      const res = await fetch(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/history?before=${encodeURIComponent(older)}`);
+      const json = (await res.json()) as { messages?: Message[]; older?: string | null };
+      if (!res.ok || !Array.isArray(json.messages)) throw new Error("load");
+      keepScroll.current = messageList.current ? messageList.current.scrollHeight - messageList.current.scrollTop : null;
+      setEarlier((current) => ({ messages: [...json.messages!, ...(current?.messages ?? [])], older: json.older ?? null }));
+    } catch {
+      setOlderError(true);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+  useLayoutEffect(() => {
+    const list = messageList.current;
+    if (list && keepScroll.current !== null) {
+      list.scrollTop = list.scrollHeight - keepScroll.current;
+      keepScroll.current = null;
+    }
+  }, [earlier]);
   const lastMessageId = props.messages.at(-1)?.id;
   useEffect(() => {
     const list = messageList.current;
@@ -188,13 +222,15 @@ export function ThreadClient(props: {
       <div className="chat-messages" ref={messageList}>
         {reactions.error && <p role="alert">{t(reactions.error)} <button type="button" onClick={() => void reactions.refresh()}>{t("Rifresko")}</button></p>}
         {reactions.unresolved && !reactions.posting && <p role="status">{t("Reaction pret rakordim.")} <button type="button" onClick={() => void reactions.retryUnresolved()}>{t("Riprovo të njëjtën kërkesë")}</button></p>}
-        {props.messages.length === 200 && (
-          <p className="muted-copy text-center">{t("200 mesazhet më të fundit")}</p>
+        {older && (
+          <button type="button" className="btn btn-ghost chat-load-older" onClick={() => void loadOlder()} disabled={loadingOlder}>
+            {loadingOlder ? t("Duke ngarkuar…") : olderError ? t("Provo përsëri") : t("Shiko mesazhet më të hershme")}
+          </button>
         )}
-        {props.messages.length ? (
-          props.messages.map((m, index) => {
+        {messages.length ? (
+          messages.map((m, index) => {
             const date = messageDate(m.created_at, t("sq-AL"));
-            const previous = index > 0 ? messageDate(props.messages[index - 1].created_at, t("sq-AL")) : null;
+            const previous = index > 0 ? messageDate(messages[index - 1].created_at, t("sq-AL")) : null;
             return <Fragment key={m.id}>
               {date.day !== previous?.day && <div className="chat-date-separator"><time dateTime={date.day}>{date.label}</time></div>}
 

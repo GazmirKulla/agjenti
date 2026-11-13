@@ -12,17 +12,42 @@ export type InboxRow = {
   unread: number;
 };
 export function InboxList({
-  rows,
+  rows: firstPage,
+  next: firstNext = null,
   slug,
   selected,
   channels,
 }: {
   rows: InboxRow[];
+  /** Reads the conversations after the first page; null when there are none. */
+  next?: string | null;
   slug: string;
   selected?: string;
   channels: { channel: "instagram" | "whatsapp"; connected: boolean; status: string }[];
 }) {
   const t = useDashboardTranslator();
+  // Older pages the owner loaded; the first page refreshes from the server on its own.
+  const [more, setMore] = useState<{ rows: InboxRow[]; next: string | null } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState(false);
+  const known = new Set(firstPage.map((row) => row.id));
+  const rows = [...firstPage, ...(more?.rows ?? []).filter((row) => !known.has(row.id))];
+  const next = more ? more.next : firstNext;
+  async function loadMore() {
+    if (!next || loadingMore) return;
+    setLoadingMore(true);
+    setMoreError(false);
+    try {
+      const res = await fetch(`/api/mobile/inbox?slug=${encodeURIComponent(slug)}&before=${encodeURIComponent(next)}`);
+      const json = (await res.json()) as { conversations?: InboxRow[]; next?: string | null };
+      if (!res.ok || !Array.isArray(json.conversations)) throw new Error("load");
+      setMore((current) => ({ rows: [...(current?.rows ?? []), ...json.conversations!], next: json.next ?? null }));
+    } catch {
+      setMoreError(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
   const [channel, setChannel] = useState<"instagram" | "whatsapp" | null>(null);
   const channelRows = channel === null ? rows : rows.filter(row => (row.channel ?? "instagram") === channel);
   const [query, setQuery] = useState("");
@@ -97,6 +122,11 @@ export function InboxList({
         ))}
         {!filtered.length && (
           <p className="muted-copy p-5">{t("Nuk ka biseda për këtë filtër.")}</p>
+        )}
+        {next && (
+          <button type="button" className="btn btn-ghost inbox-load-more" onClick={() => void loadMore()} disabled={loadingMore}>
+            {loadingMore ? t("Duke ngarkuar…") : moreError ? t("Provo përsëri") : t("Ngarko më shumë biseda")}
+          </button>
         )}
       </div>
       <p className="inbox-list-foot">{channelRows.length} {t("biseda të fundit")}</p>

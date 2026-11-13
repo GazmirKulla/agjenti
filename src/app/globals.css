@@ -4689,3 +4689,7 @@ html:has(.native-business-content:has(.inbox-workspace)) body.min-h-screen {
 .instruction-facts-link { color: var(--accent); font-weight: 600; }
 .agent-page-side .instruction-facts { margin-bottom: 0; }
 @media (max-width: 1000px) { .agent-page { grid-template-columns: 1fr; } .agent-page-side { position: static; } }
+
+/* Paged Inbox: load older conversations and messages on request. */
+.inbox-load-more { margin: 10px auto 14px; display: flex; }
+.chat-load-older { margin: 4px auto 12px; display: flex; min-height: 34px; font-size: 13px; }

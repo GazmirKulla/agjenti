@@ -2,7 +2,7 @@ import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { InboxRefresh } from "./inbox-refresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { loadInboxRows, loadThreadConversation, loadThreadMessages, type InboxRow, type ThreadConversation } from "@/lib/conversations/inbox-read";
+import { loadInboxPage, loadThreadConversation, loadThreadPage, type InboxRow, type ThreadConversation } from "@/lib/conversations/inbox-read";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { ThreadClient } from "@/app/b/[slug]/inbox/[conversationId]/thread-client";
 import { getSessionUser } from "@/lib/tenant/access";
@@ -33,9 +33,9 @@ export async function InboxWorkspace({
   const [instagram, whatsapp, rowsResult, conversationResult, messageResult, contextResult, logResult] = await Promise.all([
     db.from("instagram_connections").select("status,expires_at").eq("business_id", businessId).neq("status", "disconnected").maybeSingle(),
     db.from("whatsapp_connections").select("status").eq("business_id", businessId).maybeSingle(),
-    settle(loadInboxRows(db, businessId)),
+    settle(loadInboxPage(db, businessId)),
     selected ? settle(loadThreadConversation(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
-    selected ? settle(loadThreadMessages(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
+    selected ? settle(loadThreadPage(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
     selected ? settle(loadConversationContext(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
     selected
       ? db.from("integration_logs").select("id,target,status,error,created_at").eq("business_id", businessId)
@@ -52,7 +52,8 @@ export async function InboxWorkspace({
     };
   });
   if (rowsResult.error || !rowsResult.data) throw new Error(t("Nuk u ngarkuan bisedat."));
-  const inboxRows: InboxRow[] = rowsResult.data;
+  const inboxRows: InboxRow[] = rowsResult.data.rows;
+  const nextRows = rowsResult.data.next;
   const heading = (
     <PageHeading
       title="Inbox"
@@ -65,7 +66,7 @@ export async function InboxWorkspace({
         {heading}
         <InboxRefresh title="Inbox" />
         <div className="inbox-workspace inbox-list-home">
-          <InboxList rows={inboxRows} slug={slug} channels={channels} />
+          <InboxList rows={inboxRows} next={nextRows} slug={slug} channels={channels} />
           <section className="panel chat-panel">
             <EmptyState
               title={t(inboxRows.length ? "Zgjidh një bisedë" : "Inbox-i yt është gati")}
@@ -105,6 +106,7 @@ export async function InboxWorkspace({
         className={`inbox-workspace ${conversationId ? "has-selection" : "inbox-list-home"} ${view === "customer" ? "is-mobile-customer" : ""}`}
       >
         <InboxList
+          next={nextRows}
           channels={channels}
           slug={slug}
           selected={selected}
@@ -120,7 +122,8 @@ export async function InboxWorkspace({
           channel={conversation.channel}
           lastInboundAt={conversation.last_inbound_at}
           customerName={name}
-          messages={messageResult.data ?? []}
+          messages={messageResult.data?.messages ?? []}
+          older={messageResult.data?.older ?? null}
           pendingOrder={Boolean(contextResult.data?.pendingOrder)}
           canOrder={Boolean(contextResult.data?.forms.order.enabled)}
           canBook={Boolean(contextResult.data?.forms.booking.enabled && contextResult.data.forms.booking.services.length)}
