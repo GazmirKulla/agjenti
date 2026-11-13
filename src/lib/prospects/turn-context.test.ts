@@ -40,3 +40,15 @@ it("does not wait when the reply has no time left, and keeps the chat's earlier 
 it("never breaks the reply when the scan fails", async () => {
   await expect(prospectTurnContext({ ...base, message: "@dyqani.al" }, { policy: allowed, ownUsername: async () => null, request: vi.fn().mockRejectedValue(new Error("db")) })).resolves.toBeUndefined();
 });
+
+it("reads the customer's Instagram from Real chat Inputs when the message names none", async () => {
+  const request = vi.fn().mockResolvedValue({ kind: "existing", scan: scan({ status: "ready", profile: { name: "Dyqani", biography: "Rroba" }, posts: [] }) });
+  const context = await prospectTurnContext({ ...base, message: "Përshëndetje", sender: "@Dyqani.AL" }, { policy: allowed, request, latest: async () => null, ownUsername: async () => "agjenti.app" });
+  expect(request).toHaveBeenCalledWith(expect.objectContaining({ username: "dyqani.al" }));
+  expect(context).toMatchObject({ status: "ready" });
+  // The account the chat already talked about stays; the business's own account is never read.
+  const other = vi.fn();
+  await prospectTurnContext({ ...base, message: "sa kushton?", sender: "dyqani.al" }, { policy: allowed, request: other, latest: async () => scan({ username: "salloni_ana" }), ownUsername: async () => null });
+  await prospectTurnContext({ ...base, message: "hej", sender: "agjenti.app" }, { policy: allowed, request: other, latest: async () => null, ownUsername: async () => "agjenti.app" });
+  expect(other).not.toHaveBeenCalled();
+});

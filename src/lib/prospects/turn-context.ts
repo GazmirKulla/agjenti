@@ -1,5 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { workerOrigin } from "@/lib/discovery/continue";
+import { normalizeInstagramUsername } from "@/lib/instagram/public-profile";
 import {
   prospectReplyContext, prospectScanPolicy, prospectUsernameFromMessage, requestProspectScan,
   REPLY_WAIT_MS, waitForProspectScan, wakeProspectScan, type ProspectScan, type ScanRequest,
@@ -26,14 +27,19 @@ async function latestScan(businessId: string, conversationId: string) {
 /** For a business allowed to scan prospects (Agjenti.app), on a live chat: the
  * account the prospect named in this message is read (public data only), or
  * the chat's earlier read is reused. Any failure leaves the reply unchanged. */
-export async function prospectTurnContext(p: { businessId: string; conversationId: string; message: string; deadline: number }, deps: Deps = {}) {
+export async function prospectTurnContext(p: { businessId: string; conversationId: string; message: string; deadline: number; sender?: string | null }, deps: Deps = {}) {
   try {
     const policy = await (deps.policy ?? prospectScanPolicy)(p.businessId);
     if (!policy.allowed) return undefined;
-    const username = prospectUsernameFromMessage(p.message, await (deps.ownUsername ?? ownUsername)(p.businessId));
+    const own = await (deps.ownUsername ?? ownUsername)(p.businessId);
+    let username = prospectUsernameFromMessage(p.message, own);
     if (!username) {
+      // The account the chat last talked about; else the customer's own account from Real chat Inputs.
       const previous = await (deps.latest ?? latestScan)(p.businessId, p.conversationId);
-      return previous ? prospectReplyContext({ kind: "existing", scan: previous }, previous) : undefined;
+      if (previous) return prospectReplyContext({ kind: "existing", scan: previous }, previous);
+      const sender = p.sender ? normalizeInstagramUsername(p.sender) : null;
+      if (!sender || sender === (own ? normalizeInstagramUsername(own) : null)) return undefined;
+      username = sender;
     }
     const request: ScanRequest = await (deps.request ?? requestProspectScan)({ businessId: p.businessId, conversationId: p.conversationId, username, monthlyLimit: policy.monthlyLimit });
     if (request.kind === "refused") return prospectReplyContext(request, null);

@@ -75,6 +75,8 @@ export type AgentTurnParams = {
   onTrace?: TraceObserver;
   /** Chat Lab only: the prospect read done before the isolated turn (test mode). */
   prospectPreview?: unknown;
+  /** Real chat only: the customer's Instagram account set in ChatLab Inputs. */
+  prospectSender?: string | null;
   actionFlowRequest?: boolean;
   /** Server-resolved navigation options, never effect permission. */
   processOffers?: { flowId: string; label: string; versionId: string }[];

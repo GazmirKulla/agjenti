@@ -4,6 +4,7 @@ import { getSessionUser, isPlatformAdmin, requireBusinessAccess } from "@/lib/te
 import { transportAccess, isTransportId } from "@/lib/conversations/transport-access";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { runPanelChat } from "@/lib/agents/panel-chat/execute";
+import { applyPanelInputs, readPanelInputs } from "@/lib/agents/panel-chat/inputs";
 export const maxDuration = 180;
 async function accessFor(request: Request) {
   const user = await getSessionUser();
@@ -30,9 +31,14 @@ export async function POST(request: Request) {
     }
     // No test checkpoint, draft, fake media or arbitrary state may cross this boundary.
     if (!isTransportId(data.requestId) || !Number.isInteger(data.sequence) || data.sequence < 0 || data.sequence >= 40
-      || !data.input || Object.keys(data.input).some(key => key !== "message")
+      || !data.input || Object.keys(data.input).some(key => !["message", "senderInstagram", "customerName"].includes(key))
       || typeof data.input.message !== "string" || !data.input.message.trim() || data.input.message.length > 2000) throw new Error("Dërgo një mesazh tekst në bisedën reale.");
     const message = data.input.message.trim();
+    // Inputs: the customer's name and Instagram account, kept on the chat and its customer.
+    const inputs = readPanelInputs(data.input);
+    if ("error" in inputs) throw new Error(inputs.error);
+    if (!await applyPanelInputs({ businessId: access.businessId, userId: access.userId, streamId: data.streamId }, inputs, access.db))
+      return NextResponse.json({ error: "Të dhënat e klientit nuk u ruajtën. Provo përsëri." }, { status: 409 });
     const fingerprint = createHash("sha256").update(JSON.stringify({ stream: data.streamId, sequence: data.sequence, message })).digest("hex");
     const { error } = await access.db.rpc("enqueue_panel_chat", { p_business: access.businessId, p_user: access.userId, p_stream: data.streamId,
       p_request: data.requestId, p_sequence: data.sequence, p_message: message, p_fingerprint: fingerprint });

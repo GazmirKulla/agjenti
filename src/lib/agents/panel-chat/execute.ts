@@ -19,7 +19,7 @@ export async function runPanelChat(scope: PanelScope) {
     try {
       if (job.operation_kind !== "panel" || job.business_id !== scope.businessId || job.operator_user_id !== scope.userId || job.test_stream_id !== scope.streamId) throw new Error("Panel identity mismatch");
       const [conversation, saved, outbound] = await Promise.all([
-        db.from("conversations").select("id,status,auto_reply,openai_previous_response_id").eq("id", job.conversation_id).eq("business_id", scope.businessId).eq("panel_user_id", scope.userId).eq("panel_stream_id", scope.streamId).eq("channel", "panel").single(),
+        db.from("conversations").select("id,status,auto_reply,openai_previous_response_id,participant_username").eq("id", job.conversation_id).eq("business_id", scope.businessId).eq("panel_user_id", scope.userId).eq("panel_stream_id", scope.streamId).eq("channel", "panel").single(),
         db.from("conversation_states").select("collected,revision,workflow_id").eq("conversation_id", job.conversation_id).eq("business_id", scope.businessId).single(),
         db.from("workflow_inbound_queue").select("reply").eq("conversation_id", job.conversation_id).eq("business_id", scope.businessId).eq("operation_kind", "panel").eq("status", "sent").order("client_sequence", { ascending: false }).limit(1).maybeSingle(),
       ]);
@@ -36,6 +36,8 @@ export async function runPanelChat(scope: PanelScope) {
       const turn = await processConversationMessage({
         onTrace: observation.onTrace,
         mode: "production", source: "panel", businessId: scope.businessId,
+        // The Instagram account given in Inputs is read like the account a prospect named.
+        prospectSender: conversation.data.participant_username,
         message: job.payload.message, hasPhoto: false,
         state,
         persistedWorkflowId: saved.data.workflow_id,

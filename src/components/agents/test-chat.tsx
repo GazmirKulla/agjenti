@@ -147,7 +147,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
           const next = reconciled.outbox?.find(o => !o.accepted && !jobs.some((j: { requestId: string }) => j.requestId === o.id));
           if (!next || next.status !== "queued" || blockedByFailedTurn(reconciled, next)) continue;
           const posted = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]),
-            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: current.mode === "real" ? { message: next.text } : { ...(configurationDraft ? { configurationDraft } : {}), ...inputsRef.current, message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
+            body: JSON.stringify({ requestId: next.id, streamId: current.id, sequence: next.sequence, input: current.mode === "real" ? { message: next.text, ...inputsRef.current } : { ...(configurationDraft ? { configurationDraft } : {}), ...inputsRef.current, message: next.text, hasMedia: next.photo, session: next.session, attachments: next.attachments.map(a=>a.token) } }) });
           const result = await posted.json();
           if (disposed) return;
           setChats(all => all.map(c => c.id !== current.id ? c : { ...c, outbox: c.outbox?.map(o => o.id !== next.id ? o : { ...o, accepted: posted.ok, status: posted.ok ? "queued" : "failed", error: result.error }) }));
@@ -168,7 +168,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   async function retryOperation(operation: PendingTestTurn) {
     try {
       const response = await fetch(`/api/${real ? "agent-real" : "agent-test"}/turns?slug=${encodeURIComponent(slug)}`, { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(15000),
-        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: real ? { message: operation.text } : { ...(configurationDraft ? { configurationDraft } : {}), ...inputsRef.current, message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
+        body: JSON.stringify({ requestId: operation.id, streamId: chat.id, sequence: operation.sequence, retry: true, input: real ? { message: operation.text, ...inputsRef.current } : { ...(configurationDraft ? { configurationDraft } : {}), ...inputsRef.current, message: operation.text, hasMedia: operation.photo, session: operation.session, attachments: operation.attachments.map(a=>a.token) } }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
       setChats(all => all.map(c => c.id !== chat.id ? c : { ...c, outbox: c.outbox?.map(o => o.id === operation.id ? { ...o, accepted: true, status: "queued", error: undefined } : o) }));
@@ -339,7 +339,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         {advanced && <button className="chat-icon" type="button" title="Eksporto bisedën" aria-label="Eksporto bisedën" disabled={!messages.length || busy} onClick={download}><Icon name="download" /></button>}
         {advanced && <button className="chat-icon" type="button" title="Zgjero / zvogëlo" aria-label="Zgjero bisedën" aria-pressed={expanded} onClick={()=>setExpanded(v=>!v)}><Icon name="expand" /></button>}
         {advanced && !renderInspector && <button className="chat-toolbar-button" type="button" aria-expanded={showDetails} aria-controls="agent-test-diagnostics" onClick={()=>setShowDetails(v=>!v)}><Icon name="workflows" size={17}/> Rrjedha</button>}
-        {advanced && !real && <button className={`chat-toolbar-button chat-inputs-button ${inputCount ? "has-inputs" : ""}`} type="button" aria-haspopup="dialog"
+        {advanced && <button className={`chat-toolbar-button chat-inputs-button ${inputCount ? "has-inputs" : ""}`} type="button" aria-haspopup="dialog"
           title={inputCount ? Object.values(inputs).join(" · ") : "Shto të dhëna të klientit që simulon"} onClick={() => setInputsOpen(true)}>
           <Icon name="lead" size={17}/> Inputs{inputCount > 0 && <span className="chat-inputs-count" aria-label={`${inputCount} të plotësuara`}>{inputCount}</span>}</button>}
         <button className="chat-toolbar-button primary" type="button" disabled={preparing || voice} onClick={() => void reset()}><Icon name="plus" size={17}/> Bisedë e re</button>

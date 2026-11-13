@@ -6,14 +6,16 @@ import "./test-inputs.css";
 
 /** What the simulated customer brings to a test chat, besides their messages.
  * Sent with every test message; the server validates each field again. */
-export type TestInputs = { senderInstagram?: string };
+export type TestInputs = { senderInstagram?: string; customerName?: string };
 
 type Field = { key: keyof TestInputs; label: string; placeholder: string; help: string; icon: string; maxLength: number };
 
 /** New simulated customer details are added here (and read in execute-turn). */
 export const testInputFields: Field[] = [
   { key: "senderInstagram", label: "Instagram i klientit", placeholder: "@username", icon: "instagram", maxLength: 60,
-    help: "Llogaria nga e cila shkruan klienti. Nëse biznesi ka leje skanimi, agjenti lexon profilin publik (lexim i vërtetë, asgjë nuk ruhet)." },
+    help: "Llogaria nga e cila shkruan klienti. Nëse biznesi ka leje skanimi, agjenti lexon profilin publik. Në Real chat ruhet te klienti dhe biseda." },
+  { key: "customerName", label: "Emri i klientit", placeholder: "p.sh. Ana Hoxha", icon: "customers", maxLength: 80,
+    help: "Në Real chat, emri që merr klienti te Klientët, Lead-et dhe porositë. Pa të, përdoret @username." },
 ];
 
 export function filledTestInputs(inputs: TestInputs): TestInputs {
@@ -35,7 +37,7 @@ export function TestInputsDialog({ inputs, onSave, onClose }: { inputs: TestInpu
     onClick={event => { if (event.target === dialog.current) onClose(); }}>
     <form method="dialog" onSubmit={event => { event.preventDefault(); onSave(filledTestInputs(draft)); }}>
       <header>
-        <div><h2 id={title}>Inputs</h2><p>Të dhënat e klientit që simulon. Vlejnë për mesazhet e ardhshme të kësaj bisede prove.</p></div>
+        <div><h2 id={title}>Inputs</h2><p>Të dhënat e klientit që simulon. Vlejnë për mesazhet e ardhshme të kësaj bisede.</p></div>
         <button type="button" className="test-inputs-close" aria-label="Mbyll" onClick={onClose}><Icon name="close" size={16} /></button>
       </header>
       <div className="test-inputs-fields">
