@@ -17,7 +17,7 @@ async function ownUsername(businessId: string) {
 }
 async function latestScan(businessId: string, conversationId: string) {
   const { data } = await createServiceSupabase().from("prospect_scans")
-    .select("id,business_id,conversation_id,username,status,profile,posts,stats,error,fetched_at,updated_at")
+    .select("id,business_id,conversation_id,username,status,profile,posts,stats,error,fetched_at,updated_at,target_business_id")
     .eq("business_id", businessId).eq("conversation_id", conversationId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
   return (data as ProspectScan | null) ?? null;
 }

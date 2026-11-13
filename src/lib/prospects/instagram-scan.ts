@@ -3,6 +3,7 @@ import { fetchPublicInstagram, normalizeInstagramUsername, publicScanAvailable, 
 import type { InstagramBusinessProfile } from "@/lib/instagram/business-profile";
 import type { InstagramPost } from "@/lib/instagram/media";
 import { moduleRegistry } from "@/lib/dashboard/modules/registry";
+import { connectedToAnotherBusiness, emptyPublicProfile, recentPublicRead } from "@/lib/instagram/account-rules";
 
 /** A platform power, allowed per business by a platform admin (Agjenti.app). */
 export const PROSPECT_SCAN_ACTION = "prospect.instagram_scan";
@@ -12,6 +13,8 @@ export const DEFAULT_MONTHLY_SCANS = 50;
 export const MAX_SCANS_PER_CONVERSATION = 2;
 /** How long the reply waits for a scan started in the same turn. */
 export const REPLY_WAIT_MS = 12_000;
+/** A private or unknown account may be read again after this (it may have gone public). */
+export const NOT_FOUND_RETRY_MS = 3600_000;
 
 export type ProspectScanStatus = "queued" | "running" | "ready" | "not_found" | "failed";
 export type ProspectScan = {
@@ -62,7 +65,7 @@ function monthStart(now = new Date()) {
 export type ScanRequest =
   | { kind: "existing"; scan: ProspectScan }
   | { kind: "queued"; scan: ProspectScan }
-  | { kind: "refused"; reason: "conversation_limit" | "monthly_limit" | "unavailable"; username: string };
+  | { kind: "refused"; reason: "conversation_limit" | "monthly_limit" | "unavailable" | "already_registered"; username: string };
 
 /** Reuses this chat's read of the account, or queues one within the limits. */
 export async function requestProspectScan(p: { businessId: string; conversationId: string; username: string; monthlyLimit: number }, db: Db = createServiceSupabase()): Promise<ScanRequest> {
@@ -70,17 +73,23 @@ export async function requestProspectScan(p: { businessId: string; conversationI
     .order("created_at", { ascending: false }).limit(10);
   if (existing.error) return { kind: "refused", reason: "unavailable", username: p.username };
   const rows = (existing.data ?? []) as ProspectScan[];
+  // A business already on Agjenti (Instagram login) is never read or invited again.
+  if (await connectedToAnotherBusiness(p.username, p.businessId, db)) return { kind: "refused", reason: "already_registered", username: p.username };
   const same = rows.find(row => row.username === p.username);
-  // A failed read may be tried again on a later message; the worker caps attempts.
-  if (same && same.status !== "failed") return { kind: "existing", scan: same };
-  if (!same && rows.length >= MAX_SCANS_PER_CONVERSATION) return { kind: "refused", reason: "conversation_limit", username: p.username };
+  // A failed read may be tried again on a later message (the worker caps attempts);
+  // a private or unknown account after an hour, in case it went public or was a typo.
+  const retry = same && (same.status === "failed" || same.status === "not_found" && Date.now() - new Date(same.updated_at).getTime() > NOT_FOUND_RETRY_MS);
+  if (same && !retry) return { kind: "existing", scan: same };
+  // Accounts that were not found do not use up the chat's allowance.
+  const counted = rows.filter(row => row.status !== "not_found" && row.status !== "failed");
+  if (!same && counted.length >= MAX_SCANS_PER_CONVERSATION) return { kind: "refused", reason: "conversation_limit", username: p.username };
   const month = await db.from("prospect_scans").select("id", { count: "exact", head: true }).eq("business_id", p.businessId)
-    .gte("created_at", monthStart()).neq("status", "failed");
+    .gte("created_at", monthStart()).not("status", "in", "(failed,not_found)");
   if (month.error) return { kind: "refused", reason: "unavailable", username: p.username };
   if ((month.count ?? 0) >= p.monthlyLimit) return { kind: "refused", reason: "monthly_limit", username: p.username };
   const saved = same
     ? await db.from("prospect_scans").update({ status: "queued", error: null, attempts: 0, leased_until: null, updated_at: new Date().toISOString() })
-      .eq("id", same.id).eq("status", "failed").select(columns).maybeSingle()
+      .eq("id", same.id).in("status", ["failed", "not_found"]).select(columns).maybeSingle()
     : await db.from("prospect_scans").insert({ business_id: p.businessId, conversation_id: p.conversationId, username: p.username })
       .select(columns).maybeSingle();
   if (saved.error?.code === "23505") {
@@ -91,7 +100,7 @@ export async function requestProspectScan(p: { businessId: string; conversationI
   return { kind: "queued", scan: saved.data as ProspectScan };
 }
 
-type RunDeps = { fetcher?: typeof fetchPublicInstagram; db?: Db };
+type RunDeps = { fetcher?: typeof fetchPublicInstagram; db?: Db; recent?: typeof recentPublicRead };
 
 /** Reads one claimed scan. Captions are kept short; nothing private is read. */
 export async function runProspectScan(id: string, deps: RunDeps = {}): Promise<ProspectScanStatus | null> {
@@ -102,9 +111,11 @@ export async function runProspectScan(id: string, deps: RunDeps = {}): Promise<P
   const done = (fields: Record<string, unknown>) => db.from("prospect_scans")
     .update({ ...fields, leased_until: null, updated_at: new Date().toISOString() }).eq("id", scan.id).eq("status", "running");
   try {
-    const read = await (deps.fetcher ?? fetchPublicInstagram)(scan.username);
+    // The same public account read in the last hours (another chat, an onboarding) is reused.
+    const recent = await (deps.recent ?? recentPublicRead)(scan.username, db).catch(() => null);
+    const read = recent ?? await (deps.fetcher ?? fetchPublicInstagram)(scan.username);
     const posts = read.posts.map(post => ({ ...post, caption: post.caption?.slice(0, 1500) ?? null }));
-    await done({ status: "ready", profile: read.profile, posts, stats: read.stats ?? null, error: null, fetched_at: new Date().toISOString() });
+    await done({ status: "ready", profile: read.profile, posts, stats: read.stats ?? null, error: null, fetched_at: recent?.fetchedAt ?? new Date().toISOString() });
     return "ready";
   } catch (error) {
     const notFound = error instanceof PublicInstagramError && error.reason === "not_found";
@@ -160,14 +171,20 @@ export function platformModuleCatalog() {
 /** The reply context: only public profile data, the post captions, and status. */
 export function prospectReplyContext(request: ScanRequest | null, scan: ProspectScan | null) {
   if (!request) return undefined;
+  if (request.kind === "refused" && request.reason === "already_registered") return { username: request.username, status: "not_read",
+    guidance: "Ky profil nuk lexohet. Mos thuaj nëse llogaria është apo jo në Agjenti dhe mos krijo ftesë për të. Thuaj shkurt: nëse e keni tashmë llogari, hyni te agjenti.app; përndryshe tregoni pak për biznesin që t'ju them si mund t'ju ndihmojmë." };
   if (request.kind === "refused") return { username: request.username, status: request.reason === "unavailable" ? "unavailable" : "limit_reached",
     guidance: "Leximi i profilit nuk u bë tani. Mos thuaj se e pe profilin; pyet çfarë ofron biznesi." };
   const current = scan ?? request.scan;
-  const base = { username: current.username, status: current.status === "running" ? "queued" : current.status };
+  const base = { username: current.username, status: current.status === "running" ? "queued" : current.status,
+    // The invitation for this account was already created in this chat.
+    ...(current.target_business_id ? { invitationCreated: true, invitationGuidance: "Ftesa për këtë biznes është krijuar tashmë në këtë bisedë. Mos premto ftesë të re; nëse e kërkon, thuaj që do ta ridërgojë stafi." } : {}) };
   if (current.status !== "ready") return { ...base, modules: platformModuleCatalog(),
     guidance: current.status === "queued" || current.status === "running" ? "Profili po lexohet. Thuaj shkurt që po e shikon profilin dhe do t'i japësh propozimin pas pak; ndërkohë mund të pyesësh për biznesin."
       : current.status === "not_found" ? "Llogaria nuk u gjet ose nuk është publike. Kërko username-in e saktë ose pyet çfarë ofron biznesi."
       : "Profili nuk u lexua. Pyet çfarë ofron biznesi." };
+  if (emptyPublicProfile(current)) return { ...base, status: "empty", modules: platformModuleCatalog(),
+    guidance: "Profili është publik por nuk ka ende postime ose përshkrim. Mos hamendëso çfarë shet biznesi; pyet shkurt çfarë ofron dhe si i marrin klientët porositë ose rezervimet." };
   return { ...base, modules: platformModuleCatalog(),
     profile: { name: current.profile?.name, username: current.profile?.username ?? current.username, biography: current.profile?.biography, website: current.profile?.website },
     stats: current.stats ?? undefined,
@@ -186,7 +203,7 @@ export async function readyProspectScan(businessId: string, conversationId: stri
  * The invitation shows it; the owner's own onboarding reads it for review. */
 export async function attachProspectScanToInvitation(p: { businessId: string; conversationId: string; targetBusinessId: string }, db: Db = createServiceSupabase()) {
   const scan = await readyProspectScan(p.businessId, p.conversationId, db);
-  if (!scan) return false;
+  if (!scan || emptyPublicProfile(scan) || await connectedToAnotherBusiness(scan.username, p.targetBusinessId, db)) return false;
   const invitation = await db.from("business_invitations").select("id,details,status").eq("source_business_id", p.businessId)
     .eq("target_business_id", p.targetBusinessId).maybeSingle();
   if (invitation.error || !invitation.data || invitation.data.status !== "pending") return false;

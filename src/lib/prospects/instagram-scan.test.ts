@@ -6,6 +6,7 @@ import {
 } from "./instagram-scan";
 import { PublicInstagramError } from "@/lib/instagram/public-profile";
 
+const connected = new Set<string>();
 type Call = { table: string; op: string; filters: [string, string, unknown][]; payload?: unknown };
 type Result = { data?: unknown; error?: { code?: string; message?: string } | null; count?: number };
 /** A chainable Supabase stand-in: every finished query asks `answer`. */
@@ -20,7 +21,7 @@ function fakeDb(answer: (call: Call) => Result, rpc: (name: string, args: unknow
       return builder;
     };
     for (const name of ["select", "insert", "update", "upsert", "delete", "eq", "neq", "gte", "lt", "in", "order", "limit", "not"]) builder[name] = chain(name);
-    const finish = () => { calls.push(call); return Promise.resolve({ error: null, ...answer(call) }); };
+    const finish = () => { calls.push(call); return Promise.resolve({ error: null, ...(table === "instagram_connections" ? { data: connected.has(String(call.filters.find(([, c]) => c === "username")?.[2])) ? [{ business_id: "other" }] : [] } : answer(call)) }); };
     builder.maybeSingle = finish;
     builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => finish().then(resolve, reject);
     return builder;
@@ -89,8 +90,9 @@ describe("requestProspectScan", () => {
 describe("runProspectScan", () => {
   it("stores the public read of a claimed scan", async () => {
     const { db, calls } = fakeDb(() => ({}), () => ({ data: scan({ status: "running" }) }));
+    const recent = vi.fn().mockResolvedValue(null);
     const fetcher = vi.fn().mockResolvedValue({ profile: { name: "Dyqani" }, posts: [{ id: "1", caption: "x".repeat(3000), imageUrl: null, permalink: null, mediaType: "IMAGE" }], stats: { followers: 5 } });
-    await expect(runProspectScan("scan-1", { db, fetcher })).resolves.toBe("ready");
+    await expect(runProspectScan("scan-1", { db, fetcher, recent })).resolves.toBe("ready");
     expect(fetcher).toHaveBeenCalledWith("dyqani.al");
     const saved = calls.find(c => c.op === "update")!.payload as { status: string; posts: { caption: string }[] };
     expect(saved.status).toBe("ready");
@@ -99,7 +101,7 @@ describe("runProspectScan", () => {
   it("marks a private or unknown account and skips a scan it could not claim", async () => {
     const { db, calls } = fakeDb(() => ({}), () => ({ data: scan({ status: "running" }) }));
     const missing = vi.fn().mockRejectedValue(new PublicInstagramError("nuk u gjet", "not_found"));
-    await expect(runProspectScan("scan-1", { db, fetcher: missing })).resolves.toBe("not_found");
+    await expect(runProspectScan("scan-1", { db, fetcher: missing, recent: async () => null })).resolves.toBe("not_found");
     expect(calls.find(c => c.op === "update")!.payload).toMatchObject({ status: "not_found" });
     const unclaimed = fakeDb(() => ({}), () => ({ data: { id: null } }));
     const fetcher = vi.fn();
@@ -133,5 +135,53 @@ describe("invitation", () => {
     const other = fakeDb(() => ({ data: accepted }));
     await expect(prefillAcceptedBusiness("new", "someone-else", { db: other.db, saveUsername })).resolves.toBe(false);
     expect(saveUsername).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("account rules", () => {
+  const params = { businessId: "agjenti", conversationId: "chat", username: "dyqani.al", monthlyLimit: 50 };
+  it("never reads or invites an account another business connected with Instagram login", async () => {
+    connected.add("dyqani.al");
+    try {
+      const { db, calls } = fakeDb(() => ({ data: [] }));
+      const request = await requestProspectScan(params, db);
+      expect(request).toMatchObject({ kind: "refused", reason: "already_registered" });
+      expect(calls.some(c => c.op === "insert")).toBe(false);
+      const context = prospectReplyContext(request, null) as { status: string; guidance: string };
+      expect(context.status).toBe("not_read");
+      expect(context.guidance).toContain("Mos thuaj nëse llogaria është apo jo në Agjenti");
+      const attach = fakeDb(call => call.table === "prospect_scans" ? { data: scan() } : { data: { id: "inv", status: "pending", details: {} } });
+      await expect(attachProspectScanToInvitation({ businessId: "agjenti", conversationId: "chat", targetBusinessId: "new" }, attach.db)).resolves.toBe(false);
+      expect(attach.calls.some(c => c.op === "update")).toBe(false);
+    } finally { connected.clear(); }
+  });
+  it("lets a private or unknown account be corrected without using the chat's allowance", async () => {
+    const missing = Array.from({ length: MAX_SCANS_PER_CONVERSATION }, (_, i) => scan({ id: `m${i}`, username: `typo${i}`, status: "not_found", updated_at: new Date().toISOString() }));
+    const fresh = fakeDb(call => call.op === "insert" ? { data: scan({ status: "queued" }) } : call.filters.some(([, c]) => c === "created_at") ? { count: 0 } : { data: missing });
+    await expect(requestProspectScan(params, fresh.db)).resolves.toMatchObject({ kind: "queued" });
+    // The same unknown account is not read again within the hour, but is after it.
+    const recentMiss = fakeDb(() => ({ data: [scan({ status: "not_found", updated_at: new Date().toISOString() })] }));
+    await expect(requestProspectScan(params, recentMiss.db)).resolves.toMatchObject({ kind: "existing" });
+    const oldMiss = fakeDb(call => call.op === "update" ? { data: scan({ status: "queued" }) } : call.filters.some(([, c]) => c === "created_at") ? { count: 0 } : { data: [scan({ status: "not_found", updated_at: "2026-01-01T00:00:00Z" })] });
+    await expect(requestProspectScan(params, oldMiss.db)).resolves.toMatchObject({ kind: "queued" });
+  });
+  it("asks instead of guessing for a public profile with nothing on it, and never invites with it", async () => {
+    const empty = scan({ profile: { name: "Dyqani" }, posts: [] });
+    const context = prospectReplyContext({ kind: "existing", scan: empty }, empty) as Record<string, unknown>;
+    expect(context.status).toBe("empty");
+    expect(context.profile).toBeUndefined();
+    const attach = fakeDb(call => call.table === "prospect_scans" ? { data: empty } : { data: { id: "inv", status: "pending", details: {} } });
+    await expect(attachProspectScanToInvitation({ businessId: "agjenti", conversationId: "chat", targetBusinessId: "new" }, attach.db)).resolves.toBe(false);
+  });
+  it("tells the agent when this chat's invitation already exists", () => {
+    const linked = scan({ target_business_id: "new" });
+    expect(prospectReplyContext({ kind: "existing", scan: linked }, linked)).toMatchObject({ invitationCreated: true });
+  });
+  it("reuses a recent read of the same public account instead of paying again", async () => {
+    const { db } = fakeDb(() => ({}), () => ({ data: scan({ status: "running" }) }));
+    const fetcher = vi.fn();
+    const recent = vi.fn().mockResolvedValue({ profile: { biography: "Rroba" }, posts: [], fetchedAt: "2026-11-13T09:00:00Z" });
+    await expect(runProspectScan("scan-1", { db, fetcher, recent })).resolves.toBe("ready");
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

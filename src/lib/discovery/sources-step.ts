@@ -2,6 +2,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { fetchPublicInstagram, normalizeInstagramUsername, PublicInstagramError, PUBLIC_POST_LIMIT, publicScanAvailable } from "@/lib/instagram/public-profile";
 import { fetchPublicPage } from "@/lib/products/import-url";
 import { enqueuePublicInstagram, enqueueWebsiteReview } from "./queue";
+import { connectedToAnotherBusiness, CONNECTED_ELSEWHERE_MESSAGE, EMPTY_PROFILE_MESSAGE, emptyPublicProfile, recentPublicRead } from "@/lib/instagram/account-rules";
 import { normalizeWebsite } from "./onboarding-sources";
 import { jobProgress } from "./review";
 import { discoveryPreviews } from "./previews";
@@ -108,16 +109,24 @@ export async function previewSources(businessId: string, raw: { username?: unkno
 
   let instagram: InstagramPreview | null = null;
   let stored: StoredInstagram | null = null;
+  let blocked = false;
   if (readInstagram && username) {
-    if (await usernameScanUsed(businessId)) instagram = { username, error: "Instagram-i i këtij biznesi është analizuar tashmë." };
+    if (await connectedToAnotherBusiness(username, businessId)) { blocked = true; instagram = { username, error: CONNECTED_ELSEWHERE_MESSAGE }; }
+    else if (await usernameScanUsed(businessId)) instagram = { username, error: "Instagram-i i këtij biznesi është analizuar tashmë." };
     else if (!publicScanAvailable()) instagram = { username, error: "Leximi i Instagram-it nuk është aktiv ende. Username u ruajt dhe do të lexohet më vonë." };
     else try {
       const fresh = previous?.username === username && !!previous.profile && Date.now() - new Date(previous.fetchedAt).getTime() < 6 * 3600_000;
-      const read = fresh ? { profile: previous!.profile, posts: previous!.posts, stats: previous!.stats } : await fetchPublicInstagram(username);
-      stored = { username, fetchedAt: fresh ? previous!.fetchedAt : new Date().toISOString(), profile: read.profile as Record<string, string>,
+      // The same account read in the last hours (an Agjenti.app chat, another preview) is not paid twice.
+      const shared = fresh ? null : await recentPublicRead(username).catch(() => null);
+      const read = fresh ? { profile: previous!.profile, posts: previous!.posts, stats: previous!.stats } : shared ?? await fetchPublicInstagram(username);
+      const candidate: StoredInstagram = { username, fetchedAt: fresh ? previous!.fetchedAt : shared?.fetchedAt ?? new Date().toISOString(), profile: read.profile as Record<string, string>,
         posts: (read.posts as unknown[]).slice(0, PUBLIC_POST_LIMIT), stats: read.stats };
-      instagram = { username, name: stored.profile.name, biography: stored.profile.biography, website: stored.profile.website, postCount: stored.posts.length,
-        picture: stored.profile.profile_picture_url, followers: stored.stats?.followers, posts: stored.stats?.posts };
+      if (emptyPublicProfile({ profile: candidate.profile, posts: candidate.posts })) instagram = { username, error: EMPTY_PROFILE_MESSAGE };
+      else {
+        stored = candidate;
+        instagram = { username, name: stored.profile.name, biography: stored.profile.biography, website: stored.profile.website, postCount: stored.posts.length,
+          picture: stored.profile.profile_picture_url, followers: stored.stats?.followers, posts: stored.stats?.posts };
+      }
     } catch (error) {
       instagram = { username, error: error instanceof PublicInstagramError ? error.message : "Instagram nuk u lexua. Provo përsëri më vonë." };
     }
@@ -139,7 +148,8 @@ export async function previewSources(businessId: string, raw: { username?: unkno
   else if (!url) row.website = null;
   const { error } = await db.from("business_source_previews").upsert(row);
   if (error) throw new SourcesError("Të dhënat nuk u ruajtën. Provo përsëri.");
-  if (readInstagram && username) await db.from("businesses").update({ instagram_username: username }).eq("id", businessId);
+  // An account another business connected with Instagram login is not saved as this one's.
+  if (readInstagram && username && !blocked) await db.from("businesses").update({ instagram_username: username }).eq("id", businessId);
   return { instagram, website, about };
 }
 
@@ -150,7 +160,8 @@ export async function learnFromSources(businessId: string, userId: string, confi
   const { data } = await db.from("business_source_previews").select("instagram,website").eq("business_id", businessId).maybeSingle();
   const instagram = data?.instagram as Partial<StoredInstagram> | null;
   const website = data?.website as StoredWebsite | null;
-  const readInstagram = confirmed.instagram === true && !!instagram?.username && !!instagram.profile && publicScanAvailable() && !(await usernameScanUsed(businessId));
+  const readInstagram = confirmed.instagram === true && !!instagram?.username && !!instagram.profile && publicScanAvailable() && !(await usernameScanUsed(businessId))
+    && !emptyPublicProfile({ profile: instagram.profile, posts: instagram.posts }) && !(await connectedToAnotherBusiness(instagram.username!, businessId));
   const readWebsite = confirmed.website === true && !!website?.url;
   if (!readInstagram && !readWebsite) throw new SourcesError("Konfirmo të paktën një llogari, ose vazhdo pa analizë.", 409);
   await db.from("business_source_previews").update({

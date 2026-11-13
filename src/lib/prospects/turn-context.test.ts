@@ -18,7 +18,7 @@ it("queues the named account, wakes the worker and waits briefly for the read", 
   const request = vi.fn().mockResolvedValue({ kind: "queued", scan: scan() });
   const wake = vi.fn().mockResolvedValue(true);
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.test");
-  const wait = vi.fn().mockResolvedValue(scan({ status: "ready", profile: { name: "Dyqani" }, posts: [] }));
+  const wait = vi.fn().mockResolvedValue(scan({ status: "ready", profile: { name: "Dyqani", biography: "Rroba për fëmijë" }, posts: [] }));
   const context = await prospectTurnContext({ ...base, message: "faqja jonë është @dyqani.al" }, { policy: allowed, request, wake, wait, ownUsername: async () => "agjenti.app" });
   expect(request).toHaveBeenCalledWith(expect.objectContaining({ username: "dyqani.al", monthlyLimit: 50 }));
   expect(wake).toHaveBeenCalledWith("scan-1", "https://app.test");
@@ -33,7 +33,7 @@ it("does not wait when the reply has no time left, and keeps the chat's earlier 
   expect(wait).not.toHaveBeenCalled();
   expect(context).toMatchObject({ status: "queued" });
   const later = await prospectTurnContext({ ...base, message: "sa kushton?" }, { policy: allowed, ownUsername: async () => null,
-    latest: async () => scan({ status: "ready", profile: { name: "Dyqani" }, posts: [] }) });
+    latest: async () => scan({ status: "ready", profile: { name: "Dyqani", biography: "Rroba për fëmijë" }, posts: [] }) });
   expect(later).toMatchObject({ status: "ready", username: "dyqani.al" });
 });
 

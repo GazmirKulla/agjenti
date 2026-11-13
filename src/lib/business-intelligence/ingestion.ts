@@ -6,6 +6,7 @@ import { decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { fetchInstagramBusinessProfile, type InstagramBusinessProfile } from "@/lib/instagram/business-profile";
 import { selectDiscoveryImages } from "@/lib/discovery/images";
+import { EMPTY_PROFILE_MESSAGE, emptyPublicProfile } from "@/lib/instagram/account-rules";
 
 export async function extractWebsite(url: string, purpose: "catalog" | "onboarding" | "company" = "catalog", maxPages = 8) {
   const first = await fetchPublicPage(url);
@@ -121,6 +122,8 @@ export async function extractInstagram(businessId: string) {
 export async function extractInstagramPublic(username: string, read?: { profile: InstagramBusinessProfile; posts: InstagramPost[] } | null) {
   const { profile, posts: all } = read ?? await fetchPublicInstagram(username);
   const posts = all.slice(0, PUBLIC_POST_LIMIT);
+  // Nothing to learn from: no analysis is paid for an empty profile.
+  if (emptyPublicProfile({ profile, posts })) throw new Error(EMPTY_PROFILE_MESSAGE);
   const text = [Object.entries(profile).map(([field, value]) => `${field}: ${value}`).join("\n"), ...posts
     .map((p) => `Post: ${p.permalink ?? ""}\nCaption: ${p.caption ?? ""}\nImage: ${p.imageUrl ?? ""}`)]
     .join("\n").slice(0, 65000);

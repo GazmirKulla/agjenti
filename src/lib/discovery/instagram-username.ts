@@ -1,6 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { normalizeInstagramUsername, publicScanAvailable } from "@/lib/instagram/public-profile";
 import { enqueuePublicInstagram } from "./queue";
+import { connectedToAnotherBusiness, CONNECTED_ELSEWHERE_MESSAGE } from "@/lib/instagram/account-rules";
 
 export type UsernameResult =
   | { error: string }
@@ -23,6 +24,7 @@ export async function saveInstagramUsername(businessId: string, userId: string, 
   const username = empty ? null : normalizeInstagramUsername(raw);
   if (!empty && !username) return { error: "Shkruaj një username të vlefshëm Instagram-i, p.sh. @dyqani.im" };
   const db = createServiceSupabase();
+  if (username && await connectedToAnotherBusiness(username, businessId, db)) return { error: CONNECTED_ELSEWHERE_MESSAGE };
   const { error } = await db.from("businesses").update({ instagram_username: username }).eq("id", businessId);
   if (error) return { error: "Username nuk u ruajt. Provo përsëri." };
   if (!username) return { username: null, scanning: false, waiting: false };
@@ -53,7 +55,7 @@ export async function queuePendingUsernameScans(limit = 10) {
       db.from("instagram_connections").select("id").eq("business_id", business.id).eq("status", "connected").maybeSingle(),
       db.from("business_discovery_jobs").select("id").eq("business_id", business.id).eq("source", "instagram").limit(1).maybeSingle(),
     ]);
-    if (connection || job) continue;
+    if (connection || job || await connectedToAnotherBusiness(business.instagram_username, business.id, db)) continue;
     try { await enqueuePublicInstagram(business.id, business.billing_user_id, business.instagram_username, false, { review: true }); queued++; }
     catch { /* The next run tries again. */ }
   }
