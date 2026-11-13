@@ -4,12 +4,14 @@ import { FileCard, type FileCardItem } from "./file-card";
 import { Icon } from "@/components/dashboard/icon";
 import "./composer.css";
 export type ComposerItem = FileCardItem & { id: string };
-export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOpen, label = "Shkruaji Agjentit", placeholder = "Pyet ose kërko një ndryshim…", busy = false, items = [], onFiles, onRemove, onLink, maxLength = 12000, canSubmit, onStop, children, menuNote }: {
+export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOpen, label = "Shkruaji Agjentit", placeholder = "Pyet ose kërko një ndryshim…", busy = false, items = [], onFiles, onRemove, onLink, maxLength = 12000, canSubmit, onStop, stopping, children, menuNote }: {
   id: string; value: string; onChange: (value: string) => void; onSubmit: () => void; onVoice: () => void; onOpen?: () => void;
   label?: string; placeholder?: string; busy?: boolean; multiline?: boolean; items?: ComposerItem[]; onFiles?: (files: File[]) => void;
   onRemove?: (id: string) => void; onLink?: (url: string) => void; maxLength?: number; canSubmit?: boolean; onStop?: () => void; children?: ReactNode;
   /** A short line at the bottom of the attach menu, e.g. file limits. */
   menuNote?: string;
+  /** Shows the stop button in place of send (defaults to `busy`). */
+  stopping?: boolean;
 }) {
   const menuButton = useRef<HTMLButtonElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -66,7 +68,7 @@ export function AssistantComposer({ id, value, onChange, onSubmit, onVoice, onOp
         onPaste={e => { if (onFiles && e.clipboardData.files.length) { e.preventDefault(); onFiles(Array.from(e.clipboardData.files)); } }}
         onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !window.matchMedia("(max-width: 760px)").matches) { e.preventDefault(); if (canSend) onSubmit(); } if (e.key === "Escape") { setMenu(false); setLink(null); } }} />
       <div className="assistant-prompt-actions"><button type="button" onClick={onVoice} disabled={busy} aria-label="Dikto me mikrofon"><Icon name="microphone" size={21} /></button>
-        {onStop && busy ? <button type="button" className="assistant-prompt-send is-ready" onClick={onStop} aria-label="Ndalo pritjen"><Icon name="stop" size={20}/></button> : <button type="button" className={`assistant-prompt-send${canSend ? " is-ready" : ""}`} onClick={onSubmit} disabled={!canSend} aria-label={busy ? "Duke përgatitur përgjigjen" : "Dërgo mesazhin"}>{busy ? <span className="assistant-prompt-spinner"/> : <Icon name="up" size={21}/>}</button>}
+        {onStop && (stopping ?? busy) ? <button type="button" className="assistant-prompt-send is-ready is-stop" onClick={onStop} aria-label="Ndalo pritjen" title="Ndalo pritjen"><Icon name="stop" size={18}/></button> : <button type="button" className={`assistant-prompt-send${canSend ? " is-ready" : ""}`} onClick={onSubmit} disabled={!canSend} aria-label={busy ? "Duke përgatitur përgjigjen" : "Dërgo mesazhin"}>{busy ? <span className="assistant-prompt-spinner"/> : <Icon name="up" size={21}/>}</button>}
       </div>
     </div>{children}
   </div>;

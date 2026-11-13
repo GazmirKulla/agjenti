@@ -187,6 +187,8 @@ export function BusinessAssistant({
   const previousMaterials = useRef<{ context: string; tokens: string[]; links: string[] } | null>(null);
   const workflowRequest = useRef<WorkflowRequestPin | null>(null);
   const requestGeneration = useRef(0);
+  // The request whose finish may unlock the composer; a stopped one no longer can.
+  const activeRequest = useRef(0);
   const recoveredView = useRef(archive.view);
   recoveredView.current = archive.view;
   useEffect(() => {
@@ -311,6 +313,17 @@ export function BusinessAssistant({
     if (data.persistence) archive.accept(data.persistence, Boolean(data.recovered));
     return data;
   }
+  /** Stops waiting here only; the server may still finish, and its answer appears in the history. */
+  function stopWaiting() {
+    requestGeneration.current++;
+    activeRequest.current++;
+    locked.current = false;
+    archive.inFlight.current = false;
+    setOutgoing(null);
+    setSending(false);
+    setBusy(null);
+    setError("U ndal pritja këtu. Nëse kërkesa përfundon, përgjigjja shfaqet te historiku.");
+  }
   async function analyze(event?: React.FormEvent, requestText?: string, onboarding?: OnboardingQuickReply) {
     event?.preventDefault();
     if (locked.current || (!(requestText ?? text).trim() && !materials.length)) return;
@@ -318,6 +331,7 @@ export function BusinessAssistant({
     archive.inFlight.current = true;
     setWorkOpen(false);
     setBusy("plan");
+    const requestId = ++activeRequest.current;
     setSending(true);
     setError("");
     setResult(null);
@@ -392,11 +406,14 @@ export function BusinessAssistant({
       setText((current) => (current.trim() ? current : input));
       if (archive.view) void archive.selectThread(archive.view.conversation);
     } finally {
-      setOutgoing(null);
-      locked.current = false;
-      archive.inFlight.current = false;
-      setSending(false);
-      setBusy(null);
+      // A request the owner stopped has already unlocked the composer.
+      if (requestId === activeRequest.current) {
+        setOutgoing(null);
+        locked.current = false;
+        archive.inFlight.current = false;
+        setSending(false);
+        setBusy(null);
+      }
     }
   }
   useEffect(() => {
@@ -768,7 +785,8 @@ export function BusinessAssistant({
           {mode === "text" ? (
             <AssistantComposer {...materialProps} id="business-assistant-input" label={`Shkruaji ${agentName}`} value={text} busy={Boolean(busy) || archive.loading} multiline
               onChange={setText}
-              onSubmit={() => void analyze()} onVoice={() => { primeVoiceCapture(); setMode("audio"); }} />
+              onSubmit={() => void analyze()} onVoice={() => { primeVoiceCapture(); setMode("audio"); }}
+              onStop={busy === "plan" ? stopWaiting : undefined} />
           ) : (
             visible && <AudioRecorder variant="assistant" purpose="request" busy={Boolean(busy)} onAnalyze={transcribe} onBack={() => setMode("text")} analyzeLabel="Ktheje në tekst" />
           )}

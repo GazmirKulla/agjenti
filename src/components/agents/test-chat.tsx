@@ -392,7 +392,6 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
             {operation.status === "failed" && !blockedByFailedTurn(chat, operation) && (!operation.batchId || operation.batchId === operation.id) && <button type="button" onClick={()=>void retryOperation(operation)}>Provo përsëri të njëjtën kërkesë</button>}
           </div>)}
           {!waitStopped && chat.outbox?.some(operation => operation.status === "processing" && transportStatus[chat.id]?.processing.includes(operation.id)) && <div className="chat-typing" role="status" aria-label="Agjenti po përpunon përgjigjen"><i aria-hidden="true"/><i aria-hidden="true"/><i aria-hidden="true"/><span className="sr-only">Agjenti po përpunon përgjigjen</span></div>}
-          {waiting && !waitStopped && <button type="button" onClick={stop} title="Ndal vetëm pritjen këtu, jo punën në server">Ndalo pritjen</button>}
           {pending !== null && <div className="chat-exchange"><div className="agent-test-bubble customer"><p>{pending}</p></div><small className="chat-receipt">Po përgatitet lokalisht</small>{phase && !phase.startsWith("Agjenti") ? <p className="agent-test-thinking" role="status"><span className="chat-thinking-dot"/>{phase}</p> : <p role="status">Po përgatitet mesazhi lokalisht…</p>}</div>}
         </div>
         {!advanced && last?.turns === 40 && <p className="chat-status" role="status">U arrit kufiri i bisedës. Nis një bisedë të re.</p>}
@@ -402,6 +401,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
           {voice ? <AudioRecorder busy={voiceBusy} variant="assistant" purpose="request" onAnalyze={transcribe} onBack={()=>setVoice(false)}/> : <AssistantComposer
             id="agent-test-message" value={draft} onChange={setDraft} maxLength={2000} placeholder="Shkruaj një mesazh si klient…"
             busy={trainingBusy || voiceBusy} onSubmit={()=>void send()} onVoice={()=>{ primeVoiceCapture(); setVoice(true); }} onFiles={real ? undefined : addFiles}
+            onStop={stop} stopping={waiting && !waitStopped}
             menuNote={real ? undefined : "Deri në 3 skedarë, 3 MB secili. Foto, PDF, TXT, MD, CSV, JSON."}
             canSubmit={pending === null && Boolean(draft.trim() || photo || uploads.length || retained.length)}
             items={[...uploads.map(u=>({id:u.id,name:u.file.name,preview:u.preview})), ...retained.map((a,i)=>({id:`retained-${i}`,name:a.name}))]}
