@@ -21,16 +21,16 @@ const reasons: Record<string, string> = {
 };
 const initialChat: TestConversation = { id: "initial", title: "Bisedë e re", entries: [], updatedAt: 0 };
 type Upload = { id: string; file: File; preview?: string };
-export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false, renderInspector, senderInstagram }: {
+export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false, renderInspector }: {
   slug: string; businessName: string; userId: string; configurationDraft?: string; advanced?: boolean;
-  /** Chat Lab: the Instagram account the simulated customer writes from. */
-  senderInstagram?: string;
   renderInspector?: (entry: ChatEntry | undefined, chat: TestConversation) => ReactNode;
 }) {
   const [chats, setChats] = useState<TestConversation[]>([initialChat]);
+  // Chat Lab inputs: the Instagram account the simulated customer writes from.
+  const [senderInstagram, setSenderInstagram] = useState("");
   // Read at send time, so typing in the field does not restart the polling loop.
-  const senderRef = useRef(senderInstagram?.trim() ?? "");
-  useEffect(() => { senderRef.current = senderInstagram?.trim() ?? ""; }, [senderInstagram]);
+  const senderRef = useRef("");
+  useEffect(() => { senderRef.current = senderInstagram.trim(); }, [senderInstagram]);
   const [activeId, setActiveId] = useState("initial");
   const [ready, setReady] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -398,7 +398,17 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
             items={[...uploads.map(u=>({id:u.id,name:u.file.name,preview:u.preview})), ...retained.map((a,i)=>({id:`retained-${i}`,name:a.name}))]}
             onRemove={id=>{if(id.startsWith("retained-")) setRetained(current=>current.filter((_,i)=>`retained-${i}`!==id)); else setUploads(current=>current.filter(u=>{if(u.id!==id)return true;if(u.preview){URL.revokeObjectURL(u.preview);objectUrls.current.delete(u.preview);}return false;}));}}
           />}
-          <div className="chat-composer-tools">{advanced && !real && <label className="agent-test-photo"><input type="checkbox" checked={photo} disabled={busy || voice} onChange={e=>setPhoto(e.target.checked)}/> Simulo foto</label>}<span className="chat-character-count">{draft.length ? `${draft.length}/2000` : ""}</span></div>
+          <div className="chat-composer-tools"><div>{advanced && !real && <label className="agent-test-photo"><input type="checkbox" checked={photo} disabled={busy || voice} onChange={e=>setPhoto(e.target.checked)}/> Simulo foto</label>}
+            {advanced && !real && <details className="agent-test-inputs">
+              <summary>Inputs{senderInstagram.trim() ? ` · ${senderInstagram.trim().startsWith("@") ? "" : "@"}${senderInstagram.trim()}` : ""}</summary>
+              <div>
+                <label htmlFor="agent-test-sender-instagram">Instagram i klientit</label>
+                <input id="agent-test-sender-instagram" type="text" value={senderInstagram} maxLength={60} placeholder="@username" autoComplete="off" autoCapitalize="none" spellCheck={false}
+                  onChange={event => setSenderInstagram(event.target.value)} />
+                <small>Llogaria nga e cila shkruan klienti. Nëse biznesi ka leje skanimi, agjenti lexon profilin publik (lexim i vërtetë, asgjë nuk ruhet).</small>
+              </div>
+            </details>}</div>
+            <span className="chat-character-count">{draft.length ? `${draft.length}/2000` : ""}</span></div>
           {error && <p className="agent-test-error" role="alert">{error} <button type="button" disabled={busy} onClick={()=>void send(retry.current?.index ?? editing ?? messages.length, retry.current?.original)}>Provo përsëri</button></p>}
           <p className="agent-test-disclaimer">{real ? "Tekst dhe audio · Për të korrigjuar të dhënat, shkruaj një mesazh të ri. Fshirja nga historiku nuk anulon veprimet reale." : !advanced ? "Foto, skedarë dhe audio · Deri në 3 skedarë, 3 MB secili" : "Enter për dërgim · Shift + Enter për rresht të ri · Foto, PDF, TXT, MD, CSV, JSON · 3 skedarë, 3 MB secili. Skedarët dhe audioja përpunohen nga AI; përdor të dhëna prove."}</p>
         </form>
