@@ -61,7 +61,37 @@ export function validatePlan(raw: unknown, headers: string[], cells: string[][],
     if (column.use !== "ignore" && blank.length) column.blank = [...new Set(blank)].slice(0, 10);
     columns.push(column);
   }
+  // Every column is in the plan, so the owner sees and can change each one.
+  headers.forEach((header, index) => { if (!indexes.has(index)) columns.push({ index, header, use: "ignore" }); });
   return { columns: columns.sort((a, b) => a.index - b.index), missingPrice: input.missingPrice === "request" && taken.has("price_amount") ? "request" : "empty" };
+}
+
+/** What the owner picks for one column in the plan: an import field ("name"), an existing
+ * business field ("key:gjatesia"), a new field ("new:field" / "new:choice") or "ignore". */
+export function columnChoice(c: PlanColumn) {
+  return c.fieldKey ? `key:${c.fieldKey}` : c.use === "field" || c.use === "choice" ? `new:${c.use}` : c.use;
+}
+
+/** The owner's change to one column. An import field taken by another column frees that column;
+ * an existing field is linked to one column only. The server validates the result again. */
+export function editPlanColumn(plan: ImportPlan, index: number, change: { choice?: string; label?: string; unit?: string }, fields: BusinessField[]): ImportPlan {
+  const current = plan.columns.find(c => c.index === index);
+  if (!current) return plan;
+  const choice = change.choice ?? columnChoice(current);
+  const next: PlanColumn = { index, header: current.header, use: "ignore", ...(current.blank ? { blank: current.blank } : {}) };
+  if (choice.startsWith("key:")) {
+    const field = fields.find(f => f.key === choice.slice(4));
+    if (field) Object.assign(next, { use: field.variant ? "choice" : "field", fieldKey: field.key });
+  } else if (choice === "new:field" || choice === "new:choice") {
+    // A new field starts with the column's title as its name; the owner can rename it and set its unit.
+    const label = clean(change.label ?? current.label ?? current.header, 40), unit = clean(change.unit ?? current.unit, 12);
+    Object.assign(next, { use: choice.slice(4), label, ...(unit ? { unit } : {}) });
+  } else if (columnUses.includes(choice as ColumnUse)) next.use = choice as ColumnUse;
+  const frees = (c: PlanColumn) => c.index !== index && (
+    importFields.includes(next.use as ImportField) && c.use === next.use
+    || next.fieldKey !== undefined && c.fieldKey === next.fieldKey);
+  const columns = plan.columns.map(c => c.index === index ? next : frees(c) ? { index: c.index, header: c.header, use: "ignore" as const } : c);
+  return { columns, missingPrice: columns.some(c => c.use === "price_amount") ? plan.missingPrice : "empty" };
 }
 
 /** The new business fields the plan adds, in the shape the field settings save. */

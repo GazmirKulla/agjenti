@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { productCsvConfiguration, confirmProductCsv, evaluateProductCsv, reviewProductCsv, uploadProductCsv, acceptProductCsvPlan } from "@/lib/products/csv-import-actions";
-import { autoMapAttributes, configurationLabels, importFields, importLabels, importValueLabel, type ImportOptions, type ImportPreview, type ImportSource } from "@/lib/products/import-model";
-import type { ImportPlan } from "@/lib/products/import-plan";
+import { autoMapAttributes, configurationLabels, importFields, importLabels, importValueLabel, readImportCsv, type ImportOptions, type ImportPreview, type ImportSource } from "@/lib/products/import-model";
+import { columnChoice, describePlan, editPlanColumn, planNewFields, type ImportPlan } from "@/lib/products/import-plan";
 import { saveProductFields } from "@/lib/items/actions";
 import type { BusinessField } from "@/lib/items/fields";
 import { FileCard } from "@/components/business-assistant/file-card";
@@ -19,8 +19,8 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
   const [source, setSource] = useState(initialSource);
   const [options, setOptions] = useState<ImportOptions>(initialSource?.options ? { ...initialSource.options, fields: initialSource.fields ?? initialSource.options.fields } : { mapping: initialSource?.mapping ?? {}, fields: initialSource?.fields ?? [...importFields] });
   // The reading plan: proposed by the Agent and waiting for the owner, or approved (now or for earlier files with the same titles).
-  const [plan, setPlan] = useState<{ plan: ImportPlan; lines: string[]; newFields: string[]; advice?: string; state: "proposed" | "saved" } | undefined>(
-    initialSource?.plan ? { plan: initialSource.plan, lines: [], newFields: [], state: "saved" } : undefined);
+  const [plan, setPlan] = useState<{ plan: ImportPlan; advice?: string; state: "proposed" | "saved" } | undefined>(
+    initialSource?.plan ? { plan: initialSource.plan, state: "saved" } : undefined);
   const [preview, setPreview] = useState<ImportPreview>();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -46,6 +46,12 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
     });
   }, [sourceToken, sourceHeaders, configuration.fields]);
   const fieldLabels = Object.fromEntries(configuration.fields.map(f => [f.key, f.label]));
+  // The plan's sentences are worked out here from the file, so they follow every change the owner makes.
+  const cells = useMemo(() => { try { return source ? readImportCsv(source.raw).cells : []; } catch { return []; } }, [source]);
+  const planLines = plan ? describePlan(plan.plan, cells, configuration.fields) : [];
+  const newFields = plan ? planNewFields(plan.plan) : [];
+  const editColumn = (index: number, change: Parameters<typeof editPlanColumn>[2]) =>
+    setPlan(p => p && { ...p, plan: editPlanColumn(p.plan, index, change, configuration.fields) });
   const usedColumns = new Set([...options.fields.flatMap(f => options.mapping[f] === undefined ? [] : [options.mapping[f]!]), ...Object.values(options.attributes ?? {})]);
   const unmapped = source?.headers.flatMap((h, i) => usedColumns.has(i) ? [] : [{ header: h, index: i }]) ?? [];
   async function addField(header: string, index: number, variant: boolean) {
@@ -69,7 +75,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
     const next = result.source!;
     setSource(next);
     setOptions(next.options ? { ...next.options, fields: [...importFields] } : { mapping: next.mapping, fields: [...importFields] });
-    setPlan(next.plan ? { plan: next.plan, lines: result.planLines ?? [], newFields: [], state: "saved" } : undefined);
+    setPlan(next.plan ? { plan: next.plan, state: "saved" } : undefined);
   }
   async function review(ai: boolean) {
     if (!source) return;
@@ -78,7 +84,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
         const result = await evaluateProductCsv(slug, source.token, options);
         if (result.error || !result.plan) { setNotice(result.error ?? "Agjenti nuk ktheu plan. Provo përsëri."); setPreview(undefined); return; }
         // The owner reads the plan first; the rows are compared once it is approved.
-        setPlan({ plan: result.plan, lines: result.planLines ?? [], newFields: result.newFields ?? [], advice: result.preview?.advice, state: "proposed" });
+        setPlan({ plan: result.plan, advice: result.preview?.advice, state: "proposed" });
         setPreview(undefined); setDetail(null);
         return;
       }
@@ -95,7 +101,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
       if ("error" in result) { setNotice(result.error ?? ""); return; }
       setConfiguration(c => ({ ...c, fields: result.fields }));
       setOptions(result.options);
-      setPlan(p => p && { ...p, plan: result.plan, newFields: [], state: "saved" });
+      setPlan(p => p && { ...p, plan: result.plan, state: "saved" });
       setPreview({ ...result.preview, advice: plan.advice });
     });
   }
@@ -138,8 +144,28 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
     {source && !preview && plan?.state === "proposed" && <div className="csv-plan" aria-label="Plani i leximit">
       <p className="csv-plan-title"><Icon name="spark" size={16}/> <strong>Plani i leximit</strong></p>
       <p className="muted-copy">Agjenti propozon si të lexohet çdo kolonë. Rishikoje: asgjë nuk ruhet në katalog pa miratimin tënd të rreshtave.</p>
-      <ul>{plan.lines.map(line => <li key={line}>{line}</li>)}</ul>
-      {plan.newFields.length > 0 && <p className="muted-copy">Shtohen fushat e produkteve: {plan.newFields.map(f => `“${f}”`).join(", ")}.</p>}
+      <ol className="csv-plan-columns">{plan.plan.columns.map((column, i) => {
+        const choice = columnChoice(column);
+        return <li key={column.index}>
+          <p>{planLines[i]}</p>
+          <div className="csv-plan-edit">
+            <select className="field" aria-label={`Si lexohet “${column.header}”`} disabled={busy} value={choice} onChange={e => editColumn(column.index, { choice: e.target.value })}>
+              {importFields.map(f => <option key={f} value={f}>{importLabels[f]}</option>)}
+              {configuration.fields.map(f => <option key={f.key} value={`key:${f.key}`}>Fusha “{f.label}”{f.variant ? " (zgjedh klienti)" : ""}</option>)}
+              <option value="new:choice">Fushë e re që zgjedh klienti</option>
+              <option value="new:field">Fushë e re përshkruese</option>
+              <option value="ignore">Mos e importo</option>
+            </select>
+            {choice.startsWith("new:") && <>
+              <input className="field" aria-label={`Emri i fushës për “${column.header}”`} maxLength={40} disabled={busy} value={column.label ?? ""} onChange={e => editColumn(column.index, { label: e.target.value })}/>
+              <input className="field csv-plan-unit" aria-label={`Njësia për “${column.header}”`} placeholder="Njësia" maxLength={12} disabled={busy} value={column.unit ?? ""} onChange={e => editColumn(column.index, { unit: e.target.value })}/>
+            </>}
+          </div>
+        </li>;
+      })}</ol>
+      {plan.plan.columns.some(c => c.use === "price_amount") && <label className="csv-plan-request"><input type="checkbox" disabled={busy} checked={plan.plan.missingPrice === "request"}
+        onChange={e => setPlan(p => p && { ...p, plan: { ...p.plan, missingPrice: e.target.checked ? "request" : "empty" } })}/> Rreshtat pa asnjë çmim ruhen “Sipas kërkesës”</label>}
+      {newFields.length > 0 && <p className="muted-copy">Shtohen fushat e produkteve: {newFields.map(f => `“${f.label}”${f.unit ? ` (${f.unit})` : ""}`).join(", ")}.</p>}
       {plan.advice && <details className="csv-ai-review"><summary>Vlerësimi i Agjentit</summary><p className="csv-advice">{plan.advice}</p></details>}
       <div className="csv-buttons">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void acceptPlan()}>Prano propozimet</button>
@@ -148,7 +174,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
     </div>}
     {source && !preview && plan?.state === "saved" && <div className="csv-ready">
       <p>Kjo CSV lexohet sipas planit që ke miratuar</p>
-      {plan.lines.length > 0 && <details><summary>Si lexohen kolonat</summary><ul className="csv-plan-lines">{plan.lines.map(line => <li key={line}>{line}</li>)}</ul></details>}
+      {planLines.length > 0 && <details><summary>Si lexohen kolonat</summary><ul className="csv-plan-lines">{planLines.map(line => <li key={line}>{line}</li>)}</ul></details>}
       <button type="button" className="btn btn-primary csv-main-action" disabled={busy || !selected.length} onClick={() => void review(false)}>Krahaso me katalogun</button>
       <button type="button" className="csv-text-button" disabled={busy} onClick={() => void review(true)}>Lexoje përsëri me Agjentin</button>
     </div>}
@@ -237,7 +263,8 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
       <div className="csv-results" tabIndex={0} role="region" aria-label="Detajet e ndryshimeve">{preview.rows.map(row => <details key={row.line} open={row.status === "conflict"}>
         <summary><span className="csv-row-number">{row.line}</span><span className="csv-row-name">{row.name}</span><span className={`csv-row-status is-${row.status}`}>{{ create: "Shtim", update: "Përditësim", unchanged: "Pa ndryshim", conflict: "Konflikt" }[row.status]}</span></summary>
         {row.errors.map(s => <p role="alert" key={s}>{s}</p>)}{row.warnings.map(s => <p key={s}>{s}</p>)}
-        <dl>{Object.entries(row.patch).flatMap(([field, value]) => field === "attributes" && value && typeof value === "object"
+        {/* A value that stays empty (e.g. no price for a price on request) is not a change worth a line. */}
+        <dl>{Object.entries(row.patch).filter(([field, value]) => value != null || row.before?.[field as keyof typeof row.before] != null).flatMap(([field, value]) => field === "attributes" && value && typeof value === "object"
           ? Object.entries(value).map(([key, item]) => <div key={`a-${key}`}><dt>{fieldLabels[key] ?? key}</dt><dd><span>{display(key, row.before?.attributes?.[key])}</span> → <strong>{display(key, item)}</strong></dd></div>)
           : [<div key={field}><dt>{({ ...importLabels, ...configurationLabels })[field as keyof typeof importLabels]}</dt><dd><span>{display(field, row.before?.[field as keyof typeof row.before])}</span> → <strong>{display(field, value)}</strong></dd></div>])}
           {row.variants?.map(v => <div key={JSON.stringify(v.options)}><dt>Variant</dt><dd><strong>{Object.entries(v.options).map(([k, val]) => `${fieldLabels[k] ?? k}: ${val}`).join(" · ")}</strong>{v.sku ? ` · ${v.sku}` : ""}{v.price_amount !== null ? ` · ${v.price_amount}` : ""}</dd></div>)}</dl>

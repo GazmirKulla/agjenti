@@ -89,5 +89,6 @@ Kodi që mbetet:
 - Qelizë me disa vlera (`2; 3; 4`) → listë te produkti; atëherë të gjitha kolonat "Zgjedh klienti" të rreshtit bëhen lista.
   Rreshta me të njëjtin emër dhe lista → konflikt.
 - Shablloni njihet pa AI: "Çmimi maksimal" dhe "Njësia e çmimit" lexohen nga titulli ynë.
+- Te ueb-i pronari ndryshon çdo kolonë te karta e planit (çfarë është, emri dhe njësia e fushës së re, "Sipas kërkesës"); plani përfshin gjithmonë të gjitha kolonat.
 - Mobile: rishikimi tregon planin dhe "Prano propozimet" (`mode: accept_plan`); porosia manuale nuk ndryshoi,
   sepse lista vjen nga serveri.

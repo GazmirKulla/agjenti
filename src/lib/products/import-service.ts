@@ -37,7 +37,7 @@ export async function loadSavedPlan(access: Access, headers: string[], cells: st
   const columns = stored.columns.filter(c => !c.fieldKey || keys.has(c.fieldKey))
     .map(c => ({ ...c, use: (c.use === "field" || c.use === "choice") && !c.fieldKey ? "ignore" as const : c.use }));
   const plan = validatePlan({ columns, missingPrice: stored.missingPrice }, headers, cells, fields);
-  return plan.columns.length ? plan : undefined;
+  return plan.columns.some(c => c.use !== "ignore") ? plan : undefined;
 }
 async function rememberPlan(businessId: string, headers: string[], plan: ImportPlan) {
   const plans = await readStoredPlans(businessId);
