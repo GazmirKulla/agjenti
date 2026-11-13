@@ -16,6 +16,8 @@ export type BillingUsage = {
   available: number;
   periodStart: string;
   periodEnd: string;
+  /** End of the paid time of a plan paid with POK; null for Free or a plan set by an administrator. */
+  paidUntil: string | null;
 };
 
 export const plans: Record<BillingPlan, { name: string; monthlyLimit: number; monthlyPrice: number }> = {
@@ -46,6 +48,7 @@ export const loadBillingUsage = cache(async function loadBillingUsage(businessId
     available: Number(value.available),
     periodStart: String(value.periodStart),
     periodEnd: String(value.periodEnd),
+    paidUntil: typeof value.paidUntil === "string" ? value.paidUntil : null,
   };
 });
 

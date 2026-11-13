@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import { PageHeading } from "@/components/dashboard/ui";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { billingState, loadBillingUsage, loadUsageBreakdown, plans } from "@/lib/billing/service";
+import { isPaidPlan, loadPaymentCard } from "@/lib/billing/payments";
+import { pokConfigured, pokEnvironment } from "@/lib/billing/pok";
+import { BillingCheckout } from "@/components/dashboard/billing-checkout";
 
 const planFeatures = {
   // Every plan has every feature; plans differ only in AI messages per month.
@@ -26,6 +29,10 @@ export default async function BillingPage({ params }: { params: Promise<{ slug: 
   const payer = usage.scope === "account" && usage.billingUserId === user.id;
   const breakdown = payer && usage.billingUserId ? await loadUsageBreakdown(usage.billingUserId, usage.periodStart).catch(() => []) : [];
   const currentPlan = plans[usage.plan];
+  // Only the person who pays sees card payments; POK must be configured first.
+  const canPay = payer && pokConfigured();
+  const card = canPay ? await loadPaymentCard(user.id).catch(() => null) : null;
+  const paidOptions = (Object.keys(plans) as Array<keyof typeof plans>).filter(isPaidPlan).map((key) => ({ key, name: plans[key].name, price: plans[key].monthlyPrice }));
 
   return <>
     <PageHeading
@@ -60,6 +67,8 @@ export default async function BillingPage({ params }: { params: Promise<{ slug: 
       <ul>{breakdown.map((row) => <li key={row.id}><span>{row.name}</span><strong>{row.used.toLocaleString("sq-AL")}</strong></li>)}</ul>
     </section>}
 
+    {canPay && <BillingCheckout env={pokEnvironment()} card={card ? { label: card.label } : null} currentPlan={usage.plan} paidUntil={usage.paidUntil} plans={paidOptions} />}
+
     <section className="billing-plans" aria-label="Paketat e disponueshme">
       {(Object.keys(plans) as Array<keyof typeof plans>).map((key) => {
         const plan = plans[key];
@@ -72,7 +81,9 @@ export default async function BillingPage({ params }: { params: Promise<{ slug: 
           <p className="billing-price">{plan.monthlyPrice === 0 ? "Falas" : `${plan.monthlyPrice.toLocaleString("sq-AL")} lekë`}<small>{plan.monthlyPrice === 0 ? "" : " / muaj"}</small></p>
           <p className="muted-copy">{plan.monthlyLimit.toLocaleString("sq-AL")} mesazhe/muaj</p>
           <ul>{planFeatures[key].map((feature) => <li key={feature}>{feature}</li>)}</ul>
-          {current ? <span className="billing-plan-status">Në përdorim</span> : <span className="billing-plan-status muted">Pagesat me Stripe do të aktivizohen së shpejti.</span>}
+          {current ? <span className="billing-plan-status">Në përdorim</span> : <span className="billing-plan-status muted">{key === "free"
+            ? "Paketa kthehet në Free kur mbaron koha e paguar."
+            : canPay ? "Paguaj me kartë te seksioni më sipër." : payer ? "Pagesat me kartë do të aktivizohen së shpejti." : "Paketën e ndryshon pronari që paguan."}</span>}
         </article>;
       })}
     </section>

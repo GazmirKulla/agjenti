@@ -38,6 +38,6 @@ export default async function AdminPricingPage() {
         </article>;
       })}
     </section>
-    <p className="muted-copy mt-5">Ndryshimi i planit dhe blerja e mesazheve shtesë do të aktivizohen kur të lidhet Stripe.</p>
+    <p className="muted-copy mt-5">Pronari që paguan e paguan paketën me kartë përmes POK, një muaj në një herë. Kur mbaron koha e paguar, paketa kthehet në Free. Paketat e vendosura nga administratori nuk skadojnë. Blerja e mesazheve shtesë nuk është aktivizuar ende.</p>
   </>;
 }
