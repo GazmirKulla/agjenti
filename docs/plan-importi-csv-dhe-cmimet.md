@@ -75,3 +75,19 @@ Kodi që mbetet:
 
 - Sasia te porosia e agjentit është ende 1; çmimi për m³ kërkon sasi me presje (p.sh. 0.5 m³). Hap më vete.
 - Stoku për variant (Faza 3 e mëparshme) nuk është bërë.
+
+## Si u zbatua (ndryshime nga plani)
+
+- Migrimi u zgjerua (ende i paaplikuar): `save_products_with_visual_flow` ruan vetë `price_mode`, `price_max`, `price_unit`
+  (pa përditësim pas ruajtjes), dhe `configure_product_batch` aktivizon produktet "sipas kërkesës" pa çmim
+  (`product_price_ready`). Kufizim i ri: `range` kërkon të dy çmimet.
+- Nuk ka lista fjalësh për "Të ndryshme", "-" ose "sipas kërkesës". AI propozon te plani, për çdo kolonë, vlerat që
+  nuk janë vlerë (serveri i pranon vetëm nëse ndodhen në atë kolonë) dhe, për gjithë skedarin, nëse rreshtat pa asnjë
+  çmim janë "sipas kërkesës". Pronari i sheh si fjali dhe i miraton.
+- Plani: `src/lib/products/import-plan.ts` (validimi, fjalitë, lidhja me fushat); `acceptImportPlan` shton fushat,
+  ruan planin sipas titujve dhe krahason rreshtat. Fusha të reja shton vetëm pronari.
+- Qelizë me disa vlera (`2; 3; 4`) → listë te produkti; atëherë të gjitha kolonat "Zgjedh klienti" të rreshtit bëhen lista.
+  Rreshta me të njëjtin emër dhe lista → konflikt.
+- Shablloni njihet pa AI: "Çmimi maksimal" dhe "Njësia e çmimit" lexohen nga titulli ynë.
+- Mobile: rishikimi tregon planin dhe "Prano propozimet" (`mode: accept_plan`); porosia manuale nuk ndryshoi,
+  sepse lista vjen nga serveri.

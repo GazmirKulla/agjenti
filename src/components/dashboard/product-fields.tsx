@@ -1,4 +1,6 @@
 "use client";
+import { useState } from "react";
+import { priceModeLabels, priceModes, priceMode } from "@/lib/products/pricing";
 import { ProductBusinessWorkflow } from "@/components/products/business-workflow";
 import type { Option } from "@/lib/products/catalog";
 import { availabilityLabels, fieldsOf, itemKind } from "@/lib/items/kinds";
@@ -13,11 +15,14 @@ type ProductFieldValues = {
   description?: string | null;
   image_url?: string | null;
   price_amount?: number | null;
+  price_mode?: string | null;
+  price_max?: number | null;
+  price_unit?: string | null;
   currency?: string | null;
   product_type_id?: string | null;
   workflow_id?: string | null;
   is_active?: boolean;
-  attributes?: Record<string, string | number | boolean>;
+  attributes?: Record<string, string | number | boolean | string[]>;
   availability?: string;
   variants?: ProductVariant[];
   visual_draft?: { id: string; name: string; status: string } | null;
@@ -46,6 +51,7 @@ export function ProductFields({
   const kindDefinition = kind ? itemKind(kind) : null;
   const itemDefinition = kindDefinition ? { ...kindDefinition, fields: fieldsOf(kindDefinition.id, attributeFields(fields)) } : null;
   const choices = variantFields(fields);
+  const [mode, setMode] = useState(priceMode(product?.price_mode));
   return (
     <>
       {itemDefinition && <input type="hidden" name="item_kind" value={itemDefinition.id} />}
@@ -128,6 +134,25 @@ export function ProductFields({
       )}
 
       {itemDefinition && choices.length > 0 && (
+        <fieldset id="product-choices" className="grid gap-3">
+          <legend className="font-semibold">Vlerat që zgjedh klienti</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {choices.map(field => {
+              const list = product?.attributes?.[field.key];
+              return (
+                <label key={field.key} className="form-label">
+                  {field.label}{field.unit ? ` (${field.unit})` : ""}
+                  <input name={`choices_${field.key}`} className="field" defaultValue={Array.isArray(list) ? list.join("; ") : ""}
+                    placeholder={field.options?.length ? field.options.slice(0, 3).join("; ") : "P.sh. 2; 3; 4"} />
+                </label>
+              );
+            })}
+          </div>
+          <p className="muted-copy">Ndaji vlerat me ;. Agjenti e pyet klientin cilën dëshiron. Kur një vlerë ka kod ose çmim tjetër, shtoje si variant më poshtë; atëherë vlejnë variantet.</p>
+        </fieldset>
+      )}
+
+      {itemDefinition && choices.length > 0 && (
         <VariantEditor fields={choices} variants={product?.variants ?? []} currency={product?.currency ?? "ALL"} />
       )}
 
@@ -151,16 +176,10 @@ export function ProductFields({
         <legend className="font-semibold">Çmimi</legend>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="form-label">
-            Shuma
-            <input
-              name="price"
-              type="number"
-              min="0"
-              step="0.01"
-              className="field"
-              defaultValue={product?.price_amount ?? ""}
-              required={false}
-            />
+            Mënyra e çmimit
+            <select name="price_mode" className="field" value={mode} onChange={e => setMode(priceMode(e.target.value))}>
+              {priceModes.map(m => <option key={m} value={m}>{priceModeLabels[m]}</option>)}
+            </select>
           </label>
           <label className="form-label">
             Monedha
@@ -172,7 +191,35 @@ export function ProductFields({
               required
             />
           </label>
+          {mode !== "request" && (
+            <label className="form-label">
+              {mode === "range" ? "Nga" : mode === "from" ? "Duke filluar nga" : "Shuma"}
+              <input
+                name="price"
+                type="number"
+                min="0"
+                step="0.01"
+                className="field"
+                defaultValue={product?.price_amount ?? ""}
+                required={mode !== "fixed"}
+              />
+            </label>
+          )}
+          {mode === "range" && (
+            <label className="form-label">
+              Deri
+              <input name="price_max" type="number" min="0" step="0.01" className="field" defaultValue={product?.price_max ?? ""} required />
+            </label>
+          )}
+          {mode !== "request" && (
+            <label className="form-label">
+              Për njësi (opsionale)
+              <input name="price_unit" className="field" maxLength={20} placeholder="P.sh. m³, copë, m" defaultValue={product?.price_unit ?? ""} />
+            </label>
+          )}
         </div>
+        {mode === "request" && <p className="muted-copy">Klienti e merr çmimin nga stafi. Agjenti nuk jep çmim dhe nuk e porosit vetë këtë produkt.</p>}
+        {(mode === "range" || mode === "from") && <p className="muted-copy">Agjenti e tregon këtë çmim. Porosia automatike kërkon një çmim të caktuar, p.sh. te variantet.</p>}
       </fieldset>
 
       <fieldset id="product-process" className="grid gap-3">

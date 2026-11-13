@@ -25,6 +25,7 @@ const errors: Record<string, [string, number]> = {
   invalid_conversation: ["Biseda nuk u gjet në këtë biznes.", 404],
   product_unavailable: ["Produkti nuk është aktiv.", 409],
   price_missing: ["Produkti nuk ka çmim. Vendos çmimin te Produktet.", 409],
+  price_on_request: ["Ky produkt nuk ka një çmim të caktuar (nga–deri ose sipas kërkesës). Zgjidh një variant me çmim ose vendos çmimin te Produktet.", 409],
   variant_required: ["Zgjidh variantin (p.sh. masën) e produktit.", 400],
   variant_unavailable: ["Ky variant nuk është më në shitje.", 409],
 };

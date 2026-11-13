@@ -36,6 +36,9 @@ export function ProductEditor({
     description: product?.description ?? "",
     image: product?.image_url ?? "",
     price: product?.price_amount ?? (null as number | null),
+    mode: (product?.price_mode ?? "fixed") as string,
+    max: product?.price_max ?? (null as number | null),
+    unit: product?.price_unit ?? "",
     currency: product?.currency ?? "ALL",
     type: product?.product_type_id ?? "",
     workflow: product?.workflow_id ?? "",
@@ -47,7 +50,7 @@ export function ProductEditor({
   const router = useRouter();
   const checks = [
     ["Emri i produktit", preview.name.trim().length >= 2],
-    ["Çmimi i produktit", preview.price !== null],
+    ["Çmimi i produktit", preview.price !== null || preview.mode === "request"],
     ["Lloji i produktit", !!preview.type],
     ["Workflow për veprime (veçmas katalogut)", !!preview.workflow || !!product?.visual_workflow || !!businessWorkflow?.active],
     ["Foto e produktit", !!preview.image],
@@ -60,12 +63,15 @@ export function ProductEditor({
         onInput={(e) => {
           const form = e.currentTarget;
           const d = new FormData(form);
-          const price = String(d.get("price") ?? "");
+          const price = String(d.get("price") ?? ""), max = String(d.get("price_max") ?? "");
           setPreview({
             name: String(d.get("name") ?? ""),
             description: String(d.get("description") ?? ""),
             image: String(d.get("image_url") ?? ""),
             price: price === "" ? null : Number(price),
+            mode: String(d.get("price_mode") ?? "fixed"),
+            max: max === "" ? null : Number(max),
+            unit: String(d.get("price_unit") ?? ""),
             currency: String(d.get("currency") ?? "ALL"),
             type: String(d.get("product_type_id") ?? ""),
             workflow: String(d.get("workflow_id") ?? ""),
@@ -145,7 +151,7 @@ export function ProductEditor({
               )}
             </div>
             <h3>{preview.name || "Emri i produktit"}</h3>
-            <strong>{money(preview.price, preview.currency)}</strong>
+            <strong>{money(preview.price, preview.currency, { mode: preview.mode, max: preview.max, unit: preview.unit })}</strong>
             <p>{types.find((t) => t.id === preview.type)?.name || "Pa lloj"}</p>
             <span className="product-tag">
               {businessWorkflow?.name || product?.visual_workflow?.name || workflows.find((w) => w.id === preview.workflow)?.name ||

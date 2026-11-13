@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { productCsvConfiguration, confirmProductCsv, evaluateProductCsv, reviewProductCsv, uploadProductCsv } from "@/lib/products/csv-import-actions";
-import { autoMapAttributes, configurationLabels, importFields, importLabels, type ImportOptions, type ImportPreview, type ImportSource } from "@/lib/products/import-model";
+import { productCsvConfiguration, confirmProductCsv, evaluateProductCsv, reviewProductCsv, uploadProductCsv, acceptProductCsvPlan } from "@/lib/products/csv-import-actions";
+import { autoMapAttributes, configurationLabels, importFields, importLabels, importValueLabel, type ImportOptions, type ImportPreview, type ImportSource } from "@/lib/products/import-model";
+import type { ImportPlan } from "@/lib/products/import-plan";
 import { saveProductFields } from "@/lib/items/actions";
 import type { BusinessField } from "@/lib/items/fields";
 import { FileCard } from "@/components/business-assistant/file-card";
@@ -16,7 +17,10 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
   const [withoutHeaders, setWithoutHeaders] = useState(false);
   const [csvText, setCsvText] = useState(initialSource?.raw ?? "");
   const [source, setSource] = useState(initialSource);
-  const [options, setOptions] = useState<ImportOptions>({ mapping: initialSource?.mapping ?? {}, fields: initialSource?.fields ?? [...importFields] });
+  const [options, setOptions] = useState<ImportOptions>(initialSource?.options ? { ...initialSource.options, fields: initialSource.fields ?? initialSource.options.fields } : { mapping: initialSource?.mapping ?? {}, fields: initialSource?.fields ?? [...importFields] });
+  // The reading plan: proposed by the Agent and waiting for the owner, or approved (now or for earlier files with the same titles).
+  const [plan, setPlan] = useState<{ plan: ImportPlan; lines: string[]; newFields: string[]; advice?: string; state: "proposed" | "saved" } | undefined>(
+    initialSource?.plan ? { plan: initialSource.plan, lines: [], newFields: [], state: "saved" } : undefined);
   const [preview, setPreview] = useState<ImportPreview>();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -61,20 +65,55 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
     finally { lock.current = false; setBusy(false); }
   }
   function change(next: ImportOptions) { setOptions(next); setPreview(undefined); setNotice(""); }
+  function opened(result: { source?: ImportSource; planLines?: string[] }) {
+    const next = result.source!;
+    setSource(next);
+    setOptions(next.options ? { ...next.options, fields: [...importFields] } : { mapping: next.mapping, fields: [...importFields] });
+    setPlan(next.plan ? { plan: next.plan, lines: result.planLines ?? [], newFields: [], state: "saved" } : undefined);
+  }
   async function review(ai: boolean) {
     if (!source) return;
     await run(async () => {
-      const result = ai ? await evaluateProductCsv(slug, source.token, options) : await reviewProductCsv(slug, source.token, options);
+      if (ai) {
+        const result = await evaluateProductCsv(slug, source.token, options);
+        if (result.error || !result.plan) { setNotice(result.error ?? "Agjenti nuk ktheu plan. Provo përsëri."); setPreview(undefined); return; }
+        // The owner reads the plan first; the rows are compared once it is approved.
+        setPlan({ plan: result.plan, lines: result.planLines ?? [], newFields: result.newFields ?? [], advice: result.preview?.advice, state: "proposed" });
+        setPreview(undefined); setDetail(null);
+        return;
+      }
+      const result = await reviewProductCsv(slug, source.token, options);
       if (result.error) { setNotice(result.error); setPreview(undefined); return; }
-      if ("mapping" in result && result.mapping) setOptions(o => ({ ...o, mapping: result.mapping! }));
       setPreview(result.preview);
       setDetail(null);
     });
   }
+  async function acceptPlan() {
+    if (!source || !plan) return;
+    await run(async () => {
+      const result = await acceptProductCsvPlan(slug, source.token, plan.plan, options);
+      if ("error" in result) { setNotice(result.error ?? ""); return; }
+      setConfiguration(c => ({ ...c, fields: result.fields }));
+      setOptions(result.options);
+      setPlan(p => p && { ...p, plan: result.plan, newFields: [], state: "saved" });
+      setPreview({ ...result.preview, advice: plan.advice });
+    });
+  }
+  function downloadTemplate() {
+    // Our columns and the business's own fields; a file with these titles is read without the Agent.
+    const titles = [...importFields.map(f => importLabels[f]), ...configuration.fields.map(f => f.label)];
+    const example = ["Produkt shembull", "KOD-1", "1000", "", "", "ALL", "Përshkrimi i produktit", "", ...configuration.fields.map(f => f.variant ? "Vlera 1; Vlera 2" : "")];
+    const cell = (v: string) => /[",;\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const blob = new Blob(["\uFEFF" + [titles, example].map(row => row.map(cell).join(",")).join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob); link.download = "shablloni-produktet.csv"; link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
   function display(field: string, value: unknown) {
     if (field === "product_type_id") return configuration.types.find(t => t.id === value)?.name ?? (value ? "Lloj ekzistues" : "—");
     if (field === "workflow_id") return configuration.workflows.find(t => t.id === value)?.name ?? (value ? "Workflow ekzistues" : "Kryesori / pa konfigurim të veçantë");
-    return String(value ?? "—");
+    if (Array.isArray(value)) return value.join(", ");
+    return String(importValueLabel(field, value) ?? "—");
   }
   const allLines = Array.from({ length: source?.count ?? 0 }, (_, i) => i + 2);
   const selected = options.lines ?? allLines;
@@ -86,17 +125,34 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
       const file = e.target.files?.[0]; e.target.value = "";
       if (!file) return;
       // Invalidate approval immediately, including when the replacement file is invalid.
-      setSource(undefined); setPreview(undefined);
+      setSource(undefined); setPreview(undefined); setPlan(undefined);
       void run(async () => {
         if (file.size > 512000) { setNotice("CSV-ja duhet të jetë deri në 500 KB."); return; }
         const raw = await file.text(); setCsvText(raw);
         const result = await uploadProductCsv(slug, raw, file.name, withoutHeaders);
         if (result.error) { setNotice(result.error); return; }
-        setSource(result.source); setOptions({ mapping: result.source!.mapping, fields: [...importFields] });
+        opened(result);
       });
     }}/>
     </header>
-    {source && !preview && <div className="csv-ready">
+    {source && !preview && plan?.state === "proposed" && <div className="csv-plan" aria-label="Plani i leximit">
+      <p className="csv-plan-title"><Icon name="spark" size={16}/> <strong>Plani i leximit</strong></p>
+      <p className="muted-copy">Agjenti propozon si të lexohet çdo kolonë. Rishikoje: asgjë nuk ruhet në katalog pa miratimin tënd të rreshtave.</p>
+      <ul>{plan.lines.map(line => <li key={line}>{line}</li>)}</ul>
+      {plan.newFields.length > 0 && <p className="muted-copy">Shtohen fushat e produkteve: {plan.newFields.map(f => `“${f}”`).join(", ")}.</p>}
+      {plan.advice && <details className="csv-ai-review"><summary>Vlerësimi i Agjentit</summary><p className="csv-advice">{plan.advice}</p></details>}
+      <div className="csv-buttons">
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void acceptPlan()}>Prano propozimet</button>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => { setPlan(undefined); setDetail("settings"); }}>Lidh kolonat vetë</button>
+      </div>
+    </div>}
+    {source && !preview && plan?.state === "saved" && <div className="csv-ready">
+      <p>Kjo CSV lexohet sipas planit që ke miratuar</p>
+      {plan.lines.length > 0 && <details><summary>Si lexohen kolonat</summary><ul className="csv-plan-lines">{plan.lines.map(line => <li key={line}>{line}</li>)}</ul></details>}
+      <button type="button" className="btn btn-primary csv-main-action" disabled={busy || !selected.length} onClick={() => void review(false)}>Krahaso me katalogun</button>
+      <button type="button" className="csv-text-button" disabled={busy} onClick={() => void review(true)}>Lexoje përsëri me Agjentin</button>
+    </div>}
+    {source && !preview && !plan && <div className="csv-ready">
       <p>Gati për vlerësim</p>
       {unmapped.length > 0 && <p className="muted-copy">Kolonat {unmapped.map(u => `“${u.header}”`).join(", ")} nuk kanë ende vend. <button type="button" className="csv-text-button" onClick={() => setDetail("settings")}>Shtoji si fusha</button></p>}
       <small>Agjenti kontrollon skedarin dhe e krahason me produktet ekzistuese.</small>
@@ -104,8 +160,9 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
       <small>Përmbajtja analizohet nga AI. Ndryshimet ruhen vetëm me miratimin tënd.</small>
     </div>}
     {busy && <p className="csv-progress" role="status"><span className="csv-spinner"/> Duke përpunuar…</p>}
-    {preview && <ProductCsvResult preview={preview} saved={saved} slug={slug} busy={busy} onDetails={() => setDetail("review")} onNew={() => { setSaved(undefined); setPreview(undefined); setSource(undefined); setCsvText(""); setNotice(""); setWithoutHeaders(false); setOptions({ mapping: {}, fields: [...importFields] }); }}/>}
-    {!source && <button type="button" className="csv-text-button" onClick={() => setDetail("settings")}>Ngjit tekst ose përshtat CSV-në</button>}
+    {preview && <ProductCsvResult preview={preview} saved={saved} slug={slug} busy={busy} onDetails={() => setDetail("review")} onNew={() => { setSaved(undefined); setPreview(undefined); setSource(undefined); setPlan(undefined); setCsvText(""); setNotice(""); setWithoutHeaders(false); setOptions({ mapping: {}, fields: [...importFields] }); }}/>}
+    {!source && <div className="csv-buttons"><button type="button" className="csv-text-button" onClick={() => setDetail("settings")}>Ngjit tekst ose përshtat CSV-në</button>
+      <button type="button" className="csv-text-button" onClick={downloadTemplate}>Shkarko shabllonin</button></div>}
     {detail === "settings" && <ProductCsvDialog title="Përshtat importin" onClose={() => setDetail(null)} footer={<button type="button" className="btn btn-ghost" onClick={() => setDetail(null)}>U krye</button>}>
     <div className="csv-source-options">
       <label><input type="checkbox" disabled={busy} checked={withoutHeaders} onChange={e => { setWithoutHeaders(e.target.checked); setPreview(undefined); setSource(undefined); }}/> CSV pa tituj kolonash (emër, çmim, monedhë, përshkrim, SKU, foto)</label>
@@ -115,7 +172,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
         setPreview(undefined); setSource(undefined);
         const result = await uploadProductCsv(slug, csvText, "Produkte.csv", withoutHeaders);
         if (result.error) { setNotice(result.error); return; }
-        setSource(result.source); setOptions({ mapping: result.source!.mapping, fields: [...importFields] });
+        opened(result);
       })}>Lexo CSV-në</button>
     </details>
     </div>
@@ -181,7 +238,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
         <summary><span className="csv-row-number">{row.line}</span><span className="csv-row-name">{row.name}</span><span className={`csv-row-status is-${row.status}`}>{{ create: "Shtim", update: "Përditësim", unchanged: "Pa ndryshim", conflict: "Konflikt" }[row.status]}</span></summary>
         {row.errors.map(s => <p role="alert" key={s}>{s}</p>)}{row.warnings.map(s => <p key={s}>{s}</p>)}
         <dl>{Object.entries(row.patch).flatMap(([field, value]) => field === "attributes" && value && typeof value === "object"
-          ? Object.entries(value).map(([key, item]) => <div key={`a-${key}`}><dt>{fieldLabels[key] ?? key}</dt><dd><span>{String(row.before?.attributes?.[key] ?? "—")}</span> → <strong>{String(item)}</strong></dd></div>)
+          ? Object.entries(value).map(([key, item]) => <div key={`a-${key}`}><dt>{fieldLabels[key] ?? key}</dt><dd><span>{display(key, row.before?.attributes?.[key])}</span> → <strong>{display(key, item)}</strong></dd></div>)
           : [<div key={field}><dt>{({ ...importLabels, ...configurationLabels })[field as keyof typeof importLabels]}</dt><dd><span>{display(field, row.before?.[field as keyof typeof row.before])}</span> → <strong>{display(field, value)}</strong></dd></div>])}
           {row.variants?.map(v => <div key={JSON.stringify(v.options)}><dt>Variant</dt><dd><strong>{Object.entries(v.options).map(([k, val]) => `${fieldLabels[k] ?? k}: ${val}`).join(" · ")}</strong>{v.sku ? ` · ${v.sku}` : ""}{v.price_amount !== null ? ` · ${v.price_amount}` : ""}</dd></div>)}</dl>
       </details>)}</div>

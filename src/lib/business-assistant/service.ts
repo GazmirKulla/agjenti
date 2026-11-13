@@ -14,7 +14,7 @@ import { observeAgentEffect, requireAgentConfigurationAccess } from "@/lib/agent
 import { configurationEffectMessage, type AgentConfigurationEffect } from "@/lib/agents/configuration-contract";
 import { defaultPersonalAssistantName, readPersonalAssistantName } from "./identity";
 import { modelPlanContext, type PlanningPreferences, type RecoverablePlan } from "./persistence-model";
-import { sealImportSource } from "@/lib/products/import-service";
+import { openImportSource } from "@/lib/products/import-service";
 import { importFields, type ImportField, type ImportSource } from "@/lib/products/import-model";
 import type { AssistantMaterial } from "./materials";
 import { loadOrderFlows, prepareOrderFlow, executeOrderFlow, type OrderFlowContext, refineOrderFlowProposal } from "./orderflow-service";
@@ -501,7 +501,7 @@ export async function planRequest(
       const csvs = materials.filter(m => /\.csv$/i.test(m.name));
       if (csvs.length !== 1) return finish({ message: "Ngarko një CSV për vlerësim dhe miratim në grup.", clarifying: true });
       try {
-        const source = sealImportSource(access, csvs[0].text, csvs[0].name);
+        const source = await openImportSource(access, csvs[0].text, csvs[0].name);
         if (proposal.changes.length) {
           const selected = JSON.parse(proposal.changes[0].value);
           if (!Array.isArray(selected) || !selected.length || selected.some(f => !importFields.includes(f))) throw Error("Fusha importi të pavlefshme.");

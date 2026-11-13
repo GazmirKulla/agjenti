@@ -69,3 +69,18 @@ it("a variant without its own price takes the product's price", () => {
   expect(variantUnitAmount(variants, null, {})).toBe(800);
   expect(variantUnitAmount([], 500)).toBe(500);
 });
+
+it("without variant rows, asks for each list kept on the product; rows win when there are any", () => {
+  const definition = compileVisualProcesses(version)[0];
+  const lists = { gjatesia: ["2", "3", "4"], trashesia: ["3", "5"] };
+  const listed = composeVariantChoices(definition, [], fields, lists);
+  expect(listed.fields.filter(f => f.id.startsWith("variant_")).map(f => [f.id, f.type === "choice" ? f.options : []]))
+    .toEqual([["variant_gjatesia", ["2", "3", "4"]], ["variant_trashesia", ["3", "5"]]]);
+  const rows = composeVariantChoices(definition, variants, fields, lists);
+  expect(rows.fields.filter(f => f.id.startsWith("variant_")).map(f => f.id)).toEqual(["variant_gjatesia"]);
+});
+
+it("a variant without its own price is not orderable when the product's price is not fixed", () => {
+  expect(variantUnitAmount(variants, null, { variant_gjatesia: "80" })).toBeNull();
+  expect(variantUnitAmount(variants, null, { variant_gjatesia: "120" })).toBe(800);
+});

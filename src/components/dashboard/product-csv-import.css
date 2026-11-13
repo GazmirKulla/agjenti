@@ -83,3 +83,6 @@
   .csv-dialog-content { padding: 16px; }
   .csv-file-actions { flex-direction: column; }
 }
+.csv-plan { display: grid; gap: 10px; }
+.csv-plan-title { display: flex; align-items: center; gap: 6px; font-size: 15px; }
+.csv-plan ul, .csv-plan-lines { display: grid; gap: 6px; margin: 0; padding-left: 18px; list-style: disc; line-height: 1.5; overflow-wrap: anywhere; }

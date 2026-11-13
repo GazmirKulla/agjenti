@@ -5,7 +5,8 @@ import type { ReferenceProduct } from "@/lib/products/entity-bridge";
 import { rankKnowledge } from "@/lib/catalogs/source-ranking";
 import { attributeDetails } from "@/lib/items/kinds";
 import { attributeFields, readBusinessFields, type BusinessField } from "@/lib/items/fields";
-import { variantDetails, type ProductVariant } from "@/lib/products/variants";
+import { choiceDetails, choiceLists, variantDetails, type ProductVariant } from "@/lib/products/variants";
+import { orderablePrice } from "@/lib/products/pricing";
 
 export type ReadStatus = "complete" | "partial" | "no_match" | "unavailable" | "unsupported" | "unverified";
 /** Evidence from a server-authorized read, never an execution permission or a cache. */
@@ -23,9 +24,11 @@ export type GroundedProduct = ReferenceProduct & { description?: string | null; 
   details?: string;
   /** The choices the customer must make, with their prices, e.g. "Gjatësia 80 cm: 500 ALL; Gjatësia 120 cm: 800 ALL". */
   variants?: string;
+  /** Without variant rows: the values listed on the product that the customer chooses from, e.g. "Gjatësia: 2, 3, 4 m". */
+  choices?: string;
   /** Present only when the item is not simply available (reserved or rented); sold items are never read. */
   availability?: "reserved" | "rented" };
-const productColumns = "id,name,sku,description,product_type_id,workflow_id,price_amount,currency,item_kind,attributes,availability";
+const productColumns = "id,name,sku,description,product_type_id,workflow_id,price_amount,price_mode,price_max,price_unit,currency,item_kind,attributes,availability";
 type Extras = { fields: BusinessField[]; variants: Map<string, ProductVariant[]> };
 const noExtras: Extras = { fields: [], variants: new Map() };
 /** Turns the stored kind fields, the business's own fields and the variants into words the agent can match a request against. */
@@ -33,8 +36,11 @@ function withItemDetails(row: GroundedProduct & { item_kind?: string; attributes
   const { item_kind, attributes, availability, ...rest } = row;
   const details = attributeDetails(item_kind ?? "product", attributes, attributeFields(extras.fields));
   const own = extras.variants.get(row.id) ?? [];
-  const variants = own.length ? variantDetails(own, extras.fields, { price: row.price_amount ?? null, currency: row.currency ?? "ALL" }) : "";
-  return { ...rest, ...(details ? { details } : {}), ...(variants ? { variants } : {}), ...(availability === "reserved" || availability === "rented" ? { availability } : {}) };
+  // Variant rows win over the lists kept on the product; a variant without its own price
+  // takes the product's price only when that is one fixed number.
+  const variants = own.length ? variantDetails(own, extras.fields, { price: orderablePrice({ price_amount: row.price_amount ?? null, currency: row.currency ?? null, price_mode: row.price_mode }), currency: row.currency ?? "ALL" }) : "";
+  const choices = own.length ? "" : choiceDetails(choiceLists(attributes), extras.fields);
+  return { ...rest, ...(details ? { details } : {}), ...(variants ? { variants } : {}), ...(choices ? { choices } : {}), ...(availability === "reserved" || availability === "rented" ? { availability } : {}) };
 }
 /** The business's own fields and the active variants of its products. */
 async function readExtras(db: SupabaseClient, businessId: string): Promise<Extras> {
@@ -49,7 +55,7 @@ async function readExtrasOrThrow(db: SupabaseClient, businessId: string): Promis
   for (const v of variants.error ? [] : variants.data ?? []) map.set(v.product_id, [...(map.get(v.product_id) ?? []), { options: v.options, sku: v.sku, price_amount: v.price_amount, is_active: v.is_active }]);
   return { fields: business.error ? [] : readBusinessFields(business.data?.product_fields), variants: map };
 }
-export type GroundedService = ReferenceProduct & { description?: string; duration_minutes?: number; price_mode?: "fixed" | "from" | "request"; booking_enabled?: boolean };
+export type GroundedService = ReferenceProduct & { description?: string; duration_minutes?: number; booking_enabled?: boolean };
 export type GroundedKnowledge = { id: string; title: string; body: string; intent_key?: string | null; updated_at?: string };
 export type BusinessGrounding = {
   products: GroundedRead<GroundedProduct>;
@@ -137,9 +143,12 @@ export async function projectBusinessGrounding(read: BusinessGrounding, message:
 
 type ExactReply = { reply: string; presentedProducts?: ReferenceProduct[]; presentedServices?: ReferenceProduct[] };
 const priced = (p: ReferenceProduct) => typeof p.price_amount === "number" && Number.isFinite(p.price_amount) && p.price_amount >= 0 && Boolean(p.currency?.trim());
-function price(p: ReferenceProduct & { price_mode?: GroundedService["price_mode"] }) {
-  if (p.price_mode === "request" || !priced(p)) return "çmimi nuk është i përcaktuar; kontakto biznesin";
-  return `${p.price_mode === "from" ? "nga " : ""}${p.price_amount} ${p.currency}`;
+function price(p: ReferenceProduct) {
+  if (p.price_mode === "request") return "çmimi sipas kërkesës; stafi e jep çmimin";
+  if (!priced(p)) return "çmimi nuk është i përcaktuar; kontakto biznesin";
+  const unit = p.price_unit?.trim() ? ` për ${p.price_unit.trim()}` : "";
+  if (p.price_mode === "range" && typeof p.price_max === "number" && p.price_max !== p.price_amount) return `nga ${p.price_amount} deri ${p.price_max} ${p.currency}${unit}`;
+  return `${p.price_mode === "from" ? "nga " : ""}${p.price_amount} ${p.currency}${unit}`;
 }
 /** Small, fixed factual operations, not a router or natural-language SQL engine.
  * Invoke only AFTER the coordinator selected an informational execution path. */
@@ -182,5 +191,6 @@ export async function exactBusinessAnswer(read: BusinessGrounding, message: stri
     return { reply: "Nuk e identifikova me siguri një produkt ose shërbim të vetëm. Cilin emër të plotë ke parasysh?" };
   const selected = matches[0] as GroundedService;
   return { reply: duration ? `${selected.name}: ${selected.duration_minutes ? `${selected.duration_minutes} min. Kjo nuk konfirmon termine të lira.` : "kohëzgjatja nuk është verifikuar."}`
-    : (selected as GroundedProduct).variants ? `${selected.name}: ${(selected as GroundedProduct).variants}.` : `${selected.name}: ${price(selected)}.`, ...(kind === "product" ? { presentedProducts: [selected] } : { presentedServices: [selected] }) };
+    : (selected as GroundedProduct).variants ? `${selected.name}: ${(selected as GroundedProduct).variants}.`
+    : `${selected.name}: ${price(selected)}.${(selected as GroundedProduct).choices ? ` ${(selected as GroundedProduct).choices}.` : ""}`, ...(kind === "product" ? { presentedProducts: [selected] } : { presentedServices: [selected] }) };
 }

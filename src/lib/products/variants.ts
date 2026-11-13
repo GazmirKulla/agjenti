@@ -10,10 +10,33 @@ export type ProductVariant = {
 };
 
 export const MAX_VARIANTS = 100;
+export const MAX_CHOICES = 40;
+/** The values a customer chooses from, kept on the product: attributes.gjatesia = ["2","3","4"]. */
+export type ChoiceLists = Record<string, string[]>;
 /** Process field id for a variant choice; the order RPC reads options["variant_<key>"]. */
 export const variantFieldId = (key: string) => `variant_${key}`;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const cleanValue = (value: unknown) => typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 60) : "";
+
+/** "2; 3; 4" or "5x5 | 6x6 cm" → the separate values. A trailing unit the field already
+ * names ("10x10 cm" for a field in cm) is dropped so every value is written the same way. */
+export function splitChoices(text: string, unit?: string): string[] {
+  const suffix = unit?.trim().toLowerCase();
+  const values = text.split(/[;|]/).map(part => {
+    let value = cleanValue(part);
+    if (suffix && value.toLowerCase().endsWith(` ${suffix}`)) value = value.slice(0, -suffix.length).trim();
+    return value;
+  }).filter(Boolean);
+  return [...new Set(values)];
+}
+
+/** Every list stored on the product. The order check in the database requires a value from
+ * each of them, so all are read, also one whose field the owner has since renamed. */
+export function choiceLists(attributes: unknown): ChoiceLists {
+  const values = attributes && typeof attributes === "object" ? attributes as Record<string, unknown> : {};
+  return Object.fromEntries(Object.entries(values).flatMap(([key, list]) =>
+    Array.isArray(list) && list.length ? [[key, list.filter((v): v is string => typeof v === "string")]] : []));
+}
 
 /** Validates the owner's variant table against the business's variant fields. */
 export function parseVariants(raw: unknown, fields: BusinessField[]): { variants: ProductVariant[] } | { error: string } {
@@ -46,13 +69,27 @@ export function parseVariants(raw: unknown, fields: BusinessField[]): { variants
   return { variants };
 }
 
-/** The values a customer can choose for each variant field, from the active variants only. */
-export function variantChoices(variants: ProductVariant[], fields: BusinessField[]) {
+/** The values a customer can choose for each variant field: from the active variant rows,
+ * or, when the product has none, from the lists kept on the product. Rows win. */
+export function variantChoices(variants: ProductVariant[], fields: BusinessField[], lists: ChoiceLists = {}) {
   const active = variants.filter(v => v.is_active);
+  if (!active.length) return Object.entries(lists).flatMap(([key, values]) => {
+    const field = fields.find(f => f.key === key) ?? { key, label: key, type: "select" as const, variant: true };
+    return values.length ? [{ field, values }] : [];
+  });
   return fields.filter(f => f.variant).flatMap(field => {
     const values = [...new Set(active.flatMap(v => v.options[field.key] ? [v.options[field.key]] : []))];
     return values.length ? [{ field, values }] : [];
   });
+}
+
+/** "Gjatësia: 2, 3, 4 m; Trashësia: 3, 5 cm" — the lists the agent may tell a customer. */
+export function choiceDetails(lists: ChoiceLists, fields: BusinessField[]) {
+  const byKey = new Map(fields.map(f => [f.key, f]));
+  return Object.entries(lists).filter(([, values]) => values.length).map(([key, values]) => {
+    const field = byKey.get(key);
+    return `${field?.label ?? key}: ${values.join(", ")}${field?.unit ? ` ${field.unit}` : ""}`;
+  }).join("; ");
 }
 
 /** The one active variant that matches every chosen value, or undefined. */

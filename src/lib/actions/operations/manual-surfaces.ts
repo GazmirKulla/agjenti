@@ -89,6 +89,7 @@ export const manualSurfaces = {
   "src/lib/products/csv-import-actions.ts#reviewProductCsv": {"exception": "Read-only preview of uploaded rows."},
   "src/lib/products/csv-import-actions.ts#confirmProductCsv": {"legacy": "product_import"},
   "src/lib/products/csv-import-actions.ts#evaluateProductCsv": {"exception": "Read-only validation of product import rows."},
+  "src/lib/products/csv-import-actions.ts#acceptProductCsvPlan": {"exception": "Approves how the CSV columns are read: adds the owner's product fields and remembers the plan; product rows are persisted only by confirmProductCsv."},
   "src/lib/products/csv-import-actions.ts#productCsvConfiguration": {"exception": "Read-only lookup of the available import options."},
   "src/lib/products/import-actions.ts#previewProductFromUrl": {"exception": "Read-only external product preview."},
   "src/lib/products/import-actions.ts#scanInstagramProducts": {"exception": "Read-only product suggestions from the connected channel."},

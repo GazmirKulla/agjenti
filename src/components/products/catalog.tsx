@@ -329,7 +329,7 @@ export function ProductCatalog({
                         <strong>{p.name}</strong>
                         <small>{itemSubline(p, extra)}</small>
                         <span className="product-card-meta">
-                          <span>{money(p.price_amount, p.currency)}</span>
+                          <span>{money(p.price_amount, p.currency, { mode: p.price_mode, max: p.price_max, unit: p.price_unit })}</span>
                           <span className={`product-status is-${status}`}>{STATUS_LABEL[status] ?? status}</span>
                           {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}
                         </span>
@@ -378,7 +378,7 @@ export function ProductCatalog({
                       </Link>
                       {p.visual_workflow && <Link className="catalog-flow-name" href={entityWorkflowHref(slug, "product", p.id, p.visual_workflow.flowId)}>{p.visual_workflow.name} ↗</Link>}
                     </td>
-                    <td>{money(p.price_amount, p.currency)}</td>
+                    <td>{money(p.price_amount, p.currency, { mode: p.price_mode, max: p.price_max, unit: p.price_unit })}</td>
                     <td>
                       <span className={`product-status is-${status}`}>
                         {STATUS_LABEL[status] ?? status}

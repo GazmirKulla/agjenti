@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { autoMapAttributes, buildImportPreview, readImportCsv, importFields, type CatalogProduct } from "./import-model";
 const existing: CatalogProduct = { id: "p1", name: "Libri", sku: "LIB-1", price_amount: 520, currency: "ALL", description: "Ruaje", image_url: "https://example.com/a.jpg", is_active: true, updated_at: "2026-10-11T10:00:00Z" };
 const review = (csv: string, catalog = [existing]) => buildImportPreview(csv, { mapping: readImportCsv(csv).mapping, fields: [...importFields] }, catalog);
@@ -75,4 +75,56 @@ it("adds variants to an existing product with the same name and flags a repeated
   expect(row.errors.join()).toContain("përsëritet");
   const [ok] = buildImportPreview("emri,cmimi,gjatesia\nLibri,520,A5", { mapping, fields: [...importFields], attributes: { gjatesia: 2 } }, [existing], fields);
   expect(ok).toMatchObject({ id: "p1", status: "update", variants: [{ options: { gjatesia: "A5" }, price_amount: null }] });
+});
+
+describe("a business's own CSV read with an approved plan", () => {
+  // The wood catalog a customer sent: ranges per m³, several lengths per cell, prices on request.
+  const csv = [
+    "Produkti,Çmimi minimal (ALL),Çmimi maksimal (ALL),Njësia e çmimit,Gjatësia (m),Trashësia (cm),Gjerësia,Përmasa / seksioni,Shënime",
+    "Dërrasa Lis,70000,80000,m³,2; 3; 4,3; 5; 7; 10,Të ndryshme,,",
+    "Binare,,,,1,,,5x5; 6x6; 7x7; 8x8; 10x10 cm,Çmimi sipas kërkesës",
+    "Binare për Çati,30000,33000,m³,4; 5; 7,,Të ndryshme,Të ndryshme,",
+    "Rrathë për Tavolina,4000,8000,copë,,,,,Në varësi të përmasave",
+    "Dërrasa Qershi,65000,80000,m³,2,3; 5,,,Përmasat e dhëna: 2m x 5cm; 2m x 3cm",
+    "Dërrasa Plep,33000,35000,m³,,5; 7,,,",
+  ].join("\n");
+  const fields = [
+    { key: "gjatesia", label: "Gjatësia", type: "select" as const, unit: "m", variant: true },
+    { key: "trashesia", label: "Trashësia", type: "select" as const, unit: "cm", variant: true },
+    { key: "permasa", label: "Përmasa", type: "select" as const, unit: "cm", variant: true },
+  ];
+  const options = {
+    fields: [...importFields], mapping: { name: 0, price_amount: 1, price_max: 2, price_unit: 3, description: 8 },
+    attributes: { gjatesia: 4, trashesia: 5, permasa: 7 }, blanks: { "6": ["Të ndryshme"], "7": ["të ndryshme"] }, missingPrice: "request" as const,
+  };
+  it("reads ranges per unit, lists the customer chooses from and prices on request", () => {
+    const rows = buildImportPreview(csv, options, [], fields);
+    expect(rows.map(r => r.status)).toEqual(["create", "create", "create", "create", "create", "create"]);
+    expect(rows[0].patch).toMatchObject({ name: "Dërrasa Lis", price_amount: 70000, price_max: 80000, price_mode: "range", price_unit: "m³",
+      attributes: { gjatesia: ["2", "3", "4"], trashesia: ["3", "5", "7", "10"] } });
+    expect(rows[0].variants).toBeUndefined();
+    expect(rows[1].patch).toMatchObject({ price_mode: "request", price_amount: null, description: "Çmimi sipas kërkesës",
+      attributes: { gjatesia: ["1"], permasa: ["5x5", "6x6", "7x7", "8x8", "10x10"] } });
+    expect(rows[2].patch.attributes).toEqual({ gjatesia: ["4", "5", "7"] });
+    expect(rows[3].patch).toMatchObject({ price_mode: "range", price_unit: "copë" });
+    expect(rows[3].patch.attributes).toBeUndefined();
+    expect(rows[4].patch.attributes).toEqual({ gjatesia: ["2"], trashesia: ["3", "5"] });
+    expect(rows[5].patch.attributes).toEqual({ trashesia: ["5", "7"] });
+  });
+  it("without the plan's choices a missing price stays empty and blanks are plain values", () => {
+    const rows = buildImportPreview(csv, { ...options, missingPrice: undefined, blanks: undefined }, [], fields);
+    expect(rows[1].patch).not.toHaveProperty("price_mode");
+    expect(rows[2].status).toBe("create");
+    expect(rows[2].patch.attributes).toMatchObject({ permasa: ["Të ndryshme"] });
+  });
+  it("keeps an unchanged range, rejects an upper price below the lower one and lists on repeated names", () => {
+    const before: CatalogProduct = { id: "p2", name: "Dërrasa Plep", sku: null, price_amount: 33000, price_max: 35000, price_mode: "range", price_unit: "m³", currency: "ALL",
+      description: null, image_url: null, is_active: false, updated_at: "2026-11-13T10:00:00Z", attributes: { trashesia: ["5", "7"] } };
+    const plep = buildImportPreview(csv, options, [before], fields).find(r => r.name === "Dërrasa Plep")!;
+    expect(plep).toMatchObject({ id: "p2", status: "unchanged" }); // same range, unit and lists
+    const grouped = buildImportPreview(csv + "\nDërrasa Lis,70000,90000,m³,5,3,,,", options, [], fields);
+    expect(grouped[0].errors.join()).toContain("lista vlerash");
+    const low = buildImportPreview("emri,cmimi,Çmimi maksimal\nI ri,500,400", { fields: [...importFields], mapping: { name: 0, price_amount: 1, price_max: 2 } }, []);
+    expect(low[0].status).toBe("conflict");
+  });
 });

@@ -1,6 +1,7 @@
 import { itemKind as kindOf, parseAttributes, parseAvailability, type Availability } from "@/lib/items/kinds";
-import { attributeFields, type BusinessField } from "@/lib/items/fields";
-import { parseVariants, type ProductVariant } from "./variants";
+import { attributeFields, variantFields, type BusinessField } from "@/lib/items/fields";
+import { MAX_CHOICES, parseVariants, splitChoices, type ProductVariant } from "./variants";
+import { MAX_PRICE, priceMode, type PriceMode } from "./pricing";
 
 export type ParsedProductFields = {
   name: string;
@@ -8,13 +9,18 @@ export type ParsedProductFields = {
   sku: string | null;
   imageUrl: string | null;
   price: number | null;
+  /** Null when the form does not carry the price mode: keep what is stored. */
+  priceMode: PriceMode | null;
+  priceMax: number | null;
+  priceUnit: string | null;
   currency: string;
   productTypeId: string | null;
   workflowId: string | null;
   isActive: boolean;
   /** Null when the form does not carry the kind (e.g. an assistant edit): keep what is stored. */
   itemKind: string | null;
-  attributes: Record<string, string | number | boolean>;
+  /** Descriptive fields, and for each variant field the list of values the customer chooses from. */
+  attributes: Record<string, string | number | boolean | string[]>;
   availability: Availability;
   /** Null when the form does not carry the variant table: keep the stored variants. */
   variants: ProductVariant[] | null;
@@ -44,16 +50,25 @@ export function parseProductForm(
     }
   }
 
-  const priceText = String(form.get("price") ?? "").trim();
+  const mode = form.has("price_mode") ? priceMode(form.get("price_mode")) : null;
+  const amount = (key: string) => {
+    const text = String(form.get(key) ?? "").trim().replace(",", ".");
+    if (!text) return null;
+    const n = Number(text);
+    return Number.isFinite(n) && n >= 0 && n <= MAX_PRICE ? Math.round(n * 100) / 100 : NaN;
+  };
   const requirePrice = opts?.requirePrice ?? false;
-  let price: number | null = null;
-  if (priceText) {
-    price = Number(priceText);
-    if (!Number.isFinite(price) || price < 0)
-      return { error: "Çmimi duhet të jetë numër pozitiv ose zero." };
-  } else if (requirePrice) {
+  // A price on request has no amount; the other modes keep the amount the owner typed.
+  let price = mode === "request" ? null : amount("price");
+  if (Number.isNaN(price)) return { error: "Çmimi duhet të jetë numër pozitiv ose zero." };
+  if (price === null && mode !== "request" && (requirePrice || mode === "from" || mode === "range"))
     return { error: "Vendos çmimin e produktit." };
-  }
+  const priceMax = mode === "range" ? amount("price_max") : null;
+  if (mode === "range" && (priceMax === null || Number.isNaN(priceMax))) return { error: "Vendos çmimin “deri” si numër." };
+  if (priceMax !== null && price !== null && priceMax < price) return { error: "Çmimi “deri” duhet të jetë sa ose më i madh se çmimi “nga”." };
+  const priceUnit = String(form.get("price_unit") ?? "").trim().replace(/\s+/g, " ") || null;
+  if (priceUnit && priceUnit.length > 20) return { error: "Njësia e çmimit duhet të ketë deri në 20 shkronja (p.sh. m³, copë)." };
+  if (price !== null) price = Math.round(price * 100) / 100;
 
   const currency = String(form.get("currency") ?? "ALL")
     .trim()
@@ -67,6 +82,14 @@ export function parseProductForm(
   const itemKind = form.has("item_kind") ? kindOf(String(form.get("item_kind"))).id : null;
   const parsedAttributes = itemKind ? parseAttributes(itemKind, form, attributeFields(opts?.fields ?? [])) : { attributes: {} };
   if ("error" in parsedAttributes && parsedAttributes.error) return { error: parsedAttributes.error };
+  const attributes: ParsedProductFields["attributes"] = { ...parsedAttributes.attributes };
+  // The values the customer chooses from, without one variant row per value ("2; 3; 4").
+  if (itemKind) for (const field of variantFields(opts?.fields ?? [])) {
+    if (!form.has(`choices_${field.key}`)) continue;
+    const values = splitChoices(String(form.get(`choices_${field.key}`)), field.unit);
+    if (values.length > MAX_CHOICES) return { error: `“${field.label}” ka më shumë se ${MAX_CHOICES} vlera.` };
+    if (values.length) attributes[field.key] = values;
+  }
   const availability = parseAvailability(itemKind ?? "product", form.get("availability"));
   let variants: ProductVariant[] | null = null;
   if (form.has("variants_json")) {
@@ -75,7 +98,7 @@ export function parseProductForm(
     const parsedVariants = parseVariants(raw, opts?.fields ?? []);
     if ("error" in parsedVariants) return parsedVariants;
     variants = parsedVariants.variants;
-    if (price === null && variants.some(v => v.is_active && v.price_amount === null))
+    if (price === null && mode !== "request" && variants.some(v => v.is_active && v.price_amount === null))
       return { error: "Vendos çmimin e produktit, ose çmimin e çdo varianti në shitje." };
   }
 
@@ -85,12 +108,15 @@ export function parseProductForm(
     sku,
     imageUrl,
     price,
+    priceMode: mode,
+    priceMax,
+    priceUnit,
     currency,
     productTypeId,
     workflowId,
     isActive,
     itemKind,
-    attributes: parsedAttributes.attributes,
+    attributes,
     availability,
     variants,
   };

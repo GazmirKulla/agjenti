@@ -5,7 +5,8 @@ import { TransitionError, type Instance, type Observation, type ProcessDefinitio
 import { orderFields } from "./order-definition";
 import { digest, validateDefinition } from "./definition";
 import { readBusinessFields, type BusinessField } from "@/lib/items/fields";
-import { matchVariant, variantChoices, variantFieldId, type ProductVariant } from "@/lib/products/variants";
+import { choiceLists, matchVariant, variantChoices, variantFieldId, type ChoiceLists, type ProductVariant } from "@/lib/products/variants";
+import { orderablePrice } from "@/lib/products/pricing";
 export type OrderTerms = { productId: string; productName: string; productTypeId: string; unitAmount: number; currency: string; quantity: number };
 /** The product's active variants (sizes, lengths…); empty when it has none. */
 export async function readProductVariants(businessId: string, productId: string): Promise<ProductVariant[]> {
@@ -14,7 +15,8 @@ export async function readProductVariants(businessId: string, productId: string)
   if (error) throw new TransitionError("product_unavailable");
   return (data ?? []) as ProductVariant[];
 }
-/** The price a variant sets: its own, else the product's, else (nothing chosen yet) the lowest variant price. */
+/** The price a variant sets: its own, else the product's orderable price, else (nothing chosen yet) the lowest variant price.
+ * productPrice is null when the product's own price is not one fixed number (from, range, on request). */
 export function variantUnitAmount(variants: ProductVariant[], productPrice: number | null, chosen?: Record<string, unknown>) {
   if (!variants.length) return productPrice;
   const variant = chosen ? matchVariant(variants, chosen) : undefined;
@@ -22,21 +24,29 @@ export function variantUnitAmount(variants: ProductVariant[], productPrice: numb
   const prices = variants.flatMap(v => typeof v.price_amount === "number" ? [v.price_amount] : []);
   return productPrice ?? (prices.length ? Math.min(...prices) : null);
 }
-export async function readOrderTerms(businessId: string, productId: string, collectionOnly = false, chosen?: Record<string, unknown>) {
+type OrderProduct = { terms: OrderTerms; basePrice: number | null; lists: ChoiceLists };
+async function readOrderProduct(businessId: string, productId: string, collectionOnly: boolean, chosen?: Record<string, unknown>): Promise<OrderProduct> {
   await requireRuntimeModules(businessId, collectionOnly ? ["products", "workflows"] : ["products", "orders", "workflows"]);
   const [{ data, error }, variants] = await Promise.all([
-    createServiceSupabase().from("products").select("id,name,product_type_id,price_amount,currency")
+    createServiceSupabase().from("products").select("id,name,product_type_id,price_amount,price_mode,currency,attributes")
       .eq("business_id", businessId).eq("id", productId).eq("is_active", true).maybeSingle(),
     readProductVariants(businessId, productId),
   ]);
-  const unitAmount = data ? variantUnitAmount(variants, typeof data.price_amount === "number" ? data.price_amount : null, chosen) : null;
+  // Only a fixed product price is orderable; "from", ranges and on-request prices need a priced variant.
+  const basePrice = data ? orderablePrice(data) : null;
+  const unitAmount = data ? variantUnitAmount(variants, basePrice, chosen) : null;
   if (error || !data || !collectionOnly && (typeof unitAmount !== "number" || unitAmount < 0 || !/^[A-Z]{3}$/.test(data.currency ?? ""))) throw new TransitionError("product_unavailable");
-  return { productId: data.id, productName: data.name, productTypeId: data.product_type_id ?? "none", unitAmount: unitAmount ?? 0, currency: data.currency ?? "unpriced", quantity: 1 };
+  return { basePrice, lists: choiceLists(data.attributes),
+    terms: { productId: data.id, productName: data.name, productTypeId: data.product_type_id ?? "none", unitAmount: unitAmount ?? 0, currency: data.currency ?? "unpriced", quantity: 1 } };
+}
+export async function readOrderTerms(businessId: string, productId: string, collectionOnly = false, chosen?: Record<string, unknown>) {
+  return (await readOrderProduct(businessId, productId, collectionOnly, chosen)).terms;
 }
 /** Adds one required choice step per variant field right after the product is chosen,
- * so the agent asks e.g. "Çfarë gjatësie?" before the order review. */
-export function composeVariantChoices(definition: ProcessDefinition, variants: ProductVariant[], fields: BusinessField[]): ProcessDefinition {
-  const choices = variantChoices(variants, fields);
+ * so the agent asks e.g. "Çfarë gjatësie?" before the order review. The values come from
+ * the variant rows or, when there are none, from the lists kept on the product. */
+export function composeVariantChoices(definition: ProcessDefinition, variants: ProductVariant[], fields: BusinessField[], lists: ChoiceLists = {}): ProcessDefinition {
+  const choices = variantChoices(variants, fields, lists);
   if (!choices.length) return definition;
   const productField = orderFields(definition.id).key("productId");
   const composed = structuredClone(definition);
@@ -65,14 +75,17 @@ export function composeVariantChoices(definition: ProcessDefinition, variants: P
 export function orderContext(versions: ProcessVersion[]) {
   const terms = new Map<string, OrderTerms>();
   const variants = new Map<string, ProductVariant[]>();
+  const bases = new Map<string, number | null>();
+  const lists = new Map<string, ChoiceLists>();
   let fields: BusinessField[] = [];
   const chosenOf = (instance: Instance) => Object.fromEntries(Object.entries(instance.facts).filter(([id]) => id.startsWith("variant_")).map(([id, fact]) => [id, fact.value]));
   return {
     /** The definition with the chosen product's variant questions. */
     withVariants(definition: ProcessDefinition, instance: Instance): ProcessDefinition {
       const productId = instance.facts[orderFields(definition.id).key("productId")]?.value;
-      const own = typeof productId === "string" ? variants.get(productId) : undefined;
-      return own?.length ? composeVariantChoices(definition, own, fields) : definition;
+      if (typeof productId !== "string") return definition;
+      const own = variants.get(productId) ?? [], listed = lists.get(productId) ?? {};
+      return own.length || Object.keys(listed).length ? composeVariantChoices(definition, own, fields, listed) : definition;
     },
     /** A different product never keeps the previous product's variant answers. */
     clearVariants(instance: Instance, previousProductId: string | undefined, eventId: string) {
@@ -99,7 +112,10 @@ export function orderContext(versions: ProcessVersion[]) {
         productIds.length ? createServiceSupabase().from("businesses").select("product_fields").eq("id", state.businessId).maybeSingle() : Promise.resolve({ data: null, error: null }),
         ...productIds.map(async id => { try { variants.set(id, await readProductVariants(state.businessId, id)); } catch { variants.delete(id); } }),
         ...[...ids].map(async ([cacheKey, { id, collectionOnly }]) => {
-          try { terms.set(cacheKey, await readOrderTerms(state.businessId, id, collectionOnly)); } catch { terms.delete(cacheKey); }
+          try {
+            const read = await readOrderProduct(state.businessId, id, collectionOnly);
+            terms.set(cacheKey, read.terms); bases.set(id, read.basePrice); lists.set(id, read.lists);
+          } catch { terms.delete(cacheKey); }
         }),
       ]);
       fields = business && "data" in business && !business.error ? readBusinessFields((business.data as { product_fields?: unknown } | null)?.product_fields) : [];
@@ -116,7 +132,7 @@ export function orderContext(versions: ProcessVersion[]) {
       const options = Object.fromEntries(definition.steps.flatMap(s => s.kind === "collect" && s.fieldId !== key("productId") && !["customer_name", "customer_phone", "customer_city", "customer_address", "customer_email"].includes(s.fieldId)
         && instance.facts[s.fieldId] ? [[s.fieldId, instance.facts[s.fieldId].value]] : []));
       const own = variants.get(productId) ?? [];
-      const priced = own.length ? { ...current, unitAmount: variantUnitAmount(own, current.unitAmount, chosenOf(instance)) ?? current.unitAmount } : current;
+      const priced = own.length ? { ...current, unitAmount: variantUnitAmount(own, bases.has(productId) ? bases.get(productId)! : current.unitAmount, chosenOf(instance)) ?? current.unitAmount } : current;
       return { ...Object.fromEntries(Object.entries(priced).map(([name, value]) => [key(name), value])), [key("options")]: JSON.stringify(options) };
     },
   };

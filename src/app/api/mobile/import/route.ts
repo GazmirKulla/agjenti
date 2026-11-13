@@ -7,6 +7,7 @@ import {
   assertImportAccess,
   prepareImport,
   commitImport,
+  acceptImportPlan,
 } from "@/lib/products/import-service";
 import { evaluateImport } from "@/lib/products/import-evaluation";
 import { revalidatePath } from "next/cache";
@@ -89,6 +90,8 @@ async function handlePOST(request: Request) {
       return json({
         preview: await prepareImport(access, body.token, body.options),
       });
+    if (body.mode === "accept_plan")
+      return json(await acceptImportPlan(access, body.token, body.plan, body.options));
     if (body.mode === "evaluate")
       return json(await evaluateImport(access, body.token, body.options));
     return json({ error: "Veprim i pavlefshëm." }, 400);

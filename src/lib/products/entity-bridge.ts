@@ -4,7 +4,9 @@ import { foldText, type ConversationStatePayload } from "@/lib/workflows/state";
 import { matchingCatalogNames } from "./match-name";
 import { validValue, type FieldType } from "@/lib/workflows/context";
 
-export type ReferenceProduct = { id: string; name: string; sku?: string | null; price_amount?: number | null; currency?: string | null; price_mode?: "fixed" | "from" | "request" };
+export type ReferenceProduct = { id: string; name: string; sku?: string | null; price_amount?: number | null; currency?: string | null; price_mode?: "fixed" | "from" | "range" | "request";
+  /** Upper end of a "range" price, and what the price is for (m³, copë…). */
+  price_max?: number | null; price_unit?: string | null };
 export type PresentedEntity = {
   id: string;
   kind: "product" | "service";

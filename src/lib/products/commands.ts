@@ -65,6 +65,7 @@ function rowFromParsed(
     sku: parsed.sku,
     image_url: parsed.imageUrl,
     price_amount: parsed.price,
+    ...(parsed.priceMode ? { price_mode: parsed.priceMode, price_max: parsed.priceMax, price_unit: parsed.priceUnit } : {}),
     currency: parsed.currency,
     product_type_id: parsed.productTypeId,
     workflow_id: parsed.workflowId,
@@ -400,7 +401,7 @@ export async function bulkConfigureProducts(
   const db = createServiceSupabase();
   const { data: rows, error } = await db
     .from("products")
-    .select("id,product_type_id,workflow_id,price_amount,currency,updated_at")
+    .select("id,product_type_id,workflow_id,price_amount,price_mode,price_max,currency,updated_at")
     .eq("business_id", access.business.id)
     .in("id", ids);
   if (error || rows?.length !== ids.length)

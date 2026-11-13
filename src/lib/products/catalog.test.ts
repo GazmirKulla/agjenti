@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { catalogFilter, catalogStatus, type ProductRow } from "./catalog";
+import { catalogFilter, catalogStatus, productMoney, type ProductRow } from "./catalog";
 const product = (id: string, patch: Partial<ProductRow> = {}): ProductRow => ({
   id,
   name: "Puzzle",
@@ -46,5 +46,15 @@ describe("catalog organization", () => {
     expect(
       catalogFilter(rows, "", "all", "", "newest").map((p) => p.id),
     ).toEqual(["2", "1"]);
+  });
+});
+
+describe("productMoney", () => {
+  it("shows ranges per unit, a starting price and prices on request", () => {
+    expect(productMoney(70000, "ALL", { mode: "range", max: 80000, unit: "m³" })).toBe("70,000–80,000 Lekë / m³");
+    expect(productMoney(500, "EUR", { mode: "from" })).toBe("Nga 500 EUR");
+    expect(productMoney(null, "ALL", { mode: "request" })).toBe("Sipas kërkesës");
+    expect(productMoney(1800, "ALL")).toBe("1,800 Lekë");
+    expect(productMoney(null, "ALL")).toBe("Pa çmim");
   });
 });
