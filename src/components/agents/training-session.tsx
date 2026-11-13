@@ -4,12 +4,15 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { TrainingInput, TrainingTarget } from "@/lib/agents/training/model";
 import { TrainingEditor, TrainingSpark, emptyTraining } from "./training-editor";
+import { Icon } from "@/components/dashboard/icon";
 import "./training-session.css";
 
 export type TrainingFeedback = { receipt: string; question: string; response: string; workflowId: string | null; stepKey: string | null };
 export type TrainingRequest = { key: number; feedback: TrainingFeedback };
 
-export function TrainingSession({ target, feedback, request, memoryHref, busy = false, onBusyChange, onChanged }: {
+export function TrainingSession({ target, feedback, request, memoryHref, busy = false, compact = false, onBusyChange, onChanged }: {
+  /** A single header icon instead of the toolbar card (ChatLab). */
+  compact?: boolean;
   target: TrainingTarget; feedback?: TrainingFeedback | null; request?: TrainingRequest | null; memoryHref: string; busy?: boolean;
   onBusyChange?: (busy: boolean) => void; onChanged?: () => void;
 }) {
@@ -17,16 +20,23 @@ export function TrainingSession({ target, feedback, request, memoryHref, busy = 
   useEffect(() => {
     if (request) setEditor({ input: feedbackInput(request.feedback), feedback: request.feedback });
   }, [request]);
+  const open = () => setEditor(feedback ? { input: feedbackInput(feedback), feedback } : { input: emptyTraining() });
+  const dialog = editor && <TrainingEditor target={target} initial={editor.input} feedback={editor.feedback} memoryHref={memoryHref} onClose={() => setEditor(null)} onBusyChange={onBusyChange} onSaved={onChanged} />;
+  if (compact) return <>
+    <button className="chat-icon" type="button" disabled={busy} title={feedback ? "Korrigjo përgjigjen" : "Mësoje: mësoji agjentit diçka të re"} aria-label={feedback ? "Korrigjo përgjigjen" : "Mësoji diçka të re"} onClick={open}>
+      <Icon name="spark" size={18} /></button>
+    {dialog}
+  </>;
   return <>
     <div className="training-toolbar">
       <TrainingSpark />
       <div className="training-toolbar-copy"><strong>Unik për biznesin tënd.</strong><span>Një korrigjim sot, përgjigje më të mira nesër.</span></div>
       <div className="training-toolbar-actions">
-        <button className="training-action" disabled={busy} onClick={() => setEditor(feedback ? { input: feedbackInput(feedback), feedback } : { input: emptyTraining() })}>{feedback ? "Korrigjo përgjigjen" : "Mësoji diçka të re"}<span aria-hidden>↗</span></button>
+        <button className="training-action" disabled={busy} onClick={open}>{feedback ? "Korrigjo përgjigjen" : "Mësoji diçka të re"}<span aria-hidden>↗</span></button>
         <Link className="training-memory-link" href={memoryHref}>Memoria e Agjentit <span aria-hidden>→</span></Link>
       </div>
     </div>
-    {editor && <TrainingEditor target={target} initial={editor.input} feedback={editor.feedback} memoryHref={memoryHref} onClose={() => setEditor(null)} onBusyChange={onBusyChange} onSaved={onChanged} />}
+    {dialog}
   </>;
 }
 

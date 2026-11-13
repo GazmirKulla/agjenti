@@ -143,7 +143,10 @@
 .lab-conversation-inspection .lab-inspector > .lab-raw { margin: 0; border-radius: 0; border: 0; border-top: 1px solid var(--line); flex-shrink: 0; max-height: 180px; overflow: auto; }
 .lab-conversation-inspection .lab-warning { margin: 10px; flex-shrink: 0; }
 .lab-conversation-inspection .chat-header { flex-direction: column; align-items: stretch; padding: 16px 18px 12px; gap: 12px; }
-.lab-conversation-inspection .chat-header nav { gap: 6px; }
+.lab-conversation-inspection .chat-header nav { gap: 4px; }
+/* Keep Real chat, the tools, Inputs, Mësoje and Bisedë e re on one row. */
+.lab-conversation-inspection .chat-header nav .chat-toolbar-button { padding: 8px 10px; }
+.lab-conversation-inspection .chat-header nav .chat-icon { width: 30px; }
 .lab-conversation-inspection .chat-header nav > .primary { margin-left: auto; }
 .lab-conversation-inspection .agent-test-label { white-space: nowrap; }
 .lab-conversation-inspection .chat-safety-note { padding: 0 18px 14px; line-height: 1.6; }

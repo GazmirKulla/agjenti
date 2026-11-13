@@ -342,6 +342,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         {advanced && <button className={`chat-toolbar-button chat-inputs-button ${inputCount ? "has-inputs" : ""}`} type="button" aria-haspopup="dialog"
           title={inputCount ? Object.values(inputs).join(" · ") : "Shto të dhëna të klientit që simulon"} onClick={() => setInputsOpen(true)}>
           <Icon name="lead" size={17}/> Inputs{inputCount > 0 && <span className="chat-inputs-count" aria-label={`${inputCount} të plotësuara`}>{inputCount}</span>}</button>}
+        {advanced && <TrainingSession compact target={{ slug }} feedback={trainingFeedback} request={trainingRequest} memoryHref={`/b/${slug}/agents/memory`} busy={busy || voice} onBusyChange={setTrainingBusy} onChanged={reset} />}
         <button className="chat-toolbar-button primary" type="button" disabled={preparing || voice} onClick={() => void reset()}><Icon name="plus" size={17}/> Bisedë e re</button>
       </nav>
     </header>
@@ -525,6 +526,6 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
           </p>
         </aside>}
     </div>
-    {advanced && <TrainingSession target={{ slug }} feedback={trainingFeedback} request={trainingRequest} memoryHref={`/b/${slug}/agents/memory`} busy={busy || voice} onBusyChange={setTrainingBusy} onChanged={reset} />}
+
   </section>{renderInspector?.(inspected, chat)}</div>;
 }
