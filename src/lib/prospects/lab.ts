@@ -1,7 +1,7 @@
 import { connectedToAnotherBusiness, emptyPublicProfile } from "@/lib/instagram/account-rules";
 import { ownUsername } from "./turn-context";
 import { normalizeInstagramUsername } from "@/lib/instagram/public-profile";
-import { prospectReplyContext, prospectScanPolicy, prospectUsernameFromMessage, readPublicAccount, type ProspectScan } from "./instagram-scan";
+import { prospectReplyContext, prospectScanPolicy, senderReplyContext, prospectUsernameFromMessage, readPublicAccount, type ProspectScan } from "./instagram-scan";
 
 type Deps = {
   policy?: typeof prospectScanPolicy; connected?: typeof connectedToAnotherBusiness;
@@ -31,13 +31,15 @@ export async function labProspectRead(p: { businessId: string; message: string; 
     const own = await (deps.ownUsername ?? ownUsername)(p.businessId);
     // An account named in the message wins; otherwise the account the customer writes from.
     const sender = p.sender ? normalizeInstagramUsername(p.sender) : null;
-    const username = prospectUsernameFromMessage(p.message, own) ?? (sender && sender !== (own ? normalizeInstagramUsername(own) : null) ? sender : null);
+    const named = prospectUsernameFromMessage(p.message, own);
+    const username = named ?? (sender && sender !== (own ? normalizeInstagramUsername(own) : null) ? sender : null);
+    const fromSender = !named && username === sender;
     if (!username || username === p.previous?.username) {
       if (!p.previous) return none;
-      return { scan: p.previous, context: prospectReplyContext({ kind: "existing", scan: p.previous }, p.previous), trace: labTrace(p.previous, "reused") };
+      return { scan: p.previous, context: senderReplyContext(prospectReplyContext({ kind: "existing", scan: p.previous }, p.previous), p.previous.username === sender && !named), trace: labTrace(p.previous, "reused") };
     }
     if (await (deps.connected ?? connectedToAnotherBusiness)(username, p.businessId)) {
-      const context = prospectReplyContext({ kind: "refused", reason: "already_registered", username }, null);
+      const context = senderReplyContext(prospectReplyContext({ kind: "refused", reason: "already_registered", username }, null), fromSender);
       return { scan: p.previous, context, trace: { username, result: "already_registered", note: "E lidhur me Instagram login te një biznes tjetër: nuk lexohet dhe nuk ftohet." } };
     }
     const started = Date.now();
@@ -47,7 +49,7 @@ export async function labProspectRead(p: { businessId: string; message: string; 
       fetched_at: null, error: "Leximi zgjati shumë. Provo përsëri pas pak." }), deps.timeoutMs ?? LAB_READ_MS); });
     const read = await Promise.race([(deps.read ?? readPublicAccount)(username), slow]).finally(() => clearTimeout(timer));
     const scan: ProspectScan = { id: "lab", business_id: p.businessId, conversation_id: "lab", username, ...read, updated_at: new Date().toISOString(), target_business_id: null };
-    return { scan, context: prospectReplyContext({ kind: "existing", scan }, scan), trace: labTrace(scan, "read", Date.now() - started) };
+    return { scan, context: senderReplyContext(prospectReplyContext({ kind: "existing", scan }, scan), fromSender), trace: labTrace(scan, "read", Date.now() - started) };
   } catch {
     return none;
   }

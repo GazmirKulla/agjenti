@@ -2,7 +2,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { workerOrigin } from "@/lib/discovery/continue";
 import { normalizeInstagramUsername } from "@/lib/instagram/public-profile";
 import {
-  prospectReplyContext, prospectScanPolicy, prospectUsernameFromMessage, requestProspectScan,
+  prospectReplyContext, prospectScanPolicy, senderReplyContext as forSender, prospectUsernameFromMessage, requestProspectScan,
   REPLY_WAIT_MS, waitForProspectScan, wakeProspectScan, type ProspectScan, type ScanRequest,
 } from "./instagram-scan";
 
@@ -32,17 +32,20 @@ export async function prospectTurnContext(p: { businessId: string; conversationI
     const policy = await (deps.policy ?? prospectScanPolicy)(p.businessId);
     if (!policy.allowed) return undefined;
     const own = await (deps.ownUsername ?? ownUsername)(p.businessId);
+    const ownNormalized = own ? normalizeInstagramUsername(own) : null;
+    const sender = p.sender ? normalizeInstagramUsername(p.sender) : null;
+    const customerAccount = sender && sender !== ownNormalized ? sender : null;
     let username = prospectUsernameFromMessage(p.message, own);
     if (!username) {
-      // The account the chat last talked about; else the customer's own account from Real chat Inputs.
+      // The account the chat last talked about; else the customer's own account (the DM sender, or Real chat Inputs).
       const previous = await (deps.latest ?? latestScan)(p.businessId, p.conversationId);
-      if (previous) return prospectReplyContext({ kind: "existing", scan: previous }, previous);
-      const sender = p.sender ? normalizeInstagramUsername(p.sender) : null;
-      if (!sender || sender === (own ? normalizeInstagramUsername(own) : null)) return undefined;
-      username = sender;
+      if (previous) return forSender(prospectReplyContext({ kind: "existing", scan: previous }, previous), previous.username === customerAccount);
+      if (!customerAccount) return undefined;
+      username = customerAccount;
     }
+    const fromSender = username === customerAccount && !prospectUsernameFromMessage(p.message, own);
     const request: ScanRequest = await (deps.request ?? requestProspectScan)({ businessId: p.businessId, conversationId: p.conversationId, username, monthlyLimit: policy.monthlyLimit });
-    if (request.kind === "refused") return prospectReplyContext(request, null);
+    if (request.kind === "refused") return forSender(prospectReplyContext(request, null), fromSender);
     let scan = request.scan;
     if (["queued", "running"].includes(scan.status)) {
       if (request.kind === "queued") await (deps.wake ?? wakeProspectScan)(scan.id, workerOrigin());
@@ -50,8 +53,9 @@ export async function prospectTurnContext(p: { businessId: string; conversationI
       const until = Math.min(Date.now() + REPLY_WAIT_MS, p.deadline - 24_000);
       if (until > Date.now()) scan = await (deps.wait ?? waitForProspectScan)(scan.id, until) ?? scan;
     }
-    return prospectReplyContext(request, scan);
+    return forSender(prospectReplyContext(request, scan), fromSender);
   } catch {
     return undefined;
   }
 }
+

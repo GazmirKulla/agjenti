@@ -75,7 +75,7 @@ export type AgentTurnParams = {
   onTrace?: TraceObserver;
   /** Chat Lab only: the prospect read done before the isolated turn (test mode). */
   prospectPreview?: unknown;
-  /** Real chat only: the customer's Instagram account set in ChatLab Inputs. */
+  /** The customer's own Instagram account: the DM sender, or Real chat Inputs. */
   prospectSender?: string | null;
   actionFlowRequest?: boolean;
   /** Server-resolved navigation options, never effect permission. */

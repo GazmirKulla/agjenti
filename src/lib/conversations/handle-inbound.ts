@@ -415,6 +415,9 @@ export async function handleInboundMessage(
     conversationKey: conversationId,
     customerIdentity: { conversationId, instagramParticipantId: message.externalParticipantId, instagramConnectionId: conn.id, channel: message.channel },
     source: message.channel,
+    // The Instagram account writing in is read like an account the prospect named
+    // (only for a business allowed to scan prospects, e.g. Agjenti.app).
+    prospectSender: message.channel === "instagram" ? username ?? null : null,
     bookingGuard: job ? { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: stateRow?.revision ?? 0 } : undefined,
     processTransport: job ? { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: stateRow?.revision ?? 0 } : undefined,
     canAct,

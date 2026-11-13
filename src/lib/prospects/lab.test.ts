@@ -34,6 +34,11 @@ describe("labProspectRead", () => {
     await labProspectRead({ ...base, message: "hello", sender: "agjenti.app" }, { ...deps, read });
     expect(read).not.toHaveBeenCalled();
   });
+  it("goes on by asking when the customer's own account gives nothing usable", async () => {
+    const missing = await labProspectRead({ ...base, message: "Përshëndetje", sender: "dyqani.al" }, { ...deps, read: vi.fn().mockResolvedValue({ ...ready, status: "not_found", profile: null, posts: null }) });
+    expect(missing.context).toMatchObject({ status: "manual" });
+    expect(missing.trace).toMatchObject({ result: "not_found" });
+  });
   it("applies the live rules: connected elsewhere, private and empty accounts", async () => {
     const read = vi.fn();
     const taken = await labProspectRead({ ...base, message: "@dyqani.al" }, { ...deps, connected: vi.fn().mockResolvedValue(true), read });

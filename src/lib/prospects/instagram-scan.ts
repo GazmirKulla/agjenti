@@ -199,6 +199,15 @@ export function prospectReplyContext(request: ScanRequest | null, scan: Prospect
     guidance: "Përdor vetëm këto të dhëna publike për të shpjeguar konkretisht cilat module të Agjenti.app i shërbejnë këtij biznesi. Mos shpik çmime, numra ose rezultate." };
 }
 
+/** The customer did not name their own account: unless it was read with something
+ * on it, the reply never mentions the read and simply goes on by asking. */
+export function senderReplyContext(context: ReturnType<typeof prospectReplyContext>, fromSender: boolean) {
+  if (!fromSender || !context || ["ready", "empty"].includes(String(context.status))) return context;
+  return { username: context.username, status: "manual",
+    ...("invitationCreated" in context ? { invitationCreated: context.invitationCreated, invitationGuidance: context.invitationGuidance } : {}),
+    guidance: "Nuk ka të dhëna të mjaftueshme nga profili publik i Instagram-it të klientit. Mos e përmend leximin; vazhdo normalisht me pyetje për llojin e biznesit dhe nevojën kryesore." };
+}
+
 /** The latest read account of the chat, for the invitation that follows. */
 export async function readyProspectScan(businessId: string, conversationId: string, db: Db = createServiceSupabase()) {
   const { data } = await db.from("prospect_scans").select(columns).eq("business_id", businessId).eq("conversation_id", conversationId)

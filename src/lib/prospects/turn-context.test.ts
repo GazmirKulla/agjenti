@@ -52,3 +52,23 @@ it("reads the customer's Instagram from Real chat Inputs when the message names 
   await prospectTurnContext({ ...base, message: "hej", sender: "agjenti.app" }, { policy: allowed, request: other, latest: async () => null, ownUsername: async () => "agjenti.app" });
   expect(other).not.toHaveBeenCalled();
 });
+
+it("reads the DM sender from the first message, and goes on by asking while there is nothing usable", async () => {
+  const queued = vi.fn().mockResolvedValue({ kind: "queued", scan: scan() });
+  const first = await prospectTurnContext({ ...base, deadline: Date.now() + 10_000, message: "Përshëndetje", sender: "dyqani.al" },
+    { policy: allowed, request: queued, wake: vi.fn().mockResolvedValue(true), latest: async () => null, ownUsername: async () => "agjenti.app" });
+  expect(queued).toHaveBeenCalledWith(expect.objectContaining({ username: "dyqani.al" }));
+  expect(first).toMatchObject({ status: "manual" });
+  expect((first as { guidance: string }).guidance).toContain("Mos e përmend leximin");
+  for (const status of ["not_found", "failed"] as const) {
+    const later = await prospectTurnContext({ ...base, message: "sa kushton?", sender: "dyqani.al" }, { policy: allowed, ownUsername: async () => null, latest: async () => scan({ status }) });
+    expect(later).toMatchObject({ status: "manual" });
+  }
+  const taken = await prospectTurnContext({ ...base, message: "hej", sender: "dyqani.al" }, { policy: allowed, ownUsername: async () => null, latest: async () => null,
+    request: vi.fn().mockResolvedValue({ kind: "refused", reason: "already_registered", username: "dyqani.al" }) });
+  expect(taken).toMatchObject({ status: "manual" });
+  // An account the customer named keeps its own guidance.
+  const named = await prospectTurnContext({ ...base, message: "@salloni_ana", sender: "dyqani.al" }, { policy: allowed, ownUsername: async () => null,
+    request: vi.fn().mockResolvedValue({ kind: "existing", scan: scan({ username: "salloni_ana", status: "not_found" }) }) });
+  expect(named).toMatchObject({ status: "not_found" });
+});
