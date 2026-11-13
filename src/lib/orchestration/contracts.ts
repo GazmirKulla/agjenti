@@ -10,6 +10,8 @@ export type Field = {
   options?: string[];
   min?: number;
   max?: number;
+  /** Number fields: the value is a whole multiple of this (0.001 allows three decimals). */
+  step?: number;
 };
 export type Step =
   | { id: string; kind: "collect"; fieldId: string; prompt?: string; next: string }
@@ -130,7 +132,7 @@ export type ToolPolicy = {
   effect: "read" | "write";
   approval: "none" | "required";
   allowed: boolean;
-  inputs: { key: string; type: Field["type"]; required: boolean; options?: string[]; min?: number; max?: number }[];
+  inputs: { key: string; type: Field["type"]; required: boolean; options?: string[]; min?: number; max?: number; step?: number }[];
 };
 export type RuntimeNotice = { kind: "question" | "approval" | "offer" | "message" | "completed" | "handoff" | "blocked" | "clarify"; instanceId?: string; targetId?: string; field?: Field; text?: string; reason?: string };
 export type Transition = { state: Snapshot; notices: RuntimeNotice[]; actions: Action[] };

@@ -256,7 +256,7 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       enabled: allowed("orders", "products"),
       productId: text36(collectedSystem.productId),
       productName: typeof collectedSystem.productName === "string" ? collectedSystem.productName : null,
-      quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,
+      quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
     },
     booking: {
       enabled: bookingEnabled,

@@ -27,4 +27,13 @@ describe("immutable definition boundary", () => {
     expect(validFieldValue({ ...base, type: "boolean" }, true)).toBe(true);
     expect(validFieldValue({ ...base, type: "number", min: 0 }, -1)).toBe(false);
   });
+  it("number fields with a step take only its multiples", () => {
+    const amount = { ...valid.fields[0], type: "number" as const, min: 0.001, max: 100000, step: 0.001 };
+    expect([0.5, 0.001, 1.25, 0.3, 100000].map(v => validFieldValue(amount, v))).toEqual([true, true, true, true, true]);
+    expect([0.0005, 1 / 3, 0, 100000.001, "0.5"].map(v => validFieldValue(amount, v as number))).toEqual([false, false, false, false, false]);
+    const number = { ...valid, fields: [{ ...amount, id: "email" }] };
+    expect(validateDefinition(number).fields[0].step).toBe(0.001);
+    expect(() => validateDefinition({ ...number, fields: [{ ...amount, id: "email", step: 0 }] })).toThrow();
+    expect(() => validateDefinition({ ...valid, fields: [{ ...valid.fields[0], step: 1 }] })).toThrow();
+  });
 });

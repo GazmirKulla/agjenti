@@ -26,6 +26,10 @@ describe("checkValue", () => {
     expect(checkValue("quantity", "02", input)).toBe("2");
     expect(checkValue("quantity", "0", input)).toBe("");
     expect(checkValue("quantity", "dy", input)).toBe("");
+    expect(checkValue("quantity", "0.5", input)).toBe("0.5");
+    expect(checkValue("quantity", "12.250", input)).toBe("12.25");
+    expect(checkValue("quantity", "0,5", input)).toBe("");
+    expect(checkValue("quantity", "0.0001", input)).toBe("");
   });
   it("checks phones and emails and drops empty values", () => {
     expect(checkValue("phone", "+355 69 123 4567", input)).toBe("+355 69 123 4567");

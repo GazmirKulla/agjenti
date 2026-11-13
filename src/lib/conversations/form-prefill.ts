@@ -40,7 +40,7 @@ const REQUIRED: Record<FormKind, [PrefillKey, string][]> = {
   customer: [["name", "Emri"], ["phone", "Telefoni"]],
 };
 const MAX: Record<PrefillKey, number> = {
-  name: 120, phone: 40, email: 200, city: 120, address: 300, product_id: 36, quantity: 3, service_id: 36, date: 10, time: 5, note: 1000,
+  name: 120, phone: 40, email: 200, city: 120, address: 300, product_id: 36, quantity: 10, service_id: 36, date: 10, time: 5, note: 1000,
 };
 const SPEAKERS = { customer: "klienti", staff: "biznesi", agent: "agjenti" } as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,7 +54,7 @@ export function checkValue(key: PrefillKey, raw: unknown, input: { products: Cat
   switch (key) {
     case "product_id": return UUID.test(value) && input.products.some((p) => p.id === value) ? value : "";
     case "service_id": return UUID.test(value) && input.services.some((s) => s.id === value) ? value : "";
-    case "quantity": return /^\d{1,3}$/.test(value) && Number(value) >= 1 ? String(Number(value)) : "";
+    case "quantity": return /^\d{1,6}(\.\d{1,3})?$/.test(value) && Number(value) > 0 ? String(Number(value)) : "";
     case "date": return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && value >= input.today ? value : "";
     case "time": return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : "";
     case "phone": return /^\+?[\d\s().-]{6,}$/.test(value) && value.replace(/\D/g, "").length >= 6 ? value : "";

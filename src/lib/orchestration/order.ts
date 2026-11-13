@@ -31,7 +31,7 @@ export function orderAdapter(scope?: { businessId: string; conversationId: strin
         if (!version?.linear && flow?.productIds?.length && !flow.productIds.includes(action.input.productId)) return { status: "failed", output: { code: "product_outside_workflow" } };
         let chosen: Record<string, unknown> = {};
         try { chosen = typeof action.input.options === "string" ? JSON.parse(action.input.options) : {}; } catch { chosen = {}; }
-        const current = await readOrderTerms(scope.businessId, action.input.productId, false, chosen && typeof chosen === "object" ? chosen : {});
+        const current = await readOrderTerms(scope.businessId, action.input.productId, false, chosen && typeof chosen === "object" ? chosen : {}, action.input.quantity);
         if (digest(current) !== digest(Object.fromEntries(Object.keys(current).map(key => [key, action.input[key]])))) return { status: "failed", output: { code: "commercial_terms_changed" } };
       } catch { return { status: "failed", output: { code: "order_configuration_unverified" } }; }
       if (context.signal.aborted) return { status: "failed", output: { code: "dispatch_cancelled" } };

@@ -216,7 +216,7 @@ export function CopyInvitationLink({ url }: { url: string }) {
   );
 }
 
-type ProductOption = { id: string; name: string; price: number | null; currency: string | null; variants?: { id: string; label: string; price: number }[] };
+type ProductOption = { id: string; name: string; price: number | null; currency: string | null; unit?: string | null; variants?: { id: string; label: string; price: number }[] };
 
 /** Opens the form when the menu links to it (#krijo-porosi, #cakto-takim). */
 function useHashOpen(id: string) {
@@ -285,7 +285,9 @@ export function ManualOrderForm(props: {
   const variant = selected?.variants?.find((v) => v.id === variantId);
   const quantity = Number(values.quantity) || 1;
   const unit = variant ? variant.price : selected?.variants?.length ? null : selected?.price ?? null;
-  const total = unit != null ? unit * quantity : null;
+  // Priced per unit (m³…): parts of the unit are allowed; the server computes the saved total the same way.
+  const measure = selected?.unit ?? null;
+  const total = unit != null ? Math.round(unit * quantity * 100) / 100 : null;
   const fields = prefill.data?.fields ?? {};
   const set = (key: keyof typeof values) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setValues({ ...values, [key]: event.target.value });
@@ -329,7 +331,7 @@ export function ManualOrderForm(props: {
               <option value="">{t("Zgjidh produktin")}</option>
               {values.productId && !selected && <option value={values.productId}>{chosenName ?? t("Produkti i zgjedhur nga biseda")}</option>}
               {products.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}{p.price != null ? ` · ${p.price} ${p.currency ?? ""}` : ""}</option>
+                <option key={p.id} value={p.id}>{p.name}{p.price != null ? ` · ${p.price} ${p.currency ?? ""}${p.unit ? `/${p.unit}` : ""}` : ""}</option>
               ))}
             </select>
           </SmartLabel>
@@ -341,8 +343,9 @@ export function ManualOrderForm(props: {
               </select>
             </SmartLabel>
           ) : null}
-          <SmartLabel label="Sasia" field={fields.quantity}>
-            <input className="field" type="number" inputMode="numeric" min={1} max={999} value={values.quantity} placeholder="1" onChange={set("quantity")} />
+          <SmartLabel label={measure ? `${t("Sasia")} (${measure})` : "Sasia"} field={fields.quantity}>
+            <input className="field" type="number" inputMode={measure ? "decimal" : "numeric"} min={measure ? 0.001 : 1} max={measure ? 100000 : 999} step={measure ? 0.001 : 1}
+              value={values.quantity} placeholder="1" onChange={set("quantity")} />
           </SmartLabel>
           {total != null && <p className="smart-form-total">{t("Totali")}: <strong>{total} {selected?.currency}</strong></p>}
         </fieldset>

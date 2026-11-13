@@ -32,7 +32,8 @@ export function digest(value: unknown): string {
 export function validFieldValue(field: Field, value: Value): boolean {
   if (field.type === "photo") return value === true;
   if (field.type === "boolean") return typeof value === "boolean";
-  if (field.type === "number") return typeof value === "number" && Number.isFinite(value) && (field.min === undefined || value >= field.min) && (field.max === undefined || value <= field.max);
+  if (field.type === "number") return typeof value === "number" && Number.isFinite(value) && (field.min === undefined || value >= field.min) && (field.max === undefined || value <= field.max)
+    && (field.step === undefined || Math.abs(Math.round(value / field.step) * field.step - value) <= field.step * 1e-6);
   if (field.type === "choices") return Array.isArray(value) && value.length > 0 && value.length <= 32 && new Set(value).size === value.length && value.every(v => field.options?.includes(v));
   if (typeof value !== "string" || !value.trim() || value.length > (field.max ?? 2000) || value.length < (field.min ?? 1)) return false;
   switch (field.type) {
@@ -60,11 +61,12 @@ export function validateDefinition(definition: unknown): ProcessDefinition {
     || !text(definition.id, 200) || !text(definition.versionId, 200) || !text(definition.businessId, 200) || !text(definition.name, 200)
     || !text(definition.purpose) || !text(definition.entry, 120) || !Array.isArray(definition.fields) || definition.fields.length > 64
     || !Array.isArray(definition.steps) || definition.steps.length > 128 || !definition.steps.every(stepShape)
-    || !definition.fields.every(f => record(f) && shape(f, ["id", "subject", "label", "type", "required"], ["options", "min", "max", "source"])
+    || !definition.fields.every(f => record(f) && shape(f, ["id", "subject", "label", "type", "required"], ["options", "min", "max", "step", "source"])
       && (f.source === undefined || f.source === "customer" || f.source === "server")
       && text(f.id, 120) && text(f.subject, 120) && text(f.label, 200) && text(f.type, 30) && typeof f.required === "boolean"
       && (f.options === undefined || Array.isArray(f.options) && f.options.length <= 100 && f.options.every(o => text(o, 200)))
-      && (f.min === undefined || typeof f.min === "number") && (f.max === undefined || typeof f.max === "number"))) throw new TransitionError("invalid_definition");
+      && (f.min === undefined || typeof f.min === "number") && (f.max === undefined || typeof f.max === "number")
+      && (f.step === undefined || typeof f.step === "number" && Number.isFinite(f.step) && f.step > 0 && f.type === "number"))) throw new TransitionError("invalid_definition");
   const d = definition as unknown as ProcessDefinition;
   if (d.policyKey !== undefined && !/^[a-f0-9]{64}$/.test(d.policyKey)) throw new TransitionError("invalid_process_policy");
   if (d.collection && (!record(d.collection) || !shape(d.collection, ["domain", "revision", "profileFields"])

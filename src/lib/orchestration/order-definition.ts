@@ -1,5 +1,8 @@
 import type { Field, Step, ToolPolicy } from "./contracts";
 import { digest } from "./definition";
+/** Bounds of an order quantity; the database checks the same (order_unit_quantity_ok). A product
+ * without a price unit is always one item; one priced per unit (m³, m…) takes up to three decimals. */
+export const orderQuantityBounds = { min: 0.001, max: 100000, step: 0.001 } as const;
 export const orderInputNames = ["productId", "productName", "productTypeId", "unitAmount", "currency", "quantity", "options", "name", "phone", "city", "address"] as const;
 export function orderFields(flowId: string, authored: Field[] = [], profileFields?: string[]) {
   const prefix = `order_${digest(flowId).slice(0, 16)}`;
@@ -17,7 +20,7 @@ export function orderFields(flowId: string, authored: Field[] = [], profileField
       { id: key("productTypeId"), label: "Product type", type: "text" },
       { id: key("unitAmount"), label: "Unit price", type: "number", min: 0 },
       { id: key("currency"), label: "Currency", type: "text", min: 3, max: 3 },
-      { id: key("quantity"), label: "Quantity", type: "number", min: 1, max: 1 },
+      { id: key("quantity"), label: "Quantity", type: "number", ...orderQuantityBounds },
       { id: key("options"), label: "Configured product options", type: "text", max: 16000 },
     ].map(f => ({ ...f, subject: prefix, source: "server", required: true }) as Field)),
   ];
@@ -45,5 +48,5 @@ export function orderToolPolicy(): ToolPolicy {
   const { fields, inputField } = orderFields("policy");
   return { key: "order.create", version: 1, effect: "write", approval: "required", allowed: true,
     inputs: orderInputNames.map(name => { const f = fields.find(f => f.id === inputField(name))!;
-      return { key: name, type: f.type, required: f.required, ...(f.min !== undefined ? { min: f.min } : {}), ...(f.max !== undefined ? { max: f.max } : {}) }; }) };
+      return { key: name, type: f.type, required: f.required, ...(f.min !== undefined ? { min: f.min } : {}), ...(f.max !== undefined ? { max: f.max } : {}), ...(f.step !== undefined ? { step: f.step } : {}) }; }) };
 }

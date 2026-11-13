@@ -9,6 +9,7 @@ export type ManualOrderInput = {
   productId: string;
   /** The chosen variant (size, length…); required when the product has variants. */
   variantId?: string | null;
+  /** Whole items 1–999; for a product priced per unit (m³, m…) up to three decimals, e.g. 0.5. The RPC checks it against the product. */
   quantity: number;
   customer: { name: string; phone: string; city: string; address: string };
   note: string;
@@ -18,7 +19,7 @@ export type ManualOrderInput = {
 const errors: Record<string, [string, number]> = {
   unauthorized: ["Nuk ke qasje në këtë biznes.", 403],
   invalid_request: ["Kërkesë e pavlefshme. Rifresko faqen.", 400],
-  invalid_quantity: ["Sasia duhet të jetë nga 1 deri në 999.", 400],
+  invalid_quantity: ["Sasia nuk vlen: copë të plota nga 1 deri në 999, ose për produktet me njësi (m³, m…) deri në 3 shifra pas pikës, p.sh. 0.5.", 400],
   invalid_customer: ["Të dhënat e klientit janë të pavlefshme.", 400],
   customer_required: ["Shkruaj emrin dhe telefonin e klientit.", 400],
   invalid_note: ["Shënimi është shumë i gjatë.", 400],

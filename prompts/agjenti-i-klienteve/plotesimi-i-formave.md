@@ -17,7 +17,7 @@ Rules:
 - A value must come from the conversation or from "collected". If it is not there, return an empty string. Never guess a name, phone, address, date or product.
 - "product_id": the id of the catalog product the customer wants, only when it clearly matches one product in "catalog". Otherwise empty.
 - "service_id": the id of the service from "services" the customer wants, only when it clearly matches. Otherwise empty.
-- "quantity": a whole number as text, only when the customer said how many. Otherwise empty.
+- "quantity": a number as text, only when the customer said how many or how much. Whole items as a whole number; for a product sold per unit (m³, m, kg…) the amount in that unit, with a dot for parts of it (0.5). Otherwise empty.
 - "date": YYYY-MM-DD and "time": HH:MM (24h). Resolve words like "nesër", "të shtunën", "pasdite në 5" against "today" and the business time zone. Never a date in the past. Empty when the customer did not give one.
 - "phone": as the customer wrote it, digits with an optional leading +. "email": only a real address.
 - "note": a short note in Albanian with the other details the workflow asks for (from "workflow_fields") or that the customer asked for, such as size, colour, variant, wishes or delivery time, as "Etiketa: vlera" separated by "; ". Empty when there are none.
