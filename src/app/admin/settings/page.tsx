@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { getAppSettings } from "@/lib/platform/settings";
-import { saveAppSettings, saveModelTiers } from "@/lib/platform/actions";
+import { saveAppSettings, saveConversationLearning, saveModelTiers } from "@/lib/platform/actions";
+import { learningLimits, loadLearningSettings } from "@/lib/conversation-learning/settings";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { Icon } from "@/components/dashboard/icon";
 import { PageHeading } from "@/components/dashboard/ui";
@@ -37,6 +38,7 @@ export default async function PlatformSettingsPage() {
   const enabled = new Set(settings.onboarding_steps);
   const steps = questions.filter((q) => !["aiMode", "teamSize"].includes(q.key));
   const { tiers } = await loadModelTiers();
+  const learning = await loadLearningSettings();
   // How many businesses chose each group themselves (the rest follow the platform).
   const { data: chosen } = await createServiceSupabase().from("businesses").select("model_tier").not("model_tier", "is", null);
   const businessesByTier = new Map<string, number>();
@@ -97,6 +99,48 @@ export default async function PlatformSettingsPage() {
               Grupin e një biznesi e zgjedh te <Link className="settings-text-link" href="/admin/businesses">Bizneset</Link>.
             </p>
             <button className="btn btn-primary" type="submit">Ruaj modelet</button>
+          </div>
+        </section>
+      </ActionForm>
+
+      <ActionForm action={saveConversationLearning} className="settings-layout">
+        <section className="panel settings-section" aria-labelledby="settings-learning">
+          <SectionHead icon="chat" title="Mësimi nga bisedat" description="Te Njohuritë, Agjenti lexon bisedat e fundit me klientët dhe sugjeron njohuri që pronari i miraton një nga një. Asgjë nuk ruhet pa miratimin e tij." />
+          {!learning.stored && (
+            <p className="settings-hint settings-hint-top">Vlerat më poshtë janë parazgjedhjet që po përdoren. Për t&apos;i ndryshuar, duhet aplikuar migrimi <code>conversation_learning_settings</code>.</p>
+          )}
+          <label className="settings-toggle settings-toggle-wide">
+            <span id="settings-learning">
+              Mësimi nga bisedat aktiv
+              <small>E fikur: butoni «Mëso nga bisedat» nuk shfaqet te asnjë biznes.</small>
+            </span>
+            <input className="switch-input" type="checkbox" name="learning_enabled" defaultChecked={learning.settings.enabled} disabled={!learning.stored} />
+          </label>
+          <div className="settings-number-grid">
+            {([
+              ["learning_min_conversations", "min_conversations", "Bisedat minimale", "Skanimi hapet vetëm kur biznesi ka të paktën kaq biseda në periudhën më poshtë."],
+              ["learning_messages_per_conversation", "messages_per_conversation", "Mesazhe për bisedë", "Mesazhet e fundit që lexohen nga çdo bisedë. Instagram jep deri në 20."],
+              ["learning_max_conversations", "max_conversations", "Bisedat për skanim", "Sa biseda lexohen në një skanim, nga më e reja."],
+              ["learning_lookback_days", "lookback_days", "Periudha (ditë)", "Lexohen vetëm bisedat aktive në kaq ditët e fundit."],
+            ] as const).map(([name, key, label, hint]) => (
+              <label key={name} className="form-label settings-number">
+                {label}
+                <input className="field" type="number" name={name} min={learningLimits[key].min} max={learningLimits[key].max}
+                  defaultValue={learning.settings[key]} required disabled={!learning.stored} />
+                <small className="settings-hint">{hint} ({learningLimits[key].min}–{learningLimits[key].max})</small>
+              </label>
+            ))}
+          </div>
+          <label className="settings-toggle settings-toggle-wide">
+            <span>
+              Historia e Instagram-it
+              <small>Lexon edhe DM-të nga përpara lidhjes së Instagram-it (Meta jep 20 mesazhet e fundit të çdo bisede). WhatsApp nuk jep histori.</small>
+            </span>
+            <input className="switch-input" type="checkbox" name="learning_instagram_history" defaultChecked={learning.settings.instagram_history} disabled={!learning.stored} />
+          </label>
+          <div className="settings-inline-actions">
+            <p className="settings-hint">Kontaktet (telefon, email) hiqen para se bisedat t&apos;i lexojë AI; emrat e klientëve nuk dërgohen.</p>
+            {learning.stored && <button className="btn btn-primary" type="submit">Ruaj mësimin nga bisedat</button>}
           </div>
         </section>
       </ActionForm>

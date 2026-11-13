@@ -3,6 +3,7 @@ import { ActionForm } from "@/components/dashboard/action-form";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading } from "@/components/dashboard/ui";
 import { KnowledgeSources } from "@/components/dashboard/knowledge-sources";
+import { ConversationLearning } from "@/components/dashboard/conversation-learning";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -21,6 +22,7 @@ import { OperationButton } from "@/components/dashboard/operation-button";
 function knowledgeOrigin(intent: string | null, services: boolean) {
   if (services || intent === "service") return "Shërbim";
   if (intent?.startsWith("profile:") || intent === "business_profile") return "Nga profili i biznesit";
+  if (intent === "conversations") return "Nga bisedat me klientët";
   return "Informacion i biznesit";
 }
 
@@ -131,6 +133,7 @@ export async function KnowledgeWorkspace({
         )}
       </PageHeading>
       {!services && <KnowledgeSources slug={slug} />}
+      {!services && <ConversationLearning slug={slug} />}
       <RecordBrowser
         listTitle={services ? "Shërbimet" : "Njohuritë"}
         facets={[{ key: "status", label: "Statusi", options: [{ value: "active", label: "Aktive" }, { value: "inactive", label: "Joaktive" }] }]}
