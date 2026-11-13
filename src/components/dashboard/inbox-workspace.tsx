@@ -26,9 +26,21 @@ export async function InboxWorkspace({
   const user = await getSessionUser();
   if (!user) notFound();
   const db = createServiceSupabase();
-  const [instagram, whatsapp] = await Promise.all([
+  const selected = conversationId;
+  const settle = <T,>(promise: Promise<T>) =>
+    promise.then((data) => ({ data, error: null }), (error: unknown) => ({ data: null, error }));
+  // Everything this page reads, in parallel: opening a conversation waits for the slowest read, not their sum.
+  const [instagram, whatsapp, rowsResult, conversationResult, messageResult, contextResult, logResult] = await Promise.all([
     db.from("instagram_connections").select("status,expires_at").eq("business_id", businessId).neq("status", "disconnected").maybeSingle(),
     db.from("whatsapp_connections").select("status").eq("business_id", businessId).maybeSingle(),
+    settle(loadInboxRows(db, businessId)),
+    selected ? settle(loadThreadConversation(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
+    selected ? settle(loadThreadMessages(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
+    selected ? settle(loadConversationContext(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
+    selected
+      ? db.from("integration_logs").select("id,target,status,error,created_at").eq("business_id", businessId)
+          .order("created_at", { ascending: false }).limit(8)
+      : Promise.resolve({ data: null, error: null }),
   ]);
   const channels = (["instagram", "whatsapp"] as const).map(channel => {
     const result = channel === "instagram" ? instagram : whatsapp;
@@ -39,10 +51,8 @@ export async function InboxWorkspace({
       status: result.error ? t("Statusi nuk u ngarkua") : expired ? t("Kërkon rilidhje") : result.data?.status === "connected" ? t("I lidhur") : t("I palidhur"),
     };
   });
-  let inboxRows: InboxRow[];
-  try { inboxRows = await loadInboxRows(db, businessId); }
-  catch { throw new Error(t("Nuk u ngarkuan bisedat.")); }
-  const selected = conversationId;
+  if (rowsResult.error || !rowsResult.data) throw new Error(t("Nuk u ngarkuan bisedat."));
+  const inboxRows: InboxRow[] = rowsResult.data;
   const heading = (
     <PageHeading
       title="Inbox"
@@ -78,27 +88,10 @@ export async function InboxWorkspace({
         </div>
       </>
     );
-  let conversation: ThreadConversation | null;
-  try { conversation = await loadThreadConversation(db, businessId, selected); }
-  catch { throw new Error(t("Nuk u ngarkua biseda.")); }
+  if (conversationResult.error) throw new Error(t("Nuk u ngarkua biseda."));
+  const conversation: ThreadConversation | null = conversationResult.data;
   if (!conversation) notFound();
 
-  const [messageResult, contextResult, logResult] = await Promise.all([
-    loadThreadMessages(db, businessId, selected).then(
-      (data) => ({ data, error: null }),
-      (error: unknown) => ({ data: null, error }),
-    ),
-    loadConversationContext(db, businessId, selected).then(
-      (data) => ({ data, error: null }),
-      (error: unknown) => ({ data: null, error }),
-    ),
-    db
-      .from("integration_logs")
-      .select("id,target,status,error,created_at")
-      .eq("business_id", businessId)
-      .order("created_at", { ascending: false })
-      .limit(8),
-  ]);
   if (messageResult.error || logResult.error)
     throw new Error(t("Nuk u ngarkuan detajet e bisedës."));
 

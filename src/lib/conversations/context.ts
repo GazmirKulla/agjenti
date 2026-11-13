@@ -160,9 +160,39 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
 
   // Profile: the shared per-person memory, else the copy in this conversation's state.
   const participant = conversation.channel === "whatsapp" ? identity.data?.whatsapp_participant_id : identity.data?.instagram_participant_id;
-  const memory = (participant
-    ? await readProcessProfile(businessId, participant, conversation.channel === "whatsapp" ? "whatsapp" : "instagram").catch(() => undefined)
-    : undefined) ?? live?.profileMemory ?? {};
+  // The remaining reads only need the first batch; run them together.
+  const instances = Object.values(live?.instances ?? {});
+  const versions = new Map<string, ReturnType<typeof compileProcessVersion>>();
+  const bookingIds = (effects.data ?? []).map((row) => row.booking_id);
+  const bookingColumns = "id,service_name,starts_at,status";
+  const executionIds = (executions.data ?? []).map((row) => row.id);
+  const [savedMemory, , [byEffect, byConversation], [modules, services], invitations] = await Promise.all([
+    participant
+      ? readProcessProfile(businessId, participant, conversation.channel === "whatsapp" ? "whatsapp" : "instagram").catch(() => undefined)
+      : Promise.resolve(undefined),
+    Promise.all([...new Set(instances.map((i) => i.versionId))].map(async (versionId) => {
+      const version = await loadProcessVersion(businessId, versionId).catch(() => null);
+      if (version) versions.set(versionId, compileProcessVersion(version));
+    })),
+    Promise.all([
+      bookingIds.length
+        ? db.from("bookings").select(bookingColumns).eq("business_id", businessId).in("id", bookingIds)
+        : Promise.resolve({ data: [] as { id: string; service_name: string; starts_at: string; status: string }[], error: null }),
+      db.from("bookings").select(bookingColumns).eq("business_id", businessId).eq("conversation_id", conversationId).limit(20),
+    ]),
+    runtimeModules(businessId).catch(() => [] as string[]).then(async (modules) => {
+      const allowed = modules === null || ["bookings", "services"].every((key) => modules.includes(key));
+      const services = allowed
+        ? await db.from("booking_services").select("id,name").eq("business_id", businessId).eq("is_active", true).eq("booking_enabled", true).order("name").limit(100)
+        : { data: [] as { id: string; name: string }[], error: null };
+      return [modules, services] as const;
+    }),
+    executionIds.length
+      ? db.from("business_invitations").select("email,details,status,expires_at,accepted_at,created_at,token_ciphertext")
+          .eq("source_business_id", businessId).in("execution_id", executionIds).order("created_at", { ascending: false }).limit(1)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const memory = savedMemory ?? live?.profileMemory ?? {};
   const profile = {
     name: memory.name?.value ?? null,
     phone: memory.phone?.value ?? null,
@@ -172,12 +202,6 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
   };
 
   // Processes: field labels come from the pinned version the instance runs on.
-  const instances = Object.values(live?.instances ?? {});
-  const versions = new Map<string, ReturnType<typeof compileProcessVersion>>();
-  await Promise.all([...new Set(instances.map((i) => i.versionId))].map(async (versionId) => {
-    const version = await loadProcessVersion(businessId, versionId).catch(() => null);
-    if (version) versions.set(versionId, compileProcessVersion(version));
-  }));
   let pendingOrder: ConversationContext["pendingOrder"] = null;
   // Latest values the agent collected for the built-in order and booking fields.
   const collectedSystem: Record<string, string | number> = {};
@@ -215,14 +239,6 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
     });
 
   // Agent bookings (through their workflow effect) and bookings the owner made from this conversation.
-  const bookingIds = (effects.data ?? []).map((row) => row.booking_id);
-  const bookingColumns = "id,service_name,starts_at,status";
-  const [byEffect, byConversation] = await Promise.all([
-    bookingIds.length
-      ? db.from("bookings").select(bookingColumns).eq("business_id", businessId).in("id", bookingIds)
-      : Promise.resolve({ data: [] as { id: string; service_name: string; starts_at: string; status: string }[], error: null }),
-    db.from("bookings").select(bookingColumns).eq("business_id", businessId).eq("conversation_id", conversationId).limit(20),
-  ]);
   const bookingRows = new Map([...(byEffect.data ?? []), ...(byConversation.data ?? [])].map((row) => [row.id, row]));
   const bookings = {
     error: byEffect.error ?? byConversation.error,
@@ -230,12 +246,8 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
   };
   if (bookings.error) throw new Error("conversation_context_unavailable");
 
-  const modules = await runtimeModules(businessId).catch(() => [] as string[]);
   const allowed = (...keys: string[]) => modules === null || keys.every((key) => modules.includes(key));
   const bookingEnabled = allowed("bookings", "services");
-  const services = bookingEnabled
-    ? await db.from("booking_services").select("id,name").eq("business_id", businessId).eq("is_active", true).eq("booking_enabled", true).order("name").limit(100)
-    : { data: [] as { id: string; name: string }[], error: null };
   if (services.error) throw new Error("conversation_context_unavailable");
   const text36 = (value: unknown) => (typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value) ? value : null);
   const quantity = Number(collectedSystem.quantity);
@@ -255,11 +267,6 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
     },
   };
 
-  const executionIds = (executions.data ?? []).map((row) => row.id);
-  const invitations = executionIds.length
-    ? await db.from("business_invitations").select("email,details,status,expires_at,accepted_at,created_at,token_ciphertext")
-        .eq("source_business_id", businessId).in("execution_id", executionIds).order("created_at", { ascending: false }).limit(1)
-    : { data: [], error: null };
   if (invitations.error) throw new Error("conversation_context_unavailable");
   const invite = invitations.data?.[0];
   let invitation: ConversationContext["invitation"] = null;
