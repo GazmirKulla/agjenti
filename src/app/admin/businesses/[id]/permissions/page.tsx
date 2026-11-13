@@ -52,7 +52,7 @@ export default async function BusinessPermissionsPage({ params }: { params: Prom
                     <label>Leja<select className="field" name="enabled" defaultValue={existing?.enabled === true ? "true" : existing?.enabled === false ? "false" : "inherit"}>
                       <option value="inherit">Sipas paketës</option><option value="true">Lejo për këtë biznes</option><option value="false">Blloko për këtë biznes</option>
                     </select></label>
-                    {key === "business.provision" && <label>Krijime në muaj (bosh = sipas paketës)<input className="field" name="monthly_limit" type="number" min="0" defaultValue={existing?.monthly_limit ?? ""} /></label>}
+                    {(key === "business.provision" || key === "prospect.instagram_scan") && <label>{key === "prospect.instagram_scan" ? "Skanime në muaj" : "Krijime në muaj"} (bosh = sipas paketës)<input className="field" name="monthly_limit" type="number" min="0" defaultValue={existing?.monthly_limit ?? ""} /></label>}
                     <label>Afati i lejes (opsional)<input className="field" name="expires_at" type="date" defaultValue={existing?.expires_at ? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Tirane", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(new Date(existing.expires_at).getTime() - 1)) : ""} /></label>
                     <button className="btn btn-primary">Ruaj lejen</button>
                   </ActionForm>

@@ -7,6 +7,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { digest } from "./definition";
 import type { ProcessLease } from "./persistence";
+import { attachProspectScanToInvitation } from "@/lib/prospects/instagram-scan";
 
 /** The domain RPC rechecks lease, current revision, tenant, ownership, policy and quota.
  * Called only after executePreparedAction has committed the durable running claim.
@@ -29,6 +30,10 @@ export function businessProvisionAdapter(scope?: {
         workflowVersionId: version, nodeId: action.stepId, conversationId: scope.conversationId,
         guard: { ...scope.lease, conversationId: scope.conversationId, revision: context.revision },
       });
+      // The prospect's public Instagram read in this chat (if any) goes with the
+      // invitation; the owner reviews it after accepting. Never blocks the invite.
+      await attachProspectScanToInvitation({ businessId: scope.businessId, conversationId: scope.conversationId, targetBusinessId: result.businessId })
+        .catch(() => console.error("[prospect-scan] invitation was not linked"));
       return { status: "succeeded", output: result };
     },
     async reconcile(action, context): Promise<EffectResult | null> {

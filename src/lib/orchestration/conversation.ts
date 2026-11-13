@@ -36,6 +36,7 @@ import { catalogPresentationFromReply, visibleCatalogPresentation } from "./cata
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
 import { readProcessProfile } from "@/lib/conversations/profile";
+import { prospectTurnContext } from "@/lib/prospects/turn-context";
 
 /** One process runtime for authenticated live channels and isolated previews. */
 export async function processConversation(params: AgentTurnParams): Promise<AgentTurnResult> {
@@ -104,6 +105,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const agent = params.configurationPreview ?? agentRead.data;
   const configuration = configurationRead(agent);
   trace?.({ stage: "context", label: "Agent configuration read", data: { ...configuration, businessId: params.businessId } });
+  // Only for a business allowed to read prospects' public Instagram (Agjenti.app), on live chats.
+  const prospectRead = mode === "live" && transport ? prospectTurnContext({ businessId: params.businessId, conversationId: transport.conversationId, message: params.message, deadline }) : Promise.resolve(undefined);
   const context = {
     businessTimezone: !calendarRead.error ? calendarRead.data?.timezone ?? null : null,
     instructions: agent?.instructions ?? "", communication: agent?.communication,
@@ -113,6 +116,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       serviceIds: catalogPins.filter(pin => pin.kind === "service").map(pin => pin.id),
     }),
     attachments: params.attachmentContext,
+    prospect: await prospectRead,
   };
   trace?.({ stage: "tools", label: "Process business sources loaded", data: { knowledge: grounding.knowledge.status, products: grounding.products.status, services: grounding.services.status, readOnly: true } });
   const tools: ToolPolicy[] = [];

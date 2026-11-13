@@ -13,6 +13,8 @@ import { renderCatalogSlots } from "./catalog-presentation";
 export const CUSTOMER_REPLY_PROMPT = () => prompt("agjenti-i-klienteve/pergjigja-ndaj-klientit");
 
 export type ReplyContext = { instructions: string; communication?: unknown; training?: TrainingContext; businessProcess?: string; knowledge: unknown; products?: unknown; services?: unknown; documents?: unknown; attachments?: string;
+  /** Server-read public Instagram profile the prospect named (Agjenti.app only). */
+  prospect?: unknown;
   profileMemory?: Snapshot["profileMemory"];
   availability?: { instanceId: string; serviceId: string; date: string; starts: string[]; status: string }[] };
 export async function composeProcessReply(input: {

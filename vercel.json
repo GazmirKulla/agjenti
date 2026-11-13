@@ -29,6 +29,10 @@
     {
       "path": "/api/cron/account-deletions",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/prospect-scans",
+      "schedule": "30 5 * * *"
     }
   ]
 }

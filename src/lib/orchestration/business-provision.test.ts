@@ -2,9 +2,10 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { businessProvisionAdapter } from "./business-provision";
 import type { Action } from "./contracts";
 import { runIsolated } from "@/lib/runtime/isolated-run";
-const { provision } = vi.hoisted(() => ({ provision: vi.fn() }));
+const { provision, attach } = vi.hoisted(() => ({ provision: vi.fn(), attach: vi.fn() }));
 vi.mock("@/lib/actions/provision", () => ({ provisionBusiness: provision }));
-beforeEach(() => { provision.mockReset(); provision.mockResolvedValue({ businessId: "created", invitationUrl: "https://example.test/join", expiresAt: "later" }); });
+vi.mock("@/lib/prospects/instagram-scan", () => ({ attachProspectScanToInvitation: attach }));
+beforeEach(() => { attach.mockReset(); attach.mockResolvedValue(true); provision.mockReset(); provision.mockResolvedValue({ businessId: "created", invitationUrl: "https://example.test/join", expiresAt: "later" }); });
 const action: Action = { id: "action-1", instanceId: "instance", stepId: "create", tool: "business.provision", toolVersion: 1,
   input: { name: "Demo", email: "demo@example.test" }, inputDigest: "digest", status: "prepared" };
 const context = { businessId: "business", conversationId: "conversation", revision: 8, signal: new AbortController().signal };
@@ -31,4 +32,12 @@ it("does not dispatch after cancellation or when the pinned instance cannot be r
   expect((await adapter().execute(action, { ...context, signal: controller.signal })).status).toBe("failed");
   expect((await adapter().execute({ ...action, instanceId: "missing" }, context)).status).toBe("failed");
   expect(provision).not.toHaveBeenCalled();
+});
+
+it("links the chat's prospect scan to the new invitation and still succeeds when that fails", async () => {
+  await expect(adapter().execute(action, context)).resolves.toMatchObject({ status: "succeeded" });
+  expect(attach).toHaveBeenCalledWith({ businessId: "business", conversationId: "conversation", targetBusinessId: "created" });
+  attach.mockRejectedValueOnce(new Error("db"));
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  await expect(adapter().execute(action, context)).resolves.toMatchObject({ status: "succeeded", output: { invitationUrl: "https://example.test/join" } });
 });

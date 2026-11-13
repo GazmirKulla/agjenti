@@ -11,6 +11,7 @@ export const manualSurfaces = {
   "src/app/admin/users/actions.ts#manageUser": {"exception": "Platform-administrator-only account creation, password changes and manual email verification; unavailable to the business-owner assistant."},
   "src/app/api/business-sources/route.ts#POST": { exception: "Onboarding step 2: the owner previews and confirms what the agent learns from their own public Instagram and website." },
   "src/app/api/cron/business-discovery/route.ts#POST": { exception: "Internal worker hand-off authenticated by CRON_SECRET; it only continues scans the owner already started." },
+  "src/app/api/cron/prospect-scans/route.ts#POST": { exception: "Internal worker hand-off authenticated by CRON_SECRET; it only reads a public Instagram profile the customer agent queued after the prospect named it." },
   "src/app/api/account/deletion/route.ts#POST": { exception: "Account deletion is a personal decision of the signed-in person and is never delegated to the business assistant." },
   "src/app/auth/mobile/session/route.ts#POST": { exception: "Mobile session establishment requires the signed-in person and OAuth boundary." },
   "src/app/admin/businesses/page.tsx#createBusiness": {"exception": "Platform provisioning uses administrator-only limits and billing policy."},
