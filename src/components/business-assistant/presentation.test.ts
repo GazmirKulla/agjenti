@@ -15,17 +15,16 @@ describe("one Migo presentation", () => {
     expect(businessGoals(home, ["workflows"], false)).toEqual([]);
     expect(businessGoals(home, ["products", "knowledge"], true).map(goal => goal.module)).toEqual(["knowledge"]);
   });
-  it("keeps the configured identity and selected record in contextual entry labels", () => {
-    expect(contextualAction(product, "Luna", ["products"])).toBe("Pyet Luna për këtë produkt");
-    expect(contextualAction({ ...product, entityId: undefined, selectedEntityIds: ["p1", "p2"] }, "Migo", ["products"])).toContain("produktet e zgjedhura");
-    expect(contextualAction({ page: "services", entityId: "s1", entryPoint: "contextual" }, "Migo", ["services"])).toBe("Ndrysho këtë shërbim me Migo");
-    expect(contextualAction({ page: "knowledge", entryPoint: "contextual" }, "Migo", ["knowledge"])).toBe("Përditëso njohuritë me Migo");
-    expect(contextualAction({ page: "agents", entryPoint: "contextual" }, "Migo", ["agents"])).toContain("agjentin e klientëve");
-    expect(contextualAction(product, "Migo", [])).toBeNull();
+  it("names the page subject and selected record in contextual entry labels", () => {
+    expect(contextualAction(product, ["products"])).toBe("Ndihmë me këtë produkt");
+    expect(contextualAction({ ...product, entityId: undefined, selectedEntityIds: ["p1", "p2"] }, ["products"])).toBe("Ndihmë me produktet e zgjedhura");
+    expect(contextualAction({ page: "services", entityId: "s1", entryPoint: "contextual" }, ["services"])).toBe("Ndihmë me këtë shërbim");
+    expect(contextualAction({ page: "knowledge", entryPoint: "contextual" }, ["knowledge"])).toBe("Ndihmë me njohuritë");
+    expect(contextualAction({ page: "agents", entryPoint: "contextual" }, ["agents"])).toBe("Ndihmë me agjentin");
+    expect(contextualAction(product, [])).toBeNull();
   });
   it.each(["business", "activity", "integrations", "settings", "account", "setup"])("keeps the assistant reachable from %s", page => {
-    expect(contextualAction({ page, entryPoint: "contextual" }, "Asistenti AI", ["settings"]))
-      .toBe("Pyet Asistenti AI për këtë faqe");
+    expect(contextualAction({ page, entryPoint: "contextual" }, ["settings"])).toBe("Ndihmë me këtë faqe");
   });
   it("uses the actual request history boundary for page, selection, filter and tenant notices", () => {
     const key = assistantContextKey("shop", product);

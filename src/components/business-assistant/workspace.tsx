@@ -200,12 +200,12 @@ export function AssistantWorkspaceSurface() {
 export function AssistantEntry() {
   const w = useAssistantWorkspace();
   if (!w) return null;
-  const action = contextualAction(w.context, w.assistantName, w.modules);
+  const action = contextualAction(w.context, w.modules);
   if (!action) return null;
   return (
     <section className="assistant-context-entry" aria-label={`${w.assistantName} · ${contextLabel(w.context)}`}>
-      <button type="button" onClick={() => w.launch()} aria-haspopup="dialog">
-        <Icon name="spark" size={18} />{action}<span aria-hidden="true">↗</span>
+      <button type="button" onClick={() => w.launch()} aria-haspopup="dialog" title={action}>
+        <Icon name="spark" size={16} /><span className="assistant-entry-label">{action}</span>
       </button>
       {w.selectionLabel && <span className="assistant-selection-label">{w.selectionLabel}</span>}
     </section>

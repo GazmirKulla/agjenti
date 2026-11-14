@@ -40,18 +40,20 @@ export function planStepLabel(step: ActionPlanStep, decision?: "approved" | "rej
   return "Kërkon konfigurim";
 }
 
-/** Presentation only: server capability and authorization checks remain authoritative. */
-export function contextualAction(context: AssistantUIContext, name: string, modules: string[]) {
+/** Presentation only: server capability and authorization checks remain authoritative.
+ * A short "Ndihmë me …" link naming what the page is about; the assistant's name
+ * stays in the panel itself. */
+export function contextualAction(context: AssistantUIContext, modules: string[]) {
   const page = context.page;
-  if (["business", "activity", "integrations", "account", "setup"].includes(page)) return `Pyet ${name} për këtë faqe`;
+  if (["business", "activity", "integrations", "account", "setup"].includes(page)) return "Ndihmë me këtë faqe";
   if (!modules.includes(page)) return null;
   switch (page) {
-    case "products": return `Pyet ${name} për ${context.entityId ? "këtë produkt" : context.selectedEntityIds?.length ? "produktet e zgjedhura" : "produktet"}`;
-    case "services": return context.entityId ? `Ndrysho këtë shërbim me ${name}` : `Pyet ${name} për shërbimet`;
-    case "knowledge": return `Përditëso njohuritë me ${name}`;
-    case "agents": return `Ndihmë me agjentin e klientëve · ${name}`;
-    case "workflows": return `Ndihmë me këtë rrjedhë · ${name}`;
-    default: return `Pyet ${name} për këtë faqe`;
+    case "products": return `Ndihmë me ${context.entityId ? "këtë produkt" : context.selectedEntityIds?.length ? "produktet e zgjedhura" : "produktet"}`;
+    case "services": return `Ndihmë me ${context.entityId ? "këtë shërbim" : "shërbimet"}`;
+    case "knowledge": return "Ndihmë me njohuritë";
+    case "agents": return "Ndihmë me agjentin";
+    case "workflows": return "Ndihmë me këtë rrjedhë";
+    default: return "Ndihmë me këtë faqe";
   }
 }
 

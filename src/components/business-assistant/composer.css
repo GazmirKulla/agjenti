@@ -53,7 +53,6 @@ html[data-resolved="dark"] .dashboard-shell :is(.assistant-home-workspace,.assis
 .assistant-quick-actions button:hover { color: var(--ink); background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .assistant-quick-actions span { opacity: .5; }
 .assistant-home-workspace > small { display: block; margin-top: 20px; color: var(--ink-muted); font-size: 11px; opacity: .8; }
-.assistant-context-entry { margin-bottom: 24px; }
 .assistant-context-entry .assistant-quick-actions { margin-top: 8px; }
 .assistant-context-entry .assistant-quick-actions button { border-color: transparent; padding-left: 4px; }
 .assistant-composer .assistant-composer-top { margin-bottom: 10px; }
@@ -69,7 +68,6 @@ html[data-resolved="dark"] .dashboard-shell :is(.assistant-home-workspace,.assis
   .assistant-home-workspace > .unified-composer, .assistant-context-entry > .unified-composer { display: none; }
   .assistant-home-workspace .assistant-quick-actions { gap: 7px; margin-top: 22px; }
   .assistant-quick-actions button { font-size: 11px; padding-inline: 12px; }
-  .assistant-context-entry { margin-bottom: 12px; }
   .assistant-context-entry .assistant-quick-actions { flex-wrap: nowrap; overflow-x: auto; }
   .assistant-context-entry .assistant-quick-actions button { white-space: nowrap; }
   .assistant-mobile-dock { border-top: 0; background: linear-gradient(transparent, var(--paper) 24%); padding-top: 18px; }
