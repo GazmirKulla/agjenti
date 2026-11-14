@@ -6,7 +6,7 @@ import { listPromptFiles, placeholders } from "./files";
  * reads) plus the two parts the code builds from each agent's settings.
  * {{…}} marks a part filled for each request. Read-only. */
 
-export type PromptArea = "agjenti-i-klienteve" | "asistenti" | "udhezimet" | "burimet" | "katalogu" | "onboarding";
+export type PromptArea = "agjenti-i-klienteve" | "asistenti" | "udhezimet" | "burimet" | "katalogu" | "onboarding" | "trajnimi";
 export type PromptModel = "customer" | "assistant" | "utility" | "vision";
 export type PromptEntry = {
   id: string;
@@ -33,6 +33,7 @@ export const PROMPT_AREAS: Record<PromptArea, { title: string; description: stri
   burimet: { title: "Burimet dhe skanimi", description: "Leximi i Instagram-it, website-it dhe materialeve të biznesit." },
   katalogu: { title: "Katalogët dhe produktet", description: "Indeksimi i katalogëve, kërkimi në to dhe ndihma për produktet." },
   onboarding: { title: "Onboarding", description: "Pyetjet e para kur krijohet një biznes." },
+  trajnimi: { title: "Trajnimi nga bisedat", description: "Mësimi i stilit, ofertës dhe fakteve të biznesit nga bisedat e tij të vërteta me klientët." },
 };
 
 const models = new Set<PromptModel>(["customer", "assistant", "utility", "vision"]);

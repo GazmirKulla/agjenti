@@ -23,7 +23,7 @@ it("has a described file for every prompt the code reads, and no unused file", (
     expect(file.meta.perdorimi, file.path).toBeTruthy();
     expect(file.body.trim().length, file.path).toBeGreaterThan(50);
   }
-  const source = execSync("grep -rhoE 'prompts?\\(\"[a-z0-9/-]+\"|\"(agjenti-i-klienteve|asistenti|udhezimet|burimet|katalogu|onboarding)/[a-z0-9/-]+\"' src --include=*.ts").toString();
+  const source = execSync("grep -rhoE 'prompts?\\(\"[a-z0-9/-]+\"|\"(agjenti-i-klienteve|asistenti|udhezimet|burimet|katalogu|onboarding|trajnimi)/[a-z0-9/-]+\"' src --include=*.ts").toString();
   const used = new Set([...source.matchAll(/"([a-z0-9-]+\/[a-z0-9/-]+)"/g)].map((match) => match[1]));
   expect(files.map((file) => file.path).filter((path) => !used.has(path))).toEqual([]);
   for (const path of used) expect(() => readFileSync(`prompts/${path}.md`), path).not.toThrow();

@@ -110,3 +110,13 @@ export async function deleteAllTraining(businessId: string) {
   if (error) throw new PersistenceError("Të dhënat nuk u fshinë. Provo përsëri.");
   return { deleted: data?.length ?? 0 };
 }
+
+export const suggestionColumns = "id,destination,operation,target_table,target_id,title,current_value,proposed,evidence,confidence,explicit,requires_confirmation,risk,status,edited,created_at";
+/** What one analysis proposes, for the owner's review. Evidence quotes carry no names or contacts. */
+export async function listSuggestions(businessId: string, sessionId: unknown) {
+  const row = await session(businessId, sessionId);
+  const { data, error } = await createServiceSupabase().from("conversation_training_suggestions").select(suggestionColumns)
+    .eq("business_id", businessId).eq("session_id", row.id).order("destination").order("created_at").limit(1000);
+  if (error) throw new PersistenceError("Sugjerimet nuk u ngarkuan.", error.code === "42P01" || error.code === "PGRST205" ? 503 : 500);
+  return { suggestions: data ?? [] };
+}

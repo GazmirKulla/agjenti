@@ -24,6 +24,19 @@
 .training-bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .4s ease; }
 .training-delete { justify-self: start; min-height: 36px; padding: 6px 12px; font-size: 13px; }
 .training-link { padding: 0; border: 0; background: none; color: #b91c1c; font: inherit; text-decoration: underline; cursor: pointer; }
+.training-preview { display: grid; gap: 14px; padding-top: 4px; }
+.training-preview h3 { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; font-size: 14px; font-weight: 650; color: var(--ink); }
+.training-preview h3 span { padding: 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); font-size: 12px; }
+.training-preview ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.training-preview li { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.training-preview p { margin: 0; white-space: pre-line; color: var(--ink); font-size: 13px; line-height: 1.5; }
+.training-preview small { color: var(--ink-muted); font-size: 12px; }
+.training-preview details summary { cursor: pointer; color: var(--ink-muted); font-size: 12px; }
+.training-preview details li { padding: 4px 0; border: 0; font-size: 12px; color: var(--ink-muted); }
+.training-preview-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 13px; }
+.training-preview-head span { padding: 1px 8px; border-radius: 999px; font-size: 11px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.training-preview-head .is-conflict { background: color-mix(in srgb, #ef4444 18%, transparent); }
+.training-preview-head .is-create { background: color-mix(in srgb, #22c55e 18%, transparent); }
 @media (max-width: 560px) {
   .training-card { padding: 14px; border-radius: 14px; }
   .training-source .btn { justify-self: stretch; }

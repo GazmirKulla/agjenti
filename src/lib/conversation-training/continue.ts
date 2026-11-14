@@ -5,7 +5,7 @@ import { runTrainingQueue } from "./job";
 /** An import runs in short leased steps; each call does what fits and hands the
  * rest to a fresh call of the worker, so it finishes without an open page. The
  * daily cron is the safety net. */
-export const MAX_HOPS = 60;
+export const MAX_HOPS = 200;
 const MAX_WAIT_MS = 35_000;
 export { workerOrigin };
 

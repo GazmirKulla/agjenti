@@ -3,6 +3,9 @@ import { decryptSecret } from "@/lib/crypto/tokens";
 import { instagramGraph, instagramHistory } from "@/lib/conversation-learning/instagram-history";
 import { ArchiveError, isZip, readArchive, ARCHIVE_LIMITS } from "./archive";
 import { conversationFolder, parseConversationFile } from "./instagram-export";
+import { withAiUsage } from "@/lib/ai/usage";
+import { analyseStyle, consolidate, countBy, existingData, extractBatch, finalSuggestions, markAnalysed, MAX_ANALYSIS_CANDIDATES, storeSuggestions, threadsToAnalyse, type AnalysisCheckpoint } from "./analysis";
+import type { StyleStats } from "./style";
 import { agentMessageHashes, exportThreadMessages, inboxThreadMessages, withoutDuplicates, type StoredLine, type TrainingMessage } from "./normalize";
 
 export const TRAINING_BUCKET = "conversation-training";
@@ -19,8 +22,12 @@ export type Stats = {
   skippedFiles: number; groupConversations: number;
   firstAt: string | null; lastAt: string | null;
   owner?: string | null; warnings?: string[];
+  /** Analysis: the owner's measured style, what conversations were about, and what was proposed. */
+  style?: StyleStats; styleChanges?: string[];
+  topics?: Record<string, number>; outcomes?: Record<string, number>;
+  analysedConversations?: number; suggestions?: Record<string, number>;
 };
-type Checkpoint = {
+type Checkpoint = AnalysisCheckpoint & {
   /** Export: the uploaded file being read, the next conversation file in it, and the owner found. */
   file?: number; next?: number; owner?: string | null; counted?: boolean;
   /** Participant counts of the whole export (one-way hashes), and the names of the most frequent. */
@@ -205,9 +212,56 @@ export async function removeUploads(session: Pick<TrainingSession, "input">) {
 async function finish(session: TrainingSession, stats: Stats) {
   if (!stats.customerMessages) stats.warnings = [...(stats.warnings ?? []), "Nuk u gjetën mesazhe nga klientët."];
   else if (!stats.ownerMessages) stats.warnings = [...(stats.warnings ?? []), "Nuk u gjetën përgjigje të shkruara nga biznesi."];
-  // Phase 1 ends with the import; the analysis stages continue from here.
-  return save(session, {}, "imported", stats, { done: 1, total: 1, label: "Importi përfundoi" }, true);
+  // The import is done; the analysis continues from the owner's style.
+  return save(session, {}, "style", stats, { done: 0, total: 4, label: "Po mësoj si shkruan" });
 }
+
+/** The previous analysis of the business, to compare the owner's style with. */
+async function previousStyle(session: TrainingSession) {
+  const { data } = await createServiceSupabase().from("conversation_training_sessions").select("stats").eq("business_id", session.business_id)
+    .eq("status", "ready").neq("id", session.id).order("finished_at", { ascending: false }).limit(1).maybeSingle();
+  return (data?.stats as Partial<Stats> | undefined)?.style;
+}
+
+async function analysisStep(session: TrainingSession, data: Checkpoint, stats: Stats) {
+  if (session.stage === "style") {
+    const style = await analyseStyle(session.business_id, await previousStyle(session));
+    stats.style = style.stats; stats.styleChanges = style.changes;
+    if (style.warning) stats.warnings = [...(stats.warnings ?? []), style.warning];
+    const threads = await threadsToAnalyse(session.business_id);
+    return save(session, { threads, nextThread: 0, candidates: [], suggestions: style.suggestions }, "extract", stats,
+      { done: 0, total: threads.length, label: "Po lexoj çfarë pyesin klientët" });
+  }
+  if (session.stage === "extract") {
+    const threads = data.threads ?? [];
+    const from = data.nextThread ?? 0;
+    const candidates = data.candidates ?? [];
+    if (from < threads.length) {
+      const batch = await extractBatch(session.business_id, threads, from, Math.floor(from / 5) + candidates.length);
+      const next = { ...data, nextThread: batch.next, candidates: [...candidates, ...batch.candidates].slice(0, MAX_ANALYSIS_CANDIDATES),
+        topics: countBy(batch.intents, { ...(data.topics ?? {}) }), outcomes: countBy(batch.outcomes, { ...(data.outcomes ?? {}) }) };
+      return save(session, next, batch.next < threads.length ? "extract" : "consolidate", stats,
+        { done: batch.next, total: threads.length, label: "Po lexoj çfarë pyesin klientët" });
+    }
+    return save(session, data, "consolidate", stats, { done: threads.length, total: threads.length, label: "Po bashkoj gjetjet" });
+  }
+  if (session.stage === "consolidate") {
+    const merged = await consolidate(data.candidates ?? []);
+    return save(session, { ...data, candidates: [], merged }, "match", stats, { done: 3, total: 4, label: "Po krahasoj me të dhënat e tua" });
+  }
+  if (session.stage === "match") {
+    const existing = await existingData(session.business_id);
+    const suggestions = finalSuggestions(session.business_id, data.merged ?? [], existing, data.suggestions ?? []);
+    const stored = await storeSuggestions(session.business_id, session.id, suggestions);
+    await markAnalysed(session.business_id, data.threads ?? []);
+    stats.topics = data.topics; stats.outcomes = data.outcomes;
+    stats.analysedConversations = data.threads?.length ?? 0;
+    stats.suggestions = countBy(stored.map((s) => s.destination));
+    return save(session, {}, "review", stats, { done: 4, total: 4, label: "Gati për shqyrtim" }, true);
+  }
+  throw new Error("invalid_stage");
+}
+const ANALYSIS_STAGES = new Set(["style", "extract", "consolidate", "match"]);
 
 const PAGE = 40;
 async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: Stats) {
@@ -272,6 +326,7 @@ async function instagramAccount(businessId: string) {
 export async function processTrainingStep(session: TrainingSession) {
   const stats = { ...emptyStats(), ...session.stats };
   const data = session.checkpoint ?? {};
+  if (ANALYSIS_STAGES.has(session.stage)) return withAiUsage(session.business_id, () => analysisStep(session, data, stats));
   if (session.source === "inbox") return ingestInbox(session, data, stats);
   if (session.stage === "ingest" && !data.counted) return countParticipants(session, data, stats);
   if (session.stage === "count") return countParticipants(session, data, stats);
@@ -283,7 +338,7 @@ export async function processTrainingStep(session: TrainingSession) {
 export async function runTrainingQueue(businessId: string | null = null, budgetMs = 110_000) {
   const started = Date.now();
   let processed = 0;
-  while (Date.now() - started < budgetMs - STEP_MS - 15_000) {
+  while (Date.now() - started < budgetMs - 90_000) {
     const claim = await createServiceSupabase().rpc("claim_conversation_training", { p_business: businessId });
     if (claim.error) throw new Error("training_queue_unavailable");
     const session = (claim.data as TrainingSession[] | null)?.[0];

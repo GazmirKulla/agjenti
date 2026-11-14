@@ -3,7 +3,7 @@ import { getRequestUser, permittedWrite } from "@/lib/auth/request";
 import { requireBusinessAccess } from "@/lib/tenant/access";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { continueTraining, workerOrigin } from "@/lib/conversation-training/continue";
-import { confirmUpload, deleteAllTraining, deleteSession, listSessions, prepareUpload, startInbox } from "@/lib/conversation-training/sessions";
+import { confirmUpload, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, startInbox } from "@/lib/conversation-training/sessions";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -25,10 +25,13 @@ function wake(businessId: string, request: Request) {
   after(() => continueTraining(businessId, origin));
 }
 
-/** The business's imports (status, progress, counts) and how many messages are kept. */
+/** The business's imports (status, progress, counts) and how many messages are kept;
+ * with `session`, what that analysis proposes. */
 export async function GET(request: Request) {
   try {
     const { businessId } = await accessFor(request);
+    const session = new URL(request.url).searchParams.get("session");
+    if (session) return json(await listSuggestions(businessId, session));
     return json(await listSessions(businessId));
   } catch (error) { return failure(error); }
 }

@@ -5,12 +5,23 @@ import "./conversation-training.css";
 type Session = {
   id: string; source: "inbox" | "instagram_export"; status: "uploading" | "queued" | "running" | "ready" | "failed" | "cancelled";
   stage: string; progress: { done?: number; total?: number; label?: string }; error: string | null;
-  stats: { conversations?: number; messages?: number; duplicates?: number; customerMessages?: number; ownerMessages?: number; agentMessages?: number; skippedFiles?: number; groupConversations?: number; firstAt?: string | null; lastAt?: string | null; warnings?: string[] };
+  stats: { suggestions?: Record<string, number>; analysedConversations?: number; styleChanges?: string[]; conversations?: number; messages?: number; duplicates?: number; customerMessages?: number; ownerMessages?: number; agentMessages?: number; skippedFiles?: number; groupConversations?: number; firstAt?: string | null; lastAt?: string | null; warnings?: string[] };
   created_at: string; expires_at: string;
 };
 type State = { sessions: Session[]; keptMessages: number };
 
 const ACTIVE = new Set(["uploading", "queued", "running"]);
+type Suggestion = { id: string; destination: string; operation: string; title: string; proposed: Record<string, unknown>; current_value: unknown; requires_confirmation: boolean; confidence: string; evidence: { quote: string; speaker: string; at: string }[] };
+const DESTINATIONS: [string, string][] = [["style", "Stili i komunikimit"], ["example", "Shembuj realë"], ["knowledge", "Njohuri"], ["product", "Produkte"], ["service", "Shërbime"], ["profile", "Profili i biznesit"], ["workflow", "Procese"], ["gap", "Pyetje pa përgjigje"]];
+const OPERATIONS: Record<string, string> = { create: "E re", update: "Përditësim", duplicate: "Ekziston tashmë", conflict: "Ndryshon nga e tanishmja" };
+const CONFIDENCE: Record<string, string> = { high: "E qartë në biseda", medium: "U përmend një herë", low: "E nxjerrë, jo e thënë drejt" };
+function proposedText(s: Suggestion) {
+  const p = s.proposed as Record<string, unknown>;
+  if (s.destination === "style") return String(p.summary ?? "");
+  if (s.destination === "example") return `Klienti: ${p.customer_message}\nTi: ${p.desired_response}`;
+  const prices = Array.isArray(p.prices) ? (p.prices as { text?: string; condition?: string | null }[]).map((x) => `${x.text}${x.condition ? ` (${x.condition})` : ""}`).join(" · ") : "";
+  return [p.description ?? p.body ?? (Array.isArray(p.steps) ? (p.steps as string[]).join(" → ") : ""), prices && `Çmimi: ${prices}`].filter(Boolean).join("\n");
+}
 const date = (value?: string | null) => (value ? new Date(value).toLocaleDateString("sq-AL", { day: "numeric", month: "short", year: "numeric" }) : "");
 const MAX_BYTES = 100 * 1024 * 1024;
 
@@ -24,6 +35,15 @@ export function ConversationTraining({ slug }: { slug: string }) {
   const [files, setFiles] = useState<File[]>([]);
   const [ownerName, setOwnerName] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<{ id: string; items: Suggestion[] } | null>(null);
+
+  async function showPreview(id: string) {
+    if (preview?.id === id) { setPreview(null); return; }
+    const response = await fetch(`${endpoint}&session=${encodeURIComponent(id)}`, { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { setError(data.error || "Sugjerimet nuk u ngarkuan."); return; }
+    setPreview({ id, items: data.suggestions ?? [] });
+  }
 
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: "no-store" });
@@ -158,6 +178,37 @@ export function ConversationTraining({ slug }: { slug: string }) {
                       {s.stats.skippedFiles ? ` ${s.stats.skippedFiles} skedarë nuk u lexuan.` : ""}
                     </p>
                   )}
+                  {s.status === "ready" && s.stats.suggestions && (
+                    <>
+                      <p className="training-note">
+                        Agjenti lexoi {s.stats.analysedConversations ?? 0} biseda dhe gjeti:{" "}
+                        {DESTINATIONS.filter(([key]) => s.stats.suggestions?.[key]).map(([key, label]) => `${label.toLowerCase()} ${s.stats.suggestions?.[key]}`).join(", ") || "asgjë të re"}.
+                      </p>
+                      {s.stats.styleChanges?.map((c) => <p key={c} className="training-warning">{c}</p>)}
+                      <button type="button" className="btn btn-ghost training-delete" onClick={() => void showPreview(s.id)}>{preview?.id === s.id ? "Mbyll" : "Shiko çfarë mësoi"}</button>
+                    </>
+                  )}
+                  {preview?.id === s.id && (
+                    <div className="training-preview">
+                      {DESTINATIONS.map(([key, label]) => {
+                        const items = preview.items.filter((item) => item.destination === key);
+                        return items.length ? (
+                          <section key={key}>
+                            <h3>{label} <span>{items.length}</span></h3>
+                            <ul>{items.map((item) => (
+                              <li key={item.id}>
+                                <div className="training-preview-head"><b>{item.title}</b><span className={`is-${item.operation}`}>{OPERATIONS[item.operation]}</span></div>
+                                <p>{proposedText(item)}</p>
+                                <small>{CONFIDENCE[item.confidence]}{item.requires_confirmation ? " · Duhet ta konfirmosh" : ""}</small>
+                                {item.evidence.length > 0 && <details><summary>Nga bisedat</summary><ul>{item.evidence.map((e, i) => <li key={i}><em>{e.speaker === "customer" ? "Klienti" : e.speaker === "agent" ? "Agjenti" : "Ti"} · {date(e.at)}:</em> «{e.quote}»</li>)}</ul></details>}
+                              </li>
+                            ))}</ul>
+                          </section>
+                        ) : null;
+                      })}
+                      <p className="training-note">Miratimi i këtyre ndryshimeve vjen në hapin tjetër. Tani për tani nuk ndryshon asgjë.</p>
+                    </div>
+                  )}
                   {s.stats.warnings?.map((w) => <p key={w} className="training-warning">{w}</p>)}
                   {(s.status === "failed" || s.status === "cancelled") && <p className="training-error">{s.error || "Importi nuk përfundoi."}</p>}
                   <button type="button" className="btn btn-ghost training-delete" disabled={!!busy} onClick={() => void remove(s.id)}>Fshi</button>
@@ -166,7 +217,7 @@ export function ConversationTraining({ slug }: { slug: string }) {
             })}
           </ul>
           <p className="training-note">
-            {state.keptMessages} mesazhe të ruajtura për trajnim. Hapi tjetër (analiza dhe çfarë mësoi Agjenti) vjen së shpejti.{" "}
+            {state.keptMessages} mesazhe të ruajtura për trajnim.{" "}
             {state.keptMessages > 0 && <button type="button" className="training-link" disabled={!!busy} onClick={() => void remove()}>Fshi të gjitha</button>}
           </p>
         </section>
