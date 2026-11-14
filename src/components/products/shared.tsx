@@ -14,7 +14,8 @@ export function ProductHeading({
   slug: string;
   title: string;
   description: string;
-  back?: boolean;
+  /** true: back to the list; or a specific page (e.g. the product when editing it). */
+  back?: boolean | { href: string; label: string };
   /** What the business calls its items (e.g. "Listimet" / "listim"). */
   names?: { plural: string; singular: string };
   /** "add": only the add button (the list keeps the rest in its toolbar); "none": no buttons. */
@@ -37,8 +38,8 @@ export function ProductHeading({
     <header className="product-page-heading">
       <div>
         {back && (
-          <Link className="muted-copy" href={`/b/${slug}/products`}>
-            ‹ {names.plural}
+          <Link className="muted-copy" href={typeof back === "object" ? back.href : `/b/${slug}/products`}>
+            ‹ {typeof back === "object" ? back.label : names.plural}
           </Link>
         )}
         <h1>{title}</h1>
