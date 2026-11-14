@@ -2,6 +2,7 @@ import { loadProducts } from "@/lib/products/load";
 import {
   ProductHeading,
   ProductMethods,
+  ProductMethodTip,
   ProductTips,
 } from "@/components/products/shared";
 import { ProductEditor } from "@/components/products/editor";
@@ -19,11 +20,10 @@ export default async function NewProductPage({
 }) {
   const { slug } = await params;
   const { method: requested } = await searchParams;
-  const method = ["manual", "csv", "instagram"].includes(
-    requested ?? "",
-  )
+  // Without a method the page is the chooser: three cards and a tip.
+  const method = ["manual", "csv", "instagram"].includes(requested ?? "")
     ? requested!
-    : "manual";
+    : null;
   const data = await loadProducts(slug);
 
   let instagramStatus: string | null = null;
@@ -45,10 +45,13 @@ export default async function NewProductPage({
         slug={slug}
         names={data.items.names}
         title={data.items.titles.create}
-        description="Shto produktet dorazi, nga CSV ose Instagram. Për tekst dhe audio, përdor Agjentin."
+        description="Zgjidh mënyrën më të shpejtë për të shtuar produkte në katalog."
+        actions="none"
       />
-      <ProductMethods slug={slug} active={method} />
-      {method === "manual" ? (
+      <ProductMethods slug={slug} active={method ?? undefined} />
+      {!method ? (
+        <ProductMethodTip />
+      ) : method === "manual" ? (
         <ProductEditor
           slug={slug}
           types={data.types}
