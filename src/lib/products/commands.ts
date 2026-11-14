@@ -3,6 +3,7 @@ import { requireActionAccess } from "@/lib/actions/access";
 
 import { visualSelection, saveProductsWithVisualFlow } from "./visual-selection";
 import type { CommandActor } from "@/lib/actions/command-actor";
+import { syncLinkedProducts } from "./linked-sync";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { batchSummary, optionalUuid, parseProductBatch } from "./batch";
 import { parseProductForm } from "./parse";
@@ -241,17 +242,27 @@ export async function linkExternalProduct(actor: CommandActor, form: FormData) {
     ...rowFromParsed(access.business.id, { ...parsed, name }, "linked"),
     external_id: externalId,
   };
+  let productId: string;
   if (existing) {
     const { error } = await db
       .from("products")
       .update(row)
       .eq("id", existing.id).eq("business_id", access.business.id);
     if (error) return { error: "Produkti i lidhur nuk u përditësua." };
+    productId = existing.id;
   } else {
-    const { error } = await db.from("products").insert(row);
-    if (error) return { error: "Produkti nuk u lidh. Provo përsëri." };
+    const { data: inserted, error } = await db.from("products").insert(row).select("id").single();
+    if (error || !inserted) return { error: "Produkti nuk u lidh. Provo përsëri." };
+    productId = inserted.id;
   }
-  return { success: "Produkti u lidh nga katalogu i jashtëm." };
+  // Prices, variants and the order's choices come from the live website catalog, not from the form.
+  const sync = await syncLinkedProducts({ businessId: access.business.id, userId: user.id, productIds: [productId] })
+    .catch((e: unknown) => ({ synced: 0, missing: [], failed: [{ name, error: e instanceof Error ? e.message : "Katalogu nuk u lexua." }] }));
+  if (!sync.synced) {
+    const reason = sync.failed[0]?.error ?? "Produkti nuk gjendet më në katalogun e webit.";
+    return { error: `Produkti u lidh, por variantet dhe çmimet nuk u morën nga webi: ${reason} Provo «Rifresko nga webi».` };
+  }
+  return { success: "Produkti u lidh nga katalogu i jashtëm, me variantet dhe çmimet e webit." };
 }
 
 export async function importProductBatch(

@@ -75,18 +75,14 @@ export async function isExternalCatalogLinked(
   return Boolean(url && parseAbsoluteUrl(url));
 }
 
-export async function fetchLinkedCatalog(
+/** The website catalog as sent: products keep every field (contract v1 or v2). */
+export async function fetchLinkedCatalogDocument(
   businessId: string,
-): Promise<ExternalCatalogProduct[]> {
+): Promise<{ currency: string | null; products: Array<ExternalCatalogProduct & Record<string, unknown>> }> {
   if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "external_catalog");
   const integration = await loadIntegrationRow(businessId);
   const configuredUrl = integration?.catalog_url?.trim() || null;
-  if (!configuredUrl) return [];
-  if (!parseAbsoluteUrl(configuredUrl)) {
-    throw new Error(
-      "URL-ja e katalogut nuk është e vlefshme. Vendos një adresë të plotë te Integrimet.",
-    );
-  }
+  if (!configuredUrl) return { currency: null, products: [] };
   const url = parseAbsoluteUrl(configuredUrl);
   if (!url) {
     throw new Error(
@@ -101,6 +97,7 @@ export async function fetchLinkedCatalog(
     response = await fetch(url.toString(), {
       headers: secret ? { Authorization: `Bearer ${secret}` } : {},
       signal: AbortSignal.timeout(20_000),
+      cache: "no-store",
     });
   } catch {
     throw new Error(
@@ -112,16 +109,26 @@ export async function fetchLinkedCatalog(
       `Katalogu i jashtëm ktheu gabimin ${response.status}. Kontrollo lidhjen te Integrimet.`,
     );
   const json = (await response.json().catch(() => null)) as {
-    products?: ExternalCatalogProduct[];
+    currency?: unknown;
+    products?: Array<ExternalCatalogProduct & Record<string, unknown>>;
   } | null;
   if (!json || !Array.isArray(json.products))
     throw new Error("Përgjigjja e katalogut nuk ka formatin e pritur.");
-  return json.products.filter(
-    (product) =>
-      product &&
-      typeof product.id === "string" &&
-      typeof product.name === "string",
-  );
+  return {
+    currency: typeof json.currency === "string" ? json.currency : null,
+    products: json.products.filter(
+      (product) =>
+        product &&
+        typeof product.id === "string" &&
+        typeof product.name === "string",
+    ),
+  };
+}
+
+export async function fetchLinkedCatalog(
+  businessId: string,
+): Promise<ExternalCatalogProduct[]> {
+  return (await fetchLinkedCatalogDocument(businessId)).products;
 }
 
 export type CatalogProbeResult = {
@@ -292,6 +299,8 @@ export type ExternalOrderResult = {
   skipped?: boolean;
   orderId?: string;
   error?: string;
+  /** The website's own error code (e.g. price_changed), when it gave a safe one. */
+  code?: string;
 };
 
 export async function submitExternalOrder(params: {
@@ -320,11 +329,15 @@ export async function submitExternalOrder(params: {
         ...(secret ? { Authorization: `Bearer ${secret}` } : {}) },
       body: JSON.stringify(params.payload), signal: AbortSignal.timeout(20_000),
     });
-    const json = await response.json().catch(() => null) as { ok?: unknown; orderId?: unknown } | null;
+    const json = await response.json().catch(() => null) as { ok?: unknown; orderId?: unknown; error?: unknown; reason?: unknown } | null;
+    const raw = typeof json?.error === "string" ? json.error : typeof json?.reason === "string" ? json.reason : "";
+    const code = /^[a-z][a-z0-9_]{0,59}$/.test(raw) ? raw : undefined;
     if (response.ok && json?.ok === true) {
       result = { status: "accepted", ok: true, orderId: typeof json.orderId === "string" ? json.orderId.slice(0, 200) : undefined };
-    } else if (json?.ok === false && (response.ok || response.status >= 400 && response.status < 500 && ![408, 409, 429].includes(response.status))) {
-      result = { status: "rejected", ok: false, error: "Sistemi i jashtëm e refuzoi porosinë. Kërkohet shqyrtim nga stafi." };
+    } else if (json?.ok === false && (response.ok || response.status >= 400 && response.status < 500 && ![408, 409, 429].includes(response.status)
+      // Contract v2: price_changed is answered before anything is created.
+      || response.status === 409 && code === "price_changed")) {
+      result = { status: "rejected", ok: false, error: "Sistemi i jashtëm e refuzoi porosinë. Kërkohet shqyrtim nga stafi.", ...(code ? { code } : {}) };
     } else result = unknown();
   } catch {
     // Timeouts/network errors can occur AFTER the provider committed the order.
@@ -333,7 +346,7 @@ export async function submitExternalOrder(params: {
   // Logging must not erase a verified provider response; the submission ledger is authoritative.
   try {
     await supabase.from("integration_logs").insert({ business_id: params.businessId,
-      direction: "outbound", target: "orders", status: result.ok ? "ok" : "failed", error: result.error ?? null });
+      direction: "outbound", target: "orders", status: result.ok ? "ok" : "failed", error: result.code ?? result.error ?? null });
   } catch { /* Ledger persistence is checked by the caller. Never retry delivery for a log failure. */ }
   return result;
 }

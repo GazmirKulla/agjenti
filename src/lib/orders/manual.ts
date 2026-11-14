@@ -14,6 +14,15 @@ export type ManualOrderInput = {
   customer: { name: string; phone: string; city: string; address: string };
   note: string;
   requestKey: string;
+  /** For a linked product: the choices, extras, data and files the website declares (checked by the RPC). */
+  selection?: OrderSelection | null;
+};
+
+export type OrderSelection = {
+  options?: Record<string, string>;
+  fields?: Record<string, string | number | boolean>;
+  files?: Record<string, string[]>;
+  addons?: string[];
 };
 
 const errors: Record<string, [string, number]> = {
@@ -29,6 +38,8 @@ const errors: Record<string, [string, number]> = {
   price_on_request: ["Ky produkt nuk ka një çmim të caktuar (nga–deri ose sipas kërkesës). Zgjidh një variant me çmim ose vendos çmimin te Produktet.", 409],
   variant_required: ["Zgjidh variantin (p.sh. masën) e produktit.", 400],
   variant_unavailable: ["Ky variant nuk është më në shitje.", 409],
+  selection_required: ["Plotëso zgjedhjet dhe të dhënat që kërkon produkti (p.sh. ngjyra, foto).", 400],
+  invalid_selection: ["Një zgjedhje nuk është më mes vlerave të produktit. Rifresko formularin.", 409],
 };
 
 /** A LOCAL order the owner records from a conversation; the RPC rechecks membership and takes prices from the catalog. */
@@ -46,6 +57,7 @@ export async function createManualOrder(input: ManualOrderInput): Promise<{ orde
     p_note: input.note,
     p_request_key: input.requestKey,
     p_variant: input.variantId ?? null,
+    p_selection: input.selection ?? null,
   });
   if (error || typeof data !== "string") {
     const [message, status] = errors[error?.message ?? ""] ?? ["Porosia nuk u ruajt. Provo përsëri.", 500];

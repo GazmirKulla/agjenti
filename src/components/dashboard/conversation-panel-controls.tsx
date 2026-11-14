@@ -216,7 +216,149 @@ export function CopyInvitationLink({ url }: { url: string }) {
   );
 }
 
-type ProductOption = { id: string; name: string; price: number | null; currency: string | null; unit?: string | null; variants?: { id: string; label: string; price: number }[] };
+type DeclaredValue = { id: string; name: string };
+type DeclaredField = { key: string; label: string; type: "text" | "number" | "boolean" | "date" | "choice" | "photo" | "file"; required: boolean; min?: number; max?: number; maxLength?: number; values?: DeclaredValue[] };
+/** What the business website declares for a linked product: choices beyond the variant, extras and the data the order needs. */
+type Declared = {
+  options: { key: string; label: string; required: boolean; values: DeclaredValue[] }[];
+  addons: { id: string; name: string; price: number; appliesToVariants?: string[] }[];
+  fields: DeclaredField[];
+};
+type ProductOption = {
+  id: string; name: string; price: number | null; currency: string | null; unit?: string | null;
+  variants?: { id: string; label: string; price: number; externalId?: string | null }[];
+  declared?: Declared; sendsToWebsite?: boolean;
+};
+type Selection = { options: Record<string, string>; fields: Record<string, string | number | boolean>; files: Record<string, string[]>; addons: string[] };
+const emptySelection = (): Selection => ({ options: {}, fields: {}, files: {}, addons: [] });
+type Submission = { status: "local_only" | "pending_reconciliation" | "accepted" | "rejected"; externalOrderId?: string | null; reason?: string };
+
+/** Uploads one reference photo to the conversation and returns its private path. */
+async function uploadOrderFile(base: string, file: File): Promise<string> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(`${base}/order-files`, { method: "POST", body });
+  const json = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
+  if (!res.ok || !json.path) throw new Error(json.error || "Fotoja nuk u ngarkua.");
+  return json.path;
+}
+
+/** The choices, extras and fields a linked product needs, built from the website's declaration. */
+function DeclaredInputs(props: {
+  base: string; declared: Declared; variantExternalId: string | null; currency: string | null;
+  selection: Selection; onChange: (next: Selection) => void;
+}) {
+  const t = useDashboardTranslator();
+  const { declared, selection, onChange } = props;
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const addons = declared.addons.filter((a) => !a.appliesToVariants || (props.variantExternalId && a.appliesToVariants.includes(props.variantExternalId)));
+  if (!declared.options.length && !addons.length && !declared.fields.length) return null;
+  const setField = (key: string, value: string | number | boolean | null) => {
+    const fields = { ...selection.fields };
+    if (value === null || value === "") delete fields[key];
+    else fields[key] = value;
+    onChange({ ...selection, fields });
+  };
+  return (
+    <>
+      {declared.options.map((o) => (
+        <SmartLabel key={o.key} label={o.label}>
+          <select className="field" value={selection.options[o.key] ?? ""} required={o.required}
+            onChange={(e) => {
+              const options = { ...selection.options };
+              if (e.target.value) options[o.key] = e.target.value;
+              else delete options[o.key];
+              onChange({ ...selection, options });
+            }}>
+            <option value="">{t("Zgjidh")}</option>
+            {o.values.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        </SmartLabel>
+      ))}
+      {addons.map((a) => (
+        <label key={a.id} className="smart-form-check">
+          <input type="checkbox" checked={selection.addons.includes(a.id)}
+            onChange={(e) => onChange({ ...selection, addons: e.target.checked ? [...selection.addons, a.id] : selection.addons.filter((id) => id !== a.id) })} />
+          {a.name} · +{a.price} {props.currency ?? ""}
+        </label>
+      ))}
+      {declared.fields.map((f) => {
+        if (f.type === "photo" || f.type === "file") {
+          const paths = selection.files[f.key] ?? [];
+          const max = Math.min(f.max ?? 5, 10);
+          return (
+            <SmartLabel key={f.key} label={`${f.label}${f.required ? " *" : ""}`} wide>
+              <input className="field" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple
+                disabled={uploading === f.key || paths.length >= max}
+                onChange={async (e) => {
+                  const chosen = Array.from(e.target.files ?? []).slice(0, max - paths.length);
+                  e.target.value = "";
+                  if (!chosen.length) return;
+                  setUploading(f.key);
+                  setUploadError(null);
+                  try {
+                    const added: string[] = [];
+                    for (const file of chosen) added.push(await uploadOrderFile(props.base, file));
+                    onChange({ ...selection, files: { ...selection.files, [f.key]: [...paths, ...added] } });
+                  } catch (err) {
+                    setUploadError(err instanceof Error ? err.message : t("Fotoja nuk u ngarkua."));
+                  } finally {
+                    setUploading(null);
+                  }
+                }} />
+              <span className="muted-copy">
+                {uploading === f.key ? t("Duke ngarkuar…") : `${paths.length}/${max} ${t("foto")}`}
+                {paths.length > 0 && (
+                  <button type="button" className="btn btn-ghost" onClick={() => onChange({ ...selection, files: { ...selection.files, [f.key]: [] } })}>{t("Hiq fotot")}</button>
+                )}
+              </span>
+              {uploadError && <span role="alert" className="text-danger">{uploadError}</span>}
+            </SmartLabel>
+          );
+        }
+        const value = selection.fields[f.key];
+        if (f.type === "boolean")
+          return (
+            <label key={f.key} className="smart-form-check">
+              <input type="checkbox" checked={value === true} onChange={(e) => setField(f.key, e.target.checked ? true : null)} />
+              {f.label}
+            </label>
+          );
+        if (f.type === "choice")
+          return (
+            <SmartLabel key={f.key} label={f.label}>
+              <select className="field" value={typeof value === "string" ? value : ""} required={f.required} onChange={(e) => setField(f.key, e.target.value)}>
+                <option value="">{t("Zgjidh")}</option>
+                {(f.values ?? []).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </SmartLabel>
+          );
+        return (
+          <SmartLabel key={f.key} label={f.label} wide={f.type === "text"}>
+            <input className="field" type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} required={f.required}
+              maxLength={f.type === "text" ? f.maxLength ?? 500 : undefined} min={f.type === "number" ? f.min : undefined} max={f.type === "number" ? f.max : undefined}
+              value={value === undefined ? "" : String(value)}
+              onChange={(e) => setField(f.key, f.type === "number" ? (e.target.value === "" ? null : Number(e.target.value)) : e.target.value)} />
+          </SmartLabel>
+        );
+      })}
+    </>
+  );
+}
+
+/** The result line after saving: local, sent to the website, refused or to be checked. */
+function submissionMessage(submission: Submission | undefined, t: (text: string) => string): string {
+  if (!submission || submission.status === "local_only")
+    return submission?.reason
+      ? t("Porosia u ruajt vetëm këtu: produkti nuk është i lidhur ose i rifreskuar nga webi, ndaj nuk u dërgua.")
+      : t("Porosia u ruajt.");
+  if (submission.status === "accepted")
+    return `${t("Porosia u ruajt dhe u krijua te webi i biznesit.")}${submission.externalOrderId ? ` #${submission.externalOrderId}` : ""}`;
+  if (submission.status === "rejected")
+    return `${t("Porosia u ruajt, por webi i biznesit e refuzoi.")}${submission.reason === "price_changed" ? ` ${t("Çmimi ka ndryshuar: rifresko produktet nga webi.")}` : submission.reason ? ` (${submission.reason})` : ""}`;
+  return t("Porosia u ruajt, por dërgimi te webi nuk u verifikua. Kontrollo te Porositë; mos e ridërgo.");
+}
 
 /** Opens the form when the menu links to it (#krijo-porosi, #cakto-takim). */
 function useHashOpen(id: string) {
@@ -260,6 +402,7 @@ export function ManualOrderForm(props: {
   const [values, setValues] = useState(initial);
   const [chosenName, setChosenName] = useState(props.productName);
   const [variantId, setVariantId] = useState("");
+  const [selection, setSelection] = useState<Selection>(emptySelection);
   useApplyPrefill(prefill.data, { productId: "product_id", quantity: "quantity", name: "name", phone: "phone", city: "city", address: "address", note: "note" }, setValues, initial);
   useEffect(() => {
     if (prefill.data?.productName) setChosenName((current) => prefill.data!.productName ?? current);
@@ -284,7 +427,9 @@ export function ManualOrderForm(props: {
   const selected = products.find((p) => p.id === values.productId);
   const variant = selected?.variants?.find((v) => v.id === variantId);
   const quantity = Number(values.quantity) || 1;
-  const unit = variant ? variant.price : selected?.variants?.length ? null : selected?.price ?? null;
+  const base0 = variant ? variant.price : selected?.variants?.length ? null : selected?.price ?? null;
+  const extras = (selected?.declared?.addons ?? []).filter((a) => selection.addons.includes(a.id)).reduce((sum, a) => sum + a.price, 0);
+  const unit = base0 != null ? base0 + extras : null;
   // Priced per unit (m³…): parts of the unit are allowed; the server computes the saved total the same way.
   const measure = selected?.unit ?? null;
   const total = unit != null ? Math.round(unit * quantity * 100) / 100 : null;
@@ -299,20 +444,27 @@ export function ManualOrderForm(props: {
         onSubmit={async (event) => {
           event.preventDefault();
           if (pending) return;
-          if (!window.confirm(t("Ruaj porosinë? Ruhet si e konfirmuar te Porositë; nuk dërgohet në sistem të jashtëm."))) return;
+          if (!window.confirm(selected?.sendsToWebsite
+            ? t("Ruaj porosinë? Ruhet te Porositë dhe krijohet një herë te webi i biznesit.")
+            : t("Ruaj porosinë? Ruhet si e konfirmuar te Porositë; nuk dërgohet në sistem të jashtëm."))) return;
           setPending(true);
           setMessage({});
           try {
-            await post(`${base}/order`, {
+            const res = await fetch(`${base}/order`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
               productId: values.productId,
               ...(variant ? { variantId: variant.id } : {}),
+              ...(selected?.declared ? { selection } : {}),
               quantity,
               customer: { name: values.name, phone: values.phone, city: values.city, address: values.address },
               note: values.note,
               requestKey,
-            });
-            setMessage({ success: "Porosia u ruajt." });
+            }) });
+            const json = (await res.json().catch(() => ({}))) as { error?: string; submission?: Submission };
+            if (!res.ok) throw new Error(json.error || "Veprimi dështoi.");
+            const text = submissionMessage(json.submission, t);
+            setMessage(json.submission?.status === "rejected" || json.submission?.status === "pending_reconciliation" ? { error: text } : { success: text });
             setRequestKey(crypto.randomUUID());
+            setSelection(emptySelection());
             setValues((current) => ({ ...current, note: "" }));
             router.refresh();
           } catch (e) {
@@ -327,7 +479,7 @@ export function ManualOrderForm(props: {
           <legend>{t("Çfarë porositet")}</legend>
           <SmartLabel label="Produkti" field={fields.product_id} wide>
             <input className="field" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Kërko produktin")} aria-label={t("Kërko produktin")} />
-            <select className="field" value={values.productId} onChange={(e) => { setVariantId(""); set("productId")(e); }} required>
+            <select className="field" value={values.productId} onChange={(e) => { setVariantId(""); setSelection(emptySelection()); set("productId")(e); }} required>
               <option value="">{t("Zgjidh produktin")}</option>
               {values.productId && !selected && <option value={values.productId}>{chosenName ?? t("Produkti i zgjedhur nga biseda")}</option>}
               {products.map((p) => (
@@ -337,12 +489,16 @@ export function ManualOrderForm(props: {
           </SmartLabel>
           {selected?.variants?.length ? (
             <SmartLabel label="Varianti">
-              <select className="field" value={variantId} onChange={(e) => setVariantId(e.target.value)} required>
+              <select className="field" value={variantId} onChange={(e) => { setVariantId(e.target.value); setSelection((current) => ({ ...current, addons: [] })); }} required>
                 <option value="">{t("Zgjidh variantin")}</option>
                 {selected.variants.map((v) => <option key={v.id} value={v.id}>{v.label} · {v.price} {selected.currency ?? ""}</option>)}
               </select>
             </SmartLabel>
           ) : null}
+          {selected?.declared && (
+            <DeclaredInputs base={base} declared={selected.declared} variantExternalId={variant?.externalId ?? null}
+              currency={selected.currency} selection={selection} onChange={setSelection} />
+          )}
           <SmartLabel label={measure ? `${t("Sasia")} (${measure})` : "Sasia"} field={fields.quantity}>
             <input className="field" type="number" inputMode={measure ? "decimal" : "numeric"} min={measure ? 0.001 : 1} max={measure ? 100000 : 999} step={measure ? 0.001 : 1}
               value={values.quantity} placeholder="1" onChange={set("quantity")} />

@@ -79,12 +79,12 @@ ${JSON.stringify(catalogExample, null, 2)}
 3. Porositë — POST /api/integrations/agjenti/orders (opsionale)
 Implementoje kur webi ka një sistem real porosish. Nëse mungon, dorëzo katalogun funksional dhe shpjego çfarë mungon; mos ndërto një sistem të ri porosish pa sqaruar scope-in.
 Prano Content-Type: application/json dhe të njëjtin autorizim Bearer. Prano të dyja format:
-- Versioni 1, që Agjenti dërgon sot: formatId dhe colorId janë ID-të e formats/colors; character mund të jetë null; customer.city mund të mungojë.
+- Versioni 1, që dërgon ende rruga e porosive të konfirmuara nga stafi pas agjentit: formatId dhe colorId janë ID-të e formats/colors; character mund të jetë null; customer.city mund të mungojë.
 ${JSON.stringify(orderExample, null, 2)}
-- Versioni 2 ("version": 2), me variantin, zgjedhjet, shtesat, fushat dhe skedarët e deklaruar në katalog:
+- Versioni 2 ("version": 2), që dërgon porosia e krijuar nga pronari në bisedë («Krijo porosi»), me variantin, zgjedhjet, shtesat, fushat dhe skedarët e deklaruar në katalog. Për pajtueshmëri përfshin edhe formatId, colorId dhe character:
 ${JSON.stringify(orderExampleV2, null, 2)}
 Valido në server përmes logjikës ekzistuese të checkout-it: produktin, përkatësinë e variantit, opsioneve dhe shtesave, fushat e detyrueshme, sasinë dhe skedarët. Skedarët shkarkoji nga URL-ja menjëherë (URL-të kanë afat) dhe ruaji te storage i webit. Rillogarit çmimin, transportin dhe disponueshmërinë; mos shëno pagesë si të kryer vetëm sepse erdhi kjo kërkesë.
-Nëse totali i rillogaritur ndryshon nga expectedTotal, mos e krijo porosinë: kthe HTTP 409 me {"ok":false,"error":"price_changed","total":1300}.
+expectedTotal është shuma e artikujve (çmimi i variantit plus shtesat, herë sasinë), pa transportin. Nëse kjo shumë e rillogaritur ndryshon nga expectedTotal, mos e krijo porosinë: kthe HTTP 409 me {"ok":false,"error":"price_changed","total":1300}.
 Idempotenca: Agjenti dërgon header-in X-Agjenti-Submission-Id, unik për çdo porosi. Ruaje me indeks unik; për të njëjtin ID kthe të njëjtën përgjigje dhe mos krijo porosi të dytë.
 Kthe sukses vetëm pas ruajtjes së konfirmuar: HTTP 2xx me {"ok":true,"orderId":"id-reale","orderNumber":123}. orderId është string opsional, orderNumber number opsional. Për dështim kthe status përkatës (400 të dhëna të pavlefshme, 409 konflikt, 5xx gabim i përkohshëm) dhe {"ok":false,"error":"kod_i_sigurt","field":"çelësi i fushës kur ka"}.
 Opsionale: POST /api/integrations/agjenti/orders/quote me të njëjtin body kthen {"ok":true,"total":1500,"shipping":300,"lines":[...]} pa krijuar porosi.
@@ -120,11 +120,11 @@ export function WebsiteSpecifications({ language = "sq" }: { language?: "sq" | "
     </details>
     <details>
       <summary>Porositë · POST · opsionale</summary>
-      <p className="muted-copy">Shembull adrese: <code>https://webi-juaj.al/api/integrations/agjenti/orders</code>. Agjenti dërgon <code>Content-Type: application/json</code> dhe <code>X-Agjenti-Submission-Id</code>, unik për çdo porosi: për të njëjtin ID mos krijo porosi të dytë. Sot Agjenti dërgon versionin 1:</p>
+      <p className="muted-copy">Shembull adrese: <code>https://webi-juaj.al/api/integrations/agjenti/orders</code>. Agjenti dërgon <code>Content-Type: application/json</code> dhe <code>X-Agjenti-Submission-Id</code>, unik për çdo porosi: për të njëjtin ID mos krijo porosi të dytë. Porositë e konfirmuara nga stafi pas agjentit dërgohen ende në versionin 1:</p>
       <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(orderExample, null, 2)}</code></pre>
-      <p className="muted-copy">Endpoint-i duhet të pranojë edhe versionin 2, me variantin, zgjedhjet, shtesat, fushat dhe skedarët e katalogut:</p>
+      <p className="muted-copy">«Krijo porosi» në bisedë dërgon versionin 2, me variantin, zgjedhjet, shtesat, fushat dhe skedarët e katalogut (lidhjet e skedarëve skadojnë pas një ore):</p>
       <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(orderExampleV2, null, 2)}</code></pre>
-      <p className="muted-copy">Webi e rillogarit çmimin; kur ndryshon nga <code>expectedTotal</code>, kthe HTTP 409 me <code>{'{"ok": false, "error": "price_changed", "total": 1300}'}</code>. Për sukses kthe HTTP 2xx dhe <code>{'{"ok": true, "orderId": "porosi-1", "orderNumber": 123}'}</code>; <code>orderId</code> (tekst) dhe <code>orderNumber</code> (numër) janë opsionalë. Për dështim kthe status gabimi dhe <code>{'{"ok": false, "error": "kodi", "field": "fusha"}'}</code>. Pa URL porosish, ky integrim nuk dërgon porosi në web. Testi i katalogut nuk verifikon API-në e porosive.</p>
+      <p className="muted-copy"><code>expectedTotal</code> është shuma e artikujve pa transportin. Webi e rillogarit; kur ndryshon, kthe HTTP 409 me <code>{'{"ok": false, "error": "price_changed", "total": 1300}'}</code>. Për sukses kthe HTTP 2xx dhe <code>{'{"ok": true, "orderId": "porosi-1", "orderNumber": 123}'}</code>; <code>orderId</code> (tekst) dhe <code>orderNumber</code> (numër) janë opsionalë. Për dështim kthe status gabimi dhe <code>{'{"ok": false, "error": "kodi", "field": "fusha"}'}</code>. Pa URL porosish, ky integrim nuk dërgon porosi në web. Testi i katalogut nuk verifikon API-në e porosive.</p>
     </details>
   </div></details>;
 }
@@ -149,11 +149,11 @@ function EnglishWebsiteSpecifications() {
         <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(catalogExample, null, 2)}</code></pre>
       </details>
       <details><summary>Orders · POST · optional</summary>
-        <p className="muted-copy">Example URL: <code>https://your-website.com/api/integrations/agjenti/orders</code>. Agjenti sends <code>Content-Type: application/json</code> and <code>X-Agjenti-Submission-Id</code>, unique per order: never create a second order for the same ID. Today Agjenti sends version 1:</p>
+        <p className="muted-copy">Example URL: <code>https://your-website.com/api/integrations/agjenti/orders</code>. Agjenti sends <code>Content-Type: application/json</code> and <code>X-Agjenti-Submission-Id</code>, unique per order: never create a second order for the same ID. Orders confirmed by staff after the agent are still sent as version 1:</p>
         <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(orderExample, null, 2)}</code></pre>
-        <p className="muted-copy">The endpoint must also accept version 2, with the variant, choices, extras, fields and files from the catalog:</p>
+        <p className="muted-copy">“Create order” in a conversation sends version 2, with the variant, choices, extras, fields and files from the catalog (file links expire after one hour):</p>
         <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(orderExampleV2, null, 2)}</code></pre>
-        <p className="muted-copy">The website recalculates the price; when it differs from <code>expectedTotal</code>, return HTTP 409 with <code>{'{"ok": false, "error": "price_changed", "total": 1300}'}</code>. On success return HTTP 2xx and <code>{'{"ok": true, "orderId": "order-1", "orderNumber": 123}'}</code>; <code>orderId</code> (string) and <code>orderNumber</code> (number) are optional. On failure return an error status and <code>{'{"ok": false, "error": "code", "field": "field"}'}</code>. Without an orders URL, this integration does not submit orders to the website. The catalog test does not verify the orders API.</p>
+        <p className="muted-copy"><code>expectedTotal</code> is the items total without shipping. The website recalculates it; when it differs, return HTTP 409 with <code>{'{"ok": false, "error": "price_changed", "total": 1300}'}</code>. On success return HTTP 2xx and <code>{'{"ok": true, "orderId": "order-1", "orderNumber": 123}'}</code>; <code>orderId</code> (string) and <code>orderNumber</code> (number) are optional. On failure return an error status and <code>{'{"ok": false, "error": "code", "field": "field"}'}</code>. Without an orders URL, this integration does not submit orders to the website. The catalog test does not verify the orders API.</p>
       </details>
     </div>
   </details>;

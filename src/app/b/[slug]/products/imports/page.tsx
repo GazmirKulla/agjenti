@@ -8,6 +8,16 @@ import {
 } from "@/lib/integrations/zana";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { linkExternalProduct } from "@/lib/products/actions";
+import { refreshLinkedProducts } from "@/lib/products/linked-actions";
+/** The website's price: its own, or the lowest variant price ("nga 1200 ALL"). */
+function externalPriceLabel(p: { price: number | null; currency?: string; formats?: { price: number | null }[] } & Record<string, unknown>) {
+  const variants = Array.isArray(p.variants) ? (p.variants as { price?: unknown }[]) : p.formats ?? [];
+  const prices = variants.map((v) => v.price).filter((x): x is number => typeof x === "number");
+  const currency = p.currency ?? "ALL";
+  if (typeof p.price === "number") return `${prices.length > 1 && new Set(prices).size > 1 ? "nga " : ""}${p.price} ${currency}`;
+  return prices.length ? `nga ${Math.min(...prices)} ${currency}` : "Pa çmim";
+}
+
 export default async function ImportedProductsPage({
   params,
 }: {
@@ -52,14 +62,19 @@ export default async function ImportedProductsPage({
         <section className="panel section-pad product-external">
           <h2>Katalogu i jashtëm</h2>
           <p className="muted-copy">
-            Lidh produktet si draft. Plotëso workflow-n dhe kontrollo çmimet
-            para aktivizimit.
+            Lidh produktet si draft. Variantet, çmimet dhe të dhënat që kërkon
+            porosia merren nga webi; plotëso workflow-n para aktivizimit.
           </p>
+          {data.products.some((row) => row.external_id) && (
+            <ActionForm action={refreshLinkedProducts.bind(null, slug)}>
+              <button className="btn btn-ghost">Rifresko nga webi</button>
+            </ActionForm>
+          )}
           {remote.map((p) => (
             <div key={p.id} className="product-external-row">
               <div>
                 <strong>{p.name}</strong>
-                <p>{p.price ?? "Pa çmim"}</p>
+                <p>{externalPriceLabel(p)}</p>
               </div>
               {data.products.some((row) => row.external_id === p.id) ? (
                 <Link
