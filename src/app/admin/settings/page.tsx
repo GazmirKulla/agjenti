@@ -105,36 +105,29 @@ export default async function PlatformSettingsPage() {
 
       <ActionForm action={saveConversationLearning} className="settings-layout">
         <section className="panel settings-section" aria-labelledby="settings-learning">
-          <SectionHead icon="chat" title="Mësimi nga bisedat" description="Te Njohuritë, Agjenti lexon bisedat e fundit me klientët dhe sugjeron njohuri që pronari i miraton një nga një. Asgjë nuk ruhet pa miratimin e tij." />
+          <SectionHead icon="chat" title="Trajnimi nga bisedat" description="Te Agjenti → «Trajno nga bisedat»: pronari importon bisedat (Inbox-i ose eksporti i Instagram-it), shqyrton çfarë mësoi Agjenti, e provon dhe aplikon vetëm atë që miraton." />
           {!learning.stored && (
             <p className="settings-hint settings-hint-top">Vlerat më poshtë janë parazgjedhjet që po përdoren. Për t&apos;i ndryshuar, duhet aplikuar migrimi <code>conversation_learning_settings</code>.</p>
           )}
           <label className="settings-toggle settings-toggle-wide">
             <span id="settings-learning">
-              Mësimi nga bisedat aktiv
-              <small>E fikur: butoni «Mëso nga bisedat» nuk shfaqet te asnjë biznes.</small>
+              Trajnimi nga bisedat aktiv
+              <small>E fikur: asnjë biznes nuk mund të nisë import të ri; sugjerimet ekzistuese mbeten.</small>
             </span>
             <input className="switch-input" type="checkbox" name="learning_enabled" defaultChecked={learning.settings.enabled} disabled={!learning.stored} />
           </label>
           <div className="settings-number-grid">
-            {([
-              ["learning_min_conversations", "min_conversations", "Bisedat minimale", "Skanimi hapet vetëm kur biznesi ka të paktën kaq biseda në periudhën më poshtë."],
-              ["learning_messages_per_conversation", "messages_per_conversation", "Mesazhe për bisedë", "Mesazhet e fundit që lexohen nga çdo bisedë. Instagram jep deri në 20."],
-              ["learning_max_conversations", "max_conversations", "Bisedat për skanim", "Sa biseda lexohen në një skanim, nga më e reja."],
-              ["learning_lookback_days", "lookback_days", "Periudha (ditë)", "Lexohen vetëm bisedat aktive në kaq ditët e fundit."],
-            ] as const).map(([name, key, label, hint]) => (
-              <label key={name} className="form-label settings-number">
-                {label}
-                <input className="field" type="number" name={name} min={learningLimits[key].min} max={learningLimits[key].max}
-                  defaultValue={learning.settings[key]} required disabled={!learning.stored} />
-                <small className="settings-hint">{hint} ({learningLimits[key].min}–{learningLimits[key].max})</small>
-              </label>
-            ))}
+            <label className="form-label settings-number">
+              Periudha e Inbox-it (ditë)
+              <input className="field" type="number" name="learning_lookback_days" min={learningLimits.lookback_days.min} max={365}
+                defaultValue={Math.min(learning.settings.lookback_days, 365)} required disabled={!learning.stored} />
+              <small className="settings-hint">Nga Inbox-i lexohen bisedat aktive në kaq ditët e fundit ({learningLimits.lookback_days.min}–365). Eksporti i Instagram-it lexohet i gjithi.</small>
+            </label>
           </div>
           <label className="settings-toggle settings-toggle-wide">
             <span>
               Historia e Instagram-it
-              <small>Lexon edhe DM-të nga përpara lidhjes së Instagram-it (Meta jep 20 mesazhet e fundit të çdo bisede). WhatsApp nuk jep histori.</small>
+              <small>Kur importon nga Inbox-i, lexon edhe DM-të nga përpara lidhjes së Instagram-it (Meta jep 20 mesazhet e fundit të çdo bisede). Për historinë e plotë, pronari ngarkon eksportin e Instagram-it.</small>
             </span>
             <input className="switch-input" type="checkbox" name="learning_instagram_history" defaultChecked={learning.settings.instagram_history} disabled={!learning.stored} />
           </label>

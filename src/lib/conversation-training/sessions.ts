@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { withAiUsage } from "@/lib/ai/usage";
+import { loadLearningSettings } from "@/lib/conversation-learning/settings";
 import { removeUploads, TRAINING_BUCKET, type SessionInput, type UploadedFile } from "./job";
 import { applySuggestion, type ApplyRow } from "./apply";
 import { approvable, bulkSafe, parseEdit, type ReviewRow } from "./review";
@@ -19,17 +20,26 @@ const startError = (message: string) => {
   return new PersistenceError("Importi nuk u nis. Provo përsëri.");
 };
 
+/** The platform can switch training off for every business (admin settings). */
+async function requireEnabled() {
+  const { settings } = await loadLearningSettings();
+  if (!settings.enabled) throw new PersistenceError("Trajnimi nga bisedat është i fikur nga platforma.", 403);
+  return settings;
+}
+
 export async function listSessions(businessId: string) {
   const db = createServiceSupabase();
+  const { settings } = await loadLearningSettings();
   const [sessions, kept] = await Promise.all([
     db.from("conversation_training_sessions").select(sessionColumns).eq("business_id", businessId).order("created_at", { ascending: false }).limit(20),
     db.from("conversation_training_messages").select("id", { count: "exact", head: true }).eq("business_id", businessId),
   ]);
   if (sessions.error) throw new PersistenceError("Importet nuk u ngarkuan.", sessions.error.code === "42P01" || sessions.error.code === "PGRST205" ? 503 : 500);
-  return { sessions: sessions.data ?? [], keptMessages: kept.count ?? 0 };
+  return { enabled: settings.enabled, lookbackDays: Math.min(settings.lookback_days, 365), sessions: sessions.data ?? [], keptMessages: kept.count ?? 0 };
 }
 
 export async function startInbox(businessId: string, userId: string) {
+  await requireEnabled();
   const { data, error } = await createServiceSupabase().rpc("start_conversation_training", { p_business: businessId, p_user: userId, p_source: "inbox", p_input: {}, p_status: "queued" });
   if (error) throw startError(error.message);
   return { id: data as string };
@@ -38,6 +48,7 @@ export async function startInbox(businessId: string, userId: string) {
 /** Validates the files the owner chose and returns one signed upload URL per file:
  * the browser sends them straight to private storage, never through this server. */
 export async function prepareUpload(businessId: string, userId: string, input: { files?: unknown; ownerName?: unknown }) {
+  await requireEnabled();
   const list = Array.isArray(input.files) ? input.files : [];
   if (!list.length || list.length > MAX_FILES) throw new PersistenceError(`Zgjidh nga 1 deri në ${MAX_FILES} skedarë.`, 400);
   const ownerName = typeof input.ownerName === "string" ? input.ownerName.trim() : "";

@@ -9,7 +9,7 @@ type Session = {
   stats: { suggestions?: Record<string, number>; analysedConversations?: number; styleChanges?: string[]; conversations?: number; messages?: number; duplicates?: number; customerMessages?: number; ownerMessages?: number; agentMessages?: number; skippedFiles?: number; groupConversations?: number; firstAt?: string | null; lastAt?: string | null; warnings?: string[] };
   created_at: string; expires_at: string;
 };
-type State = { sessions: Session[]; keptMessages: number };
+type State = { enabled?: boolean; lookbackDays?: number; sessions: Session[]; keptMessages: number };
 
 const ACTIVE = new Set(["uploading", "queued", "running"]);
 const date = (value?: string | null) => (value ? new Date(value).toLocaleDateString("sq-AL", { day: "numeric", month: "short", year: "numeric" }) : "");

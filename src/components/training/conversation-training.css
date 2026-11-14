@@ -1,3 +1,8 @@
+.training-entry { display: flex; gap: 12px; align-items: center; margin-bottom: 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); text-decoration: none; }
+.training-entry:hover { border-color: var(--accent); }
+.training-entry > span:nth-child(2) { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.training-entry b { font-size: 15px; font-weight: 650; }
+.training-entry small { color: var(--ink-muted); font-size: 13px; line-height: 1.5; }
 .training { display: grid; gap: 16px; max-width: 920px; }
 .training-steps { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; overflow-x: auto; scrollbar-width: none; }
 .training-steps li { display: flex; flex: none; gap: 6px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-muted); font-size: 12px; white-space: nowrap; }

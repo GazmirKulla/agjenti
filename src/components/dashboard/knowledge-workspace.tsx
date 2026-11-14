@@ -3,7 +3,7 @@ import { ActionForm } from "@/components/dashboard/action-form";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading } from "@/components/dashboard/ui";
 import { KnowledgeSources } from "@/components/dashboard/knowledge-sources";
-import { ConversationLearning } from "@/components/dashboard/conversation-learning";
+import { TrainingEntry } from "@/components/training/training-entry";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -133,7 +133,7 @@ export async function KnowledgeWorkspace({
         )}
       </PageHeading>
       {!services && <KnowledgeSources slug={slug} />}
-      {!services && <ConversationLearning slug={slug} />}
+      {!services && <TrainingEntry slug={slug} />}
       <RecordBrowser
         listTitle={services ? "Shërbimet" : "Njohuritë"}
         facets={[{ key: "status", label: "Statusi", options: [{ value: "active", label: "Aktive" }, { value: "inactive", label: "Joaktive" }] }]}

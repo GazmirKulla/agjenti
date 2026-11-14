@@ -89,16 +89,13 @@ export async function saveModelTiers(form: FormData) {
   return { success: "Modelet u ruajtën. Vlejnë menjëherë për thirrjet e reja." };
 }
 
-/** Saves the platform limits of "Mëso nga bisedat". */
+/** Saves the platform settings of "Trajno nga bisedat": on/off, the Inbox period and the Instagram history. */
 export async function saveConversationLearning(form: FormData) {
   const user = await getSessionUser();
   if (!user || !(await isPlatformAdmin(user.id))) return { error: "Kërkohet qasja e administratorit." };
   const conversation_learning = normalizeLearningSettings({
     enabled: form.get("learning_enabled") === "on",
     instagram_history: form.get("learning_instagram_history") === "on",
-    min_conversations: form.get("learning_min_conversations"),
-    messages_per_conversation: form.get("learning_messages_per_conversation"),
-    max_conversations: form.get("learning_max_conversations"),
     lookback_days: form.get("learning_lookback_days"),
   });
   const { error } = await createServiceSupabase().from("app_settings")
@@ -109,5 +106,5 @@ export async function saveConversationLearning(form: FormData) {
       : "Cilësimet nuk u ruajtën. Provo përsëri.",
   };
   revalidatePath("/admin/settings");
-  return { success: "Cilësimet e mësimit nga bisedat u ruajtën." };
+  return { success: "Cilësimet e trajnimit nga bisedat u ruajtën." };
 }

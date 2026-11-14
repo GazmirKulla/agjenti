@@ -42,7 +42,7 @@ it("does not expose optional modules omitted by the business profile", () => {
   expect(limited.primary.map(item => item.id)).toContain("services");
   expect(limited.business.map(item => item.id)).toEqual([]);
   expect(limited.search.some(item => item.path === "products" || item.path === "workflows")).toBe(false);
-  expect(limited.agent.map(item => item.path)).toEqual(["agents", "agents/memory", "agents/test"]);
+  expect(limited.agent.map(item => item.path)).toEqual(["agents", "agents/training", "agents/memory", "agents/test"]);
 });
 
 it("leaves administrator navigation independent of the business grouping", () => {

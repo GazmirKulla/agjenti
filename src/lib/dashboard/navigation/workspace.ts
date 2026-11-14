@@ -23,6 +23,7 @@ export function organizeWorkspace(allItems: NavItem[]) {
   const items = allItems.filter(item => item.id !== "sources");
   const agent: WorkspaceLink[] = items.filter(item => agentIds.has(item.id)).map(item => ({ ...item, label: item.id === "agents" ? "Identiteti dhe udhëzimet" : item.label }));
   if (items.some(item => item.id === "agents")) agent.push(
+    { id: "agent-training", path: "agents/training", label: "Trajno nga bisedat", icon: "chat" },
     { id: "agent-memory", path: "agents/memory", label: "Memoria", icon: "history" },
     { id: "agent-test", path: "agents/test", label: "Provo agjentin", icon: "spark" },
   );
@@ -69,7 +70,7 @@ export function businessWorkspaceGroups(navigation: ReturnType<typeof organizeWo
     { id: "offer", label: "Produkte dhe shërbime", description: "Oferta që u prezanton klientëve.", paths: ["products", "services", "catalogs"] },
     { id: "knowledge", label: "Njohuritë dhe burimet", description: "Informacioni që përdor agjenti për t'u përgjigjur.", paths: ["knowledge", "sources"] },
     { id: "channels", label: "Kanalet", description: "Lidhjet me Instagram dhe WhatsApp.", paths: ["integrations"] },
-    { id: "behavior", label: "Konfigurimi i agjentit", description: "Udhëzimet, memoria dhe provat e agjentit të klientëve.", paths: ["agents", "agents/memory", "agents/test"] },
+    { id: "behavior", label: "Konfigurimi i agjentit", description: "Udhëzimet, memoria dhe provat e agjentit të klientëve.", paths: ["agents", "agents/training", "agents/memory", "agents/test"] },
     { id: "operations", label: "Porosi dhe rezervime", description: "Puna e përditshme dhe kërkesat e klientëve.", paths: ["orders", "bookings", "calendar", "leads"] },
   ];
   const links = [...navigation.agent, ...navigation.search];

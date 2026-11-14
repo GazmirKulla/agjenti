@@ -1,6 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { instagramGraph, instagramHistory } from "@/lib/conversation-learning/instagram-history";
+import { loadLearningSettings } from "@/lib/conversation-learning/settings";
 import { ArchiveError, isZip, readArchive, ARCHIVE_LIMITS } from "./archive";
 import { conversationFolder, parseConversationFile } from "./instagram-export";
 import { withAiUsage } from "@/lib/ai/usage";
@@ -9,7 +10,7 @@ import type { StyleStats } from "./style";
 import { agentMessageHashes, exportThreadMessages, inboxThreadMessages, withoutDuplicates, type StoredLine, type TrainingMessage } from "./normalize";
 
 export const TRAINING_BUCKET = "conversation-training";
-/** Inbox conversations active within this many days are read. */
+/** Inbox conversations active within this many days are read, at most (the platform setting can shorten it). */
 export const INBOX_LOOKBACK_DAYS = 365;
 const STEP_MS = 45_000;
 const BATCH = 500;
@@ -266,7 +267,8 @@ const ANALYSIS_STAGES = new Set(["style", "extract", "consolidate", "match"]);
 const PAGE = 40;
 async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: Stats) {
   const db = createServiceSupabase();
-  const since = new Date(Date.now() - INBOX_LOOKBACK_DAYS * 86_400_000).toISOString();
+  const { settings } = await loadLearningSettings();
+  const since = new Date(Date.now() - Math.min(settings.lookback_days, INBOX_LOOKBACK_DAYS) * 86_400_000).toISOString();
   const started = Date.now();
   let offset = data.offset ?? 0;
   const threads = new Set<string>(data.threads ?? []);
@@ -299,7 +301,7 @@ async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: St
       more ? { done: offset, total, label: "Po lexoj bisedat e Inbox-it" } : { done: total, total, label: "Po lexoj historinë e Instagram-it" });
   }
   // DMs from before Instagram was connected, as far as Meta gives them (20 per conversation).
-  {
+  if (settings.instagram_history) {
     const account = await instagramAccount(session.business_id);
     if (account) {
       const history = await instagramHistory({ graph: account.graph, accountId: account.accountId, since: new Date(since), maxConversations: 200, perConversation: 20 })
