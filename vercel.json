@@ -33,6 +33,10 @@
     {
       "path": "/api/cron/prospect-scans",
       "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/cron/conversation-training",
+      "schedule": "15 3 * * *"
     }
   ]
 }

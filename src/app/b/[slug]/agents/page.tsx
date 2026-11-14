@@ -147,6 +147,7 @@ export default async function AgentsPage({
         description={`Si flet Agjenti me klientët e ${access.business.name} në Instagram dhe WhatsApp. Faktet (çmimet, oferta, dërgesa) i lexon nga Njohuritë.`}
       >
         <div className="agent-heading-actions">
+          <Link href={`/b/${slug}/agents/training`} className="btn btn-ghost">Trajno nga bisedat</Link>
           <Link href={`/b/${slug}/agents/memory`} className="btn btn-ghost">Memoria</Link>
           <Link href={`/b/${slug}/agents/test`} className="btn btn-primary">Provo Agjentin →</Link>
         </div>
