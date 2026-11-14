@@ -1,9 +1,9 @@
 import { after } from "next/server";
-import { getRequestUser, permittedWrite } from "@/lib/auth/request";
+import { bearerToken, getRequestUser, permittedWrite } from "@/lib/auth/request";
 import { requireBusinessAccess } from "@/lib/tenant/access";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { continueTraining, workerOrigin } from "@/lib/conversation-training/continue";
-import { confirmUpload, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, startInbox } from "@/lib/conversation-training/sessions";
+import { applyApproved, approveSafe, confirmUpload, decideSuggestion, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, startInbox } from "@/lib/conversation-training/sessions";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -38,18 +38,23 @@ export async function GET(request: Request) {
 
 /** `inbox` starts reading the Inbox; `upload` prepares direct uploads of an Instagram
  * export and `uploaded` starts reading them; `delete` removes one import, `delete_all`
- * every imported conversation. Nothing here sends messages or changes the agent. */
+ * every imported conversation. `decide` approves or rejects one suggestion, `approve_safe`
+ * the safe ones together, and `apply` writes the approved ones through the platform's
+ * registered operations. Nothing here sends messages to customers. */
 export async function POST(request: Request) {
   if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   try {
     const { user, businessId } = await accessFor(request);
-    const body = (await request.json().catch(() => ({}))) as { action?: string; id?: unknown; files?: unknown; ownerName?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { action?: string; id?: unknown; files?: unknown; ownerName?: unknown; decision?: unknown; edited?: unknown };
     switch (body.action) {
       case "inbox": { const result = await startInbox(businessId, user.id); wake(businessId, request); return json(result, 202); }
       case "upload": return json(await prepareUpload(businessId, user.id, body));
       case "uploaded": { const result = await confirmUpload(businessId, body.id); wake(businessId, request); return json(result, 202); }
       case "delete": return json(await deleteSession(businessId, body.id));
       case "delete_all": return json(await deleteAllTraining(businessId));
+      case "decide": return json(await decideSuggestion(businessId, user.id, body));
+      case "approve_safe": return json(await approveSafe(businessId, user.id, body.id));
+      case "apply": return json(await applyApproved(businessId, user.id, body.id, request.headers.has("authorization") ? bearerToken(request) : undefined));
       default: return json({ error: "Veprim i panjohur." }, 400);
     }
   } catch (error) { return failure(error); }

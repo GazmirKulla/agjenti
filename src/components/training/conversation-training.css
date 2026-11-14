@@ -37,7 +37,47 @@
 .training-preview-head span { padding: 1px 8px; border-radius: 999px; font-size: 11px; background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .training-preview-head .is-conflict { background: color-mix(in srgb, #ef4444 18%, transparent); }
 .training-preview-head .is-create { background: color-mix(in srgb, #22c55e 18%, transparent); }
+.training-review { display: grid; gap: 12px; padding-top: 6px; }
+.training-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -2px; padding: 2px; }
+.training-tabs button { flex: none; display: flex; gap: 6px; align-items: center; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink-muted); font: inherit; font-size: 13px; cursor: pointer; }
+.training-tabs button span { font-size: 11px; opacity: .8; }
+.training-tabs button.is-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--ink); font-weight: 600; }
+.training-cards { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.training-suggestion { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.training-suggestion.risk-important { border-left: 3px solid #f59e0b; }
+.training-suggestion.is-rejected, .training-suggestion.is-superseded { opacity: .55; }
+.training-suggestion.is-applied { border-color: color-mix(in srgb, #22c55e 50%, var(--line)); }
+.training-suggestion-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.training-suggestion-head div { display: grid; gap: 2px; min-width: 0; }
+.training-suggestion-head small { color: var(--ink-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.training-suggestion-head b { color: var(--ink); font-size: 14px; overflow-wrap: anywhere; }
+.training-badge { flex: none; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); white-space: nowrap; }
+.training-badge.is-create { background: color-mix(in srgb, #22c55e 18%, transparent); }
+.training-badge.is-conflict { background: color-mix(in srgb, #ef4444 18%, transparent); }
+.training-badge.is-update { background: color-mix(in srgb, #3b82f6 16%, transparent); }
+.training-compare { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.training-compare.is-new { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.training-compare span { color: var(--ink-muted); font-size: 11px; font-weight: 600; }
+.training-compare p { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.training-edit { display: grid; gap: 8px; }
+.training-edit label { display: grid; gap: 4px; color: var(--ink-muted); font-size: 12px; }
+.training-meta { margin: 0; color: var(--ink-muted); font-size: 12px; }
+.training-done { margin: 0; color: #15803d; font-size: 13px; }
+.training-evidence summary { cursor: pointer; color: var(--ink-muted); font-size: 12px; }
+.training-evidence ul { display: grid; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; }
+.training-evidence li { color: var(--ink-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.training-evidence em { margin-right: 4px; font-style: normal; font-weight: 600; }
+.training-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.training-actions .btn { min-height: 40px; padding: 6px 14px; font-size: 13px; }
+.training-results { display: grid; gap: 6px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, #22c55e 10%, transparent); font-size: 13px; }
+.training-results ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.training-results li.is-failed { color: #b91c1c; }
+.training-footer { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; padding: 10px 0; background: var(--surface); border-top: 1px solid var(--line); }
+.training-footer span { margin-right: auto; color: var(--ink-muted); font-size: 12px; }
+.training-footer .btn { min-height: 44px; }
 @media (max-width: 560px) {
+  .training-actions .btn, .training-footer .btn { flex: 1 1 auto; }
+  .training-footer span { flex-basis: 100%; }
   .training-card { padding: 14px; border-radius: 14px; }
   .training-source .btn { justify-self: stretch; }
 }

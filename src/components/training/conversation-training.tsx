@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./conversation-training.css";
+import { TrainingReview } from "./training-review";
 
 type Session = {
   id: string; source: "inbox" | "instagram_export"; status: "uploading" | "queued" | "running" | "ready" | "failed" | "cancelled";
@@ -11,19 +12,9 @@ type Session = {
 type State = { sessions: Session[]; keptMessages: number };
 
 const ACTIVE = new Set(["uploading", "queued", "running"]);
-type Suggestion = { id: string; destination: string; operation: string; title: string; proposed: Record<string, unknown>; current_value: unknown; requires_confirmation: boolean; confidence: string; evidence: { quote: string; speaker: string; at: string }[] };
-const DESTINATIONS: [string, string][] = [["style", "Stili i komunikimit"], ["example", "Shembuj realë"], ["knowledge", "Njohuri"], ["product", "Produkte"], ["service", "Shërbime"], ["profile", "Profili i biznesit"], ["workflow", "Procese"], ["gap", "Pyetje pa përgjigje"]];
-const OPERATIONS: Record<string, string> = { create: "E re", update: "Përditësim", duplicate: "Ekziston tashmë", conflict: "Ndryshon nga e tanishmja" };
-const CONFIDENCE: Record<string, string> = { high: "E qartë në biseda", medium: "U përmend një herë", low: "E nxjerrë, jo e thënë drejt" };
-function proposedText(s: Suggestion) {
-  const p = s.proposed as Record<string, unknown>;
-  if (s.destination === "style") return String(p.summary ?? "");
-  if (s.destination === "example") return `Klienti: ${p.customer_message}\nTi: ${p.desired_response}`;
-  const prices = Array.isArray(p.prices) ? (p.prices as { text?: string; condition?: string | null }[]).map((x) => `${x.text}${x.condition ? ` (${x.condition})` : ""}`).join(" · ") : "";
-  return [p.description ?? p.body ?? (Array.isArray(p.steps) ? (p.steps as string[]).join(" → ") : ""), prices && `Çmimi: ${prices}`].filter(Boolean).join("\n");
-}
 const date = (value?: string | null) => (value ? new Date(value).toLocaleDateString("sq-AL", { day: "numeric", month: "short", year: "numeric" }) : "");
 const MAX_BYTES = 100 * 1024 * 1024;
+const DESTINATIONS: [string, string][] = [["style", "Stili i komunikimit"], ["example", "Shembuj realë"], ["knowledge", "Njohuri"], ["product", "Produkte"], ["service", "Shërbime"], ["profile", "Profili i biznesit"], ["workflow", "Procese"], ["gap", "Pyetje pa përgjigje"]];
 
 /** Steps 1–2 of training: choose where the conversations come from, then follow the import. */
 export function ConversationTraining({ slug }: { slug: string }) {
@@ -35,15 +26,7 @@ export function ConversationTraining({ slug }: { slug: string }) {
   const [files, setFiles] = useState<File[]>([]);
   const [ownerName, setOwnerName] = useState("");
   const input = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<{ id: string; items: Suggestion[] } | null>(null);
-
-  async function showPreview(id: string) {
-    if (preview?.id === id) { setPreview(null); return; }
-    const response = await fetch(`${endpoint}&session=${encodeURIComponent(id)}`, { cache: "no-store" });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) { setError(data.error || "Sugjerimet nuk u ngarkuan."); return; }
-    setPreview({ id, items: data.suggestions ?? [] });
-  }
+  const [reviewing, setReviewing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: "no-store" });
@@ -119,7 +102,7 @@ export function ConversationTraining({ slug }: { slug: string }) {
     <div className="training">
       <ol className="training-steps" aria-label="Hapat">
         {["Burimi", "Importi", "Çfarë mësoi", "Miratimi", "Prova", "Aplikimi"].map((label, i) => (
-          <li key={label} className={i === 0 || (i === 1 && (active || state?.sessions.length)) ? "is-current" : ""}><span>{i + 1}</span>{label}</li>
+          <li key={label} className={(reviewing ? [2, 3, 5].includes(i) : i === 0 || (i === 1 && (active || state?.sessions.length))) ? "is-current" : ""}><span>{i + 1}</span>{label}</li>
         ))}
       </ol>
 
@@ -185,30 +168,10 @@ export function ConversationTraining({ slug }: { slug: string }) {
                         {DESTINATIONS.filter(([key]) => s.stats.suggestions?.[key]).map(([key, label]) => `${label.toLowerCase()} ${s.stats.suggestions?.[key]}`).join(", ") || "asgjë të re"}.
                       </p>
                       {s.stats.styleChanges?.map((c) => <p key={c} className="training-warning">{c}</p>)}
-                      <button type="button" className="btn btn-ghost training-delete" onClick={() => void showPreview(s.id)}>{preview?.id === s.id ? "Mbyll" : "Shiko çfarë mësoi"}</button>
+                      <button type="button" className="btn btn-primary training-delete" onClick={() => setReviewing(reviewing === s.id ? null : s.id)}>{reviewing === s.id ? "Mbyll" : "Shqyrto çfarë mësoi"}</button>
                     </>
                   )}
-                  {preview?.id === s.id && (
-                    <div className="training-preview">
-                      {DESTINATIONS.map(([key, label]) => {
-                        const items = preview.items.filter((item) => item.destination === key);
-                        return items.length ? (
-                          <section key={key}>
-                            <h3>{label} <span>{items.length}</span></h3>
-                            <ul>{items.map((item) => (
-                              <li key={item.id}>
-                                <div className="training-preview-head"><b>{item.title}</b><span className={`is-${item.operation}`}>{OPERATIONS[item.operation]}</span></div>
-                                <p>{proposedText(item)}</p>
-                                <small>{CONFIDENCE[item.confidence]}{item.requires_confirmation ? " · Duhet ta konfirmosh" : ""}</small>
-                                {item.evidence.length > 0 && <details><summary>Nga bisedat</summary><ul>{item.evidence.map((e, i) => <li key={i}><em>{e.speaker === "customer" ? "Klienti" : e.speaker === "agent" ? "Agjenti" : "Ti"} · {date(e.at)}:</em> «{e.quote}»</li>)}</ul></details>}
-                              </li>
-                            ))}</ul>
-                          </section>
-                        ) : null;
-                      })}
-                      <p className="training-note">Miratimi i këtyre ndryshimeve vjen në hapin tjetër. Tani për tani nuk ndryshon asgjë.</p>
-                    </div>
-                  )}
+                  {reviewing === s.id && <TrainingReview endpoint={endpoint} sessionId={s.id} onApplied={() => void load()} />}
                   {s.stats.warnings?.map((w) => <p key={w} className="training-warning">{w}</p>)}
                   {(s.status === "failed" || s.status === "cancelled") && <p className="training-error">{s.error || "Importi nuk përfundoi."}</p>}
                   <button type="button" className="btn btn-ghost training-delete" disabled={!!busy} onClick={() => void remove(s.id)}>Fshi</button>

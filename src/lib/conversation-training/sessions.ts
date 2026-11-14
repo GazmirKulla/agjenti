@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
+import { withAiUsage } from "@/lib/ai/usage";
 import { removeUploads, TRAINING_BUCKET, type SessionInput, type UploadedFile } from "./job";
+import { applySuggestion, type ApplyRow } from "./apply";
+import { approvable, bulkSafe, parseEdit, type ReviewRow } from "./review";
 
 export const MAX_FILES = 20;
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
@@ -111,7 +114,7 @@ export async function deleteAllTraining(businessId: string) {
   return { deleted: data?.length ?? 0 };
 }
 
-export const suggestionColumns = "id,destination,operation,target_table,target_id,title,current_value,proposed,evidence,confidence,explicit,requires_confirmation,risk,status,edited,created_at";
+export const suggestionColumns = "id,destination,operation,target_table,target_id,title,current_value,proposed,evidence,confidence,explicit,requires_confirmation,risk,status,edited,applied_ref,created_at";
 /** What one analysis proposes, for the owner's review. Evidence quotes carry no names or contacts. */
 export async function listSuggestions(businessId: string, sessionId: unknown) {
   const row = await session(businessId, sessionId);
@@ -119,4 +122,68 @@ export async function listSuggestions(businessId: string, sessionId: unknown) {
     .eq("business_id", businessId).eq("session_id", row.id).order("destination").order("created_at").limit(1000);
   if (error) throw new PersistenceError("Sugjerimet nuk u ngarkuan.", error.code === "42P01" || error.code === "PGRST205" ? 503 : 500);
   return { suggestions: data ?? [] };
+}
+
+const ROW_COLUMNS = "id,session_id,destination,operation,status,risk,requires_confirmation,proposed,target_table,target_id,title,edited,applied_ref";
+async function suggestion(businessId: string, id: unknown) {
+  if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) throw new PersistenceError("Sugjerimi nuk u gjet.", 404);
+  const { data } = await createServiceSupabase().from("conversation_training_suggestions").select(ROW_COLUMNS).eq("business_id", businessId).eq("id", id).maybeSingle();
+  if (!data) throw new PersistenceError("Sugjerimi nuk u gjet.", 404);
+  return data as ReviewRow & ApplyRow & { session_id: string; applied_ref: unknown };
+}
+
+/** The owner approves (optionally with changes) or rejects one suggestion. An important
+ * one (price, hours, policy, a change to an existing record) is approved only this way. */
+export async function decideSuggestion(businessId: string, userId: string, input: { id?: unknown; decision?: unknown; edited?: unknown }) {
+  const row = await suggestion(businessId, input.id);
+  if (input.decision !== "approve" && input.decision !== "reject") throw new PersistenceError("Zgjidh Mirato ose Refuzo.", 400);
+  const edit = input.decision === "approve" ? parseEdit(row.destination, input.edited) ?? row.edited : row.edited;
+  if (input.decision === "approve") { const why = approvable(row, edit); if (why) throw new PersistenceError(why, 409); }
+  else if (!["pending", "approved", "failed"].includes(row.status)) throw new PersistenceError("Ky sugjerim nuk mund të ndryshohet më.", 409);
+  const { data, error } = await createServiceSupabase().from("conversation_training_suggestions").update({
+    status: input.decision === "approve" ? "approved" : "rejected", edited: edit, applied_ref: null,
+    decided_by: userId, decided_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  }).eq("business_id", businessId).eq("id", row.id).eq("status", row.status).select("id,status,edited").maybeSingle();
+  if (error || !data) throw new PersistenceError("Sugjerimi ndryshoi ndërkohë. Rifresko.", 409);
+  return data;
+}
+
+/** Approves together what is safe: new knowledge, examples and style, nothing with a price or a policy. */
+export async function approveSafe(businessId: string, userId: string, sessionId: unknown) {
+  const row = await session(businessId, sessionId);
+  const { data } = await createServiceSupabase().from("conversation_training_suggestions").select(ROW_COLUMNS).eq("business_id", businessId).eq("session_id", row.id).eq("status", "pending");
+  const ids = ((data ?? []) as ReviewRow[]).filter(bulkSafe).map((r) => r.id);
+  if (!ids.length) return { approved: 0 };
+  const { error } = await createServiceSupabase().from("conversation_training_suggestions").update({ status: "approved", decided_by: userId, decided_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("business_id", businessId).in("id", ids).eq("status", "pending");
+  if (error) throw new PersistenceError("Miratimi nuk u ruajt. Provo përsëri.");
+  return { approved: ids.length };
+}
+
+const ORDER: Record<string, number> = { profile: 0, knowledge: 1, gap: 2, workflow: 3, product: 4, service: 5, example: 6, style: 7 };
+/** Applies the session's approved suggestions, each once: a suggestion is claimed before it is
+ * written, and each write is an operation with an id derived from the suggestion. */
+export async function applyApproved(businessId: string, userId: string, sessionId: unknown, accessToken?: string, limit = 40) {
+  const owner = await session(businessId, sessionId);
+  const db = createServiceSupabase();
+  const { data } = await db.from("conversation_training_suggestions").select(ROW_COLUMNS).eq("business_id", businessId).eq("session_id", owner.id).eq("status", "approved").is("applied_ref", null);
+  const rows = ((data ?? []) as (ApplyRow & ReviewRow)[]).sort((a, b) => (ORDER[a.destination] ?? 9) - (ORDER[b.destination] ?? 9));
+  const results: { id: string; title: string; destination: string; ok: boolean; message: string }[] = [];
+  for (const row of rows.slice(0, limit)) {
+    const claim = await db.from("conversation_training_suggestions").update({ applied_ref: { state: "applying", at: new Date().toISOString() } })
+      .eq("business_id", businessId).eq("id", row.id).eq("status", "approved").is("applied_ref", null).select("id").maybeSingle();
+    if (!claim.data) continue;
+    try {
+      const done = await withAiUsage(businessId, () => applySuggestion(businessId, userId, row, accessToken));
+      await db.from("conversation_training_suggestions").update({ status: "applied", applied_ref: { state: "applied", table: done.table, id: done.id, message: done.message, at: new Date().toISOString() }, updated_at: new Date().toISOString() })
+        .eq("business_id", businessId).eq("id", row.id);
+      results.push({ id: row.id, title: row.title, destination: row.destination, ok: true, message: done.message });
+    } catch (error) {
+      const message = error instanceof Error ? error.message.slice(0, 300) : "Nuk u aplikua.";
+      await db.from("conversation_training_suggestions").update({ status: "failed", applied_ref: { state: "failed", error: message, at: new Date().toISOString() }, updated_at: new Date().toISOString() })
+        .eq("business_id", businessId).eq("id", row.id);
+      results.push({ id: row.id, title: row.title, destination: row.destination, ok: false, message });
+    }
+  }
+  return { results, remaining: Math.max(0, rows.length - limit) };
 }
