@@ -44,6 +44,8 @@ export type AgentTurnParams = {
   /** Injected only by the authenticated queue worker. */
   processTransport?: import("@/lib/calendar/service").BookingEffectGuard;
   configurationPreview?: import("@/lib/agents/communication-configuration").AgentConfigurationPreview;
+  /** Isolated test only: what a conversation-training session would change, held in memory. */
+  trainingPreview?: import("@/lib/conversation-training/preview").TrainingPreview;
   /** Coordinator-resolved hint, revalidated against the active tenant catalog by adapters. Never a customer API input. */
   selectedProductId?: string;
   selectedServiceId?: string;

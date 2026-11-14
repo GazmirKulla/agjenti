@@ -3,6 +3,7 @@ import { bearerToken, getRequestUser, permittedWrite } from "@/lib/auth/request"
 import { requireBusinessAccess } from "@/lib/tenant/access";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { continueTraining, workerOrigin } from "@/lib/conversation-training/continue";
+import { compareReplies, listTestMessages, recordTestFeedback } from "@/lib/conversation-training/compare";
 import { applyApproved, approveSafe, confirmUpload, decideSuggestion, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, startInbox } from "@/lib/conversation-training/sessions";
 
 export const runtime = "nodejs";
@@ -30,7 +31,8 @@ function wake(businessId: string, request: Request) {
 export async function GET(request: Request) {
   try {
     const { businessId } = await accessFor(request);
-    const session = new URL(request.url).searchParams.get("session");
+    const params = new URL(request.url).searchParams, session = params.get("session");
+    if (session && params.get("tests")) return json({ messages: await listTestMessages(businessId, session) });
     if (session) return json(await listSuggestions(businessId, session));
     return json(await listSessions(businessId));
   } catch (error) { return failure(error); }
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
   if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   try {
     const { user, businessId } = await accessFor(request);
-    const body = (await request.json().catch(() => ({}))) as { action?: string; id?: unknown; files?: unknown; ownerName?: unknown; decision?: unknown; edited?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { action?: string; id?: unknown; files?: unknown; ownerName?: unknown; decision?: unknown; edited?: unknown; message?: unknown; choice?: unknown; preferred?: unknown };
     switch (body.action) {
       case "inbox": { const result = await startInbox(businessId, user.id); wake(businessId, request); return json(result, 202); }
       case "upload": return json(await prepareUpload(businessId, user.id, body));
@@ -54,6 +56,8 @@ export async function POST(request: Request) {
       case "delete_all": return json(await deleteAllTraining(businessId));
       case "decide": return json(await decideSuggestion(businessId, user.id, body));
       case "approve_safe": return json(await approveSafe(businessId, user.id, body.id));
+      case "compare": return json(await compareReplies(businessId, user.id, body.id, body.message));
+      case "test_feedback": return json(await recordTestFeedback(businessId, user.id, body));
       case "apply": return json(await applyApproved(businessId, user.id, body.id, request.headers.has("authorization") ? bearerToken(request) : undefined));
       default: return json({ error: "Veprim i panjohur." }, 400);
     }

@@ -17,6 +17,7 @@ export type ConversationMessageParams = AgentTurnParams & {
 /** The single conversation entry point. Transport owns identity, persistence and delivery. */
 export async function processConversationMessage(params: ConversationMessageParams): Promise<AgentTurnResult> {
   if (params.configurationPreview && (params.mode !== "test" || params.configurationPreview.businessId !== params.businessId)) throw new Error("invalid_configuration_preview");
+  if (params.trainingPreview && (params.mode !== "test" || params.trainingPreview.businessId !== params.businessId)) throw new Error("invalid_training_preview");
   const isolated = params.source === "admin_chat_lab" || params.mode === "test" || !!params.visualPreview || !!params.linearPreview || isIsolatedExecution();
   if (isolated && !isIsolatedExecution()) return runIsolated(() => processConversationMessage({ ...params, mode: "test" }));
   return withAiUsage(params.businessId, () => processConversation(isolated ? { ...params, mode: "test" } : params));

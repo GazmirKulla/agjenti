@@ -75,7 +75,22 @@
 .training-footer { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; padding: 10px 0; background: var(--surface); border-top: 1px solid var(--line); }
 .training-footer span { margin-right: auto; color: var(--ink-muted); font-size: 12px; }
 .training-footer .btn { min-height: 44px; }
+.training-test { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+.training-test h3 { margin: 0; font-size: 14px; font-weight: 650; color: var(--ink); }
+.training-test-custom { display: flex; gap: 8px; }
+.training-test-custom .field { flex: 1; min-width: 0; }
+.training-test-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.training-test-list > li { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.training-test-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.training-test-head p { margin: 0; color: var(--ink); font-size: 13px; overflow-wrap: anywhere; }
+.training-test-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.training-test-compare > div { display: grid; gap: 4px; align-content: start; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.training-test-compare > div.is-proposed { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.training-test-compare > div.is-chosen { border-color: var(--accent); }
+.training-test-compare span { color: var(--ink-muted); font-size: 11px; font-weight: 600; }
+.training-test-compare p { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
 @media (max-width: 560px) {
+  .training-test-compare { grid-template-columns: 1fr; }
   .training-actions .btn, .training-footer .btn { flex: 1 1 auto; }
   .training-footer span { flex-basis: 100%; }
   .training-card { padding: 14px; border-radius: 14px; }

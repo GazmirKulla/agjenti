@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { TrainingTest } from "./training-test";
 
 type Price = { min: number; max: number | null; currency: string; text?: string; condition?: string | null; ageDays?: number };
 export type Suggestion = {
@@ -208,6 +209,7 @@ export function TrainingReview({ endpoint, sessionId, onApplied }: { endpoint: s
         })}
       </ul>
       {error && <p className="training-error" role="alert">{error}</p>}
+      <TrainingTest endpoint={endpoint} sessionId={sessionId} onFeedback={() => void load()} />
       {results && (
         <div className="training-results" role="status">
           <b>Çfarë u ruajt</b>

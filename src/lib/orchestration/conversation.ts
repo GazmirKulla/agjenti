@@ -28,6 +28,7 @@ import { availableSlots } from "@/lib/calendar/service";
 import { loadCurrentLinearVersions, loadProcessVersion, compileProcessVersion } from "./version-store";
 import { linearProcessVersion, type ProcessVersion } from "./linear-definition";
 import { processTrainingContext } from "./training-context";
+import { applyTrainingPreview } from "@/lib/conversation-training/preview";
 import { productDependencies } from "./product-dependencies";
 import { productStepSource } from "./product-composition";
 import { retrieveBusinessSources } from "@/lib/catalogs/retrieval";
@@ -101,6 +102,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     identity?.instagramParticipantId ? readProcessProfile(params.businessId, identity.instagramParticipantId, identity.channel ?? "instagram") : Promise.resolve(undefined),
   ]);
   if (profileMemory) state.profileMemory = profileMemory;
+  // A training test reads the proposed knowledge, services and prices on top of the stored ones.
+  if (params.trainingPreview && mode === "test" && params.trainingPreview.businessId === params.businessId) applyTrainingPreview(grounding, params.trainingPreview);
   if (agentRead.error) throw new Error("process_configuration_unavailable");
   const agent = params.configurationPreview ?? agentRead.data;
   const configuration = configurationRead(agent);
@@ -208,7 +211,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     }
   }
   const [training, documents] = await Promise.all([
-    processTrainingContext(state, versions, params.message),
+    processTrainingContext(state, versions, params.message, mode === "test" ? params.trainingPreview?.memories : undefined),
     params.message.trim() ? retrieveBusinessSources(params.businessId, params.message, state.retrieval, trace, undefined,
       { semanticRouting: true, deadline: deadline - 8000, history }) : null,
   ]);
