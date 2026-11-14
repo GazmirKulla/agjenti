@@ -69,6 +69,15 @@ it.each(["save_business_modules", "save_visual_workflow", "submit_confirmed_orde
   },
 );
 
+it("still counts AI usage spent in isolated runs", async () => {
+  m.rpc.mockResolvedValue({ data: null, error: null });
+  await runIsolated(async () => {
+    await createServiceSupabase().rpc("record_ai_usage", { p_business: "tenant-a", p_model: "m", p_input: 1, p_output: 1 });
+    expect(snapshotExternalActions()).toEqual([]);
+  });
+  expect(m.rpc).toHaveBeenCalledWith("record_ai_usage", expect.objectContaining({ p_business: "tenant-a" }));
+});
+
 it.each(["insert", "update", "upsert", "delete"] as const)("still blocks direct %s", async method => {
   await runIsolated(() => {
     const table = createServiceSupabase().from("orders");

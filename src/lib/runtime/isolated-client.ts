@@ -14,6 +14,10 @@ const READ_RPC = new Set([
   "workflow_runtime_readiness",
 ]);
 const WRITE_METHODS = new Set(["insert", "update", "upsert", "delete"]);
+/** Platform metering, not a business effect: OpenAI tokens are really spent in
+ * Chat Lab and tests, so they are still counted. `record_ai_usage` only adds to
+ * the business's daily usage counters (see the ai_usage migration). */
+const METERING_RPC = new Set(["record_ai_usage"]);
 
 export function guardIsolatedClient<T extends object>(client: T): T {
   if (!isIsolatedExecution() && !isCollectionOnly()) return client;
@@ -28,7 +32,7 @@ export function guardIsolatedClient<T extends object>(client: T): T {
       }
       if (prop === "rpc") {
         return (fn: string, args?: unknown) => {
-          if (!READ_RPC.has(fn)) {
+          if (!READ_RPC.has(fn) && !METERING_RPC.has(fn)) {
             assertBusinessEffectAllowed(`rpc:${fn}`);
             refuseIsolatedEffect("database.mutate", `rpc:${fn}`);
           }
