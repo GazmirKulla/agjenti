@@ -64,6 +64,9 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   const [trainingBusy, setTrainingBusy] = useState(false);
   const [trainingFeedback, setTrainingFeedback] = useState<TrainingFeedback | null>(null);
   const chatLog = useRef<HTMLDivElement>(null);
+  // Follow new messages only while the reader is at the bottom; polling or a
+  // re-render must never pull someone back down while they read older messages.
+  const followLatest = useRef(true);
   const focusComposer = () => document.getElementById("agent-test-message")?.focus();
 
   const retry = useRef<{ index: number; original?: ChatEntry } | null>(null);
@@ -117,8 +120,8 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   }, []);
 
   useEffect(() => {
-    if (chatLog.current && !showJump) chatLog.current.scrollTop = chatLog.current.scrollHeight;
-  }, [messages.length, chat.outbox, pending, phase, activeId, showJump]);
+    if (chatLog.current && followLatest.current) chatLog.current.scrollTop = chatLog.current.scrollHeight;
+  }, [messages.length, chat.outbox, pending, phase, activeId]);
   useEffect(() => {
     if (!ready) return;
     let disposed = false, running = false;
@@ -204,13 +207,13 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
     clearComposer(); setTrainingFeedback(null); setTrainingRequest(null); setWaitStopped(false);
     if (hasInFlightTurns(chat)) setStorageNotice("Biseda e mëparshme ruhet në historik. Puna e saj nuk është anuluar.");
     window.speechSynthesis?.cancel(); setSpeaking(null);
-    setChats(all.slice(0,8)); setActiveId(next.id); setShowJump(false);
+    setChats(all.slice(0,8)); setActiveId(next.id); followLatest.current = true; setShowJump(false);
   }
   function selectChat(id: string) {
     if (preparing) return;
     const selected = chats.find(c => c.id === id);
     if (selected?.mode === "real" && (!advanced || Boolean(configurationDraft) || !window.confirm("Kjo bisedë lejon veprime reale pas konfirmimit. Vazhdo?"))) return;
-    clearComposer(); setActiveId(id); setWaitStopped(false); setTrainingFeedback(null); setTrainingRequest(null); setShowJump(false);
+    clearComposer(); setActiveId(id); setWaitStopped(false); setTrainingFeedback(null); setTrainingRequest(null); followLatest.current = true; setShowJump(false);
     setChats(current => [...current.filter(c=>c.id===id), ...current.filter(c=>c.id!==id)]);
     window.speechSynthesis?.cancel(); setSpeaking(null);
   }
@@ -251,7 +254,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
     if (!original) setDraft("");
     setWaitStopped(false);
     const run = ++epoch.current; preparingInput.current = true; controller.current = new AbortController();
-    setError(""); setShowJump(false); setPendingIndex(index);
+    setError(""); followLatest.current = true; setShowJump(false); setPendingIndex(index);
     setPending(text || (files.length || existing.length ? "Skedar i bashkëngjitur" : "[Foto e simuluar]"));
     try {
       const attachments = [...existing];
@@ -370,7 +373,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         {!advanced && last && !last.debug.agentConfigured && <p className="chat-status" role="status">Agjenti nuk është gati. <Link href={`/b/${slug}/agents`}>Kontrollo konfigurimin →</Link></p>}
         {!advanced && last && (last.debug.fallbackReason === "provider_error" || last.debug.fallbackReason === "missing_api_key" || last.debug.fallbackReason === "empty_reply") && <p className="chat-status" role="status">Agjenti nuk mundi të përgjigjej normalisht. Provo përsëri më vonë ose kontrollo konfigurimin.</p>}
         {advanced && last && <TestConfiguration configuration={last.configuration} slug={slug} agentConfigured={last.debug.agentConfigured} />}
-        <div className="agent-test-log" ref={chatLog} role="log" aria-label="Biseda e provës" aria-live="polite" onScroll={e=>{ const el=e.currentTarget; setShowJump(el.scrollHeight-el.scrollTop-el.clientHeight>120); }}>
+        <div className="agent-test-log" ref={chatLog} role="log" aria-label="Biseda e provës" aria-live="polite" onScroll={e=>{ const el=e.currentTarget; const distance=el.scrollHeight-el.scrollTop-el.clientHeight; followLatest.current = distance<24; setShowJump(distance>120); }}>
           {!messages.length && !pending && !chat.outbox?.length && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti yt.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
           {(pendingIndex !== null ? messages.slice(0,pendingIndex) : messages).map((entry,index)=><div className={`chat-exchange ${renderInspector && inspected?.id === entry.id ? "lab-selected-exchange" : ""}`} key={entry.id}>
             <div className="agent-test-bubble customer"><p>{entry.text}</p>{entry.photo && <span className="chat-file-pill">Foto e simuluar</span>}{entry.attachments.map((a,i)=><span className="chat-file-pill" key={i}>{a.preview?.startsWith("blob:") ? <Image unoptimized width={80} height={80} src={a.preview} alt={a.name}/> : <Icon name="file" size={15}/>} {a.name}</span>)}</div>
@@ -395,7 +398,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
           {pending !== null && <div className="chat-exchange"><div className="agent-test-bubble customer"><p>{pending}</p></div><small className="chat-receipt">Po përgatitet lokalisht</small>{phase && !phase.startsWith("Agjenti") ? <p className="agent-test-thinking" role="status"><span className="chat-thinking-dot"/>{phase}</p> : <p role="status">Po përgatitet mesazhi lokalisht…</p>}</div>}
         </div>
         {!advanced && last?.turns === 40 && <p className="chat-status" role="status">U arrit kufiri i bisedës. Nis një bisedë të re.</p>}
-        {showJump && <button className="chat-jump chat-icon" type="button" aria-label="Shko te mesazhi i fundit" onClick={()=>{setShowJump(false);chatLog.current?.scrollTo({top:chatLog.current.scrollHeight,behavior:"smooth"});}}><Icon name="down" size={18}/></button>}
+        {showJump && <button className="chat-jump chat-icon" type="button" aria-label="Shko te mesazhi i fundit" onClick={()=>{followLatest.current = true; setShowJump(false);chatLog.current?.scrollTo({top:chatLog.current.scrollHeight,behavior:"smooth"});}}><Icon name="down" size={18}/></button>}
         <form className="agent-test-composer" onSubmit={e=>{e.preventDefault();void send();}}>
           {editing !== null && <div className="chat-edit-notice"><span>{messages[editing]?.batchId ? `Po ndryshon grupin e ${messages.filter(e=>e.batchId===messages[editing].batchId).length} mesazheve.` : `Po ndryshon mesazhin ${editing+1}.`} Origjinali ruhet si bisedë më vete.</span><button type="button" className="chat-icon" aria-label="Anulo ndryshimin" disabled={busy} onClick={()=>clearComposer()}><Icon name="close" size={16}/></button></div>}
           {voice ? <AudioRecorder busy={voiceBusy} variant="assistant" purpose="request" onAnalyze={transcribe} onBack={()=>setVoice(false)}/> : <AssistantComposer
