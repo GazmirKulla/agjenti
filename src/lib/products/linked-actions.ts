@@ -8,7 +8,8 @@ import { describeSync, syncLinkedProducts } from "./linked-sync";
 export async function refreshLinkedProducts(slug: string) {
   try {
     const actor = await manualCommandActor(slug);
-    await requireActionAccess(actor.business.id, actor.userId, "product.edit");
+    // Same permission as linking a product from the website catalog.
+    await requireActionAccess(actor.business.id, actor.userId, "product.create");
     const result = await syncLinkedProducts({ businessId: actor.business.id, userId: actor.userId });
     revalidatePath(`/b/${actor.business.slug}`, "layout");
     return describeSync(result);

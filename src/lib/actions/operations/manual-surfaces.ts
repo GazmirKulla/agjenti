@@ -82,7 +82,7 @@ export const manualSurfaces = {
   "src/lib/products/actions.ts#updateProduct": {"operation": "product.edit"},
   "src/lib/products/actions.ts#deleteProduct": {"operation": "product.delete"},
   "src/lib/products/actions.ts#linkExternalProduct": {"legacy": "linear_link"},
-  "src/lib/products/linked-actions.ts#refreshLinkedProducts": {"operation": "product.edit"},
+  "src/lib/products/linked-actions.ts#refreshLinkedProducts": {"legacy": "linear_link"},
   "src/lib/products/actions.ts#importProductBatch": {"legacy": "product_import"},
   "src/lib/products/actions.ts#bulkConfigureProducts": {"operation": "product.bulk"},
   "src/lib/products/ai-actions.ts#generateProductDescription": {"exception": "Read-only suggested text, never persisted by this action."},
