@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { conversationDisplayName } from "./ensure-customer";
+import { ORDER_ITEMS_SELECT, orderItemSummary, type OrderItemSummary } from "@/lib/orders/item-summary";
 
 /** Shared by the web Inbox and the native app, so both read the same rows and tenant filters. */
 export class InboxReadError extends Error {
@@ -252,6 +253,7 @@ export type CustomerOrder = {
   total_amount: number | null;
   currency: string | null;
   created_at: string;
+  items: OrderItemSummary[];
 };
 
 /** The customer's five latest orders in this business; none for an unlinked conversation. */
@@ -259,11 +261,11 @@ export async function loadCustomerOrders(db: SupabaseClient, businessId: string,
   if (!customerId) return [];
   const { data, error } = await db
     .from("orders")
-    .select("id,status,total_amount,currency,created_at")
+    .select(`id,status,total_amount,currency,created_at,${ORDER_ITEMS_SELECT}`)
     .eq("business_id", businessId)
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false })
     .limit(5);
   if (error) throw new InboxReadError("thread_unavailable");
-  return data ?? [];
+  return (data ?? []).map(({ order_items, ...order }) => ({ ...order, items: orderItemSummary(order_items) }));
 }

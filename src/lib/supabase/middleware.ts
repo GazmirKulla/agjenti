@@ -7,18 +7,27 @@ import { isAuthRetryableFetchError } from "@supabase/supabase-js";
  * deadline well below that; an Auth outage then gets a clear answer instead of a hang. */
 export const AUTH_CHECK_TIMEOUT_MS = 8000;
 
-/** Every Auth request of this check shares the deadline's abort signal. */
-function deadlineFetch(deadline: AbortSignal): typeof fetch {
+/** What Auth itself answered during this check. */
+export type AuthReplies = { rejected: boolean };
+
+/** Every Auth request of this check shares the deadline's abort signal. A 4xx answer
+ * (for example "Refresh Token Not Found") is noted: Auth is reachable and the session
+ * is gone, so a check that still runs out of time afterwards is not an outage. */
+export function deadlineFetch(deadline: AbortSignal, replies: AuthReplies = { rejected: false }): typeof fetch {
+  const note = (response: Response) => {
+    if (response.status >= 400 && response.status < 500 && response.status !== 429) replies.rejected = true;
+    return response;
+  };
   return (input, init) => {
     const outer = init?.signal;
-    if (!outer) return fetch(input, { ...init, signal: deadline });
+    if (!outer) return fetch(input, { ...init, signal: deadline }).then(note);
     const controller = new AbortController();
     const abort = (signal: AbortSignal) => controller.abort(signal.reason);
     for (const signal of [outer, deadline]) {
       if (signal.aborted) abort(signal);
       else signal.addEventListener("abort", () => abort(signal), { once: true });
     }
-    return fetch(input, { ...init, signal: controller.signal });
+    return fetch(input, { ...init, signal: controller.signal }).then(note);
   };
 }
 
@@ -57,11 +66,12 @@ export async function updateSession(request: NextRequest) {
 
   let response = NextResponse.next({ request });
   const deadline = new AbortController();
+  const replies: AuthReplies = { rejected: false };
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      global: { fetch: deadlineFetch(deadline.signal) },
+      global: { fetch: deadlineFetch(deadline.signal, replies) },
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -84,7 +94,8 @@ export async function updateSession(request: NextRequest) {
     timer = setTimeout(() => { deadline.abort(new Error("auth_check_timeout")); resolve("expired"); }, AUTH_CHECK_TIMEOUT_MS);
   });
   const result = await Promise.race([supabase.auth.getUser(), expired]).finally(() => clearTimeout(timer));
-  const unreachable = result === "expired" || isAuthRetryableFetchError(result.error);
+  // Out of time after Auth already rejected the session: signed out, not an outage.
+  const unreachable = result === "expired" ? !replies.rejected : isAuthRetryableFetchError(result.error);
   const user = result === "expired" ? null : result.data.user;
 
   const isPublic = path === "/join" ||

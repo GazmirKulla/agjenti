@@ -1,12 +1,13 @@
 import { channelAdapter } from "@/lib/conversations/channel";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { ORDER_ITEMS_SELECT, orderItemSummary, type OrderItemSummary } from "./item-summary";
 export type OrderCustomerIdentity = {
   channel?: "instagram" | "whatsapp";
   conversationId: string;
   instagramParticipantId: string;
   instagramConnectionId: string;
 };
-type OrderSummary = { id: string; status: string; created_at: string };
+type OrderSummary = { id: string; status: string; created_at: string; items: OrderItemSummary[] };
 
 /** Read only: the query never accepts a customer ID or order ID as an authorization boundary. */
 export async function ownOrders(businessId: string, identity: OrderCustomerIdentity): Promise<OrderSummary[] | null> {
@@ -25,14 +26,15 @@ export async function ownOrders(businessId: string, identity: OrderCustomerIdent
   ]);
   if (conversationsError || customerError) throw new Error("order_status_unavailable");
   const ids = [...new Set([conversation.id, ...(conversations ?? []).map(item => item.id)])];
-  const scoped = db.from("orders").select("id,status,created_at").eq("business_id", businessId);
+  const columns = `id,status,created_at,${ORDER_ITEMS_SELECT}`;
+  const scoped = db.from("orders").select(columns).eq("business_id", businessId);
   const results = await Promise.all([
     scoped.in("conversation_id", ids).order("created_at", { ascending: false }).limit(6),
-    customer ? db.from("orders").select("id,status,created_at").eq("business_id", businessId).eq("customer_id", customer.id).order("created_at", { ascending: false }).limit(6) : Promise.resolve({ data: [], error: null }),
+    customer ? db.from("orders").select(columns).eq("business_id", businessId).eq("customer_id", customer.id).order("created_at", { ascending: false }).limit(6) : Promise.resolve({ data: [], error: null }),
   ]);
   if (results.some(result => result.error)) throw new Error("order_status_unavailable");
   const orders = new Map<string, OrderSummary>();
-  for (const result of results) for (const order of result.data ?? []) orders.set(order.id, order);
+  for (const result of results) for (const { order_items, ...order } of result.data ?? []) orders.set(order.id, { ...order, items: orderItemSummary(order_items) });
   return [...orders.values()].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 6);
 }
 

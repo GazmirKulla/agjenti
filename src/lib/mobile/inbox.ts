@@ -70,6 +70,7 @@ export function mobileThread(conversation: ThreadConversation, messages: ThreadM
       total: order.total_amount,
       currency: order.currency,
       createdAt: order.created_at,
+      items: order.items,
     })),
     messages: messages.map((m) => ({
       id: m.id,

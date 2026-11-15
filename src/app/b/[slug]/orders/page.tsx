@@ -150,8 +150,11 @@ export default async function OrdersPage({
                   <h3>Informacioni i porosisë</h3>
                   <dl className="detail-fields">
                     <div>
-                      <dt>Totali</dt>
-                      <dd>{money(o.total_amount, o.currency)}</dd>
+                      <dt>Totali i artikujve</dt>
+                      <dd>
+                        {money(o.total_amount, o.currency)}
+                        {o.external_system && <><br />Pa transportin: webi i biznesit e shton te totali i vet.</>}
+                      </dd>
                     </div>
                     <div>
                       <dt>Sistemi i jashtëm</dt>
@@ -164,8 +167,9 @@ export default async function OrdersPage({
                   </dl>
                 </div>
                 <p className="muted-copy">
-                  Statusi pasqyron krijimin dhe përcjelljen e porosisë. Pagesat
-                  dhe transporti menaxhohen jashtë këtij paneli.
+                  Statusi pasqyron krijimin dhe përcjelljen e porosisë. Totali
+                  është shuma e artikujve; pagesat dhe transporti menaxhohen
+                  jashtë këtij paneli.
                   {o.status === "pending_reconciliation" && " Kontrollo në sistemin e jashtëm nëse porosia është pranuar. Mos e ridërgo: një timeout nuk provon dështim."}
                 </p>
               </>

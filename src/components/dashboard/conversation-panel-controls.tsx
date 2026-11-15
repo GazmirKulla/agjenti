@@ -231,7 +231,9 @@ type ProductOption = {
 };
 type Selection = { options: Record<string, string>; fields: Record<string, string | number | boolean>; files: Record<string, string[]>; addons: string[] };
 const emptySelection = (): Selection => ({ options: {}, fields: {}, files: {}, addons: [] });
-type Submission = { status: "local_only" | "pending_reconciliation" | "accepted" | "rejected"; externalOrderId?: string | null; reason?: string };
+type Submission = { status: "local_only" | "pending_reconciliation" | "accepted" | "rejected"; externalOrderId?: string | null; reason?: string;
+  /** The field the website refused, its label and the item (1-based), when the website named one. */
+  field?: string; fieldLabel?: string; line?: number };
 
 /** Uploads one reference photo to the conversation and returns its private path. */
 async function uploadOrderFile(base: string, file: File): Promise<string> {
@@ -428,6 +430,15 @@ function DeclaredInputs(props: {
   );
 }
 
+/** "Artikulli 2: mungon «Personazhi»." from the field the website named; empty when it named none. */
+function refusedField(submission: Submission, t: (text: string) => string): string {
+  if (!submission.field) return "";
+  const label = submission.fieldLabel ?? submission.field;
+  const missing = submission.reason?.startsWith("missing_");
+  if (!submission.line) return ` ${missing ? t("Mungon") : t("Nuk pranohet")} «${label}».`;
+  return ` ${t("Artikulli")} ${submission.line}: ${missing ? t("mungon") : t("nuk pranohet")} «${label}».`;
+}
+
 /** The result line after saving: local, sent to the website, refused or to be checked. */
 function submissionMessage(submission: Submission | undefined, t: (text: string) => string): string {
   if (!submission || submission.status === "local_only")
@@ -437,7 +448,7 @@ function submissionMessage(submission: Submission | undefined, t: (text: string)
   if (submission.status === "accepted")
     return `${t("Porosia u ruajt dhe u krijua te webi i biznesit.")}${submission.externalOrderId ? ` #${submission.externalOrderId}` : ""}`;
   if (submission.status === "rejected")
-    return `${t("Porosia u ruajt, por webi i biznesit e refuzoi.")}${submission.reason === "price_changed" ? ` ${t("Çmimi ka ndryshuar: rifresko produktet nga webi.")}` : submission.reason ? ` (${submission.reason})` : ""}`;
+    return `${t("Porosia u ruajt, por webi i biznesit e refuzoi.")}${submission.reason === "price_changed" ? ` ${t("Çmimi ka ndryshuar: rifresko produktet nga webi.")}` : refusedField(submission, t) || (submission.reason ? ` (${submission.reason})` : "")}`;
   return t("Porosia u ruajt, por dërgimi te webi nuk u verifikua. Kontrollo te Porositë; mos e ridërgo.");
 }
 

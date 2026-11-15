@@ -301,6 +301,8 @@ export type ExternalOrderResult = {
   error?: string;
   /** The website's own error code (e.g. price_changed), when it gave a safe one. */
   code?: string;
+  /** The field the website named with the code (e.g. character for missing_field). */
+  field?: string;
 };
 
 export async function submitExternalOrder(params: {
@@ -329,15 +331,16 @@ export async function submitExternalOrder(params: {
         ...(secret ? { Authorization: `Bearer ${secret}` } : {}) },
       body: JSON.stringify(params.payload), signal: AbortSignal.timeout(20_000),
     });
-    const json = await response.json().catch(() => null) as { ok?: unknown; orderId?: unknown; error?: unknown; reason?: unknown } | null;
-    const raw = typeof json?.error === "string" ? json.error : typeof json?.reason === "string" ? json.reason : "";
-    const code = /^[a-z][a-z0-9_]{0,59}$/.test(raw) ? raw : undefined;
+    const json = await response.json().catch(() => null) as { ok?: unknown; orderId?: unknown; error?: unknown; reason?: unknown; field?: unknown } | null;
+    // Zana sends {reason: "missing_field", error: "missing_field", field: "character"}; the code wins over a sentence.
+    const code = [json?.reason, json?.error].find((v): v is string => typeof v === "string" && /^[a-z][a-z0-9_]{0,59}$/.test(v));
+    const field = typeof json?.field === "string" && /^[A-Za-z][A-Za-z0-9_]{0,59}$/.test(json.field) ? json.field : undefined;
     if (response.ok && json?.ok === true) {
       result = { status: "accepted", ok: true, orderId: typeof json.orderId === "string" ? json.orderId.slice(0, 200) : undefined };
     } else if (json?.ok === false && (response.ok || response.status >= 400 && response.status < 500 && ![408, 409, 429].includes(response.status)
       // Contract v2: price_changed is answered before anything is created.
       || response.status === 409 && code === "price_changed")) {
-      result = { status: "rejected", ok: false, error: "Sistemi i jashtëm e refuzoi porosinë. Kërkohet shqyrtim nga stafi.", ...(code ? { code } : {}) };
+      result = { status: "rejected", ok: false, error: "Sistemi i jashtëm e refuzoi porosinë. Kërkohet shqyrtim nga stafi.", ...(code ? { code } : {}), ...(code && field ? { field } : {}) };
     } else result = unknown();
   } catch {
     // Timeouts/network errors can occur AFTER the provider committed the order.
@@ -346,7 +349,7 @@ export async function submitExternalOrder(params: {
   // Logging must not erase a verified provider response; the submission ledger is authoritative.
   try {
     await supabase.from("integration_logs").insert({ business_id: params.businessId,
-      direction: "outbound", target: "orders", status: result.ok ? "ok" : "failed", error: result.code ?? result.error ?? null });
+      direction: "outbound", target: "orders", status: result.ok ? "ok" : "failed", error: result.code ? (result.field ? `${result.code}:${result.field}` : result.code) : result.error ?? null });
   } catch { /* Ledger persistence is checked by the caller. Never retry delivery for a log failure. */ }
   return result;
 }

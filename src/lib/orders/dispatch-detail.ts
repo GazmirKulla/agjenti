@@ -1,0 +1,49 @@
+import type { LinkedSpec } from "@/lib/integrations/linked-catalog";
+
+/** What the website named in its refusal, in the owner's words where Agjenti knows them. */
+export type RejectionDetail = { field?: string; fieldLabel?: string; line?: number };
+
+type Item = Record<string, unknown>;
+const record = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+const filled = (v: unknown) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
+
+/** True when the item sent a value for `field` (an option, a detail, a photo or a top-level value). */
+export function itemHas(item: Item, field: string): boolean {
+  if (filled(record(item.options)[field]) || filled(record(item.fields)[field]) || filled(item[field])) return true;
+  return Array.isArray(item.files) && item.files.some((f) => record(f).key === field);
+}
+
+/** Order-level fields the website may name; they belong to no item. */
+const ORDER_FIELDS = new Set(["customer", "currency", "expectedTotal", "items", "channel"]);
+const LABELS: Record<string, string> = {
+  customer: "Të dhënat e klientit", productId: "Produkti", variantId: "Varianti", formatId: "Formati",
+  quantity: "Sasia", addons: "Shtesat", currency: "Monedha", color: "Ngjyra",
+};
+
+/**
+ * Which item and detail the website's refusal points at. The website names the field but not the
+ * item, so for a missing field it is the first item (in the order sent) that left it empty; for
+ * any other refusal an item is named only when the order has one.
+ */
+export function rejectionDetail(input: {
+  code?: string;
+  field?: string;
+  items: Item[];
+  /** products.external_spec by the website's product id. */
+  specs: Map<string, LinkedSpec | null>;
+}): RejectionDetail {
+  const { field, items } = input;
+  if (!field) return {};
+  let line: number | undefined;
+  if (!ORDER_FIELDS.has(field)) {
+    if (input.code?.startsWith("missing_")) {
+      const index = items.findIndex((item) => !itemHas(item, field));
+      if (index >= 0) line = index + 1;
+    } else if (items.length === 1) line = 1;
+  }
+  const item = line ? items[line - 1] : undefined;
+  const spec = item && typeof item.productId === "string" ? input.specs.get(item.productId) : undefined;
+  const pool = spec ? [...spec.options, ...spec.fields] : [...input.specs.values()].flatMap((s) => (s ? [...s.options, ...s.fields] : []));
+  const fieldLabel = pool.find((f) => f.key === field)?.label ?? LABELS[field];
+  return { field, ...(fieldLabel ? { fieldLabel } : {}), ...(line ? { line } : {}) };
+}

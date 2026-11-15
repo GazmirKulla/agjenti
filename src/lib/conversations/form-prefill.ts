@@ -128,9 +128,11 @@ const schema = {
 
 /** Null when the conversation is not in this business. */
 export async function prefillForm(db: SupabaseClient, businessId: string, conversationId: string, kind: FormKind): Promise<Prefill | null> {
-  const context = await loadConversationContext(db, businessId, conversationId);
-  if (!context) return null;
-  const [messages, products, calendar, workflowFields] = await Promise.all([
+  // The context, messages, catalog and calendar are read at once; only the workflow
+  // labels wait for the context. The model call is the slow part, so it gets the
+  // rest of the time the app waits (see PREFILL_TIMEOUT in the mobile app).
+  const [context, messages, products, calendar] = await Promise.all([
+    loadConversationContext(db, businessId, conversationId),
     db.from("messages").select("source,body,created_at").eq("business_id", businessId).eq("conversation_id", conversationId)
       .not("body", "is", null).in("source", ["customer", "staff", "agent"]).order("created_at", { ascending: false }).limit(40),
     kind === "order"
@@ -138,8 +140,9 @@ export async function prefillForm(db: SupabaseClient, businessId: string, conver
           .is("archived_at", null).not("price_amount", "is", null).order("name").limit(200)
       : Promise.resolve({ data: [] as { id: string; name: string; price_amount: number | null; currency: string | null }[], error: null }),
     db.from("business_calendar_settings").select("timezone").eq("business_id", businessId).maybeSingle(),
-    workflowFieldLabels(businessId, context.processes, kind),
   ]);
+  if (!context) return null;
+  const workflowFields = await workflowFieldLabels(businessId, context.processes, kind);
   if (messages.error || products.error) throw new Error("prefill_unavailable");
   const timezone = calendar.data?.timezone ?? "Europe/Tirane";
   const now = zonedParts(new Date(), timezone);

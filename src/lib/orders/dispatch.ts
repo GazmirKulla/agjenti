@@ -1,6 +1,8 @@
 import { submitExternalOrder } from "@/lib/integrations/zana";
 import { assertBusinessEffectAllowed, isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import type { LinkedSpec } from "@/lib/integrations/linked-catalog";
+import { rejectionDetail, type RejectionDetail } from "./dispatch-detail";
 
 export const ORDER_FILES_BUCKET = "order-files";
 /** Long enough for the website to copy the file while handling the order. */
@@ -11,11 +13,11 @@ export type DispatchOutcome = {
   externalOrderId?: string | null;
   /** Why the order stayed local (unmapped_product, unmapped_variant) or the website's error code. */
   reason?: string;
-};
+} & RejectionDetail;
 
 type Begin = {
   orderId: string; attemptId?: string; status: DispatchOutcome["status"]; externalOrderId?: string | null;
-  dispatch: boolean; reason?: string; payload?: Record<string, unknown>;
+  dispatch: boolean; reason?: string; line?: number; payload?: Record<string, unknown>;
 };
 
 /** Short-lived links instead of storage paths, so the website can download the files. */
@@ -48,7 +50,8 @@ export async function dispatchManualOrder(input: { businessId: string; userId: s
   const { data, error } = await db.rpc("begin_order_dispatch", { p_business: input.businessId, p_user: input.userId, p_order: input.orderId });
   if (error || !data || typeof data !== "object") return { status: "pending_reconciliation", reason: "dispatch_unverified" };
   const begin = data as Begin;
-  if (!begin.dispatch) return { status: begin.status, externalOrderId: begin.externalOrderId ?? null, ...(begin.reason ? { reason: begin.reason } : {}) };
+  if (!begin.dispatch) return { status: begin.status, externalOrderId: begin.externalOrderId ?? null, ...(begin.reason ? { reason: begin.reason } : {}),
+    ...(typeof begin.line === "number" ? { line: begin.line } : {}) };
   // Permission was granted and recorded: from here a failure is reconciled, not retried.
   const payload = begin.payload ? await signFiles(begin.payload).catch(() => null) : null;
   if (!payload || !begin.attemptId) return { status: "pending_reconciliation", reason: "files_unavailable" };
@@ -57,5 +60,18 @@ export async function dispatchManualOrder(input: { businessId: string; userId: s
   const finished = await db.rpc("finish_order_submission", { p_business: input.businessId, p_order: input.orderId,
     p_attempt: begin.attemptId, p_status: result.status, p_external: result.orderId ?? null }).then((v) => v, () => null);
   if (!finished || finished.error) return { status: "pending_reconciliation", reason: "result_unrecorded" };
-  return { status: result.status, externalOrderId: result.orderId ?? null, ...(result.code ? { reason: result.code } : {}) };
+  const detail = result.status === "rejected" && result.field ? await refusedField(input.businessId, payload, result.code, result.field) : {};
+  return { status: result.status, externalOrderId: result.orderId ?? null, ...(result.code ? { reason: result.code } : {}), ...detail };
+}
+
+/** The item and the owner's label for the field the website refused. Best effort: the order is already recorded. */
+async function refusedField(businessId: string, payload: Record<string, unknown>, code: string | undefined, field: string): Promise<RejectionDetail> {
+  const items = Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [];
+  const ids = [...new Set(items.map((item) => item.productId).filter((id): id is string => typeof id === "string"))];
+  const { data } = ids.length
+    ? await createServiceSupabase().from("products").select("external_id,external_spec").eq("business_id", businessId).in("external_id", ids)
+      .then((v) => v, () => ({ data: null }))
+    : { data: null };
+  const specs = new Map((data ?? []).map((p) => [p.external_id as string, (p.external_spec ?? null) as LinkedSpec | null]));
+  return rejectionDetail({ code, field, items, specs });
 }

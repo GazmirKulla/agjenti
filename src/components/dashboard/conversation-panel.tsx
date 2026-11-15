@@ -3,6 +3,7 @@ import type { ConversationContext } from "@/lib/conversations/context";
 import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { BookingForm, CopyInvitationLink, LeadStatusControl, ManualOrderForm, SaveCustomerForm } from "./conversation-panel-controls";
 import { formatDate, money } from "./ui";
+import { orderItemsText } from "@/lib/orders/item-summary";
 
 /** Inbox side panel: what the business already knows about this conversation. */
 export async function ConversationPanel({ context, businessId, slug }: { context: ConversationContext; businessId: string; slug: string }) {
@@ -81,6 +82,7 @@ export async function ConversationPanel({ context, businessId, slug }: { context
             <Link className="customer-order" key={order.id} href={`/b/${slug}/orders`}>
               <div><strong>#{order.id.slice(0, 8)}</strong><span className="muted-copy">{t(order.statusLabel)}</span></div>
               <p>{formatDate(order.createdAt, locale)}<strong>{money(order.total, order.currency ?? undefined)}</strong></p>
+              {order.items.length > 0 && <p className="muted-copy">{orderItemsText(order.items)}</p>}
             </Link>
           ))
         ) : (

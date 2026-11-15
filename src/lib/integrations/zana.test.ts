@@ -176,6 +176,13 @@ describe("W4 external order delivery evidence", () => {
     const result = await send();
     expect(result).toMatchObject({ ok: false, status: "rejected" }); expect(result.error).not.toContain("private");
   });
+  it("keeps the field the website named with its code", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ ok: false, reason: "missing_field", error: "missing_field", field: "character" }, { status: 422 }));
+    expect(await send()).toMatchObject({ status: "rejected", code: "missing_field", field: "character" });
+    mocks.fetch.mockResolvedValue(Response.json({ ok: false, error: "missing_field", field: "a b; drop" }, { status: 422 }));
+    const odd = await send();
+    expect(odd).toMatchObject({ status: "rejected", code: "missing_field" }); expect(odd.field).toBeUndefined();
+  });
   it.each([408,409,429,500,503])("does not treat HTTP %s as proof of non-delivery", async status => {
     mocks.fetch.mockResolvedValue(Response.json({ ok: false }, { status }));
     expect(await send()).toMatchObject({ ok: false, status: "pending_reconciliation" });
