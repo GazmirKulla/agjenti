@@ -106,12 +106,29 @@ const pageSize = (value: number | undefined, fallback: number, max: number) =>
   Number.isInteger(value) && value! > 0 ? Math.min(value!, max) : fallback;
 
 /** One page of the Inbox, newest first; `next` reads the page after it. */
+/** A search text safe inside a PostgREST filter: letters, digits, spaces and + - . @ _ ' only, at most 60 characters. */
+export function inboxQuery(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const text = raw.normalize("NFC").replace(/[^\p{L}\p{N} +\-.@_']/gu, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  return text.length >= 2 ? text : null;
+}
+
 export async function loadInboxPage(
   db: SupabaseClient,
   businessId: string,
-  options: { before?: PageCursor | null; limit?: number } = {},
+  options: { before?: PageCursor | null; limit?: number; query?: string | null } = {},
 ): Promise<{ rows: InboxRow[]; next: string | null }> {
   const limit = pageSize(options.limit, INBOX_PAGE, 100);
+  // Search: the name or username on the channel, the last message, or the saved customer's name, username or phone.
+  const query = inboxQuery(options.query);
+  let customerIds: string[] = [];
+  if (query) {
+    const like = `*${query}*`;
+    const { data: customers, error: customerError } = await db.from("customers").select("id").eq("business_id", businessId)
+      .or(`display_name.ilike.${like},username.ilike.${like},phone.ilike.${like}`).limit(50);
+    if (customerError) throw new InboxReadError("list_unavailable");
+    customerIds = (customers ?? []).map((c) => c.id as string);
+  }
   let read = db
     .from("conversations")
     .select(
@@ -119,6 +136,11 @@ export async function loadInboxPage(
     )
     .eq("business_id", businessId)
     .eq("customers.business_id", businessId);
+  if (query) {
+    const like = `*${query}*`;
+    read = read.or([`participant_display_name.ilike.${like}`, `participant_username.ilike.${like}`, `last_message_preview.ilike.${like}`,
+      ...(customerIds.length ? [`customer_id.in.(${customerIds.join(",")})`] : [])].join(","));
+  }
   const before = options.before;
   if (before)
     read = before.at

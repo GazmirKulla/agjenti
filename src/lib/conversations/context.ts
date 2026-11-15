@@ -39,7 +39,8 @@ export type ConversationContext = {
     /** The product's photo fields the website needs: staff choose those photos before sending. */
     photoFields: PendingPhotoField[];
   } | null;
-  orders: { id: string; status: string; statusLabel: string; total: number | null; currency: string | null; createdAt: string; items: OrderItemSummary[] }[];
+  /** `sent`: the order is on the business website, which keeps its item photos. */
+  orders: { id: string; status: string; statusLabel: string; total: number | null; currency: string | null; createdAt: string; items: OrderItemSummary[]; sent: boolean }[];
   bookings: { id: string; service: string; startsAt: string; status: string; statusLabel: string }[];
   lead: { id: string; status: LeadStatus; statusLabel: string; interest: string } | null;
   /** Agjenti.app only: the invitation sent to this prospect and what was collected for it. */
@@ -165,9 +166,9 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       .eq("business_id", businessId).eq("id", conversationId).maybeSingle(),
     db.from("conversation_states").select("collected").eq("business_id", businessId).eq("conversation_id", conversationId).maybeSingle(),
     conversation.customer_id
-      ? db.from("orders").select(`id,status,total_amount,currency,created_at,${ORDER_ITEMS_SELECT}`).eq("business_id", businessId)
+      ? db.from("orders").select(`id,status,total_amount,currency,created_at,external_system,external_order_id,${ORDER_ITEMS_SELECT}`).eq("business_id", businessId)
           .or(`conversation_id.eq.${conversationId},customer_id.eq.${conversation.customer_id}`).order("created_at", { ascending: false }).limit(10)
-      : db.from("orders").select(`id,status,total_amount,currency,created_at,${ORDER_ITEMS_SELECT}`).eq("business_id", businessId)
+      : db.from("orders").select(`id,status,total_amount,currency,created_at,external_system,external_order_id,${ORDER_ITEMS_SELECT}`).eq("business_id", businessId)
           .eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(10),
     db.from("workflow_booking_effects").select("booking_id").eq("business_id", businessId).eq("conversation_id", conversationId).limit(20),
     db.from("leads").select("id,status,interest,updated_at").eq("business_id", businessId).eq("conversation_id", conversationId)
@@ -359,6 +360,7 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       currency: order.currency,
       createdAt: order.created_at,
       items: orderItemSummary(order.order_items),
+      sent: order.external_system === "external" && Boolean(order.external_order_id),
     })),
     bookings: (bookings.data ?? []).map((booking) => ({
       id: booking.id,

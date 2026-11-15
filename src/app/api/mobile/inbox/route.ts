@@ -3,7 +3,7 @@ import { mobileInboxAccess, mobileInboxError, mobileInboxHeaders } from "@/lib/m
 
 export const runtime = "nodejs";
 
-/** One page of the Inbox (newest first). `?before=<next>` reads the page after it. */
+/** One page of the Inbox (newest first). `?before=<next>` reads the page after it; `?q=` searches it. */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const access = await mobileInboxAccess(request, url.searchParams.get("slug") ?? "");
@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     const page = await loadInboxPage(access.db, access.businessId, {
       before: parseCursor(url.searchParams.get("before")),
       limit: Number(url.searchParams.get("limit")) || undefined,
+      query: url.searchParams.get("q"),
     });
     return Response.json({ businessId: access.businessId, conversations: page.rows, next: page.next }, { headers: mobileInboxHeaders });
   } catch (error) {

@@ -34,7 +34,7 @@ describe("native inbox access", () => {
     expect(await response.json()).toEqual({ businessId: business, conversations: [{ id: conversationId, name: "Ana" }], next: null });
     expect(m.access).toHaveBeenCalledWith("user", "shop");
     expect(m.rpc).toHaveBeenCalledWith("current_user_module_allowed", { p_business: business, p_module: "inbox" });
-    expect(m.rows).toHaveBeenCalledWith({ service: true }, business, { before: null, limit: undefined });
+    expect(m.rows).toHaveBeenCalledWith({ service: true }, business, { before: null, limit: undefined, query: null });
   });
   it("refuses missing identity, foreign businesses and a disabled inbox module before reading", async () => {
     m.identity.mockResolvedValueOnce(null);
@@ -59,12 +59,12 @@ describe("native inbox access", () => {
     const cursor = `2026-11-13T10:00:00.000Z|${conversationId}`;
     m.rows.mockResolvedValueOnce({ rows: [], next: null });
     await list(req(`/api/mobile/inbox?slug=shop&before=${encodeURIComponent(cursor)}`));
-    expect(m.rows).toHaveBeenCalledWith({ service: true }, business, { before: { at: "2026-11-13T10:00:00.000Z", id: conversationId }, limit: undefined });
+    expect(m.rows).toHaveBeenCalledWith({ service: true }, business, { before: { at: "2026-11-13T10:00:00.000Z", id: conversationId }, limit: undefined, query: null });
     await thread(req(`/api/mobile/inbox/${conversationId}?slug=shop&before=${encodeURIComponent(cursor)}&limit=20`), ctx());
     expect(m.messages).toHaveBeenLastCalledWith({ service: true }, business, conversationId, { before: { at: "2026-11-13T10:00:00.000Z", id: conversationId }, limit: 20 });
     // A malformed cursor reads the first page instead of reaching the query.
     await list(req("/api/mobile/inbox?slug=shop&before=x),or(id.neq.0"));
-    expect(m.rows).toHaveBeenLastCalledWith({ service: true }, business, { before: null, limit: undefined });
+    expect(m.rows).toHaveBeenLastCalledWith({ service: true }, business, { before: null, limit: undefined, query: null });
   });
   it("reports a controlled failure when reads fail", async () => {
     m.rows.mockRejectedValueOnce(new InboxReadError("list_unavailable"));
