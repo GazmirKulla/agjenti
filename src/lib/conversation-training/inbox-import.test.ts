@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transcript } from "@/lib/conversation-learning/transcripts";
-import { addHistoryToInbox, parseHistoryOptions, URL_BUDGET, urlChunks } from "./inbox-import";
+import { addHistoryToInbox, parseAnalysisOptions, parseHistoryOptions, URL_BUDGET, urlChunks } from "./inbox-import";
 
 const BUSINESS = "2af8cfe5-5f63-47a1-baf3-959cfea49b79";
 const OTHER = "11111111-2222-3333-4444-555555555555";
@@ -54,14 +54,20 @@ const thread = (customer: string, lines: [Transcript["lines"][number]["speaker"]
   lines: lines.map(([speaker, text, at, id]) => ({ speaker, text, at, id })),
 });
 
-describe("history options", () => {
-  it("accepts only the offered counts and keeps adding off unless asked", () => {
-    expect(parseHistoryOptions({ limit: 50 })).toEqual({ limit: 50, addToInbox: false });
-    expect(parseHistoryOptions({ limit: 100, addToInbox: true })).toEqual({ limit: 100, addToInbox: true });
-    expect(parseHistoryOptions({})).toEqual({ limit: 200, addToInbox: false });
-    expect(parseHistoryOptions({ limit: "all", addToInbox: true })).toEqual({ limit: "all", addToInbox: true });
-    for (const limit of [0, 75, 201, "50", "ALL", 1e6, null]) expect(parseHistoryOptions({ limit })).toBeNull();
-    expect(parseHistoryOptions({ limit: 50, addToInbox: "yes" })).toBeNull();
+describe("import and analysis options", () => {
+  it("import: only the offered periods, and adding is off unless asked", () => {
+    expect(parseHistoryOptions({ days: 30 })).toEqual({ days: 30, addToInbox: false });
+    expect(parseHistoryOptions({ days: 180, addToInbox: true })).toEqual({ days: 180, addToInbox: true });
+    expect(parseHistoryOptions({})).toEqual({ days: 90, addToInbox: false });
+    for (const days of [0, 7, 60, 365, "30", null]) expect(parseHistoryOptions({ days })).toBeNull();
+    expect(parseHistoryOptions({ days: 30, addToInbox: "yes" })).toBeNull();
+  });
+
+  it("analysis: at most 50 conversations, contacts only when asked", () => {
+    expect(parseAnalysisOptions(undefined)).toEqual({ limit: 50, onlyContacts: false });
+    expect(parseAnalysisOptions({ limit: 10, onlyContacts: true })).toEqual({ limit: 10, onlyContacts: true });
+    for (const limit of [0, 51, 100, 600, "50"]) expect(parseAnalysisOptions({ limit })).toBeNull();
+    expect(parseAnalysisOptions({ onlyContacts: 1 })).toBeNull();
   });
 });
 

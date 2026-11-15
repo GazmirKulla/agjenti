@@ -7,12 +7,15 @@ export type Transcript = { key: string; channel: "instagram" | "whatsapp"; lines
 const EMAIL = /[\w.+-]+@[\w-]+(\.[\w-]+)+/g;
 // Phone-like runs: 9+ digits with spaces, dots, dashes or a leading + (prices such as "1500 - 2000" stay).
 const PHONE = /\+?\d[\d\s().-]{7,}\d/g;
-const phone = (match: string) => (match.replace(/\D/g, "").length >= 9 ? "[telefon]" : match);
+/** What a phone number or an email is replaced with: a masked message that holds one of
+ * these had contact details (a format check, not a reading of what was meant). */
+export const CONTACT_MARKS = { phone: "[telefon]", email: "[email]" } as const;
+const phone = (match: string) => (match.replace(/\D/g, "").length >= 9 ? CONTACT_MARKS.phone : match);
 const URL_WITH_TOKEN = /https?:\/\/\S*[?&](token|key|code|sig)=\S*/gi;
 
 /** Removes contact details before conversations are sent to the AI; names are never sent. */
 export function redact(text: string): string {
-  return text.replace(URL_WITH_TOKEN, "[lidhje]").replace(EMAIL, "[email]").replace(PHONE, phone);
+  return text.replace(URL_WITH_TOKEN, "[lidhje]").replace(EMAIL, CONTACT_MARKS.email).replace(PHONE, phone);
 }
 
 /** Keeps the newest `perConversation` text lines, oldest first, trimmed and redacted. */

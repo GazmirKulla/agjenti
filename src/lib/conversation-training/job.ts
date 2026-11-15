@@ -7,7 +7,7 @@ import { conversationFolder, parseConversationFile } from "./instagram-export";
 import { withAiUsage } from "@/lib/ai/usage";
 import { analyseStyle, consolidate, countBy, existingData, extractBatch, finalSuggestions, markAnalysed, MAX_ANALYSIS_CANDIDATES, storeSuggestions, threadsToAnalyse, type AnalysisCheckpoint } from "./analysis";
 import type { StyleStats } from "./style";
-import { addHistoryToInbox, DEFAULT_HISTORY_LIMIT, type HistoryOptions } from "./inbox-import";
+import { addHistoryToInbox, parseAnalysisOptions, type AnalysisOptions, type HistoryOptions } from "./inbox-import";
 import { agentMessageHashes, exportThreadMessages, inboxThreadMessages, withoutDuplicates, type StoredLine, type TrainingMessage } from "./normalize";
 
 export const TRAINING_BUCKET = "conversation-training";
@@ -18,7 +18,7 @@ const BATCH = 500;
 
 export type UploadedFile = { path: string; name: string; size: number };
 /** `historyOnly`: only adds Instagram history to Conversations again (a retry), no training. */
-export type SessionInput = { files?: UploadedFile[]; ownerName?: string; history?: HistoryOptions; historyOnly?: boolean };
+export type SessionInput = { files?: UploadedFile[]; ownerName?: string; history?: HistoryOptions; historyOnly?: boolean; analysis?: AnalysisOptions };
 export type Stats = {
   conversations: number; messages: number; duplicates: number;
   customerMessages: number; ownerMessages: number; agentMessages: number;
@@ -240,7 +240,7 @@ async function analysisStep(session: TrainingSession, data: Checkpoint, stats: S
     const style = await analyseStyle(session.business_id, await previousStyle(session));
     stats.style = style.stats; stats.styleChanges = style.changes;
     if (style.warning) stats.warnings = [...(stats.warnings ?? []), style.warning];
-    const threads = await threadsToAnalyse(session.business_id);
+    const threads = await threadsToAnalyse(session.business_id, parseAnalysisOptions(session.input.analysis) ?? undefined);
     return save(session, { threads, nextThread: 0, candidates: [], suggestions: style.suggestions }, "extract", stats,
       { done: 0, total: threads.length, label: "Po lexoj çfarë pyesin klientët" });
   }
@@ -279,7 +279,9 @@ const PAGE = 40;
 async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: Stats) {
   const db = createServiceSupabase();
   const { settings } = await loadLearningSettings();
-  const since = new Date(Date.now() - Math.min(settings.lookback_days, INBOX_LOOKBACK_DAYS) * 86_400_000).toISOString();
+  // The owner's period; an import from before periods existed keeps the platform's.
+  const days = session.input.history?.days ?? settings.lookback_days;
+  const since = new Date(Date.now() - Math.min(days, INBOX_LOOKBACK_DAYS) * 86_400_000).toISOString();
   const started = Date.now();
   let offset = data.offset ?? 0;
   const threads = new Set<string>(data.threads ?? []);
@@ -315,8 +317,9 @@ async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: St
   // one page after another across steps, so "all" never outlasts a step.
   if (settings.instagram_history) {
     const account = await instagramAccount(session.business_id);
-    const options = session.input.history ?? { limit: DEFAULT_HISTORY_LIMIT, addToInbox: false };
-    const limit = options.limit === "all" ? Number.POSITIVE_INFINITY : options.limit;
+    const options = session.input.history ?? { days, addToInbox: false };
+    // Every conversation of the period: Meta's pages end where the period does.
+    const limit = Number.POSITIVE_INFINITY;
     let after = data.historyAfter, listed = data.historyListed ?? 0;
     const warn = (message: string) => { if (!stats.warnings?.includes(message)) stats.warnings = [...(stats.warnings ?? []), message]; };
     while (account && after !== null && listed < limit && Date.now() - started < STEP_MS) {

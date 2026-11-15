@@ -2,6 +2,8 @@ import OpenAI from "@/lib/ai/openai";
 import { modelFor } from "@/lib/agents/model";
 import { prompt } from "@/lib/ai/prompts/files";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { CONTACT_MARKS } from "@/lib/conversation-learning/transcripts";
+import { DEFAULT_ANALYSIS, type AnalysisOptions } from "./inbox-import";
 import { ANALYSIS_SCHEMA_VERSION, numberTurns, PROFILE_FIELDS, sha256, suggestionKey, validCandidates, type Candidate, type Suggestion } from "./analysis-model";
 import { mergeCandidates, suggestionsFor, type ExistingData } from "./match";
 import { toTurns, type Speaker, type Turn } from "./normalize";
@@ -76,12 +78,19 @@ async function loadThreads(businessId: string, keys?: string[], limit = 6000) {
   return [...byThread].map(([thread, rows]) => ({ thread, turns: toTurns(rows) }));
 }
 
-/** Conversations with messages not analysed yet, newest first. */
-export async function threadsToAnalyse(businessId: string) {
-  const { data, error } = await createServiceSupabase().from("conversation_training_messages").select("thread_key")
-    .eq("business_id", businessId).is("analyzed_at", null).order("sent_at", { ascending: false }).limit(50_000);
-  if (error) throw new Error("messages_unavailable");
-  return [...new Set((data ?? []).map((r) => r.thread_key as string))].slice(0, MAX_THREADS);
+/** Conversations with messages not analysed yet, newest first, at most `limit`. With
+ * `onlyContacts`, only those where the customer sent a phone number or an email: their
+ * stored messages hold the mark that replaced it. The rest stay for a later analysis. */
+export async function threadsToAnalyse(businessId: string, options: AnalysisOptions = DEFAULT_ANALYSIS) {
+  const db = createServiceSupabase();
+  const unread = () => db.from("conversation_training_messages").select("thread_key,sent_at").eq("business_id", businessId).is("analyzed_at", null);
+  const reads = options.onlyContacts
+    ? Object.values(CONTACT_MARKS).map((mark) => unread().eq("speaker", "customer").ilike("body", `%${mark}%`))
+    : [unread()];
+  const results = await Promise.all(reads.map((q) => q.order("sent_at", { ascending: false }).limit(50_000)));
+  if (results.some((r) => r.error)) throw new Error("messages_unavailable");
+  const rows = results.flatMap((r) => (r.data ?? []) as { thread_key: string; sent_at: string }[]).sort((a, b) => b.sent_at.localeCompare(a.sent_at));
+  return [...new Set(rows.map((r) => r.thread_key))].slice(0, Math.min(options.limit, MAX_THREADS));
 }
 
 async function activeAgent(businessId: string) {

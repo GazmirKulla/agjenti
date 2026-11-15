@@ -9,13 +9,14 @@ type Session = {
   stage: string; progress: { done?: number; total?: number; label?: string; open?: boolean; stageStartedAt?: string }; error: string | null;
   stats: { suggestions?: Record<string, number>; analysedConversations?: number; styleChanges?: string[]; conversations?: number; messages?: number; duplicates?: number; customerMessages?: number; ownerMessages?: number; agentMessages?: number; skippedFiles?: number; groupConversations?: number; firstAt?: string | null; lastAt?: string | null; warnings?: string[]; inbox?: { conversations: number; created: number; messages: number } };
   created_at: string; expires_at: string;
-  history?: { limit: number | "all"; addToInbox: boolean } | null; historyOnly?: boolean | null;
+  history?: { days?: number; addToInbox: boolean } | null; historyOnly?: boolean | null; analysis?: { limit: number; onlyContacts: boolean } | null;
 };
-type State = { enabled?: boolean; lookbackDays?: number; instagramHistory?: boolean; historyLimits?: (number | "all")[]; sessions: Session[]; keptMessages: number };
+type State = { enabled?: boolean; lookbackDays?: number; instagramHistory?: boolean; importPeriods?: number[]; analysisLimits?: number[]; sessions: Session[]; keptMessages: number };
 
 const ACTIVE = new Set(["uploading", "queued", "running"]);
 const date = (value?: string | null) => (value ? new Date(value).toLocaleDateString("sq-AL", { day: "numeric", month: "short", year: "numeric" }) : "");
 const MAX_BYTES = 100 * 1024 * 1024;
+const PERIODS: Record<number, string> = { 30: "Muaji i fundit", 90: "3 muajt e fundit", 180: "6 muajt e fundit" };
 const DESTINATIONS: [string, string][] = [["style", "Stili i komunikimit"], ["example", "Shembuj realë"], ["knowledge", "Njohuri"], ["product", "Produkte"], ["service", "Shërbime"], ["profile", "Profili i biznesit"], ["workflow", "Procese"], ["gap", "Pyetje pa përgjigje"]];
 
 /** Steps 1–2 of training: choose where the conversations come from, then follow the import. */
@@ -29,7 +30,10 @@ export function ConversationTraining({ slug }: { slug: string }) {
   const [ownerName, setOwnerName] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const [reviewing, setReviewing] = useState<string | null>(null);
-  const [historyLimit, setHistoryLimit] = useState<number | "all">(50);
+  const [days, setDays] = useState(90);
+  const [analysisLimit, setAnalysisLimit] = useState(50);
+  const [onlyContacts, setOnlyContacts] = useState(false);
+  const analysis = { limit: analysisLimit, onlyContacts };
   const [addToInbox, setAddToInbox] = useState(false);
 
   const load = useCallback(async () => {
@@ -58,7 +62,7 @@ export function ConversationTraining({ slug }: { slug: string }) {
 
   async function fromInbox() {
     setBusy("inbox"); setError("");
-    try { await post({ action: "inbox", limit: historyLimit, addToInbox: state?.instagramHistory !== false && addToInbox }); await load(); }
+    try { await post({ action: "inbox", days, addToInbox: state?.instagramHistory !== false && addToInbox, analysis }); await load(); }
     catch (e) { setError(e instanceof Error ? e.message : "Importi nuk u nis."); }
     finally { setBusy(""); }
   }
@@ -67,7 +71,7 @@ export function ConversationTraining({ slug }: { slug: string }) {
     if (!files.length) return;
     setBusy("upload"); setError(""); setUploaded(0);
     try {
-      const prepared = await post({ action: "upload", files: files.map((f) => ({ name: f.name, size: f.size })), ownerName: ownerName.trim() || undefined });
+      const prepared = await post({ action: "upload", files: files.map((f) => ({ name: f.name, size: f.size })), ownerName: ownerName.trim() || undefined, analysis });
       for (const [i, target] of (prepared.uploads as { url: string }[]).entries()) {
         const file = files[i];
         const response = await fetch(target.url, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream", "x-upsert": "false" }, body: file });
@@ -121,21 +125,21 @@ export function ConversationTraining({ slug }: { slug: string }) {
         <div className="training-sources">
           <div className="training-source">
             <h3>Bisedat në Agjenti</h3>
-            <p>Bisedat e Instagram-it dhe WhatsApp-it që janë tashmë te Inbox-i (deri në një vit), edhe historia që Instagram jep për to.</p>
-            {state?.instagramHistory !== false && (
-              <div className="training-history">
-                <label className="training-owner">
-                  <span>Sa biseda të lexohen nga Instagram</span>
-                  <select className="field" value={historyLimit} disabled={disabled} onChange={(e) => setHistoryLimit(e.target.value === "all" ? "all" : Number(e.target.value))}>
-                    {(state?.historyLimits ?? [50, 100, 200, "all"]).map((n) => <option key={n} value={n}>{n === "all" ? `Të gjitha (të ${state?.lookbackDays ?? 90} ditëve të fundit)` : `${n} bisedat e fundit`}</option>)}
-                  </select>
-                </label>
+            <p>Bisedat e Instagram-it dhe WhatsApp-it që janë tashmë te Inbox-i, edhe historia që Instagram jep për to.</p>
+            <div className="training-history">
+              <label className="training-owner">
+                <span>Çfarë të importohet</span>
+                <select className="field" value={days} disabled={disabled} onChange={(e) => setDays(Number(e.target.value))}>
+                  {(state?.importPeriods ?? [30, 90, 180]).map((n) => <option key={n} value={n}>{PERIODS[n] ?? `${n} ditët e fundit`}</option>)}
+                </select>
+              </label>
+              {state?.instagramHistory !== false && (
                 <label className="training-check">
                   <input type="checkbox" checked={addToInbox} disabled={disabled} onChange={(e) => setAddToInbox(e.target.checked)} />
-                  <span>Shtoji edhe te Bisedat, si mesazhe të zakonshme. Nuk u dërgohet asgjë klientëve dhe agjenti nuk u përgjigjet këtyre bisedave.</span>
+                  <span>Shtoji historinë e Instagram-it edhe te Bisedat, si mesazhe të zakonshme. Nuk u dërgohet asgjë klientëve dhe agjenti nuk u përgjigjet këtyre bisedave.</span>
                 </label>
-              </div>
-            )}
+              )}
+            </div>
             <button type="button" className="btn btn-primary" disabled={disabled} onClick={() => void fromInbox()}>
               {busy === "inbox" ? "Po nis…" : "Lexo bisedat e Inbox-it"}
             </button>
@@ -152,6 +156,20 @@ export function ConversationTraining({ slug }: { slug: string }) {
               {busy === "upload" ? `Po ngarkoj ${uploaded}/${files.length}…` : files.length > 1 ? `Ngarko ${files.length} skedarë` : "Ngarko eksportin"}
             </button>
           </div>
+        </div>
+        <div className="training-history training-analysis">
+          <h3>Çfarë të lexojë AI pas importit</h3>
+          <label className="training-owner">
+            <span>Sa biseda</span>
+            <select className="field" value={analysisLimit} disabled={disabled} onChange={(e) => setAnalysisLimit(Number(e.target.value))}>
+              {(state?.analysisLimits ?? [10, 25, 50]).map((n) => <option key={n} value={n}>{n} bisedat më të reja</option>)}
+            </select>
+          </label>
+          <label className="training-check">
+            <input type="checkbox" checked={onlyContacts} disabled={disabled} onChange={(e) => setOnlyContacts(e.target.checked)} />
+            <span>Vetëm bisedat ku klienti ka dërguar numër telefoni ose email (zakonisht ata që kanë bërë porosi).</span>
+          </label>
+          <p className="training-note">Importohen të gjitha bisedat e periudhës; AI lexon vetëm këto. Të tjerat mbeten për një lexim të mëvonshëm.</p>
         </div>
         <p className="training-note">Gjatë trajnimit nuk i dërgohet asnjë mesazh klientëve dhe nuk ndryshon asgjë te Agjenti, përveç bisedave që zgjedh t&apos;i shtosh te Bisedat (ato mbeten edhe kur fshin importin). Emrat, telefonat dhe email-et hiqen. Bisedat e importuara fshihen vetë pas 30 ditësh, ose kur t&apos;i fshish ti.</p>
         {error && <p className="training-error" role="alert">{error}</p>}

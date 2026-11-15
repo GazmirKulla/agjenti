@@ -6,13 +6,13 @@ import { loadLearningSettings } from "@/lib/conversation-learning/settings";
 import { removeUploads, TRAINING_BUCKET, type SessionInput, type UploadedFile } from "./job";
 import { applySuggestion, type ApplyRow } from "./apply";
 import { approvable, bulkSafe, parseEdit, type ReviewRow } from "./review";
-import { HISTORY_LIMITS, parseHistoryOptions } from "./inbox-import";
+import { ANALYSIS_LIMITS, IMPORT_PERIODS, parseAnalysisOptions, parseHistoryOptions } from "./inbox-import";
 
 export const MAX_FILES = 20;
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
 const EXTENSIONS = new Set(["zip", "json", "html", "htm"]);
 
-export const sessionColumns = "id,source,status,stage,progress,stats,error,created_at,updated_at,finished_at,expires_at,next_attempt_at,leased_until,history:input->history,historyOnly:input->historyOnly";
+export const sessionColumns = "id,source,status,stage,progress,stats,error,created_at,updated_at,finished_at,expires_at,next_attempt_at,leased_until,history:input->history,historyOnly:input->historyOnly,analysis:input->analysis";
 
 const startError = (message: string) => {
   if (message.includes("session_active")) return new PersistenceError("Një import është ende në punë. Prit sa të mbarojë.", 409);
@@ -36,11 +36,9 @@ export async function listSessions(businessId: string) {
     db.from("conversation_training_messages").select("id", { count: "exact", head: true }).eq("business_id", businessId),
   ]);
   if (sessions.error) throw new PersistenceError("Importet nuk u ngarkuan.", sessions.error.code === "42P01" || sessions.error.code === "PGRST205" ? 503 : 500);
-  return { enabled: settings.enabled, lookbackDays: Math.min(settings.lookback_days, 365), instagramHistory: settings.instagram_history, historyLimits: HISTORY_LIMITS, sessions: sessions.data ?? [], keptMessages: kept.count ?? 0 };
+  return { enabled: settings.enabled, lookbackDays: Math.min(settings.lookback_days, 365), instagramHistory: settings.instagram_history, importPeriods: IMPORT_PERIODS, analysisLimits: ANALYSIS_LIMITS, sessions: sessions.data ?? [], keptMessages: kept.count ?? 0 };
 }
 
-/** `limit` is how many Instagram conversations are read from Meta (50, 100 or 200);
- * `addToInbox` also writes them into the business's Conversations. */
 /** An import left waiting: its step is overdue, or the worker holding it stopped (its lease
  * ran out). The chain of steps normally moves on by itself; this lets an open page restart it. */
 export function stalled(rows: { status: string; next_attempt_at?: string | null; leased_until?: string | null }[], now = Date.now()) {
@@ -48,11 +46,19 @@ export function stalled(rows: { status: string; next_attempt_at?: string | null;
     || (s.status === "running" && !!s.leased_until && Date.parse(s.leased_until) < now));
 }
 
-export async function startInbox(businessId: string, userId: string, input: { limit?: unknown; addToInbox?: unknown } = {}) {
+function analysisFrom(input: unknown) {
+  const analysis = parseAnalysisOptions(input && typeof input === "object" ? input : undefined);
+  if (!analysis) throw new PersistenceError(`Zgjidh sa biseda të lexojë AI: ${ANALYSIS_LIMITS.join(", ")}.`, 400);
+  return analysis;
+}
+
+/** `days` is the period imported from the Inbox and Instagram (30, 90 or 180); `addToInbox`
+ * also writes Instagram's history into Conversations; `analysis` is what the AI then reads. */
+export async function startInbox(businessId: string, userId: string, input: { days?: unknown; addToInbox?: unknown; analysis?: unknown } = {}) {
   await requireEnabled();
   const history = parseHistoryOptions(input);
-  if (!history) throw new PersistenceError(`Zgjidh ${HISTORY_LIMITS.join(", ")} biseda.`, 400);
-  const sessionInput: SessionInput = { history };
+  if (!history) throw new PersistenceError("Zgjidh muajin e fundit, 3 ose 6 muajt e fundit.", 400);
+  const sessionInput: SessionInput = { history, analysis: analysisFrom(input.analysis) };
   const { data, error } = await createServiceSupabase().rpc("start_conversation_training", { p_business: businessId, p_user: userId, p_source: "inbox", p_input: sessionInput, p_status: "queued" });
   if (error) throw startError(error.message);
   return { id: data as string };
@@ -75,7 +81,7 @@ export async function retryInboxHistory(businessId: string, userId: string, id: 
 
 /** Validates the files the owner chose and returns one signed upload URL per file:
  * the browser sends them straight to private storage, never through this server. */
-export async function prepareUpload(businessId: string, userId: string, input: { files?: unknown; ownerName?: unknown }) {
+export async function prepareUpload(businessId: string, userId: string, input: { files?: unknown; ownerName?: unknown; analysis?: unknown }) {
   await requireEnabled();
   const list = Array.isArray(input.files) ? input.files : [];
   if (!list.length || list.length > MAX_FILES) throw new PersistenceError(`Zgjidh nga 1 deri në ${MAX_FILES} skedarë.`, 400);
@@ -90,7 +96,7 @@ export async function prepareUpload(businessId: string, userId: string, input: {
     if (!Number.isFinite(size) || size <= 0 || size > MAX_FILE_BYTES) throw new PersistenceError("Çdo skedar duhet të jetë deri në 100 MB. Shkarko nga Instagram vetëm «Mesazhet».", 400);
     return { name, size, path: `${businessId}/${randomUUID()}.${ext === "htm" ? "html" : ext}` };
   });
-  const sessionInput: SessionInput = { files, ...(ownerName ? { ownerName } : {}) };
+  const sessionInput: SessionInput = { files, ...(ownerName ? { ownerName } : {}), analysis: analysisFrom(input.analysis) };
   const db = createServiceSupabase();
   const { data: id, error } = await db.rpc("start_conversation_training", { p_business: businessId, p_user: userId, p_source: "instagram_export", p_input: sessionInput, p_status: "uploading" });
   if (error) throw startError(error.message);

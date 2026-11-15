@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   } catch (error) { return failure(error); }
 }
 
-/** `inbox` starts reading the Inbox (with `limit` Instagram conversations, and `addToInbox`
+/** `inbox` starts reading the Inbox (over `days`, with `addToInbox`
  * to write them into Conversations; `retry_inbox` repeats only that adding, without duplicates); `upload` prepares direct uploads of an Instagram
  * export and `uploaded` starts reading them; `delete` removes one import, `delete_all`
  * every imported conversation. `decide` approves or rejects one suggestion, `approve_safe`
@@ -51,9 +51,9 @@ export async function POST(request: Request) {
   if (!permittedWrite(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   try {
     const { user, businessId } = await accessFor(request);
-    const body = (await request.json().catch(() => ({}))) as { action?: string; id?: unknown; files?: unknown; ownerName?: unknown; decision?: unknown; edited?: unknown; message?: unknown; choice?: unknown; preferred?: unknown; limit?: unknown; addToInbox?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { action?: string; id?: unknown; files?: unknown; ownerName?: unknown; decision?: unknown; edited?: unknown; message?: unknown; choice?: unknown; preferred?: unknown; days?: unknown; addToInbox?: unknown; analysis?: unknown };
     switch (body.action) {
-      case "inbox": { const result = await startInbox(businessId, user.id, { limit: body.limit, addToInbox: body.addToInbox }); wake(businessId, request); return json(result, 202); }
+      case "inbox": { const result = await startInbox(businessId, user.id, { days: body.days, addToInbox: body.addToInbox, analysis: body.analysis }); wake(businessId, request); return json(result, 202); }
       case "retry_inbox": { const result = await retryInboxHistory(businessId, user.id, body.id); wake(businessId, request); return json(result, 202); }
       case "upload": return json(await prepareUpload(businessId, user.id, body));
       case "uploaded": { const result = await confirmUpload(businessId, body.id); wake(businessId, request); return json(result, 202); }

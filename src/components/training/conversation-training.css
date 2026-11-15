@@ -18,6 +18,8 @@
 .training-source .btn { justify-self: start; min-height: 44px; }
 .training-owner { display: grid; gap: 4px; font-size: 12px; color: var(--ink-muted); }
 .training-history { display: grid; gap: 8px; }
+.training-analysis { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.training-analysis h3 { margin: 0; font-size: 14px; }
 .training-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--ink-muted); line-height: 1.4; }
 .training-check input { margin-top: 2px; }
 .training-owner em { font-style: normal; opacity: .8; }

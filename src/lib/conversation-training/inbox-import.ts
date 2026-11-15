@@ -1,20 +1,35 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transcript } from "@/lib/conversation-learning/transcripts";
 
-/** How many Instagram conversations one import reads from Meta; the owner chooses.
- * "all" reads every conversation active within the platform's lookback period. */
-export const HISTORY_LIMITS = [50, 100, 200, "all"] as const;
-export type HistoryLimit = (typeof HISTORY_LIMITS)[number];
-export const DEFAULT_HISTORY_LIMIT: HistoryLimit = 200;
+/** What one import brings in: the conversations active in the last `days` (about one,
+ * three or six months), from the Inbox and Instagram's history; the owner chooses. */
+export const IMPORT_PERIODS = [30, 90, 180] as const;
+export type ImportPeriod = (typeof IMPORT_PERIODS)[number];
+export const DEFAULT_IMPORT_PERIOD: ImportPeriod = 90;
 
-export type HistoryOptions = { limit: HistoryLimit; addToInbox: boolean };
+export type HistoryOptions = { days: ImportPeriod; addToInbox: boolean };
 
-/** The owner's choice, validated: only the offered counts, and adding is off unless asked. */
-export function parseHistoryOptions(input: { limit?: unknown; addToInbox?: unknown }): HistoryOptions | null {
-  const limit = input.limit === undefined ? DEFAULT_HISTORY_LIMIT : input.limit;
-  if (!HISTORY_LIMITS.includes(limit as HistoryLimit)) return null;
+/** The owner's choice, validated: only the offered periods, and adding is off unless asked.
+ * An import started before periods existed (it had a count) keeps the default period. */
+export function parseHistoryOptions(input: { days?: unknown; addToInbox?: unknown }): HistoryOptions | null {
+  const days = input.days === undefined ? DEFAULT_IMPORT_PERIOD : input.days;
+  if (!IMPORT_PERIODS.includes(days as ImportPeriod)) return null;
   if (input.addToInbox !== undefined && typeof input.addToInbox !== "boolean") return null;
-  return { limit: limit as HistoryLimit, addToInbox: input.addToInbox === true };
+  return { days: days as ImportPeriod, addToInbox: input.addToInbox === true };
+}
+
+/** How many conversations the AI reads after an import (at most 50), and whether only
+ * those where the customer sent a phone number or an email, which usually means an order. */
+export const ANALYSIS_LIMITS = [10, 25, 50] as const;
+export type AnalysisLimit = (typeof ANALYSIS_LIMITS)[number];
+export type AnalysisOptions = { limit: AnalysisLimit; onlyContacts: boolean };
+export const DEFAULT_ANALYSIS: AnalysisOptions = { limit: 50, onlyContacts: false };
+
+export function parseAnalysisOptions(input: { limit?: unknown; onlyContacts?: unknown } | null | undefined): AnalysisOptions | null {
+  const limit = input?.limit === undefined ? DEFAULT_ANALYSIS.limit : input.limit;
+  if (!ANALYSIS_LIMITS.includes(limit as AnalysisLimit)) return null;
+  if (input?.onlyContacts !== undefined && typeof input.onlyContacts !== "boolean") return null;
+  return { limit: limit as AnalysisLimit, onlyContacts: input?.onlyContacts === true };
 }
 
 const CHUNK = 200;
