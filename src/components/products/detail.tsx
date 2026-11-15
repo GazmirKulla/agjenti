@@ -64,7 +64,6 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
     Object.entries(options).map(([key, value]) => `${choices.find(f => f.key === key)?.label ?? key}: ${value}`).join(" · ");
   const ready = [
     ["Çmimi ose “Sipas kërkesës”", priceReady(product)],
-    ["Lloji i produktit", Boolean(product.product_type_id)],
     ["Workflow për porosinë", Boolean(product.workflow_id || product.visual_workflow || businessWorkflow?.active)],
     ["Foto e produktit", Boolean(product.image_url)],
     ["Aktiv në katalog", inCatalog],

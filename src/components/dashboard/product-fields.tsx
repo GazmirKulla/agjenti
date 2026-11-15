@@ -226,7 +226,7 @@ export function ProductFields({
         <legend className="font-semibold">Workflow dhe produkti</legend>
         <ProductBusinessWorkflow slug={slug} workflow={workflows.find(w => w.businessWorkflow)?.businessWorkflow} product={product?.id ? { ...product, id: product.id } : undefined} />
         <label className="form-label">
-          Lloji i produktit
+          Shablloni i hapave të porosisë <span className="muted-copy">(opsional)</span>
           <select
             name="product_type_id"
             className="field"
@@ -234,7 +234,7 @@ export function ProductFields({
             required={requireType}
           >
             <option value="">
-              {requireType ? "Zgjidh llojin" : "Pa lloj"}
+              {requireType ? "Zgjidh shabllonin" : "Pa shabllon (te një produkt i ri zgjidhet vetë)"}
             </option>
             {types.map((type) => (
               <option key={type.id} value={type.id}>

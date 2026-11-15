@@ -35,7 +35,8 @@ export type ProductRow = {
 export const productCatalogColumns = "id,name,description,sku,image_url,source,external_id,price_amount,price_mode,price_max,price_unit,currency,product_type_id,workflow_id,is_active,item_kind,attributes,availability,archived_at,created_at,updated_at";
 export type Option = { id: string; name: string; description?: string | null; businessWorkflow?: BusinessWorkflow };
 export function isMapped(p: ProductRow) {
-  return Boolean(p.product_type_id && (p.workflow_id || p.visual_workflow || p.business_workflow?.active));
+  // Linked to the steps of an order; the product type is only the template those steps may come from.
+  return Boolean(p.workflow_id || p.visual_workflow || p.business_workflow?.active);
 }
 export function catalogStatus(p: ProductRow) {
   return p.archived_at ? "archived" : p.is_active ? "active" : !isMapped(p) ? "unlinked" : "draft";

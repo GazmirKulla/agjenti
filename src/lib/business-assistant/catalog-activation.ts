@@ -52,7 +52,7 @@ export async function inspectCatalogActivation(actor: Actor, key: unknown): Prom
         const linked = await createServiceSupabase().from("workflows").select("id").eq("business_id", actor.businessId).eq("id", product.workflow_id).maybeSingle();
         if (linked.error || !linked.data) throw new Error("Lidhja ekzistuese e produktit nuk u verifikua. Korrigjoje para aktivizimit.");
       }
-    } catch { problem = "Produkti nuk u verifikua për aktivizim. Duhen çmim, monedhë, lloj aktiv dhe lidhje të vlefshme. Rifresko konfigurimin nëse këto janë plotësuar."; }
+    } catch { problem = "Produkti nuk u verifikua për aktivizim. Duhen çmim, monedhë dhe lidhje të vlefshme. Rifresko konfigurimin nëse këto janë plotësuar."; }
     const ticket: Ticket = { purpose: "assistant-catalog-activation-v1", capability, userId: actor.userId, businessId: actor.businessId,
       productId: product.id, updatedAt: product.updated_at ?? "", expires: Date.now() + 10 * 60000 };
     return { id: product.id, name: product.name, price: product.price_amount, currency: product.currency,

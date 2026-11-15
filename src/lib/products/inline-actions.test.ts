@@ -88,11 +88,19 @@ describe("inline product configuration", () => {
   });
   it("names activation requirements and refuses foreign workflows or inactive types", async () => {
     product.workflow_id = product.product_type_id = null; product.price_amount = null;
-    expect((await activate()).error).toMatch(/çmimi.*monedha.*lloji/);
+    expect((await activate()).error).toMatch(/çmimi.*monedha/);
     product.workflow_id = workflow; product.product_type_id = type; product.price_amount = 0;
     workflowAvailable = false; expect((await activate()).error).toContain("këtë biznes");
     workflowAvailable = true; typeAvailable = false; expect((await activate()).error).toContain("nuk është aktiv");
     expect(m.update).not.toHaveBeenCalled();
+  });
+  it("activates a priced product without a product type: the type is only a template of order steps", async () => {
+    product.product_type_id = null; product.workflow_id = null; product.price_amount = 500;
+    expect((await activate()).product).toMatchObject({ is_active: true, product_type_id: null });
+  });
+  it("keeps an active product active when its product type is removed", async () => {
+    product.is_active = true; product.price_amount = 500;
+    expect((await updateCatalogField("test", { id, field: "product_type_id", value: null, updatedAt: stamp })).product?.is_active).toBe(true);
   });
   it("activates a valid free product and updates only its status with tenant and revision guards", async () => {
     product.price_amount = 0;

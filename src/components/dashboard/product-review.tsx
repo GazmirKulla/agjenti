@@ -184,9 +184,9 @@ export function ProductReview({
       </ul>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="form-label">
-          Lloji për këto produkte
+          Shablloni i hapave të porosisë (opsional)
           <select className="field" value={typeId} onChange={(event) => setTypeId(event.target.value)}>
-            <option value="">Pa lloj</option>
+            <option value="">Zgjidhet vetë sipas produktit</option>
             {types.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.name}

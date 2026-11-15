@@ -51,7 +51,6 @@ export function ProductEditor({
   const checks = [
     ["Emri i produktit", preview.name.trim().length >= 2],
     ["Çmimi i produktit", preview.price !== null || preview.mode === "request"],
-    ["Lloji i produktit", !!preview.type],
     ["Workflow për veprime (veçmas katalogut)", !!preview.workflow || !!product?.visual_workflow || !!businessWorkflow?.active],
     ["Foto e produktit", !!preview.image],
   ] as const;

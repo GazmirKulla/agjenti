@@ -42,8 +42,6 @@ export async function updateCatalogField(actor: CommandActor, change: Change): P
     visual = (await publishedProductBindings(businessId)).get(next.id);
   }
   catch { /* Workflow metadata is not a prerequisite for catalog availability. */ }
-  const demoted = next.is_active && !next.product_type_id && change.field !== "is_active";
-  if (demoted) changes.is_active = next.is_active = false;
   if (next.is_active) {
     try { await requireCatalogActivation(businessId, [next]); }
     catch (error) { return { error: error instanceof Error ? error.message : "Nuk u verifikua katalogu." }; }
@@ -67,5 +65,5 @@ export async function updateCatalogField(actor: CommandActor, change: Change): P
   const saved = await write.select(productCatalogColumns).maybeSingle();
   if (saved.error) return { error: "Ndryshimi nuk u ruajt. Provo përsëri." };
   if (!saved.data) return { error: "Produkti ndryshoi ndërkohë. Rifresko listën dhe provo përsëri." };
-  return { product: { ...saved.data, visual_workflow: visual ?? null, business_workflow: businessWorkflow } as ProductRow, success: demoted ? "U ruajt. Produkti kaloi në draft sepse lidhja u hoq." : "U ruajt." };
+  return { product: { ...saved.data, visual_workflow: visual ?? null, business_workflow: businessWorkflow } as ProductRow, success: "U ruajt." };
 }
