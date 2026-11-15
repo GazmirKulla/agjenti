@@ -4,7 +4,7 @@ import { requireBusinessAccess } from "@/lib/tenant/access";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { continueTraining, workerOrigin } from "@/lib/conversation-training/continue";
 import { compareReplies, listTestMessages, recordTestFeedback } from "@/lib/conversation-training/compare";
-import { applyApproved, approveSafe, confirmUpload, decideSuggestion, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, startInbox } from "@/lib/conversation-training/sessions";
+import { applyApproved, approveSafe, confirmUpload, decideSuggestion, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, retryInboxHistory, startInbox } from "@/lib/conversation-training/sessions";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 }
 
 /** `inbox` starts reading the Inbox (with `limit` Instagram conversations, and `addToInbox`
- * to write them into Conversations); `upload` prepares direct uploads of an Instagram
+ * to write them into Conversations; `retry_inbox` repeats only that adding, without duplicates); `upload` prepares direct uploads of an Instagram
  * export and `uploaded` starts reading them; `delete` removes one import, `delete_all`
  * every imported conversation. `decide` approves or rejects one suggestion, `approve_safe`
  * the safe ones together, and `apply` writes the approved ones through the platform's
@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as { action?: string; id?: unknown; files?: unknown; ownerName?: unknown; decision?: unknown; edited?: unknown; message?: unknown; choice?: unknown; preferred?: unknown; limit?: unknown; addToInbox?: unknown };
     switch (body.action) {
       case "inbox": { const result = await startInbox(businessId, user.id, { limit: body.limit, addToInbox: body.addToInbox }); wake(businessId, request); return json(result, 202); }
+      case "retry_inbox": { const result = await retryInboxHistory(businessId, user.id, body.id); wake(businessId, request); return json(result, 202); }
       case "upload": return json(await prepareUpload(businessId, user.id, body));
       case "uploaded": { const result = await confirmUpload(businessId, body.id); wake(businessId, request); return json(result, 202); }
       case "delete": return json(await deleteSession(businessId, body.id));

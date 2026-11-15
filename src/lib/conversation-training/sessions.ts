@@ -12,7 +12,7 @@ export const MAX_FILES = 20;
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
 const EXTENSIONS = new Set(["zip", "json", "html", "htm"]);
 
-export const sessionColumns = "id,source,status,stage,progress,stats,error,created_at,updated_at,finished_at,expires_at";
+export const sessionColumns = "id,source,status,stage,progress,stats,error,created_at,updated_at,finished_at,expires_at,history:input->history,historyOnly:input->historyOnly";
 
 const startError = (message: string) => {
   if (message.includes("session_active")) return new PersistenceError("Një import është ende në punë. Prit sa të mbarojë.", 409);
@@ -46,6 +46,21 @@ export async function startInbox(businessId: string, userId: string, input: { li
   const history = parseHistoryOptions(input);
   if (!history) throw new PersistenceError(`Zgjidh ${HISTORY_LIMITS.join(", ")} biseda.`, 400);
   const sessionInput: SessionInput = { history };
+  const { data, error } = await createServiceSupabase().rpc("start_conversation_training", { p_business: businessId, p_user: userId, p_source: "inbox", p_input: sessionInput, p_status: "queued" });
+  if (error) throw startError(error.message);
+  return { id: data as string };
+}
+
+/** Runs again only the adding of Instagram history to Conversations, with the choices of
+ * import `id`, e.g. after it failed. Messages already there are skipped by their Instagram
+ * id, so nothing is added twice; nothing is learned or analysed again. */
+export async function retryInboxHistory(businessId: string, userId: string, id: unknown) {
+  await requireEnabled();
+  const row = await session(businessId, id);
+  if (row.source !== "inbox" || !row.input.history?.addToInbox) throw new PersistenceError("Ky import nuk shtonte biseda te Bisedat.", 409);
+  const history = parseHistoryOptions(row.input.history);
+  if (!history) throw new PersistenceError("Zgjedhjet e këtij importi nuk vlejnë më.", 409);
+  const sessionInput: SessionInput = { history, historyOnly: true };
   const { data, error } = await createServiceSupabase().rpc("start_conversation_training", { p_business: businessId, p_user: userId, p_source: "inbox", p_input: sessionInput, p_status: "queued" });
   if (error) throw startError(error.message);
   return { id: data as string };

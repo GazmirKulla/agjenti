@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { normalizeLearningSettings, defaultLearningSettings } from "./settings";
 import { cleanLines, mergeTranscripts, redact, transcriptText, validSuggestions, type Transcript } from "./transcripts";
-import { instagramHistory } from "./instagram-history";
+import { instagramHistory, instagramHistoryPage } from "./instagram-history";
 
 describe("learning settings", () => {
   it("uses the defaults for missing or broken values and keeps limits", () => {
@@ -80,5 +80,35 @@ describe("instagramHistory", () => {
     expect(out[0].key).toBe("instagram:cust1");
     expect(out[0].lines.map((l) => l.speaker)).toEqual(["biznesi", "agjenti", "klienti"]);
     expect(calls).toContain("c1 messages.limit(20){id,created_time,from,message}");
+  });
+});
+
+describe("instagramHistoryPage", () => {
+  const conv = (id: string, day: number) => ({ id, updated_time: `2026-11-${String(day).padStart(2, "0")}T10:00:00+0000`, participants: { data: [{ id: "biz" }, { id: `cust-${id}`, username: `u${id}` }] } });
+  const messages = { messages: { data: [{ id: "m", created_time: "2026-11-10T10:00:00+0000", from: { id: "x" }, message: "Përshëndetje" }] } };
+
+  it("resumes from the cursor and asks for no more than is left", async () => {
+    const asked: Record<string, string>[] = [];
+    const graph = async (path: string, params: Record<string, string>) => {
+      if (path !== "me/conversations") return messages;
+      asked.push(params);
+      return params.after === "p2"
+        ? { data: [conv("c3", 12)] }
+        : { data: [conv("c1", 14), conv("c2", 13)], paging: { cursors: { after: "p2" }, next: "https://next" } };
+    };
+    const first = await instagramHistoryPage({ graph, accountId: "biz", since: new Date("2026-10-01"), perConversation: 20, max: 2 });
+    expect(asked[0].limit).toBe("2");
+    expect(first).toMatchObject({ listed: 2, after: "p2" });
+    expect(first.threads.map((t) => t.customer)).toEqual([{ id: "cust-c1", username: "uc1" }, { id: "cust-c2", username: "uc2" }]);
+    const second = await instagramHistoryPage({ graph, accountId: "biz", since: new Date("2026-10-01"), perConversation: 20, max: 25, after: first.after });
+    expect(second).toMatchObject({ listed: 1, after: null });
+  });
+
+  it("ends at the period even when Meta has more pages", async () => {
+    const graph = async (path: string) => path === "me/conversations"
+      ? { data: [conv("c1", 14), { ...conv("old", 1), updated_time: "2026-01-01T10:00:00+0000" }], paging: { cursors: { after: "p2" }, next: "https://next" } }
+      : messages;
+    const page = await instagramHistoryPage({ graph, accountId: "biz", since: new Date("2026-10-01"), perConversation: 20, max: 25 });
+    expect(page).toMatchObject({ listed: 1, after: null });
   });
 });

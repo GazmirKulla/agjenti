@@ -8,8 +8,9 @@ type Session = {
   stage: string; progress: { done?: number; total?: number; label?: string }; error: string | null;
   stats: { suggestions?: Record<string, number>; analysedConversations?: number; styleChanges?: string[]; conversations?: number; messages?: number; duplicates?: number; customerMessages?: number; ownerMessages?: number; agentMessages?: number; skippedFiles?: number; groupConversations?: number; firstAt?: string | null; lastAt?: string | null; warnings?: string[]; inbox?: { conversations: number; created: number; messages: number } };
   created_at: string; expires_at: string;
+  history?: { limit: number | "all"; addToInbox: boolean } | null; historyOnly?: boolean | null;
 };
-type State = { enabled?: boolean; lookbackDays?: number; instagramHistory?: boolean; historyLimits?: number[]; sessions: Session[]; keptMessages: number };
+type State = { enabled?: boolean; lookbackDays?: number; instagramHistory?: boolean; historyLimits?: (number | "all")[]; sessions: Session[]; keptMessages: number };
 
 const ACTIVE = new Set(["uploading", "queued", "running"]);
 const date = (value?: string | null) => (value ? new Date(value).toLocaleDateString("sq-AL", { day: "numeric", month: "short", year: "numeric" }) : "");
@@ -21,13 +22,13 @@ export function ConversationTraining({ slug }: { slug: string }) {
   const endpoint = `/api/conversation-training?slug=${encodeURIComponent(slug)}`;
   const [state, setState] = useState<State | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState<"" | "inbox" | "upload" | "delete">("");
+  const [busy, setBusy] = useState<"" | "inbox" | "upload" | "delete" | "retry">("");
   const [uploaded, setUploaded] = useState(0);
   const [files, setFiles] = useState<File[]>([]);
   const [ownerName, setOwnerName] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const [reviewing, setReviewing] = useState<string | null>(null);
-  const [historyLimit, setHistoryLimit] = useState(50);
+  const [historyLimit, setHistoryLimit] = useState<number | "all">(50);
   const [addToInbox, setAddToInbox] = useState(false);
 
   const load = useCallback(async () => {
@@ -99,6 +100,12 @@ export function ConversationTraining({ slug }: { slug: string }) {
     setFiles(large ? [] : chosen);
   }
 
+  async function retry(id: string) {
+    setBusy("retry"); setError("");
+    try { await post({ action: "retry_inbox", id }); await load(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Riprovimi nuk u nis."); }
+    finally { setBusy(""); }
+  }
   const disabled = !!busy || !!active;
   return (
     <div className="training">
@@ -118,8 +125,8 @@ export function ConversationTraining({ slug }: { slug: string }) {
               <div className="training-history">
                 <label className="training-owner">
                   <span>Sa biseda të lexohen nga Instagram</span>
-                  <select className="field" value={historyLimit} disabled={disabled} onChange={(e) => setHistoryLimit(Number(e.target.value))}>
-                    {(state?.historyLimits ?? [50, 100, 200]).map((n) => <option key={n} value={n}>{n} bisedat e fundit</option>)}
+                  <select className="field" value={historyLimit} disabled={disabled} onChange={(e) => setHistoryLimit(e.target.value === "all" ? "all" : Number(e.target.value))}>
+                    {(state?.historyLimits ?? [50, 100, 200, "all"]).map((n) => <option key={n} value={n}>{n === "all" ? `Të gjitha (të ${state?.lookbackDays ?? 90} ditëve të fundit)` : `${n} bisedat e fundit`}</option>)}
                   </select>
                 </label>
                 <label className="training-check">
@@ -158,7 +165,7 @@ export function ConversationTraining({ slug }: { slug: string }) {
               return (
                 <li key={s.id} className={`training-session is-${s.status}`}>
                   <div className="training-session-head">
-                    <b>{s.source === "inbox" ? "Inbox-i" : "Eksporti i Instagram-it"}</b>
+                    <b>{s.historyOnly ? "Shtimi te Bisedat (riprovim)" : s.source === "inbox" ? "Inbox-i" : "Eksporti i Instagram-it"}</b>
                     <span>{date(s.created_at)}</span>
                   </div>
                   {ACTIVE.has(s.status) && (
@@ -191,6 +198,11 @@ export function ConversationTraining({ slug }: { slug: string }) {
                   {reviewing === s.id && <TrainingReview endpoint={endpoint} sessionId={s.id} onApplied={() => void load()} />}
                   {s.stats.warnings?.map((w) => <p key={w} className="training-warning">{w}</p>)}
                   {(s.status === "failed" || s.status === "cancelled") && <p className="training-error">{s.error || "Importi nuk përfundoi."}</p>}
+                  {s.source === "inbox" && s.history?.addToInbox && !ACTIVE.has(s.status) && (
+                    <button type="button" className="btn btn-ghost training-delete" disabled={disabled} onClick={() => void retry(s.id)}>
+                      {busy === "retry" ? "Po nis…" : "Provo përsëri shtimin te Bisedat"}
+                    </button>
+                  )}
                   <button type="button" className="btn btn-ghost training-delete" disabled={!!busy} onClick={() => void remove(s.id)}>Fshi</button>
                 </li>
               );

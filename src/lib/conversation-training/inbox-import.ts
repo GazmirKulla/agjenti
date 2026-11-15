@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transcript } from "@/lib/conversation-learning/transcripts";
 
-/** How many Instagram conversations one import reads from Meta; the owner chooses. */
-export const HISTORY_LIMITS = [50, 100, 200] as const;
+/** How many Instagram conversations one import reads from Meta; the owner chooses.
+ * "all" reads every conversation active within the platform's lookback period. */
+export const HISTORY_LIMITS = [50, 100, 200, "all"] as const;
 export type HistoryLimit = (typeof HISTORY_LIMITS)[number];
 export const DEFAULT_HISTORY_LIMIT: HistoryLimit = 200;
 
@@ -18,6 +19,20 @@ export function parseHistoryOptions(input: { limit?: unknown; addToInbox?: unkno
 
 const CHUNK = 200;
 const chunks = <T,>(items: T[], size = CHUNK) => Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, (i + 1) * size));
+/** Values filtered with `.in()` travel in the request URL, and Instagram message ids are
+ * long (~150 characters): groups stay within this many encoded characters. */
+export const URL_BUDGET = 4_000;
+export function urlChunks(values: string[], budget = URL_BUDGET) {
+  const out: string[][] = [];
+  let current: string[] = [], size = 0;
+  for (const value of values) {
+    const length = encodeURIComponent(`"${value}",`).length;
+    if (current.length && size + length > budget) { out.push(current); current = []; size = 0; }
+    current.push(value); size += length;
+  }
+  if (current.length) out.push(current);
+  return out;
+}
 
 type Row = {
   business_id: string; conversation_id: string; instagram_connection_id: string;
@@ -44,12 +59,12 @@ export async function addHistoryToInbox(db: SupabaseClient, params: { businessId
   if (!ids.length) return { conversations: 0, created: 0, messages: 0 };
 
   const known = new Set<string>();
-  for (const part of chunks(ids)) {
+  for (const part of urlChunks(ids)) {
     const [stored, ours] = await Promise.all([
       db.from("messages").select("external_message_id").eq("business_id", businessId).eq("instagram_connection_id", connectionId).in("external_message_id", part),
       db.from("message_transport_parts").select("external_message_id").eq("business_id", businessId).eq("connection_id", connectionId).in("external_message_id", part),
     ]);
-    if (stored.error || ours.error) throw new Error("inbox_lookup_failed");
+    if (stored.error || ours.error) throw new Error(`inbox_lookup_failed:${(stored.error ?? ours.error)?.code ?? ""} ${(stored.error ?? ours.error)?.message ?? ""}`);
     for (const row of [...(stored.data ?? []), ...(ours.data ?? [])]) if (row.external_message_id) known.add(row.external_message_id as string);
   }
 
@@ -61,11 +76,11 @@ export async function addHistoryToInbox(db: SupabaseClient, params: { businessId
   if (!pending.length) return { conversations: 0, created: 0, messages: 0 };
 
   const latest = new Map<string, { id: string; last: string | null }>();
-  for (const part of chunks(pending.map((t) => t.customer.id))) {
+  for (const part of urlChunks(pending.map((t) => t.customer.id))) {
     const { data, error } = await db.from("conversations").select("id,instagram_participant_id,last_message_at,created_at")
       .eq("business_id", businessId).eq("instagram_connection_id", connectionId).in("instagram_participant_id", part)
       .order("created_at", { ascending: false });
-    if (error) throw new Error("inbox_lookup_failed");
+    if (error) throw new Error(`inbox_lookup_failed:${error.code ?? ""} ${error.message}`);
     for (const row of data ?? []) {
       const participant = row.instagram_participant_id as string;
       if (!latest.has(participant)) latest.set(participant, { id: row.id as string, last: row.last_message_at as string | null });
@@ -85,7 +100,7 @@ export async function addHistoryToInbox(db: SupabaseClient, params: { businessId
         last_message_at: last.at, last_inbound_at: inbound?.at ?? null, last_message_preview: last.text.slice(0, 140),
       };
     })).select("id,instagram_participant_id");
-    if (error) throw new Error("inbox_conversation_failed");
+    if (error) throw new Error(`inbox_conversation_failed:${error.code ?? ""} ${error.message}`);
     for (const row of data ?? []) latest.set(row.instagram_participant_id as string, { id: row.id as string, last: null });
   }
 
@@ -120,7 +135,7 @@ export async function addHistoryToInbox(db: SupabaseClient, params: { businessId
 async function insertMessages(db: SupabaseClient, rows: Row[]) {
   const { error } = await db.from("messages").insert(rows);
   if (!error) return rows.length;
-  if (error.code !== "23505") throw new Error("inbox_message_failed");
+  if (error.code !== "23505") throw new Error(`inbox_message_failed:${error.code ?? ""} ${error.message}`);
   let added = 0;
   for (const row of rows) {
     const one = await db.from("messages").insert(row);

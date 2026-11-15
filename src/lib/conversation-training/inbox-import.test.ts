@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transcript } from "@/lib/conversation-learning/transcripts";
-import { addHistoryToInbox, parseHistoryOptions } from "./inbox-import";
+import { addHistoryToInbox, parseHistoryOptions, URL_BUDGET, urlChunks } from "./inbox-import";
 
 const BUSINESS = "2af8cfe5-5f63-47a1-baf3-959cfea49b79";
 const OTHER = "11111111-2222-3333-4444-555555555555";
@@ -59,8 +59,20 @@ describe("history options", () => {
     expect(parseHistoryOptions({ limit: 50 })).toEqual({ limit: 50, addToInbox: false });
     expect(parseHistoryOptions({ limit: 100, addToInbox: true })).toEqual({ limit: 100, addToInbox: true });
     expect(parseHistoryOptions({})).toEqual({ limit: 200, addToInbox: false });
-    for (const limit of [0, 75, 201, "50", 1e6, null]) expect(parseHistoryOptions({ limit })).toBeNull();
+    expect(parseHistoryOptions({ limit: "all", addToInbox: true })).toEqual({ limit: "all", addToInbox: true });
+    for (const limit of [0, 75, 201, "50", "ALL", 1e6, null]) expect(parseHistoryOptions({ limit })).toBeNull();
     expect(parseHistoryOptions({ limit: 50, addToInbox: "yes" })).toBeNull();
+  });
+});
+
+describe("lookups by Instagram id", () => {
+  it("split long ids so each request URL stays short, keeping every id once", () => {
+    const ids = Array.from({ length: 1000 }, (_, i) => `aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDAx${String(i).padStart(4, "0")}${"x".repeat(110)}`);
+    const parts = urlChunks(ids);
+    expect(parts.flat()).toEqual(ids);
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) expect(part.map((v) => encodeURIComponent(`"${v}",`)).join("").length).toBeLessThanOrEqual(URL_BUDGET);
+    expect(urlChunks([])).toEqual([]);
   });
 });
 

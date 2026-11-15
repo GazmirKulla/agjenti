@@ -1,6 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
-import { instagramGraph, instagramHistory } from "@/lib/conversation-learning/instagram-history";
+import { instagramGraph, instagramHistoryPage } from "@/lib/conversation-learning/instagram-history";
 import { loadLearningSettings } from "@/lib/conversation-learning/settings";
 import { ArchiveError, isZip, readArchive, ARCHIVE_LIMITS } from "./archive";
 import { conversationFolder, parseConversationFile } from "./instagram-export";
@@ -17,7 +17,8 @@ const STEP_MS = 45_000;
 const BATCH = 500;
 
 export type UploadedFile = { path: string; name: string; size: number };
-export type SessionInput = { files?: UploadedFile[]; ownerName?: string; history?: HistoryOptions };
+/** `historyOnly`: only adds Instagram history to Conversations again (a retry), no training. */
+export type SessionInput = { files?: UploadedFile[]; ownerName?: string; history?: HistoryOptions; historyOnly?: boolean };
 export type Stats = {
   conversations: number; messages: number; duplicates: number;
   customerMessages: number; ownerMessages: number; agentMessages: number;
@@ -38,6 +39,8 @@ type Checkpoint = AnalysisCheckpoint & {
   participants?: Record<string, number>; names?: Record<string, string>;
   /** Inbox: the next page of conversations, then the Instagram history. */
   offset?: number; history?: boolean;
+  /** Instagram history: the next page's cursor (null once done) and how many conversations were listed. */
+  historyAfter?: string | null; historyListed?: number;
   threads?: string[]; conversations?: number;
 };
 export type TrainingSession = {
@@ -278,7 +281,7 @@ async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: St
   const { count } = await db.from("conversations").select("id", { count: "exact", head: true })
     .eq("business_id", session.business_id).in("channel", ["instagram", "whatsapp"]).gte("last_message_at", since);
   const total = count ?? 0;
-  if (!data.history) {
+  if (!data.history && !session.input.historyOnly) {
     while (Date.now() - started < STEP_MS) {
       const { data: rows, error } = await db.from("conversations").select("id,channel,customers(instagram_user_id,username,display_name)")
         .eq("business_id", session.business_id).in("channel", ["instagram", "whatsapp"]).gte("last_message_at", since)
@@ -303,26 +306,42 @@ async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: St
     return save(session, { offset, history: !more, threads: [...threads].slice(-500) }, more ? "ingest" : "history", stats,
       more ? { done: offset, total, label: "Po lexoj bisedat e Inbox-it" } : { done: total, total, label: "Po lexoj historinë e Instagram-it" });
   }
-  // DMs from before Instagram was connected, as far as Meta gives them (20 per conversation).
+  // DMs from before Instagram was connected, as far as Meta gives them (20 per conversation),
+  // one page after another across steps, so "all" never outlasts a step.
   if (settings.instagram_history) {
     const account = await instagramAccount(session.business_id);
     const options = session.input.history ?? { limit: DEFAULT_HISTORY_LIMIT, addToInbox: false };
-    if (account) {
-      const history = await instagramHistory({ graph: account.graph, accountId: account.accountId, since: new Date(since), maxConversations: options.limit, perConversation: 20 })
-        .catch(() => { stats.warnings = [...(stats.warnings ?? []), "Historia e Instagram-it nuk u lexua këtë herë."]; return []; });
-      const messages = history.flatMap((t) => inboxThreadMessages(session.business_id, t.key, t.lines.map((l) => ({
+    const limit = options.limit === "all" ? Number.POSITIVE_INFINITY : options.limit;
+    let after = data.historyAfter, listed = data.historyListed ?? 0;
+    const warn = (message: string) => { if (!stats.warnings?.includes(message)) stats.warnings = [...(stats.warnings ?? []), message]; };
+    while (account && after !== null && listed < limit && Date.now() - started < STEP_MS) {
+      const page = await instagramHistoryPage({ graph: account.graph, accountId: account.accountId, since: new Date(since), perConversation: 20, after, max: Math.min(25, limit - listed) })
+        .catch(() => { warn("Historia e Instagram-it nuk u lexua e plotë këtë herë."); return null; });
+      if (!page) break;
+      listed += page.listed; after = page.after;
+      const messages = page.threads.flatMap((t) => inboxThreadMessages(session.business_id, t.key, t.lines.map((l) => ({
         source: l.speaker === "klienti" ? "customer" : l.speaker === "agjenti" ? "agent" : "staff", body: l.text, created_at: l.at,
       }) as StoredLine)));
       await ingest(session, messages, stats, threads);
-      if (options.addToInbox && history.length) {
-        try { stats.inbox = await addHistoryToInbox(db, { businessId: session.business_id, connectionId: account.connectionId, threads: history }); }
-        catch (error) {
-          console.error("[conversation-training] inbox import", error instanceof Error ? error.message.slice(0, 200) : "failed");
-          stats.warnings = [...(stats.warnings ?? []), "Bisedat nuk u shtuan te Bisedat këtë herë."];
+      if (options.addToInbox && page.threads.length) {
+        try {
+          const added = await addHistoryToInbox(db, { businessId: session.business_id, connectionId: account.connectionId, threads: page.threads });
+          const sum = stats.inbox ?? { conversations: 0, created: 0, messages: 0 };
+          stats.inbox = { conversations: sum.conversations + added.conversations, created: sum.created + added.created, messages: sum.messages + added.messages };
+        } catch (error) {
+          console.error("[conversation-training] inbox import", error instanceof Error ? error.message.slice(0, 300) : "failed");
+          warn("Disa biseda nuk u shtuan te Bisedat këtë herë.");
         }
       }
+      if (!after) after = null;
+    }
+    if (account && after !== null && listed < limit && Date.now() - started >= STEP_MS) {
+      return save(session, { ...data, history: true, historyAfter: after ?? undefined, historyListed: listed, threads: [...threads].slice(-500) }, "history", stats,
+        { done: listed, total: Number.isFinite(limit) ? limit : listed + 25, label: "Po lexoj historinë e Instagram-it" });
     }
   }
+  // A retry only adds to Conversations: nothing new to learn from, so no analysis.
+  if (session.input.historyOnly) return save(session, {}, "review", stats, { done: 1, total: 1, label: "Gati" }, true);
   return finish(session, stats);
 }
 
