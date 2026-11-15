@@ -80,7 +80,7 @@ Vendimet e pronarit (15.11.2026):
 |---|---|---|---|
 | **A** | Një ndërtues artikulli (`order_item_payload`) për të gjitha rrugët; agjenti dërgon v2; `unmapped_product`; hiqen çelësat v1 nga payload-i | Po | Web |
 | **B** | Stafi zgjedh fotot kur konfirmon porosinë e agjentit | Po (`p_files`, i njëjti migrim si A) | Web + mobile (release) |
-| **C** | Workflow-i krijohet nga `spec` te «Rifresko nga webi» dhe gatishmëria; rigjenerimi i workflow-ve të Zanës | Jo | Web |
+| **C** | Pyetjet e agjentit nga `spec` në çast (zëvendëson workflow-et e ruajtura) | Jo | Web |
 | **D** | `products.spec` për çdo produkt: redaktori i produktit vendas shkruan opsionet, shtesat dhe personalizimin; `product_fields` mbetet biblioteka e fushave të biznesit; workflow-i gjenerohet edhe për produktet vendase | Po | Web + mobile (shfaqja e produktit) |
 | **E** | Porosia: kolonat e totaleve, transporti dhe totali nga përgjigjja e webit, adresa e strukturuar, arsyeja e refuzimit te `order_submissions` | Po | Web + mobile (Porositë, paneli i klientit) |
 | **F** | Klienti: `email`, `city`, `address` te `customers` | Po | Web + mobile |
@@ -170,4 +170,5 @@ Rregull: një migrim që rishkruan një funksion ka gjithmonë timestamp më të
 - Faza A u ekzekutua në prodhim dhe u provua me @bora.mato24: Zana pranoi porosinë v2 (#484, pastaj u fshi).
 - **Zana (pjesë e fazës G), 15.11.2026:** pranon vetëm v2 (`unsupported_version`); emërton fushën e klientit që mungon (`missing_field`, `customer.address`); gabimet e artikullit kanë `item`; suksesi kthen `total` (me transportin) dhe `shipping`. Agjenti i lexon dhe ia tregon pronarit. Mbetet push-i i repo-s `puzzle` dhe prova.
 - **Faza B, 15.11.2026:** kodi është gati (web + mobile, pa migrim të ri: `p_files` erdhi me fazën A). `pendingOrder` mban `actionId` dhe `photoFields` vetëm kur biznesi ka URL porosish; «Konfirmo porosinë» hap kartën me zgjedhësin e fotove (web: paneli i klientit `#konfirmo-porosine`; aplikacioni: pamja «Konfirmo porosinë»). Mbetet prova me një porosi të vërtetë të agjentit te biseda @bora.mato24 dhe release i aplikacionit (0.3.14).
-- Mbeten fazat C–F dhe H.
+- **Faza C, 15.11.2026 (ndryshuar me miratim):** pyetjet nuk ruhen si workflow. Pas zgjedhjes së produktit të lidhur, `composeSpecChoices` (`src/lib/orchestration/order-context.ts`) shton pyetjet nga `external_spec`: variantin (`variant_<çelësi>`, vetëm vlerat aktive), opsionet e tjera dhe fushat e artikullit me çelësat e katalogut. Pyeten vetëm fushat e detyrueshme; ato opsionale pranohen kur klienti i përmend dhe shkojnë me porosinë. «Rifresko nga webi» i përditëson menjëherë. Zana nuk kishte workflow për produktet e lidhura (`workflow_id` bosh), ndaj nuk ka asgjë për të rigjeneruar.
+- Mbeten fazat D–F dhe H.

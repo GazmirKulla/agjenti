@@ -7,6 +7,7 @@ import { digest, validFieldValue, validateDefinition } from "./definition";
 import { readBusinessFields, type BusinessField } from "@/lib/items/fields";
 import { choiceLists, matchVariant, variantChoices, variantFieldId, type ChoiceLists, type ProductVariant } from "@/lib/products/variants";
 import { orderablePrice } from "@/lib/products/pricing";
+import type { LinkedSpec } from "@/lib/integrations/linked-catalog";
 export type OrderTerms = { productId: string; productName: string; productTypeId: string; unitAmount: number; currency: string; quantity: number };
 /** What the customer orders of a product priced per unit (m³, m…): a number in that unit, asked after the product. */
 export const orderQuantityField = "order_quantity";
@@ -29,12 +30,14 @@ export function variantUnitAmount(variants: ProductVariant[], productPrice: numb
   const prices = variants.flatMap(v => typeof v.price_amount === "number" ? [v.price_amount] : []);
   return productPrice ?? (prices.length ? Math.min(...prices) : null);
 }
-type OrderProduct = { terms: OrderTerms; basePrice: number | null; lists: ChoiceLists; priceUnit: string | null };
+type OrderProduct = { terms: OrderTerms; basePrice: number | null; lists: ChoiceLists; priceUnit: string | null;
+  /** A product linked to the business website: what its catalog declares the order needs. */
+  spec: LinkedSpec | null };
 /** requested: the reviewed quantity. It counts only for a product priced per unit; any other product is one item. */
 async function readOrderProduct(businessId: string, productId: string, collectionOnly: boolean, chosen?: Record<string, unknown>, requested?: unknown): Promise<OrderProduct> {
   await requireRuntimeModules(businessId, collectionOnly ? ["products", "workflows"] : ["products", "orders", "workflows"]);
   const [{ data, error }, variants] = await Promise.all([
-    createServiceSupabase().from("products").select("id,name,product_type_id,price_amount,price_mode,price_unit,currency,attributes")
+    createServiceSupabase().from("products").select("id,name,product_type_id,price_amount,price_mode,price_unit,currency,attributes,source,external_spec")
       .eq("business_id", businessId).eq("id", productId).eq("is_active", true).maybeSingle(),
     readProductVariants(businessId, productId),
   ]);
@@ -45,11 +48,71 @@ async function readOrderProduct(businessId: string, productId: string, collectio
   const priceUnit = priceUnitOf(data.price_unit);
   if (priceUnit && requested !== undefined && !validOrderQuantity(requested)) throw new TransitionError("invalid_quantity");
   const quantity = priceUnit && validOrderQuantity(requested) ? requested : 1;
-  return { basePrice, lists: choiceLists(data.attributes), priceUnit,
+  const spec = data.source === "linked" ? readSpec(data.external_spec) : null;
+  return { basePrice, lists: choiceLists(data.attributes), priceUnit, spec,
     terms: { productId: data.id, productName: data.name, productTypeId: data.product_type_id ?? "none", unitAmount: unitAmount ?? 0, currency: data.currency ?? "unpriced", quantity } };
 }
 export async function readOrderTerms(businessId: string, productId: string, collectionOnly = false, chosen?: Record<string, unknown>, quantity?: unknown) {
   return (await readOrderProduct(businessId, productId, collectionOnly, chosen, quantity)).terms;
+}
+/** The catalog declaration when it has the expected shape; anything else asks nothing more. */
+function readSpec(raw: unknown): LinkedSpec | null {
+  const spec = raw && typeof raw === "object" ? (raw as Partial<LinkedSpec>) : null;
+  return spec && Array.isArray(spec.options) && Array.isArray(spec.fields) ? { version: spec.version === 1 ? 1 : 2, options: spec.options, addons: Array.isArray(spec.addons) ? spec.addons : [], fields: spec.fields } : null;
+}
+const SPEC_FIELD_TYPES: Record<string, Field["type"]> = { text: "text", number: "number", boolean: "boolean", date: "date", choice: "choice", photo: "photo", file: "photo" };
+/** The facts a linked product's catalog asks for, by key: its variant choices (variant_<key>) and the rest under the catalog's own key. */
+export function specFieldIds(spec: LinkedSpec, variants: ProductVariant[]): string[] {
+  const variantKeys = new Set(variants.filter(v => v.is_active).flatMap(v => Object.keys(v.options)));
+  return [...spec.options.map(o => variantKeys.has(o.key) ? variantFieldId(o.key) : o.key),
+    ...spec.fields.filter(f => (f.appliesTo ?? "item") === "item" && SPEC_FIELD_TYPES[f.type]).map(f => f.key)];
+}
+/**
+ * For a product linked to the business website: asks, right after the product, what its catalog
+ * declares: the variant (format, size…) from the active variants, the other choices (theme, color…)
+ * and the item details (character, date, photo…), under the catalog's own keys; only the required
+ * ones are asked, the optional ones are accepted when the customer gives them. The questions follow
+ * the catalog as "Rifresko nga webi" last stored it; nothing is saved in a workflow. A question the
+ * workflow already asks under the same key is not asked twice. The server maps the answers to the
+ * website's ids when the order is sent (process_order_selection).
+ */
+export function composeSpecChoices(definition: ProcessDefinition, spec: LinkedSpec, variants: ProductVariant[]): ProcessDefinition {
+  const active = variants.filter(v => v.is_active);
+  const variantKeys = new Set(active.flatMap(v => Object.keys(v.options)));
+  const added: Field[] = [];
+  for (const option of spec.options) {
+    const variant = variantKeys.has(option.key);
+    const offered = variant ? [...new Set(active.flatMap(v => v.options[option.key] ? [v.options[option.key]] : []))] : option.values.map(v => v.name);
+    if (!offered.length) continue;
+    added.push({ id: variant ? variantFieldId(option.key) : option.key, subject: variant ? "product_variant" : "product_option", label: option.label,
+      type: "choice", required: variant || option.required !== false, options: offered.slice(0, 100) });
+  }
+  for (const field of spec.fields) {
+    const type = SPEC_FIELD_TYPES[field.type];
+    if (!type || (field.appliesTo ?? "item") !== "item") continue;
+    const values = field.type === "choice" ? (field.values ?? []).map(v => v.name) : [];
+    if (field.type === "choice" && !values.length) continue;
+    added.push({ id: field.key, subject: "order_line", label: field.label, type, required: field.required === true,
+      ...(values.length ? { options: values.slice(0, 100) } : {}),
+      ...(type === "number" && typeof field.min === "number" ? { min: field.min } : {}), ...(type === "number" && typeof field.max === "number" ? { max: field.max } : {}) });
+  }
+  const fresh = added.filter(f => !definition.fields.some(existing => existing.id === f.id));
+  if (!fresh.length) return definition;
+  const composed = structuredClone(definition);
+  composed.fields.push(...fresh);
+  const prompt = (f: Field) => f.type === "choice" ? `Which ${f.label}? Options: ${f.options!.join(", ")}`
+    : f.type === "photo" ? `Ask the customer to send the photo for: ${f.label}.` : `${f.label}?`;
+  // Only what the website requires gets its own question; an optional choice (a color with a store
+  // default) is taken when the customer mentions it.
+  const asked = fresh.filter(f => f.required);
+  if (asked.length) insertAfterProduct(definition, composed, (selectorId, destination) => {
+    const ids = asked.map(f => `spec_${digest([selectorId, f.id]).slice(0, 16)}`);
+    composed.steps.push(...asked.map((f, i) => ({ id: ids[i], kind: "collect" as const, fieldId: f.id, prompt: prompt(f), next: ids[i + 1] ?? destination })));
+    return ids[0];
+  });
+  addToReview(definition, composed, asked.map(f => f.id));
+  if (composed.fields.length > 64 || composed.steps.length > 128) throw new TransitionError("product_composition_limit");
+  return validateDefinition(composed);
 }
 /** Inserts steps right after the product is chosen (after its server terms when they are resolved there). */
 function insertAfterProduct(definition: ProcessDefinition, composed: ProcessDefinition, insert: (selectorId: string, destination: string) => string) {
@@ -113,6 +176,7 @@ export function orderContext(versions: ProcessVersion[]) {
   const bases = new Map<string, number | null>();
   const lists = new Map<string, ChoiceLists>();
   const units = new Map<string, string | null>();
+  const specs = new Map<string, LinkedSpec | null>();
   let fields: BusinessField[] = [];
   const chosenOf = (instance: Instance) => Object.fromEntries(Object.entries(instance.facts).filter(([id]) => id.startsWith("variant_")).map(([id, fact]) => [id, fact.value]));
   return {
@@ -120,15 +184,20 @@ export function orderContext(versions: ProcessVersion[]) {
     withVariants(definition: ProcessDefinition, instance: Instance): ProcessDefinition {
       const productId = instance.facts[orderFields(definition.id).key("productId")]?.value;
       if (typeof productId !== "string") return definition;
-      const own = variants.get(productId) ?? [], listed = lists.get(productId) ?? {}, unit = units.get(productId);
+      const own = variants.get(productId) ?? [], listed = lists.get(productId) ?? {}, unit = units.get(productId), spec = specs.get(productId);
       const measured = unit ? composeOrderQuantity(definition, unit) : definition;
+      // A linked product: its catalog declares the variant and everything else, under the website's keys.
+      if (spec) return composeSpecChoices(measured, spec, own);
       return own.length || Object.keys(listed).length ? composeVariantChoices(measured, own, fields, listed) : measured;
     },
     /** A different product never keeps the previous product's variant answers or quantity. */
     clearVariants(instance: Instance, previousProductId: string | undefined, eventId: string) {
       if (previousProductId === undefined || instance.productWorkflow?.productId === previousProductId) return;
+      // The previous linked product's catalog answers (theme, character…) belong to it too.
+      const previousSpec = specs.get(previousProductId);
+      const specIds = new Set(previousSpec ? specFieldIds(previousSpec, variants.get(previousProductId) ?? []) : []);
       for (const [id, fact] of Object.entries(instance.facts))
-        if ((id.startsWith("variant_") || id === orderQuantityField) && fact.eventId !== eventId) delete instance.facts[id];
+        if ((id.startsWith("variant_") || id === orderQuantityField || specIds.has(id)) && fact.eventId !== eventId) delete instance.facts[id];
     },
     async prepare(state: Snapshot, definitions: ProcessDefinition[], observation?: Observation) {
       const ids = new Map<string, { id: string; collectionOnly: boolean }>();
@@ -152,7 +221,7 @@ export function orderContext(versions: ProcessVersion[]) {
         ...[...ids].map(async ([cacheKey, { id, collectionOnly }]) => {
           try {
             const read = await readOrderProduct(state.businessId, id, collectionOnly);
-            terms.set(cacheKey, read.terms); bases.set(id, read.basePrice); lists.set(id, read.lists); units.set(id, read.priceUnit);
+            terms.set(cacheKey, read.terms); bases.set(id, read.basePrice); lists.set(id, read.lists); units.set(id, read.priceUnit); specs.set(id, read.spec);
           } catch { terms.delete(cacheKey); }
         }),
       ]);
@@ -170,6 +239,9 @@ export function orderContext(versions: ProcessVersion[]) {
       const options = Object.fromEntries(definition.steps.flatMap(s => s.kind === "collect" && s.fieldId !== key("productId") && s.fieldId !== orderQuantityField && !["customer_name", "customer_phone", "customer_city", "customer_address", "customer_email"].includes(s.fieldId)
         && instance.facts[s.fieldId] ? [[s.fieldId, instance.facts[s.fieldId].value]] : []));
       const own = variants.get(productId) ?? [];
+      // A linked product's optional catalog answers have no question of their own; they go with the order too.
+      const spec = specs.get(productId);
+      if (spec) for (const id of specFieldIds(spec, own)) if (instance.facts[id] && !Object.hasOwn(options, id)) options[id] = instance.facts[id].value;
       const priced: Partial<OrderTerms> = own.length ? { ...current, unitAmount: variantUnitAmount(own, bases.has(productId) ? bases.get(productId)! : current.unitAmount, chosenOf(instance)) ?? current.unitAmount } : { ...current };
       // Priced per unit: the quantity is the customer's answer; until it is given, there is none to review.
       if (units.get(productId)) {
