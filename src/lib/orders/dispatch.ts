@@ -13,7 +13,15 @@ export type DispatchOutcome = {
   externalOrderId?: string | null;
   /** Why the order stayed local (unmapped_product, unmapped_variant) or the website's error code. */
   reason?: string;
-} & RejectionDetail;
+} & RejectionDetail & WebsiteTotals;
+
+/** What the website says the customer pays (items plus shipping), when it says so. */
+export type WebsiteTotals = { websiteTotal?: number; shipping?: number; currency?: string };
+export function websiteTotals(result: { total?: number; shipping?: number }, payload: Record<string, unknown>): WebsiteTotals {
+  if (result.total === undefined && result.shipping === undefined) return {};
+  return { ...(result.total !== undefined ? { websiteTotal: result.total } : {}), ...(result.shipping !== undefined ? { shipping: result.shipping } : {}),
+    ...(typeof payload.currency === "string" ? { currency: payload.currency } : {}) };
+}
 
 type Begin = {
   orderId: string; attemptId?: string; status: DispatchOutcome["status"]; externalOrderId?: string | null;
@@ -61,12 +69,12 @@ export async function dispatchManualOrder(input: { businessId: string; userId: s
   const finished = await db.rpc("finish_order_submission", { p_business: input.businessId, p_order: input.orderId,
     p_attempt: begin.attemptId, p_status: result.status, p_external: result.orderId ?? null }).then((v) => v, () => null);
   if (!finished || finished.error) return { status: "pending_reconciliation", reason: "result_unrecorded" };
-  const detail = result.status === "rejected" && result.field ? await refusedField(input.businessId, payload, result.code, result.field) : {};
-  return { status: result.status, externalOrderId: result.orderId ?? null, ...(result.code ? { reason: result.code } : {}), ...detail };
+  const detail = result.status === "rejected" && result.field ? await refusedField(input.businessId, payload, result.code, result.field, result.item) : {};
+  return { status: result.status, externalOrderId: result.orderId ?? null, ...(result.code ? { reason: result.code } : {}), ...detail, ...websiteTotals(result, payload) };
 }
 
 /** The item and the owner's label for the field the website refused. Best effort: the order is already recorded. */
-export async function refusedField(businessId: string, payload: Record<string, unknown>, code: string | undefined, field: string): Promise<RejectionDetail> {
+export async function refusedField(businessId: string, payload: Record<string, unknown>, code: string | undefined, field: string, item?: number): Promise<RejectionDetail> {
   const items = Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [];
   const ids = [...new Set(items.map((item) => item.productId).filter((id): id is string => typeof id === "string"))];
   const { data } = ids.length
@@ -74,7 +82,7 @@ export async function refusedField(businessId: string, payload: Record<string, u
       .then((v) => v, () => ({ data: null }))
     : { data: null };
   const specs = new Map((data ?? []).map((p) => [p.external_id as string, (p.external_spec ?? null) as LinkedSpec | null]));
-  return rejectionDetail({ code, field, items, specs });
+  return rejectionDetail({ code, field, item, items, specs });
 }
 
 /** The owner's label for a field Agjenti itself found missing or invalid (the order stayed here). */

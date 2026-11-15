@@ -167,4 +167,6 @@ Rregull: një migrim që rishkruan një funksion ka gjithmonë timestamp më të
 ## 11. Gjendja
 
 - **Faza A (15.11.2026):** migrimi `20261115200000_agent_orders_v2.sql` dhe kodi janë gati, pa commit. U provua në një bazë lokale me të 132 migrimet: `supabase/tests/agent_orders_v2.sql` dhe `order_unit_quantities.sql` kalojnë. Testet `order_submission*.sql` dhe `order_write_boundary.sql` dështonin edhe para këtij ndryshimi (`conversation_states_native_snapshot`). Migrimi ekzekutohet para publikimit të kodit, sepse kodi i ri dërgon `p_files`.
-- Mbetet: miratimi për migrimin, prova me @bora.mato24 te Zana, pastaj fazat B–H.
+- Faza A u ekzekutua në prodhim dhe u provua me @bora.mato24: Zana pranoi porosinë v2 (#484, pastaj u fshi).
+- **Zana (pjesë e fazës G), 15.11.2026:** pranon vetëm v2 (`unsupported_version`); emërton fushën e klientit që mungon (`missing_field`, `customer.address`); gabimet e artikullit kanë `item`; suksesi kthen `total` (me transportin) dhe `shipping`. Agjenti i lexon dhe ia tregon pronarit. Mbetet push-i i repo-s `puzzle` dhe prova.
+- Mbeten fazat B–F dhe H.

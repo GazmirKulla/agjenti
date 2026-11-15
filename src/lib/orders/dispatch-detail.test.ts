@@ -28,6 +28,12 @@ describe("rejectionDetail", () => {
     expect(rejectionDetail({ code: "missing_customer", field: "customer", items: [{}], specs })).toEqual({ field: "customer", fieldLabel: "Të dhënat e klientit" });
     expect(rejectionDetail({ code: "invalid_quantity", field: "quantity", items: [{ quantity: 0 }], specs: new Map() })).toEqual({ field: "quantity", fieldLabel: "Sasia", line: 1 });
   });
+  it("takes the item the website named, and keeps customer details off the items", () => {
+    const items = [{ productId: "puzzle", fields: {} }, { productId: "puzzle", fields: {} }];
+    expect(rejectionDetail({ code: "missing_field", field: "character", item: 2, items, specs })).toEqual({ field: "character", fieldLabel: "Personazhi", line: 2 });
+    expect(rejectionDetail({ code: "missing_field", field: "customer.address", items, specs })).toEqual({ field: "customer.address", fieldLabel: "Adresa" });
+    expect(rejectionDetail({ code: "invalid_option", field: "color", item: 9, items, specs })).toEqual({ field: "color", fieldLabel: "Ngjyra e kutisë" });
+  });
   it("returns nothing without a field and the bare key for an unknown one", () => {
     expect(rejectionDetail({ code: "price_changed", items: [{}], specs })).toEqual({});
     expect(rejectionDetail({ code: "missing_field", field: "engraving", items: [{}, {}], specs: new Map() })).toEqual({ field: "engraving", line: 1 });

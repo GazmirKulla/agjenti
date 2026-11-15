@@ -183,6 +183,18 @@ describe("W4 external order delivery evidence", () => {
     const odd = await send();
     expect(odd).toMatchObject({ status: "rejected", code: "missing_field" }); expect(odd.field).toBeUndefined();
   });
+  it("keeps the item, a customer field and, on success, the website's total and shipping", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ ok: false, reason: "missing_field", field: "customer.address" }, { status: 400 }));
+    expect(await send()).toMatchObject({ status: "rejected", code: "missing_field", field: "customer.address" });
+    mocks.fetch.mockResolvedValue(Response.json({ ok: false, reason: "missing_field", field: "photo", item: 2 }, { status: 400 }));
+    expect(await send()).toMatchObject({ status: "rejected", field: "photo", item: 2 });
+    mocks.fetch.mockResolvedValue(Response.json({ ok: false, reason: "missing_field", field: "photo", item: 0 }, { status: 400 }));
+    expect((await send()).item).toBeUndefined();
+    mocks.fetch.mockResolvedValue(Response.json({ ok: true, orderId: "ord_1", total: 2900, shipping: 200 }));
+    expect(await send()).toMatchObject({ status: "accepted", orderId: "ord_1", total: 2900, shipping: 200 });
+    mocks.fetch.mockResolvedValue(Response.json({ ok: true, orderId: "ord_1", total: "2900" }));
+    expect((await send()).total).toBeUndefined();
+  });
   it.each([408,409,429,500,503])("does not treat HTTP %s as proof of non-delivery", async status => {
     mocks.fetch.mockResolvedValue(Response.json({ ok: false }, { status }));
     expect(await send()).toMatchObject({ ok: false, status: "pending_reconciliation" });

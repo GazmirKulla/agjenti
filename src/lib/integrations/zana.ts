@@ -301,8 +301,13 @@ export type ExternalOrderResult = {
   error?: string;
   /** The website's own error code (e.g. price_changed), when it gave a safe one. */
   code?: string;
-  /** The field the website named with the code (e.g. character for missing_field). */
+  /** The field the website named with the code (e.g. character, customer.address). */
   field?: string;
+  /** The item (from 1) the refusal belongs to, when the website named one. */
+  item?: number;
+  /** On success: what the customer pays on the website (items plus shipping) and the shipping. */
+  total?: number;
+  shipping?: number;
 };
 
 export async function submitExternalOrder(params: {
@@ -331,16 +336,20 @@ export async function submitExternalOrder(params: {
         ...(secret ? { Authorization: `Bearer ${secret}` } : {}) },
       body: JSON.stringify(params.payload), signal: AbortSignal.timeout(20_000),
     });
-    const json = await response.json().catch(() => null) as { ok?: unknown; orderId?: unknown; error?: unknown; reason?: unknown; field?: unknown } | null;
+    const json = await response.json().catch(() => null) as { ok?: unknown; orderId?: unknown; error?: unknown; reason?: unknown; field?: unknown; item?: unknown; total?: unknown; shipping?: unknown } | null;
     // Zana sends {reason: "missing_field", error: "missing_field", field: "character"}; the code wins over a sentence.
     const code = [json?.reason, json?.error].find((v): v is string => typeof v === "string" && /^[a-z][a-z0-9_]{0,59}$/.test(v));
-    const field = typeof json?.field === "string" && /^[A-Za-z][A-Za-z0-9_]{0,59}$/.test(json.field) ? json.field : undefined;
+    const field = typeof json?.field === "string" && /^[A-Za-z][A-Za-z0-9_.]{0,59}$/.test(json.field) ? json.field : undefined;
+    const item = typeof json?.item === "number" && Number.isInteger(json.item) && json.item >= 1 && json.item <= 20 ? json.item : undefined;
+    const amount = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 9_999_999_999 ? v : undefined);
     if (response.ok && json?.ok === true) {
-      result = { status: "accepted", ok: true, orderId: typeof json.orderId === "string" ? json.orderId.slice(0, 200) : undefined };
+      const total = amount(json.total), shipping = amount(json.shipping);
+      result = { status: "accepted", ok: true, orderId: typeof json.orderId === "string" ? json.orderId.slice(0, 200) : undefined,
+        ...(total !== undefined ? { total } : {}), ...(shipping !== undefined ? { shipping } : {}) };
     } else if (json?.ok === false && (response.ok || response.status >= 400 && response.status < 500 && ![408, 409, 429].includes(response.status)
       // Contract v2: price_changed is answered before anything is created.
       || response.status === 409 && code === "price_changed")) {
-      result = { status: "rejected", ok: false, error: "Sistemi i jashtëm e refuzoi porosinë. Kërkohet shqyrtim nga stafi.", ...(code ? { code } : {}), ...(code && field ? { field } : {}) };
+      result = { status: "rejected", ok: false, error: "Sistemi i jashtëm e refuzoi porosinë. Kërkohet shqyrtim nga stafi.", ...(code ? { code } : {}), ...(code && field ? { field } : {}), ...(code && item ? { item } : {}) };
     } else result = unknown();
   } catch {
     // Timeouts/network errors can occur AFTER the provider committed the order.

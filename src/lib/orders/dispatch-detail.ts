@@ -14,20 +14,23 @@ export function itemHas(item: Item, field: string): boolean {
 }
 
 /** Order-level fields the website may name; they belong to no item. */
-const ORDER_FIELDS = new Set(["customer", "currency", "expectedTotal", "items", "channel"]);
+const ORDER_FIELDS = new Set(["customer", "currency", "expectedTotal", "items", "channel", "version"]);
 const LABELS: Record<string, string> = {
-  customer: "Të dhënat e klientit", productId: "Produkti", variantId: "Varianti", formatId: "Formati",
-  quantity: "Sasia", addons: "Shtesat", currency: "Monedha", color: "Ngjyra",
+  customer: "Të dhënat e klientit", "customer.name": "Emri", "customer.phone": "Telefoni", "customer.address": "Adresa",
+  "customer.city": "Qyteti", productId: "Produkti", variantId: "Varianti", quantity: "Sasia", addons: "Shtesat", currency: "Monedha",
 };
 
 /**
  * Which item and detail the website's refusal points at. The website names the field but not the
  * item, so for a missing field it is the first item (in the order sent) that left it empty; for
- * any other refusal an item is named only when the order has one.
+ * any other refusal an item is named only when the order has one. A website that names the item
+ * (contract v2, `item`) is taken at its word.
  */
 export function rejectionDetail(input: {
   code?: string;
   field?: string;
+  /** The item the website named (from 1); it wins over any guess. */
+  item?: number;
   items: Item[];
   /** products.external_spec by the website's product id. */
   specs: Map<string, LinkedSpec | null>;
@@ -35,7 +38,9 @@ export function rejectionDetail(input: {
   const { field, items } = input;
   if (!field) return {};
   let line: number | undefined;
-  if (!ORDER_FIELDS.has(field)) {
+  const orderLevel = ORDER_FIELDS.has(field) || field.startsWith("customer.");
+  if (!orderLevel && input.item && input.item <= items.length) line = input.item;
+  else if (!orderLevel) {
     if (input.code?.startsWith("missing_")) {
       const index = items.findIndex((item) => !itemHas(item, field));
       if (index >= 0) line = index + 1;

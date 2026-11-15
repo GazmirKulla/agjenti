@@ -233,7 +233,9 @@ type Selection = { options: Record<string, string>; fields: Record<string, strin
 const emptySelection = (): Selection => ({ options: {}, fields: {}, files: {}, addons: [] });
 type Submission = { status: "local_only" | "pending_reconciliation" | "accepted" | "rejected"; externalOrderId?: string | null; reason?: string;
   /** The field the website refused, its label and the item (1-based), when the website named one. */
-  field?: string; fieldLabel?: string; line?: number };
+  field?: string; fieldLabel?: string; line?: number;
+  /** What the website charges (items plus shipping) and its shipping, when it says so. */
+  websiteTotal?: number; shipping?: number; currency?: string };
 
 /** Uploads one reference photo to the conversation and returns its private path. */
 async function uploadOrderFile(base: string, file: File): Promise<string> {
@@ -430,6 +432,14 @@ function DeclaredInputs(props: {
   );
 }
 
+/** " Totali te webi: 2900 ALL (me transportin 200)." when the website gave its total. */
+function websiteTotal(submission: Submission, t: (text: string) => string): string {
+  if (submission.websiteTotal === undefined) return "";
+  const currency = submission.currency ? ` ${submission.currency}` : "";
+  const shipping = submission.shipping ? ` (${t("me transportin")} ${submission.shipping})` : "";
+  return ` ${t("Totali te webi")}: ${submission.websiteTotal}${currency}${shipping}.`;
+}
+
 /** "Artikulli 2: mungon «Personazhi»." from the field the website named; empty when it named none. */
 function refusedField(submission: Submission, t: (text: string) => string): string {
   if (!submission.field) return "";
@@ -446,7 +456,7 @@ function submissionMessage(submission: Submission | undefined, t: (text: string)
       ? t("Porosia u ruajt vetëm këtu: produkti nuk është i lidhur ose i rifreskuar nga webi, ndaj nuk u dërgua.")
       : t("Porosia u ruajt.");
   if (submission.status === "accepted")
-    return `${t("Porosia u ruajt dhe u krijua te webi i biznesit.")}${submission.externalOrderId ? ` #${submission.externalOrderId}` : ""}`;
+    return `${t("Porosia u ruajt dhe u krijua te webi i biznesit.")}${submission.externalOrderId ? ` #${submission.externalOrderId}` : ""}${websiteTotal(submission, t)}`;
   if (submission.status === "rejected")
     return `${t("Porosia u ruajt, por webi i biznesit e refuzoi.")}${submission.reason === "price_changed" ? ` ${t("Çmimi ka ndryshuar: rifresko produktet nga webi.")}` : refusedField(submission, t) || (submission.reason ? ` (${submission.reason})` : "")}`;
   return t("Porosia u ruajt, por dërgimi te webi nuk u verifikua. Kontrollo te Porositë; mos e ridërgo.");
