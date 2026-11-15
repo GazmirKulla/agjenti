@@ -2,10 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./conversation-training.css";
 import { TrainingReview } from "./training-review";
+import { stepOf, timeLeft } from "./progress";
 
 type Session = {
   id: string; source: "inbox" | "instagram_export"; status: "uploading" | "queued" | "running" | "ready" | "failed" | "cancelled";
-  stage: string; progress: { done?: number; total?: number; label?: string }; error: string | null;
+  stage: string; progress: { done?: number; total?: number; label?: string; open?: boolean; stageStartedAt?: string }; error: string | null;
   stats: { suggestions?: Record<string, number>; analysedConversations?: number; styleChanges?: string[]; conversations?: number; messages?: number; duplicates?: number; customerMessages?: number; ownerMessages?: number; agentMessages?: number; skippedFiles?: number; groupConversations?: number; firstAt?: string | null; lastAt?: string | null; warnings?: string[]; inbox?: { conversations: number; created: number; messages: number } };
   created_at: string; expires_at: string;
   history?: { limit: number | "all"; addToInbox: boolean } | null; historyOnly?: boolean | null;
@@ -171,7 +172,9 @@ export function ConversationTraining({ slug }: { slug: string }) {
                   {ACTIVE.has(s.status) && (
                     <>
                       <div className="training-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span style={{ width: `${pct}%` }} /></div>
-                      <p className="training-note">{s.status === "uploading" ? "Po ngarkohet…" : s.progress.label || "Në radhë…"} Mund ta mbyllësh faqen: vazhdon vetë.</p>
+                      <p className="training-note">{s.status === "uploading" ? "Po ngarkohet…" : s.progress.label || "Në radhë…"}
+                        {s.status !== "uploading" && [stepOf(s), timeLeft(s.progress)].filter(Boolean).length > 0 && ` (${[stepOf(s), timeLeft(s.progress)].filter(Boolean).join(" · ")})`}
+                        {" "}Mund ta mbyllësh faqen: vazhdon vetë.</p>
                     </>
                   )}
                   {s.status === "ready" && (
@@ -210,7 +213,7 @@ export function ConversationTraining({ slug }: { slug: string }) {
           </ul>
           <p className="training-note">
             {state.keptMessages} mesazhe të ruajtura për trajnim.{" "}
-            {state.keptMessages > 0 && <button type="button" className="training-link" disabled={!!busy} onClick={() => void remove()}>Fshi të gjitha</button>}
+            {state.keptMessages > 0 && !active && <button type="button" className="training-link" disabled={!!busy} onClick={() => void remove()}>Fshi të gjitha</button>}
           </p>
         </section>
       )}

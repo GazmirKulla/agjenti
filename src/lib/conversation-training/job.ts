@@ -47,13 +47,18 @@ export type TrainingSession = {
   id: string; business_id: string; user_id: string | null; source: "inbox" | "instagram_export";
   status: string; stage: string; input: SessionInput; checkpoint: Checkpoint; stats: Partial<Stats>;
   lease_token: string; attempts: number;
+  progress?: Progress | null;
 };
+/** `stageStartedAt` lets the page estimate the time left of the step; `open` marks a total that is not known. */
+type Progress = { done: number; total: number; label: string; open?: boolean; stageStartedAt?: string };
 
 export const emptyStats = (): Stats => ({ conversations: 0, messages: 0, duplicates: 0, customerMessages: 0, ownerMessages: 0, agentMessages: 0, skippedFiles: 0, groupConversations: 0, firstAt: null, lastAt: null });
 
 export class TrainingStepError extends Error {}
 
-async function save(session: TrainingSession, checkpoint: Checkpoint, stage: string, stats: Stats, progress: { done: number; total: number; label: string }, done = false, error: string | null = null) {
+async function save(session: TrainingSession, checkpoint: Checkpoint, stage: string, stats: Stats, step: Progress, done = false, error: string | null = null) {
+  const kept = stage === session.stage ? session.progress?.stageStartedAt : undefined;
+  const progress: Progress = { ...step, stageStartedAt: kept ?? new Date().toISOString() };
   const { data, error: failure } = await createServiceSupabase().rpc("checkpoint_conversation_training", {
     p_session: session.id, p_lease: session.lease_token, p_checkpoint: checkpoint, p_stage: stage,
     p_progress: progress, p_stats: stats, p_done: done, p_error: error,
@@ -337,7 +342,7 @@ async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: St
     }
     if (account && after !== null && listed < limit && Date.now() - started >= STEP_MS) {
       return save(session, { ...data, history: true, historyAfter: after ?? undefined, historyListed: listed, threads: [...threads].slice(-500) }, "history", stats,
-        { done: listed, total: Number.isFinite(limit) ? limit : listed + 25, label: "Po lexoj historinë e Instagram-it" });
+        { done: listed, total: Number.isFinite(limit) ? limit : listed + 25, label: "Po lexoj historinë e Instagram-it", ...(Number.isFinite(limit) ? {} : { open: true }) });
     }
   }
   // A retry only adds to Conversations: nothing new to learn from, so no analysis.
