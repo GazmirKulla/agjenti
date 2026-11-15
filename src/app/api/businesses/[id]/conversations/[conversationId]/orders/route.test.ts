@@ -100,3 +100,9 @@ it("W4 ignores client confirmation, product, price and intent overrides", async 
 });
 
 afterEach(() => m.profile.mockReset());
+it("refuses malformed chosen photos before reading the conversation", async () => {
+  const response = await POST(new Request("https://app.test/api/orders", { method: "POST", body: JSON.stringify({ files: { photo: "not-a-list" } }) }),
+    { params: Promise.resolve({ id: "business", conversationId: "conversation" }) });
+  expect(response.status).toBe(400);
+  expect(m.rpc).not.toHaveBeenCalled(); expect(m.submit).not.toHaveBeenCalled();
+});

@@ -138,6 +138,10 @@ describe("W4 order submission boundary", () => {
     expect(m.rpc).toHaveBeenCalledWith("submit_process_order", expect.objectContaining({ p_user: "actor", p_revision: 7, p_action: actionId, p_files: null }));
     expect(m.rpc).not.toHaveBeenCalledWith("finish_order_submission", expect.anything());
   });
+  it("passes the photos staff chose to the database, which checks them", async () => {
+    await submitConfirmedOrder({ ...args, actionId, files: { photo: ["business/conversation/x.jpg"] } });
+    expect(m.rpc).toHaveBeenCalledWith("submit_process_order", expect.objectContaining({ p_files: { photo: ["business/conversation/x.jpg"] } }));
+  });
   it("keeps an order the database recorded locally, with the reason it gave", async () => {
     m.rpc.mockImplementation(async () => ({ data: { orderId, attemptId: "attempt", status: "local_only", dispatch: false, reason: "unmapped_product", line: 1 } }));
     expect(submissionResponse(await submitConfirmedOrder(args))).toMatchObject({ status: 200, body: { submissionStatus: "local_only", reason: "unmapped_product", line: 1,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { reconcileOrder, submissionError, submissionResponse, submitConfirmedOrder } from "@/lib/orders/submission";
+import { readChosenFiles, reconcileOrder, submissionError, submissionResponse, submitConfirmedOrder } from "@/lib/orders/submission";
 import { requestUserId } from "@/lib/conversations/transport-access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
@@ -20,9 +20,12 @@ async function handle(request: Request, context: RouteContext, reconcile: boolea
     const userId = await actor(request, businessId);
     if (!userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const body = await request.json().catch(() => null);
+    // The photos staff chose for the website (web panel, app 0.3.14+); older clients send none.
+    const files = reconcile ? null : readChosenFiles(body?.files);
+    if (files === false) return NextResponse.json({ error: "Fotot e zgjedhura nuk janë të vlefshme." }, { status: 400 });
     const receipt = reconcile
       ? await reconcileOrder({ businessId, conversationId, userId, body })
-      : await submitConfirmedOrder({ businessId, conversationId, userId, ...(typeof body?.actionId === "string" ? { actionId: body.actionId } : {}) });
+      : await submitConfirmedOrder({ businessId, conversationId, userId, ...(typeof body?.actionId === "string" ? { actionId: body.actionId } : {}), files });
     const response = submissionResponse(receipt);
     return NextResponse.json(response.body, { status: response.status });
   } catch (error) {

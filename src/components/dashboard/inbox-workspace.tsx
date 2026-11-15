@@ -125,6 +125,7 @@ export async function InboxWorkspace({
           messages={messageResult.data?.messages ?? []}
           older={messageResult.data?.older ?? null}
           pendingOrder={Boolean(contextResult.data?.pendingOrder)}
+          pendingOrderPhotos={Boolean(contextResult.data?.pendingOrder?.photoFields.length)}
           canOrder={Boolean(contextResult.data?.forms.order.enabled)}
           canBook={Boolean(contextResult.data?.forms.booking.enabled && contextResult.data.forms.booking.services.length)}
           logs={logResult.data ?? []}

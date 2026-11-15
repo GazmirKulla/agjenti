@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ConversationContext } from "@/lib/conversations/context";
 import { getDashboardTranslator } from "@/lib/dashboard/language/server";
-import { BookingForm, CopyInvitationLink, LeadStatusControl, ManualOrderForm, SaveCustomerForm } from "./conversation-panel-controls";
+import { BookingForm, ConfirmAgentOrder, CopyInvitationLink, LeadStatusControl, ManualOrderForm, SaveCustomerForm } from "./conversation-panel-controls";
 import { formatDate, money } from "./ui";
 import { orderItemsText } from "@/lib/orders/item-summary";
 
@@ -72,7 +72,10 @@ export async function ConversationPanel({ context, businessId, slug }: { context
 
       <section className="panel section-pad">
         <h2 className="text-base mb-4">{t("Porositë")}</h2>
-        {context.pendingOrder && (
+        {context.pendingOrder && context.pendingOrder.photoFields.length > 0 ? (
+          <ConfirmAgentOrder businessId={businessId} conversationId={conversation.id} process={context.pendingOrder.process}
+            actionId={context.pendingOrder.actionId} photoFields={context.pendingOrder.photoFields} />
+        ) : context.pendingOrder && (
           <p className="conversation-flag" role="status">
             {t("Një porosi pret konfirmimin tënd")} ({context.pendingOrder.process}). {t("Konfirmoje nga menuja e bisedës.")}
           </p>

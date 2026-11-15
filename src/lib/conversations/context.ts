@@ -13,6 +13,9 @@ import { ORDER_ITEMS_SELECT, orderItemSummary, type OrderItemSummary } from "@/l
  * place for the web Inbox and the native app. Read-only: actions keep their own
  * routes and server checks. Every query is scoped to this business.
  */
+/** A photo (or file) the website asks for on the item, as its catalog declares it. */
+export type PendingPhotoField = { key: string; label: string; type: "photo" | "file"; required: boolean; min?: number; max?: number };
+
 export type ConversationContext = {
   conversation: { id: string; name: string; handle: string; channel: string; status: string };
   /** What the agent collected about the person (validated values only). */
@@ -28,7 +31,12 @@ export type ConversationContext = {
     missing: string[];
   }[];
   /** An order the agent prepared that waits for staff confirmation. */
-  pendingOrder: { process: string } | null;
+  pendingOrder: {
+    process: string;
+    actionId: string;
+    /** The product's photo fields the website needs: staff choose those photos before sending. */
+    photoFields: PendingPhotoField[];
+  } | null;
   orders: { id: string; status: string; statusLabel: string; total: number | null; currency: string | null; createdAt: string; items: OrderItemSummary[] }[];
   bookings: { id: string; service: string; startsAt: string; status: string; statusLabel: string }[];
   lead: { id: string; status: LeadStatus; statusLabel: string; interest: string } | null;
@@ -106,6 +114,18 @@ const systemFields: Record<string, { label: string | null; missing?: string }> =
 const customerFields: Record<string, string> = { name: "Emri", phone: "Telefoni", email: "Email", city: "Qyteti", address: "Adresa" };
 
 /** The owner-facing label of a field, null to hide it, and the label to list when it is missing. */
+/** The item photo and file fields of a product's catalog declaration (products.external_spec). */
+export function pendingPhotoFields(spec: unknown): PendingPhotoField[] {
+  const fields = spec && typeof spec === "object" && Array.isArray((spec as { fields?: unknown }).fields) ? (spec as { fields: unknown[] }).fields : [];
+  return fields.flatMap((raw) => {
+    const f = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+    if ((f.type !== "photo" && f.type !== "file") || (f.appliesTo ?? "item") !== "item" || typeof f.key !== "string" || typeof f.label !== "string") return [];
+    const count = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 10 ? v : undefined);
+    const min = count(f.min), max = count(f.max);
+    return [{ key: f.key, label: f.label, type: f.type, required: f.required === true, ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) }];
+  });
+}
+
 export function fieldPresentation(field: Field): { label: string | null; missing: string | null } {
   const customer = /^customer_([a-z]+)$/.exec(field.id);
   if (customer) {
@@ -204,6 +224,7 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
 
   // Processes: field labels come from the pinned version the instance runs on.
   let pendingOrder: ConversationContext["pendingOrder"] = null;
+  let pendingProductId: string | null = null;
   // Latest values the agent collected for the built-in order and booking fields.
   const collectedSystem: Record<string, string | number> = {};
   for (const instance of instances)
@@ -228,7 +249,11 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
           missing.push(presentation.missing);
       }
       const name = definition?.name ?? "Proces";
-      if (instance.action?.tool === "order.create" && instance.action.output?.submissionStatus === "awaiting_staff") pendingOrder = { process: name };
+      if (instance.action?.tool === "order.create" && instance.action.output?.submissionStatus === "awaiting_staff") {
+        pendingOrder = { process: name, actionId: instance.action.id, photoFields: [] };
+        const product = (instance.action.input as { productId?: unknown } | undefined)?.productId;
+        pendingProductId = typeof product === "string" && /^[0-9a-f-]{36}$/i.test(product) ? product : null;
+      }
       return {
         id: instance.id,
         name,
@@ -246,6 +271,18 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
     data: [...bookingRows.values()].sort((a, b) => b.starts_at.localeCompare(a.starts_at)),
   };
   if (bookings.error) throw new Error("conversation_context_unavailable");
+
+  // Photos only matter when the order goes to the business website: then staff choose them.
+  // Set inside the map above, so TypeScript cannot see it here.
+  const pending = pendingOrder as ConversationContext["pendingOrder"];
+  if (pending && pendingProductId) {
+    const [product, integration] = await Promise.all([
+      db.from("products").select("external_spec").eq("business_id", businessId).eq("id", pendingProductId).maybeSingle(),
+      db.from("integrations").select("orders_url").eq("business_id", businessId).eq("kind", "http").maybeSingle(),
+    ]);
+    const sends = typeof integration.data?.orders_url === "string" && integration.data.orders_url.trim() !== "";
+    if (!product.error && !integration.error && sends) pending.photoFields = pendingPhotoFields(product.data?.external_spec);
+  }
 
   const allowed = (...keys: string[]) => modules === null || keys.every((key) => modules.includes(key));
   const bookingEnabled = allowed("bookings", "services");

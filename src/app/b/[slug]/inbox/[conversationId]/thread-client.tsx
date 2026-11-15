@@ -41,6 +41,8 @@ export function ThreadClient(props: {
   older?: string | null;
   /** An order the agent prepared waits for staff confirmation. */
   pendingOrder?: boolean;
+  /** The website needs photos: staff choose them in the customer panel before sending. */
+  pendingOrderPhotos?: boolean;
   /** The owner can record an order / book an appointment from this conversation. */
   canOrder?: boolean;
   canBook?: boolean;
@@ -204,7 +206,8 @@ export function ThreadClient(props: {
               disabled: pending,
               onSelect: () => void request(props.status === "active" ? "pause" : "resume"),
             },
-            ...(props.pendingOrder ? [{ group: t("Veprimet kryesore"), icon: "✓", label: t("Konfirmo porosinë"), hint: t("Kontrollo dhe dërgo porosinë që përgatiti agjenti."), badge: t("në pritje"), disabled: pending, onSelect: confirmOrder }] : []),
+            ...(props.pendingOrder ? [{ group: t("Veprimet kryesore"), icon: "✓", label: t("Konfirmo porosinë"), hint: props.pendingOrderPhotos ? t("Zgjidh fotot për webin dhe dërgo porosinë.") : t("Kontrollo dhe dërgo porosinë që përgatiti agjenti."), badge: t("në pritje"), disabled: pending,
+              ...(props.pendingOrderPhotos ? { href: `/b/${props.slug}/inbox/${props.conversationId}/customer#konfirmo-porosine` } : { onSelect: confirmOrder }) }] : []),
             ...(props.canOrder ? [{ group: t("Veprimet kryesore"), icon: "＋", label: t("Krijo porosi"), hint: t("Plotësohet vetë nga biseda."), href: `/b/${props.slug}/inbox/${props.conversationId}/customer#krijo-porosi` }] : []),
             ...(props.canBook ? [{ group: t("Veprimet kryesore"), icon: "◷", label: t("Cakto takim"), hint: t("Shërbimi, data dhe ora nga biseda."), href: `/b/${props.slug}/inbox/${props.conversationId}/customer#cakto-takim` }] : []),
             { group: t("Informacioni"), icon: "☺", label: t("Detajet e klientit"), hint: t("Kontakti, porositë dhe takimet."), href: `/b/${props.slug}/inbox/${props.conversationId}/customer` },

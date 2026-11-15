@@ -36,6 +36,8 @@ const errors: Record<string, [string, number]> = {
   workflow_not_ready: ["Produkti është në katalog, por workflow-i i porosisë nuk u verifikua. Kontakto stafin.", 409],
   customer_unavailable: ["Klienti nuk i përket këtij biznesi.", 403],
   unsupported_order_scope: ["Dërgimi mbështet vetëm një produkt me sasi 1. Kjo kërkesë duhet shqyrtuar nga stafi.", 400],
+  invalid_order_scope: ["Fotot e zgjedhura nuk i përkasin kësaj porosie. Zgjidhi përsëri.", 400],
+  invalid_selection: ["Fotot e zgjedhura nuk i përkasin kësaj bisede ose nuk janë fusha foto e produktit. Zgjidhi përsëri.", 400],
   submission_unavailable: ["Porosia nuk u gjet në këtë bisedë.", 404],
   result_conflict: ["Rezultati i porosisë është regjistruar tashmë. Rifresko gjendjen.", 409],
   submission_in_flight: ["Dërgimi mund të jetë ende në proces. Prit të paktën një minutë para pajtimit manual.", 409],
@@ -54,10 +56,23 @@ function isReceipt(value: unknown): value is SubmissionReceipt {
 }
 
 /** Server-owned state only: the POST body cannot supply prices, product IDs or intent keys. */
-export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string; expectedRevision?: number; actionId?: string }): Promise<SubmissionReceipt> {
+/** The photos staff chose, per photo field: storage paths of order-files. The database checks each one. */
+export type ChosenFiles = Record<string, string[]>;
+/** Shape only, from the request body; null when absent, false when malformed. */
+export function readChosenFiles(raw: unknown): ChosenFiles | null | false {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) return false;
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length > 10) return false;
+  for (const [key, paths] of entries)
+    if (!/^[a-z][a-z0-9_]{0,39}$/.test(key) || !Array.isArray(paths) || paths.length > 10 || paths.some((p) => typeof p !== "string" || p.length > 300)) return false;
+  return Object.fromEntries(entries) as ChosenFiles;
+}
+
+export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string; expectedRevision?: number; actionId?: string; files?: ChosenFiles | null }): Promise<SubmissionReceipt> {
   return submitOrder(input);
 }
-async function submitOrder(input: {businessId: string; conversationId: string; userId: string; expectedRevision?: number; actionId?: string}): Promise<SubmissionReceipt> {
+async function submitOrder(input: {businessId: string; conversationId: string; userId: string; expectedRevision?: number; actionId?: string; files?: ChosenFiles | null}): Promise<SubmissionReceipt> {
   assertBusinessEffectAllowed("order.create");
   if (isIsolatedExecution()) refuseIsolatedEffect("order.create");
   const db = createServiceSupabase();
@@ -80,7 +95,7 @@ async function submitOrder(input: {businessId: string; conversationId: string; u
     const eligible = input.actionId ? actions.filter(a => a.id === input.actionId) : pending.length ? pending : actions;
     if (eligible.length !== 1 || !uuid.test(eligible[0].id)) fail("confirmation_required");
     const { data, error } = await db.rpc("submit_process_order", { p_business: businessId, p_conversation: conversationId, p_revision: row.revision,
-      p_action: eligible[0].id, p_user: userId, p_job: null, p_token: null, p_files: null });
+      p_action: eligible[0].id, p_user: userId, p_job: null, p_token: null, p_files: input.files ?? null });
     if (error || !isReceipt(data)) fail(error?.message ?? "write_failed");
     return settleReceipt(businessId, userId, data);
   }

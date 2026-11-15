@@ -462,6 +462,55 @@ function submissionMessage(submission: Submission | undefined, t: (text: string)
   return t("Porosia u ruajt, por dërgimi te webi nuk u verifikua. Kontrollo te Porositë; mos e ridërgo.");
 }
 
+/**
+ * The agent's order waiting for staff, when the business website needs photos: staff choose the photos
+ * for each photo field (from the conversation or the device), then send. Prices and products stay the
+ * agent's reviewed order; only the files are added, and the server checks each one.
+ */
+export function ConfirmAgentOrder(props: {
+  businessId: string; conversationId: string; process: string; actionId: string;
+  photoFields: { key: string; label: string; type: "photo" | "file"; required: boolean; min?: number; max?: number }[];
+}) {
+  const t = useDashboardTranslator();
+  const router = useRouter();
+  const base = `/api/businesses/${props.businessId}/conversations/${props.conversationId}`;
+  const [selection, setSelection] = useState<Selection>(emptySelection);
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const declared: Declared = { options: [], addons: [], fields: props.photoFields };
+  const missing = props.photoFields.filter((f) => (selection.files[f.key]?.length ?? 0) < Math.max(f.min ?? 0, f.required ? 1 : 0));
+  async function send() {
+    if (!window.confirm(t("Dërgo porosinë që përgatiti agjenti, me fotot e zgjedhura? Ky veprim nuk kthehet mbrapsht."))) return;
+    setSending(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`${base}/orders`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actionId: props.actionId, files: selection.files }) });
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string; notice?: string; submissionStatus?: Submission["status"] };
+      if (!res.ok && res.status !== 202) throw new Error(json.error || t("Porosia nuk u dërgua."));
+      setMessage({ text: json.notice ?? (json.error || submissionMessage({ ...(json as Omit<Submission, "status">), status: json.submissionStatus ?? "pending_reconciliation" }, t)), error: false });
+      router.refresh();
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : t("Porosia nuk u dërgua."), error: true });
+    } finally {
+      setSending(false);
+    }
+  }
+  return (
+    <div id="konfirmo-porosine" className="conversation-flag" role="group" aria-label={t("Konfirmo porosinë")}>
+      <p>{t("Një porosi pret konfirmimin tënd")} ({props.process}). {t("Zgjidh fotot që shkojnë te webi i biznesit, pastaj dërgoje.")}</p>
+      <div className="smart-form-grid">
+        <DeclaredInputs base={base} declared={declared} variantExternalId={null} currency={null} selection={selection} onChange={setSelection} />
+      </div>
+      <button type="button" className="btn btn-primary" disabled={sending || missing.length > 0} onClick={() => void send()}>
+        {sending ? t("Duke dërguar…") : t("Dërgo porosinë")}
+      </button>
+      {missing.length > 0 && <p className="muted-copy">{t("Zgjidh foton për")} «{missing[0].label}».</p>}
+      {message && <p role={message.error ? "alert" : "status"} className={message.error ? "text-danger" : "muted-copy"}>{message.text}</p>}
+    </div>
+  );
+}
+
 /** Opens the form when the menu links to it (#krijo-porosi, #cakto-takim). */
 function useHashOpen(id: string) {
   const [open, setOpen] = useState(false);
