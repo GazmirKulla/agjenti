@@ -1,7 +1,8 @@
 /** Who wrote a line: the customer, a person of the business, or the agent. */
 export type Speaker = "klienti" | "biznesi" | "agjenti";
-export type Line = { speaker: Speaker; text: string; at: string };
-export type Transcript = { key: string; channel: "instagram" | "whatsapp"; lines: Line[]; lastAt: string };
+/** `id` is the provider's message id, when the line was read from the provider. */
+export type Line = { speaker: Speaker; text: string; at: string; id?: string };
+export type Transcript = { key: string; channel: "instagram" | "whatsapp"; lines: Line[]; lastAt: string; customer?: { id: string; username?: string } };
 
 const EMAIL = /[\w.+-]+@[\w-]+(\.[\w-]+)+/g;
 // Phone-like runs: 9+ digits with spaces, dots, dashes or a leading + (prices such as "1500 - 2000" stay).

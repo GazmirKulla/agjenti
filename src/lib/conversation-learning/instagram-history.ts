@@ -37,7 +37,7 @@ export async function instagramHistory(params: {
   agentMessageIds?: Set<string>;
 }): Promise<Transcript[]> {
   const per = Math.min(params.perConversation, INSTAGRAM_MESSAGE_LIMIT);
-  const conversations: { id: string; customer: string; updated: string }[] = [];
+  const conversations: { id: string; customer: string; username?: string; updated: string }[] = [];
   let after: string | undefined;
   for (let page = 0; page < 10 && conversations.length < params.maxConversations; page++) {
     const body = await params.graph("me/conversations", {
@@ -47,8 +47,8 @@ export async function instagramHistory(params: {
     for (const row of list<{ id?: string; updated_time?: string; participants?: { data?: Participant[] } }>(body.data)) {
       if (!row.id || !row.updated_time) continue;
       if (Date.parse(row.updated_time) < params.since.getTime()) { older = true; break; }
-      const customer = list<Participant>(row.participants?.data).find((p) => p.id && p.id !== params.accountId)?.id;
-      if (customer) conversations.push({ id: row.id, customer, updated: new Date(row.updated_time).toISOString() });
+      const customer = list<Participant>(row.participants?.data).find((p) => p.id && p.id !== params.accountId);
+      if (customer?.id) conversations.push({ id: row.id, customer: customer.id, username: customer.username, updated: new Date(row.updated_time).toISOString() });
       if (conversations.length >= params.maxConversations) break;
     }
     const paging = body.paging as { cursors?: { after?: string }; next?: string } | undefined;
@@ -69,8 +69,12 @@ export async function instagramHistory(params: {
         speaker: m.from?.id === conversation.customer ? "klienti" : m.id && params.agentMessageIds?.has(m.id) ? "agjenti" : "biznesi",
         text: m.message as string,
         at: new Date(m.created_time as string).toISOString(),
+        ...(m.id ? { id: m.id } : {}),
       }));
-    return lines.length ? { key: `instagram:${conversation.customer}`, channel: "instagram", lines, lastAt: conversation.updated } : null;
+    return lines.length ? {
+      key: `instagram:${conversation.customer}`, channel: "instagram", lines, lastAt: conversation.updated,
+      customer: { id: conversation.customer, ...(conversation.username ? { username: conversation.username } : {}) },
+    } : null;
   };
 
   const out: Transcript[] = [];

@@ -7,6 +7,7 @@ import { conversationFolder, parseConversationFile } from "./instagram-export";
 import { withAiUsage } from "@/lib/ai/usage";
 import { analyseStyle, consolidate, countBy, existingData, extractBatch, finalSuggestions, markAnalysed, MAX_ANALYSIS_CANDIDATES, storeSuggestions, threadsToAnalyse, type AnalysisCheckpoint } from "./analysis";
 import type { StyleStats } from "./style";
+import { addHistoryToInbox, DEFAULT_HISTORY_LIMIT, type HistoryOptions } from "./inbox-import";
 import { agentMessageHashes, exportThreadMessages, inboxThreadMessages, withoutDuplicates, type StoredLine, type TrainingMessage } from "./normalize";
 
 export const TRAINING_BUCKET = "conversation-training";
@@ -16,7 +17,7 @@ const STEP_MS = 45_000;
 const BATCH = 500;
 
 export type UploadedFile = { path: string; name: string; size: number };
-export type SessionInput = { files?: UploadedFile[]; ownerName?: string };
+export type SessionInput = { files?: UploadedFile[]; ownerName?: string; history?: HistoryOptions };
 export type Stats = {
   conversations: number; messages: number; duplicates: number;
   customerMessages: number; ownerMessages: number; agentMessages: number;
@@ -27,6 +28,8 @@ export type Stats = {
   style?: StyleStats; styleChanges?: string[];
   topics?: Record<string, number>; outcomes?: Record<string, number>;
   analysedConversations?: number; suggestions?: Record<string, number>;
+  /** Instagram history written into Conversations, when the owner allowed it. */
+  inbox?: { conversations: number; created: number; messages: number };
 };
 type Checkpoint = AnalysisCheckpoint & {
   /** Export: the uploaded file being read, the next conversation file in it, and the owner found. */
@@ -303,13 +306,21 @@ async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: St
   // DMs from before Instagram was connected, as far as Meta gives them (20 per conversation).
   if (settings.instagram_history) {
     const account = await instagramAccount(session.business_id);
+    const options = session.input.history ?? { limit: DEFAULT_HISTORY_LIMIT, addToInbox: false };
     if (account) {
-      const history = await instagramHistory({ graph: account.graph, accountId: account.accountId, since: new Date(since), maxConversations: 200, perConversation: 20 })
+      const history = await instagramHistory({ graph: account.graph, accountId: account.accountId, since: new Date(since), maxConversations: options.limit, perConversation: 20 })
         .catch(() => { stats.warnings = [...(stats.warnings ?? []), "Historia e Instagram-it nuk u lexua këtë herë."]; return []; });
       const messages = history.flatMap((t) => inboxThreadMessages(session.business_id, t.key, t.lines.map((l) => ({
         source: l.speaker === "klienti" ? "customer" : l.speaker === "agjenti" ? "agent" : "staff", body: l.text, created_at: l.at,
       }) as StoredLine)));
       await ingest(session, messages, stats, threads);
+      if (options.addToInbox && history.length) {
+        try { stats.inbox = await addHistoryToInbox(db, { businessId: session.business_id, connectionId: account.connectionId, threads: history }); }
+        catch (error) {
+          console.error("[conversation-training] inbox import", error instanceof Error ? error.message.slice(0, 200) : "failed");
+          stats.warnings = [...(stats.warnings ?? []), "Bisedat nuk u shtuan te Bisedat këtë herë."];
+        }
+      }
     }
   }
   return finish(session, stats);
@@ -317,11 +328,11 @@ async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: St
 
 async function instagramAccount(businessId: string) {
   const { data } = await createServiceSupabase().from("instagram_connections")
-    .select("ig_user_id,access_token_ciphertext,status,expires_at")
+    .select("id,ig_user_id,access_token_ciphertext,status,expires_at")
     .eq("business_id", businessId).eq("status", "connected")
     .order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (!data?.access_token_ciphertext || (data.expires_at && Date.parse(data.expires_at) < Date.now())) return null;
-  try { return { accountId: String(data.ig_user_id), graph: instagramGraph(decryptSecret(data.access_token_ciphertext)) }; }
+  try { return { connectionId: String(data.id), accountId: String(data.ig_user_id), graph: instagramGraph(decryptSecret(data.access_token_ciphertext)) }; }
   catch { return null; }
 }
 

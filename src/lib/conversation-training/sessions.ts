@@ -6,6 +6,7 @@ import { loadLearningSettings } from "@/lib/conversation-learning/settings";
 import { removeUploads, TRAINING_BUCKET, type SessionInput, type UploadedFile } from "./job";
 import { applySuggestion, type ApplyRow } from "./apply";
 import { approvable, bulkSafe, parseEdit, type ReviewRow } from "./review";
+import { HISTORY_LIMITS, parseHistoryOptions } from "./inbox-import";
 
 export const MAX_FILES = 20;
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
@@ -35,12 +36,17 @@ export async function listSessions(businessId: string) {
     db.from("conversation_training_messages").select("id", { count: "exact", head: true }).eq("business_id", businessId),
   ]);
   if (sessions.error) throw new PersistenceError("Importet nuk u ngarkuan.", sessions.error.code === "42P01" || sessions.error.code === "PGRST205" ? 503 : 500);
-  return { enabled: settings.enabled, lookbackDays: Math.min(settings.lookback_days, 365), sessions: sessions.data ?? [], keptMessages: kept.count ?? 0 };
+  return { enabled: settings.enabled, lookbackDays: Math.min(settings.lookback_days, 365), instagramHistory: settings.instagram_history, historyLimits: HISTORY_LIMITS, sessions: sessions.data ?? [], keptMessages: kept.count ?? 0 };
 }
 
-export async function startInbox(businessId: string, userId: string) {
+/** `limit` is how many Instagram conversations are read from Meta (50, 100 or 200);
+ * `addToInbox` also writes them into the business's Conversations. */
+export async function startInbox(businessId: string, userId: string, input: { limit?: unknown; addToInbox?: unknown } = {}) {
   await requireEnabled();
-  const { data, error } = await createServiceSupabase().rpc("start_conversation_training", { p_business: businessId, p_user: userId, p_source: "inbox", p_input: {}, p_status: "queued" });
+  const history = parseHistoryOptions(input);
+  if (!history) throw new PersistenceError(`Zgjidh ${HISTORY_LIMITS.join(", ")} biseda.`, 400);
+  const sessionInput: SessionInput = { history };
+  const { data, error } = await createServiceSupabase().rpc("start_conversation_training", { p_business: businessId, p_user: userId, p_source: "inbox", p_input: sessionInput, p_status: "queued" });
   if (error) throw startError(error.message);
   return { id: data as string };
 }
