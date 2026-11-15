@@ -12,7 +12,7 @@ export const MAX_FILES = 20;
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
 const EXTENSIONS = new Set(["zip", "json", "html", "htm"]);
 
-export const sessionColumns = "id,source,status,stage,progress,stats,error,created_at,updated_at,finished_at,expires_at,history:input->history,historyOnly:input->historyOnly";
+export const sessionColumns = "id,source,status,stage,progress,stats,error,created_at,updated_at,finished_at,expires_at,next_attempt_at,leased_until,history:input->history,historyOnly:input->historyOnly";
 
 const startError = (message: string) => {
   if (message.includes("session_active")) return new PersistenceError("Një import është ende në punë. Prit sa të mbarojë.", 409);
@@ -41,6 +41,13 @@ export async function listSessions(businessId: string) {
 
 /** `limit` is how many Instagram conversations are read from Meta (50, 100 or 200);
  * `addToInbox` also writes them into the business's Conversations. */
+/** An import left waiting: its step is overdue, or the worker holding it stopped (its lease
+ * ran out). The chain of steps normally moves on by itself; this lets an open page restart it. */
+export function stalled(rows: { status: string; next_attempt_at?: string | null; leased_until?: string | null }[], now = Date.now()) {
+  return rows.some((s) => (s.status === "queued" && !!s.next_attempt_at && Date.parse(s.next_attempt_at) < now - 20_000)
+    || (s.status === "running" && !!s.leased_until && Date.parse(s.leased_until) < now));
+}
+
 export async function startInbox(businessId: string, userId: string, input: { limit?: unknown; addToInbox?: unknown } = {}) {
   await requireEnabled();
   const history = parseHistoryOptions(input);

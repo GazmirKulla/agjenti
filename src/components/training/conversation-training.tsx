@@ -175,6 +175,7 @@ export function ConversationTraining({ slug }: { slug: string }) {
                       <p className="training-note">{s.status === "uploading" ? "Po ngarkohet…" : s.progress.label || "Në radhë…"}
                         {s.status !== "uploading" && [stepOf(s), timeLeft(s.progress)].filter(Boolean).length > 0 && ` (${[stepOf(s), timeLeft(s.progress)].filter(Boolean).join(" · ")})`}
                         {" "}Mund ta mbyllësh faqen: vazhdon vetë.</p>
+                      {s.error && <p className="training-warning">{s.error}</p>}
                     </>
                   )}
                   {s.status === "ready" && (

@@ -4,7 +4,7 @@ import { requireBusinessAccess } from "@/lib/tenant/access";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { continueTraining, workerOrigin } from "@/lib/conversation-training/continue";
 import { compareReplies, listTestMessages, recordTestFeedback } from "@/lib/conversation-training/compare";
-import { applyApproved, approveSafe, confirmUpload, decideSuggestion, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, retryInboxHistory, startInbox } from "@/lib/conversation-training/sessions";
+import { applyApproved, approveSafe, confirmUpload, decideSuggestion, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, retryInboxHistory, stalled, startInbox } from "@/lib/conversation-training/sessions";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -34,7 +34,10 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams, session = params.get("session");
     if (session && params.get("tests")) return json({ messages: await listTestMessages(businessId, session) });
     if (session) return json(await listSuggestions(businessId, session));
-    return json(await listSessions(businessId));
+    const list = await listSessions(businessId);
+    // The page asks every few seconds while an import runs: a stalled one is started again.
+    if (stalled(list.sessions)) wake(businessId, request);
+    return json(list);
   } catch (error) { return failure(error); }
 }
 

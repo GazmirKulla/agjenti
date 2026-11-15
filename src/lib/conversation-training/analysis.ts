@@ -127,31 +127,56 @@ export async function analyseStyle(businessId: string, previous?: StyleStats) {
 }
 
 /** The next batch of conversations, bounded in size, with the AI's findings. */
-export async function extractBatch(businessId: string, threads: string[], from: number, batchIndex: number) {
-  const keys = threads.slice(from, from + BATCH_THREADS);
+/** Batches read by the AI at the same time in one step. */
+export const PARALLEL_BATCHES = 4;
+type Loaded = { thread: string; turns: Turn[] };
+
+/** Splits the next conversations, in order, into up to `parallel` batches within the size limits. */
+export function planBatches(keys: string[], loaded: Loaded[], parallel = PARALLEL_BATCHES) {
+  const groups: Loaded[][] = [];
+  let size = 0;
+  for (const t of loaded) {
+    const length = t.turns.reduce((sum, turn) => sum + turn.text.length + 30, 0);
+    const current = groups.at(-1);
+    if (current && current.length < BATCH_THREADS && size + length <= BATCH_CHARS) { current.push(t); size += length; continue; }
+    if (groups.length >= parallel) break;
+    groups.push([t]); size = length;
+  }
+  return groups.map((group) => ({ group, end: keys.indexOf(group.at(-1)!.thread) + 1, start: keys.indexOf(group[0].thread) }));
+}
+
+/** Reads the next conversations from `from` in up to PARALLEL_BATCHES AI calls at once.
+ * `next` moves past the batches that succeeded in order; a later failure is read again. */
+export async function extractBatch(businessId: string, threads: string[], from: number, parallel = PARALLEL_BATCHES) {
+  const keys = threads.slice(from, from + BATCH_THREADS * parallel);
   const loaded = (await loadThreads(businessId, keys, 8000))
     .map((t) => ({ ...t, turns: t.turns.slice(-TURNS_PER_THREAD) }))
     .filter((t) => t.turns.some((turn) => turn.speaker === "customer"));
   const order = new Map(keys.map((k, i) => [k, i]));
   loaded.sort((a, b) => (order.get(a.thread) ?? 0) - (order.get(b.thread) ?? 0));
-  const picked: typeof loaded = [];
-  let size = 0;
-  for (const t of loaded) {
-    const length = t.turns.reduce((sum, turn) => sum + turn.text.length + 30, 0);
-    if (picked.length && size + length > BATCH_CHARS) break;
-    picked.push(t); size += length;
-  }
-  // Conversations not read in this batch stay for the next one.
-  const consumed = picked.length ? keys.indexOf(picked.at(-1)!.thread) + 1 : keys.length;
-  if (!picked.length) return { next: from + consumed, candidates: [] as Candidate[], intents: [] as string[], outcomes: [] as string[] };
-  const { text, refs } = numberTurns(picked);
-  const raw = await structured(EXTRACTION_PROMPT(), { conversations: text }, "conversation_findings", EXTRACTION_SCHEMA, 9000);
-  const conversations = raw && typeof raw === "object" && Array.isArray((raw as { conversations?: unknown }).conversations) ? (raw as { conversations: { intents?: unknown; outcome?: unknown }[] }).conversations : [];
+  const plan = planBatches(keys, loaded, parallel);
+  // Nothing to read in these conversations: they are all consumed.
+  if (!plan.length) return { next: from + keys.length, candidates: [] as Candidate[], intents: [] as string[], outcomes: [] as string[] };
+  const settled = await Promise.allSettled(plan.map(async ({ group, start }) => {
+    const { text, refs } = numberTurns(group);
+    const raw = await structured(EXTRACTION_PROMPT(), { conversations: text }, "conversation_findings", EXTRACTION_SCHEMA, 9000);
+    const conversations = raw && typeof raw === "object" && Array.isArray((raw as { conversations?: unknown }).conversations) ? (raw as { conversations: { intents?: unknown; outcome?: unknown }[] }).conversations : [];
+    return {
+      // Unique per batch: the position of its first conversation in the whole list.
+      candidates: validCandidates(raw, refs, 1_000_000 + from + start),
+      intents: conversations.flatMap((c) => (Array.isArray(c.intents) ? c.intents.filter((i): i is string => typeof i === "string" && INTENTS.includes(i)) : [])),
+      outcomes: conversations.flatMap((c) => (typeof c.outcome === "string" && OUTCOMES.includes(c.outcome) ? [c.outcome] : [])),
+    };
+  }));
+  const done = settled.findIndex((r) => r.status === "rejected");
+  const ok = done < 0 ? settled.length : done;
+  if (!ok) throw (settled[0] as PromiseRejectedResult).reason;
+  const results = settled.slice(0, ok).map((r) => (r as PromiseFulfilledResult<{ candidates: Candidate[]; intents: string[]; outcomes: string[] }>).value);
   return {
-    next: from + consumed,
-    candidates: validCandidates(raw, refs, batchIndex),
-    intents: conversations.flatMap((c) => (Array.isArray(c.intents) ? c.intents.filter((i): i is string => typeof i === "string" && INTENTS.includes(i)) : [])),
-    outcomes: conversations.flatMap((c) => (typeof c.outcome === "string" && OUTCOMES.includes(c.outcome) ? [c.outcome] : [])),
+    next: from + plan[ok - 1].end,
+    candidates: results.flatMap((r) => r.candidates),
+    intents: results.flatMap((r) => r.intents),
+    outcomes: results.flatMap((r) => r.outcomes),
   };
 }
 

@@ -249,7 +249,7 @@ async function analysisStep(session: TrainingSession, data: Checkpoint, stats: S
     const from = data.nextThread ?? 0;
     const candidates = data.candidates ?? [];
     if (from < threads.length) {
-      const batch = await extractBatch(session.business_id, threads, from, Math.floor(from / 5) + candidates.length);
+      const batch = await extractBatch(session.business_id, threads, from);
       const next = { ...data, nextThread: batch.next, candidates: [...candidates, ...batch.candidates].slice(0, MAX_ANALYSIS_CANDIDATES),
         topics: countBy(batch.intents, { ...(data.topics ?? {}) }), outcomes: countBy(batch.outcomes, { ...(data.outcomes ?? {}) }) };
       return save(session, next, batch.next < threads.length ? "extract" : "consolidate", stats,
