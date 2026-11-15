@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
+import { ACCOUNT_SUPPORT_EMAIL } from "@/lib/account/deletion-notice";
 import "../privacy/privacy.css";
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export default function SupportPage() {
           <span className="privacy-kicker">AGJENTI SUPPORT</span>
           <h1>How can we help?</h1>
           <p>Get help with Agjenti on iOS, Android or the web. Contact us about app issues, account access, feedback or feature requests.</p>
-          <a className="privacy-login" href="mailto:zanastoreeu@gmail.com?subject=Agjenti%20support">Email support →</a>
+          <a className="privacy-login" href={`mailto:${ACCOUNT_SUPPORT_EMAIL}?subject=Agjenti%20support`}>Email support →</a>
         </div>
         <div className="privacy-layout">
           <aside>
@@ -37,7 +38,7 @@ export default function SupportPage() {
           <article className="privacy-article">
             <section id="contact">
               <h2>Contact support</h2>
-              <p>Email <a href="mailto:zanastoreeu@gmail.com">zanastoreeu@gmail.com</a>. You can contact us without signing in to Agjenti.</p>
+              <p>Email <a href={`mailto:${ACCOUNT_SUPPORT_EMAIL}`}>{ACCOUNT_SUPPORT_EMAIL}</a>. You can contact us without signing in to Agjenti.</p>
               <p>Na shkruaj në shqip ose anglisht. You can write to us in Albanian or English.</p>
             </section>
             <section id="app-issues">
@@ -62,7 +63,7 @@ export default function SupportPage() {
       </main>
       <footer className="privacy-footer">
         <Link href="/">Agjenti</Link>
-        <a href="mailto:zanastoreeu@gmail.com">zanastoreeu@gmail.com</a>
+        <a href={`mailto:${ACCOUNT_SUPPORT_EMAIL}`}>{ACCOUNT_SUPPORT_EMAIL}</a>
       </footer>
     </div>
   );

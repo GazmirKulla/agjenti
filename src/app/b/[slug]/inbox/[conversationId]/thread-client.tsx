@@ -131,6 +131,8 @@ export function ThreadClient(props: {
       if (!res.ok) throw new Error(json.error || "Veprimi dështoi.");
       // Accepted is not always completed (an order awaiting reconciliation).
       if (json.ok === false && json.error) setError(json.error);
+      // Saved here but not sent to the website (e.g. a photo is missing): say why.
+      else if (typeof json.notice === "string") setError(json.notice);
       if (path === "messages") setText("");
       if (path === "delete") {
         router.push(`/b/${props.slug}/inbox`);

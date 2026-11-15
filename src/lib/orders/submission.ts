@@ -1,5 +1,7 @@
 import { CapabilityEnforcementError, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { submitExternalOrder } from "@/lib/integrations/zana";
+import { localFieldDetail, refusedField, signFiles } from "./dispatch";
+import type { RejectionDetail } from "./dispatch-detail";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isIsolatedExecution, refuseIsolatedEffect, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
 import type { Snapshot } from "@/lib/orchestration/contracts";
@@ -11,7 +13,9 @@ export type SubmissionReceipt = {
   externalOrderId?: string | null;
   dispatch: boolean;
   payload?: Record<string, unknown>;
-};
+  /** Why the order stayed here (unmapped_product, missing_field…) or the website's refusal code. */
+  reason?: string;
+} & RejectionDetail;
 export class OrderSubmissionError extends Error {
   constructor(public readonly code: string, message: string, public readonly status = 409) { super(message); }
 }
@@ -76,7 +80,7 @@ async function submitOrder(input: {businessId: string; conversationId: string; u
     const eligible = input.actionId ? actions.filter(a => a.id === input.actionId) : pending.length ? pending : actions;
     if (eligible.length !== 1 || !uuid.test(eligible[0].id)) fail("confirmation_required");
     const { data, error } = await db.rpc("submit_process_order", { p_business: businessId, p_conversation: conversationId, p_revision: row.revision,
-      p_action: eligible[0].id, p_user: userId, p_job: null, p_token: null });
+      p_action: eligible[0].id, p_user: userId, p_job: null, p_token: null, p_files: null });
     if (error || !isReceipt(data)) fail(error?.message ?? "write_failed");
     return settleReceipt(businessId, userId, data);
   }
@@ -86,23 +90,34 @@ async function submitOrder(input: {businessId: string; conversationId: string; u
 async function settleReceipt(businessId: string, userId: string | null, receipt: SubmissionReceipt): Promise<SubmissionReceipt> {
   const db = createServiceSupabase();
 
-  if (!receipt.dispatch) return receipt;
+  if (!receipt.dispatch) {
+    // Kept here because something the website needs is missing: name it in the owner's words.
+    if (receipt.status === "local_only" && typeof receipt.field === "string")
+      return { ...receipt, ...await localFieldDetail(businessId, receipt.orderId, receipt.field, receipt.line).catch(() => ({})) };
+    return receipt;
+  }
   if (userId === null) fail("unexpected_dispatch");
   // PENDING_RECONCILIATION was persisted before permission to send was returned.
   // Crash, response loss or concurrent replay cannot acquire permission again.
+  const unverified = (reason: string): SubmissionReceipt => ({ ...receipt, dispatch: false, payload: undefined, status: "pending_reconciliation", reason });
+  const payload = await signFiles(receipt.payload!).catch(() => null);
+  if (!payload) return unverified("files_unavailable");
   let result;
   try {
-    result = await submitExternalOrder({ businessId, attemptId: receipt.attemptId, payload: receipt.payload! });
+    result = await submitExternalOrder({ businessId, attemptId: receipt.attemptId, payload });
   } catch {
-    return { ...receipt, dispatch: false, payload: undefined, status: "pending_reconciliation" };
+    return unverified("dispatch_unverified");
   }
+  // The orders URL was checked when permission was granted; removed since then, nothing was sent.
+  if (result.status === "local_only") return unverified("integration_removed");
   const finished = await db.rpc("finish_order_submission", { p_business: businessId, p_order: receipt.orderId,
     p_attempt: receipt.attemptId, p_status: result.status, p_external: result.orderId ?? null }).then(value => value, () => null);
   // An accepted response is not reported as successful until persisted.
   if (!isReceipt(finished?.data) || finished?.error || finished.data.dispatch
       || finished.data.orderId !== receipt.orderId || finished.data.attemptId !== receipt.attemptId)
-    return { ...receipt, dispatch: false, payload: undefined, status: "pending_reconciliation" };
-  return finished.data;
+    return unverified("result_unrecorded");
+  const detail = result.status === "rejected" && result.field ? await refusedField(businessId, payload, result.code, result.field).catch(() => ({})) : {};
+  return { ...finished.data, ...(result.code ? { reason: result.code } : {}), ...detail };
 }
 
 /** Manual, evidence-backed reconciliation, not a retry endpoint. */
@@ -126,11 +141,28 @@ export function submissionError(error: unknown) {
   if (error instanceof CapabilityEnforcementError) return { status: 403, body: { error: error.message, code: error.code } };
   return { status: 503, body: { error: "Rezultati nuk u verifikua. Kontrollo listën e porosive para një konfirmimi të ri.", code: "submission_unverified" } };
 }
+/** "mungon «Fotoja»" / "«Ngjyra» nuk pranohet", from the field Agjenti or the website named. */
+function fieldText(receipt: SubmissionReceipt): string {
+  if (!receipt.field) return "";
+  const label = `«${receipt.fieldLabel ?? receipt.field}»`;
+  const what = receipt.reason?.startsWith("missing_") ? `mungon ${label}` : `${label} nuk pranohet`;
+  return receipt.line && receipt.line > 1 ? `artikulli ${receipt.line}: ${what}` : what;
+}
+/** Why an order stayed here instead of going to the website, for the person who confirmed it. */
+export function localOrderNotice(receipt: SubmissionReceipt): string | undefined {
+  if (receipt.status !== "local_only" || !receipt.reason) return undefined;
+  const why = fieldText(receipt) || (["unmapped_product", "not_synced", "unmapped_variant"].includes(receipt.reason)
+    ? "produkti nuk është i lidhur ose i rifreskuar nga webi" : "zgjedhjet nuk përputhen me katalogun e webit");
+  return `Porosia u ruajt këtu, por nuk u dërgua te webi: ${why}.`;
+}
 export function submissionResponse(receipt: SubmissionReceipt) {
   const status = receipt.status === "pending_reconciliation" ? 202 : receipt.status === "rejected" ? 502 : 200;
   return { status, body: { ok: status === 200, orderId: receipt.orderId, externalOrderId: receipt.externalOrderId,
     submissionStatus: receipt.status, submissionId: receipt.attemptId, localOrderCreated: true,
+    ...(receipt.reason ? { reason: receipt.reason } : {}), ...(receipt.field ? { field: receipt.field } : {}),
+    ...(receipt.fieldLabel ? { fieldLabel: receipt.fieldLabel } : {}), ...(receipt.line ? { line: receipt.line } : {}),
     ...(status === 202 ? { error: "Porosia është ruajtur, por dërgimi nuk është verifikuar. Kërkohet kontroll nga stafi; mos e ridërgo." }
-      : status === 502 ? { error: "Sistemi i jashtëm e refuzoi porosinë. Retry nuk e ridërgon." } : {}),
+      : status === 502 ? { error: `Sistemi i jashtëm e refuzoi porosinë${fieldText(receipt) ? `: ${fieldText(receipt)}` : ""}. Retry nuk e ridërgon.` } : {}),
+    ...(localOrderNotice(receipt) ? { notice: localOrderNotice(receipt) } : {}),
   } };
 }

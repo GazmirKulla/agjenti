@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
+import { ACCOUNT_SUPPORT_EMAIL } from "@/lib/account/deletion-notice";
 import "../privacy/privacy.css";
 
 export const metadata: Metadata = {
@@ -163,7 +164,7 @@ export default function TermsPage() {
               <h2>10. Kontakti</h2>
               <p>
                 Për pyetje mbi këto kushte:{" "}
-                <a href="mailto:zanastoreeu@gmail.com">zanastoreeu@gmail.com</a>
+                <a href={`mailto:${ACCOUNT_SUPPORT_EMAIL}`}>{ACCOUNT_SUPPORT_EMAIL}</a>
                 . Shih edhe{" "}
                 <Link href="/privacy">politikën e privatësisë</Link>.
               </p>

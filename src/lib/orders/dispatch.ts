@@ -21,8 +21,9 @@ type Begin = {
 };
 
 /** Short-lived links instead of storage paths, so the website can download the files. */
-async function signFiles(payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+export async function signFiles(payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
   const items = Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [];
+  if (!items.some((item) => Array.isArray(item.files) && item.files.length)) return payload;
   const storage = createServiceSupabase().storage.from(ORDER_FILES_BUCKET);
   const signed = [];
   for (const item of items) {
@@ -65,7 +66,7 @@ export async function dispatchManualOrder(input: { businessId: string; userId: s
 }
 
 /** The item and the owner's label for the field the website refused. Best effort: the order is already recorded. */
-async function refusedField(businessId: string, payload: Record<string, unknown>, code: string | undefined, field: string): Promise<RejectionDetail> {
+export async function refusedField(businessId: string, payload: Record<string, unknown>, code: string | undefined, field: string): Promise<RejectionDetail> {
   const items = Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [];
   const ids = [...new Set(items.map((item) => item.productId).filter((id): id is string => typeof id === "string"))];
   const { data } = ids.length
@@ -74,4 +75,16 @@ async function refusedField(businessId: string, payload: Record<string, unknown>
     : { data: null };
   const specs = new Map((data ?? []).map((p) => [p.external_id as string, (p.external_spec ?? null) as LinkedSpec | null]));
   return rejectionDetail({ code, field, items, specs });
+}
+
+/** The owner's label for a field Agjenti itself found missing or invalid (the order stayed here). */
+export async function localFieldDetail(businessId: string, orderId: string, field: string, line?: number): Promise<RejectionDetail> {
+  const { data } = await createServiceSupabase().from("order_items").select("position,products(external_spec)")
+    .eq("order_id", orderId).order("position", { ascending: true }).then((v) => v, () => ({ data: null }));
+  const rows = (data ?? []) as { products: { external_spec: LinkedSpec | null } | { external_spec: LinkedSpec | null }[] | null }[];
+  const spec = (row: (typeof rows)[number] | undefined) => (Array.isArray(row?.products) ? row?.products[0] : row?.products)?.external_spec ?? null;
+  const own = spec(rows[(line ?? 1) - 1]);
+  const pool = own ? [own] : rows.map(spec).filter((s): s is LinkedSpec => !!s);
+  const fieldLabel = pool.flatMap((s) => [...s.options, ...s.fields]).find((f) => f.key === field)?.label;
+  return { field, ...(fieldLabel ? { fieldLabel } : {}), ...(line ? { line } : {}) };
 }

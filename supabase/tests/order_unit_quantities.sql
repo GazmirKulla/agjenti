@@ -65,10 +65,11 @@ end $$;
 create function pg_temp.submit(a uuid, rev integer) returns jsonb language sql as $$
  select public.submit_process_order(i.business,i.conversation,rev,a,i.owner,null,null) from ids i
 $$;
+-- No website here: the order is recorded locally (20261115200000_agent_orders_v2.sql); the website request is tested in agent_orders_v2.sql.
 do $$ declare a uuid; r jsonb; begin
  a:=pg_temp.review((select wood from ids),'Dërrasë pishe',1200,'0.75',1);
  r:=pg_temp.submit(a,1);
- if (r->>'totalAmount' is not null) or (r#>>'{payload,totalAmount}')::numeric<>900 or (r#>>'{payload,items,0,quantity}')::numeric<>0.75 then raise exception 'agent payload %',r; end if;
+ if r->>'status' is distinct from 'local_only' or r ? 'payload' then raise exception 'agent receipt %',r; end if;
  if (select total_amount from public.orders where id=(r->>'orderId')::uuid)<>900 then raise exception 'agent total'; end if;
  if (select quantity from public.order_items where order_id=(r->>'orderId')::uuid)<>0.75 then raise exception 'agent item quantity'; end if;
  if (select payload->>'unit' from public.orders where id=(r->>'orderId')::uuid)<>'m³' then raise exception 'agent unit'; end if;
@@ -80,7 +81,8 @@ select pg_temp.fails($$select pg_temp.submit(pg_temp.review((select wood from id
 select pg_temp.fails($$select pg_temp.submit(pg_temp.review((select chair from ids),'Karrige',2500,'2',5),5)$$,'commercial_terms_changed');
 do $$ declare r jsonb; begin
  r:=pg_temp.submit(pg_temp.review((select chair from ids),'Karrige',2500,'1',6),6);
- if (r#>>'{payload,totalAmount}')::numeric<>2500 or (r#>>'{payload,items,0,quantity}')::numeric<>1 then raise exception 'chair payload %',r; end if;
+ if r->>'status' is distinct from 'local_only' or (select total_amount from public.orders where id=(r->>'orderId')::uuid)<>2500
+   or (select quantity from public.order_items where order_id=(r->>'orderId')::uuid)<>1 then raise exception 'chair order %',r; end if;
 end $$;
 -- Rows written outside these functions are still bounded.
 select pg_temp.fails($$insert into public.order_items(order_id,quantity) select id,0 from public.orders limit 1$$,

@@ -1,4 +1,4 @@
-/** Version 2 of the website contract. The v1 fields (formats, colors, formatId, colorId) stay for compatibility. */
+/** Version 2 of the website contract. Orders are always v2; the catalog still reads the v1 fields (formats, colors) until they are retired. */
 const catalogExample = {
   version: 2,
   currency: "ALL",
@@ -26,12 +26,7 @@ const catalogExample = {
     colors: [{ id: "ngjyra-1", name: "E bardhë" }],
   }],
 };
-/** What Agjenti sends today (v1) and what it will send once v2 sending is enabled. */
-const orderExample = {
-  channel: "instagram",
-  customer: { name: "Klient shembull", phone: "+355…", city: "Tiranë", address: "Adresë shembull" },
-  items: [{ productId: "produkt-1", productType: "tipi-1", formatId: "format-1", colorId: "ngjyra-1", quantity: 1, character: null }],
-};
+/** The one order shape Agjenti sends (contract v2), from "Krijo porosi" and from the agent's orders staff confirm. */
 const orderExampleV2 = {
   version: 2,
   channel: "instagram",
@@ -78,10 +73,7 @@ ${JSON.stringify(catalogExample, null, 2)}
 
 3. Porositë — POST /api/integrations/agjenti/orders (opsionale)
 Implementoje kur webi ka një sistem real porosish. Nëse mungon, dorëzo katalogun funksional dhe shpjego çfarë mungon; mos ndërto një sistem të ri porosish pa sqaruar scope-in.
-Prano Content-Type: application/json dhe të njëjtin autorizim Bearer. Prano të dyja format:
-- Versioni 1, që dërgon ende rruga e porosive të konfirmuara nga stafi pas agjentit: formatId dhe colorId janë ID-të e formats/colors; character mund të jetë null; customer.city mund të mungojë.
-${JSON.stringify(orderExample, null, 2)}
-- Versioni 2 ("version": 2), që dërgon porosia e krijuar nga pronari në bisedë («Krijo porosi»), me variantin, zgjedhjet, shtesat, fushat dhe skedarët e deklaruar në katalog. Për pajtueshmëri përfshin edhe formatId, colorId dhe character:
+Prano Content-Type: application/json dhe të njëjtin autorizim Bearer. Agjenti dërgon vetëm versionin 2 ("version": 2): source "owner_manual" kur pronari krijon porosinë në bisedë («Krijo porosi»), source "agent" kur stafi konfirmon porosinë që përgatiti agjenti. Çdo artikull ka variantin, zgjedhjet, shtesat, fushat dhe skedarët me ID-të dhe çelësat që deklaron katalogu, pa fusha të tjera:
 ${JSON.stringify(orderExampleV2, null, 2)}
 Valido në server përmes logjikës ekzistuese të checkout-it: produktin, përkatësinë e variantit, opsioneve dhe shtesave, fushat e detyrueshme, sasinë dhe skedarët. Skedarët shkarkoji nga URL-ja menjëherë (URL-të kanë afat) dhe ruaji te storage i webit. Rillogarit çmimin, transportin dhe disponueshmërinë; mos shëno pagesë si të kryer vetëm sepse erdhi kjo kërkesë.
 expectedTotal është shuma e artikujve (çmimi i variantit plus shtesat, herë sasinë), pa transportin. Nëse kjo shumë e rillogaritur ndryshon nga expectedTotal, mos e krijo porosinë: kthe HTTP 409 me {"ok":false,"error":"price_changed","total":1300}.
@@ -120,9 +112,7 @@ export function WebsiteSpecifications({ language = "sq" }: { language?: "sq" | "
     </details>
     <details>
       <summary>Porositë · POST · opsionale</summary>
-      <p className="muted-copy">Shembull adrese: <code>https://webi-juaj.al/api/integrations/agjenti/orders</code>. Agjenti dërgon <code>Content-Type: application/json</code> dhe <code>X-Agjenti-Submission-Id</code>, unik për çdo porosi: për të njëjtin ID mos krijo porosi të dytë. Porositë e konfirmuara nga stafi pas agjentit dërgohen ende në versionin 1:</p>
-      <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(orderExample, null, 2)}</code></pre>
-      <p className="muted-copy">«Krijo porosi» në bisedë dërgon versionin 2, me variantin, zgjedhjet, shtesat, fushat dhe skedarët e katalogut (lidhjet e skedarëve skadojnë pas një ore):</p>
+      <p className="muted-copy">Shembull adrese: <code>https://webi-juaj.al/api/integrations/agjenti/orders</code>. Agjenti dërgon <code>Content-Type: application/json</code> dhe <code>X-Agjenti-Submission-Id</code>, unik për çdo porosi: për të njëjtin ID mos krijo porosi të dytë. Çdo porosi dërgohet në versionin 2: nga «Krijo porosi» në bisedë (<code>{'source: "owner_manual"'}</code>) dhe nga porosia e agjentit që konfirmon stafi (<code>{'source: "agent"'}</code>), me variantin, zgjedhjet, shtesat, fushat dhe skedarët me çelësat e katalogut (lidhjet e skedarëve skadojnë pas një ore):</p>
       <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(orderExampleV2, null, 2)}</code></pre>
       <p className="muted-copy"><code>expectedTotal</code> është shuma e artikujve pa transportin. Webi e rillogarit; kur ndryshon, kthe HTTP 409 me <code>{'{"ok": false, "error": "price_changed", "total": 1300}'}</code>. Për sukses kthe HTTP 2xx dhe <code>{'{"ok": true, "orderId": "porosi-1", "orderNumber": 123}'}</code>; <code>orderId</code> (tekst) dhe <code>orderNumber</code> (numër) janë opsionalë. Për dështim kthe status gabimi dhe <code>{'{"ok": false, "error": "kodi", "field": "fusha"}'}</code>. Pa URL porosish, ky integrim nuk dërgon porosi në web. Testi i katalogut nuk verifikon API-në e porosive.</p>
     </details>
@@ -149,9 +139,7 @@ function EnglishWebsiteSpecifications() {
         <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(catalogExample, null, 2)}</code></pre>
       </details>
       <details><summary>Orders · POST · optional</summary>
-        <p className="muted-copy">Example URL: <code>https://your-website.com/api/integrations/agjenti/orders</code>. Agjenti sends <code>Content-Type: application/json</code> and <code>X-Agjenti-Submission-Id</code>, unique per order: never create a second order for the same ID. Orders confirmed by staff after the agent are still sent as version 1:</p>
-        <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(orderExample, null, 2)}</code></pre>
-        <p className="muted-copy">“Create order” in a conversation sends version 2, with the variant, choices, extras, fields and files from the catalog (file links expire after one hour):</p>
+        <p className="muted-copy">Example URL: <code>https://your-website.com/api/integrations/agjenti/orders</code>. Agjenti sends <code>Content-Type: application/json</code> and <code>X-Agjenti-Submission-Id</code>, unique per order: never create a second order for the same ID. Every order is sent as version 2: from “Create order” in a conversation (<code>{'source: "owner_manual"'}</code>) and from the agent&apos;s order that staff confirm (<code>{'source: "agent"'}</code>), with the variant, choices, extras, fields and files under the catalog&apos;s keys (file links expire after one hour):</p>
         <pre className="overflow-x-auto text-sm p-3"><code>{JSON.stringify(orderExampleV2, null, 2)}</code></pre>
         <p className="muted-copy"><code>expectedTotal</code> is the items total without shipping. The website recalculates it; when it differs, return HTTP 409 with <code>{'{"ok": false, "error": "price_changed", "total": 1300}'}</code>. On success return HTTP 2xx and <code>{'{"ok": true, "orderId": "order-1", "orderNumber": 123}'}</code>; <code>orderId</code> (string) and <code>orderNumber</code> (number) are optional. On failure return an error status and <code>{'{"ok": false, "error": "code", "field": "field"}'}</code>. Without an orders URL, this integration does not submit orders to the website. The catalog test does not verify the orders API.</p>
       </details>

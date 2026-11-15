@@ -130,12 +130,27 @@ describe("W4 order submission boundary", () => {
     expect(submissionResponse(await submitConfirmedOrder(args))).toMatchObject({ status: 502, body: { ok: false, orderId } });
     expect((await submitConfirmedOrder(args)).status).toBe("rejected"); expect(m.submit).toHaveBeenCalledTimes(1);
   });
-  it("supports local-only persistence and forwards the authoritative RPC currency/channel, not defaults", async () => {
+  it("forwards the authoritative RPC payload and never records an integration removed after permission as local-only", async () => {
     m.submit.mockResolvedValue({ status: "local_only", ok: true, skipped: true });
-    expect(submissionResponse(await submitConfirmedOrder(args))).toMatchObject({ status: 200, body: { submissionStatus: "local_only" } });
+    expect(submissionResponse(await submitConfirmedOrder(args))).toMatchObject({ status: 202, body: { submissionStatus: "pending_reconciliation", reason: "integration_removed" } });
     expect(m.submit).toHaveBeenCalledWith({ businessId: args.businessId, attemptId: "attempt",
       payload: { channel: "whatsapp", currency: "EUR", totalAmount: 19.5, items: [{ productId, quantity: 1, unitAmount: 19.5 }] } });
-    expect(m.rpc).toHaveBeenCalledWith("submit_process_order", expect.objectContaining({ p_user: "actor", p_revision: 7, p_action: actionId }));
+    expect(m.rpc).toHaveBeenCalledWith("submit_process_order", expect.objectContaining({ p_user: "actor", p_revision: 7, p_action: actionId, p_files: null }));
+    expect(m.rpc).not.toHaveBeenCalledWith("finish_order_submission", expect.anything());
+  });
+  it("keeps an order the database recorded locally, with the reason it gave", async () => {
+    m.rpc.mockImplementation(async () => ({ data: { orderId, attemptId: "attempt", status: "local_only", dispatch: false, reason: "unmapped_product", line: 1 } }));
+    expect(submissionResponse(await submitConfirmedOrder(args))).toMatchObject({ status: 200, body: { submissionStatus: "local_only", reason: "unmapped_product", line: 1,
+      notice: "Porosia u ruajt këtu, por nuk u dërgua te webi: produkti nuk është i lidhur ose i rifreskuar nga webi." } });
+    expect(m.submit).not.toHaveBeenCalled();
+  });
+  it("names the field that kept the order here or that the website refused", () => {
+    const base = { orderId, attemptId: "attempt", dispatch: false } as const;
+    expect(submissionResponse({ ...base, status: "local_only", reason: "missing_field", field: "photo", fieldLabel: "Fotoja", line: 1 }).body.notice)
+      .toBe("Porosia u ruajt këtu, por nuk u dërgua te webi: mungon «Fotoja».");
+    expect(submissionResponse({ ...base, status: "rejected", reason: "invalid_option", field: "color", line: 2 }).body.error)
+      .toBe("Sistemi i jashtëm e refuzoi porosinë: artikulli 2: «color» nuk pranohet. Retry nuk e ridërgon.");
+    expect(submissionResponse({ ...base, status: "local_only" }).body).not.toHaveProperty("notice");
   });
   it.each(["foreign_business", "foreign_conversation", "test_mode", "missing_action", "ambiguous_action"])("rejects %s before the transaction", async cause => {
     if(cause === "foreign_business") state.businessId = "foreign";
@@ -166,7 +181,7 @@ describe("W4 order submission boundary", () => {
     const before = structuredClone(state);
     await submitConfirmedOrder({ ...args, actionId });
     expect(m.rpc).toHaveBeenCalledWith("submit_process_order", { p_business: args.businessId, p_conversation: args.conversationId,
-      p_revision: 7, p_action: actionId, p_user: args.userId, p_job: null, p_token: null });
+      p_revision: 7, p_action: actionId, p_user: args.userId, p_job: null, p_token: null, p_files: null });
     expect(state).toEqual(before);
   });
   it("scopes all receipt/state reads to both business and conversation", async () => {
