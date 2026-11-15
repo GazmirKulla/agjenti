@@ -170,6 +170,8 @@ export const english: Record<string, string> = {
   "Fshi bisedën": "Delete conversation",
   "200 mesazhet më të fundit": "Latest 200 messages",
   "Foto nga biseda": "Conversation image",
+  "Ose zgjidh nga fotot që dërgoi klienti në bisedë:": "Or choose from the photos the customer sent in the conversation:",
+  "Hiq fotot": "Remove photos",
   "Hap": "Open",
   "bashkëngjitjen": "attachment",
   "Mesazh pa tekst": "Message without text",

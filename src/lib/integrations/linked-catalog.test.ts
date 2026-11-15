@@ -47,4 +47,11 @@ describe("normalizeLinkedProduct", () => {
   it("refuses option keys the variants table cannot store", () => {
     expect(() => normalizeLinkedProduct({ id: "x", name: "X", options: [{ key: "Masa e madhe", values: [{ id: "1", name: "1" }] }], variants: [] })).toThrow(LinkedCatalogError);
   });
+  it("keeps the website's photo only as an https link", () => {
+    expect(normalizeLinkedProduct({ id: "p", price: 100, image: "https://cdn.example/p.jpg" }).imageUrl).toBe("https://cdn.example/p.jpg");
+    expect(normalizeLinkedProduct({ id: "p", price: 100, imageUrl: "https://cdn.example/q.jpg", variants: [] }).imageUrl).toBe("https://cdn.example/q.jpg");
+    expect(normalizeLinkedProduct({ id: "p", price: 100, image: "http://cdn.example/p.jpg" }).imageUrl).toBeNull();
+    expect(normalizeLinkedProduct({ id: "p", price: 100, image: "javascript:alert(1)" }).imageUrl).toBeNull();
+    expect(normalizeLinkedProduct({ id: "p", price: 100 }).imageUrl).toBeNull();
+  });
 });

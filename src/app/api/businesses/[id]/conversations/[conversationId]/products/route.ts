@@ -15,7 +15,7 @@ export async function GET(request: Request, context: Context) {
   const access = await transportAccess(businessId, request);
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const query = (new URL(request.url).searchParams.get("q") ?? "").trim().slice(0, 80).replace(/[%_,()\\]/g, " ");
-  let read = access.db.from("products").select("id,name,price_amount,price_mode,price_unit,currency,source,external_spec").eq("business_id", businessId)
+  let read = access.db.from("products").select("id,name,price_amount,price_mode,price_unit,currency,source,external_spec,image_url").eq("business_id", businessId)
     .eq("is_active", true).is("archived_at", null).order("name").limit(40);
   if (query) read = read.ilike("name", `%${query}%`);
   const { data, error } = await read;
@@ -48,6 +48,7 @@ export async function GET(request: Request, context: Context) {
       fields: spec.fields.filter((f) => f.appliesTo === "item"),
     } : null;
     return [{ id: p.id, name: p.name, price: base ?? Math.min(...own.map((v) => v.price)), currency: p.currency, unit: p.price_unit ?? null,
+      image: typeof p.image_url === "string" && p.image_url.startsWith("https://") ? p.image_url : null,
       ...(own.length ? { variants: own.map((v) => ({ id: v.id, label: v.label, price: v.price, externalId: v.externalId })) } : {}),
       ...(declared ? { declared } : {}), sendsToWebsite: sendsOrders && p.source === "linked" }];
   }).slice(0, 20);

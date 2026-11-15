@@ -65,7 +65,7 @@ Mund të përdorësh një route tjetër nëse konventat e projektit e kërkojnë
 Kthe HTTP 200 me {"version":2,"currency":"ALL","orderFields":[],"products":[]}; products është array edhe kur është bosh.
 Çdo produkt ka:
 - id dhe name si string; ID-të e produkteve, varianteve, vlerave të opsioneve dhe shtesave janë të qëndrueshme dhe janë ato që pranon endpoint-i i porosive.
-- productType (string ose null); priceMode: "fixed" | "from" | "range" | "request"; price dhe priceMax (numër ose null); priceUnit (p.sh. "m²", ose null); currency.
+- productType (string ose null); priceMode: "fixed" | "from" | "range" | "request"; price dhe priceMax (numër ose null); priceUnit (p.sh. "m²", ose null); currency; image (lidhje https e fotos kryesore të produktit, ose null).
 - options: [{key, label, affectsPrice, values: [{id, name}]}] — zgjedhjet e klientit (masa, formati, ngjyra, materiali).
 - variants: [{id, options: {key: valueId}, sku, price, active}] — çdo kombinim që ka çmimin ose kodin e vet.
 - addons: [{id, name, price, appliesToVariants}] — shtesa opsionale me çmim.

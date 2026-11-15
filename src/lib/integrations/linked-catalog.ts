@@ -15,6 +15,8 @@ export type LinkedProduct = {
   priceMode: "fixed" | "from" | "range" | "request";
   price: number | null; priceMax: number | null; priceUnit: string | null; currency: string;
   variants: LinkedVariant[]; spec: LinkedSpec;
+  /** The website's main photo of the product (https), or null. */
+  imageUrl: string | null;
 };
 
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -27,6 +29,18 @@ const list = (v: unknown): Record<string, unknown>[] =>
   Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object" && !Array.isArray(x)) : [];
 
 export class LinkedCatalogError extends Error {}
+
+/** `image` (or `imageUrl`) as a plain https link; anything else is ignored. */
+function imageOf(raw: Record<string, unknown>): string | null {
+  const value = typeof raw.image === "string" ? raw.image : typeof raw.imageUrl === "string" ? raw.imageUrl : null;
+  const url = value?.trim();
+  if (!url || url.length > 2000) return null;
+  try {
+    return new URL(url).protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
 
 function values(raw: unknown): LinkedOptionValue[] {
   const seen = new Set<string>();
@@ -53,6 +67,7 @@ function fromV1(raw: Record<string, unknown>, currency: string): LinkedProduct {
     price, priceMax: null, priceUnit: null, currency,
     variants: dedupe(formats.map((f) => ({ external_id: f.id, options: { format: f.name }, sku: null, price_amount: f.price, is_active: true }))),
     spec: { version: 1, options, addons: [], fields: [] },
+    imageUrl: imageOf(raw),
   };
 }
 
@@ -127,5 +142,6 @@ export function normalizeLinkedProduct(raw: Record<string, unknown>, catalogCurr
   return {
     priceMode, price, priceMax, priceUnit: str(raw.priceUnit, 20), currency, variants,
     spec: { version: 2, options, addons, fields },
+    imageUrl: imageOf(raw),
   };
 }

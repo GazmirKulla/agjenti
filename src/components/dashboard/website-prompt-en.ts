@@ -15,7 +15,7 @@ You may use a different route if project conventions require it; provide the com
 Return HTTP 200 with {"version":2,"currency":"ALL","orderFields":[],"products":[]}; products is an array even when empty.
 Each product has:
 - string id and name; product, variant, option value and extra IDs are stable and are the ones the orders endpoint accepts.
-- productType (string or null); priceMode: "fixed" | "from" | "range" | "request"; price and priceMax (number or null); priceUnit (e.g. "m²", or null); currency.
+- productType (string or null); priceMode: "fixed" | "from" | "range" | "request"; price and priceMax (number or null); priceUnit (e.g. "m²", or null); currency; image (https URL of the main product photo, or null).
 - options: [{key, label, affectsPrice, values: [{id, name}]}] — the customer's choices (size, format, color, material).
 - variants: [{id, options: {key: valueId}, sku, price, active}] — each combination with its own price or code.
 - addons: [{id, name, price, appliesToVariants}] — optional priced extras.

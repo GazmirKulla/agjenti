@@ -18,7 +18,7 @@ export type LinkedSyncResult = { synced: number; missing: string[]; failed: { na
  */
 export async function syncLinkedProducts(input: { businessId: string; userId: string; productIds?: string[] }): Promise<LinkedSyncResult> {
   const db = createServiceSupabase();
-  let read = db.from("products").select("id,name,external_id").eq("business_id", input.businessId)
+  let read = db.from("products").select("id,name,external_id,image_url").eq("business_id", input.businessId)
     .eq("source", "linked").not("external_id", "is", null);
   if (input.productIds?.length) read = read.in("id", input.productIds);
   const { data: linked, error } = await read;
@@ -41,6 +41,9 @@ export async function syncLinkedProducts(input: { businessId: string; userId: st
         p_currency: next.currency, p_variants: next.variants, p_spec: next.spec,
       });
       if (syncError) throw new Error(errors[syncError.message] ?? "Produkti nuk u përditësua nga webi.");
+      // A product without a photo takes the website's; one the owner chose is kept. A failed write leaves it as it was.
+      if (next.imageUrl && !product.image_url?.trim())
+        await db.from("products").update({ image_url: next.imageUrl }).eq("id", product.id).eq("business_id", input.businessId).then(() => undefined, () => undefined);
       result.synced += 1;
     } catch (err) {
       result.failed.push({ name: product.name, error: err instanceof LinkedCatalogError || err instanceof Error ? err.message : "Produkti nuk u përditësua." });

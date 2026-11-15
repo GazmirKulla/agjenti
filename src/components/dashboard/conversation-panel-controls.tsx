@@ -243,6 +243,32 @@ async function uploadOrderFile(base: string, file: File): Promise<string> {
   return json.path;
 }
 
+type ChatPhoto = { id: string; createdAt: string; caption: string | null };
+
+/** Photos the customer sent in the conversation, read once while a photo field is shown. */
+function useChatPhotos(base: string, active: boolean): ChatPhoto[] | null {
+  const [photos, setPhotos] = useState<ChatPhoto[] | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    let current = true;
+    fetch(`${base}/order-files`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { photos?: ChatPhoto[] } | null) => current && setPhotos(Array.isArray(json?.photos) ? json.photos : []), () => current && setPhotos([]));
+    return () => {
+      current = false;
+    };
+  }, [base, active]);
+  return photos;
+}
+
+/** Copies a conversation photo into the order's private files, so the website gets a lasting link. */
+async function copyChatPhoto(base: string, photoId: string): Promise<string> {
+  const res = await fetch(`${base}/order-files`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ photoId }) });
+  const json = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
+  if (!res.ok || !json.path) throw new Error(json.error || "Fotoja nuk u ngarkua.");
+  return json.path;
+}
+
 /** The choices, extras and fields a linked product needs, built from the website's declaration. */
 function DeclaredInputs(props: {
   base: string; declared: Declared; variantExternalId: string | null; currency: string | null;
@@ -252,6 +278,40 @@ function DeclaredInputs(props: {
   const { declared, selection, onChange } = props;
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Which conversation photo became which stored file, per field: `${field}|${photoId}` → path.
+  const [fromChat, setFromChat] = useState<Record<string, string>>({});
+  const chatPhotos = useChatPhotos(props.base, declared.fields.some((f) => f.type === "photo" || f.type === "file"));
+  // Uploads finish after other choices may have changed: always build on the latest selection.
+  const latest = useRef(selection);
+  useEffect(() => {
+    latest.current = selection;
+  });
+  const addFiles = (key: string, added: string[]) => {
+    const current = latest.current;
+    onChange({ ...current, files: { ...current.files, [key]: [...(current.files[key] ?? []), ...added] } });
+  };
+  const toggleChatPhoto = async (key: string, photoId: string, max: number) => {
+    const mark = `${key}|${photoId}`;
+    const stored = fromChat[mark];
+    if (stored) {
+      const current = latest.current;
+      onChange({ ...current, files: { ...current.files, [key]: (current.files[key] ?? []).filter((path) => path !== stored) } });
+      setFromChat((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== mark)));
+      return;
+    }
+    if ((latest.current.files[key] ?? []).length >= max) return;
+    setUploading(key);
+    setUploadError(null);
+    try {
+      const path = await copyChatPhoto(props.base, photoId);
+      addFiles(key, [path]);
+      setFromChat((current) => ({ ...current, [mark]: path }));
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : t("Fotoja nuk u ngarkua."));
+    } finally {
+      setUploading(null);
+    }
+  };
   const addons = declared.addons.filter((a) => !a.appliesToVariants || (props.variantExternalId && a.appliesToVariants.includes(props.variantExternalId)));
   if (!declared.options.length && !addons.length && !declared.fields.length) return null;
   const setField = (key: string, value: string | number | boolean | null) => {
@@ -300,7 +360,7 @@ function DeclaredInputs(props: {
                   try {
                     const added: string[] = [];
                     for (const file of chosen) added.push(await uploadOrderFile(props.base, file));
-                    onChange({ ...selection, files: { ...selection.files, [f.key]: [...paths, ...added] } });
+                    addFiles(f.key, added);
                   } catch (err) {
                     setUploadError(err instanceof Error ? err.message : t("Fotoja nuk u ngarkua."));
                   } finally {
@@ -310,9 +370,30 @@ function DeclaredInputs(props: {
               <span className="muted-copy">
                 {uploading === f.key ? t("Duke ngarkuar…") : `${paths.length}/${max} ${t("foto")}`}
                 {paths.length > 0 && (
-                  <button type="button" className="btn btn-ghost" onClick={() => onChange({ ...selection, files: { ...selection.files, [f.key]: [] } })}>{t("Hiq fotot")}</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => {
+                    onChange({ ...selection, files: { ...selection.files, [f.key]: [] } });
+                    setFromChat((current) => Object.fromEntries(Object.entries(current).filter(([mark]) => !mark.startsWith(`${f.key}|`))));
+                  }}>{t("Hiq fotot")}</button>
                 )}
               </span>
+              {chatPhotos?.length ? (
+                <>
+                  <span className="muted-copy">{t("Ose zgjidh nga fotot që dërgoi klienti në bisedë:")}</span>
+                  <div className="order-chat-photos">
+                    {chatPhotos.map((photo) => {
+                      const chosen = Boolean(fromChat[`${f.key}|${photo.id}`]);
+                      return (
+                        <button key={photo.id} type="button" aria-pressed={chosen} title={photo.caption ?? new Date(photo.createdAt).toLocaleString()}
+                          disabled={uploading !== null || (!chosen && paths.length >= max)}
+                          onClick={() => void toggleChatPhoto(f.key, photo.id, max)}>
+                          {/* eslint-disable-next-line @next/next/no-img-element -- private, same-origin preview behind the member check */}
+                          <img src={`${props.base}/order-files?photo=${encodeURIComponent(photo.id)}`} alt={photo.caption || t("Foto nga biseda")} loading="lazy" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
               {uploadError && <span role="alert" className="text-danger">{uploadError}</span>}
             </SmartLabel>
           );
