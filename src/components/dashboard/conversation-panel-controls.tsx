@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDashboardTranslator } from "@/components/dashboard/language";
 import type { LeadStatus } from "@/lib/leads/model";
 
@@ -455,7 +455,119 @@ function useHashOpen(id: string) {
   return [open, setOpen] as const;
 }
 
-/** A LOCAL order from this conversation; the server takes the price from the catalog. */
+/** One item of the order being written: its own product, variant, choices and quantity. */
+type OrderLine = {
+  key: string; productId: string; chosenName: string | null; variantId: string; quantity: string;
+  selection: Selection; product: ProductOption | null;
+};
+const MAX_ORDER_LINES = 10;
+const newLine = (productId = "", quantity = "", chosenName: string | null = null): OrderLine => ({
+  key: crypto.randomUUID(), productId, chosenName, variantId: "", quantity, selection: emptySelection(), product: null,
+});
+
+/** Unit price with extras × quantity, as the server computes it; null while it is not known. */
+function linePrice(line: OrderLine): { total: number | null; currency: string | null } {
+  const product = line.product;
+  const variant = product?.variants?.find((v) => v.id === line.variantId);
+  const base = variant ? variant.price : product?.variants?.length ? null : product?.price ?? null;
+  const extras = (product?.declared?.addons ?? []).filter((a) => line.selection.addons.includes(a.id)).reduce((sum, a) => sum + a.price, 0);
+  const quantity = Number(line.quantity) || 1;
+  return { total: base != null ? Math.round((base + extras) * quantity * 100) / 100 : null, currency: product?.currency ?? null };
+}
+
+/** The body of one item for the order request. */
+function lineBody(line: OrderLine) {
+  const variant = line.product?.variants?.find((v) => v.id === line.variantId);
+  return {
+    productId: line.productId,
+    ...(variant ? { variantId: variant.id } : {}),
+    ...(line.product?.declared ? { selection: line.selection } : {}),
+    quantity: Number(line.quantity) || 1,
+  };
+}
+
+/** Search, product, variant, declared choices and quantity of one order item. */
+function OrderLineEditor(props: {
+  base: string; open: boolean; index: number; count: number; line: OrderLine; fields: PrefillData["fields"];
+  onChange: (update: (line: OrderLine) => OrderLine) => void; onRemove?: () => void;
+}) {
+  const t = useDashboardTranslator();
+  const { base, line, onChange } = props;
+  const [query, setQuery] = useState("");
+  const [products, setProducts] = useState<ProductOption[]>([]);
+  useEffect(() => {
+    if (!props.open) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`${base}/products?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        .then((res) => res.json())
+        .then((json: { products?: ProductOption[] }) => setProducts(json.products ?? []))
+        .catch(() => undefined);
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [props.open, query, base]);
+  // A product chosen before the list loaded (prefill from the conversation) gets its details once it appears.
+  const listed = products.find((p) => p.id === line.productId);
+  useEffect(() => {
+    if (listed && line.product?.id !== listed.id) onChange((current) => (current.productId === listed.id ? { ...current, product: listed } : current));
+  }, [listed, line.product, onChange]);
+  const selected = line.product?.id === line.productId ? line.product : listed;
+  const variant = selected?.variants?.find((v) => v.id === line.variantId);
+  const measure = selected?.unit ?? null;
+  const { total } = linePrice({ ...line, product: selected ?? null });
+  const first = props.index === 0;
+  return (
+    <fieldset className="smart-form-group">
+      <legend>{props.count > 1 ? `${t("Artikulli")} ${props.index + 1}` : t("Çfarë porositet")}</legend>
+      <SmartLabel label="Produkti" field={first ? props.fields.product_id : undefined} wide>
+        <input className="field" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Kërko produktin")} aria-label={t("Kërko produktin")} />
+        <select className="field" value={line.productId} required
+          onChange={(e) => {
+            const product = products.find((p) => p.id === e.target.value) ?? null;
+            onChange((current) => ({ ...current, productId: e.target.value, chosenName: product?.name ?? null, product, variantId: "", selection: emptySelection() }));
+          }}>
+          <option value="">{t("Zgjidh produktin")}</option>
+          {line.productId && !listed && <option value={line.productId}>{line.chosenName ?? selected?.name ?? t("Produkti i zgjedhur nga biseda")}</option>}
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}{p.price != null ? ` · ${p.price} ${p.currency ?? ""}${p.unit ? `/${p.unit}` : ""}` : ""}</option>
+          ))}
+        </select>
+      </SmartLabel>
+      {selected?.variants?.length ? (
+        <SmartLabel label="Varianti">
+          <select className="field" value={line.variantId} required
+            onChange={(e) => {
+              const variantId = e.target.value;
+              onChange((current) => ({ ...current, variantId, selection: { ...current.selection, addons: [] } }));
+            }}>
+            <option value="">{t("Zgjidh variantin")}</option>
+            {selected.variants.map((v) => <option key={v.id} value={v.id}>{v.label} · {v.price} {selected.currency ?? ""}</option>)}
+          </select>
+        </SmartLabel>
+      ) : null}
+      {selected?.declared && (
+        <DeclaredInputs base={base} declared={selected.declared} variantExternalId={variant?.externalId ?? null}
+          currency={selected.currency} selection={line.selection} onChange={(selection) => onChange((current) => ({ ...current, selection }))} />
+      )}
+      <SmartLabel label={measure ? `${t("Sasia")} (${measure})` : "Sasia"} field={first ? props.fields.quantity : undefined}>
+        <input className="field" type="number" inputMode={measure ? "decimal" : "numeric"} min={measure ? 0.001 : 1} max={measure ? 100000 : 999} step={measure ? 0.001 : 1}
+          value={line.quantity} placeholder="1" onChange={(e) => {
+            const quantity = e.target.value;
+            onChange((current) => ({ ...current, quantity }));
+          }} />
+      </SmartLabel>
+      {total != null && props.count > 1 && <p className="muted-copy">{t("Shuma e artikullit")}: {total} {selected?.currency}</p>}
+      {props.onRemove && (
+        <button type="button" className="btn btn-ghost" onClick={props.onRemove}>{t("Hiq artikullin")}</button>
+      )}
+    </fieldset>
+  );
+}
+
+/** A LOCAL order from this conversation, with one or more items; the server takes the prices from the catalog. */
 export function ManualOrderForm(props: {
   businessId: string;
   conversationId: string;
@@ -469,11 +581,7 @@ export function ManualOrderForm(props: {
   const base = `/api/businesses/${props.businessId}/conversations/${props.conversationId}`;
   const [open, setOpen] = useHashOpen("krijo-porosi");
   const prefill = usePrefill(base, "order", open);
-  const [query, setQuery] = useState("");
-  const [products, setProducts] = useState<ProductOption[]>([]);
   const [initial] = useState({
-    productId: props.productId ?? "",
-    quantity: props.productId ? String(props.quantity) : "",
     name: props.customer.name,
     phone: props.customer.phone,
     city: props.customer.city,
@@ -481,42 +589,45 @@ export function ManualOrderForm(props: {
     note: "",
   });
   const [values, setValues] = useState(initial);
-  const [chosenName, setChosenName] = useState(props.productName);
-  const [variantId, setVariantId] = useState("");
-  const [selection, setSelection] = useState<Selection>(emptySelection);
-  useApplyPrefill(prefill.data, { productId: "product_id", quantity: "quantity", name: "name", phone: "phone", city: "city", address: "address", note: "note" }, setValues, initial);
+  const [lines, setLines] = useState<OrderLine[]>(() => [newLine(props.productId ?? "", props.productId ? String(props.quantity) : "", props.productName)]);
+  useApplyPrefill(prefill.data, { name: "name", phone: "phone", city: "city", address: "address", note: "note" }, setValues, initial);
+  // The conversation's product and quantity fill the first item, unless the owner already changed it.
+  const [firstInitial] = useState({ productId: props.productId ?? "", quantity: props.productId ? String(props.quantity) : "" });
+  const setFirstLine = useCallback<React.Dispatch<React.SetStateAction<typeof firstInitial>>>((update) => {
+    setLines((current) => {
+      const [first, ...rest] = current;
+      const before = { productId: first.productId, quantity: first.quantity };
+      const next = typeof update === "function" ? update(before) : update;
+      if (next.productId === before.productId && next.quantity === before.quantity) return current;
+      const changed = next.productId !== before.productId;
+      return [{ ...first, ...next, ...(changed ? { variantId: "", selection: emptySelection(), product: null, chosenName: null } : {}) }, ...rest];
+    });
+  }, []);
+  useApplyPrefill(prefill.data, { productId: "product_id", quantity: "quantity" }, setFirstLine, firstInitial);
   useEffect(() => {
-    if (prefill.data?.productName) setChosenName((current) => prefill.data!.productName ?? current);
+    const name = prefill.data?.productName;
+    if (name) setLines((current) => [{ ...current[0], chosenName: current[0].chosenName ?? name }, ...current.slice(1)]);
   }, [prefill.data]);
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
-  useEffect(() => {
-    if (!open) return;
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      fetch(`${base}/products?q=${encodeURIComponent(query)}`, { signal: controller.signal })
-        .then((res) => res.json())
-        .then((json: { products?: ProductOption[] }) => setProducts(json.products ?? []))
-        .catch(() => undefined);
-    }, 250);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [open, query, base]);
-  const selected = products.find((p) => p.id === values.productId);
-  const variant = selected?.variants?.find((v) => v.id === variantId);
-  const quantity = Number(values.quantity) || 1;
-  const base0 = variant ? variant.price : selected?.variants?.length ? null : selected?.price ?? null;
-  const extras = (selected?.declared?.addons ?? []).filter((a) => selection.addons.includes(a.id)).reduce((sum, a) => sum + a.price, 0);
-  const unit = base0 != null ? base0 + extras : null;
-  // Priced per unit (m³…): parts of the unit are allowed; the server computes the saved total the same way.
-  const measure = selected?.unit ?? null;
-  const total = unit != null ? Math.round(unit * quantity * 100) / 100 : null;
+  const updateLine = useCallback((key: string) => (update: (line: OrderLine) => OrderLine) =>
+    setLines((current) => current.map((line) => (line.key === key ? update(line) : line))), []);
+  const prices = lines.map(linePrice);
+  const currencies = new Set(prices.map((p) => p.currency).filter(Boolean));
+  const total = prices.every((p) => p.total != null) && currencies.size <= 1
+    ? Math.round(prices.reduce((sum, p) => sum + (p.total ?? 0), 0) * 100) / 100 : null;
+  const allSend = lines.every((line) => line.product?.sendsToWebsite);
   const fields = prefill.data?.fields ?? {};
   const set = (key: keyof typeof values) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setValues({ ...values, [key]: event.target.value });
+  const confirmText = allSend
+    ? lines.length > 1
+      ? t("Ruaj porosinë me {n} artikuj? Ruhet te Porositë dhe krijohet një herë te webi i biznesit.").replace("{n}", String(lines.length))
+      : t("Ruaj porosinë? Ruhet te Porositë dhe krijohet një herë te webi i biznesit.")
+    : lines.some((line) => line.product?.sendsToWebsite)
+      ? t("Ruaj porosinë? Ruhet si e konfirmuar te Porositë. Një artikull nuk është i lidhur me webin, ndaj e gjithë porosia mbetet vetëm këtu.")
+      : t("Ruaj porosinë? Ruhet si e konfirmuar te Porositë; nuk dërgohet në sistem të jashtëm.");
   return (
     <details id="krijo-porosi" className="conversation-action" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>{t("Krijo porosi")}</summary>
@@ -525,17 +636,12 @@ export function ManualOrderForm(props: {
         onSubmit={async (event) => {
           event.preventDefault();
           if (pending) return;
-          if (!window.confirm(selected?.sendsToWebsite
-            ? t("Ruaj porosinë? Ruhet te Porositë dhe krijohet një herë te webi i biznesit.")
-            : t("Ruaj porosinë? Ruhet si e konfirmuar te Porositë; nuk dërgohet në sistem të jashtëm."))) return;
+          if (!window.confirm(confirmText)) return;
           setPending(true);
           setMessage({});
           try {
             const res = await fetch(`${base}/order`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-              productId: values.productId,
-              ...(variant ? { variantId: variant.id } : {}),
-              ...(selected?.declared ? { selection } : {}),
-              quantity,
+              lines: lines.map(lineBody),
               customer: { name: values.name, phone: values.phone, city: values.city, address: values.address },
               note: values.note,
               requestKey,
@@ -545,7 +651,7 @@ export function ManualOrderForm(props: {
             const text = submissionMessage(json.submission, t);
             setMessage(json.submission?.status === "rejected" || json.submission?.status === "pending_reconciliation" ? { error: text } : { success: text });
             setRequestKey(crypto.randomUUID());
-            setSelection(emptySelection());
+            setLines([newLine()]);
             setValues((current) => ({ ...current, note: "" }));
             router.refresh();
           } catch (e) {
@@ -556,36 +662,19 @@ export function ManualOrderForm(props: {
         }}
       >
         <PrefillStatus prefill={prefill} />
-        <fieldset className="smart-form-group">
-          <legend>{t("Çfarë porositet")}</legend>
-          <SmartLabel label="Produkti" field={fields.product_id} wide>
-            <input className="field" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Kërko produktin")} aria-label={t("Kërko produktin")} />
-            <select className="field" value={values.productId} onChange={(e) => { setVariantId(""); setSelection(emptySelection()); set("productId")(e); }} required>
-              <option value="">{t("Zgjidh produktin")}</option>
-              {values.productId && !selected && <option value={values.productId}>{chosenName ?? t("Produkti i zgjedhur nga biseda")}</option>}
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}{p.price != null ? ` · ${p.price} ${p.currency ?? ""}${p.unit ? `/${p.unit}` : ""}` : ""}</option>
-              ))}
-            </select>
-          </SmartLabel>
-          {selected?.variants?.length ? (
-            <SmartLabel label="Varianti">
-              <select className="field" value={variantId} onChange={(e) => { setVariantId(e.target.value); setSelection((current) => ({ ...current, addons: [] })); }} required>
-                <option value="">{t("Zgjidh variantin")}</option>
-                {selected.variants.map((v) => <option key={v.id} value={v.id}>{v.label} · {v.price} {selected.currency ?? ""}</option>)}
-              </select>
-            </SmartLabel>
-          ) : null}
-          {selected?.declared && (
-            <DeclaredInputs base={base} declared={selected.declared} variantExternalId={variant?.externalId ?? null}
-              currency={selected.currency} selection={selection} onChange={setSelection} />
-          )}
-          <SmartLabel label={measure ? `${t("Sasia")} (${measure})` : "Sasia"} field={fields.quantity}>
-            <input className="field" type="number" inputMode={measure ? "decimal" : "numeric"} min={measure ? 0.001 : 1} max={measure ? 100000 : 999} step={measure ? 0.001 : 1}
-              value={values.quantity} placeholder="1" onChange={set("quantity")} />
-          </SmartLabel>
-          {total != null && <p className="smart-form-total">{t("Totali")}: <strong>{total} {selected?.currency}</strong></p>}
-        </fieldset>
+        {lines.map((line, index) => (
+          <OrderLineEditor key={line.key} base={base} open={open} index={index} count={lines.length} line={line} fields={fields}
+            onChange={updateLine(line.key)}
+            onRemove={lines.length > 1 ? () => setLines((current) => current.filter((l) => l.key !== line.key)) : undefined} />
+        ))}
+        {lines.length < MAX_ORDER_LINES && (
+          <button type="button" className="btn btn-ghost w-full" onClick={() => setLines((current) => [...current, newLine()])}>
+            {t("Shto artikull")}
+          </button>
+        )}
+        {total != null && lines.some((line) => line.product) && (
+          <p className="smart-form-total">{t("Totali")}: <strong>{total} {[...currencies][0] ?? ""}</strong></p>
+        )}
         <fieldset className="smart-form-group">
           <legend>{t("Klienti dhe dërgesa")}</legend>
           <div className="smart-form-grid">
@@ -606,7 +695,7 @@ export function ManualOrderForm(props: {
             <textarea className="field" rows={2} value={values.note} maxLength={1000} placeholder={t("Masa, ngjyra, koha e dërgesës…")} onChange={set("note")} />
           </SmartLabel>
         </fieldset>
-        <button type="submit" className="btn btn-primary w-full" disabled={pending || !values.productId}>
+        <button type="submit" className="btn btn-primary w-full" disabled={pending || lines.some((line) => !line.productId)}>
           {pending ? t("Duke ruajtur…") : t("Ruaj porosinë")}
         </button>
         {message.error && <p role="alert" className="smart-form-error">{t(message.error)}</p>}

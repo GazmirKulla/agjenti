@@ -19,6 +19,27 @@ const ORDER_STATUSES = [
   ["pending_reconciliation", "Për verifikim nga stafi"],
 ] as const;
 
+type OrderItemRow = {
+  id: string; quantity: number | string; unit_amount: number | string | null; options: Record<string, unknown> | null;
+  position: number | null; products: { name: string } | null;
+};
+
+/** Every item of the order in the order it was written, with its readable choices. */
+function orderLines(rows: OrderItemRow[] | null) {
+  return [...(rows ?? [])]
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((row) => {
+      const quantity = Number(row.quantity);
+      const unit = row.unit_amount == null ? null : Number(row.unit_amount);
+      const choices = Object.entries(row.options ?? {})
+        .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value) && String(value).trim())
+        .map(([key, value]) => `${key}: ${value === true ? "po" : String(value)}`)
+        .join(" · ");
+      return { id: row.id, name: row.products?.name ?? "Produkt i hequr", quantity,
+        total: unit == null ? null : Math.round(unit * quantity * 100) / 100, choices };
+    });
+}
+
 export default async function OrdersPage({
   params,
 }: {
@@ -33,7 +54,7 @@ export default async function OrdersPage({
   const { data: orders, error } = await createServiceSupabase()
     .from("orders")
     .select(
-      "id,status,total_amount,currency,external_order_id,external_system,created_at,customers(display_name,username,phone)",
+      "id,status,total_amount,currency,external_order_id,external_system,created_at,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))",
     )
     .eq("business_id", access.business.id)
     .order("created_at", { ascending: false })
@@ -72,6 +93,7 @@ export default async function OrdersPage({
             username: string | null;
             phone: string | null;
           } | null;
+          const items = orderLines(o.order_items as unknown as OrderItemRow[] | null);
           return {
             id: o.id,
             title: `#${o.external_order_id || o.id.slice(0, 8)}`,
@@ -108,6 +130,22 @@ export default async function OrdersPage({
                     </div>
                   </dl>
                 </div>
+                {items.length > 0 && (
+                  <div className="detail-block">
+                    <h3>{items.length > 1 ? `Artikujt (${items.length})` : "Artikulli"}</h3>
+                    <dl className="detail-fields">
+                      {items.map((item) => (
+                        <div key={item.id}>
+                          <dt>{item.quantity} × {item.name}</dt>
+                          <dd>
+                            {money(item.total, o.currency)}
+                            {item.choices && <><br />{item.choices}</>}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
                 <div className="detail-block">
                   <h3>Informacioni i porosisë</h3>
                   <dl className="detail-fields">
