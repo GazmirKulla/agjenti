@@ -3,6 +3,13 @@ import { useDashboardTranslator } from "@/components/dashboard/language";
 import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "./icon";
+export type InboxSignals = {
+  phone: boolean;
+  email: boolean;
+  orders: number;
+  lead: "new" | "contacted" | "won" | "lost" | null;
+  customer: boolean;
+};
 export type InboxRow = {
   channel?: string;
   id: string;
@@ -10,7 +17,34 @@ export type InboxRow = {
   name: string;
   preview: string | null;
   unread: number;
+  /** Null when the server could not tell; the unread count is shown instead. */
+  awaitingReply?: boolean | null;
+  signals?: InboxSignals | null;
 };
+const leadLabels = { new: "Lead i ri", contacted: "Lead në kontakt", won: "Lead i fituar", lost: "Lead i humbur" } as const;
+
+/** Compact, server-computed markers of what the business already has from this conversation. */
+function RowSignals({ signals }: { signals: InboxSignals }) {
+  const t = useDashboardTranslator();
+  const items: { key: string; icon: string; label: string; text?: string; tone?: string }[] = [];
+  if (signals.phone) items.push({ key: "phone", icon: "phone", label: t("Ka numër telefoni") });
+  if (signals.email) items.push({ key: "email", icon: "mail", label: t("Ka email") });
+  if (signals.orders > 0)
+    items.push({ key: "orders", icon: "cart", label: `${t("Porosi")}: ${signals.orders}`, text: String(signals.orders), tone: "good" });
+  if (signals.lead) items.push({ key: "lead", icon: "lead", label: t(leadLabels[signals.lead]), tone: signals.lead === "new" ? "warn" : undefined });
+  if (signals.customer) items.push({ key: "customer", icon: "customers", label: t("Klient i regjistruar") });
+  if (!items.length) return null;
+  return (
+    <span className="inbox-row-signals" role="list" aria-label={t("Të dhënat e bisedës")}>
+      {items.map((item) => (
+        <span key={item.key} role="listitem" className={`inbox-signal ${item.tone ?? ""}`} title={item.label} aria-label={item.label}>
+          <Icon name={item.icon} size={12} />
+          {item.text && <span aria-hidden="true">{item.text}</span>}
+        </span>
+      ))}
+    </span>
+  );
+}
 export function InboxList({
   rows: firstPage,
   next: firstNext = null,
@@ -48,6 +82,8 @@ export function InboxList({
       setLoadingMore(false);
     }
   }
+  // Older servers (or a failed signals read) give no reply state: fall back to the unread count.
+  const awaiting = (row: InboxRow) => row.awaitingReply ?? row.unread > 0;
   const [channel, setChannel] = useState<"instagram" | "whatsapp" | null>(null);
   const channelRows = channel === null ? rows : rows.filter(row => (row.channel ?? "instagram") === channel);
   const [query, setQuery] = useState("");
@@ -55,7 +91,7 @@ export function InboxList({
   const filtered = channelRows.filter(
     (r) =>
       (filter === "all" ||
-        (filter === "unread" ? r.unread > 0 : r.status === filter)) &&
+        (filter === "awaiting" ? awaiting(r) : r.status === filter)) &&
       `${r.name} ${r.preview ?? ""}`
         .toLocaleLowerCase()
         .includes(query.toLocaleLowerCase()),
@@ -77,7 +113,7 @@ export function InboxList({
       <div className="inbox-filters">
         {[
           ["all", t("Të gjitha")],
-          ["unread", t("Të palexuara")],
+          ["awaiting", t("Pa përgjigje")],
           ["active", t("Në proces")],
           ["completed", t("Të mbyllura")],
         ].map(([id, label]) => (
@@ -116,8 +152,15 @@ export function InboxList({
               <strong>{r.name}</strong>
               <small className="inbox-row-channel"><Icon name={r.channel === "whatsapp" ? "whatsapp" : "instagram"} size={14} />{r.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</small>
               <small>{r.preview || t("Pa mesazh")}</small>
+              {r.signals && <RowSignals signals={r.signals} />}
             </span>
-            {r.unread > 0 && <span className="unread-badge">{r.unread}</span>}
+            {r.awaitingReply === true ? (
+              <span className="awaiting-badge" title={t("Klienti pret përgjigje")} aria-label={t("Klienti pret përgjigje")}>
+                <Icon name="reply" size={12} />
+              </span>
+            ) : r.awaitingReply == null && r.unread > 0 ? (
+              <span className="unread-badge">{r.unread}</span>
+            ) : null}
           </Link>
         ))}
         {!filtered.length && (

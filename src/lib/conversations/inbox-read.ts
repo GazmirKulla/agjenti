@@ -16,15 +16,75 @@ type CustomerJoin = {
   created_at?: string;
 } | null;
 
+/** What the business already has from this conversation, read from its own rows. */
+export type InboxSignals = {
+  /** The customer sent a phone number or one was collected/linked (a format check). */
+  phone: boolean;
+  /** The customer sent an email address or one was collected (a format check). */
+  email: boolean;
+  /** Orders of this conversation or its linked customer, drafts and failures excluded. */
+  orders: number;
+  /** The customer's open lead, else their latest one. */
+  lead: "new" | "contacted" | "won" | "lost" | null;
+  /** Linked to a (non-archived) customer record of this business. */
+  customer: boolean;
+};
+
 export type InboxRow = {
   id: string;
   channel: string;
   status: string;
   name: string;
   preview: string | null;
+  /** 0 once the business replied; kept for app versions that read only this. */
   unread: number;
+  /** The customer's latest message has no delivered reply after it; null when unknown. */
+  awaitingReply: boolean | null;
+  /** Null when the signals could not be read; the row still shows. */
+  signals: InboxSignals | null;
   updatedAt: string | null;
 };
+
+type SignalRow = {
+  conversation_id: string;
+  last_customer_at: string | null;
+  last_reply_at: string | null;
+  has_phone: boolean | null;
+  has_email: boolean | null;
+  order_count: number | null;
+  lead_status: string | null;
+  customer_linked: boolean | null;
+};
+const LEAD_STATUSES = ["new", "contacted", "won", "lost"] as const;
+
+/** Reply state and indicators for one page of conversations, scoped to the business. */
+async function loadInboxSignals(db: SupabaseClient, businessId: string, ids: string[]) {
+  const signals = new Map<string, { awaitingReply: boolean; signals: InboxSignals }>();
+  if (!ids.length) return signals;
+  const { data, error } = await db.rpc("inbox_row_signals", { p_business: businessId, p_conversations: ids });
+  if (error || !Array.isArray(data)) {
+    // The list still renders; rows show no reply state or indicators instead of a guess.
+    console.warn("[inbox] signals unavailable", error?.message ?? "no data");
+    return signals;
+  }
+  const wanted = new Set(ids);
+  for (const row of data as SignalRow[]) {
+    if (!wanted.has(row.conversation_id)) continue;
+    const customerAt = row.last_customer_at ? Date.parse(row.last_customer_at) : NaN;
+    const replyAt = row.last_reply_at ? Date.parse(row.last_reply_at) : NaN;
+    signals.set(row.conversation_id, {
+      awaitingReply: Number.isFinite(customerAt) && !(Number.isFinite(replyAt) && replyAt >= customerAt),
+      signals: {
+        phone: row.has_phone === true,
+        email: row.has_email === true,
+        orders: Number.isSafeInteger(row.order_count) && row.order_count! > 0 ? row.order_count! : 0,
+        lead: LEAD_STATUSES.find((status) => status === row.lead_status) ?? null,
+        customer: row.customer_linked === true,
+      },
+    });
+  }
+  return signals;
+}
 
 /**
  * A page cursor: the sort value and id of the last row the reader has.
@@ -70,8 +130,11 @@ export async function loadInboxPage(
   if (error) throw new InboxReadError("list_unavailable");
   const page = (data ?? []).slice(0, limit);
   const last = page.at(-1);
-  const rows = page.map((row) => {
+  const signals = await loadInboxSignals(db, businessId, page.map((row) => row.id));
+  const rows = page.map((row): InboxRow => {
     const joined = row.customers as unknown as CustomerJoin;
+    const known = signals.get(row.id);
+    const unread = Number.isSafeInteger(row.unread_count) && row.unread_count > 0 ? row.unread_count : 0;
     return {
       id: row.id,
       channel: row.channel,
@@ -82,7 +145,9 @@ export async function loadInboxPage(
         customers: joined?.business_id === businessId ? joined : null,
       }),
       preview: row.last_message_preview,
-      unread: Number.isSafeInteger(row.unread_count) && row.unread_count > 0 ? row.unread_count : 0,
+      unread: known?.awaitingReply === false ? 0 : unread,
+      awaitingReply: known ? known.awaitingReply : null,
+      signals: known?.signals ?? null,
       updatedAt: typeof row.last_message_at === "string" ? row.last_message_at : null,
     };
   });
