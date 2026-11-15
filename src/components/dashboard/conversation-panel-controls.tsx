@@ -217,7 +217,9 @@ export function CopyInvitationLink({ url }: { url: string }) {
 }
 
 type DeclaredValue = { id: string; name: string };
-type DeclaredField = { key: string; label: string; type: "text" | "number" | "boolean" | "date" | "choice" | "photo" | "file"; required: boolean; min?: number; max?: number; maxLength?: number; values?: DeclaredValue[] };
+type DeclaredField = { key: string; label: string; type: "text" | "number" | "boolean" | "date" | "choice" | "photo" | "file"; required: boolean; min?: number; max?: number; maxLength?: number; values?: DeclaredValue[];
+  /** output: the business's own photo of the item (processed design), optional and never the customer's. */
+  role?: "input" | "output" };
 /** What the business website declares for a linked product: choices beyond the variant, extras and the data the order needs. */
 type Declared = {
   options: { key: string; label: string; required: boolean; values: DeclaredValue[] }[];
@@ -352,7 +354,7 @@ function DeclaredInputs(props: {
           const paths = selection.files[f.key] ?? [];
           const max = Math.min(f.max ?? 5, 10);
           return (
-            <SmartLabel key={f.key} label={`${f.label}${f.required ? " *" : ""}`} wide>
+            <SmartLabel key={f.key} label={`${f.label}${f.required ? " *" : ""}${f.role === "output" ? ` · ${t("foto e biznesit, opsionale")}` : ""}`} wide>
               <input className="field" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple
                 disabled={uploading === f.key || paths.length >= max}
                 onChange={async (e) => {
@@ -469,7 +471,7 @@ function submissionMessage(submission: Submission | undefined, t: (text: string)
  */
 export function ConfirmAgentOrder(props: {
   businessId: string; conversationId: string; process: string; actionId: string;
-  photoFields: { key: string; label: string; type: "photo" | "file"; required: boolean; min?: number; max?: number }[];
+  photoFields: { key: string; label: string; type: "photo" | "file"; required: boolean; min?: number; max?: number; role?: "input" | "output" }[];
 }) {
   const t = useDashboardTranslator();
   const router = useRouter();

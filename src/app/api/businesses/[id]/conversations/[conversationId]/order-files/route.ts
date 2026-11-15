@@ -29,7 +29,8 @@ export async function GET(request: Request, context: Context) {
   const { access, businessId, conversationId } = opened;
   const photo = new URL(request.url).searchParams.get("photo");
   if (!photo) {
-    const photos = await listCustomerPhotos(access.db, businessId, conversationId);
+    // from=all: also the photos the business sent (a processed design), for the store's own photos of an item.
+    const photos = await listCustomerPhotos(access.db, businessId, conversationId, { business: new URL(request.url).searchParams.get("from") === "all" });
     if (!photos) return NextResponse.json({ error: "Fotot e bisedës nuk u lexuan." }, { status: 503 });
     return NextResponse.json({ photos }, { headers: noStore });
   }

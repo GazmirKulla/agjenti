@@ -14,7 +14,9 @@ import { ORDER_ITEMS_SELECT, orderItemSummary, type OrderItemSummary } from "@/l
  * routes and server checks. Every query is scoped to this business.
  */
 /** A photo (or file) the website asks for on the item, as its catalog declares it. */
-export type PendingPhotoField = { key: string; label: string; type: "photo" | "file"; required: boolean; min?: number; max?: number };
+export type PendingPhotoField = { key: string; label: string; type: "photo" | "file"; required: boolean; min?: number; max?: number;
+  /** output: the business's processed photo for the item, optional. */
+  role?: "input" | "output" };
 
 export type ConversationContext = {
   conversation: { id: string; name: string; handle: string; channel: string; status: string };
@@ -122,7 +124,9 @@ export function pendingPhotoFields(spec: unknown): PendingPhotoField[] {
     if ((f.type !== "photo" && f.type !== "file") || (f.appliesTo ?? "item") !== "item" || typeof f.key !== "string" || typeof f.label !== "string") return [];
     const count = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 10 ? v : undefined);
     const min = count(f.min), max = count(f.max);
-    return [{ key: f.key, label: f.label, type: f.type, required: f.required === true, ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) }];
+    const output = f.role === "output";
+    return [{ key: f.key, label: f.label, type: f.type, required: !output && f.required === true, ...(min !== undefined && !output ? { min } : {}), ...(max !== undefined ? { max } : {}),
+      ...(output ? { role: "output" as const } : {}) }];
   });
 }
 

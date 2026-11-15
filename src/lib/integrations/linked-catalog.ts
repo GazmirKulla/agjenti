@@ -4,8 +4,15 @@ export type LinkedOptionValue = { id: string; name: string };
 export type LinkedOption = { key: string; label: string; required: boolean; affectsPrice: boolean; values: LinkedOptionValue[] };
 export type LinkedAddon = { id: string; name: string; price: number; appliesToVariants?: string[] };
 export type LinkedFieldType = "text" | "number" | "boolean" | "date" | "choice" | "photo" | "file";
+/**
+ * input: what the customer gives for the order (asked by the agent). output: what the business makes for
+ * the item, e.g. the processed design shown to the customer for approval or a photo of the finished
+ * product; never asked, never required, and it may be added after the order exists. Output files live on
+ * the business website; Agjenti shows them from there.
+ */
+export type LinkedFieldRole = "input" | "output";
 export type LinkedField = {
-  key: string; label: string; type: LinkedFieldType; appliesTo: "item" | "order"; required: boolean;
+  key: string; label: string; type: LinkedFieldType; appliesTo: "item" | "order"; required: boolean; role?: LinkedFieldRole;
   min?: number; max?: number; maxLength?: number; values?: LinkedOptionValue[];
 };
 /** Stored on products.external_spec; the database checks a selection against it. */
@@ -119,9 +126,13 @@ export function normalizeLinkedProduct(raw: Record<string, unknown>, catalogCurr
   const fields: LinkedField[] = list(raw.fields).flatMap((f) => {
     const key = str(f.key, 40), label = str(f.label, 80) ?? key, type = f.type as LinkedFieldType;
     if (!key || !KEY.test(key) || !FIELD_TYPES.has(type) || byKey.has(key)) return [];
-    const field: LinkedField = { key, label: label!, type, appliesTo: f.appliesTo === "order" ? "order" : "item", required: f.required === true };
+    // Only a photo or file of an item can be the business's output; it is never required to order.
+    const output = f.role === "output" && (type === "photo" || type === "file");
+    if (f.role === "output" && !output) return [];
+    const field: LinkedField = { key, label: label!, type, appliesTo: output ? "item" : f.appliesTo === "order" ? "order" : "item", required: !output && f.required === true,
+      ...(output ? { role: "output" as const } : {}) };
     const min = count(f.min), max = count(f.max), maxLength = count(f.maxLength);
-    if (min !== undefined) field.min = min;
+    if (min !== undefined && !output) field.min = min;
     if (max !== undefined) field.max = max;
     if (maxLength !== undefined) field.maxLength = maxLength;
     if (type === "choice") field.values = values(f.values);

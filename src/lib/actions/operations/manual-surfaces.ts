@@ -121,6 +121,7 @@ export const manualSurfaces = {
   "src/app/api/businesses/[id]/conversations/[conversationId]/messages/route.ts#POST": {"exception": "Human-to-customer communication remains explicit manual sending."},
   "src/app/api/businesses/[id]/conversations/[conversationId]/orders/route.ts#POST": {"operation": "order.submit"},
   "src/app/api/businesses/[id]/conversations/[conversationId]/orders/route.ts#PATCH": {"operation": "order.reconcile"},
+  "src/app/api/businesses/[id]/orders/[orderId]/files/route.ts#POST": {"exception": "The owner adds the store's own photos of an item (processed design, finished product) to an order already on the business website; the website keeps them and Agjenti removes its temporary copies. Membership and the item's declared output field are checked; nothing about the order itself changes."},
   "src/app/api/businesses/[id]/conversations/[conversationId]/reactions/route.ts#POST": {"exception": "Human-to-customer reactions remain explicit manual sending."},
   "src/app/api/businesses/[id]/delete/route.ts#POST": {"exception": "Deleting an entire tenant requires the dedicated account removal flow."},
   "src/app/api/businesses/[id]/instagram/disconnect/route.ts#POST": {"exception": "OAuth account connection lifecycle."},

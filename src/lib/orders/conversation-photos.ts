@@ -13,7 +13,7 @@ const PHOTO_ID = /^([0-9a-f-]{36}):(\d{1,2})$/i;
 const LIST_MESSAGES = 60;
 const LIST_PHOTOS = 24;
 
-export type ConversationPhoto = { id: string; createdAt: string; caption: string | null };
+export type ConversationPhoto = { id: string; createdAt: string; caption: string | null; /** Sent by the business, not the customer. */ byBusiness?: boolean };
 export type PhotoRead = { bytes: Buffer; type: string } | { error: string; status: number };
 
 type Attachment = { kind?: unknown; sourceUrl?: unknown; externalMediaId?: unknown; caption?: unknown };
@@ -35,15 +35,17 @@ function photoSource(item: unknown): { url: string } | { mediaId: string } | nul
   return null;
 }
 
-/** Photos the customer sent in this conversation, newest first. Only ids are returned; the bytes go through readCustomerPhoto. */
-export async function listCustomerPhotos(db: SupabaseClient, businessId: string, conversationId: string): Promise<ConversationPhoto[] | null> {
-  const { data, error } = await db.from("messages").select("id,media,created_at").eq("business_id", businessId)
-    .eq("conversation_id", conversationId).eq("direction", "inbound").order("created_at", { ascending: false }).limit(LIST_MESSAGES);
+/** Photos the customer sent in this conversation, newest first; with `business`, also those the business sent
+ * (a processed design shown to the customer). Only ids are returned; the bytes go through readCustomerPhoto. */
+export async function listCustomerPhotos(db: SupabaseClient, businessId: string, conversationId: string, options: { business?: boolean } = {}): Promise<ConversationPhoto[] | null> {
+  const { data, error } = await db.from("messages").select("id,media,created_at,direction").eq("business_id", businessId)
+    .eq("conversation_id", conversationId).in("direction", options.business ? ["inbound", "outbound"] : ["inbound"]).order("created_at", { ascending: false }).limit(LIST_MESSAGES);
   if (error) return null;
   return (data ?? []).flatMap((m) => (Array.isArray(m.media) ? m.media : []).flatMap((item: unknown, index: number) => {
     if (!photoSource(item)) return [];
     const caption = (item as Attachment).caption;
-    return [{ id: `${m.id}:${index}`, createdAt: m.created_at as string, caption: typeof caption === "string" ? caption.slice(0, 200) : null }];
+    return [{ id: `${m.id}:${index}`, createdAt: m.created_at as string, caption: typeof caption === "string" ? caption.slice(0, 200) : null,
+      ...(m.direction === "outbound" ? { byBusiness: true } : {}) }];
   })).slice(0, LIST_PHOTOS);
 }
 
@@ -101,14 +103,14 @@ async function downloadWhatsApp(businessId: string, conversationId: string, medi
   return download(meta.url, token, typeof meta.mime_type === "string" ? meta.mime_type : undefined);
 }
 
-/** The bytes of one photo the customer sent in this conversation (an id from listCustomerPhotos). */
+/** The bytes of one photo of this conversation, the customer's or the business's (an id from listCustomerPhotos). */
 export async function readCustomerPhoto(db: SupabaseClient, businessId: string, conversationId: string, photoId: string): Promise<PhotoRead> {
   const match = PHOTO_ID.exec(photoId);
   if (!match) return { error: "Fotoja nuk u gjet në bisedë.", status: 404 };
   const { data: message, error } = await db.from("messages").select("media,direction").eq("id", match[1]!)
     .eq("business_id", businessId).eq("conversation_id", conversationId).maybeSingle();
   if (error) return { error: "Biseda nuk u lexua.", status: 503 };
-  const source = message?.direction === "inbound" && Array.isArray(message.media) ? photoSource(message.media[Number(match[2])]) : null;
+  const source = (message?.direction === "inbound" || message?.direction === "outbound") && Array.isArray(message.media) ? photoSource(message.media[Number(match[2])]) : null;
   if (!source) return { error: "Fotoja nuk u gjet në bisedë.", status: 404 };
   return "url" in source ? download(source.url) : downloadWhatsApp(businessId, conversationId, source.mediaId);
 }

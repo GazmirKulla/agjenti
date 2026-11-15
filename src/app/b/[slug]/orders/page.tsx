@@ -1,4 +1,5 @@
 import { RecordBrowser } from "@/components/dashboard/record-browser";
+import { OrderOutputPhotos } from "@/components/dashboard/order-output-photos";
 import {
   PageHeading,
   StatCard,
@@ -166,6 +167,7 @@ export default async function OrdersPage({
                     </div>
                   </dl>
                 </div>
+                {o.external_system === "external" && o.external_order_id && <OrderOutputPhotos businessId={access.business.id} orderId={o.id} />}
                 <p className="muted-copy">
                   Statusi pasqyron krijimin dhe përcjelljen e porosisë. Totali
                   është shuma e artikujve; pagesat dhe transporti menaxhohen

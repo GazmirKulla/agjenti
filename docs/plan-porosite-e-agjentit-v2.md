@@ -74,6 +74,37 @@ Vendimet e pronarit (15.11.2026):
    - `product_types` me `external_key` `personalized`/`puzzle`, si dhe `order_items.product_type_key` dhe `external_format_id`;
    - leximi i katalogut v1 te `linked-catalog.ts` (`fromV1`).
 
+## 3a. Fushat hyrëse dhe fushat dalëse (fotot e përpunuara)
+
+Një artikull ka dy lloje të dhënash:
+- **Hyrëse:** atë që jep klienti që porosia të krijohet (masa, personazhi, fotoja e tij). Agjenti i pyet, dhe pa të detyrueshmet porosia nuk dërgohet.
+- **Dalëse:** atë që prodhon biznesi për artikullin: dizajni ose fotoja e përpunuar, provë që i tregohet klientit, foto e produktit të përfunduar. Klienti nuk i jep, agjenti nuk i pyet, dhe nuk e ndalojnë krijimin e porosisë. Te Zana janë `processedImages` (dhe më vonë `completionPhotos`), ndërsa fotot e klientit janë `customImages`.
+
+**Kontrata (katalogu v2):** çdo fushë merr `role: "input" | "output"` (parazgjedhja `input`). Shembull te Zana: `{"key": "processed", "label": "Foto e përpunuar", "type": "photo", "role": "output", "appliesTo": "item", "max": 5}`.
+
+**Nga vjen një foto dalëse** (të katër burimet ruhen njësoj):
+1. Ngarkohet te webi i biznesit (te Zana, `processedImages` në panelin e saj ose nga AI) → Agjenti e lexon nga webi.
+2. Biznesi ia ka dërguar klientit në bisedë (mesazh `outbound` me `media`) → zgjidhet nga fotot e bisedës.
+3. Ngarkohet me dorë në Agjenti gjatë bisedës, para porosisë («Krijo porosi» / «Konfirmo porosinë»).
+4. Ngarkohet me dorë pasi porosia është krijuar (te Porositë ose paneli i klientit).
+
+**Modeli në Agjenti:** tabelë e re `order_item_files` (një rresht për çdo skedar): `order_item_id`, `field_key`, `role`, `path` (bucket `order-files`), `source` (`customer_chat`, `business_chat`, `upload`, `website`), `external_url`, `created_by`, `created_at`, `synced_at`. Fotot hyrëse të sotme (`selection.files`) kalojnë aty gradualisht; fotot dalëse jetojnë vetëm aty, sepse ndryshojnë pas krijimit të porosisë.
+
+**Sinkronizimi me webin (kontrata e re):**
+- Me porosinë: fotot dalëse që ekzistojnë dërgohen si `files` me çelësin e tyre, si fotot hyrëse.
+- Pas porosisë: `POST {orders_url}/{orderId}/files` me `{"items": [{"item": 1, "key": "processed", "files": [{"id": "…", "url": "…"}]}]}`, idempotent sipas `id` të skedarit.
+- Nga webi te Agjenti: `GET {orders_url}/{orderId}` kthen artikujt me skedarët dalës (`files` me `role: output`). Agjenti e thërret kur hapet porosia ose me «Rifresko nga webi» te porosia, dhe i ruan me `source: website`.
+
+**Ku duken:**
+- Te porosia (web dhe aplikacion) dalin të ndara «Fotot e klientit» dhe «Fotot e përpunuara», me butonin «Shto foto të përpunuar» (nga pajisja ose nga fotot e bisedës, në të dyja drejtimet).
+- Hap i mëvonshëm: agjenti mund t'ia dërgojë klientit foton e përpunuar për miratim.
+
+**Fazat:**
+- **O1:** kontrata `role` dhe migrimi `order_item_files`, plus fotot dalëse te «Krijo porosi» dhe «Konfirmo porosinë».
+- **O2:** shtimi pas porosisë dhe `POST …/files`.
+- **O3:** leximi nga webi (`GET …/{orderId}`).
+- **Zana:** katalogu deklaron `processed`, porositë pranojnë `files` me `processed` → `processedImages`, dhe shtohen dy endpoint-et.
+
 ## 4. Fazat
 
 | Faza | Çfarë | Migrim | Prek |

@@ -382,3 +382,73 @@ export async function loadBusinessCatalogUrl(
   return url && parseAbsoluteUrl(url) ? url : null;
 }
 
+
+/** A file of an item on the business website: the customer's (input) or the store's (output, e.g. processed design). */
+export type ExternalOrderFile = { key: string; role: "input" | "output"; url: string };
+export type ExternalOrderView = {
+  orderNumber?: number; status: string; total?: number; shipping?: number;
+  items: { item: number; productName: string | null; files: ExternalOrderFile[] }[];
+};
+
+/** The order's address on the website: {orders_url}/{id}, only for an https URL and a safe id. */
+async function externalOrderUrl(businessId: string, externalOrderId: string, suffix = ""): Promise<{ url: string; secret?: string } | null> {
+  if (!/^[A-Za-z0-9_.:-]{1,200}$/.test(externalOrderId)) return null;
+  const integration = await loadIntegrationRow(businessId);
+  const base = integration?.orders_url?.trim();
+  const parsed = base ? parseAbsoluteUrl(base) : null;
+  if (!parsed || parsed.protocol !== "https:") return null;
+  const secret = resolveBearerSecret({ secretCiphertext: integration?.secret_ciphertext });
+  return { url: `${parsed.toString().replace(/\/$/, "")}/${encodeURIComponent(externalOrderId)}${suffix}`, ...(secret ? { secret } : {}) };
+}
+
+function readView(json: unknown): ExternalOrderView | null {
+  const j = json as { ok?: unknown; orderNumber?: unknown; status?: unknown; total?: unknown; shipping?: unknown; items?: unknown } | null;
+  if (!j || j.ok !== true || !Array.isArray(j.items)) return null;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+  const items = j.items.slice(0, 20).flatMap((raw, index) => {
+    const item = (raw && typeof raw === "object" ? raw : {}) as { item?: unknown; productName?: unknown; files?: unknown };
+    const files = (Array.isArray(item.files) ? item.files : []).flatMap((f) => {
+      const file = (f && typeof f === "object" ? f : {}) as { key?: unknown; role?: unknown; url?: unknown };
+      return typeof file.key === "string" && /^[a-z][a-z0-9_]{0,39}$/.test(file.key) && typeof file.url === "string" && file.url.startsWith("https://") && file.url.length < 2000
+        ? [{ key: file.key, role: file.role === "output" ? "output" as const : "input" as const, url: file.url }] : [];
+    }).slice(0, 100);
+    return [{ item: num(item.item) ?? index + 1, productName: typeof item.productName === "string" ? item.productName.slice(0, 200) : null, files }];
+  });
+  return { ...(num(j.orderNumber) !== undefined ? { orderNumber: num(j.orderNumber) } : {}), status: typeof j.status === "string" ? j.status.slice(0, 40) : "",
+    ...(num(j.total) !== undefined ? { total: num(j.total) } : {}), ...(num(j.shipping) !== undefined ? { shipping: num(j.shipping) } : {}), items };
+}
+
+/** Reads an order on the business website, with each item's photos. Read only; null when it cannot be read. */
+export async function fetchExternalOrder(businessId: string, externalOrderId: string): Promise<ExternalOrderView | null> {
+  if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "external_order_read");
+  const target = await externalOrderUrl(businessId, externalOrderId);
+  if (!target) return null;
+  const response = await fetch(target.url, { headers: target.secret ? { Authorization: `Bearer ${target.secret}` } : {}, redirect: "manual",
+    signal: AbortSignal.timeout(15_000), cache: "no-store" }).catch(() => null);
+  if (!response?.ok) return null;
+  return readView(await response.json().catch(() => null));
+}
+
+/**
+ * Adds the store's photos (processed design, finished product) to an order on the website. Each file
+ * carries Agjenti's id, so a repeated delivery adds nothing twice. The website keeps the files.
+ */
+export async function sendExternalOrderFiles(businessId: string, externalOrderId: string,
+  groups: { item: number; key: string; files: { id: string; url: string }[] }[]): Promise<{ ok: true; view: ExternalOrderView } | { ok: false; code?: string; field?: string }> {
+  assertBusinessEffectAllowed("provider.order");
+  if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "external_order_files");
+  const target = await externalOrderUrl(businessId, externalOrderId, "/files");
+  if (!target) return { ok: false, code: "integration_unavailable" };
+  const response = await fetch(target.url, { method: "POST", redirect: "manual", signal: AbortSignal.timeout(60_000),
+    headers: { "Content-Type": "application/json", ...(target.secret ? { Authorization: `Bearer ${target.secret}` } : {}) },
+    body: JSON.stringify({ items: groups }) }).catch(() => null);
+  const json = await response?.json().catch(() => null) as { reason?: unknown; error?: unknown; field?: unknown } | null;
+  const view = response?.ok ? readView(json) : null;
+  try {
+    await createServiceSupabase().from("integration_logs").insert({ business_id: businessId, direction: "outbound", target: "order_files",
+      status: view ? "ok" : "failed", error: view ? null : typeof json?.reason === "string" ? json.reason.slice(0, 60) : `http_${response?.status ?? 0}` });
+  } catch { /* the website's answer stands */ }
+  if (view) return { ok: true, view };
+  const code = [json?.reason, json?.error].find((v): v is string => typeof v === "string" && /^[a-z][a-z0-9_]{0,59}$/.test(v));
+  return { ok: false, ...(code ? { code } : {}), ...(typeof json?.field === "string" && /^[A-Za-z][A-Za-z0-9_.]{0,59}$/.test(json.field) ? { field: json.field } : {}) };
+}

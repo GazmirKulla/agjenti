@@ -65,7 +65,7 @@ const SPEC_FIELD_TYPES: Record<string, Field["type"]> = { text: "text", number: 
 export function specFieldIds(spec: LinkedSpec, variants: ProductVariant[]): string[] {
   const variantKeys = new Set(variants.filter(v => v.is_active).flatMap(v => Object.keys(v.options)));
   return [...spec.options.map(o => variantKeys.has(o.key) ? variantFieldId(o.key) : o.key),
-    ...spec.fields.filter(f => (f.appliesTo ?? "item") === "item" && SPEC_FIELD_TYPES[f.type]).map(f => f.key)];
+    ...spec.fields.filter(f => (f.appliesTo ?? "item") === "item" && f.role !== "output" && SPEC_FIELD_TYPES[f.type]).map(f => f.key)];
 }
 /**
  * For a product linked to the business website: asks, right after the product, what its catalog
@@ -89,7 +89,8 @@ export function composeSpecChoices(definition: ProcessDefinition, spec: LinkedSp
   }
   for (const field of spec.fields) {
     const type = SPEC_FIELD_TYPES[field.type];
-    if (!type || (field.appliesTo ?? "item") !== "item") continue;
+    // The business's output (a processed design) is never the customer's to give.
+    if (!type || (field.appliesTo ?? "item") !== "item" || field.role === "output") continue;
     const values = field.type === "choice" ? (field.values ?? []).map(v => v.name) : [];
     if (field.type === "choice" && !values.length) continue;
     added.push({ id: field.key, subject: "order_line", label: field.label, type, required: field.required === true,
