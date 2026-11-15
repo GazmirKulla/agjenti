@@ -6,7 +6,7 @@ import { loadLearningSettings } from "@/lib/conversation-learning/settings";
 import { removeUploads, TRAINING_BUCKET, type SessionInput, type UploadedFile } from "./job";
 import { applySuggestion, type ApplyRow } from "./apply";
 import { approvable, bulkSafe, parseEdit, type ReviewRow } from "./review";
-import { ANALYSIS_LIMITS, IMPORT_PERIODS, parseAnalysisOptions, parseHistoryOptions } from "./inbox-import";
+import { allowedPeriods, ANALYSIS_LIMITS, parseAnalysisOptions, parseHistoryOptions } from "./inbox-import";
 
 export const MAX_FILES = 20;
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
@@ -36,7 +36,7 @@ export async function listSessions(businessId: string) {
     db.from("conversation_training_messages").select("id", { count: "exact", head: true }).eq("business_id", businessId),
   ]);
   if (sessions.error) throw new PersistenceError("Importet nuk u ngarkuan.", sessions.error.code === "42P01" || sessions.error.code === "PGRST205" ? 503 : 500);
-  return { enabled: settings.enabled, lookbackDays: Math.min(settings.lookback_days, 365), instagramHistory: settings.instagram_history, importPeriods: IMPORT_PERIODS, analysisLimits: ANALYSIS_LIMITS, sessions: sessions.data ?? [], keptMessages: kept.count ?? 0 };
+  return { enabled: settings.enabled, lookbackDays: Math.min(settings.lookback_days, 365), instagramHistory: settings.instagram_history, importPeriods: allowedPeriods(Math.min(settings.lookback_days, 365)), analysisLimits: ANALYSIS_LIMITS, sessions: sessions.data ?? [], keptMessages: kept.count ?? 0 };
 }
 
 /** An import left waiting: its step is overdue, or the worker holding it stopped (its lease
@@ -55,9 +55,10 @@ function analysisFrom(input: unknown) {
 /** `days` is the period imported from the Inbox and Instagram (30, 90 or 180); `addToInbox`
  * also writes Instagram's history into Conversations; `analysis` is what the AI then reads. */
 export async function startInbox(businessId: string, userId: string, input: { days?: unknown; addToInbox?: unknown; analysis?: unknown } = {}) {
-  await requireEnabled();
+  const settings = await requireEnabled();
   const history = parseHistoryOptions(input);
   if (!history) throw new PersistenceError("Zgjidh muajin e fundit, 3 ose 6 muajt e fundit.", 400);
+  if (!allowedPeriods(settings.lookback_days).includes(history.days)) throw new PersistenceError(`Platforma lejon import deri në ${settings.lookback_days} ditët e fundit.`, 400);
   const sessionInput: SessionInput = { history, analysis: analysisFrom(input.analysis) };
   const { data, error } = await createServiceSupabase().rpc("start_conversation_training", { p_business: businessId, p_user: userId, p_source: "inbox", p_input: sessionInput, p_status: "queued" });
   if (error) throw startError(error.message);

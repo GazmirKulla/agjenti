@@ -118,21 +118,21 @@ export default async function PlatformSettingsPage() {
           </label>
           <div className="settings-number-grid">
             <label className="form-label settings-number">
-              Periudha e Inbox-it (ditë)
+              Periudha maksimale e importit (ditë)
               <input className="field" type="number" name="learning_lookback_days" min={learningLimits.lookback_days.min} max={365}
                 defaultValue={Math.min(learning.settings.lookback_days, 365)} required disabled={!learning.stored} />
-              <small className="settings-hint">Nga Inbox-i lexohen bisedat aktive në kaq ditët e fundit ({learningLimits.lookback_days.min}–365). Eksporti i Instagram-it lexohet i gjithi.</small>
+              <small className="settings-hint">Pronari zgjedh muajin e fundit, 3 ose 6 muajt e fundit, vetëm brenda këtij kufiri ({learningLimits.lookback_days.min}–365): me 90 i ofrohen 1 dhe 3 muaj, me 180 edhe 6 muaj. Vlen për Inbox-in dhe historinë e Instagram-it; eksporti i Instagram-it importohet i gjithi.</small>
             </label>
           </div>
           <label className="settings-toggle settings-toggle-wide">
             <span>
               Historia e Instagram-it
-              <small>Kur importon nga Inbox-i, lexon edhe DM-të nga përpara lidhjes së Instagram-it (Meta jep 20 mesazhet e fundit të çdo bisede). Për historinë e plotë, pronari ngarkon eksportin e Instagram-it.</small>
+              <small>Kur importon nga Inbox-i, lexon edhe DM-të nga përpara lidhjes së Instagram-it (Meta jep 20 mesazhet e fundit të çdo bisede). Vetëm kur është ndezur, pronari mund t&apos;i shtojë edhe te Bisedat si mesazhe të zakonshme, pa dublikata dhe pa iu dërguar asgjë klientëve. Për historinë e plotë, pronari ngarkon eksportin e Instagram-it.</small>
             </span>
             <input className="switch-input" type="checkbox" name="learning_instagram_history" defaultChecked={learning.settings.instagram_history} disabled={!learning.stored} />
           </label>
           <div className="settings-inline-actions">
-            <p className="settings-hint">Kontaktet (telefon, email) hiqen para se bisedat t&apos;i lexojë AI; emrat e klientëve nuk dërgohen.</p>
+            <p className="settings-hint">Pas importit AI lexon deri në 50 biseda (pronari zgjedh 10, 25 ose 50), opsionalisht vetëm ato ku klienti dërgoi telefon ose email. Kontaktet hiqen para se bisedat t&apos;i lexojë AI; emrat e klientëve nuk dërgohen.</p>
             {learning.stored && <button className="btn btn-primary" type="submit">Ruaj mësimin nga bisedat</button>}
           </div>
         </section>

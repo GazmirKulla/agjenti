@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transcript } from "@/lib/conversation-learning/transcripts";
-import { addHistoryToInbox, parseAnalysisOptions, parseHistoryOptions, URL_BUDGET, urlChunks } from "./inbox-import";
+import { addHistoryToInbox, allowedPeriods, parseAnalysisOptions, parseHistoryOptions, URL_BUDGET, urlChunks } from "./inbox-import";
 
 const BUSINESS = "2af8cfe5-5f63-47a1-baf3-959cfea49b79";
 const OTHER = "11111111-2222-3333-4444-555555555555";
@@ -61,6 +61,15 @@ describe("import and analysis options", () => {
     expect(parseHistoryOptions({})).toEqual({ days: 90, addToInbox: false });
     for (const days of [0, 7, 60, 365, "30", null]) expect(parseHistoryOptions({ days })).toBeNull();
     expect(parseHistoryOptions({ days: 30, addToInbox: "yes" })).toBeNull();
+  });
+
+  it("import: the owner is offered only periods within the platform's", () => {
+    expect(allowedPeriods(365)).toEqual([30, 90, 180]);
+    expect(allowedPeriods(180)).toEqual([30, 90, 180]);
+    expect(allowedPeriods(90)).toEqual([30, 90]);
+    expect(allowedPeriods(60)).toEqual([30]);
+    // Shorter than a month: the month is offered, and the import reads only the platform's days.
+    expect(allowedPeriods(7)).toEqual([30]);
   });
 
   it("analysis: at most 50 conversations, contacts only when asked", () => {

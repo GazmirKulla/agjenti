@@ -34,6 +34,10 @@ export function ConversationTraining({ slug }: { slug: string }) {
   const [analysisLimit, setAnalysisLimit] = useState(50);
   const [onlyContacts, setOnlyContacts] = useState(false);
   const analysis = { limit: analysisLimit, onlyContacts };
+  // Only the periods the platform allows; the longest of them until the owner chooses.
+  const periods = state?.importPeriods ?? [30, 90, 180];
+  const period = periods.includes(days) ? days : periods[periods.length - 1];
+  const periodLabel = (n: number) => (state?.lookbackDays && state.lookbackDays < n ? `${state.lookbackDays} ditët e fundit` : PERIODS[n] ?? `${n} ditët e fundit`);
   const [addToInbox, setAddToInbox] = useState(false);
 
   const load = useCallback(async () => {
@@ -62,7 +66,7 @@ export function ConversationTraining({ slug }: { slug: string }) {
 
   async function fromInbox() {
     setBusy("inbox"); setError("");
-    try { await post({ action: "inbox", days, addToInbox: state?.instagramHistory !== false && addToInbox, analysis }); await load(); }
+    try { await post({ action: "inbox", days: period, addToInbox: state?.instagramHistory !== false && addToInbox, analysis }); await load(); }
     catch (e) { setError(e instanceof Error ? e.message : "Importi nuk u nis."); }
     finally { setBusy(""); }
   }
@@ -129,8 +133,8 @@ export function ConversationTraining({ slug }: { slug: string }) {
             <div className="training-history">
               <label className="training-owner">
                 <span>Çfarë të importohet</span>
-                <select className="field" value={days} disabled={disabled} onChange={(e) => setDays(Number(e.target.value))}>
-                  {(state?.importPeriods ?? [30, 90, 180]).map((n) => <option key={n} value={n}>{PERIODS[n] ?? `${n} ditët e fundit`}</option>)}
+                <select className="field" value={period} disabled={disabled} onChange={(e) => setDays(Number(e.target.value))}>
+                  {periods.map((n) => <option key={n} value={n}>{periodLabel(n)}</option>)}
                 </select>
               </label>
               {state?.instagramHistory !== false && (

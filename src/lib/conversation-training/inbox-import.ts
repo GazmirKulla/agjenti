@@ -9,6 +9,13 @@ export const DEFAULT_IMPORT_PERIOD: ImportPeriod = 90;
 
 export type HistoryOptions = { days: ImportPeriod; addToInbox: boolean };
 
+/** The periods the owner may choose: those within the platform's period (super-admin).
+ * When that is shorter than a month, the month is offered and read only that far. */
+export function allowedPeriods(platformDays: number): ImportPeriod[] {
+  const within = IMPORT_PERIODS.filter((days) => days <= platformDays);
+  return within.length ? within : [IMPORT_PERIODS[0]];
+}
+
 /** The owner's choice, validated: only the offered periods, and adding is off unless asked.
  * An import started before periods existed (it had a count) keeps the default period. */
 export function parseHistoryOptions(input: { days?: unknown; addToInbox?: unknown }): HistoryOptions | null {

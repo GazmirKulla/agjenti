@@ -279,8 +279,9 @@ const PAGE = 40;
 async function ingestInbox(session: TrainingSession, data: Checkpoint, stats: Stats) {
   const db = createServiceSupabase();
   const { settings } = await loadLearningSettings();
-  // The owner's period; an import from before periods existed keeps the platform's.
-  const days = session.input.history?.days ?? settings.lookback_days;
+  // The owner's period, never beyond the platform's (it may have been shortened since);
+  // an import from before periods existed keeps the platform's.
+  const days = Math.min(session.input.history?.days ?? settings.lookback_days, settings.lookback_days);
   const since = new Date(Date.now() - Math.min(days, INBOX_LOOKBACK_DAYS) * 86_400_000).toISOString();
   const started = Date.now();
   let offset = data.offset ?? 0;
