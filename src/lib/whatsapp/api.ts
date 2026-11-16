@@ -3,7 +3,7 @@ import type { MessagePart, PartObserver } from "@/lib/conversations/delivery-sta
 import { isIsolatedExecution, refuseIsolatedEffect, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
 
 export const whatsappGraphVersion = () => process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || "v26.0";
-class WhatsAppRejected extends Error {}
+class WhatsAppRejected extends Error { constructor(message: string, readonly code?: string) { super(message); } }
 export async function whatsappGraph<T>(path: string, token: string, body?: unknown): Promise<T> {
   if (body !== undefined) assertBusinessEffectAllowed("whatsapp.write");
   if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "whatsapp");
@@ -16,7 +16,7 @@ export async function whatsappGraph<T>(path: string, token: string, body?: unkno
   const data = await response.json();
   if (!response.ok || data.error) {
     const message = "Kërkesa te WhatsApp dështoi. Kontrollo lejet dhe lidhjen në Meta.";
-    if (response.status >= 400 && response.status < 500 && data.error) throw new WhatsAppRejected(message);
+    if (response.status >= 400 && response.status < 500 && data.error) throw new WhatsAppRejected(message, data.error.code === 190 ? "token_revoked" : response.status === 429 ? "rate_limited" : undefined);
     throw new Error(message);
   }
   return data as T;
@@ -26,15 +26,16 @@ export async function sendWhatsAppText(params: { accountId: string; token: strin
   if (!body || body.length > 4096) return { ok: false, error: "Mesazhi duhet të ketë 1–4096 karaktere." };
   await params.onPart?.({ index: 0, body, status: "sending" }, 1);
   let part: MessagePart;
+  let code: string | undefined;
   try {
     const data = await whatsappGraph<{ messages?: { id: string }[] }>(`${params.accountId}/messages`, params.token, {
       messaging_product: "whatsapp", recipient_type: "individual", to: params.to, type: "text", text: { body, preview_url: false },
     });
     if (!data.messages?.[0]?.id) throw new Error("Missing receipt");
     part = { index: 0, body, status: "sent", messageId: data.messages[0].id };
-  } catch (error) { part = { index: 0, body, status: error instanceof WhatsAppRejected ? "failed" : "uncertain", error: "Dërgimi në WhatsApp nuk u konfirmua. Kontrollo lidhjen dhe dritaren 24-orëshe." }; }
+  } catch (error) { code = error instanceof WhatsAppRejected ? error.code : undefined; part = { index: 0, body, status: error instanceof WhatsAppRejected ? "failed" : "uncertain", error: "Dërgimi në WhatsApp nuk u konfirmua. Kontrollo lidhjen dhe dritaren 24-orëshe." }; }
   await params.onPart?.(part, 1);
-  return part.status === "sent" ? { ok: true, messageId: part.messageId, parts: [part] } : { ok: false, error: part.error!, parts: [part] };
+  return part.status === "sent" ? { ok: true, messageId: part.messageId, parts: [part] } : { ok: false, error: part.error!, parts: [part], ...(code ? { code } : {}) };
 }
 
 /** Staff photo to the customer by its https URL, with the caption under it (up to 1024 characters). Sent once. */

@@ -21,3 +21,7 @@ it("retains the existing history bounds", () => {
   expect(history.messages).toHaveLength(10);
   expect(history.messages.every(message => message.content.length === 1200)).toBe(true);
 });
+it("campaigns and preference receipts do not become human takeover signals", () => {
+  expect(inboxHistory([{ ...row("Offer", "staff"), sent_via: "campaign" }], new Set()).staffReplied).toBe(false);
+  expect(inboxHistory([{ ...row("Unsubscribed", "staff"), sent_via: "marketing_preference" }], new Set()).staffReplied).toBe(false);
+});

@@ -49,7 +49,13 @@ export async function persistBusinessEcho(echo: NormalizedBusinessEcho, options:
     const { count, error } = await db.from("workflow_inbound_queue").select("id", { count: "exact", head: true })
       .eq("connection_id", connection.id).eq("participant_id", echo.externalParticipantId).eq("status", "sending");
     if (error) throw new Error("Echo in-flight check failed");
-    if (!count) break;
+    const campaign = await db.from("marketing_campaign_recipients").select("id", { count: "exact", head: true })
+      .eq("connection_id", connection.id).eq("participant_id", echo.externalParticipantId).eq("status", "sending");
+    if (campaign.error && campaign.error.code !== "42P01" && campaign.error.code !== "PGRST205") throw new Error("Echo campaign check failed");
+    const confirmation = await db.from("marketing_preference_events").select("id", { count: "exact", head: true })
+      .eq("connection_id", connection.id).eq("participant_id", echo.externalParticipantId).eq("confirmation_status", "sending");
+    if (confirmation.error && confirmation.error.code !== "42P01" && confirmation.error.code !== "PGRST205") throw new Error("Echo preference check failed");
+    if (!count && !campaign.count && !confirmation.count) break;
     if (Date.now() >= deadline) return "in_flight";
     await sleep(options.pollMs ?? 2_000);
   }

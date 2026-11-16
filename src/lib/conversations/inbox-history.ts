@@ -5,6 +5,7 @@ export type InboxHistoryMessage = {
   body: string | null;
   direction: string;
   source: string;
+  sent_via?: string | null;
   delivery_status: string;
   external_message_id: string | null;
 };
@@ -14,10 +15,11 @@ export function inboxHistory(rows: InboxHistoryMessage[], currentIds: Set<string
   const previous = rows.filter(row => !currentIds.has(row.external_message_id ?? "")
     && (row.direction === "inbound" && row.source === "customer"
       || row.direction === "outbound" && isAcceptedDelivery(row.delivery_status) && ["agent", "staff"].includes(row.source)));
-  const staffReplied = previous.find(row => row.direction === "outbound")?.source === "staff";
+  const lastHuman = previous.find(row => row.direction === "outbound" && row.sent_via !== "campaign" && row.sent_via !== "marketing_preference");
+  const staffReplied = lastHuman?.source === "staff";
   const messages: ConversationMessage[] = previous.filter(row => row.body?.trim()).slice(0, 10).reverse().map(row => ({
     role: row.direction === "inbound" ? "user" : "assistant",
-    content: `${row.source === "staff" ? "[Stafi] " : ""}${row.body}`.slice(0, 1200),
+    content: `${row.sent_via === "marketing_preference" ? "[Preferencat e ofertave] " : row.sent_via === "campaign" ? "[Fushatë] " : row.source === "staff" ? "[Stafi] " : ""}${row.body}`.slice(0, 1200),
   }));
   return { messages, staffReplied };
 }

@@ -2,7 +2,7 @@ import { moduleRegistry } from "../modules/registry";
 import type { DashboardProfile, ModuleId } from "../modules/types";
 
 export type NavItem = {
-  id: ModuleId | "chat-lab" | "pricing" | "actions" | "users" | "usage" | "prompts" | "flows";
+  id: ModuleId | "chat-lab" | "pricing" | "actions" | "users" | "usage" | "prompts" | "flows" | "campaigns";
   path: string;
   label: string;
   icon: string;
@@ -19,7 +19,7 @@ export function buildNavigationItems(
     variant === "mobile"
       ? profile.mobileNavigationItems
       : profile.navigationItems;
-  return ids.map((id) => {
+  const items: NavItem[] = ids.map((id) => {
     const mod = moduleRegistry[id];
     return {
       id,
@@ -29,6 +29,8 @@ export function buildNavigationItems(
       ...(labels[id] ? { custom: true as const } : {}),
     };
   });
+  if (variant === "desktop") items.splice(Math.max(0, items.findIndex(item => item.id === "inbox") + 1), 0, { id: "campaigns", path: "campaigns", label: "Fushatat", icon: "spark" });
+  return items;
 }
 
 export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"): NavItem[] {

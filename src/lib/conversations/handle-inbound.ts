@@ -1,3 +1,4 @@
+import { reviewMarketingPreference } from "@/lib/campaigns/preference";
 import { initialSnapshot } from "@/lib/orchestration/contracts";
 import { inboxHistory, type InboxHistoryMessage } from "./inbox-history";
 import { readStoredConversationState } from "@/lib/orchestration/stored-state";
@@ -277,6 +278,7 @@ export async function handleInboundMessage(
 
   const correlationId = job ? `workflow-job:${job.id}` : randomUUID();
   let reactionMessageId: string | null = null;
+  let onlyMarketingWithdrawal = batch.originals.length > 0;
   let persistenceStage: InboundPersistenceError["stage"] = "message_insert";
   try {
     for (const original of batch.originals) {
@@ -289,6 +291,7 @@ export async function handleInboundMessage(
           [adapter.connection]: conn.id,
           direction: "inbound",
           source: "customer",
+          marketing_inbound_at: original.timestamp.toISOString(),
           body: original.text,
           external_message_id: original.externalMessageId,
           media: original.attachments,
@@ -312,6 +315,8 @@ export async function handleInboundMessage(
         if (!insertedMessage?.id) throw new Error("Inbound insert not confirmed");
         reactionMessageId = insertedMessage.id;
       }
+      const preference = reactionMessageId ? await reviewMarketingPreference(businessId, reactionMessageId) : undefined;
+      onlyMarketingWithdrawal = onlyMarketingWithdrawal && preference?.onlyWithdrawal === true;
     }
     if (!job) {
       // Claim the legacy receipt only AFTER persistence. Failure above must not
@@ -334,6 +339,7 @@ export async function handleInboundMessage(
     });
     throw failure;
   }
+  if (onlyMarketingWithdrawal) return; // Preference acknowledgement is separate; preserve the workflow exactly.
   const conversationStatus = createdFresh ? "active" : open?.status;
   const convAuto = createdFresh ? business?.auto_reply : open?.auto_reply;
   const autoOn = convAuto ?? business?.auto_reply ?? false;
@@ -366,19 +372,19 @@ export async function handleInboundMessage(
   // Persisted inbox history also includes customers and staff who spoke while AI
   // was paused. Never replay those messages as workflow commands or field values.
   const [{ data: historyRows, error: historyError }, { data: lastOutbound, error: outboundError }] = await Promise.all([
-    supabase.from("messages").select("body,direction,source,delivery_status,external_message_id")
+    supabase.from("messages").select("body,direction,source,sent_via,delivery_status,external_message_id")
       .eq("business_id", businessId).eq("conversation_id", conversationId)
       .or("and(direction.eq.inbound,source.eq.customer),and(direction.eq.outbound,delivery_status.in.(sent,delivered,read),source.in.(agent,staff))")
       .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(10 + batch.originals.length),
     // Ownership evidence must not disappear when many messages arrive during pause.
-    supabase.from("messages").select("body,source,delivery_status")
+    supabase.from("messages").select("body,source,sent_via,delivery_status")
       .eq("business_id", businessId).eq("conversation_id", conversationId).eq("direction", "outbound")
       .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
   ]);
   if (historyError || outboundError) throw new Error("Conversation history unavailable");
   const history = inboxHistory((historyRows ?? []) as InboxHistoryMessage[], new Set(batch.originals.map(original => original.externalMessageId)));
   inboundState.recentMessages = history.messages;
-  const staffReplied = history.staffReplied || lastOutbound?.source === "staff" && isAcceptedDelivery(lastOutbound.delivery_status);
+  const staffReplied = history.staffReplied || lastOutbound?.source === "staff" && lastOutbound.sent_via !== "campaign" && lastOutbound.sent_via !== "marketing_preference" && isAcceptedDelivery(lastOutbound.delivery_status);
   const resumedHandoff = runtime.handoffRequested === true;
   if (resumedHandoff) inboundState.runtime = { ...runtime, handoffRequested: false };
   const canAct = async () => {

@@ -1,0 +1,92 @@
+-- Disposable/local database only. No provider calls. Every fixture rolls back.
+begin;
+do $$
+declare owner uuid:=gen_random_uuid(); staff uuid:=gen_random_uuid(); outsider uuid:=gen_random_uuid(); b uuid:=gen_random_uuid(); other uuid:=gen_random_uuid(); conn uuid:=gen_random_uuid(); conv uuid:=gen_random_uuid(); msg uuid:=gen_random_uuid(); campaign uuid; recipient uuid; claim jsonb; ack jsonb; event_id uuid; a jsonb; input jsonb; n integer;
+begin
+ insert into auth.users(id,email) values(owner,'campaign-owner@example.invalid'),(staff,'campaign-staff@example.invalid'),(outsider,'campaign-outsider@example.invalid');
+ insert into profiles(id) values(owner),(staff),(outsider) on conflict do nothing;
+ insert into businesses(id,name,slug,auto_reply) values(b,'Campaign fixture','campaign-'||b,false),(other,'Other fixture','campaign-'||other,false);
+ insert into business_users(business_id,user_id,role) values(b,owner,'owner'),(b,staff,'staff'),(other,outsider,'owner');
+ insert into instagram_connections(id,business_id,ig_user_id,access_token_ciphertext,status) values(conn,b,'test-'||conn,'never-used','connected');
+ insert into conversations(id,business_id,instagram_connection_id,instagram_participant_id,last_inbound_at,participant_display_name) values(conv,b,conn,'person',now(),'Arta');
+ perform manage_marketing(b,owner,'settings',null,'{"enabled":true,"timezone":"Europe/Tirane","frequencyDays":7}');
+ update marketing_settings set start_hour=0,end_hour=24 where business_id=b;
+ update marketing_control set enabled=true;
+ insert into messages(id,business_id,conversation_id,direction,source,body,external_message_id,instagram_connection_id,marketing_inbound_at) values(msg,b,conv,'inbound','customer','Yes, send me your offers','inbound-'||msg,conn,now());
+ if marketing_eligible(b,conv,23,'all',null)<>'review_pending' then raise exception 'Inbound must hold marketing'; end if;
+ perform review_marketing_preference(b,msg,'subscribe','send me your offers');
+ if marketing_eligible(b,conv,23,'all',null) is not null then raise exception 'Consent should permit eligible contact'; end if;
+ input:=jsonb_build_object('name','Fixture','channel','instagram','body','Hello {{emri}}','terms','Until tomorrow','hours',23,'orders','all','maxRecipients',100);
+ begin perform prepare_marketing_campaign(b,outsider,input); raise exception 'Cross tenant draft accepted'; exception when raise_exception then if sqlerrm<>'forbidden' then raise; end if; end;
+ campaign:=prepare_marketing_campaign(b,staff,input);
+ if (select count(*) from marketing_campaign_recipients where campaign_id=campaign)<>1 then raise exception 'Expected one recipient'; end if;
+ select id into recipient from marketing_campaign_recipients where campaign_id=campaign;
+ if begin_marketing_send(recipient) is not null then raise exception 'Unconfirmed draft sent'; end if;
+ begin perform manage_marketing(b,staff,'confirm',campaign,'{"count":1}'); raise exception 'Staff confirmed'; exception when raise_exception then if sqlerrm<>'owner_required' then raise; end if; end;
+ begin perform manage_marketing(b,owner,'confirm',campaign,'{"count":2}'); raise exception 'Incorrect count accepted'; exception when raise_exception then if sqlerrm<>'audience_changed' then raise; end if; end;
+ perform manage_marketing(b,owner,'confirm',campaign,'{"count":1}');
+ claim:=begin_marketing_send(recipient);
+ if claim is null then raise exception 'Confirmed eligible recipient not claimed'; end if;
+ if begin_marketing_send(recipient) is not null then raise exception 'Duplicate send claimed'; end if;
+ a:=business_allowance(b);
+ if (a->>'reserved')::integer<>1 then raise exception 'Shared quota was not reserved'; end if;
+ perform finish_marketing_send(recipient,(claim->>'token')::uuid,'uncertain',null,'timeout');
+ if (select status from marketing_campaigns where id=campaign)<>'paused' then raise exception 'Uncertain send must pause'; end if;
+ perform manage_marketing(b,owner,'resume',campaign);
+ if begin_marketing_send(recipient) is not null then raise exception 'Uncertain send retried'; end if;
+ if marketing_eligible(b,conv,23,'all',null)<>'frequency' then raise exception 'Uncertain result must retain frequency guard'; end if;
+ -- A late receipt settles quota exactly once, even after cancellation.
+ perform manage_marketing(b,owner,'cancel',campaign);
+ perform finish_marketing_send(recipient,(claim->>'token')::uuid,'sent','provider-1',null);
+ perform finish_marketing_send(recipient,(claim->>'token')::uuid,'sent','provider-1',null);
+ a:=business_allowance(b);
+ if (a->>'used')::integer<>1 or (a->>'reserved')::integer<>0 then raise exception 'Quota double counted or not settled'; end if;
+ perform record_transport_receipt(conn,'person','provider-1','read',now());
+ if (select delivery_status from messages where id=(select message_id from marketing_campaign_recipients where id=recipient))<>'read' then raise exception 'Receipt not reflected in inbox'; end if;
+ -- Withdrawal holds before interpretation, even with auto replies off.
+ msg:=gen_random_uuid();
+ insert into messages(id,business_id,conversation_id,direction,source,body,external_message_id,instagram_connection_id,marketing_inbound_at) values(msg,b,conv,'inbound','customer','Please stop sending promotions','inbound-'||msg,conn,now());
+ if marketing_eligible(b,conv,23,'all',null)<>'review_pending' then raise exception 'New inbound did not hold'; end if;
+ perform review_marketing_preference(b,msg,'unsubscribe','stop sending promotions');
+ if marketing_eligible(b,conv,23,'all',null)<>'unsubscribed' then raise exception 'Withdrawal ignored'; end if;
+ select id into event_id from marketing_preference_events where message_id=msg;
+ ack:=begin_marketing_confirmation(event_id);
+ if ack is null then raise exception 'Withdrawal acknowledgement not claimable with autoreply disabled'; end if;
+ if begin_marketing_confirmation(event_id) is not null then raise exception 'Duplicate withdrawal acknowledgement'; end if;
+ perform finish_marketing_confirmation(event_id,(ack->>'confirmation_token')::uuid,'failed',null);
+ if (business_allowance(b)->>'reserved')::integer<>0 then raise exception 'Failed acknowledgement leaked quota'; end if;
+ msg:=gen_random_uuid();
+ insert into messages(id,business_id,conversation_id,direction,source,body,external_message_id,instagram_connection_id,marketing_inbound_at) values(msg,b,conv,'inbound','customer','Where is my order?','inbound-'||msg,conn,now());
+ perform review_marketing_preference(b,msg,'unchanged',null);
+ if marketing_eligible(b,conv,23,'all',null)<>'unsubscribed' then raise exception 'Service reply silently resubscribed'; end if;
+ -- New explicit consent, then expiry checked at send, not at preview.
+ msg:=gen_random_uuid();
+ insert into messages(id,business_id,conversation_id,direction,source,body,external_message_id,instagram_connection_id,marketing_inbound_at) values(msg,b,conv,'inbound','customer','I want promotional messages again','inbound-'||msg,conn,now());
+ perform review_marketing_preference(b,msg,'subscribe','promotional messages again');
+ update marketing_campaign_recipients set started_at=now()-interval '8 days' where id=recipient;
+ campaign:=prepare_marketing_campaign(b,owner,input);
+ select id into recipient from marketing_campaign_recipients where campaign_id=campaign;
+ perform manage_marketing(b,owner,'confirm',campaign,'{"count":1}');
+ update marketing_campaigns set next_send_at=null where business_id=b;
+ update conversations set last_inbound_at=now()-interval '23 hours 1 minute' where id=conv;
+ if begin_marketing_send(recipient) is not null then raise exception 'Expired window sent'; end if;
+ if (select reason from marketing_campaign_recipients where id=recipient)<>'window_closed' then raise exception 'Missing window exclusion'; end if;
+ -- Imported rows cannot open the window, and stopping campaigns does not lose withdrawals.
+ update conversations set last_inbound_at=now() where id=conv;
+ update messages set marketing_inbound_at=now()-interval '24 hours' where conversation_id=conv and direction='inbound';
+ if marketing_eligible(b,conv,23,'all',null)<>'no_inbound' then raise exception 'Imported/recent conversation timestamp opened marketing window'; end if;
+ update marketing_settings set enabled=false where business_id=b;
+ msg:=gen_random_uuid();
+ insert into messages(id,business_id,conversation_id,direction,source,body,external_message_id,instagram_connection_id,marketing_inbound_at) values(msg,b,conv,'inbound','customer','No more promotions','inbound-'||msg,conn,now());
+ if not (select review_pending from marketing_preferences where connection_id=conn and participant_id='person') then raise exception 'Disabled feature lost withdrawal hold'; end if;
+ perform review_marketing_preference(b,msg,'unsubscribe','No more promotions');
+ update marketing_settings set enabled=true where business_id=b;
+ if marketing_eligible(b,conv,23,'all',null)<>'unsubscribed' then raise exception 'Enabling feature erased withdrawal'; end if;
+ -- Validate schema, tenant, and access boundaries independently of the UI.
+ begin perform prepare_marketing_campaign(b,owner,input||'{"hours":24}'); raise exception '24-hour filter accepted'; exception when check_violation then null; end;
+ begin perform review_marketing_preference(other,msg,'subscribe','No more promotions'); raise exception 'Cross tenant evidence accepted'; exception when raise_exception then if sqlerrm<>'invalid_message' then raise; end if; end;
+ if has_function_privilege('authenticated','public.begin_marketing_send(uuid)','execute') then raise exception 'Client has send RPC access'; end if;
+ if has_table_privilege('authenticated','public.marketing_campaigns','insert') then raise exception 'Client can create confirmed campaigns'; end if;
+ raise notice 'Marketing campaign consent, authorization, expiry, receipts, quota and retry checks passed';
+end $$;
+rollback;

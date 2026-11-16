@@ -78,6 +78,7 @@ export function mobileThread(conversation: ThreadConversation, messages: ThreadM
       source: m.source,
       // "instagram_app" | "whatsapp_app" when the business wrote from the native app.
       sentVia: m.sent_via ?? null,
+      campaignName: m.campaign_name ?? null,
       body: m.body,
       createdAt: m.created_at,
       deliveryStatus: m.delivery_status,

@@ -18,6 +18,7 @@ type Message = {
   direction: string;
   source: string;
   sent_via?: string | null;
+  campaign_name?: string | null;
   body: string | null;
   media: NormalizedAttachment[] | null;
   created_at: string;
@@ -280,7 +281,7 @@ export function ThreadClient(props: {
               {!m.body && !m.media?.length && <p>{t("Mesazh pa tekst")}</p>}
               <div className="chat-message-footer">
               <small>
-                {m.source === "agent"
+                {m.sent_via === "campaign" ? `${t("Fushatë")}: ${m.campaign_name || "—"}` : m.sent_via === "marketing_preference" ? t("Preferencat e ofertave") : m.source === "agent"
                   ? t("Agjenti AI")
                   : m.sent_via === "instagram_app"
                     ? t("Dërguar nga Instagram")

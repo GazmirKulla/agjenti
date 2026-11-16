@@ -1,3 +1,4 @@
+import { campaignContext } from "@/lib/campaigns/service";
 import { randomUUID } from "node:crypto";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { emptyState } from "@/lib/workflows/state";
@@ -121,6 +122,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       serviceIds: catalogPins.filter(pin => pin.kind === "service").map(pin => pin.id),
     }),
     attachments: params.attachmentContext,
+    campaigns: mode === "live" && transport ? await campaignContext(params.businessId, transport.conversationId) : undefined,
     prospect: await prospectRead,
   };
   trace?.({ stage: "tools", label: "Process business sources loaded", data: { knowledge: grounding.knowledge.status, products: grounding.products.status, services: grounding.services.status, readOnly: true } });

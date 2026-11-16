@@ -7,10 +7,12 @@ const mocks = vi.hoisted(() => ({
   profile: vi.fn(),
   rpc: vi.fn(),
   aiReaction: vi.fn(),
+  marketingReview: vi.fn(),
 }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({ from: mocks.from, rpc: mocks.rpc }),
 }));
+vi.mock("@/lib/campaigns/preference", () => ({ reviewMarketingPreference: mocks.marketingReview }));
 vi.mock("./process-conversation-message", () => ({ processConversationMessage: mocks.process }));
 vi.mock("./ai-reaction-runtime",()=>({runAiReaction:mocks.aiReaction}));
 vi.mock("@/lib/crypto/tokens", () => ({
@@ -63,6 +65,7 @@ let originalStatus: string;
 let conversationLookups: Record<string, unknown>[];
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.marketingReview.mockResolvedValue(undefined);
   vi.unstubAllEnvs();
   paused = false;
   historyResult = undefined;
@@ -810,4 +813,22 @@ it("does not treat the WhatsApp transport as a workflow channel field", async ()
   const incoming = { ...message, channel: "whatsapp" as const, externalParticipantId: "355691234567", contextMetadata: { whatsappPhoneNumberId: "123456" } };
   await handleInboundMessage(incoming, { ...queuedJob(), participant_id: incoming.externalParticipantId, payload: incoming });
   expect(mocks.process.mock.calls[0][0].state.fields.channel).toBeUndefined();
+});
+
+it("records marketing preferences even while the conversation is paused", async () => {
+  paused = true;
+  await handleInboundMessage(message, queuedJob());
+  expect(mocks.marketingReview).toHaveBeenCalledWith("business-a", expect.any(String));
+  expect(mocks.process).not.toHaveBeenCalled();
+});
+it("a pure verified withdrawal preserves workflow state and avoids a second reply", async () => {
+  mocks.marketingReview.mockResolvedValue({ decision: "unsubscribe", onlyWithdrawal: true });
+  await handleInboundMessage(message, queuedJob());
+  expect(mocks.process).not.toHaveBeenCalled();
+  expect(mocks.rpc.mock.calls.some(([name]) => name === "commit_process_checkpoint")).toBe(false);
+});
+it("a withdrawal with a service question still runs the normal conversation", async () => {
+  mocks.marketingReview.mockResolvedValue({ decision: "unsubscribe", onlyWithdrawal: false });
+  await handleInboundMessage(message, queuedJob());
+  expect(mocks.process).toHaveBeenCalledOnce();
 });

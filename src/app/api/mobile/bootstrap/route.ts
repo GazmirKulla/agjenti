@@ -41,14 +41,14 @@ export async function GET(request: Request) {
           // "Gati për klientët": what is left before the agent answers customers.
           readiness: readinessSummary(readiness),
           modules: profile.enabledModules,
-          navigation: navigationOrder
+          navigation: [{ id: "campaigns", label: t("Fushatat"), description: t("Oferta për kontaktet që kanë pranuar marketingun"), path: `/b/${encodeURIComponent(business.slug)}/campaigns` }, ...navigationOrder
             .filter((id) => profile.navigationItems.includes(id))
             .map((id) => ({
               id,
               label: t(moduleRegistry[id].label),
               description: t(moduleRegistry[id].description),
               path: `/b/${encodeURIComponent(business.slug)}${moduleRegistry[id].path ? `/${moduleRegistry[id].path}` : ""}`,
-            })),
+            }))],
         };
       }),
     );

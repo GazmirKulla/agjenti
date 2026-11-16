@@ -6,6 +6,8 @@ import type { Action } from "@/lib/business-assistant/model";
  * manual-only reason. Exceptions never confer authority on the customer agent. */
 type Coverage = { operation: OperationKey } | { legacy: Action } | { exception: string };
 export const manualSurfaces = {
+  "src/app/api/campaigns/route.ts#POST": { exception: "Members prepare immutable campaign drafts; only the current business owner confirms sends, manages preferences or changes settings. No assistant or customer-agent send capability." },
+  "src/app/api/cron/campaigns/route.ts#POST": { exception: "CRON_SECRET authenticated continuation of owner-confirmed campaigns; every send rechecks consent, membership, quiet hours and shared quota in the database." },
   "src/app/api/agent-real/turns/route.ts#POST": { "exception": "Owner-only panel transport; effects pass the existing workflow action guards and explicit real-session confirmation." },
 
   "src/app/admin/users/actions.ts#manageUser": {"exception": "Platform-administrator-only account creation, password changes and manual email verification; unavailable to the business-owner assistant."},

@@ -46,6 +46,7 @@ async function postMessage(
 	}
 	const data = (await response.json().catch(() => null)) as MetaErrorBody | null;
 	if (!response.ok) {
+        if (response.status === 429) return { ok: false, error: "Instagram kërkon të ngadalësohet dërgimi.", code: "rate_limited" };
 		const code = data?.error?.code;
 		const subcode = data?.error?.error_subcode;
 		if (code === 10 && subcode === 2534022) {

@@ -233,7 +233,7 @@ export async function loadThreadConversation(db: SupabaseClient, businessId: str
 }
 
 export const threadMessageColumns =
-  "id,direction,source,sent_via,body,media,created_at,delivery_status,delivery_error,external_message_id,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)";
+  "id,direction,source,sent_via,campaign_id,campaign_name,body,media,created_at,delivery_status,delivery_error,external_message_id,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)";
 
 /** A page of messages, oldest first: the latest ones, or those older than `before`.
  * `older` reads the page before it; null when there is nothing older. */

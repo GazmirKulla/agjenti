@@ -46,7 +46,7 @@ it("returns only allowed businesses and modules without exposing credentials", a
   expect(data.businesses).toHaveLength(1);
   expect(
     data.businesses[0].navigation.map((x: { id: string }) => x.id),
-  ).toEqual(["products", "settings"]);
+  ).toEqual(["campaigns", "products", "settings"]);
   expect(data.user).toEqual({ id: "owner", email: "owner@example.test", canDeleteAccount: true });
   expect(response.headers.get("cache-control")).toContain("no-store");
   expect(data.businesses[0].aiUsage).toBeNull();
