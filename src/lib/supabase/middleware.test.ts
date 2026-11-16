@@ -20,6 +20,8 @@ it("serves public content and independently authenticated callbacks without auth
     "/api/meta/deauthorize",
     "/api/cron/refresh-instagram-tokens",
     "/api/instagram/oauth/callback",
+    // Signed customer photo links are verified by the route itself.
+    "/api/businesses/11111111-1111-4111-8111-111111111111/conversations/22222222-2222-4222-8222-222222222222/avatar",
   ]) {
     expect(
       (await updateSession(new NextRequest(`https://agjenti.app${path}`)))
@@ -106,4 +108,10 @@ it("does not count a 429 or a 5xx as a rejected session", async () => {
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+it("keeps the session check on other conversation routes", async () => {
+  await updateSession(new NextRequest("https://agjenti.app/api/businesses/b/conversations/c/messages"));
+  await updateSession(new NextRequest("https://agjenti.app/api/businesses/b/conversations/c/avatar/extra"));
+  expect(m.user).toHaveBeenCalledTimes(2);
 });

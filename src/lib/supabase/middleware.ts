@@ -53,6 +53,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/api/catalogs/share/") ||
     path === "/api/cron/refresh-instagram-tokens" ||
     path === "/api/cron/business-discovery" ||
+    // Customer photos carry their own signed link; one session check per image overloads Auth.
+    /^\/api\/businesses\/[^/]+\/conversations\/[^/]+\/avatar$/.test(path) ||
     path === "/api/instagram/oauth/callback" ||
     path === "/api/meta/data-deletion" ||
     path === "/api/meta/deauthorize" ||

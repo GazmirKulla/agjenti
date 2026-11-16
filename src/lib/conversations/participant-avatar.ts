@@ -1,3 +1,4 @@
+import { signedAvatarQuery } from "./avatar-link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchInstagramUserProfile, type InstagramUserProfile } from "@/lib/instagram/user-profile";
 
@@ -67,12 +68,13 @@ export async function refreshInstagramParticipantAvatar(input: RefreshInput): Pr
 }
 
 /**
- * Stable address of a stored photo, served by the avatar route with browser caching. The version
- * changes only when the photo is checked again, so periodic Inbox refreshes reuse the cached image.
+ * Stable, signed address of a stored photo. Sign only while rendering for a viewer who may see this
+ * conversation. The link changes when the photo is checked again or the weekly window turns over.
  * Null when there is no stored photo: the UI shows initials.
  */
-export function participantAvatarUrl(businessId: string, conversationId: string, path: string | null | undefined, checkedAt: string | null | undefined): string | null {
+export function participantAvatarUrl(businessId: string, conversationId: string, path: string | null | undefined, checkedAt: string | null | undefined, now = Date.now()): string | null {
   if (!path) return null;
-  const version = checkedAt ? Date.parse(checkedAt) : NaN;
-  return `/api/businesses/${businessId}/conversations/${conversationId}/avatar${Number.isFinite(version) ? `?v=${version}` : ""}`;
+  const at = checkedAt ? Date.parse(checkedAt) : NaN;
+  const version = Number.isFinite(at) ? String(at) : "0";
+  return `/api/businesses/${businessId}/conversations/${conversationId}/avatar?${signedAvatarQuery(businessId, conversationId, version, now)}`;
 }

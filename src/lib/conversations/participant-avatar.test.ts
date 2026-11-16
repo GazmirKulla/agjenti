@@ -114,12 +114,14 @@ describe("refreshInstagramParticipantAvatar", () => {
 });
 
 describe("participantAvatarUrl", () => {
-  it("is stable across refreshes and changes only when the photo is checked again", () => {
-    const at = "2026-11-16T12:00:00.000Z";
-    const first = participantAvatarUrl("biz-1", "conv-1", "biz-1/instagram/c/1.jpg", at);
-    expect(first).toBe(`/api/businesses/biz-1/conversations/conv-1/avatar?v=${Date.parse(at)}`);
-    expect(participantAvatarUrl("biz-1", "conv-1", "biz-1/instagram/c/1.jpg", at)).toBe(first);
-    expect(participantAvatarUrl("biz-1", "conv-1", "biz-1/instagram/c/1.jpg", "2026-11-23T12:00:00.000Z")).not.toBe(first);
+  it("is stable across refreshes in the same week and changes when the photo is checked again", () => {
+    vi.stubEnv("TOKEN_ENCRYPTION_KEY", "test-key");
+    const at = "2026-11-16T12:00:00.000Z", now = Date.parse("2026-11-16T22:00:00Z");
+    const first = participantAvatarUrl("biz-1", "conv-1", "biz-1/instagram/c/1.jpg", at, now)!;
+    expect(first.startsWith("/api/businesses/biz-1/conversations/conv-1/avatar?")).toBe(true);
+    expect(participantAvatarUrl("biz-1", "conv-1", "biz-1/instagram/c/1.jpg", at, now + 3600_000)).toBe(first);
+    expect(participantAvatarUrl("biz-1", "conv-1", "biz-1/instagram/c/1.jpg", "2026-11-23T12:00:00.000Z", now)).not.toBe(first);
+    vi.unstubAllEnvs();
   });
 
   it("is null without a stored photo so the initials show", () => {
