@@ -20,7 +20,9 @@ export type PendingPhotoField = { key: string; label: string; type: "photo" | "f
   role?: "input" | "output" };
 
 export type ConversationContext = {
-  conversation: { id: string; name: string; handle: string; channel: string; status: string; avatarUrl?: string | null };
+  conversation: { id: string; name: string; handle: string; channel: string; status: string; avatarUrl?: string | null;
+    /** The name the channel shows for the customer (profile name); null when it shows none. */
+    channelName: string | null };
   /** What the agent collected about the person (validated values only). */
   profile: { name: string | null; phone: string | null; email: string | null; city: string | null; address: string | null };
   customer: { linked: boolean; name: string | null; phone: string | null; since: string | null };
@@ -366,7 +368,8 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
   });
   const leadRow = lead.data;
   return {
-    conversation: { id: conversation.id, name: conversation.name, handle: conversation.handle, channel: conversation.channel, status: conversation.status, avatarUrl: conversation.avatarUrl },
+    conversation: { id: conversation.id, name: conversation.name, handle: conversation.handle, channel: conversation.channel, status: conversation.status, avatarUrl: conversation.avatarUrl,
+      channelName: conversation.participant_display_name?.trim() || null },
     profile,
     customer: {
       linked: Boolean(conversation.customer),

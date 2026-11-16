@@ -62,7 +62,7 @@ export async function ConversationPanel({ context, businessId, slug }: { context
         ) : (
           <>
             <p className="muted-copy mb-3">{t("Ende jo klient CRM. Të dhënat më poshtë janë marrë nga biseda; kontrolloji para se ta ruash.")}</p>
-            <SaveCustomerForm businessId={businessId} conversationId={conversation.id} name={value("name")} phone={value("phone")} />
+            <SaveCustomerForm businessId={businessId} conversationId={conversation.id} name={conversation.channelName || value("name")} phone={value("phone")} />
           </>
         )}
       </section>
