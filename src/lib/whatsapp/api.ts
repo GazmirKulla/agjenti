@@ -36,3 +36,20 @@ export async function sendWhatsAppText(params: { accountId: string; token: strin
   await params.onPart?.(part, 1);
   return part.status === "sent" ? { ok: true, messageId: part.messageId, parts: [part] } : { ok: false, error: part.error!, parts: [part] };
 }
+
+/** Staff photo to the customer by its https URL, with the caption under it (up to 1024 characters). Sent once. */
+export async function sendWhatsAppImage(params: { accountId: string; token: string; to: string; url: string; caption?: string | null; onPart?: PartObserver }): Promise<SendInstagramResult> {
+  const caption = params.caption?.trim() ?? "";
+  if (!/^https:\/\/\S+$/.test(params.url) || caption.length > 1024) return { ok: false, error: "Fotoja ose shënimi nuk janë të vlefshëm (shënimi deri në 1024 karaktere)." };
+  await params.onPart?.({ index: 0, body: params.url, status: "sending" }, 1);
+  let part: MessagePart;
+  try {
+    const data = await whatsappGraph<{ messages?: { id: string }[] }>(`${params.accountId}/messages`, params.token, {
+      messaging_product: "whatsapp", recipient_type: "individual", to: params.to, type: "image", image: { link: params.url, ...(caption ? { caption } : {}) },
+    });
+    if (!data.messages?.[0]?.id) throw new Error("Missing receipt");
+    part = { index: 0, body: params.url, status: "sent", messageId: data.messages[0].id };
+  } catch (error) { part = { index: 0, body: params.url, status: error instanceof WhatsAppRejected ? "failed" : "uncertain", error: "Dërgimi i fotos në WhatsApp nuk u konfirmua. Kontrollo lidhjen dhe dritaren 24-orëshe." }; }
+  await params.onPart?.(part, 1);
+  return part.status === "sent" ? { ok: true, messageId: part.messageId, parts: [part] } : { ok: false, error: part.error!, parts: [part] };
+}

@@ -249,21 +249,21 @@ async function uploadOrderFile(base: string, file: File): Promise<string> {
   return json.path;
 }
 
-type ChatPhoto = { id: string; createdAt: string; caption: string | null };
+type ChatPhoto = { id: string; createdAt: string; caption: string | null; byBusiness?: boolean };
 
 /** Photos the customer sent in the conversation, read once while a photo field is shown. */
-function useChatPhotos(base: string, active: boolean): ChatPhoto[] | null {
+function useChatPhotos(base: string, active: boolean, business = false): ChatPhoto[] | null {
   const [photos, setPhotos] = useState<ChatPhoto[] | null>(null);
   useEffect(() => {
     if (!active) return;
     let current = true;
-    fetch(`${base}/order-files`, { cache: "no-store" })
+    fetch(`${base}/order-files${business ? "?from=all" : ""}`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((json: { photos?: ChatPhoto[] } | null) => current && setPhotos(Array.isArray(json?.photos) ? json.photos : []), () => current && setPhotos([]));
     return () => {
       current = false;
     };
-  }, [base, active]);
+  }, [base, active, business]);
   return photos;
 }
 
@@ -286,7 +286,8 @@ function DeclaredInputs(props: {
   const [uploadError, setUploadError] = useState<string | null>(null);
   // Which conversation photo became which stored file, per field: `${field}|${photoId}` → path.
   const [fromChat, setFromChat] = useState<Record<string, string>>({});
-  const chatPhotos = useChatPhotos(props.base, declared.fields.some((f) => f.type === "photo" || f.type === "file"));
+  // The business's own photo fields may also take the photos the business sent in the conversation.
+  const chatPhotos = useChatPhotos(props.base, declared.fields.some((f) => f.type === "photo" || f.type === "file"), declared.fields.some((f) => f.role === "output"));
   // Uploads finish after other choices may have changed: always build on the latest selection.
   const latest = useRef(selection);
   useEffect(() => {
@@ -382,11 +383,11 @@ function DeclaredInputs(props: {
                   }}>{t("Hiq fotot")}</button>
                 )}
               </span>
-              {chatPhotos?.length ? (
+              {(f.role === "output" ? chatPhotos : chatPhotos?.filter((photo) => !photo.byBusiness))?.length ? (
                 <>
-                  <span className="muted-copy">{t("Ose zgjidh nga fotot që dërgoi klienti në bisedë:")}</span>
+                  <span className="muted-copy">{f.role === "output" ? t("Ose zgjidh nga fotot e bisedës:") : t("Ose zgjidh nga fotot që dërgoi klienti në bisedë:")}</span>
                   <div className="order-chat-photos">
-                    {chatPhotos.map((photo) => {
+                    {(f.role === "output" ? chatPhotos! : chatPhotos!.filter((photo) => !photo.byBusiness)).map((photo) => {
                       const chosen = Boolean(fromChat[`${f.key}|${photo.id}`]);
                       return (
                         <button key={photo.id} type="button" aria-pressed={chosen} title={photo.caption ?? new Date(photo.createdAt).toLocaleString()}

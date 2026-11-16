@@ -78,7 +78,7 @@ Vendimet e pronarit (15.11.2026):
 
 Një artikull ka dy lloje të dhënash:
 - **Hyrëse:** atë që jep klienti që porosia të krijohet (masa, personazhi, fotoja e tij). Agjenti i pyet, dhe pa të detyrueshmet porosia nuk dërgohet.
-- **Dalëse:** atë që prodhon biznesi për artikullin: dizajni ose fotoja e përpunuar, provë që i tregohet klientit, foto e produktit të përfunduar. Klienti nuk i jep, agjenti nuk i pyet, dhe nuk e ndalojnë krijimin e porosisë. Te Zana janë `processedImages` (dhe më vonë `completionPhotos`), ndërsa fotot e klientit janë `customImages`.
+- **Dalëse:** atë që prodhon biznesi për artikullin: dizajni ose fotoja e përpunuar, provë që i tregohet klientit, foto e produktit të përfunduar. Klienti nuk i jep, agjenti nuk i pyet, dhe nuk e ndalojnë krijimin e porosisë. Te Zana është `processedImages`, ndërsa fotot e klientit janë `customImages`. (Vendim 16.11.2026: «Foto e produktit të gatshëm» / `completionPhotos` nuk deklarohet; Agjenti mban vetëm foton e përpunuar si fushë dalëse.)
 
 **Kontrata (katalogu v2):** çdo fushë merr `role: "input" | "output"` (parazgjedhja `input`). Shembull te Zana: `{"key": "processed", "label": "Foto e përpunuar", "type": "photo", "role": "output", "appliesTo": "item", "max": 5}`.
 

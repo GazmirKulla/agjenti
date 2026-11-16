@@ -95,16 +95,21 @@ async function sendPrepared(job: WorkflowJob) {
     }
     const allowed = humanAgent ? instagramReplyWindow(humanAgent.lastInboundAt) !== "closed"
         : isInstagramMessagingWindowOpen(job.payload.timestamp);
+    // A staff photo (the business's processed design) goes as an image, with its caption.
+    const media = job.operation_kind === "staff" ? (job.payload as { media?: { kind?: unknown; url?: unknown } }).media : undefined;
+    const image = media?.kind === "image" && typeof media.url === "string" ? media.url : null;
+    // Each part's receipt is persisted before the next provider request; a failed persistence stops the send.
+    const onPart = async (part: import("./delivery-status").MessagePart, total: number) => {
+        const receipt = { p_job: job.id, p_token: job.lease_token, p_index: part.index, p_total: total, p_body: part.body, p_status: part.status, p_external: part.messageId ?? null, p_error: part.error ?? null };
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try { const { error } = await db.rpc("record_transport_part", receipt); if (!error) return; }
+            catch { /* Retry the idempotent DB receipt, never the external part. */ }
+        }
+        throw new Error("Part receipt persistence failed; do not resend");
+    };
+    const target = { accountId: String("phone_number_id" in connection ? connection.phone_number_id : connection.ig_user_id), token: String(token), to: job.participant_id, onPart, ...(humanAgent ? { humanAgent } : {}) };
     const sent = allowed
-      ? await adapter.send({ accountId: String("phone_number_id" in connection ? connection.phone_number_id : connection.ig_user_id), token: String(token), to: job.participant_id, body: job.reply ?? "", ...(humanAgent ? { humanAgent } : {}),
-          onPart: async (part, total) => {
-            const receipt = { p_job: job.id, p_token: job.lease_token, p_index: part.index, p_total: total, p_body: part.body, p_status: part.status, p_external: part.messageId ?? null, p_error: part.error ?? null };
-            for (let attempt = 0; attempt < 2; attempt++) {
-                try { const { error } = await db.rpc("record_transport_part", receipt); if (!error) return; }
-                catch { /* Retry the idempotent DB receipt, never the external part. */ }
-            }
-            throw new Error("Part receipt persistence failed; do not resend");
-          } })
+      ? await (image ? adapter.sendImage({ ...target, url: image, caption: job.reply }) : adapter.send({ ...target, body: job.reply ?? "" }))
       : { ok: false as const, error: "Dritarja 24-orëshe ka mbaruar." };
     const confirmed = sent.ok && typeof sent.messageId === "string" && Boolean(sent.messageId.trim());
     const receipt = { p_id: job.id, p_token: job.lease_token, p_ok: confirmed,

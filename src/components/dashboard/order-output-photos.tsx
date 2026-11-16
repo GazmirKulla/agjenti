@@ -20,6 +20,7 @@ export function OrderOutputPhotos({ businessId, orderId }: { businessId: string;
   const [busy, setBusy] = useState<string | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatPhoto[] | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const load = useCallback(() => {
     fetch(base, { cache: "no-store" })
       .then((res) => res.json().then((json: View & { error?: string }) => (res.ok ? json : Promise.reject(new Error(json.error)))))
@@ -65,13 +66,41 @@ export function OrderOutputPhotos({ businessId, orderId }: { businessId: string;
       fetch(`${files}?from=all`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null))
         .then((json: { photos?: ChatPhoto[] } | null) => setChat(json?.photos ?? []), () => setChat([]));
   };
-  const thumbs = (list: File[]) => (
+  /** Sends one of the store's photos to the customer in the conversation, for approval. */
+  async function sendToCustomer(item: number, file: File) {
+    const caption = window.prompt(t("Shënim për klientin (opsional):"), t("Ja si do dalë. A ju pëlqen?"));
+    if (caption === null) return;
+    setBusy(`send|${file.url}`);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/businesses/${businessId}/conversations/${view!.conversationId}/messages`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: crypto.randomUUID(), body: caption.trim(), media: { orderId, item, key: file.key, url: file.url } }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(json.error || t("Fotoja nuk u dërgua."));
+      setNotice(t("Fotoja po i dërgohet klientit. Statusin e sheh te biseda."));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("Fotoja nuk u dërgua."));
+    } finally {
+      setBusy(null);
+    }
+  }
+  const thumbs = (list: File[], item?: number) => (
     <div className="order-chat-photos">
       {list.map((f) => (
-        <a key={f.url} href={f.url} target="_blank" rel="noreferrer">
-          {/* eslint-disable-next-line @next/next/no-img-element -- the business website's own image */}
-          <img src={f.url} alt="" loading="lazy" />
-        </a>
+        <span key={f.url}>
+          <a href={f.url} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element -- the business website's own image */}
+            <img src={f.url} alt="" loading="lazy" />
+          </a>
+          {item !== undefined && (
+            <button type="button" className="btn btn-ghost" disabled={busy !== null} onClick={() => void sendToCustomer(item, f)}>
+              {busy === `send|${f.url}` ? t("Duke dërguar…") : t("Dërgoja klientit")}
+            </button>
+          )}
+        </span>
       ))}
     </div>
   );
@@ -92,7 +121,7 @@ export function OrderOutputPhotos({ businessId, orderId }: { businessId: string;
               return (
                 <div key={field.key}>
                   <p className="muted-copy">{field.label}</p>
-                  {list.length ? thumbs(list) : <p className="muted-copy">{t("Ende pa foto.")}</p>}
+                  {list.length ? thumbs(list, item.item) : <p className="muted-copy">{t("Ende pa foto.")}</p>}
                   <label className="btn btn-ghost">
                     {busy === mark ? t("Duke ngarkuar…") : t("Ngarko foto")}
                     <input type="file" hidden accept="image/jpeg,image/png,image/webp,image/heic,image/heif" disabled={busy !== null}
@@ -124,6 +153,7 @@ export function OrderOutputPhotos({ businessId, orderId }: { businessId: string;
           </div>
         );
       })}
+      {notice && <p role="status" className="muted-copy">{notice}</p>}
       {error && <p role="alert" className="text-danger">{error}</p>}
     </div>
   );

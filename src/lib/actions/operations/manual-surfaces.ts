@@ -118,7 +118,7 @@ export const manualSurfaces = {
   "src/app/api/businesses/[id]/conversations/[conversationId]/order-files/route.ts#POST": {"exception": "The owner attaches a reference photo to the manual order form; it is stored privately and only its path is returned."},
   "src/app/api/businesses/[id]/conversations/[conversationId]/booking/route.ts#POST": {"legacy": "booking_update"},
   "src/app/api/businesses/[id]/conversations/[conversationId]/lead/route.ts#POST": {"exception": "Moving this conversation's lead along is the owner's own sales bookkeeping, through the same manage_lead check as the Leads page."},
-  "src/app/api/businesses/[id]/conversations/[conversationId]/messages/route.ts#POST": {"exception": "Human-to-customer communication remains explicit manual sending."},
+  "src/app/api/businesses/[id]/conversations/[conversationId]/messages/route.ts#POST": {"exception": "Human-to-customer communication remains explicit manual sending, including a photo of the business's own for an item of this conversation's order (read again from the business website, never a URL from the request)."},
   "src/app/api/businesses/[id]/conversations/[conversationId]/orders/route.ts#POST": {"operation": "order.submit"},
   "src/app/api/businesses/[id]/conversations/[conversationId]/orders/route.ts#PATCH": {"operation": "order.reconcile"},
   "src/app/api/businesses/[id]/orders/[orderId]/files/route.ts#POST": {"exception": "The owner adds the store's own photos of an item (processed design, finished product) to an order already on the business website; the website keeps them and Agjenti removes its temporary copies. Membership and the item's declared output field are checked; nothing about the order itself changes."},

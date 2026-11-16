@@ -103,3 +103,47 @@ export async function sendInstagramText(params: {
 	}
 	return { ok: true, messageId: lastId, parts };
 }
+
+/**
+ * Staff photo to the customer (the business's processed design, for approval): the image by its https
+ * URL, then the caption as text when there is one. Each part is recorded before the next one is sent,
+ * and a part with an unknown result stops the send; nothing is ever replayed.
+ */
+export async function sendInstagramImage(params: {
+	accountId: string;
+	token: string;
+	to: string;
+	url: string;
+	caption?: string | null;
+	onPart?: PartObserver;
+	humanAgent?: { lastInboundAt: string };
+}): Promise<SendInstagramResult> {
+	assertBusinessEffectAllowed("instagram.send");
+	if (isIsolatedExecution()) refuseIsolatedEffect("customer.message", "instagram");
+	if (!/^https:\/\/\S+$/.test(params.url)) return { ok: false, error: "Fotoja nuk ka një adresë të vlefshme." };
+	const caption = params.caption?.trim() ?? "";
+	const pieces: { body: string; message: Record<string, unknown> }[] = [
+		{ body: params.url, message: { attachment: { type: "image", payload: { url: params.url, is_reusable: false } } } },
+		...(caption ? splitInstagramText(caption).map((chunk) => ({ body: chunk, message: { text: chunk } })) : []),
+	];
+	let lastId: string | undefined;
+	const parts: MessagePart[] = [];
+	for (const [index, piece] of pieces.entries()) {
+		const window = params.humanAgent ? instagramReplyWindow(params.humanAgent.lastInboundAt) : "standard";
+		if (window === "closed") return { ok: false, error: "Afati 7-ditor ka përfunduar. Klienti duhet të shkruajë përsëri.", parts };
+		await params.onPart?.({ index, body: piece.body, status: "sending" }, pieces.length);
+		const send = await postMessage(params.accountId, params.token, {
+			recipient: { id: params.to },
+			message: piece.message,
+			...(window === "human_agent" ? { tag: "HUMAN_AGENT" } : {}),
+		});
+		const part: MessagePart = send.ok
+			? { index, body: piece.body, status: "sent", messageId: send.messageId }
+			: { index, body: piece.body, status: send.code === "send_uncertain" || send.code === "receipt_missing" ? "uncertain" : "failed", error: send.error };
+		parts.push(part);
+		await params.onPart?.(part, pieces.length);
+		if (!send.ok) return { ...send, parts };
+		lastId = send.messageId ?? lastId;
+	}
+	return { ok: true, messageId: lastId, parts };
+}

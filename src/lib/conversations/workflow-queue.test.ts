@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), handle: vi.fn(), send: vi.fn(), writes: [] as unknown[], filters: [] as unknown[] }));
+const m = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), handle: vi.fn(), send: vi.fn(), sendImage: vi.fn(), writes: [] as unknown[], filters: [] as unknown[] }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: m.rpc, from: m.from }) }));
 vi.mock("./handle-inbound", () => ({ handleInboundMessage: m.handle }));
-vi.mock("@/lib/instagram/send", () => ({ sendInstagramText: m.send }));
+vi.mock("@/lib/instagram/send", () => ({ sendInstagramText: m.send, sendInstagramImage: m.sendImage }));
 vi.mock("@/lib/crypto/tokens", () => ({ decryptSecret: () => "test-token" }));
 import { runWorkflowQueue, prepareWorkflowReply, enqueueWorkflowMessage } from "./workflow-queue";
 import type { AgentTurnResult } from "./process-agent-turn";
@@ -211,6 +211,16 @@ it("tags only the persisted staff operation using the current conversation windo
  await runWorkflowQueue();
  expect(m.send).toHaveBeenCalledWith(expect.objectContaining({humanAgent: {lastInboundAt: expect.any(String)}}));
  expect(m.filters).toContainEqual(["id", "conversation"]);
+});
+it("sends a staff photo as an image with its caption, not as text", async () => {
+ m.sendImage.mockResolvedValue({ ok: true, messageId: "photo" });
+ const staff = { ...structuredClone(job), operation_kind: "staff", conversation_id: "conversation", operator_user_id: "operator", reply: "Ja si do dalë",
+   payload: { ...structuredClone(job).payload, media: { kind: "image", url: "https://store.test/p.jpg" } } };
+ m.rpc.mockResolvedValueOnce({data:[staff],error:null}).mockResolvedValueOnce({data:true,error:null}).mockResolvedValueOnce({data:null,error:null}).mockResolvedValueOnce({data:[],error:null});
+ await runWorkflowQueue();
+ expect(m.sendImage).toHaveBeenCalledWith(expect.objectContaining({ url: "https://store.test/p.jpg", caption: "Ja si do dalë", humanAgent: { lastInboundAt: expect.any(String) } }));
+ expect(m.send).not.toHaveBeenCalled();
+ expect(m.rpc).toHaveBeenCalledWith("finish_workflow_send", expect.objectContaining({ p_ok: true, p_external: "photo" }));
 });
 it("never extends the Instagram AI window even if a send lease is granted", async () => {
  const expired = {...structuredClone(job), payload: {channel:"instagram", timestamp:new Date(Date.now()-48*3600000).toISOString()}};
