@@ -1,6 +1,6 @@
 # Plan: dërgimi i fotos së përpunuar te klienti (për miratim)
 
-Statusi: kodi gati, 16.11.2026; migrimi `20261116090000_staff_media_messages.sql` pret miratimin dhe nuk është ekzekutuar. U provua në bazën lokale (`supabase/tests/staff_media_messages.sql`, `instagram_human_agent.sql`).
+Statusi: në prodhim, 16.11.2026. Migrimi `20261116090000_staff_media_messages.sql` u ekzekutua; kodi web `577ec79`, mobile `3766c62` (butoni në aplikacion vjen me 0.3.16). Provë reale te @bora.mato24: fotoja e përpunuar dhe shënimi u dërguan në Instagram (dy pjesë, të dyja me ID), mesazhi u ruajt me foton; porosia provë u fshi në të dyja anët.
 
 ## Qëllimi
 
