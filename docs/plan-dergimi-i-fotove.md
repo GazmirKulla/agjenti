@@ -43,7 +43,12 @@ Biznesi i tregon klientit në bisedë foton e përpunuar të artikullit (dizajni
 
   URL nga klienti nuk pranohet kurrë. Rruga është tashmë te `manual-surfaces.ts` («Human-to-customer communication remains explicit manual sending»); përshkrimi përditësohet me fotot.
 - Statusi i dërgimit shfaqet njësoj si për tekstin: «po dërgohet», «u dërgua», «nuk u konfirmua». Për WhatsApp jashtë 24 orëve dhe Instagram jashtë 7 ditëve, butoni nuk aktivizohet dhe tregon arsyen.
-- Hap i mëvonshëm (jo në këtë plan): butoni «Foto» te composer-i i bisedës, për çdo foto, jo vetëm për ato të porosisë.
+- Butoni «+» te composer-i i bisedës në aplikacion (16.11.2026) dërgon edhe foto të tjera, me të njëjtën rrugë dhe të njëjtat kontrolle. `media` i rrugës pranon:
+  - foto e porosisë (si më sipër);
+  - `{ kind: "upload", path }`: një foto e ngarkuar nga telefoni te `order-files` e kësaj bisede. Lejohen vetëm JPG, PNG dhe WEBP. Dërgohet me lidhje të nënshkruar 1-orëshe;
+  - `{ kind: "product", productId }`: fotoja `https` e një produkti aktiv të biznesit, e lexuar nga baza. Lista vjen nga `GET …/product-photos?q=`.
+
+  Fingerprint-i mbështetet te identiteti i fotos (URL-ja e porosisë, `upload:path`, `product:id:url`), jo te lidhja e nënshkruar.
 
 ### 4. Miratimi (pa automatizim në këtë fazë)
 

@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { transportAccess, isTransportId } from "@/lib/conversations/transport-access";
 import { runWorkflowQueue } from "@/lib/conversations/workflow-queue";
-import { orderPhotoToSend } from "@/lib/orders/send-photo";
+import { staffPhotoToSend } from "@/lib/conversations/staff-photo";
 
 export const maxDuration = 180;
 type Context = { params: Promise<{ id: string; conversationId: string }> };
@@ -14,22 +14,22 @@ export async function POST(request: Request, context: Context) {
     const raw = await request.text();
     if (raw.length > 25000) throw new Error("Mesazhi është shumë i gjatë.");
     const body = JSON.parse(raw);
-    // A photo of an order on the business website (its processed design, for approval), with an optional caption.
+    // A photo (an order's processed design, one uploaded for this conversation, or a product's), with an optional caption.
     const withPhoto = body.media !== undefined && body.media !== null;
     const caption = typeof body.body === "string" ? body.body.trim() : "";
     if (!isTransportId(body.requestId) || !isTransportId(conversationId) || (!withPhoto && !caption) || caption.length > (withPhoto ? 1000 : 20000)
       || (body.body !== undefined && typeof body.body !== "string")) throw new Error("Mesazh ose identitet i pavlefshëm.");
     const text = caption;
-    const photo = withPhoto && body.retryAttempt === undefined ? await orderPhotoToSend(businessId, conversationId, body.media) : null;
-    if (withPhoto && body.retryAttempt === undefined && !photo) return NextResponse.json({ error: "Kjo foto nuk është më te porosia në webin e biznesit." }, { status: 400 });
+    const photo = withPhoto && body.retryAttempt === undefined ? await staffPhotoToSend(businessId, conversationId, body.media) : null;
+    if (withPhoto && body.retryAttempt === undefined && !photo) return NextResponse.json({ error: "Kjo foto nuk mund të dërgohet. Zgjidh një foto tjetër." }, { status: 400 });
     const isRetry = body.retryAttempt !== undefined;
     if (isRetry && (!Number.isInteger(body.retryAttempt) || body.retryAttempt < 1 || body.retryAttempt > 3)) return NextResponse.json({ error: "Provë e pavlefshme." }, { status: 400 });
     const { data, error } = await access.db.rpc(isRetry ? "retry_staff_transport" : "enqueue_transport_operation", isRetry ? {
       p_business: businessId, p_user: access.userId, p_conversation: conversationId, p_request: body.requestId, p_attempt: body.retryAttempt,
     } : {
       p_business: businessId, p_user: access.userId, p_request: body.requestId, p_kind: "staff", p_scope: conversationId,
-      p_sequence: null, p_fingerprint: createHash("sha256").update(JSON.stringify(photo ? { conversationId, text, photo } : { conversationId, text })).digest("hex"),
-      p_payload: photo ? { body: text, media: { kind: "image", url: photo } } : { body: text },
+      p_sequence: null, p_fingerprint: createHash("sha256").update(JSON.stringify(photo ? { conversationId, text, photo: photo.identity } : { conversationId, text })).digest("hex"),
+      p_payload: photo ? { body: text, media: { kind: "image", url: photo.url } } : { body: text },
     });
     if (error) return NextResponse.json({ error: "Mesazhi nuk u pranua. Kontrollo bisedën, lejet dhe afatin e përgjigjes (Instagram manual: 7 ditë; WhatsApp: 24 orë).", code: "transport_rejected" }, { status: 409 });
     after(() => runWorkflowQueue().then(() => {}));

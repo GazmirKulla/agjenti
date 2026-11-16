@@ -53,3 +53,15 @@ it("requires atomic same-operation eligibility and attempt fencing for explicit 
  expect(m.rpc).toHaveBeenCalledWith("retry_staff_transport",{p_business:business,p_user:"operator",p_conversation:conversation,p_request:requestId,p_attempt:1});
  expect(m.rpc).not.toHaveBeenCalledWith("enqueue_transport_operation",expect.anything());
 });
+it("sends a photo by the URL the server resolves and fingerprints it by its stable identity",async()=>{
+ const resolved=vi.spyOn(await import("@/lib/conversations/staff-photo"),"staffPhotoToSend");
+ resolved.mockResolvedValue({url:"https://files.test/signed?token=a",identity:"upload:x"});
+ await call({requestId,body:"",media:{kind:"upload",path:"x"}});
+ resolved.mockResolvedValue({url:"https://files.test/signed?token=b",identity:"upload:x"});
+ await call({requestId,body:"",media:{kind:"upload",path:"x"}});
+ expect(m.rpc.mock.calls[0][1].p_payload).toEqual({body:"",media:{kind:"image",url:"https://files.test/signed?token=a"}});
+ expect(m.rpc.mock.calls[0][1].p_fingerprint).toBe(m.rpc.mock.calls[1][1].p_fingerprint);
+ resolved.mockResolvedValue(null);
+ expect((await call({requestId,body:"",media:{kind:"product",productId:"x"}})).status).toBe(400);
+ resolved.mockRestore();
+});
