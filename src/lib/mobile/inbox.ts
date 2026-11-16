@@ -30,7 +30,8 @@ export function mobileInboxError(status: 401 | 403 | 404 | 503) {
   return Response.json({ error }, { status, headers: mobileInboxHeaders });
 }
 
-export type MobileAttachment = { kind: string; url: string; filename: string | null; caption: string | null };
+/** `type`: the channel's own item type (story_mention, ig_reel, ig_post…), so the app can say what was shared. */
+export type MobileAttachment = { kind: string; url: string; filename: string | null; caption: string | null; type: string | null };
 function attachments(media: unknown): MobileAttachment[] {
   if (!Array.isArray(media)) return [];
   return media.flatMap((item: Partial<NormalizedAttachment> & { filename?: unknown; caption?: unknown }) => {
@@ -42,6 +43,7 @@ function attachments(media: unknown): MobileAttachment[] {
       url,
       filename: typeof item.filename === "string" ? item.filename : null,
       caption: typeof item.caption === "string" ? item.caption : null,
+      type: typeof item.metadata?.instagramAttachmentType === "string" ? item.metadata.instagramAttachmentType.slice(0, 40) : null,
     }];
   });
 }

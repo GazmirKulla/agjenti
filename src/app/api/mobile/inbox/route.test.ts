@@ -73,10 +73,15 @@ describe("native inbox access", () => {
   it("passes only https attachments and the reply window to the app", async () => {
     m.conversation.mockResolvedValueOnce({ id: conversationId, name: "Ana", handle: "@ana", status: "active", channel: "instagram", last_inbound_at: new Date(Date.now() - 2 * 864e5).toISOString(), customer: null });
     m.messages.mockResolvedValueOnce({ older: null, messages: [{ id: "m1", direction: "inbound", source: "customer", body: null, created_at: "2026-11-08T10:00:00Z", delivery_status: null, delivery_error: null, transport_request_id: null,
-      media: [{ kind: "image", sourceUrl: "https://cdn.test/a.jpg" }, { kind: "image", sourceUrl: "javascript:alert(1)" }, { kind: "document", sourceUrl: "http://cdn.test/b.pdf" }] }] });
+      media: [{ kind: "image", sourceUrl: "https://cdn.test/a.jpg" }, { kind: "image", sourceUrl: "javascript:alert(1)" }, { kind: "document", sourceUrl: "http://cdn.test/b.pdf" },
+        { kind: "share", sourceUrl: "https://cdn.test/reel.mp4", metadata: { instagramAttachmentType: "ig_reel" } }] }] });
     const body = await (await thread(req(), ctx())).json();
     expect(body.conversation.replyWindow).toBe("human_agent");
-    expect(body.messages[0].attachments).toEqual([{ kind: "image", url: "https://cdn.test/a.jpg", filename: null, caption: null }]);
+    expect(body.messages[0].attachments).toEqual([
+      { kind: "image", url: "https://cdn.test/a.jpg", filename: null, caption: null, type: null },
+      // The app labels shared items by the channel's own type.
+      { kind: "share", url: "https://cdn.test/reel.mp4", filename: null, caption: null, type: "ig_reel" },
+    ]);
     expect(m.messages).toHaveBeenCalledWith({ service: true }, business, conversationId, { before: null, limit: undefined });
   });
   it("shares customer details and orders only for a customer of this business", async () => {
