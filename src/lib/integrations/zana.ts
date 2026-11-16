@@ -387,6 +387,8 @@ export async function loadBusinessCatalogUrl(
 export type ExternalOrderFile = { key: string; role: "input" | "output"; url: string };
 export type ExternalOrderView = {
   orderNumber?: number; status: string; total?: number; shipping?: number;
+  /** Whether the website still accepts a change of this order; absent when the website does not say. */
+  editable?: boolean;
   items: { item: number; productName: string | null; files: ExternalOrderFile[] }[];
 };
 
@@ -402,7 +404,7 @@ async function externalOrderUrl(businessId: string, externalOrderId: string, suf
 }
 
 function readView(json: unknown): ExternalOrderView | null {
-  const j = json as { ok?: unknown; orderNumber?: unknown; status?: unknown; total?: unknown; shipping?: unknown; items?: unknown } | null;
+  const j = json as { ok?: unknown; orderNumber?: unknown; status?: unknown; total?: unknown; shipping?: unknown; editable?: unknown; items?: unknown } | null;
   if (!j || j.ok !== true || !Array.isArray(j.items)) return null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
   const items = j.items.slice(0, 20).flatMap((raw, index) => {
@@ -415,7 +417,8 @@ function readView(json: unknown): ExternalOrderView | null {
     return [{ item: num(item.item) ?? index + 1, productName: typeof item.productName === "string" ? item.productName.slice(0, 200) : null, files }];
   });
   return { ...(num(j.orderNumber) !== undefined ? { orderNumber: num(j.orderNumber) } : {}), status: typeof j.status === "string" ? j.status.slice(0, 40) : "",
-    ...(num(j.total) !== undefined ? { total: num(j.total) } : {}), ...(num(j.shipping) !== undefined ? { shipping: num(j.shipping) } : {}), items };
+    ...(num(j.total) !== undefined ? { total: num(j.total) } : {}), ...(num(j.shipping) !== undefined ? { shipping: num(j.shipping) } : {}),
+    ...(typeof j.editable === "boolean" ? { editable: j.editable } : {}), items };
 }
 
 /** Reads an order on the business website, with each item's photos. Read only; null when it cannot be read. */
@@ -451,4 +454,46 @@ export async function sendExternalOrderFiles(businessId: string, externalOrderId
   if (view) return { ok: true, view };
   const code = [json?.reason, json?.error].find((v): v is string => typeof v === "string" && /^[a-z][a-z0-9_]{0,59}$/.test(v));
   return { ok: false, ...(code ? { code } : {}), ...(typeof json?.field === "string" && /^[A-Za-z][A-Za-z0-9_.]{0,59}$/.test(json.field) ? { field: json.field } : {}) };
+}
+
+/** The website's answer to a change: accepted, refused (nothing changed), or not known. */
+export type ExternalOrderChange =
+  | { status: "accepted"; view: ExternalOrderView | null }
+  | { status: "rejected"; code?: string; field?: string }
+  | { status: "uncertain" };
+
+/**
+ * Changes an order on the business website: PATCH {orders_url}/{id} with the delivery details and/or the
+ * note. X-Agjenti-Change-Id identifies the change: the website applies one id once and answers the same
+ * again, so sending the same change again after an unclear result is safe. A timeout or a server error
+ * is "uncertain", never a refusal: the website may have applied it.
+ */
+export async function amendExternalOrder(businessId: string, externalOrderId: string, changeId: string,
+  changes: Record<string, unknown>): Promise<ExternalOrderChange> {
+  assertBusinessEffectAllowed("provider.order");
+  if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "external_order_change");
+  const target = await externalOrderUrl(businessId, externalOrderId);
+  if (!target) return { status: "rejected", code: "integration_unavailable" };
+  let result: ExternalOrderChange;
+  try {
+    const response = await fetch(target.url, { method: "PATCH", redirect: "manual", signal: AbortSignal.timeout(20_000),
+      headers: { "Content-Type": "application/json", "X-Agjenti-Change-Id": changeId, ...(target.secret ? { Authorization: `Bearer ${target.secret}` } : {}) },
+      body: JSON.stringify({ version: 2, changes }) });
+    const json = await response.json().catch(() => null) as { ok?: unknown; reason?: unknown; error?: unknown; field?: unknown } | null;
+    const code = [json?.reason, json?.error].find((v): v is string => typeof v === "string" && /^[a-z][a-z0-9_]{0,59}$/.test(v));
+    const field = typeof json?.field === "string" && /^[A-Za-z][A-Za-z0-9_.]{0,59}$/.test(json.field) ? json.field : undefined;
+    if (response.ok && json?.ok === true) result = { status: "accepted", view: readView(json) };
+    // A website without the change route answers 404/405: nothing changed.
+    else if (response.status === 404 || response.status === 405) result = { status: "rejected", code: code ?? "change_unsupported" };
+    else if (response.status >= 400 && response.status < 500 && ![408, 429].includes(response.status) && json?.ok === false)
+      result = { status: "rejected", ...(code ? { code } : {}), ...(code && field ? { field } : {}) };
+    else result = { status: "uncertain" };
+  } catch {
+    result = { status: "uncertain" };
+  }
+  try {
+    await createServiceSupabase().from("integration_logs").insert({ business_id: businessId, direction: "outbound", target: "order_change",
+      status: result.status === "accepted" ? "ok" : "failed", error: result.status === "rejected" ? result.code ?? "rejected" : result.status === "uncertain" ? "uncertain" : null });
+  } catch { /* the website's answer stands */ }
+  return result;
 }

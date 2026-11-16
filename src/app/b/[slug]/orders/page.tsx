@@ -1,4 +1,5 @@
 import { orderDelivery } from "@/lib/customers/contact";
+import { OrderEditor } from "@/components/dashboard/order-editor";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { OrderOutputPhotos } from "@/components/dashboard/order-output-photos";
 import {
@@ -56,7 +57,7 @@ export default async function OrdersPage({
   const { data: orders, error } = await createServiceSupabase()
     .from("orders")
     .select(
-      "id,status,total_amount,currency,external_order_id,external_system,created_at,delivery:payload->customer,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))",
+      "id,status,total_amount,currency,external_order_id,external_system,created_at,delivery:payload->customer,note:payload->note,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))",
     )
     .eq("business_id", access.business.id)
     .order("created_at", { ascending: false })
@@ -142,10 +143,12 @@ export default async function OrdersPage({
                       <div><dt>Telefoni</dt><dd>{delivery.phone || "—"}</dd></div>
                       <div><dt>Qyteti</dt><dd>{delivery.city || "—"}</dd></div>
                       <div><dt>Adresa</dt><dd>{delivery.address || "—"}</dd></div>
+                      {typeof o.note === "string" && o.note ? <div><dt>Shënimi</dt><dd>{o.note}</dd></div> : null}
                     </dl>
                   ) : (
                     <p className="muted-copy">Kjo porosi nuk ka të dhëna dërgese të ruajtura.</p>
                   )}
+                  {o.status !== "pending_reconciliation" && <OrderEditor businessId={access.business.id} orderId={o.id} />}
                 </div>
                 {items.length > 0 && (
                   <div className="detail-block">
