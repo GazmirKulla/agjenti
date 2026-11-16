@@ -40,9 +40,12 @@ export function useMessageReactions(endpoint: string, storageKey: string) {
       if (stored && typeof stored.messageId === "string" && typeof stored.requestId === "string" && Number.isInteger(stored.revision) && typeof stored.emoji === "string") save(stored);
     } catch { /* Ignore malformed local hints, never trust them for authorization. */ }
     void refresh();
-    const timer = setInterval(() => { if (!busy.current) void refresh(); }, 3000);
+    // Visible tabs only; returning to the tab reads at once. Reactions are not worth a read every 3s.
+    const tick = () => { if (!busy.current && document.visibilityState === "visible") void refresh(); };
+    const timer = setInterval(tick, 10_000);
     const reconnect = () => void refresh(); window.addEventListener("online", reconnect);
-    return () => { alive.current = false; clearInterval(timer); window.removeEventListener("online", reconnect); };
+    document.addEventListener("visibilitychange", tick);
+    return () => { alive.current = false; clearInterval(timer); window.removeEventListener("online", reconnect); document.removeEventListener("visibilitychange", tick); };
   }, [refresh, save, storageKey]);
   const submit = async (approval: Approval) => {
     if (busy.current) return;

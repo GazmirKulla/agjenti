@@ -3,6 +3,7 @@ import { InboxRefresh } from "./inbox-refresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadInboxPage, loadThreadConversation, loadThreadPage, type InboxRow, type ThreadConversation } from "@/lib/conversations/inbox-read";
+import { loadInboxVersion } from "@/lib/conversations/inbox-version";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { ThreadClient } from "@/app/b/[slug]/inbox/[conversationId]/thread-client";
 import { getSessionUser } from "@/lib/tenant/access";
@@ -30,7 +31,7 @@ export async function InboxWorkspace({
   const settle = <T,>(promise: Promise<T>) =>
     promise.then((data) => ({ data, error: null }), (error: unknown) => ({ data: null, error }));
   // Everything this page reads, in parallel: opening a conversation waits for the slowest read, not their sum.
-  const [instagram, whatsapp, rowsResult, conversationResult, messageResult, contextResult, logResult] = await Promise.all([
+  const [instagram, whatsapp, rowsResult, conversationResult, messageResult, contextResult, logResult, versionResult] = await Promise.all([
     db.from("instagram_connections").select("status,expires_at").eq("business_id", businessId).neq("status", "disconnected").maybeSingle(),
     db.from("whatsapp_connections").select("status").eq("business_id", businessId).maybeSingle(),
     settle(loadInboxPage(db, businessId)),
@@ -41,7 +42,10 @@ export async function InboxWorkspace({
       ? db.from("integration_logs").select("id,target,status,error,created_at").eq("business_id", businessId)
           .order("created_at", { ascending: false }).limit(8)
       : Promise.resolve({ data: null, error: null }),
+    // Fingerprint of what this render shows: the client refreshes only when it changes.
+    settle(loadInboxVersion(db, businessId, selected ?? null)),
   ]);
+  const version = versionResult.data;
   const channels = (["instagram", "whatsapp"] as const).map(channel => {
     const result = channel === "instagram" ? instagram : whatsapp;
     const expired = channel === "instagram" && instagram.data?.expires_at && Date.parse(instagram.data.expires_at) <= Date.now();
@@ -64,7 +68,7 @@ export async function InboxWorkspace({
     return (
       <>
         {heading}
-        <InboxRefresh title="Inbox" />
+        <InboxRefresh title="Inbox" businessId={businessId} version={version} />
         <div className="inbox-workspace inbox-list-home">
           <InboxList rows={inboxRows} next={nextRows} slug={slug} channels={channels} />
           <section className="panel chat-panel">
@@ -101,7 +105,7 @@ export async function InboxWorkspace({
   return (
     <>
       {heading}
-        <InboxRefresh title={name} />
+        <InboxRefresh title={name} businessId={businessId} conversationId={selected} version={version} />
       <div
         className={`inbox-workspace ${conversationId ? "has-selection" : "inbox-list-home"} ${view === "customer" ? "is-mobile-customer" : ""}`}
       >
