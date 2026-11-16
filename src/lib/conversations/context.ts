@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptSecret } from "@/lib/crypto/tokens";
-import { readProcessProfile } from "@/lib/conversations/profile";
+import { readProcessProfileEntry } from "@/lib/conversations/profile";
+import { orderDelivery, resolveContact, type ResolvedContact } from "@/lib/customers/contact";
 import type { Field, Snapshot, Value } from "@/lib/orchestration/contracts";
 import { compileProcessVersion, loadProcessVersion } from "@/lib/orchestration/version-store";
 import { statusLabels as leadStatusLabels, type LeadStatus } from "@/lib/leads/model";
@@ -23,6 +24,9 @@ export type ConversationContext = {
   /** What the agent collected about the person (validated values only). */
   profile: { name: string | null; phone: string | null; email: string | null; city: string | null; address: string | null };
   customer: { linked: boolean; name: string | null; phone: string | null; since: string | null };
+  /** One value per contact field from the saved customer, the latest order's delivery and the
+   * agent's memory (newest wins); `others` lists the differing values. Read this, not customer/profile. */
+  contact: ResolvedContact;
   handoffRequested: boolean;
   processes: {
     id: string;
@@ -40,7 +44,9 @@ export type ConversationContext = {
     photoFields: PendingPhotoField[];
   } | null;
   /** `sent`: the order is on the business website, which keeps its item photos. */
-  orders: { id: string; status: string; statusLabel: string; total: number | null; currency: string | null; createdAt: string; items: OrderItemSummary[]; sent: boolean }[];
+  orders: { id: string; status: string; statusLabel: string; total: number | null; currency: string | null; createdAt: string; items: OrderItemSummary[]; sent: boolean;
+    /** The delivery details this order was saved with. */
+    delivery: { name: string | null; phone: string | null; city: string | null; address: string | null } | null }[];
   bookings: { id: string; service: string; startsAt: string; status: string; statusLabel: string }[];
   lead: { id: string; status: LeadStatus; statusLabel: string; interest: string } | null;
   /** Agjenti.app only: the invitation sent to this prospect and what was collected for it. */
@@ -166,9 +172,9 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       .eq("business_id", businessId).eq("id", conversationId).maybeSingle(),
     db.from("conversation_states").select("collected").eq("business_id", businessId).eq("conversation_id", conversationId).maybeSingle(),
     conversation.customer_id
-      ? db.from("orders").select(`id,status,total_amount,currency,created_at,external_system,external_order_id,${ORDER_ITEMS_SELECT}`).eq("business_id", businessId)
+      ? db.from("orders").select(`id,status,total_amount,currency,created_at,external_system,external_order_id,delivery:payload->customer,${ORDER_ITEMS_SELECT}`).eq("business_id", businessId)
           .or(`conversation_id.eq.${conversationId},customer_id.eq.${conversation.customer_id}`).order("created_at", { ascending: false }).limit(10)
-      : db.from("orders").select(`id,status,total_amount,currency,created_at,external_system,external_order_id,${ORDER_ITEMS_SELECT}`).eq("business_id", businessId)
+      : db.from("orders").select(`id,status,total_amount,currency,created_at,external_system,external_order_id,delivery:payload->customer,${ORDER_ITEMS_SELECT}`).eq("business_id", businessId)
           .eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(10),
     db.from("workflow_booking_effects").select("booking_id").eq("business_id", businessId).eq("conversation_id", conversationId).limit(20),
     db.from("leads").select("id,status,interest,updated_at").eq("business_id", businessId).eq("conversation_id", conversationId)
@@ -194,7 +200,7 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
   const executionIds = (executions.data ?? []).map((row) => row.id);
   const [savedMemory, , [byEffect, byConversation], [modules, services], invitations] = await Promise.all([
     participant
-      ? readProcessProfile(businessId, participant, conversation.channel === "whatsapp" ? "whatsapp" : "instagram").catch(() => undefined)
+      ? readProcessProfileEntry(businessId, participant, conversation.channel === "whatsapp" ? "whatsapp" : "instagram").catch(() => undefined)
       : Promise.resolve(undefined),
     Promise.all([...new Set(instances.map((i) => i.versionId))].map(async (versionId) => {
       const version = await loadProcessVersion(businessId, versionId).catch(() => null);
@@ -218,7 +224,9 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
           .eq("source_business_id", businessId).in("execution_id", executionIds).order("created_at", { ascending: false }).limit(1)
       : Promise.resolve({ data: [], error: null }),
   ]);
-  const memory = savedMemory ?? live?.profileMemory ?? {};
+  // The in-conversation copy has no write time, so it only fills fields nothing else has.
+  const memory = savedMemory?.memory ?? live?.profileMemory ?? {};
+  const memoryAt = savedMemory?.memory ? savedMemory.updatedAt : null;
   const profile = {
     name: memory.name?.value ?? null,
     phone: memory.phone?.value ?? null,
@@ -339,6 +347,19 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
     };
   }
 
+  const deliveryOf = (raw: unknown) => {
+    const values = orderDelivery({ customer: raw });
+    return values ? { name: values.name ?? null, phone: values.phone ?? null, city: values.city ?? null, address: values.address ?? null } : null;
+  };
+  const latestDelivery = (orders.data ?? []).map((order) => ({ values: orderDelivery({ customer: order.delivery }), at: order.created_at as string }))
+    .find((entry) => entry.values);
+  const contact = resolveContact({
+    crm: conversation.customer
+      ? { values: { name: conversation.customer.display_name, phone: conversation.customer.phone }, at: conversation.customer.updated_at ?? conversation.customer.created_at ?? null }
+      : null,
+    order: latestDelivery?.values ? { values: latestDelivery.values, at: latestDelivery.at } : null,
+    agent: { values: profile, at: memoryAt },
+  });
   const leadRow = lead.data;
   return {
     conversation: { id: conversation.id, name: conversation.name, handle: conversation.handle, channel: conversation.channel, status: conversation.status },
@@ -349,6 +370,7 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       phone: conversation.customer?.phone ?? null,
       since: conversation.customer?.created_at ?? null,
     },
+    contact,
     handoffRequested: live?.handoffRequested === true,
     processes,
     pendingOrder,
@@ -361,6 +383,7 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       createdAt: order.created_at,
       items: orderItemSummary(order.order_items),
       sent: order.external_system === "external" && Boolean(order.external_order_id),
+      delivery: deliveryOf(order.delivery),
     })),
     bookings: (bookings.data ?? []).map((booking) => ({
       id: booking.id,

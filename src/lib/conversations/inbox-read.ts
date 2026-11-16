@@ -15,6 +15,7 @@ type CustomerJoin = {
   username: string | null;
   phone?: string | null;
   created_at?: string;
+  updated_at?: string;
 } | null;
 
 /** What the business already has from this conversation, read from its own rows. */
@@ -201,7 +202,7 @@ export async function loadThreadConversation(db: SupabaseClient, businessId: str
   const { data, error } = await db
     .from("conversations")
     .select(
-      "id,channel,status,last_inbound_at,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(business_id,display_name,username,phone,created_at)",
+      "id,channel,status,last_inbound_at,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(business_id,display_name,username,phone,created_at,updated_at)",
     )
     .eq("business_id", businessId)
     .eq("customers.business_id", businessId)

@@ -4,21 +4,26 @@ import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { BookingForm, ConfirmAgentOrder, CopyInvitationLink, LeadStatusControl, ManualOrderForm, SaveCustomerForm } from "./conversation-panel-controls";
 import { formatDate, money } from "./ui";
 import { orderItemsText } from "@/lib/orders/item-summary";
+import { contactSourceLabels, type ContactKey } from "@/lib/customers/contact";
 
 /** Inbox side panel: what the business already knows about this conversation. */
 export async function ConversationPanel({ context, businessId, slug }: { context: ConversationContext; businessId: string; slug: string }) {
   const t = await getDashboardTranslator();
   const locale = t("sq-AL");
-  const { conversation, customer, profile } = context;
+  const { conversation, customer, contact } = context;
   const when = (value: string) =>
     new Date(value).toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Tirane" });
-  const collected = [
-    [t("Emri"), profile.name],
-    [t("Telefoni"), profile.phone],
-    [t("Email"), profile.email],
-    [t("Qyteti"), profile.city],
-    [t("Adresa"), profile.address],
-  ].filter((row): row is [string, string] => Boolean(row[1]));
+  const value = (key: ContactKey) => contact[key]?.value ?? "";
+  const contactRows = ([
+    ["name", t("Emri")],
+    ["phone", t("Telefoni")],
+    ["email", t("Email")],
+    ["city", t("Qyteti")],
+    ["address", t("Adresa")],
+  ] as [ContactKey, string][]).flatMap(([key, label]) => {
+    const field = contact[key];
+    return field ? [{ key, label, field }] : [];
+  });
   return (
     <>
       <section className="panel section-pad">
@@ -31,28 +36,39 @@ export async function ConversationPanel({ context, businessId, slug }: { context
           </div>
         </div>
         {context.handoffRequested && <p className="conversation-flag" role="status">{t("Klienti kërkoi të flasë me një person.")}</p>}
+        {contactRows.length > 0 && (
+          <dl className="detail-fields mb-4">
+            {contactRows.map(({ key, label, field }) => (
+              <div key={key}>
+                <dt>{label}</dt>
+                <dd>
+                  {field.value}
+                  <span className="muted-copy block text-xs">{t(contactSourceLabels[field.source])}</span>
+                  {field.others.map((other) => (
+                    <span key={`${other.source}:${other.value}`} className="muted-copy block text-xs">
+                      {t("Tjetër")}: {other.value} · {t(contactSourceLabels[other.source])}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
         {customer.linked ? (
           <dl className="detail-fields">
-            <div><dt>{t("Emri")}</dt><dd>{customer.name || "—"}</dd></div>
-            <div><dt>{t("Telefoni")}</dt><dd>{customer.phone || profile.phone || "—"}</dd></div>
             <div><dt>{t("Klient që nga")}</dt><dd>{formatDate(customer.since, locale)}</dd></div>
           </dl>
         ) : (
           <>
             <p className="muted-copy mb-3">{t("Ende jo klient CRM. Të dhënat më poshtë janë marrë nga biseda; kontrolloji para se ta ruash.")}</p>
-            <SaveCustomerForm businessId={businessId} conversationId={conversation.id} name={profile.name ?? ""} phone={profile.phone ?? ""} />
+            <SaveCustomerForm businessId={businessId} conversationId={conversation.id} name={value("name")} phone={value("phone")} />
           </>
         )}
       </section>
 
-      {(collected.length > 0 || context.processes.length > 0) && (
+      {context.processes.length > 0 && (
         <section className="panel section-pad">
           <h2 className="text-base mb-4">{t("Çfarë mblodhi agjenti")}</h2>
-          {collected.length > 0 && (
-            <dl className="detail-fields mb-4">
-              {collected.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-            </dl>
-          )}
           {context.processes.map((process) => (
             <div key={process.id} className="conversation-process">
               <div className="conversation-process-head">
@@ -98,12 +114,7 @@ export async function ConversationPanel({ context, businessId, slug }: { context
             productId={context.forms.order.productId}
             productName={context.forms.order.productName}
             quantity={context.forms.order.quantity}
-            customer={{
-              name: customer.name ?? profile.name ?? "",
-              phone: customer.phone ?? profile.phone ?? "",
-              city: profile.city ?? "",
-              address: profile.address ?? "",
-            }}
+            customer={{ name: value("name"), phone: value("phone"), city: value("city"), address: value("address") }}
           />
         )}
       </section>
@@ -126,8 +137,8 @@ export async function ConversationPanel({ context, businessId, slug }: { context
               serviceId={context.forms.booking.serviceId}
               date={context.forms.booking.date}
               time={context.forms.booking.time}
-              name={customer.name ?? profile.name ?? ""}
-              contact={customer.phone ?? profile.phone ?? ""}
+              name={value("name")}
+              contact={value("phone")}
             />
           )}
         </section>

@@ -1,3 +1,4 @@
+import { orderDelivery } from "@/lib/customers/contact";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { OrderOutputPhotos } from "@/components/dashboard/order-output-photos";
 import {
@@ -55,7 +56,7 @@ export default async function OrdersPage({
   const { data: orders, error } = await createServiceSupabase()
     .from("orders")
     .select(
-      "id,status,total_amount,currency,external_order_id,external_system,created_at,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))",
+      "id,status,total_amount,currency,external_order_id,external_system,created_at,delivery:payload->customer,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))",
     )
     .eq("business_id", access.business.id)
     .order("created_at", { ascending: false })
@@ -95,6 +96,8 @@ export default async function OrdersPage({
             phone: string | null;
           } | null;
           const items = orderLines(o.order_items as unknown as OrderItemRow[] | null);
+          // What this order was saved and sent with; the customer card may have changed since.
+          const delivery = orderDelivery({ customer: o.delivery });
           return {
             id: o.id,
             title: `#${o.external_order_id || o.id.slice(0, 8)}`,
@@ -115,7 +118,7 @@ export default async function OrdersPage({
                   <StatusBadge status={o.status} />
                 </div>
                 <div className="detail-block">
-                  <h3>Informacioni i klientit</h3>
+                  <h3>Kartela e klientit</h3>
                   <dl className="detail-fields">
                     <div>
                       <dt>Emri</dt>
@@ -130,6 +133,19 @@ export default async function OrdersPage({
                       <dd>{c?.phone || "—"}</dd>
                     </div>
                   </dl>
+                </div>
+                <div className="detail-block">
+                  <h3>Dërgesa e kësaj porosie</h3>
+                  {delivery ? (
+                    <dl className="detail-fields">
+                      <div><dt>Emri</dt><dd>{delivery.name || "—"}</dd></div>
+                      <div><dt>Telefoni</dt><dd>{delivery.phone || "—"}</dd></div>
+                      <div><dt>Qyteti</dt><dd>{delivery.city || "—"}</dd></div>
+                      <div><dt>Adresa</dt><dd>{delivery.address || "—"}</dd></div>
+                    </dl>
+                  ) : (
+                    <p className="muted-copy">Kjo porosi nuk ka të dhëna dërgese të ruajtura.</p>
+                  )}
                 </div>
                 {items.length > 0 && (
                   <div className="detail-block">

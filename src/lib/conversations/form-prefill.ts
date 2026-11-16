@@ -63,12 +63,10 @@ export function checkValue(key: PrefillKey, raw: unknown, input: { products: Cat
   }
 }
 
-/** What is already known, per form field: the agent's validated values, then the saved customer. */
+/** What is already known, per form field: the resolved contact (newest of customer record, last order, agent). */
 export function collectedValues(context: ConversationContext, kind: FormKind): Partial<Record<PrefillKey, string>> {
-  const profile = context.profile;
-  const name = profile.name ?? context.customer.name ?? "";
-  const phone = profile.phone ?? context.customer.phone ?? "";
-  const values: Partial<Record<PrefillKey, string>> = { name, phone, email: profile.email ?? "", city: profile.city ?? "", address: profile.address ?? "" };
+  const known = (key: keyof ConversationContext["contact"]) => context.contact[key]?.value ?? "";
+  const values: Partial<Record<PrefillKey, string>> = { name: known("name"), phone: known("phone"), email: known("email"), city: known("city"), address: known("address") };
   if (kind === "order") {
     values.product_id = context.forms.order.productId ?? "";
     if (context.forms.order.productId) values.quantity = String(context.forms.order.quantity);

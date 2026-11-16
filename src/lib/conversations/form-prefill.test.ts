@@ -6,6 +6,7 @@ vi.mock("@/lib/orchestration/version-store", () => ({ compileProcessVersion: () 
 vi.mock("./context", () => ({ fieldPresentation: () => ({ label: null, missing: null }), loadConversationContext: async () => null }));
 
 const { checkValue, collectedValues, mergePrefill } = await import("./form-prefill");
+const { resolveContact } = await import("@/lib/customers/contact");
 
 const product = "11111111-1111-4111-8111-111111111111";
 const service = "22222222-2222-4222-8222-222222222222";
@@ -63,10 +64,16 @@ describe("mergePrefill", () => {
 });
 
 describe("collectedValues", () => {
-  it("reads the agent's profile and the form starting values", () => {
+  it("starts from the resolved contact, not from one source", () => {
     const context = {
-      profile: { name: "Ana", phone: null, email: null, city: "Tiranë", address: null },
-      customer: { linked: true, name: "Ana K.", phone: "0691234567", since: null },
+      // Older sources disagree; the resolved contact is what the forms use.
+      profile: { name: "Ana", phone: "0670000000", email: null, city: null, address: null },
+      customer: { linked: true, name: "Ana K.", phone: "0680000000", since: null },
+      contact: resolveContact({
+        crm: { values: { name: "Ana K.", phone: "0680000000" }, at: "2026-11-01T00:00:00Z" },
+        order: { values: { name: "Ana", phone: "0691234567", city: "Tiranë" }, at: "2026-11-10T00:00:00Z" },
+        agent: { values: { phone: "0670000000" }, at: null },
+      }),
       forms: {
         order: { enabled: true, productId: product, productName: "Fustan", quantity: 2 },
         booking: { enabled: true, services: [], serviceId: null, date: "2026-11-20", time: null },
