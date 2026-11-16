@@ -74,6 +74,7 @@ export const manualSurfaces = {
   "src/lib/onboarding/actions.ts#createBusiness": {"exception": "Initial workspace onboarding must preserve the setup contract."},
   "src/lib/onboarding/actions.ts#finishOnboardingProfile": {"exception": "Onboarding: replaces the untouched starter instructions with ones built from the owner's answers."},
   "src/lib/platform/actions.ts#saveAppSettings": {"exception": "Platform secrets and settings remain administrator-only."},
+  "src/lib/platform/actions.ts#saveCampaignSending": {"exception": "Platform-wide switch for campaign sending remains administrator-only."},
   "src/lib/platform/actions.ts#saveConversationLearning": {"exception": "Platform limits of learning from conversations remain administrator-only."},
   "src/lib/platform/actions.ts#saveModelTiers": {"exception": "Administrator-only model groups; platform cost policy."},
   "src/lib/product-types/actions.ts#createGlobalProductType": {"exception": "Global product type administration affects every business."},
