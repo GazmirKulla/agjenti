@@ -449,6 +449,7 @@ export const english: Record<string, string> = {
   "Klienti kërkoi të flasë me një person.": "The customer asked to talk to a person.",
   "Ende jo klient CRM. Të dhënat më poshtë janë marrë nga biseda; kontrolloji para se ta ruash.": "Not a CRM customer yet. The details below come from the conversation; check them before saving.",
   "Çfarë mblodhi agjenti": "What the agent collected",
+  "transporti": "shipping",
   "Porosia nuk u lexua.": "The order could not be read.",
   "Nuk ka asnjë ndryshim nga të dhënat e porosisë.": "Nothing differs from the order’s details.",
   "Porosia u ndryshua edhe te webi i biznesit.": "The order was changed on the business website too.",

@@ -435,11 +435,11 @@ function DeclaredInputs(props: {
   );
 }
 
-/** " Totali te webi: 2900 ALL (me transportin 200)." when the website gave its total. */
+/** " Totali te webi: 2700 ALL (transporti 200)." when the website gave its total; whether the total includes shipping is the website's choice. */
 function websiteTotal(submission: Submission, t: (text: string) => string): string {
   if (submission.websiteTotal === undefined) return "";
   const currency = submission.currency ? ` ${submission.currency}` : "";
-  const shipping = submission.shipping ? ` (${t("me transportin")} ${submission.shipping})` : "";
+  const shipping = submission.shipping ? ` (${t("transporti")} ${submission.shipping})` : "";
   return ` ${t("Totali te webi")}: ${submission.websiteTotal}${currency}${shipping}.`;
 }
 
