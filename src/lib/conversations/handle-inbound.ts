@@ -11,7 +11,9 @@ import { processConversationMessage } from "./process-conversation-message";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { channelAdapter } from "./channel";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
-import { fetchInstagramUserProfile } from "@/lib/instagram/user-profile";
+import { fetchInstagramUserProfile, type InstagramUserProfile } from "@/lib/instagram/user-profile";
+import { avatarIsStale, refreshInstagramParticipantAvatar } from "./participant-avatar";
+import { replyTargetFrom } from "./reply-target";
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
@@ -153,8 +155,9 @@ export async function handleInboundMessage(
 
   let username = message.senderUsername;
   let displayName = message.senderDisplayName;
+  let profile: InstagramUserProfile | null = null;
   if (message.channel === "instagram" && !username && !displayName) {
-    const profile = await fetchInstagramUserProfile(
+    profile = await fetchInstagramUserProfile(
       message.externalParticipantId,
       accessToken,
     );
@@ -175,7 +178,7 @@ export async function handleInboundMessage(
   }
   let conversationQuery = supabase
     .from("conversations")
-    .select("id,status,auto_reply,openai_previous_response_id")
+    .select("id,status,auto_reply,openai_previous_response_id,participant_avatar_checked_at")
     .eq("business_id", businessId)
     .eq(adapter.participant, message.externalParticipantId)
     .eq(adapter.connection, conn.id);
@@ -267,6 +270,11 @@ export async function handleInboundMessage(
     console.warn("[inbound] early return: no conversationId");
     return;
   }
+  if (message.channel === "instagram" && avatarIsStale(open?.participant_avatar_checked_at as string | null | undefined)) {
+    await refreshInstagramParticipantAvatar({
+      db: supabase, businessId, connectionId: conn.id, participantId: message.externalParticipantId, accessToken, profile,
+    }).catch((error) => console.warn("[inbound] avatar refresh failed", error instanceof Error ? error.message : error));
+  }
 
   if (job) {
     const { data: bound, error } = await supabase.rpc("bind_workflow_inbound", {
@@ -295,6 +303,7 @@ export async function handleInboundMessage(
           body: original.text,
           external_message_id: original.externalMessageId,
           media: original.attachments,
+          reply_to: replyTargetFrom(original.contextMetadata),
           delivery_status: "delivered",
         })
         .select("id")

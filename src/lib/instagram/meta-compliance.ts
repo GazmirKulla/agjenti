@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { encryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { PARTICIPANT_AVATAR_BUCKET } from "@/lib/conversations/participant-avatar";
 
 export type InstagramConnectionRow = {
 	id: string;
@@ -87,8 +88,13 @@ export async function deleteInstagramUserData(params: {
         }
 		const { data: conversations } = await supabase
 			.from("conversations")
-			.select("id,customer_id")
+			.select("id,customer_id,participant_avatar_path")
 			.eq("instagram_connection_id", connection.id);
+		const avatarPaths = [...new Set((conversations ?? []).map((row) => row.participant_avatar_path).filter((p): p is string => Boolean(p)))];
+		if (avatarPaths.length) {
+			const { error } = await supabase.storage.from(PARTICIPANT_AVATAR_BUCKET).remove(avatarPaths);
+			if (error) throw new Error("Nuk u fshinë fotot e profilit të klientëve.");
+		}
 
 		const conversationIds = (conversations ?? []).map((row) => row.id);
 		const customerIds = [
@@ -120,6 +126,8 @@ export async function deleteInstagramUserData(params: {
 					instagram_participant_id: null,
 					participant_username: null,
 					participant_display_name: null,
+					participant_avatar_path: null,
+					participant_avatar_checked_at: null,
 					updated_at: now,
 				})
 				.in("id", conversationIds)

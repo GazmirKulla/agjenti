@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { conversationDisplayName } from "./ensure-customer";
+import { participantAvatarUrl } from "./participant-avatar";
+import { loadReplyQuotes } from "./reply-target";
 import { ORDER_ITEMS_SELECT, orderItemSummary, type OrderItemSummary } from "@/lib/orders/item-summary";
 
 /** Shared by the web Inbox and the native app, so both read the same rows and tenant filters. */
@@ -45,6 +47,8 @@ export type InboxRow = {
   /** Null when the signals could not be read; the row still shows. */
   signals: InboxSignals | null;
   updatedAt: string | null;
+  /** Short-lived link to the customer's stored profile photo; null shows initials. */
+  avatarUrl: string | null;
 };
 
 type SignalRow = {
@@ -133,7 +137,7 @@ export async function loadInboxPage(
   let read = db
     .from("conversations")
     .select(
-      "id,channel,status,last_message_preview,last_message_at,unread_count,participant_display_name,participant_username,customers(business_id,display_name,username)",
+      "id,channel,status,last_message_preview,last_message_at,unread_count,participant_display_name,participant_username,participant_avatar_path,participant_avatar_checked_at,customers(business_id,display_name,username)",
     )
     .eq("business_id", businessId)
     .eq("customers.business_id", businessId);
@@ -173,6 +177,7 @@ export async function loadInboxPage(
       awaitingReply: known ? known.awaitingReply : null,
       signals: known?.signals ?? null,
       updatedAt: typeof row.last_message_at === "string" ? row.last_message_at : null,
+      avatarUrl: participantAvatarUrl(businessId, row.id, row.participant_avatar_path, row.participant_avatar_checked_at),
     };
   });
   return { rows, next: (data ?? []).length > limit && last ? cursorOf(last.last_message_at ?? null, last.id) : null };
@@ -195,6 +200,7 @@ export type ThreadConversation = {
   customer: CustomerJoin;
   name: string;
   handle: string;
+  avatarUrl: string | null;
 };
 
 /** Null when the conversation is not in this business. */
@@ -202,7 +208,7 @@ export async function loadThreadConversation(db: SupabaseClient, businessId: str
   const { data, error } = await db
     .from("conversations")
     .select(
-      "id,channel,status,last_inbound_at,customer_id,instagram_participant_id,participant_display_name,participant_username,customers(business_id,display_name,username,phone,created_at,updated_at)",
+      "id,channel,status,last_inbound_at,customer_id,instagram_participant_id,participant_display_name,participant_username,participant_avatar_path,participant_avatar_checked_at,customers(business_id,display_name,username,phone,created_at,updated_at)",
     )
     .eq("business_id", businessId)
     .eq("customers.business_id", businessId)
@@ -230,11 +236,12 @@ export async function loadThreadConversation(db: SupabaseClient, businessId: str
       customers: customer,
     }),
     handle: username ? `@${username}` : data.channel === "whatsapp" ? "WhatsApp" : "Instagram",
+    avatarUrl: participantAvatarUrl(businessId, data.id, data.participant_avatar_path, data.participant_avatar_checked_at),
   };
 }
 
 export const threadMessageColumns =
-  "id,direction,source,sent_via,campaign_id,campaign_name,body,media,created_at,delivery_status,delivery_error,external_message_id,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)";
+  "id,direction,source,sent_via,campaign_id,campaign_name,body,media,created_at,customer_deleted_at,customer_edited_at,reply_to,delivery_status,delivery_error,external_message_id,transport_request_id,message_transport_parts(id,part_index,part_count,body,status)";
 
 /** A page of messages, oldest first: the latest ones, or those older than `before`.
  * `older` reads the page before it; null when there is nothing older. */
@@ -259,8 +266,10 @@ export async function loadThreadPage(
   if (error) throw new InboxReadError("thread_unavailable");
   const page = (data ?? []).slice(0, limit);
   const oldest = page.at(-1);
+  // A quote that cannot be read is left out; the reply itself still shows.
+  const quotes = await loadReplyQuotes(db, businessId, conversationId, page).catch(() => new Map());
   return {
-    messages: page.reverse(),
+    messages: page.reverse().map((m) => ({ ...m, reply_quote: quotes.get(m.id) ?? null })),
     older: (data ?? []).length > limit && oldest ? cursorOf(oldest.created_at, oldest.id) : null,
   };
 }

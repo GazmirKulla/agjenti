@@ -6,6 +6,8 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading, formatDate } from "@/components/dashboard/ui";
 import { CustomerActions } from "@/components/dashboard/customer-actions";
+import { ParticipantAvatar } from "@/components/dashboard/participant-avatar";
+import { participantAvatarUrl } from "@/lib/conversations/participant-avatar";
 export default async function CustomersPage({
   params,
   searchParams,
@@ -43,7 +45,8 @@ export default async function CustomersPage({
   if (!archiveReady) result = archivedView ? { data: [], error: null, count: 0 } as unknown as typeof result : await list(false);
   const { data: customers, error, count } = result;
   if (error) throw new Error("Nuk u ngarkuan klientët.");
-  const [{ count: archivedCount }, membership, orderRows] = await Promise.all([
+  const customerIds = (customers ?? []).map((c) => c.id);
+  const [{ count: archivedCount }, membership, orderRows, avatarRows] = await Promise.all([
     archiveReady
       ? db.from("customers").select("id", { count: "exact", head: true }).eq("business_id", access.business.id).not("archived_at", "is", null)
       : Promise.resolve({ count: 0 }),
@@ -51,7 +54,15 @@ export default async function CustomersPage({
     (customers ?? []).length
       ? db.from("orders").select("customer_id").eq("business_id", access.business.id).in("customer_id", (customers ?? []).map((c) => c.id))
       : Promise.resolve({ data: [] as { customer_id: string }[] }),
+    // The photo lives with the channel conversation; the newest one with a photo wins.
+    customerIds.length
+      ? db.from("conversations").select("id,customer_id,participant_avatar_path,participant_avatar_checked_at").eq("business_id", access.business.id)
+          .in("customer_id", customerIds).not("participant_avatar_path", "is", null).order("last_message_at", { ascending: false, nullsFirst: false })
+      : Promise.resolve({ data: [] as { id: string; customer_id: string; participant_avatar_path: string; participant_avatar_checked_at: string | null }[] }),
   ]);
+  const avatarByCustomer = new Map<string, string | null>();
+  for (const row of avatarRows.data ?? []) if (!avatarByCustomer.has(row.customer_id))
+    avatarByCustomer.set(row.customer_id, participantAvatarUrl(access.business.id, row.id, row.participant_avatar_path, row.participant_avatar_checked_at));
   // Only the owner (or a platform administrator) may remove or delete customers.
   const canManage = archiveReady && (access.admin || membership.data?.role === "owner");
   const ordersByCustomer = new Map<string, number>();
@@ -98,11 +109,10 @@ export default async function CustomersPage({
                   <h2>{c.display_name || c.username || "Klient Instagram"}</h2>
                   <p>{c.username ? `@${c.username}` : "Instagram"}</p>
                 </div>
-                <span className="profile-avatar">
-                  {(c.display_name || c.username || "K")
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </span>
+                <ParticipantAvatar
+                  name={c.display_name || c.username || "K"}
+                  src={avatarByCustomer.get(c.id)}
+                />
               </div>
               <div className="detail-block">
                 <h3>Informacioni i kontaktit</h3>

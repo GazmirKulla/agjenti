@@ -1,8 +1,9 @@
 import { createHmac } from "node:crypto";
 import { beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ enqueue: vi.fn(), run: vi.fn(), after: vi.fn(), handle: vi.fn(), receipts: vi.fn(), reactions: vi.fn(), echoes: vi.fn() }));
+const m = vi.hoisted(() => ({ enqueue: vi.fn(), run: vi.fn(), after: vi.fn(), handle: vi.fn(), receipts: vi.fn(), reactions: vi.fn(), changes: vi.fn(), echoes: vi.fn() }));
 vi.mock("@/lib/conversations/business-echo", () => ({ persistBusinessEchoes: m.echoes }));
 vi.mock("@/lib/conversations/provider-reactions", async original => ({ ...await original<typeof import("@/lib/conversations/provider-reactions")>(), persistProviderReactions: m.reactions }));
+vi.mock("@/lib/conversations/provider-message-changes", async original => ({ ...await original<typeof import("@/lib/conversations/provider-message-changes")>(), persistProviderMessageChanges: m.changes }));
 vi.mock("@/lib/conversations/provider-receipts", async original => ({ ...await original<typeof import("@/lib/conversations/provider-receipts")>(), persistProviderReceipts: m.receipts }));
 vi.mock("@/lib/conversations/workflow-queue", () => ({ enqueueWorkflowMessage: m.enqueue, runWorkflowQueue: m.run }));
 vi.mock("@/lib/conversations/handle-inbound", () => ({ handleInboundMessage: m.handle }));
@@ -90,4 +91,20 @@ it("stores WhatsApp Business app echoes without enqueueing an agent turn", async
  expect(m.enqueue).not.toHaveBeenCalled();
  await m.after.mock.calls[0][0]();
  expect(m.echoes).toHaveBeenCalledWith([expect.objectContaining({ channel: "whatsapp", accountId: "123456", externalParticipantId: "355691234567", externalMessageId: "wamid.echo" })]);
+});
+
+it("records an Instagram unsend and edit without waking the AI queue, and asks Meta to retry on failure", async () => {
+ const body = { object: "instagram", entry: [{ id: "account", messaging: [
+  { sender: { id: "customer" }, recipient: { id: "account" }, timestamp: Date.now(), message: { mid: "gone", is_deleted: true } },
+  { sender: { id: "customer" }, recipient: { id: "account" }, timestamp: Date.now(), message_edit: { mid: "changed", text: "Nr. 42", num_edit: 1 } },
+ ] }] };
+ expect((await POST(signed(body, "ig-secret"))).status).toBe(200);
+ expect(m.changes).toHaveBeenCalledWith([
+  expect.objectContaining({ messageId: "gone", participantId: "customer", deleted: true }),
+  expect.objectContaining({ messageId: "changed", deleted: false, text: "Nr. 42" }),
+ ]);
+ expect(m.enqueue).not.toHaveBeenCalled();
+ expect(m.handle).not.toHaveBeenCalled();
+ m.changes.mockRejectedValueOnce(new Error("synthetic outage"));
+ expect((await POST(signed(body, "ig-secret"))).status).toBe(503);
 });

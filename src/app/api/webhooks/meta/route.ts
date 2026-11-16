@@ -3,6 +3,7 @@ import { persistBusinessEchoes } from "@/lib/conversations/business-echo";
 import type { NormalizedBusinessEcho } from "@/lib/instagram/types";
 import { parseProviderReceipts, persistProviderReceipts } from "@/lib/conversations/provider-receipts";
 import { parseProviderReactions, persistProviderReactions } from "@/lib/conversations/provider-reactions";
+import { parseProviderMessageChanges, persistProviderMessageChanges } from "@/lib/conversations/provider-message-changes";
 import { verifyMetaSignature } from "@/lib/instagram/meta-webhook";
 import { enqueueWorkflowMessage, runWorkflowQueue } from "@/lib/conversations/workflow-queue";
 import { after, NextResponse } from "next/server";
@@ -80,6 +81,7 @@ export async function POST(request: Request) {
 		storeEchoesLater(echoes);
         await persistProviderReceipts(parseProviderReceipts(payload));
         await persistProviderReactions(parseProviderReactions(payload));
+        await persistProviderMessageChanges(parseProviderMessageChanges(payload));
 		console.log("[meta webhook][POST]", {
 			accepted: messages.length,
 			echoes: echoes.length,

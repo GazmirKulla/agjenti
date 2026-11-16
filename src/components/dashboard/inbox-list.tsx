@@ -3,6 +3,7 @@ import { useDashboardTranslator } from "@/components/dashboard/language";
 import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "./icon";
+import { ParticipantAvatar } from "./participant-avatar";
 export type InboxSignals = {
   phone: boolean;
   email: boolean;
@@ -20,6 +21,7 @@ export type InboxRow = {
   /** Null when the server could not tell; the unread count is shown instead. */
   awaitingReply?: boolean | null;
   signals?: InboxSignals | null;
+  avatarUrl?: string | null;
 };
 const leadLabels = { new: "Lead i ri", contacted: "Lead në kontakt", won: "Lead i fituar", lost: "Lead i humbur" } as const;
 
@@ -145,9 +147,7 @@ export function InboxList({
             aria-current={selected === r.id ? "page" : undefined}
             className={`inbox-row ${selected === r.id ? "selected" : ""}`}
           >
-            <span className="profile-avatar">
-              {r.name.slice(0, 2).toUpperCase()}
-            </span>
+            <ParticipantAvatar name={r.name} src={r.avatarUrl} size={35} />
             <span className="inbox-row-copy">
               <strong>{r.name}</strong>
               <small className="inbox-row-channel"><Icon name={r.channel === "whatsapp" ? "whatsapp" : "instagram"} size={14} />{r.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</small>

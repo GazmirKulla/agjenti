@@ -46,6 +46,11 @@ function attachments(media: unknown): MobileAttachment[] {
   });
 }
 
+function storyReply(value: unknown) {
+  const story = value && typeof value === "object" && !Array.isArray(value) ? (value as { story?: { id?: unknown; url?: unknown } }).story : null;
+  if (!story || typeof story !== "object") return null;
+  return { story: { id: typeof story.id === "string" ? story.id : null, url: typeof story.url === "string" && story.url.startsWith("https://") ? story.url : null } };
+}
 type ThreadMessage = Awaited<ReturnType<typeof loadThreadMessages>>[number];
 export function mobileThread(conversation: ThreadConversation, messages: ThreadMessage[], orders: CustomerOrder[] = []) {
   return {
@@ -53,6 +58,7 @@ export function mobileThread(conversation: ThreadConversation, messages: ThreadM
       id: conversation.id,
       name: conversation.name,
       handle: conversation.handle,
+      avatarUrl: conversation.avatarUrl,
       status: conversation.status,
       channel: conversation.channel,
       replyWindow: conversation.channel === "instagram" ? instagramReplyWindow(conversation.last_inbound_at) : "standard",
@@ -81,6 +87,12 @@ export function mobileThread(conversation: ThreadConversation, messages: ThreadM
       campaignName: m.campaign_name ?? null,
       body: m.body,
       createdAt: m.created_at,
+      // The customer unsent / edited this message on the channel; null otherwise.
+      deletedAt: m.customer_deleted_at ?? null,
+      editedAt: m.customer_edited_at ?? null,
+      // Another message in this conversation the customer replied to, or the business's story.
+      replyTo: m.reply_quote ? { messageId: m.reply_quote.messageId, body: m.reply_quote.body, deleted: m.reply_quote.deleted }
+        : storyReply(m.reply_to),
       deliveryStatus: m.delivery_status,
       deliveryError: m.delivery_error,
       transportRequestId: m.transport_request_id ?? null,

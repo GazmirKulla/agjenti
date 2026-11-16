@@ -3,6 +3,7 @@ import type { ConversationContext } from "@/lib/conversations/context";
 import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { BookingForm, ConfirmAgentOrder, CopyInvitationLink, LeadStatusControl, ManualOrderForm, SaveCustomerForm } from "./conversation-panel-controls";
 import { formatDate, money } from "./ui";
+import { ParticipantAvatar } from "./participant-avatar";
 import { orderItemsText } from "@/lib/orders/item-summary";
 import { contactSourceLabels, type ContactKey } from "@/lib/customers/contact";
 
@@ -29,7 +30,7 @@ export async function ConversationPanel({ context, businessId, slug }: { context
       <section className="panel section-pad">
         <h2 className="text-base mb-5">{customer.linked ? t("Informacioni i klientit") : t("Pjesëmarrësi i bisedës")}</h2>
         <div className="flex items-center gap-3 mb-6">
-          <span className="profile-avatar">{conversation.name.slice(0, 2).toUpperCase()}</span>
+          <ParticipantAvatar name={conversation.name} src={conversation.avatarUrl} />
           <div>
             <h3>{conversation.name}</h3>
             <p className="muted-copy">{conversation.handle}</p>

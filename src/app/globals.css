@@ -1708,6 +1708,58 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
   overflow: hidden;
   font-size: 19px;
 }
+.chat-reply-quote {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: inherit;
+  text-decoration: none;
+}
+.chat-reply-quote small {
+  color: var(--ink-muted);
+}
+.chat-reply-quote span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+}
+.chat-media-card {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+.chat-media-card-label {
+  color: var(--ink-muted);
+}
+.chat-media-card-preview {
+  width: 160px;
+  height: auto;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.chat-receipt {
+  align-self: flex-end;
+  margin: -4px 4px 0;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.chat-message-deleted {
+  font-style: italic;
+  color: var(--ink-muted);
+}
+.participant-avatar {
+  overflow: hidden;
+}
+.participant-avatar img,
 .instagram-account-avatar img {
   width: 100%;
   height: 100%;

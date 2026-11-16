@@ -13,6 +13,21 @@ import { instagramReplyWindow } from "@/lib/instagram/window";
 import { useReplyOutbox } from "@/components/agents/reply-outbox";
 import { MessageReactions, useMessageReactions } from "@/components/agents/message-reactions";
 import { IntegrationActivity, type IntegrationActivityLog } from "@/components/dashboard/integration-activity";
+import { ParticipantAvatar } from "@/components/dashboard/participant-avatar";
+import { showsInlineDelivery, threadReceipt } from "@/lib/conversations/delivery-status";
+import type { ReplyQuote } from "@/lib/conversations/reply-target";
+import { ChatMediaCard } from "@/components/dashboard/chat-media-card";
+
+/** What a shared item is, from the channel's own attachment type. */
+const shareLabels: Record<string, string> = {
+  story_mention: "Ju përmendi në story", story: "Shpërndau një story", ig_story: "Shpërndau një story",
+  ig_reel: "Shpërndau një reel", reel: "Shpërndau një reel", ig_post: "Shpërndau një postim",
+};
+function storyOf(value: unknown): { url: string | null } | null {
+  const story = value && typeof value === "object" && !Array.isArray(value) ? (value as { story?: { url?: unknown } }).story : null;
+  if (!story || typeof story !== "object") return null;
+  return { url: typeof story.url === "string" && story.url.startsWith("https://") ? story.url : null };
+}
 type Message = {
   id: string;
   direction: string;
@@ -22,6 +37,10 @@ type Message = {
   body: string | null;
   media: NormalizedAttachment[] | null;
   created_at: string;
+  customer_deleted_at?: string | null;
+  customer_edited_at?: string | null;
+  reply_to?: unknown;
+  reply_quote?: ReplyQuote | null;
   delivery_status: string | null;
   delivery_error: string | null;
   transport_request_id?: string | null;
@@ -37,6 +56,7 @@ export function ThreadClient(props: {
   channel?: string;
   lastInboundAt?: string | null;
   customerName: string;
+  customerAvatarUrl?: string | null;
   messages: Message[];
   /** Reads the messages before the first one shown; null when there are none. */
   older?: string | null;
@@ -112,6 +132,9 @@ export function ThreadClient(props: {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const outbox = useReplyOutbox(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/messages`, `agjenti:reply:${props.userId}:${props.businessId}:${props.conversationId}`, () => router.refresh());
+  // Sends not yet stored show their own progress; the receipt waits until they are.
+  const pendingSends = outbox.operations.filter(o => !props.messages.some(m => m.transport_request_id === o.requestId));
+  const receipt = pendingSends.length ? null : threadReceipt(messages);
   const reactions = useMessageReactions(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/reactions`, `agjenti:reaction:${props.userId}:${props.businessId}:${props.conversationId}`);
   async function request(path: string, body?: object) {
     if (pending) return;
@@ -186,9 +209,7 @@ export function ThreadClient(props: {
           className="chat-contact-link"
           aria-label={t("Hap detajet e klientit")}
         >
-          <span className="profile-avatar">
-            {props.customerName.slice(0, 2).toUpperCase()}
-          </span>
+          <ParticipantAvatar name={props.customerName} src={props.customerAvatarUrl} />
           <div>
             <h2>{props.customerName}</h2>
             <LocalizedStatusBadge status={props.status} />
@@ -241,13 +262,25 @@ export function ThreadClient(props: {
               {date.day !== previous?.day && <div className="chat-date-separator"><time dateTime={date.day}>{date.label}</time></div>}
 
             <div
+              id={`message-${m.id}`}
               className={`chat-message ${m.direction === "outbound" ? "outbound" : "inbound"}`}
             >
+              {m.reply_quote && (
+                <a className="chat-reply-quote" href={m.reply_quote.messageId ? `#message-${m.reply_quote.messageId}` : undefined}>
+                  <small>{t(m.reply_quote.direction === "outbound" ? "Përgjigje për mesazhin tuaj" : "Përgjigje për mesazhin")}</small>
+                  <span>{m.reply_quote.deleted ? t("Mesazhi u fshi") : m.reply_quote.body || t(m.reply_quote.messageId ? "Mesazh pa tekst" : "Mesazhi nuk gjendet")}</span>
+                </a>
+              )}
+              {(() => { const story = storyOf(m.reply_to); return story && <ChatMediaCard label={t("Iu përgjigj story-t tuaj")} url={story.url} alt={t("Story")} />; })()}
               {m.body && <p>{m.body}</p>}
               {(m.message_transport_parts?.length ?? 0) > 1 && <details><summary>Pjesët e dërgimit</summary>{m.message_transport_parts?.slice().sort((a,b)=>a.part_index-b.part_index).map(p=><p key={p.id}>Pjesa {p.part_index+1}/{p.part_count}: {p.status}</p>)}</details>}
               {(Array.isArray(m.media) ? m.media : []).map(
                 (attachment, index) => {
                   const url = attachment?.sourceUrl;
+                  if (attachment?.kind === "share") {
+                    const type = String(attachment.metadata?.instagramAttachmentType ?? "");
+                    return <ChatMediaCard key={index} label={t(shareLabels[type] ?? "Shpërndau një postim")} url={typeof url === "string" && url.startsWith("https://") ? url : null} alt={t("Postim i shpërndarë")} />;
+                  }
                   if (typeof url !== "string" || !url.startsWith("https://"))
                     return null;
                   return (
@@ -278,7 +311,8 @@ export function ThreadClient(props: {
                   );
                 },
               )}
-              {!m.body && !m.media?.length && <p>{t("Mesazh pa tekst")}</p>}
+              {m.customer_deleted_at ? <p className="chat-message-deleted">{t("Klienti e fshiu këtë mesazh")}</p>
+                : !m.body && !m.media?.length && <p>{t("Mesazh pa tekst")}</p>}
               <div className="chat-message-footer">
               <small>
                 {m.sent_via === "campaign" ? `${t("Fushatë")}: ${m.campaign_name || "—"}` : m.sent_via === "marketing_preference" ? t("Preferencat e ofertave") : m.source === "agent"
@@ -292,9 +326,10 @@ export function ThreadClient(props: {
                         : t("Klienti")}{" "}
                 ·{" "}
                 <time dateTime={m.created_at} title={date.full} aria-label={date.full}>{date.time}</time>
-                {m.delivery_status ? ` · ${t(m.delivery_status)}` : ""}
+                {m.customer_edited_at && !m.customer_deleted_at ? ` · ${t("ndryshuar")}` : ""}
+                {showsInlineDelivery(m.direction, m.delivery_status) ? ` · ${t(m.delivery_status!)}` : ""}
               </small>
-              <MessageReactions messageId={m.id} channel={props.channel ?? "instagram"} eligible={m.direction === "inbound" && m.source === "customer" && Boolean(m.external_message_id)} parts={m.message_transport_parts} controller={reactions} />
+              <MessageReactions messageId={m.id} channel={props.channel ?? "instagram"} eligible={m.direction === "inbound" && m.source === "customer" && Boolean(m.external_message_id) && !m.customer_deleted_at} parts={m.message_transport_parts} controller={reactions} />
               </div>
               {m.delivery_error && (
                 <p className="text-danger text-xs mt-1">{t(m.delivery_error)}</p>
@@ -306,7 +341,8 @@ export function ThreadClient(props: {
         ) : (
           <p className="muted-copy text-center">{t("Biseda ende nuk ka mesazhe.")}</p>
         )}
-        {outbox.operations.filter(o => !props.messages.some(m => m.transport_request_id === o.requestId)).map(o => <div key={o.requestId} className="chat-message outbound"><p>{o.body}</p><small>{o.status === "prepared" || o.status === "queued" ? "Në radhë" : o.status === "sending" ? "Duke dërguar" : o.status === "sent" ? "Pranuar nga kanali" : o.status === "uncertain" ? "Dërgim i pakonfirmuar — mos e ridërgo" : "Dështoi"}</small>{o.error && <p role="alert">{o.error}</p>}{o.status === "failed" && !o.accepted && <button type="button" onClick={()=>outbox.retry(o.requestId)}>Provo përsëri</button>}</div>)}
+        {receipt && <p className="chat-receipt">{t(receipt === "read" ? "Parë" : receipt === "delivered" ? "Dorëzuar" : "Dërguar")}</p>}
+        {pendingSends.map(o => <div key={o.requestId} className="chat-message outbound"><p>{o.body}</p><small>{o.status === "prepared" || o.status === "queued" ? "Në radhë" : o.status === "sending" ? "Duke dërguar" : o.status === "sent" ? "Pranuar nga kanali" : o.status === "uncertain" ? "Dërgim i pakonfirmuar — mos e ridërgo" : "Dështoi"}</small>{o.error && <p role="alert">{o.error}</p>}{o.status === "failed" && !o.accepted && <button type="button" onClick={()=>outbox.retry(o.requestId)}>Provo përsëri</button>}</div>)}
       </div>
       <form
         className="chat-composer"

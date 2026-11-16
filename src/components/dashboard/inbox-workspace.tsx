@@ -122,6 +122,7 @@ export async function InboxWorkspace({
           channel={conversation.channel}
           lastInboundAt={conversation.last_inbound_at}
           customerName={name}
+          customerAvatarUrl={conversation.avatarUrl}
           messages={messageResult.data?.messages ?? []}
           older={messageResult.data?.older ?? null}
           pendingOrder={Boolean(contextResult.data?.pendingOrder)}
