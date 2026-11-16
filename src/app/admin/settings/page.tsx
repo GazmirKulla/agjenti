@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { getAppSettings } from "@/lib/platform/settings";
-import { saveAppSettings, saveConversationLearning, saveModelTiers } from "@/lib/platform/actions";
+import { saveAppSettings, saveCampaignSending, saveConversationLearning, saveModelTiers } from "@/lib/platform/actions";
 import { learningLimits, loadLearningSettings } from "@/lib/conversation-learning/settings";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { Icon } from "@/components/dashboard/icon";
@@ -39,6 +39,8 @@ export default async function PlatformSettingsPage() {
   const steps = questions.filter((q) => !["aiMode", "teamSize"].includes(q.key));
   const { tiers } = await loadModelTiers();
   const learning = await loadLearningSettings();
+  const campaignControl = await createServiceSupabase().from("marketing_control").select("enabled").eq("singleton", true).maybeSingle();
+  const campaignsStored = !campaignControl.error && Boolean(campaignControl.data);
   // How many businesses chose each group themselves (the rest follow the platform).
   const { data: chosen } = await createServiceSupabase().from("businesses").select("model_tier").not("model_tier", "is", null);
   const businessesByTier = new Map<string, number>();
@@ -99,6 +101,26 @@ export default async function PlatformSettingsPage() {
               Grupin e një biznesi e zgjedh te <Link className="settings-text-link" href="/admin/businesses">Bizneset</Link>.
             </p>
             <button className="btn btn-primary" type="submit">Ruaj modelet</button>
+          </div>
+        </section>
+      </ActionForm>
+
+      <ActionForm action={saveCampaignSending} className="settings-layout">
+        <section className="panel settings-section" aria-labelledby="settings-campaigns">
+          <SectionHead icon="spark" title="Fushatat" description="Dërgimi i ofertave te kontaktet që kanë pranuar marketingun, për të gjitha bizneset." />
+          {!campaignsStored && (
+            <p className="settings-hint settings-hint-top">Për ta ndryshuar, duhet aplikuar migrimi <code>marketing_campaigns</code>.</p>
+          )}
+          <label className="settings-toggle settings-toggle-wide">
+            <span id="settings-campaigns">
+              Dërgimi i fushatave aktiv
+              <small>E fikur: bizneset përgatisin vetëm drafte dhe asnjë mesazh nuk dërgohet. E ndezur: dërgojnë vetëm bizneset që e kanë aktivizuar marketingun te cilësimet e tyre.</small>
+            </span>
+            <input className="switch-input" type="checkbox" name="campaigns_enabled" defaultChecked={campaignControl.data?.enabled === true} disabled={!campaignsStored} />
+          </label>
+          <div className="settings-inline-actions">
+            <p className="settings-hint">Përpara ndezjes së parë: aktivizo marketingun vetëm te biznesi i provës dhe dërgo një fushatë provë te një kontakt yti.</p>
+            {campaignsStored && <button className="btn btn-primary" type="submit">Ruaj fushatat</button>}
           </div>
         </section>
       </ActionForm>

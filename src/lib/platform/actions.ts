@@ -108,3 +108,21 @@ export async function saveConversationLearning(form: FormData) {
   revalidatePath("/admin/settings");
   return { success: "Cilësimet e trajnimit nga bisedat u ruajtën." };
 }
+
+/** Platform-wide switch for sending marketing campaigns (`marketing_control`). Off: owners
+ * can still prepare drafts and nothing is sent; the database functions enforce it too. */
+export async function saveCampaignSending(form: FormData) {
+  const user = await getSessionUser();
+  if (!user || !(await isPlatformAdmin(user.id))) return { error: "Kërkohet qasja e administratorit." };
+  const enabled = form.get("campaigns_enabled") === "on";
+  const { data, error } = await createServiceSupabase().from("marketing_control")
+    .update({ enabled }).eq("singleton", true).select("enabled").maybeSingle();
+  if (error || !data) return {
+    error: error && ["42P01", "PGRST205"].includes(error.code)
+      ? "Duhet aplikuar migrimi i fushatave në databazë përpara ruajtjes."
+      : "Cilësimi nuk u ruajt. Provo përsëri.",
+  };
+  console.info("[platform] campaign sending", { enabled: data.enabled, by: user.id });
+  revalidatePath("/admin/settings");
+  return { success: data.enabled ? "Dërgimi i fushatave u aktivizua për platformën." : "Dërgimi i fushatave u çaktivizua. Asnjë mesazh nuk dërgohet." };
+}
