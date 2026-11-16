@@ -69,7 +69,8 @@ it("keeps only this business's customer identity and three newest rows", async (
         last_message_preview: "Pershendetje",
         last_message_at: "2026-11-07T10:00:00Z",
         unread_count: 2,
-        participant_display_name: "Ana",
+        // No channel name: the own business's CRM name is used.
+        participant_display_name: null,
         participant_username: "ana",
         customers: { business_id: "biz-1", display_name: "Ana K", username: "ana" },
       },

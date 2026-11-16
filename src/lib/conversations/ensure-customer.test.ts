@@ -111,14 +111,24 @@ describe("ensureCustomerForConversation association boundary", () => {
 });
 
 describe("conversationDisplayName", () => {
-	it("prefers CRM customer name over participant fields", () => {
+	it("prefers the name the channel shows over the CRM name", () => {
 		expect(
 			conversationDisplayName({
 				participant_display_name: "IG Name",
 				participant_username: "ig_user",
 				customers: { display_name: "CRM Name", username: "crm_user" },
 			}),
-		).toBe("CRM Name");
+		).toBe("IG Name");
+	});
+
+	it("uses the name given in the conversation when the channel shows none", () => {
+		expect(
+			conversationDisplayName({
+				participant_display_name: "  ",
+				participant_username: "ig_user",
+				customers: { display_name: "Ana Hoxha", username: "ig_user" },
+			}),
+		).toBe("Ana Hoxha");
 	});
 
 	it("falls back to participant fields when not a CRM customer", () => {

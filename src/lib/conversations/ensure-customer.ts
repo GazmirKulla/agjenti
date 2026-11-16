@@ -134,6 +134,7 @@ export async function ensureCustomerForConversation(
 	return { ok: true, customerId: created.id as string, created: true };
 }
 
+/** The name a conversation is shown under in the Inbox (web, mobile, assistant). */
 export function conversationDisplayName(row: {
 	participant_display_name?: string | null;
 	participant_username?: string | null;
@@ -143,10 +144,12 @@ export function conversationDisplayName(row: {
 	} | null;
 }): string {
 	const customer = row.customers;
+	// The name the channel shows (profile name) comes first; a name the customer gave
+	// in the conversation (kept on the CRM record) is used only when the channel shows none.
 	return (
-		customer?.display_name ||
+		row.participant_display_name?.trim() ||
+		customer?.display_name?.trim() ||
 		customer?.username ||
-		row.participant_display_name ||
 		row.participant_username ||
 		"Bisedë me klientin"
 	);
