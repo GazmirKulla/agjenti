@@ -38,7 +38,7 @@ const errors: Record<string, [string, number]> = {
   invalid_request: ["Kërkesë e pavlefshme. Rifresko faqen.", 400],
   invalid_quantity: ["Sasia nuk vlen: copë të plota nga 1 deri në 999, ose për produktet me njësi (m³, m…) deri në 3 shifra pas pikës, p.sh. 0.5.", 400],
   invalid_customer: ["Të dhënat e klientit janë të pavlefshme.", 400],
-  customer_required: ["Shkruaj emrin dhe telefonin e klientit.", 400],
+  customer_required: ["Shkruaj emrin e klientit dhe telefonin, kur biznesi e kërkon.", 400],
   invalid_note: ["Shënimi është shumë i gjatë.", 400],
   invalid_conversation: ["Biseda nuk u gjet në këtë biznes.", 404],
   product_unavailable: ["Produkti nuk është aktiv.", 409],

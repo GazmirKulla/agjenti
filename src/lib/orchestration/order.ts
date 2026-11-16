@@ -1,6 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
-import { loadProcessVersion, compileProcessVersion } from "./version-store";
+import { loadProcessVersion, compileProcessVersion, readOptionalCustomerFields, withCustomerPolicy } from "./version-store";
 import { TransitionError, type Instance } from "./contracts";
 import { digest } from "./definition";
 import { readOrderTerms } from "./order-context";
@@ -14,7 +14,7 @@ export function orderAdapter(scope?: { businessId: string; conversationId: strin
       const instance = scope.instance(action.instanceId);
       if (!instance || typeof action.input.productId !== "string") return { status: "failed", output: { code: "invalid_order_scope" } };
       try {
-        const version = await loadProcessVersion(scope.businessId, instance.versionId);
+        const version = withCustomerPolicy(await loadProcessVersion(scope.businessId, instance.versionId), await readOptionalCustomerFields(scope.businessId));
         let definition = version && compileProcessVersion(version).find(d => d.id === instance.definitionId);
         if (!instance.productWorkflow || instance.productWorkflow.productId !== action.input.productId)
           return { status: "failed", output: { code: "product_dependency_unavailable" } };

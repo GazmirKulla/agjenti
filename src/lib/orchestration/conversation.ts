@@ -26,7 +26,7 @@ import { orderFields, orderToolPolicy } from "./order-definition";
 import { bookingContext } from "./booking-context";
 import { bookingToolPolicy, bookingFields } from "./booking-definition";
 import { availableSlots } from "@/lib/calendar/service";
-import { loadCurrentLinearVersions, loadProcessVersion, compileProcessVersion } from "./version-store";
+import { loadCurrentLinearVersions, loadProcessVersion, compileProcessVersion, readOptionalCustomerFields, withCustomerPolicy } from "./version-store";
 import { linearProcessVersion, type ProcessVersion } from "./linear-definition";
 import { processTrainingContext } from "./training-context";
 import { applyTrainingPreview } from "@/lib/conversation-training/preview";
@@ -60,6 +60,9 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       versions.set(versionId, pinned);
     }
   }
+  // The business's optional customer details shape the order questions and the review.
+  const optionalCustomer = await readOptionalCustomerFields(params.businessId);
+  for (const version of versions.values()) withCustomerPolicy(version, optionalCustomer);
   const definitions = [...versions.values()].flatMap(compileProcessVersion);
   const editorStep = (version: ProcessVersion, stepId: string) => {
     if (version.linear) return stepId;

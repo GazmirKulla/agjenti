@@ -3,6 +3,17 @@ import { loadVisualVersion } from "@/lib/workflows/visual/store";
 import type { WorkflowStepDef } from "@/lib/workflows/engine";
 import { linearProcessVersion, compileLinearProcess, type ProcessVersion } from "./linear-definition";
 import { compileVisualProcesses } from "./visual-definition";
+/** The customer details this business made optional (empty: the defaults). */
+export async function readOptionalCustomerFields(businessId: string): Promise<string[]> {
+  const { data, error } = await createServiceSupabase().from("businesses").select("optional_customer_fields").eq("id", businessId).maybeSingle();
+  if (error) throw new Error("process_configuration_unavailable");
+  return Array.isArray(data?.optional_customer_fields) ? data.optional_customer_fields.filter((f: unknown): f is string => typeof f === "string") : [];
+}
+/** Marks loaded versions with the business's optional customer details before they are compiled. */
+export function withCustomerPolicy<T extends ProcessVersion | null | undefined>(version: T, optional: string[]): T {
+  if (version && optional.length) version.customerOptional = optional;
+  return version;
+}
 export function compileProcessVersion(version: ProcessVersion) { return version.linear ? [compileLinearProcess(version)] : compileVisualProcesses(version); }
 export async function loadProcessVersion(businessId: string, id: string): Promise<ProcessVersion | null> {
   const db = createServiceSupabase();

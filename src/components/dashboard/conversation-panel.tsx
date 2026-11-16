@@ -114,6 +114,7 @@ export async function ConversationPanel({ context, businessId, slug }: { context
             productId={context.forms.order.productId}
             productName={context.forms.order.productName}
             quantity={context.forms.order.quantity}
+            optionalCustomer={context.forms.order.optionalCustomer}
             customer={{ name: value("name"), phone: value("phone"), city: value("city"), address: value("address") }}
           />
         )}

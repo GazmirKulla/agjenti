@@ -110,7 +110,7 @@ export function OrderEditor({ businessId, orderId }: { businessId: string; order
                   <label key={key} className="grid gap-1">
                     <span className="muted-copy">{t(labels[key])}</span>
                     <input className="field" value={values[key]} onChange={set(key)} maxLength={key === "address" ? 300 : key === "phone" ? 40 : 120}
-                      required={key === "name" || key === "phone"} type={key === "phone" ? "tel" : "text"} autoComplete="off" />
+                      required={key === "name"} type={key === "phone" ? "tel" : "text"} autoComplete="off" />
                   </label>
                 ))}
               </div>

@@ -3,7 +3,7 @@ import { decryptSecret } from "@/lib/crypto/tokens";
 import { readProcessProfileEntry } from "@/lib/conversations/profile";
 import { orderDelivery, resolveContact, type ResolvedContact } from "@/lib/customers/contact";
 import type { Field, Snapshot, Value } from "@/lib/orchestration/contracts";
-import { compileProcessVersion, loadProcessVersion } from "@/lib/orchestration/version-store";
+import { compileProcessVersion, loadProcessVersion, readOptionalCustomerFields, withCustomerPolicy } from "@/lib/orchestration/version-store";
 import { statusLabels as leadStatusLabels, type LeadStatus } from "@/lib/leads/model";
 import { loadThreadConversation } from "./inbox-read";
 import { runtimeModules } from "@/lib/capabilities/enforcement";
@@ -65,7 +65,9 @@ export type ConversationContext = {
   prospectScans: { username: string; status: string; statusLabel: string; posts: number; fetchedAt: string | null }[];
   /** What the owner's "Krijo porosi" and "Cakto takim" forms start from. */
   forms: {
-    order: { enabled: boolean; productId: string | null; productName: string | null; quantity: number };
+    order: { enabled: boolean; productId: string | null; productName: string | null; quantity: number;
+      /** Customer details this business made optional (businesses.optional_customer_fields); the name never is. */
+      optionalCustomer: string[] };
     booking: { enabled: boolean; services: { id: string; name: string }[]; serviceId: string | null; date: string | null; time: string | null };
   };
 };
@@ -198,12 +200,13 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
   const bookingIds = (effects.data ?? []).map((row) => row.booking_id);
   const bookingColumns = "id,service_name,starts_at,status";
   const executionIds = (executions.data ?? []).map((row) => row.id);
+  const optionalCustomer = readOptionalCustomerFields(businessId).catch(() => [] as string[]);
   const [savedMemory, , [byEffect, byConversation], [modules, services], invitations] = await Promise.all([
     participant
       ? readProcessProfileEntry(businessId, participant, conversation.channel === "whatsapp" ? "whatsapp" : "instagram").catch(() => undefined)
       : Promise.resolve(undefined),
     Promise.all([...new Set(instances.map((i) => i.versionId))].map(async (versionId) => {
-      const version = await loadProcessVersion(businessId, versionId).catch(() => null);
+      const version = withCustomerPolicy(await loadProcessVersion(businessId, versionId).catch(() => null), await optionalCustomer);
       if (version) versions.set(versionId, compileProcessVersion(version));
     })),
     Promise.all([
@@ -308,6 +311,7 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       productId: text36(collectedSystem.productId),
       productName: typeof collectedSystem.productName === "string" ? collectedSystem.productName : null,
       quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+      optionalCustomer: await optionalCustomer,
     },
     booking: {
       enabled: bookingEnabled,

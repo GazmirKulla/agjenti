@@ -4,12 +4,15 @@ import { digest } from "./definition";
  * without a price unit is always one item; one priced per unit (m³, m…) takes up to three decimals. */
 export const orderQuantityBounds = { min: 0.001, max: 100000, step: 0.001 } as const;
 export const orderInputNames = ["productId", "productName", "productTypeId", "unitAmount", "currency", "quantity", "options", "name", "phone", "city", "address"] as const;
-export function orderFields(flowId: string, authored: Field[] = [], profileFields?: string[]) {
+/** Customer details a business may make optional; the name is always asked. */
+export const OPTIONAL_CUSTOMER_FIELDS = ["phone", "city", "address"] as const;
+/** `optional`: the business's optional customer details (businesses.optional_customer_fields); an authored field keeps its own setting. */
+export function orderFields(flowId: string, authored: Field[] = [], profileFields?: string[], optional: readonly string[] = []) {
   const prefix = `order_${digest(flowId).slice(0, 16)}`;
   const key = (name: string) => `${prefix}_${name}`;
   const customerKeys = profileFields ?? ["name", "phone", "city", "address"];
   const customer = customerKeys.map(name => authored.find(f => f.id === `customer_${name}`) ?? {
-    id: `customer_${name}`, subject: "customer", label: name, type: name === "phone" ? "phone" : name === "email" ? "email" : "text", required: true,
+    id: `customer_${name}`, subject: "customer", label: name, type: name === "phone" ? "phone" : name === "email" ? "email" : "text", required: !optional.includes(name),
     ...(name === "name" ? { min: 2, max: 120 } : {}),
   } as Field);
   const fields: Field[] = [
@@ -45,7 +48,8 @@ export function finishOrder(flowId: string, terminal: string, label: string, fie
   ];
 }
 export function orderToolPolicy(): ToolPolicy {
-  const { fields, inputField } = orderFields("policy");
+  // The tool needs the name; the server checks the other details against the business's setting.
+  const { fields, inputField } = orderFields("policy", [], undefined, OPTIONAL_CUSTOMER_FIELDS);
   return { key: "order.create", version: 1, effect: "write", approval: "required", allowed: true,
     inputs: orderInputNames.map(name => { const f = fields.find(f => f.id === inputField(name))!;
       return { key: name, type: f.type, required: f.required, ...(f.min !== undefined ? { min: f.min } : {}), ...(f.max !== undefined ? { max: f.max } : {}), ...(f.step !== undefined ? { step: f.step } : {}) }; }) };

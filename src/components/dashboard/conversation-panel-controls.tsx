@@ -648,6 +648,8 @@ export function ManualOrderForm(props: {
   productName: string | null;
   quantity: number;
   customer: { name: string; phone: string; city: string; address: string };
+  /** Customer details the business made optional; the name is always required. */
+  optionalCustomer?: string[];
 }) {
   const t = useDashboardTranslator();
   const router = useRouter();
@@ -755,7 +757,7 @@ export function ManualOrderForm(props: {
               <input className="field" value={values.name} maxLength={120} autoComplete="off" onChange={set("name")} required />
             </SmartLabel>
             <SmartLabel label="Telefoni" field={fields.phone}>
-              <input className="field" type="tel" value={values.phone} maxLength={40} autoComplete="off" placeholder="+355…" onChange={set("phone")} required />
+              <input className="field" type="tel" value={values.phone} maxLength={40} autoComplete="off" placeholder="+355…" onChange={set("phone")} required={!props.optionalCustomer?.includes("phone")} />
             </SmartLabel>
             <SmartLabel label="Qyteti" field={fields.city}>
               <input className="field" value={values.city} maxLength={120} autoComplete="off" onChange={set("city")} />

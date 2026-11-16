@@ -23,7 +23,7 @@ export type OrderChangeOutcome =
 const errors: Record<string, [string, number]> = {
   unauthorized: ["Nuk ke qasje në këtë biznes.", 403],
   invalid_change: ["Të dhënat e ndryshimit nuk janë të vlefshme.", 400],
-  customer_required: ["Emri dhe telefoni i dërgesës nuk mund të mbeten bosh.", 400],
+  customer_required: ["Emri (dhe telefoni, kur biznesi e kërkon) nuk mund të mbeten bosh.", 400],
   no_change: ["Nuk ka asnjë ndryshim nga të dhënat e porosisë.", 400],
   order_not_found: ["Porosia nuk u gjet.", 404],
   order_unsettled: ["Dërgimi i kësaj porosie te webi nuk është verifikuar ende. Kontrolloje te webi para se ta ndryshosh.", 409],

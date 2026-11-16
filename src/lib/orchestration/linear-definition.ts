@@ -5,7 +5,9 @@ import type { Field, ProcessDefinition, Step } from "./contracts";
 import { TransitionError } from "./contracts";
 import { digest, validateDefinition } from "./definition";
 import { finishOrder, orderFields } from "./order-definition";
-export type ProcessVersion = VisualVersion & { linear?: { workflowId: string; steps: WorkflowStepDef[]; productIds: string[] } };
+export type ProcessVersion = VisualVersion & { linear?: { workflowId: string; steps: WorkflowStepDef[]; productIds: string[] };
+  /** The business's optional customer details, set when the version is loaded for a turn. */
+  customerOptional?: string[] };
 export function linearProcessVersion(input: { id: string; businessId: string; workflowId: string; name: string; steps: WorkflowStepDef[]; productIds: string[] }): ProcessVersion {
   const parsed = parseLinearDefinition({ name: input.name, steps: input.steps });
   const flowId = `linear_${input.workflowId}`;
@@ -25,7 +27,7 @@ export function compileLinearProcess(version: ProcessVersion): ProcessDefinition
       required: s.required !== false, ...(s.options?.length ? { options: s.options } : {}) };
     if (fields.has(id)) throw new TransitionError("conflicting_field_schema"); fields.set(id, field);
   }
-  const schema = orderFields(definitionId, [...fields.values()]);
+  const schema = orderFields(definitionId, [...fields.values()], undefined, version.customerOptional);
   for (const field of schema.fields) { if (fields.has(field.id) && fields.get(field.id) !== field) throw new TransitionError("conflicting_field_schema"); fields.set(field.id, field); }
   const steps: Step[] = [{ id: "product", kind: "collect", fieldId: key("productId"), prompt: "Which product would you like?", next: "resolve_product" },
     { id: "resolve_product", kind: "resolve", fieldIds: [key("productName")], next: nodeId(linear.steps[0]) }];

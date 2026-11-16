@@ -85,6 +85,8 @@ export function mergePrefill(input: {
   kind: FormKind;
   collected: Partial<Record<PrefillKey, string>>;
   model: Partial<Record<PrefillKey, { value: string; evidence: string }>>;
+  /** Details the business made optional are never reported missing. */
+  optional?: readonly string[];
 }): { fields: Prefill["fields"]; missing: string[] } {
   const fields: Prefill["fields"] = {};
   for (const key of FORM_FIELDS[input.kind]) {
@@ -93,7 +95,7 @@ export function mergePrefill(input: {
     if (found?.value) fields[key] = { value: found.value, source: "biseda", evidence: found.evidence.slice(0, 120) };
     else if (agent) fields[key] = { value: agent, source: "agjenti", evidence: "" };
   }
-  const missing = REQUIRED[input.kind].filter(([key]) => !fields[key]).map(([, label]) => label);
+  const missing = REQUIRED[input.kind].filter(([key]) => !fields[key] && !(input.kind === "order" && input.optional?.includes(key))).map(([, label]) => label);
   return { fields, missing };
 }
 
@@ -176,7 +178,7 @@ export async function prefillForm(db: SupabaseClient, businessId: string, conver
     }
   }
 
-  const { fields, missing } = mergePrefill({ kind, collected, model });
+  const { fields, missing } = mergePrefill({ kind, collected, model, optional: context.forms.order.optionalCustomer });
   const productId = fields.product_id?.value;
   return {
     fields,

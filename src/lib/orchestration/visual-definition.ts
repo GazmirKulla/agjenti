@@ -77,7 +77,7 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
       if (fields.has(field.id)) throw new TransitionError("conflicting_field_schema");
       fields.set(field.id, field);
     }
-    const orderSchema = orderFields(flow.id, [...fields.values()], collectionOnly ? scope.profileFields : undefined);
+    const orderSchema = orderFields(flow.id, [...fields.values()], collectionOnly ? scope.profileFields : undefined, (version as { customerOptional?: string[] }).customerOptional);
     if (order) for (const field of orderSchema.fields) {
       const existing = fields.get(field.id);
       if (existing && existing !== field) throw new TransitionError("conflicting_field_schema");
