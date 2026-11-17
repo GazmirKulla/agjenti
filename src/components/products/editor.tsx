@@ -9,8 +9,8 @@ import {
 } from "@/lib/products/actions";
 import { applyTypeSuggestion } from "@/lib/product-types/actions";
 import { ActionForm } from "@/components/dashboard/action-form";
-import { productMoney as money } from "@/lib/products/catalog";
 import { ProductTips } from "./shared";
+import { ProductPhoto } from "./product-photo";
 import type { ProductRow, Option } from "@/lib/products/catalog";
 import { usePageAssistantContext } from "@/components/business-assistant/workspace";
 export function ProductEditor({
@@ -40,7 +40,6 @@ export function ProductEditor({
     max: product?.price_max ?? (null as number | null),
     unit: product?.price_unit ?? "",
     currency: product?.currency ?? "ALL",
-    type: product?.product_type_id ?? "",
     workflow: product?.workflow_id ?? "",
     active: product?.is_active ?? false,
   });
@@ -72,7 +71,6 @@ export function ProductEditor({
             max: max === "" ? null : Number(max),
             unit: String(d.get("price_unit") ?? ""),
             currency: String(d.get("currency") ?? "ALL"),
-            type: String(d.get("product_type_id") ?? ""),
             workflow: String(d.get("workflow_id") ?? ""),
             active: d.get("is_active") === "on",
           });
@@ -121,42 +119,31 @@ export function ProductEditor({
               </div>
             </section>
           )}
-          <nav
-            className="product-editor-nav"
-            aria-label="Seksionet e produktit"
-          >
-            <a href="#product-identity">Përmbledhje</a>
-            <a href="#product-media">Media</a>
-            <a href="#product-pricing">Çmimi</a>
-            <a href="#product-process">Workflow</a>
-          </nav>
-          <ProductFields
-            slug={slug}
-            product={product}
-            types={types}
-            workflows={workflows}
-            kind={kind}
-            fields={fields}
-          />
+          <div className="panel product-editor-card">
+            <nav
+              className="product-editor-nav"
+              aria-label="Seksionet e produktit"
+            >
+              <a href="#product-identity">Përmbledhje</a>
+              <a href="#product-pricing">Çmimi</a>
+              <a href="#product-process">Workflow</a>
+              <a href="#product-media">Foto</a>
+            </nav>
+            <ProductFields
+              slug={slug}
+              product={product}
+              types={types}
+              workflows={workflows}
+              kind={kind}
+              fields={fields}
+              creating={!product}
+              photoAside
+            />
+          </div>
         </fieldset>
         <aside className="product-side">
-          <section className="panel section-pad product-live-preview">
-            <h2>Pamje paraprake</h2>
-            <div className="product-preview-photo">
-              {preview.image && /^https?:\/\//.test(preview.image) ? (
-                <img src={preview.image} alt="Pamje e produktit" />
-              ) : (
-                <span>□</span>
-              )}
-            </div>
-            <h3>{preview.name || "Emri i produktit"}</h3>
-            <strong>{money(preview.price, preview.currency, { mode: preview.mode, max: preview.max, unit: preview.unit })}</strong>
-            <p>{types.find((t) => t.id === preview.type)?.name || "Pa lloj"}</p>
-            <span className="product-tag">
-              {businessWorkflow?.name || product?.visual_workflow?.name || workflows.find((w) => w.id === preview.workflow)?.name ||
-                "Pa workflow"}
-            </span>
-          </section>
+          <ProductPhoto slug={slug} initial={product?.image_url ?? ""} name={preview.name}
+            onChange={image => setPreview(current => ({ ...current, image }))} />
           <section className="panel section-pad">
             <h2>Plotësimi i informacionit</h2>
             <strong>

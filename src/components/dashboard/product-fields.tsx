@@ -37,6 +37,8 @@ export function ProductFields({
   requireType = false,
   kind,
   fields = [],
+  creating = false,
+  photoAside = false,
 }: {
   slug: string;
   product?: ProductFieldValues;
@@ -47,7 +49,12 @@ export function ProductFields({
   kind?: string;
   /** The business's own product fields and variant choices. */
   fields?: BusinessField[];
+  /** A new product from the manual form: no step template and no sold/available status (it starts available). */
+  creating?: boolean;
+  /** The photo is edited beside the form, so there is no Media section here. */
+  photoAside?: boolean;
 }) {
+  const showAvailability = !creating && (itemKind(kind ?? "product").availability.length > 1);
   const kindDefinition = kind ? itemKind(kind) : null;
   const itemDefinition = kindDefinition ? { ...kindDefinition, fields: fieldsOf(kindDefinition.id, attributeFields(fields)) } : null;
   const choices = variantFields(fields);
@@ -90,7 +97,7 @@ export function ProductFields({
         </div>
       </fieldset>
 
-      {itemDefinition && (itemDefinition.fields.length > 0 || itemDefinition.availability.length > 1) && (
+      {itemDefinition && (itemDefinition.fields.length > 0 || showAvailability) && (
         <fieldset id="product-details" className="grid gap-3">
           <legend className="font-semibold">Të dhënat</legend>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -120,7 +127,7 @@ export function ProductFields({
                 </label>
               );
             })}
-            {itemDefinition.availability.length > 1 && (
+            {showAvailability && (
               <label className="form-label">
                 Statusi
                 <select name="availability" className="field" defaultValue={product?.availability ?? itemDefinition.availability[0]}>
@@ -129,7 +136,7 @@ export function ProductFields({
               </label>
             )}
           </div>
-          <p className="muted-copy">Agjenti i përdor këto të dhëna për të gjetur atë që kërkon klienti. Artikujt e shitur nuk u ofrohen klientëve.</p>
+          <p className="muted-copy">Agjenti i përdor këto të dhëna për të gjetur atë që kërkon klienti.{showAvailability ? " Artikujt e shitur nuk u ofrohen klientëve." : ""}</p>
         </fieldset>
       )}
 
@@ -156,7 +163,7 @@ export function ProductFields({
         <VariantEditor fields={choices} variants={product?.variants ?? []} currency={product?.currency ?? "ALL"} />
       )}
 
-      <fieldset id="product-media" className="grid gap-3">
+      {!photoAside && <fieldset id="product-media" className="grid gap-3">
         <legend className="font-semibold">Media</legend>{" "}
         <label className="form-label">
           URL e fotos
@@ -171,7 +178,7 @@ export function ProductFields({
         <p className="muted-copy">
           Vendos linkun e fotos që dëshiron të shfaqësh në katalog.
         </p>
-      </fieldset>
+      </fieldset>}
       <fieldset id="product-pricing" className="grid gap-3">
         <legend className="font-semibold">Çmimi</legend>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -225,7 +232,7 @@ export function ProductFields({
       <fieldset id="product-process" className="grid gap-3">
         <legend className="font-semibold">Workflow dhe produkti</legend>
         <ProductBusinessWorkflow slug={slug} workflow={workflows.find(w => w.businessWorkflow)?.businessWorkflow} product={product?.id ? { ...product, id: product.id } : undefined} />
-        <label className="form-label">
+        {!creating && <label className="form-label">
           Shablloni i hapave të porosisë <span className="muted-copy">(opsional)</span>
           <select
             name="product_type_id"
@@ -242,7 +249,7 @@ export function ProductFields({
               </option>
             ))}
           </select>
-        </label>
+        </label>}
         <details open={Boolean(product?.workflow_id)}>
           <summary>Proces i posaçëm i porosisë (opsional)</summary>
         <label className="form-label">

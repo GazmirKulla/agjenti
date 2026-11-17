@@ -1425,3 +1425,131 @@
   vertical-align: 0.1em;
   white-space: nowrap;
 }
+
+/* Product form: one card whose sections are the fields; the photo and saving sit beside it. */
+.product-editor-card {
+  padding: 0 1.25rem;
+  min-width: 0;
+}
+.product-editor-card > .product-editor-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -1.25rem;
+  padding: 0.8rem 1.25rem;
+  background: var(--surface);
+  border-radius: 14px 14px 0 0;
+}
+.product-editor-card > fieldset {
+  min-width: 0;
+  padding: 1.25rem 0;
+  border: 0;
+  scroll-margin-top: 4rem;
+}
+.product-editor-card > fieldset + fieldset,
+.product-editor-card > fieldset + .toggle-label {
+  border-top: 1px solid var(--line);
+}
+.product-editor-card > fieldset > legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 0.85rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.product-editor-card > fieldset::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+.product-editor-card > .toggle-label {
+  margin: 0 -1.25rem;
+  padding: 1rem 1.25rem;
+}
+.product-photo h2 {
+  margin-bottom: 0.75rem;
+}
+.product-photo-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.product-photo-frame:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.product-photo-frame.has-photo {
+  border-style: solid;
+}
+.product-photo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.product-photo-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+.product-photo-empty small {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+.product-photo-busy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.product-photo-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+.product-photo-actions .btn {
+  flex: 1;
+  gap: 0.35rem;
+  min-height: 40px;
+  padding-inline: 0.5rem;
+  border: 1px solid var(--line);
+}
+.product-photo-actions .product-photo-remove {
+  flex: 0 0 40px;
+  color: var(--danger);
+}
+.product-photo .form-label {
+  margin-top: 0.7rem;
+}
+@media (max-width: 850px) {
+  .product-editor .product-side {
+    display: contents;
+  }
+  .product-editor .product-photo {
+    order: -1;
+  }
+  .product-editor-card {
+    padding: 0 1rem;
+  }
+  .product-editor-card > .product-editor-nav,
+  .product-editor-card > .toggle-label {
+    margin-inline: -1rem;
+    padding-inline: 1rem;
+  }
+  .product-photo-frame {
+    aspect-ratio: 4 / 3;
+  }
+}
