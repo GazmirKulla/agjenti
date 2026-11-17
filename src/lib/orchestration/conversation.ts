@@ -39,6 +39,7 @@ import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
 import { readProcessProfile } from "@/lib/conversations/profile";
 import { prospectTurnContext } from "@/lib/prospects/turn-context";
+import { replyProductPhotos } from "@/lib/conversations/reply-photos";
 
 /** One process runtime for authenticated live channels and isolated previews. */
 export async function processConversation(params: AgentTurnParams): Promise<AgentTurnResult> {
@@ -238,6 +239,10 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     instances: Object.values(state.instances).map(i => ({ id: i.id, definitionId: i.definitionId, versionId: i.versionId, stepId: i.stepId, status: i.status, waitId: i.wait?.id })),
     presentedTargetIds: composed.targetIds, mode } });
   trace?.({ stage: "ai", label: "Process reply composed", data: { responseId: composed.responseId, usage: { input_tokens: composed.inputTokens, output_tokens: composed.outputTokens, total_tokens: composed.inputTokens + composed.outputTokens } } });
+  const productPhotos = composed.presented?.kind === "product"
+    ? await replyProductPhotos({ businessId: params.businessId, productIds: composed.presented.items.map(item => item.id), communication: agent?.communication,
+      conversationId: mode === "live" ? transport?.conversationId : null })
+    : [];
   const active = state.focusId ? state.instances[state.focusId] : Object.values(state.instances).at(-1);
   const definition = active ? definitionFor(state, active, env) : undefined;
   const version = active ? versions.get(active.versionId) : current;
@@ -245,6 +250,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     recentMessages: state.history };
   return { ...(active && definition && version ? { preparedRequest: processPreparedRequest(active, definition, version, Date.now()) } : {}), ...(transport ? { processCheckpoint: { event: { ...event, id: `job:${transport.jobId}:reply` }, expectedRevision, targetIds: composed.targetIds } } : {}), reply: composed.reply, nextState, previousResponseId: null, workflowId: null, productName: null,
     ...(composed.presented?.kind === "product" ? { presentedProducts: [...composed.presented.items] } : {}),
+    ...(productPhotos.length ? { productPhotos } : {}),
     ...(composed.presented?.kind === "service" ? { presentedServices: [...composed.presented.items] } : {}),
     workflowProgress: definition?.fields.map(f => ({ key: f.id, label: f.label, kind: "text" as const,
       status: active?.facts[f.id] ? "done" as const : active?.wait?.fieldId === f.id ? "current" as const : "pending" as const,

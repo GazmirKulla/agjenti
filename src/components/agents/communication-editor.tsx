@@ -50,6 +50,7 @@ export function CommunicationEditor({ agent, slug, versions, action }: {
           <label className="form-label">Gjatësia<select name="length" className="field" defaultValue={policy.length}><option value="concise">Përgjigje të shkurtra</option><option value="balanced">Shpjegim sipas nevojës</option></select></label>
           <label className="form-label">Pyetjet njohëse<select name="questions" className="field" defaultValue={policy.questions}><option value="when_needed">Një pyetje kur ndihmon bisedën</option><option value="on_request">Pa pyetje njohëse shtesë</option></select></label>
           <label className="form-label">Emoji<select name="emoji" className="field" defaultValue={policy.emoji}><option value="light">Me masë</option><option value="none">Pa emoji</option></select></label>
+          <label className="form-label">Fotot e produkteve<select name="productPhotos" className="field" defaultValue={policy.productPhotos}><option value="send">Dërgo foton kur sugjeron një produkt</option><option value="off">Vetëm emri dhe çmimi</option></select></label>
         </div>
       </fieldset>
       <div className="agent-editor-footer">

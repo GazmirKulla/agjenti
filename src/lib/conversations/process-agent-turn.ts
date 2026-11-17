@@ -11,6 +11,8 @@ export type AgentTurnResult = {
   /** Server-rendered catalog references in reply; finalized by the coordinator. */
   presentedProducts?: ReferenceProduct[];
   presentedServices?: ReferenceProduct[];
+  /** Server-selected photos of presentedProducts, sent after the reply; revalidated by the queue before sending. */
+  productPhotos?: import("./reply-photos").ReplyProductPhoto[];
   visualWorkflow?: import("@/lib/workflows/visual/types").VisualTrace;
   /** Isolated/Chat Lab only. Live turns omit this; never treat SIMULATED as a real write. */
   externalActions?: import("@/lib/runtime/execution-context").ExternalAction[];

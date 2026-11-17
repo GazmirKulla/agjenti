@@ -47,11 +47,11 @@ describe("the learned style", () => {
     expect(second).not.toContain("Përgjigju shkurt");
   });
 
-  it("is saved as a draft and published through agent.communication, keeping the language setting", async () => {
+  it("is saved as a draft and published through agent.communication, keeping the language and product photo settings", async () => {
     tables.ai_agents = { id: "a1", instructions: "Je asistenti i Watchmaster.", communication: { version: 1, language: "sq", tone: "warm", length: "balanced", questions: "when_needed", emoji: "light" }, configuration_draft: null };
     const result = await applySuggestion(B, U, row({ destination: "style", proposed: { instructions: "- Përgjigju shkurt.", policy: { tone: "neutral", length: "concise", emoji: "none", questions: "when_needed" } } }));
     expect(ops.map((o) => [o.key, o.input.mode])).toEqual([["agent.communication", "draft"], ["agent.communication", "publish"]]);
-    expect(ops[0].input.communication).toEqual({ version: 1, language: "sq", tone: "neutral", length: "concise", questions: "when_needed", emoji: "none" });
+    expect(ops[0].input.communication).toEqual({ version: 1, language: "sq", tone: "neutral", length: "concise", questions: "when_needed", emoji: "none", productPhotos: "send" });
     expect(String(ops[0].input.instructions)).toMatch(/^Je asistenti i Watchmaster\.\n\n## Stili/);
     expect(result.message).toContain("Versioni 3 u publikua.");
   });

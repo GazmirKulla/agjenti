@@ -6,6 +6,7 @@ import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/types
 import type { NormalizedIncomingMessage } from "@/lib/instagram/types";
 import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import { channelAdapter } from "./channel";
+import { MAX_REPLY_PHOTOS, sendReplyWithPhotos } from "./reply-photos";
 import { instagramReplyWindow, isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
 import type { AgentTurnResult } from "./process-agent-turn";
 import { InboundPersistenceError } from "./inbound-persistence-error";
@@ -30,6 +31,8 @@ export type WorkflowJob = {
     operation_kind?: "inbound" | "staff" | "test";
     operator_user_id?: string;
     test_stream_id?: string;
+    /** Photos fixed for a prepared agent reply by attach_workflow_reply_media; sent after its text. */
+    reply_media?: { kind: "image"; productId: string; url: string }[] | null;
 };
 export async function enqueueWorkflowMessage(message: NormalizedIncomingMessage) {
     if (isIsolatedExecution()) refuseIsolatedEffect("background_job", "workflow_queue");
@@ -61,17 +64,35 @@ export async function prepareWorkflowReply(job: WorkflowJob, conversationId: str
             reply: { text: turn.reply, presentedTargetIds: envelope.targetIds } });
         // On replay the database's prepared text is authoritative, not regenerated prose.
         if (receipt.replayed) {
-            const { data, error } = await createServiceSupabase().from("workflow_inbound_queue").select("reply,status")
+            const { data, error } = await createServiceSupabase().from("workflow_inbound_queue").select("reply,status,reply_media")
                 .eq("id", job.id).eq("business_id", job.business_id).eq("lease_token", job.lease_token).maybeSingle();
             if (error || data?.status !== "prepared" || typeof data.reply !== "string") throw new Error("Process reply receipt unavailable");
             job.reply = data.reply;
-        } else job.reply = turn.reply;
+            job.reply_media = replyMedia(data.reply_media);
+        } else {
+            job.reply = turn.reply;
+            job.reply_media = turn.productPhotos?.length ? await attachReplyMedia(job, turn.productPhotos.map(photo => photo.productId)) : null;
+        }
         job.conversation_id = conversationId;
         job.process_runtime = true;
         job.status = "prepared";
         return;
     }
     throw new Error("Native process checkpoint required");
+}
+/** Only well-formed photos fixed by the database are sent; anything else sends the reply as text. */
+function replyMedia(value: unknown): WorkflowJob["reply_media"] {
+    if (!Array.isArray(value) || !value.length || value.length > MAX_REPLY_PHOTOS) return null;
+    const items = value.filter((item): item is { kind: "image"; productId: string; url: string } => Boolean(item) && typeof item === "object"
+        && item.kind === "image" && typeof item.productId === "string" && typeof item.url === "string" && /^https:\/\/\S+$/.test(item.url));
+    return items.length === value.length ? items : null;
+}
+/** The database re-reads each photo from the business's active products. Without its confirmation the reply goes as text. */
+async function attachReplyMedia(job: WorkflowJob, productIds: string[]) {
+    const { data, error } = await createServiceSupabase().rpc("attach_workflow_reply_media", {
+        p_business: job.business_id, p_job: job.id, p_token: job.lease_token, p_products: productIds.slice(0, MAX_REPLY_PHOTOS),
+    });
+    return error ? null : replyMedia(data);
 }
 async function sendPrepared(job: WorkflowJob) {
     const db = createServiceSupabase();
@@ -108,8 +129,11 @@ async function sendPrepared(job: WorkflowJob) {
         throw new Error("Part receipt persistence failed; do not resend");
     };
     const target = { accountId: String("phone_number_id" in connection ? connection.phone_number_id : connection.ig_user_id), token: String(token), to: job.participant_id, onPart, ...(humanAgent ? { humanAgent } : {}) };
+    const photos = job.operation_kind !== "staff" ? replyMedia(job.reply_media) : null;
     const sent = allowed
-      ? await (image ? adapter.sendImage({ ...target, url: image, caption: job.reply }) : adapter.send({ ...target, body: job.reply ?? "" }))
+      ? await (image ? adapter.sendImage({ ...target, url: image, caption: job.reply })
+        : photos ? sendReplyWithPhotos({ ...target, channel: job.payload.channel, body: job.reply ?? "", photos })
+        : adapter.send({ ...target, body: job.reply ?? "" }))
       : { ok: false as const, error: "Dritarja 24-orëshe ka mbaruar." };
     const confirmed = sent.ok && typeof sent.messageId === "string" && Boolean(sent.messageId.trim());
     const receipt = { p_id: job.id, p_token: job.lease_token, p_ok: confirmed,

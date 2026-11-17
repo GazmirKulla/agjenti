@@ -227,3 +227,41 @@ it("never extends the Instagram AI window even if a send lease is granted", asyn
  m.rpc.mockResolvedValueOnce({data:[expired],error:null}).mockResolvedValueOnce({data:true,error:null}).mockResolvedValueOnce({data:null,error:null}).mockResolvedValueOnce({data:[],error:null});
  await runWorkflowQueue(); expect(m.send).not.toHaveBeenCalled();
 });
+const photoProduct = "00000000-0000-4000-8000-000000004201";
+it("fixes the presented product photos in the database after the reply commit, passing only product ids", async () => {
+    const queued = { ...job, status: "processing", payload: job.payload as unknown as NormalizedIncomingMessage };
+    const state = { ...initialSnapshot(business, "conversation", "live"), revision: 5 };
+    const fixed = [{ kind: "image", productId: photoProduct, url: "https://cdn.test/a.jpg" }];
+    m.rpc.mockResolvedValueOnce({ data: { replayed: false, revision: 5, state }, error: null }).mockResolvedValueOnce({ data: fixed, error: null });
+    const turn = { nextState: { runtime: state }, reply: "Ja", productPhotos: [{ productId: photoProduct, url: "https://model-or-stale.test/x.jpg" }],
+        processCheckpoint: { event: { id: "event", actor: "customer", businessId: business, conversationId: "conversation", message: "Start" }, expectedRevision: 4, targetIds: [] } } as unknown as AgentTurnResult;
+    await prepareWorkflowReply(queued, "conversation", 4, turn);
+    expect(m.rpc).toHaveBeenLastCalledWith("attach_workflow_reply_media", { p_business: business, p_job: 1, p_token: "lease", p_products: [photoProduct] });
+    expect(queued).toMatchObject({ status: "prepared", reply_media: fixed });
+});
+it("sends the reply as text when the database does not confirm the photos", async () => {
+    const queued = { ...job, status: "processing", payload: job.payload as unknown as NormalizedIncomingMessage };
+    const state = { ...initialSnapshot(business, "conversation", "live"), revision: 5 };
+    m.rpc.mockResolvedValueOnce({ data: { replayed: false, revision: 5, state }, error: null }).mockResolvedValueOnce({ data: null, error: { code: "P0001" } });
+    const turn = { nextState: { runtime: state }, reply: "Ja", productPhotos: [{ productId: photoProduct, url: "https://cdn.test/a.jpg" }],
+        processCheckpoint: { event: { id: "event", actor: "customer", businessId: business, conversationId: "conversation", message: "Start" }, expectedRevision: 4, targetIds: [] } } as unknown as AgentTurnResult;
+    await prepareWorkflowReply(queued, "conversation", 4, turn);
+    expect(queued).toMatchObject({ status: "prepared", reply_media: null });
+});
+it("sends the prepared text, then each fixed photo without a caption, and completes with the last receipt", async () => {
+    m.sendImage.mockResolvedValue({ ok: true, messageId: "photo" });
+    const prepared = { ...structuredClone(job), reply_media: [{ kind: "image", productId: photoProduct, url: "https://cdn.test/a.jpg" }] };
+    m.rpc.mockResolvedValueOnce({ data: [prepared], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: [], error: null });
+    await runWorkflowQueue();
+    expect(m.send).toHaveBeenCalledWith(expect.objectContaining({ body: "Saved answer" }));
+    expect(m.sendImage).toHaveBeenCalledWith(expect.objectContaining({ url: "https://cdn.test/a.jpg" }));
+    expect(m.sendImage.mock.calls[0][0]).not.toHaveProperty("caption");
+    expect(m.rpc).toHaveBeenCalledWith("finish_workflow_send", expect.objectContaining({ p_ok: true, p_external: "photo" }));
+});
+it("never sends photos a prepared job carries in a malformed shape", async () => {
+    const prepared = { ...structuredClone(job), reply_media: [{ kind: "image", productId: photoProduct, url: "javascript:alert(1)" }] };
+    m.rpc.mockResolvedValueOnce({ data: [prepared], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: [], error: null });
+    await runWorkflowQueue();
+    expect(m.send).toHaveBeenCalledOnce();
+    expect(m.sendImage).not.toHaveBeenCalled();
+});

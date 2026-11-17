@@ -517,3 +517,14 @@ html[data-resolved="dark"] .agent-test-step.is-current .agent-test-step-mark {
 .real-chat-active { border-color: #f59e0b !important; color: #fbbf24 !important; }
 .real-chat-note { border-left: 3px solid #f59e0b; }
 
+
+.agent-test-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  margin: 6px 0 0 44px;
+}
+.agent-test-photos .chat-receipt {
+  flex-basis: 100%;
+}
