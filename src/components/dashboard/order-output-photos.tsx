@@ -87,74 +87,102 @@ export function OrderOutputPhotos({ businessId, orderId }: { businessId: string;
       setBusy(null);
     }
   }
-  const thumbs = (list: File[], item?: number) => (
-    <div className="order-chat-photos">
+  /** A grid of square photos; the store's own carry "Dërgoja klientit" under each. */
+  const grid = (list: File[], item?: number) => (
+    <ul className="order-photos-grid">
       {list.map((f) => (
-        <span key={f.url}>
-          <a href={f.url} target="_blank" rel="noreferrer">
+        <li key={f.url} className="order-photo">
+          <a href={f.url} target="_blank" rel="noreferrer" className="order-photo-image" aria-label={t("Hap foton")}>
             {/* eslint-disable-next-line @next/next/no-img-element -- the business website's own image */}
             <img src={f.url} alt="" loading="lazy" />
           </a>
           {item !== undefined && (
-            <button type="button" className="btn btn-ghost" disabled={busy !== null} onClick={() => void sendToCustomer(item, f)}>
+            <button type="button" className="order-photo-action" disabled={busy !== null} onClick={() => void sendToCustomer(item, f)}>
               {busy === `send|${f.url}` ? t("Duke dërguar…") : t("Dërgoja klientit")}
             </button>
           )}
-        </span>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 
   return (
-    <div className="detail-block">
+    <div className="detail-block order-photos">
       <h3>{t("Fotot e artikujve")}</h3>
       {view.items.map((item) => {
         const own = item.files ?? [];
         const customer = own.filter((f) => f.role === "input");
         return (
-          <div key={item.item} className="detail-fields">
-            {view.items.length > 1 && <p><strong>{t("Artikulli")} {item.item}: {item.productName}</strong></p>}
-            {customer.length > 0 && <><p className="muted-copy">{t("Fotot e klientit")}</p>{thumbs(customer)}</>}
+          <section key={item.item} className="order-photos-item">
+            {view.items.length > 1 && (
+              <p className="order-photos-item-title">
+                <span>{t("Artikulli")} {item.item}</span> {item.productName}
+              </p>
+            )}
+            {customer.length > 0 && (
+              <div className="order-photos-group">
+                <div className="order-photos-group-head">
+                  <h4>{t("Fotot e klientit")}</h4>
+                  <span className="order-photos-count">{customer.length}</span>
+                </div>
+                {grid(customer)}
+              </div>
+            )}
             {item.outputFields.map((field) => {
               const mark = `${item.item}|${field.key}`;
               const list = own.filter((f) => f.role === "output" && f.key === field.key);
               return (
-                <div key={field.key}>
-                  <p className="muted-copy">{field.label}</p>
-                  {list.length ? thumbs(list, item.item) : <p className="muted-copy">{t("Ende pa foto.")}</p>}
-                  <label className="btn btn-ghost">
-                    {busy === mark ? t("Duke ngarkuar…") : t("Ngarko foto")}
-                    <input type="file" hidden accept="image/jpeg,image/png,image/webp,image/heic,image/heif" disabled={busy !== null}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        e.target.value = "";
-                        if (file) void add(item.item, field.key, upload(file));
-                      }} />
-                  </label>
-                  <button type="button" className="btn btn-ghost" disabled={busy !== null} onClick={() => pick(mark)}>{t("Zgjidh nga biseda")}</button>
+                <div key={field.key} className="order-photos-group">
+                  <div className="order-photos-group-head">
+                    <h4>{field.label}</h4>
+                    {list.length > 0 && <span className="order-photos-count">{list.length}</span>}
+                    <div className="order-photos-actions">
+                      <label className={`btn btn-ghost btn-small${busy !== null ? " is-disabled" : ""}`}>
+                        {busy === mark ? t("Duke ngarkuar…") : t("Ngarko foto")}
+                        <input type="file" hidden accept="image/jpeg,image/png,image/webp,image/heic,image/heif" disabled={busy !== null}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (file) void add(item.item, field.key, upload(file));
+                          }} />
+                      </label>
+                      <button type="button" className={`btn btn-ghost btn-small${picking === mark ? " is-active" : ""}`} disabled={busy !== null}
+                        aria-expanded={picking === mark} onClick={() => pick(mark)}>
+                        {t("Zgjidh nga biseda")}
+                      </button>
+                    </div>
+                  </div>
+                  {list.length ? grid(list, item.item) : <p className="order-photos-empty">{t("Ende pa foto.")}</p>}
                   {picking === mark && (
-                    chat === null ? <p className="muted-copy">{t("Duke lexuar fotot e bisedës…")}</p>
-                      : chat.length === 0 ? <p className="muted-copy">{t("Nuk ka foto në bisedë.")}</p>
-                      : (
-                        <div className="order-chat-photos">
-                          {chat.map((photo) => (
-                            <button key={photo.id} type="button" disabled={busy !== null} title={photo.byBusiness ? t("E dërguar nga biznesi") : t("E dërguar nga klienti")}
-                              onClick={() => void add(item.item, field.key, copy(photo.id))}>
-                              {/* eslint-disable-next-line @next/next/no-img-element -- private, same-origin preview behind the member check */}
-                              <img src={`${files}?photo=${encodeURIComponent(photo.id)}`} alt={photo.caption || t("Foto nga biseda")} loading="lazy" />
-                            </button>
-                          ))}
-                        </div>
-                      )
+                    <div className="order-photos-picker">
+                      <p className="muted-copy">{t("Kliko një foto të bisedës për ta shtuar këtu.")}</p>
+                      {chat === null ? <p className="muted-copy">{t("Duke lexuar fotot e bisedës…")}</p>
+                        : chat.length === 0 ? <p className="muted-copy">{t("Nuk ka foto në bisedë.")}</p>
+                        : (
+                          <ul className="order-photos-grid">
+                            {chat.map((photo) => (
+                              <li key={photo.id} className="order-photo">
+                                <button type="button" className="order-photo-image" disabled={busy !== null}
+                                  title={photo.byBusiness ? t("E dërguar nga biznesi") : t("E dërguar nga klienti")}
+                                  onClick={() => void add(item.item, field.key, copy(photo.id))}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element -- private, same-origin preview behind the member check */}
+                                  <img src={`${files}?photo=${encodeURIComponent(photo.id)}`} alt={photo.caption || t("Foto nga biseda")} loading="lazy" />
+                                </button>
+                                <span className="order-photo-caption">{photo.byBusiness ? t("Biznesi") : t("Klienti")}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                    </div>
                   )}
                 </div>
               );
             })}
-          </div>
+          </section>
         );
       })}
-      {notice && <p role="status" className="muted-copy">{notice}</p>}
-      {error && <p role="alert" className="text-danger">{error}</p>}
+      {notice && <p role="status" className="smart-form-success">{notice}</p>}
+      {error && <p role="alert" className="smart-form-error">{error}</p>}
     </div>
   );
 }

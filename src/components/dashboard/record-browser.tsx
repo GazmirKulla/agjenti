@@ -39,6 +39,7 @@ export function RecordBrowser({
   createForm,
   createLabel = "Shto të re",
   createAsModal = false,
+  detailAsModal = false,
   facets = [],
   sortable = false,
 }: {
@@ -65,6 +66,8 @@ export function RecordBrowser({
   createLabel?: string;
   /** Kur true, forma e krijimit hapet në modal, jo në panelin e detajeve. */
   createAsModal?: boolean;
+  /** Kur true, detajet hapen në një modal mbi listën (në desktop); në telefon mbeten në ekran të plotë. */
+  detailAsModal?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(records[0]?.id ?? "");
@@ -149,13 +152,13 @@ export function RecordBrowser({
   useEffect(() => {
     if (!detailOpen) return;
     const key = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || dialogRef.current?.open || !window.matchMedia("(max-width: 1200px)").matches) return;
+      if (event.key !== "Escape" || dialogRef.current?.open || (!detailAsModal && !window.matchMedia("(max-width: 1200px)").matches)) return;
       setOpened(false);
       setCreating(false);
     };
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
-  }, [detailOpen]);
+  }, [detailOpen, detailAsModal]);
 
   const formWithClose =
     createAsModal && isValidElement(createForm)
@@ -165,7 +168,7 @@ export function RecordBrowser({
       : createForm;
 
   return (
-    <div className={`record-browser ${columns ? "table-browser" : ""}${detailOpen ? " is-detail-open" : ""}`}>
+    <div className={`record-browser ${columns ? "table-browser" : ""}${detailAsModal ? " detail-modal" : ""}${detailOpen ? " is-detail-open" : ""}`}>
       <section className="panel record-list">
         <div className="record-toolbar">
           <h2>
@@ -374,8 +377,12 @@ export function RecordBrowser({
           </div>
         )}
       </section>
+      {detailAsModal && detailOpen ? (
+        <div className="record-detail-backdrop" aria-hidden onClick={() => { setOpened(false); setCreating(false); }} />
+      ) : null}
       <section
         className="panel record-detail"
+        {...(detailAsModal && detailOpen ? { role: "dialog", "aria-modal": true } : {})}
         key={
           creating && !createAsModal ? "create" : (active?.id ?? "empty")
         }
@@ -388,7 +395,7 @@ export function RecordBrowser({
             setCreating(false);
           }}
         >
-          ‹ Kthehu te lista
+          {detailAsModal ? <><span className="record-detail-back-phone">‹ Kthehu te lista</span><span className="record-detail-back-desktop" aria-label="Mbyll">✕</span></> : "‹ Kthehu te lista"}
         </button>
         {creating && !createAsModal ? (
           <>

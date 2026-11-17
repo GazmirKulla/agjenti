@@ -3,6 +3,7 @@ import { OrderEditor } from "@/components/dashboard/order-editor";
 import { WebsiteStatusControl } from "@/components/dashboard/website-status-control";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { OrderOutputPhotos } from "@/components/dashboard/order-output-photos";
+import { Icon } from "@/components/dashboard/icon";
 import {
   PageHeading,
   StatCard,
@@ -37,9 +38,8 @@ function orderLines(rows: OrderItemRow[] | null) {
       const unit = row.unit_amount == null ? null : Number(row.unit_amount);
       const choices = Object.entries(row.options ?? {})
         .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value) && String(value).trim())
-        .map(([key, value]) => `${key}: ${value === true ? "po" : String(value)}`)
-        .join(" · ");
-      return { id: row.id, name: row.products?.name ?? "Produkt i hequr", quantity,
+        .map(([key, value]) => ({ key, value: value === true ? "po" : String(value) }));
+      return { id: row.id, name: row.products?.name ?? "Produkt i hequr", quantity, unit,
         total: unit == null ? null : Math.round(unit * quantity * 100) / 100, choices };
     });
 }
@@ -72,7 +72,7 @@ export default async function OrdersPage({
         title={`Porositë e ${access.business.name}`}
         description="Ndiq porositë e krijuara nga bisedat me klientët."
       />
-      <div className="stats-grid">
+      <div className="stats-grid stats-compact">
         {ORDER_STATUSES.map(([status, label]) => (
           <StatCard
             key={status}
@@ -89,6 +89,7 @@ export default async function OrdersPage({
         columns={["Porosia / Klienti", "Shuma", "Statusi", "Data"]}
         facets={[{ key: "status", label: "Statusi", options: ORDER_STATUSES.map(([value, label]) => ({ value, label })) }]}
         sortable
+        detailAsModal
         emptyTitle="Ende nuk ka porosi"
         emptyDescription="Konfirmo një porosi nga biseda me klientin për ta parë këtu."
         records={(orders ?? []).map((o) => {
@@ -115,96 +116,115 @@ export default async function OrdersPage({
               formatDate(o.created_at),
             ],
             detail: (
-              <>
-                <div className="detail-header">
-                  <div>
+              <div className="order-detail">
+                <header className="order-detail-head">
+                  <span className="order-detail-icon"><Icon name="orders" size={22} /></span>
+                  <div className="order-detail-title">
+                    <p className="order-detail-eyebrow">Porosia</p>
                     <h2>#{o.external_order_id || o.id.slice(0, 8)}</h2>
-                    <p>{formatDate(o.created_at)}</p>
+                    <p className="order-detail-meta">
+                      <Icon name="calendar" size={14} /> {formatDate(o.created_at)}
+                      {c?.display_name || c?.username ? <> · <Icon name="customers" size={14} /> {c?.display_name || c?.username}</> : null}
+                    </p>
                   </div>
-                  <StatusBadge status={o.status} />
-                </div>
-                {sent && (
-                  <div className="detail-block">
-                    <h3>Statusi në webin e biznesit</h3>
-                    <WebsiteStatusControl businessId={access.business.id} orderId={o.id} initial={websiteStatus} />
+                  <div className="order-detail-total">
+                    <span>Totali</span>
+                    <strong>{money(o.total_amount, o.currency)}</strong>
+                    <div className="order-detail-badges">
+                      <StatusBadge status={o.status} />
+                      {websiteStatus && <StatusBadge status={`website-${websiteStatus.key}`} label={`Webi: ${websiteStatus.label}`} />}
+                    </div>
                   </div>
-                )}
-                <div className="detail-block">
-                  <h3>Kartela e klientit</h3>
-                  <dl className="detail-fields">
-                    <div>
-                      <dt>Emri</dt>
-                      <dd>{c?.display_name || "—"}</dd>
+                </header>
+
+                <div className="order-detail-grid">
+                  <section className="order-card">
+                    <h3 className="order-card-title"><span className="order-card-icon"><Icon name="products" size={16} /></span>
+                      {items.length > 1 ? `Artikujt (${items.length})` : "Artikulli"}</h3>
+                    {items.length ? (
+                      <ul className="order-items">
+                        {items.map((item) => (
+                          <li key={item.id} className="order-item">
+                            <span className="order-item-qty">{item.quantity}×</span>
+                            <div className="order-item-body">
+                              <strong>{item.name}</strong>
+                              {item.choices.length > 0 && (
+                                <div className="order-item-choices">
+                                  {item.choices.map((choice) => (
+                                    <span key={choice.key} className="order-chip"><em>{choice.key}</em> {choice.value}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {item.unit != null && item.quantity !== 1 && <small>{money(item.unit, o.currency)} / copë</small>}
+                            </div>
+                            <span className="order-item-total">{money(item.total, o.currency)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <p className="muted-copy">Kjo porosi nuk ka artikuj të ruajtur.</p>}
+                    <div className="order-items-sum">
+                      <span>Totali i artikujve</span>
+                      <strong>{money(o.total_amount, o.currency)}</strong>
                     </div>
-                    <div>
-                      <dt>Instagram</dt>
-                      <dd>{c?.username || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Telefoni</dt>
-                      <dd>{c?.phone || "—"}</dd>
-                    </div>
-                  </dl>
-                </div>
-                <div className="detail-block">
-                  <h3>Dërgesa e kësaj porosie</h3>
-                  {delivery ? (
-                    <dl className="detail-fields">
-                      <div><dt>Emri</dt><dd>{delivery.name || "—"}</dd></div>
-                      <div><dt>Telefoni</dt><dd>{delivery.phone || "—"}</dd></div>
-                      <div><dt>Qyteti</dt><dd>{delivery.city || "—"}</dd></div>
-                      <div><dt>Adresa</dt><dd>{delivery.address || "—"}</dd></div>
-                      {typeof o.note === "string" && o.note ? <div><dt>Shënimi</dt><dd>{o.note}</dd></div> : null}
-                    </dl>
-                  ) : (
-                    <p className="muted-copy">Kjo porosi nuk ka të dhëna dërgese të ruajtura.</p>
-                  )}
-                  {o.status !== "pending_reconciliation" && <OrderEditor businessId={access.business.id} orderId={o.id} />}
-                </div>
-                {items.length > 0 && (
-                  <div className="detail-block">
-                    <h3>{items.length > 1 ? `Artikujt (${items.length})` : "Artikulli"}</h3>
-                    <dl className="detail-fields">
-                      {items.map((item) => (
-                        <div key={item.id}>
-                          <dt>{item.quantity} × {item.name}</dt>
-                          <dd>
-                            {money(item.total, o.currency)}
-                            {item.choices && <><br />{item.choices}</>}
-                          </dd>
+                    {o.external_system && <p className="order-card-note">Pa transportin: webi i biznesit e shton te totali i vet.</p>}
+                  </section>
+
+                  <div className="order-detail-side">
+                    <section className="order-card">
+                      <h3 className="order-card-title"><span className="order-card-icon"><Icon name="customers" size={16} /></span>Klienti</h3>
+                      <div className="order-person">
+                        <span className="order-avatar">{(c?.display_name || c?.username || "K").trim().slice(0, 1).toUpperCase()}</span>
+                        <div>
+                          <strong>{c?.display_name || "Klient pa emër"}</strong>
+                          {c?.username && <p><Icon name="instagram" size={13} /> @{c.username.replace(/^@/, "")}</p>}
                         </div>
-                      ))}
-                    </dl>
+                      </div>
+                      {c?.phone && <a className="order-contact" href={`tel:${c.phone.replace(/\s+/g, "")}`}><Icon name="phone" size={15} /> {c.phone}</a>}
+                    </section>
+
+                    <section className="order-card">
+                      <h3 className="order-card-title"><span className="order-card-icon"><Icon name="car" size={16} /></span>Dërgesa</h3>
+                      {delivery ? (
+                        <dl className="order-facts">
+                          <div><dt><Icon name="customers" size={14} /> Marrësi</dt><dd>{delivery.name || "—"}</dd></div>
+                          <div><dt><Icon name="phone" size={14} /> Telefoni</dt><dd>{delivery.phone || "—"}</dd></div>
+                          <div><dt><Icon name="store" size={14} /> Qyteti</dt><dd>{delivery.city || "—"}</dd></div>
+                          <div><dt><Icon name="home" size={14} /> Adresa</dt><dd>{delivery.address || "—"}</dd></div>
+                        </dl>
+                      ) : (
+                        <p className="muted-copy">Kjo porosi nuk ka të dhëna dërgese të ruajtura.</p>
+                      )}
+                      {typeof o.note === "string" && o.note ? (
+                        <div className="order-note"><Icon name="file" size={14} /><p>{o.note}</p></div>
+                      ) : null}
+                      {o.status !== "pending_reconciliation" && <OrderEditor businessId={access.business.id} orderId={o.id} />}
+                    </section>
                   </div>
-                )}
-                <div className="detail-block">
-                  <h3>Informacioni i porosisë</h3>
-                  <dl className="detail-fields">
-                    <div>
-                      <dt>Totali i artikujve</dt>
-                      <dd>
-                        {money(o.total_amount, o.currency)}
-                        {o.external_system && <><br />Pa transportin: webi i biznesit e shton te totali i vet.</>}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Sistemi i jashtëm</dt>
-                      <dd>{o.external_system || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Referenca e jashtme</dt>
-                      <dd>{o.external_order_id || "—"}</dd>
-                    </div>
-                  </dl>
                 </div>
+
                 {o.external_system === "external" && o.external_order_id && <OrderOutputPhotos businessId={access.business.id} orderId={o.id} />}
-                <p className="muted-copy">
+                {sent && (
+                  <section className="order-card">
+                    <h3 className="order-card-title"><span className="order-card-icon"><Icon name="link" size={16} /></span>Statusi në webin e biznesit</h3>
+                    <WebsiteStatusControl businessId={access.business.id} orderId={o.id} initial={websiteStatus} />
+                  </section>
+                )}
+
+                <section className="order-card order-card-quiet">
+                  <h3 className="order-card-title"><span className="order-card-icon"><Icon name="history" size={16} /></span>Informacioni i porosisë</h3>
+                  <dl className="order-facts order-facts-inline">
+                    <div><dt>Sistemi i jashtëm</dt><dd>{o.external_system || "—"}</dd></div>
+                    <div><dt>Referenca e jashtme</dt><dd>{o.external_order_id || "—"}</dd></div>
+                    <div><dt>ID në Agjenti</dt><dd>{o.id.slice(0, 8)}</dd></div>
+                  </dl>
+                </section>
+                <p className="order-detail-foot">
                   Statusi pasqyron krijimin dhe përcjelljen e porosisë. Totali
                   është shuma e artikujve; pagesat dhe transporti menaxhohen
                   jashtë këtij paneli.
                   {o.status === "pending_reconciliation" && " Kontrollo në sistemin e jashtëm nëse porosia është pranuar. Mos e ridërgo: një timeout nuk provon dështim."}
                 </p>
-              </>
+              </div>
             ),
           };
         })}
