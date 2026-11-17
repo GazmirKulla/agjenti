@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { priceModeLabels, priceModes, priceMode } from "@/lib/products/pricing";
 import { ProductBusinessWorkflow } from "@/components/products/business-workflow";
@@ -97,9 +98,12 @@ export function ProductFields({
         </div>
       </fieldset>
 
-      {itemDefinition && (itemDefinition.fields.length > 0 || showAvailability) && (
+      {itemDefinition && (
         <fieldset id="product-details" className="grid gap-3">
           <legend className="font-semibold">Të dhënat</legend>
+          {itemDefinition.fields.length === 0 && (
+            <p className="muted-copy">Ende nuk ke fusha. Shto p.sh. Ngjyra, Masa ose Materiali, që Agjenti t’ua tregojë klientëve dhe t’i pyesë para porosisë.</p>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             {itemDefinition.fields.map((field) => {
               const value = product?.attributes?.[field.key];
@@ -136,7 +140,10 @@ export function ProductFields({
               </label>
             )}
           </div>
-          <p className="muted-copy">Agjenti i përdor këto të dhëna për të gjetur atë që kërkon klienti.{showAvailability ? " Artikujt e shitur nuk u ofrohen klientëve." : ""}</p>
+          <p className="muted-copy">
+            {itemDefinition.fields.length > 0 && <>Agjenti i përdor këto të dhëna për të gjetur atë që kërkon klienti.{showAvailability ? " Artikujt e shitur nuk u ofrohen klientëve." : ""} </>}
+            <Link className="soft-link" href={`/b/${slug}/products/fields`}>{itemDefinition.fields.length > 0 ? "Ndrysho fushat" : "Shto fushat"} →</Link>
+          </p>
         </fieldset>
       )}
 
@@ -155,7 +162,7 @@ export function ProductFields({
               );
             })}
           </div>
-          <p className="muted-copy">Ndaji vlerat me ;. Agjenti e pyet klientin cilën dëshiron. Kur një vlerë ka kod ose çmim tjetër, shtoje si variant më poshtë; atëherë vlejnë variantet.</p>
+          <p className="muted-copy">Ndaji vlerat me ;. Agjenti e pyet klientin cilën dëshiron. Kur një vlerë ka kod ose çmim tjetër, shtoje si variant më poshtë; atëherë vlejnë variantet. <Link className="soft-link" href={`/b/${slug}/products/fields`}>Ndrysho fushat →</Link></p>
         </fieldset>
       )}
 

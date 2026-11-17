@@ -31,9 +31,9 @@ export function ProductFieldsSettings({ slug, fields }: { slug: string; fields: 
         <button className="btn btn-primary" type="button" onClick={save} disabled={pending}>{pending ? "Duke ruajtur…" : "Ruaj"}</button>
       </div>
       <p className="muted-copy">
-        Shto të dhënat që kanë produktet e tua, p.sh. <strong>Druri</strong> ose <strong>Ngjyra</strong>.
-        Shëno <strong>Zgjedh klienti</strong> për masat dhe opsionet që ndryshojnë nga një copë te tjetra (p.sh. Gjatësia 80 / 100 / 120 cm):
-        çdo vlerë mund të ketë kodin dhe çmimin e vet, dhe agjenti e pyet klientin para porosisë.
+        Çdo fushë është një e dhënë që e plotëson te forma e produktit, p.sh. <strong>Druri</strong> ose <strong>Ngjyra</strong>, dhe Agjenti ua tregon klientëve.
+        Ndize <strong>Zgjedh klienti</strong> kur klienti zgjedh një vlerë para porosisë (p.sh. Gjatësia 80 / 100 / 120 cm):
+        çdo vlerë mund të ketë kodin dhe çmimin e vet te variantet e produktit.
       </p>
       {rows.length === 0 && <p className="muted-copy">Ende nuk ke fusha. Shto të parën më poshtë.</p>}
       <div className="grid gap-3">
@@ -64,7 +64,7 @@ export function ProductFieldsSettings({ slug, fields }: { slug: string; fields: 
             )}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <label className="toggle-label">
-                <span>Zgjedh klienti (variant me kod dhe çmim)</span>
+                <span>Zgjedh klienti</span>
                 <input className="switch-input" type="checkbox" checked={row.variant} onChange={e => update(index, { variant: e.target.checked })} />
               </label>
               <button type="button" className="btn btn-ghost" onClick={() => setRows(current => current.filter((_, i) => i !== index))}>Hiqe</button>
