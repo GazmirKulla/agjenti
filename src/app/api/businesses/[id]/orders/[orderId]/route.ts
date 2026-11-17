@@ -5,7 +5,7 @@ import { amendOrder, readChangeValues, readOrderChanges } from "@/lib/orders/ame
 type Context = { params: Promise<{ id: string; orderId: string }> };
 const noStore = { "Cache-Control": "private, no-store" };
 
-/** The order's delivery details and note, whether they can still change, and the changes so far (web and app). */
+/** The order's client and delivery details, note and items, whether they can still change, and the changes so far (web and app). */
 export async function GET(request: Request, context: Context) {
   const { id: businessId, orderId } = await context.params;
   if (!isTransportId(orderId)) return NextResponse.json({ error: "Porosia nuk u gjet." }, { status: 404 });
@@ -21,16 +21,18 @@ export async function GET(request: Request, context: Context) {
 }
 
 /**
- * Staff change the delivery details and/or the note: `{ changeId, changes: { customer?, note? } }`.
- * The same changeId never changes the order twice; after an unclear answer the same request is sent again.
+ * Staff change the client and delivery details, the note and/or the items: `{ changeId, changes: { customer?, note?, lines? } }`.
+ * The same changeId never changes the order twice; after an unclear answer the same request is sent again
+ * (`{ changeId, retry: true }`).
  */
 export async function PATCH(request: Request, context: Context) {
   const { id: businessId, orderId } = await context.params;
   if (!isTransportId(orderId)) return NextResponse.json({ error: "Porosia nuk u gjet." }, { status: 404 });
   const access = await transportAccess(businessId, request);
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const body = (await request.json().catch(() => null)) as { changeId?: unknown; changes?: unknown } | null;
-  const changes = readChangeValues(body?.changes);
+  const body = (await request.json().catch(() => null)) as { changeId?: unknown; changes?: unknown; retry?: unknown } | null;
+  // A retry (`retry: true`) names only the change: the stored one is sent again, never new values.
+  const changes = body?.retry === true ? {} : readChangeValues(body?.changes);
   if (typeof body?.changeId !== "string" || !isTransportId(body.changeId) || !changes)
     return NextResponse.json({ error: "Të dhënat e ndryshimit nuk janë të vlefshme." }, { status: 400 });
   const outcome = await amendOrder({ businessId, userId: access.userId, orderId, changeId: body.changeId, changes });

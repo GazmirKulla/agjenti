@@ -69,3 +69,36 @@ it("reads only the delivery fields and the note", () => {
   expect(readChangeValues({ customer: {} })).toBeNull();
   expect(readChangeValues(null)).toBeNull();
 });
+
+const product = "40000000-0000-4000-8000-000000000001";
+const variant = "50000000-0000-4000-8000-000000000001";
+
+it("reads the items of a change in the shape of a new order", () => {
+  expect(readChangeValues({ lines: [{ productId: product, variantId: variant, quantity: 2, selection: { options: { theme: "frozen" } } }] }))
+    .toEqual({ lines: [{ productId: product, variantId: variant, quantity: 2, selection: { options: { theme: "frozen" } } }] });
+  expect(readChangeValues({ lines: [{ productId: product, quantity: 1 }] })).toEqual({ lines: [{ productId: product, variantId: null, quantity: 1, selection: null }] });
+  expect(readChangeValues({ lines: [] })).toBeNull();
+  expect(readChangeValues({ lines: Array.from({ length: 11 }, () => ({ productId: product, quantity: 1 })) })).toBeNull();
+  expect(readChangeValues({ lines: [{ productId: "x", quantity: 1 }] })).toBeNull();
+  expect(readChangeValues({ lines: [{ productId: product, quantity: "2" }] })).toBeNull();
+  expect(readChangeValues({ lines: [{ productId: product, quantity: 1, selection: [] }] })).toBeNull();
+});
+
+it("the website receives the request the database built, not the stored change", async () => {
+  const request = { items: [{ productId: "zana-1", variantId: "a3", quantity: 1, files: [] }], currency: "ALL", expectedTotal: 2700 };
+  m.rpc.mockResolvedValueOnce({ data: { ...row("pending"), send: true, externalOrderId: "ord_1", request }, error: null })
+    .mockResolvedValueOnce({ data: row("accepted"), error: null });
+  m.amend.mockResolvedValue({ status: "accepted", view: null });
+  expect(await amendOrder({ ...ids, changes: { lines: [{ productId: product, variantId: variant, quantity: 1 }] } })).toMatchObject({ ok: true });
+  expect(m.amend).toHaveBeenCalledWith(ids.businessId, "ord_1", ids.changeId, request);
+});
+
+it("an item the database refuses names the item", async () => {
+  m.rpc.mockResolvedValueOnce({ data: null, error: { message: "variant_required:2" } });
+  const outcome = await amendOrder({ ...ids, changes: { lines: [{ productId: product, quantity: 1 }, { productId: product, quantity: 1 }] } });
+  expect(outcome).toMatchObject({ ok: false, status: 400 });
+  expect(!outcome.ok && outcome.error).toMatch(/^Artikulli 2: Zgjidh variantin/);
+  m.rpc.mockResolvedValueOnce({ data: null, error: { message: "unmapped_product:1" } });
+  const unlinked = await amendOrder({ ...ids, changes: { lines: [{ productId: product, quantity: 1 }] } });
+  expect(!unlinked.ok && unlinked.error).toContain("nuk është i lidhur me webin");
+});
