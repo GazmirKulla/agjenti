@@ -2,6 +2,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { loadItemSetup } from "@/lib/items/business";
 import { itemKind } from "@/lib/items/kinds";
 import { variantLabel } from "@/lib/products/variants";
+import { standardFields } from "./product-query";
 
 type Row = Record<string, unknown>;
 
@@ -18,7 +19,10 @@ export type SchemaField = {
   source: string;
 };
 /** The business's product structure. "unavailable" means unknown, never "no fields". */
-export type ProductSchema = { status: "read" | "unavailable"; itemKind: string; fields: SchemaField[] };
+export type ProductSchema = { status: "read" | "unavailable"; itemKind: string;
+  /** Columns every product has, with their types; status is derived (active, inactive, archived). */
+  standardFields: { key: string; type: string }[];
+  fields: SchemaField[] };
 export type ProductSetup = Pick<Awaited<ReturnType<typeof loadItemSetup>>, "kind" | "fields" | "fieldsRead">;
 
 const DESCRIPTION_LIMIT = 300;
@@ -51,7 +55,7 @@ export function productSchema(setup: ProductSetup, kinds: Iterable<string> = [])
     fields.push({ key: f.key, label: f.label, type: f.type, ...(f.unit ? { unit: f.unit } : {}),
       ...(f.options ? { options: f.options.map(o => ({ value: o, label: o })) } : {}), ...(f.variant ? { variant: true } : {}), source: "business" });
   }
-  return { status: setup.fieldsRead ? "read" : "unavailable", itemKind: setup.kind.id, fields };
+  return { status: setup.fieldsRead ? "read" : "unavailable", itemKind: setup.kind.id, standardFields: standardFields.map(f => ({ key: f.key, type: f.type })), fields };
 }
 
 type VariantRow = { product_id: string; options: Record<string, string>; sku: string | null; price_amount: number | null };
@@ -89,7 +93,7 @@ export function compactProduct(row: Row, schema: ProductSchema, variants?: Varia
   const description = typeof row.description === "string" ? row.description : null;
   const businessFields = schema.fields.filter(f => f.source === "business").map(f => ({ key: f.key, label: f.label, type: f.type, ...(f.unit ? { unit: f.unit } : {}) }));
   const compact: Row = {};
-  for (const key of ["id", "name", "sku", "price_amount", "price_mode", "price_max", "price_unit", "currency", "is_active", "archived_at", "availability",
+  for (const key of ["id", "name", "sku", "image_url", "price_amount", "price_mode", "price_max", "price_unit", "currency", "is_active", "archived_at", "availability",
     "item_kind", "product_type_id", "workflow_id", "updated_at"]) if (row[key] !== undefined && row[key] !== null) compact[key] = row[key];
   if (description) compact.description = description.length > DESCRIPTION_LIMIT ? `${description.slice(0, DESCRIPTION_LIMIT)}…` : description;
   if (Object.keys(values).length) compact.values = values;
@@ -114,7 +118,7 @@ export function fitRows<T>(rows: T[], budget: number): { rows: T[]; cut: boolean
 }
 
 export const CATALOG_SCAN_LIMIT = 5000;
-const catalogColumns = "id,name,sku,description,price_amount,price_mode,price_max,price_unit,currency,is_active,archived_at,availability,item_kind,attributes,product_type_id,workflow_id,created_at,updated_at";
+const catalogColumns = "id,name,sku,description,image_url,price_amount,price_mode,price_max,price_unit,currency,is_active,archived_at,availability,item_kind,attributes,product_type_id,workflow_id,created_at,updated_at";
 /** The whole catalog of one business, page by page, for a server-side query. complete is false past the scan limit or on a failed page. */
 export async function scanCatalog(businessId: string): Promise<{ rows: Row[]; complete: boolean }> {
   const db = createServiceSupabase();

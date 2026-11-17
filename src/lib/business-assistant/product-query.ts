@@ -15,8 +15,8 @@ type FieldType = "text" | "number" | "select" | "boolean" | "date";
 export type QueryField = { key: string; type: FieldType; variant?: boolean };
 
 /** Columns every product has. status is derived: archived, active or inactive. */
-const standardFields: QueryField[] = [
-  { key: "name", type: "text" }, { key: "sku", type: "text" }, { key: "description", type: "text" },
+export const standardFields: QueryField[] = [
+  { key: "name", type: "text" }, { key: "sku", type: "text" }, { key: "description", type: "text" }, { key: "image_url", type: "text" },
   { key: "price_amount", type: "number" }, { key: "price_max", type: "number" }, { key: "price_mode", type: "text" }, { key: "price_unit", type: "text" },
   { key: "currency", type: "text" }, { key: "status", type: "text" }, { key: "availability", type: "text" }, { key: "item_kind", type: "text" },
   { key: "product_type_id", type: "text" }, { key: "workflow_id", type: "text" }, { key: "created_at", type: "date" }, { key: "updated_at", type: "date" },

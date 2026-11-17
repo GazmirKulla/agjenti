@@ -438,6 +438,15 @@ export async function planRequest(
     workflowRepairs++;
     context.workflowRepair = { diagnostic, rejected, instruction: "Correct this proposal against the original loaded graph; do not execute it." };
   };
+  // A proposal that breaks the action contract (a malformed search, an unregistered
+  // operation key) goes back to the model with the server's diagnostic, at most twice.
+  let proposalRepairs = 0;
+  const repairProposal = (diagnostic: string, rejected: unknown) => {
+    if (proposalRepairs >= 2) throw new AssistantError(diagnostic === "invalid_search" ? "Kërkimi nuk u formulua saktë. Provo ta shprehësh ndryshe." : "Veprimi i propozuar nuk mbështetet. Provo ta shprehësh ndryshe.");
+    proposalRepairs++;
+    context.proposalRepair = { diagnostic, rejected, instruction: "Return a corrected proposal that follows the action contract. Searches use action search with changes kind, query, filters, group_by, sort, offset; operation keys must come from ownerOperations." };
+  };
+  const registeredOperations = new Set(assistantOperationCatalog().map(operation => operation.key));
   for (let attempt = 0; attempt < 5; attempt++) {
     const flowId = validatedContext?.workflowSelection?.flowId;
     const loadedGraph = (context.workflow as WorkflowCard | undefined)?.workspace.graph;
@@ -507,6 +516,10 @@ export async function planRequest(
     } catch (e) {
       if (rawProposal && typeof rawProposal === "object" && (rawProposal as { action?: unknown }).action === "workflow_draft" && e instanceof AssistantError) {
         repairWorkflow(e.message, rawProposal);
+        continue;
+      }
+      if (rawProposal && typeof rawProposal === "object" && (rawProposal as { action?: unknown }).action === "search" && e instanceof AssistantError) {
+        repairProposal("invalid_search", rawProposal);
         continue;
       }
       if (e instanceof AssistantError) throw e;
@@ -634,6 +647,13 @@ export async function planRequest(
     if (proposal.action === "search") {
       context.searchResult = await searchContext(access, proposal, productSetup);
       continue;
+    }
+    if (proposal.action === "operation") {
+      const key = proposal.changes.find(change => change.field === "key")?.value;
+      if (!key || !registeredOperations.has(key)) {
+        repairProposal("unregistered_operation", proposal);
+        continue;
+      }
     }
     if (selectedProducts.length && !["clarify", "operation", "operation_plan", "operation_resume"].includes(proposal.action)) return { message: "Për ndryshimet e produkteve zgjidh një produkt. Një workflow mund ta lidhësh me disa produkte njëherësh." };
     let expected: Row | undefined;
