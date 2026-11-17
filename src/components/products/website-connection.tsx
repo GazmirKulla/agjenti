@@ -15,7 +15,8 @@ export async function WebsiteConnection({ slug, businessId, linkedCount }: { slu
   const url = data?.catalog_url?.trim() || null;
   const host = url ? (() => { try { return new URL(url).host; } catch { return url; } })() : null;
   const settings = `/b/${slug}/products?detail=website`;
-  return <section className={`website-connection${url ? " is-linked" : ""}`} aria-label={t("Webi i biznesit")}>
+  // Unlinked, it is a small suggestion beside the catalog, not the first thing on the page.
+  return <section className={`website-connection${url ? " is-linked" : " is-compact"}`} aria-label={t("Webi i biznesit")}>
     <span className="website-connection-icon" aria-hidden><Icon name="display" size={22} /></span>
     <div className="website-connection-text">
       <strong>
@@ -24,13 +25,14 @@ export async function WebsiteConnection({ slug, businessId, linkedCount }: { slu
       </strong>
       <p>{error ? t("Nuk u ngarkua konfigurimi i webit.")
         : url ? `${host} · ${linkedCount === 1 ? t("1 produkt nga webi") : `${linkedCount} ${t("produkte nga webi")}`}`
+        : linkedCount ? `${linkedCount === 1 ? t("1 produkt erdhi nga webi") : `${linkedCount} ${t("produkte erdhën nga webi")}`}. ${t("Lidhe që çmimet dhe porositë të përditësohen vetë.")}`
         : t("Lidh webin që produktet, çmimet dhe porositë të vijnë drejt nga webi.")}</p>
     </div>
     <div className="website-connection-actions">
       {url ? <>
         <Link className="btn btn-primary" href={`/b/${slug}/products/imports`}>{t("Lidh produktet e webit")}</Link>
         <Link className="btn btn-ghost" href={settings} scroll={false}>{t("Menaxho lidhjen")}</Link>
-      </> : <Link className="btn btn-primary" href={settings} scroll={false}><Icon name="link" size={16} /> {t("Lidh me webin")}</Link>}
+      </> : <Link className="btn btn-ghost" href={settings} scroll={false}><Icon name="link" size={16} /> {t("Lidh me webin")}</Link>}
     </div>
   </section>;
 }

@@ -51,10 +51,11 @@ describe("catalog organization", () => {
 
 describe("productMoney", () => {
   it("shows ranges per unit, a starting price and prices on request", () => {
-    expect(productMoney(70000, "ALL", { mode: "range", max: 80000, unit: "m³" })).toBe("70,000–80,000 Lekë / m³");
+    expect(productMoney(70000, "ALL", { mode: "range", max: 80000, unit: "m³" })).toBe("70\u00a0000–80\u00a0000 Lekë / m³");
     expect(productMoney(500, "EUR", { mode: "from" })).toBe("Nga 500 EUR");
     expect(productMoney(null, "ALL", { mode: "request" })).toBe("Sipas kërkesës");
-    expect(productMoney(1800, "ALL")).toBe("1,800 Lekë");
+    expect(productMoney(1800, "ALL")).toBe("1\u00a0800 Lekë");
     expect(productMoney(null, "ALL")).toBe("Pa çmim");
+    expect(productMoney(12.5, "EUR")).toBe("12,50 EUR");
   });
 });

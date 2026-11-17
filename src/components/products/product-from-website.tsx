@@ -54,7 +54,7 @@ export function ProductFromWebsite({ slug, types, workflows, kind, fields, usage
         {message.success && <p className="form-feedback form-feedback-success" role="status">{message.success}</p>}
         {missing.length > 0 && (
           <p className="muted-copy">
-            Nuk ke fushë për {missing.join(", ")}. Shtoje te <Link className="soft-link" href={`/b/${slug}/products/fields`}>Fushat</Link> si «Zgjedh klienti», që Agjenti ta pyesë klientin dhe importi ta plotësojë vetë.
+            Nuk ke fushë për {missing.join(", ")}. Shtoje te <Link className="inline-link" href={`/b/${slug}/products/fields`}>Fushat</Link> si «Zgjedh klienti», që Agjenti ta pyesë klientin dhe importi ta plotësojë vetë.
           </p>
         )}
       </form>

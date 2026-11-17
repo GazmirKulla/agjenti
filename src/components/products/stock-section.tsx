@@ -55,7 +55,7 @@ export function StockSection({ slug, settings, mode, onMode, quantity, onQuantit
       {mode !== "off" && (
         <p className="muted-copy">
           {stockDeductLabels[settings.deduct].effect}{" "}
-          <Link className="soft-link" href={`/b/${slug}/products/structure#stock`}>Ndrysho rregullin →</Link>
+          <Link className="inline-link" href={`/b/${slug}/products/structure#stock`}>Ndrysho rregullin →</Link>
         </p>
       )}
     </fieldset>

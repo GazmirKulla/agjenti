@@ -11,6 +11,7 @@ import { shownFieldKeys, type FieldUsage } from "@/lib/items/field-visibility";
 import type { ProductVariant } from "@/lib/products/variants";
 import { VariantEditor } from "@/components/products/variant-editor";
 import { StockSection } from "@/components/products/stock-section";
+import { filledFields } from "@/lib/products/readiness";
 import type { StockMode, StockSettings } from "@/lib/products/stock";
 
 type ProductFieldValues = {
@@ -115,6 +116,8 @@ export function ProductFields({
       : { error: "AI nuk gjeti të dhëna të qarta për fushat bosh. Shto më shumë te përshkrimi ose plotësoji vetë." });
   });
   const hasFields = !!itemDefinition && (itemDefinition.fields.length > 0 || choices.length > 0);
+  const noDetails = hasFields && !!itemDefinition && filledFields(itemDefinition.fields.map(f => f.key), product?.attributes).filled === 0
+    && choices.every(f => !(Array.isArray(product?.attributes?.[f.key]) && (product?.attributes?.[f.key] as string[]).length));
   const autoRan = useRef(false);
   useEffect(() => {
     if (!autoSuggest || !hasFields || autoRan.current) return;
@@ -166,11 +169,15 @@ export function ProductFields({
         <fieldset id="product-details" className="grid gap-3" ref={details}>
           <legend className="font-semibold">Të dhënat</legend>
           {(itemDefinition.fields.length > 0 || choices.length > 0) && (
-            <div className="flex flex-wrap items-center gap-3">
-              <button type="button" className="btn btn-ghost" onClick={suggest} disabled={suggesting}>
-                {suggesting ? "AI po lexon…" : "✦ Plotëso me AI"}
-              </button>
-              <span className="muted-copy">Nga emri dhe përshkrimi; plotëson vetëm fushat bosh.</span>
+            // All empty: the agent can only match this product by its name, so filling them is the useful next step.
+            <div className={`product-ai-fill${noDetails ? " is-empty" : ""}`}>
+              {noDetails && <p><strong>Të dhënat janë bosh.</strong> Agjenti e gjen këtë produkt vetëm kur klienti thotë emrin. AI mund t’i plotësojë nga emri dhe përshkrimi; i kontrollon para se të ruash.</p>}
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" className={noDetails ? "btn btn-primary" : "btn btn-ghost"} onClick={suggest} disabled={suggesting}>
+                  {suggesting ? "AI po lexon…" : "✦ Plotëso me AI"}
+                </button>
+                {!noDetails && <span className="muted-copy">Nga emri dhe përshkrimi; plotëson vetëm fushat bosh.</span>}
+              </div>
             </div>
           )}
           {aiMessage.error && <p className="form-feedback form-feedback-error" role="alert">{aiMessage.error}</p>}
@@ -228,7 +235,7 @@ export function ProductFields({
           )}
           <p className="muted-copy">
             {itemDefinition.fields.length > 0 && <>Agjenti i përdor këto të dhëna për të gjetur atë që kërkon klienti.{showAvailability ? " Artikujt e shitur nuk u ofrohen klientëve." : ""} </>}
-            <Link className="soft-link" href={`/b/${slug}/products/structure#fields`}>{itemDefinition.fields.length > 0 ? "Ndrysho fushat" : "Shto fushat"} →</Link>
+            <Link className="inline-link" href={`/b/${slug}/products/structure#fields`}>{itemDefinition.fields.length > 0 ? "Ndrysho fushat" : "Shto fushat"} →</Link>
           </p>
         </fieldset>
       )}
@@ -248,7 +255,7 @@ export function ProductFields({
               );
             })}
           </div>
-          <p className="muted-copy">Ndaji vlerat me ;. Agjenti e pyet klientin cilën dëshiron. Kur një vlerë ka kod ose çmim tjetër, shtoje si variant më poshtë; atëherë vlejnë variantet. <Link className="soft-link" href={`/b/${slug}/products/structure#fields`}>Ndrysho fushat →</Link></p>
+          <p className="muted-copy">Ndaji vlerat me ;. Agjenti e pyet klientin cilën dëshiron. Kur një vlerë ka kod ose çmim tjetër, shtoje si variant më poshtë; atëherë vlejnë variantet. <Link className="inline-link" href={`/b/${slug}/products/structure#fields`}>Ndrysho fushat →</Link></p>
         </fieldset>
       )}
 
@@ -332,7 +339,7 @@ export function ProductFields({
         <legend className="font-semibold">Workflow dhe produkti</legend>
         <ProductBusinessWorkflow slug={slug} workflow={workflows.find(w => w.businessWorkflow)?.businessWorkflow} product={product?.id ? { ...product, id: product.id } : undefined} />
         {!creating && <label className="form-label">
-          Shablloni i hapave të porosisë <span className="muted-copy">(opsional)</span>
+          <span>Shablloni i porosisë <span className="muted-copy">(opsional)</span></span>
           <select
             name="product_type_id"
             className="field"
@@ -370,7 +377,7 @@ export function ProductFields({
         </details>
       </fieldset>
 
-      <label className="toggle-label">
+      <label className="toggle-label" id="product-active">
         <span>
           Aktiv në katalog
           <small>Produktet joaktive nuk i sheh Agjenti AI.</small>

@@ -3,6 +3,10 @@ import { OperationButton } from "@/components/dashboard/operation-button";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ProductFields } from "@/components/dashboard/product-fields";
+import { ReadinessList } from "./readiness-list";
+import { filledFields, productReadiness } from "@/lib/products/readiness";
+import { fieldsOf } from "@/lib/items/kinds";
+import { attributeFields } from "@/lib/items/fields";
 import {
   createProduct,
   updateProduct,
@@ -40,6 +44,8 @@ export function ProductEditor({
   const initial = product ?? draft;
   usePageAssistantContext(product ? { entityType: "product", entityId: product.id, selectionLabel: product.name } : {});
   const businessWorkflow = workflows.find(w => w.businessWorkflow)?.businessWorkflow;
+  // The product's own fields (the kind's and the business's), as the form names them: attr_<key>.
+  const detailKeys = fieldsOf(kind ?? "product", attributeFields(fields)).map(f => f.key);
   const [preview, setPreview] = useState({
     name: initial?.name ?? "",
     description: initial?.description ?? "",
@@ -51,18 +57,16 @@ export function ProductEditor({
     currency: initial?.currency ?? "ALL",
     workflow: initial?.workflow_id ?? "",
     active: initial?.is_active ?? false,
+    details: filledFields(detailKeys, initial?.attributes),
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [pending, start] = useTransition();
   const router = useRouter();
-  const checks = [
-    ["Emri i produktit", preview.name.trim().length >= 2],
-    ["Çmimi i produktit", preview.price !== null || preview.mode === "request"],
-    ["Workflow për veprime (veçmas katalogut)", !!preview.workflow || !!product?.visual_workflow || !!businessWorkflow?.active],
-    ["Foto e produktit", !!preview.image],
-  ] as const;
-  const completed = checks.filter(([, ok]) => ok).length;
+  const readiness = productReadiness({ name: preview.name, description: preview.description, image: preview.image,
+    price_amount: preview.price, price_mode: preview.mode, price_max: preview.max, currency: preview.currency, details: preview.details,
+    workflow: !!preview.workflow || !!product?.visual_workflow || !!businessWorkflow?.active,
+    active: preview.active, archived: Boolean(product?.archived_at), availability: product?.availability });
   return (
     <>
       <form
@@ -82,6 +86,7 @@ export function ProductEditor({
             currency: String(d.get("currency") ?? "ALL"),
             workflow: String(d.get("workflow_id") ?? ""),
             active: d.get("is_active") === "on",
+            details: filledFields(detailKeys, Object.fromEntries(detailKeys.map(key => [key, d.get(`attr_${key}`) ?? undefined]))),
           });
         }}
         onSubmit={(e) => {
@@ -121,9 +126,7 @@ export function ProductEditor({
               )}
               <div>
                 <h2>{product.name}</h2>
-                <p className="muted-copy">
-                  {product.sku ? `SKU: ${product.sku}` : "Pa SKU"}
-                </p>
+                {product.sku && <p className="muted-copy">SKU: {product.sku}</p>}
                 <p>{product.description || "Shto përshkrimin e produktit."}</p>
               </div>
             </section>
@@ -134,9 +137,11 @@ export function ProductEditor({
               aria-label="Seksionet e produktit"
             >
               <a href="#product-identity">Përmbledhje</a>
+              <a href="#product-details">Të dhënat</a>
               <a href="#product-pricing">Çmimi</a>
+              <a href="#product-stock">Gjendja</a>
               <a href="#product-process">Workflow</a>
-              <a href="#product-media">Foto</a>
+              <a href="#product-photo">Foto</a>
             </nav>
             <ProductFields
               slug={slug}
@@ -154,23 +159,13 @@ export function ProductEditor({
           </div>
         </fieldset>
         <aside className="product-side">
-          <ProductPhoto slug={slug} initial={initial?.image_url ?? ""} name={preview.name}
-            onChange={image => setPreview(current => ({ ...current, image }))} />
+          <div id="product-photo">
+            <ProductPhoto slug={slug} initial={initial?.image_url ?? ""} name={preview.name}
+              onChange={image => setPreview(current => ({ ...current, image }))} />
+          </div>
           <section className="panel section-pad">
-            <h2>Plotësimi i informacionit</h2>
-            <strong>
-              {completed} nga {checks.length} fusha të plota
-            </strong>
-            <progress value={completed} max={checks.length} />
-            <ul className="product-checklist">
-              {checks.map(([label, ok]) => (
-                <li key={label} className={ok ? "is-complete" : ""}>
-                  <span aria-hidden>{ok ? "✓" : "○"}</span>
-                  {label}
-                  {label === "Foto e produktit" ? " (opsionale)" : ""}
-                </li>
-              ))}
-            </ul>
+            <h2>Gati për Agjentin</h2>
+            <ReadinessList items={readiness} hrefFor={anchor => `#${anchor}`} />
           </section>
           <div className="product-save-actions">
             <button
@@ -202,37 +197,36 @@ export function ProductEditor({
             )}
             {success && <p role="status">{success}</p>}
             <p className="muted-copy">
-              Aktiv në katalog do të thotë i kërkueshëm dhe i rekomandueshëm. Porositja kërkon workflow dhe autorizim të veçantë. Draftet nuk u shfaqen klientëve.
+              Aktiv në katalog do të thotë që Agjenti e gjen dhe e rekomandon. Porosia kërkon workflow dhe autorizim të veçantë. Draftet nuk u shfaqen klientëve.
             </p>
           </div>
         </aside>
       </form>
       {product && (
         <div className="products-workspace product-detail-extras">
-          <section className="panel section-pad">
-            <h2>Proces i posaçëm i porosisë (opsional)</h2>
-            <p className="muted-copy">
-              {product.visual_workflow ? `Produkti ndjek rrjedhën “${product.visual_workflow.name}”. Hapat ndryshohen te Workflow.` : types.find((t) => t.id === product.product_type_id)
-                ?.description ||
-                "Workflow-i kryesor drejton mesazhet. Shto një proces të posaçëm vetëm nëse ky produkt kërkon hapa të tjerë."}
-            </p>
-            {product.product_type_id && !product.visual_workflow && (
+          {product.product_type_id && !product.visual_workflow && types.find((t) => t.id === product.product_type_id)?.description && (
+            <section className="panel section-pad">
+              <h2>Sugjerimi i shabllonit</h2>
+              <p className="muted-copy">{types.find((t) => t.id === product.product_type_id)?.description}</p>
               <ActionForm action={applyTypeSuggestion.bind(null, slug)}>
                 <input type="hidden" name="product_id" value={product.id} />
-                <input
-                  type="hidden"
-                  name="product_type_id"
-                  value={product.product_type_id}
-                />
-                <button className="btn btn-ghost">
-                  Përdor sugjerimin e llojit
-                </button>
+                <input type="hidden" name="product_type_id" value={product.product_type_id} />
+                <button className="btn btn-ghost">Përdor sugjerimin e shabllonit</button>
               </ActionForm>
-            )}
-            <OperationButton slug={slug} operation={product.archived_at ? "product.restore" : "product.archive"} input={{ id: product.id }}>
-              {product.archived_at ? "Rikthe si draft" : "Arkivo produktin"}
-            </OperationButton>
-            <OperationButton slug={slug} operation="product.delete" input={{ id: product.id }} redirectTo={`/b/${slug}/products`}>Fshi produktin</OperationButton>
+            </section>
+          )}
+          <section className="panel section-pad product-danger-zone" aria-labelledby="product-danger-title">
+            <h2 id="product-danger-title">Arkivo ose fshi</h2>
+            <p className="muted-copy">
+              {product.archived_at ? "Produkti është i arkivuar: Agjenti nuk e ofron. Riktheje si draft për ta përdorur sërish."
+                : "Arkivimi e heq nga katalogu dhe nga Agjenti, por e ruan për porositë e kaluara. Fshirja e heq përgjithmonë."}
+            </p>
+            <div className="product-danger-actions">
+              <OperationButton slug={slug} operation={product.archived_at ? "product.restore" : "product.archive"} input={{ id: product.id }}>
+                {product.archived_at ? "Rikthe si draft" : "Arkivo produktin"}
+              </OperationButton>
+              <OperationButton slug={slug} operation="product.delete" input={{ id: product.id }} redirectTo={`/b/${slug}/products`}>Fshi produktin</OperationButton>
+            </div>
           </section>
           <ProductTips />
         </div>

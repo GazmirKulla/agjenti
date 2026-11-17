@@ -83,11 +83,12 @@ export function catalogFilter(
           : (b.created_at ?? "").localeCompare(a.created_at ?? ""),
     );
 }
+/** Albanian grouping: a no-break space between thousands and a comma before decimals ("1 290", "12,50"). */
 const amountText = (amount: number) => {
   const [whole, decimal] = amount.toFixed(2).split(".");
-  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${decimal === "00" ? "" : "." + decimal}`;
+  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0")}${decimal === "00" ? "" : "," + decimal}`;
 };
-/** "70,000–80,000 Lekë / m³", "Nga 500 Lekë", "Sipas kërkesës".
+/** "70 000–80 000 Lekë / m³", "Nga 500 Lekë", "Sipas kërkesës".
  * Deterministic across Node and browsers whose ICU currency data differs. */
 export function productMoney(amount: number | null, currency: string, price?: { mode?: string | null; max?: number | null; unit?: string | null }) {
   const mode = priceMode(price?.mode);

@@ -845,14 +845,19 @@
   color: var(--ink);
 }
 .product-tile-photo {
+  position: relative;
   display: grid;
   place-items: center;
   aspect-ratio: 1;
+  overflow: hidden;
   margin-bottom: 0.5rem;
   background: var(--paper);
   color: var(--ink-muted);
 }
+/* Taken out of the flow so a tall photo cannot stretch its card: every card stays square. */
 .product-tile-photo img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1032,7 +1037,7 @@
 .product-detail {
   display: grid;
   gap: 1rem;
-  max-width: 1080px;
+  max-width: 1240px;
   margin-top: 1rem;
   padding-bottom: 100px;
 }
@@ -1135,7 +1140,7 @@
 .product-detail-tiles {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.75rem;
   margin: 0;
 }
@@ -1348,9 +1353,29 @@
   min-height: 44px;
   gap: 0.35rem;
 }
+.website-connection.is-compact {
+  padding: 0.55rem 0.75rem;
+}
+.website-connection.is-compact .website-connection-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+.website-connection.is-compact .website-connection-actions .btn {
+  min-height: 36px;
+}
 @media (max-width: 760px) {
   .website-connection {
     flex-wrap: wrap;
+  }
+  .website-connection.is-compact {
+    flex-wrap: nowrap;
+  }
+  .website-connection.is-compact .website-connection-text p {
+    display: none;
+  }
+  .website-connection.is-compact .website-connection-actions {
+    width: auto;
   }
   .website-connection-actions {
     width: 100%;
@@ -1576,3 +1601,25 @@
 .agent-product-line { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--paper-2); font-size: 14px; overflow-wrap: anywhere; }
 .agent-product-line span { color: var(--ink-muted); margin-right: 4px; }
 .agent-product-view dd { white-space: pre-line; overflow-wrap: anywhere; }
+
+/* Readiness for the agent: one list on the product page and in the form. */
+.product-readiness { display: grid; gap: 0.75rem; }
+.product-readiness-head { display: grid; gap: 0.4rem; }
+.product-readiness-head progress { width: 100%; height: 6px; }
+.product-readiness-text { display: grid; gap: 0.15rem; min-width: 0; }
+.product-readiness-text small { color: var(--ink-muted); line-height: 1.45; }
+.product-checklist li.is-complete .product-readiness-text small { display: none; }
+
+/* The list: what a product still needs, beside its status. */
+.product-missing-badge { margin-left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  color: var(--ink-muted); border: 1px dashed var(--line-strong, var(--line)); white-space: nowrap; }
+
+/* Archive and delete, apart from the rest of the form. */
+.product-danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+.product-danger-zone h2 { font-size: 15px; }
+.product-danger-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+
+/* AI fill: highlighted only when every field is still empty. */
+.product-ai-fill { display: grid; gap: 0.5rem; }
+.product-ai-fill.is-empty { padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); }
+.product-ai-fill.is-empty p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }

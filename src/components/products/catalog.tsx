@@ -1,5 +1,6 @@
 "use client";
-import { attributeSummary, availabilityLabels, type KindField } from "@/lib/items/kinds";
+import { attributeSummary, availabilityLabels, fieldsOf, type KindField } from "@/lib/items/kinds";
+import { filledFields, missingReadiness, productReadiness } from "@/lib/products/readiness";
 import { catalogStockState, stockStateLabels, type StockSettings } from "@/lib/products/stock";
 import { attributeFields, type BusinessField } from "@/lib/items/fields";
 import { useCatalogAssistantContext } from "@/components/business-assistant/workspace";
@@ -68,7 +69,7 @@ function itemSubline(p: ProductRow, extra: KindField[] = []) {
   const variants = p.variants?.filter(v => v.is_active).length ?? 0;
   const summary = [attributeSummary(p.item_kind ?? "product", p.attributes, extra), variants ? `${variants} variante` : ""].filter(Boolean).join(" · ");
   if (summary) return summary;
-  return p.sku ? `SKU: ${p.sku}` : "Pa SKU";
+  return p.sku ? `SKU: ${p.sku}` : "";
 }
 
 export function ProductCatalog({
@@ -95,6 +96,18 @@ export function ProductCatalog({
   const defaultFilter = mapping ? "unlinked" : "all";
   const [filter, setFilter] = useState(defaultFilter);
   const [stockFilter, setStockFilter] = useState<"" | "out" | "low">("");
+  const [needsWork, setNeedsWork] = useState(false);
+  // What a product still needs for the agent, from the same rule as the product page and form.
+  // The list shows only the product's own content: the workflow is the business's, and drafts have their own status.
+  const missingOf = (p: ProductRow) => missingReadiness(productReadiness({ ...p, name: p.name, description: p.description, image: p.image_url,
+    details: filledFields(fieldsOf(p.item_kind ?? "product", attributeFields(fields)).map(f => f.key), p.attributes),
+    workflow: Boolean(p.workflow_id || p.visual_workflow || p.business_workflow?.active),
+    active: p.is_active, archived: Boolean(p.archived_at), availability: p.availability })).filter(item => item.key !== "workflow" && item.key !== "active");
+  const missingBadge = (p: ProductRow) => {
+    const missing = missingOf(p);
+    return missing.length ? <span className="product-missing-badge" title={`Për Agjentin mungon: ${missing.map(m => m.label).join(", ")}`}>
+      {missing.length === 1 ? `Mungon: ${missing[0].label.replace(/ \(.*\)$/, "")}` : `${missing.length} për plotësim`}</span> : null;
+  };
   const stockOf = (p: ProductRow) => stock ? catalogStockState(p, p.variants ?? [], stock) : null;
   const counting = Boolean(stock) && products.some(p => stockOf(p) !== null);
   const stockBadge = (p: ProductRow) => {
@@ -152,10 +165,11 @@ export function ProductCatalog({
   const filtered = useMemo(
     () => catalogFilter(catalogProducts, query, filter, typeFilter, sort)
       .filter(p => source === "all" || fromWebsite(p) === (source === "website"))
-      .filter(p => !stockFilter || (stockFilter === "out" ? stockOf(p) === "out" : stockOf(p) === "low" || stockOf(p) === "out")),
+      .filter(p => !stockFilter || (stockFilter === "out" ? stockOf(p) === "out" : stockOf(p) === "low" || stockOf(p) === "out"))
+      .filter(p => !needsWork || missingOf(p).length > 0),
     // stockOf reads the props it closes over; the list recomputes when they change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [catalogProducts, query, filter, typeFilter, sort, source, stockFilter, stock],
+    [catalogProducts, query, filter, typeFilter, sort, source, stockFilter, stock, needsWork, fields],
   );
   const sourceCounts = useMemo(() => {
     const current = catalogProducts.filter(p => !p.archived_at);
@@ -172,15 +186,15 @@ export function ProductCatalog({
   // the server re-resolves each ID, archives products with history, and previews before confirming.
   const bulkRemoval = useManualOperation(slug, "product.remove");
   const removeMany = (ids: string[]) => void bulkRemoval.prepare({ scope: "ids", ids });
-  const activeFilters = Number(filter !== defaultFilter) + Number(Boolean(typeFilter)) + Number(Boolean(stockFilter));
+  const activeFilters = Number(filter !== defaultFilter) + Number(Boolean(typeFilter)) + Number(Boolean(stockFilter)) + Number(needsWork);
   const filterItems: RowMenuItem[] = [
     ...STATUS_FILTERS.map(([value, label]) => ({
       group: "Statusi", label, checked: filter === value,
       onSelect: () => { setFilter(value); setPage(1); },
     })),
     ...(types.length
-      ? [{ id: "", name: "Të gjitha llojet" }, ...types].map((type) => ({
-          group: "Lloji", label: type.name, checked: typeFilter === type.id,
+      ? [{ id: "", name: "Të gjitha shabllonet" }, ...types].map((type) => ({
+          group: "Shablloni i porosisë", label: type.name, checked: typeFilter === type.id,
           onSelect: () => { setTypeFilter(type.id); setPage(1); },
         }))
       : []),
@@ -190,8 +204,9 @@ export function ProductCatalog({
           onSelect: () => { setStockFilter(value); setPage(1); },
         }))
       : []),
+    { group: "Gatishmëria", label: "Ka nevojë për plotësim", checked: needsWork, onSelect: () => { setNeedsWork(value => !value); setPage(1); } },
     ...(activeFilters
-      ? [{ label: "Pastro filtrat", onSelect: () => { setFilter(defaultFilter); setTypeFilter(""); setStockFilter(""); setPage(1); } }]
+      ? [{ label: "Pastro filtrat", onSelect: () => { setFilter(defaultFilter); setTypeFilter(""); setStockFilter(""); setNeedsWork(false); setPage(1); } }]
       : []),
   ];
   const sortItems: RowMenuItem[] = SORTS.map(([value, label]) => ({
@@ -208,29 +223,18 @@ export function ProductCatalog({
       disabled: !shown.length,
       onSelect: () => { setSelected(shown.map((p) => p.id)); setBulkOpen(true); },
     },
+    // Deleting is never a menu item: it starts from a selection, in the bar that shows what is selected.
     {
       group: "Veprime",
-      label: `Fshi produktet e kësaj faqeje (${shown.length})`,
-      danger: true,
-      disabled: !shown.length || bulkRemoval.busy,
-      onSelect: () => removeMany(shown.map((p) => p.id)),
+      label: `Zgjidh produktet e kësaj faqeje (${shown.length})`,
+      disabled: !shown.length,
+      onSelect: () => setSelected(shown.map((p) => p.id)),
     },
-    ...(filtered.length > shown.length
-      ? [{
-          group: "Veprime",
-          label: filtered.length > 100
-            ? `Fshi të gjitha sipas filtrit (${filtered.length}, maks. 100)`
-            : `Fshi të gjitha sipas filtrit (${filtered.length})`,
-          danger: true,
-          disabled: filtered.length > 100 || bulkRemoval.busy,
-          onSelect: () => removeMany(filtered.map((p) => p.id)),
-        }]
-      : []),
   ];
   function rowActions(p: ProductRow): RowMenuItem[] {
     return [
       { label: "Hap produktin", href: `/b/${slug}/products/${p.id}` },
-      { label: "Konfiguro llojin dhe procesin", onSelect: () => setConfigId(p.id) },
+      { label: "Konfiguro shabllonin dhe procesin", onSelect: () => setConfigId(p.id) },
       ...(p.visual_workflow
         ? [{ label: `Hap procesin: ${p.visual_workflow.name}`, href: entityWorkflowHref(slug, "product", p.id, p.visual_workflow.flowId) }]
         : []),
@@ -402,9 +406,12 @@ export function ProductCatalog({
         {selected.length > 0 && !bulkOpen && (
           <div className="catalog-bulk-bar" role="region" aria-label="Produktet e zgjedhura">
             <strong>{selected.length} të zgjedhura</strong>
+            {filtered.length > selected.length && filtered.length <= 100 && (
+              <button type="button" className="btn btn-ghost" onClick={() => setSelected(filtered.map((p) => p.id))}>Zgjidh të gjitha sipas filtrit ({filtered.length})</button>
+            )}
             <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("activate")}>{mapping ? "Lidh dhe aktivizo" : "Aktivizo"}</button>
             <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("draft")}>Kalo në draft</button>
-            <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setBulkOpen(true)}>Lloji / procesi</button>
+            <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setBulkOpen(true)}>Shablloni / procesi</button>
             <button type="button" className="btn btn-ghost catalog-bulk-danger" disabled={bulkRemoval.busy} onClick={() => removeMany(selected)}>Fshi</button>
             <button type="button" className="catalog-bulk-clear" onClick={() => setSelected([])}>Pastro</button>
           </div>
@@ -429,7 +436,7 @@ export function ProductCatalog({
                         <span className="product-card-meta">
                           <span>{money(p.price_amount, p.currency, { mode: p.price_mode, max: p.price_max, unit: p.price_unit })}</span>
                           <span className={`product-status is-${status}`}>{STATUS_LABEL[status] ?? status}</span>
-                          {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}{stockBadge(p)}
+                          {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}{stockBadge(p)}{missingBadge(p)}
                         </span>
                       </span>
                     </Link>
@@ -458,7 +465,7 @@ export function ProductCatalog({
                     <span className="product-card-meta">
                       <span>{money(p.price_amount, p.currency, { mode: p.price_mode, max: p.price_max, unit: p.price_unit })}</span>
                       <span className={`product-status is-${status}`}>{STATUS_LABEL[status] ?? status}</span>
-                      {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}{stockBadge(p)}
+                      {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}{stockBadge(p)}{missingBadge(p)}
                     </span>
                   </Link>
                   <span className="product-tile-menu"><RowMenu label={`Më shumë për ${p.name}`} title={p.name} items={rowActions(p)} /></span>
@@ -519,7 +526,7 @@ export function ProductCatalog({
                       <span className={`product-status is-${status}`}>
                         {STATUS_LABEL[status] ?? status}
                       </span>
-                      {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}{stockBadge(p)}
+                      {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}{stockBadge(p)}{missingBadge(p)}
                     </td>
                     <td>
                       <RowMenu label={`Më shumë për ${p.name}`} items={rowActions(p)} />
@@ -599,7 +606,7 @@ export function ProductCatalog({
         {configProduct && (
           <div className="catalog-dialog-fields">
             <label className="form-label">
-              Lloji
+              Shablloni i porosisë
               <select
                 className="field"
                 value={
@@ -618,13 +625,13 @@ export function ProductCatalog({
                   )
                 }
               >
-                <option value="">Pa lloj</option>
+                <option value="">Pa shabllon</option>
                 {configProduct.product_type_id &&
                   !types.some(
                     (type) => type.id === configProduct.product_type_id,
                   ) && (
                     <option value={configProduct.product_type_id} disabled>
-                      Lloji aktual (joaktiv)
+                      Shablloni aktual (joaktiv)
                     </option>
                   )}
                 {types.map((type) => (
@@ -779,7 +786,7 @@ export function ProductCatalog({
       >
         <div className="catalog-dialog-fields">
           <label className="form-label">
-            Lloji i produktit
+            Shablloni i porosisë
             <select
               className="field"
               value={typeId}

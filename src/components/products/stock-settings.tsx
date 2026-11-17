@@ -13,11 +13,17 @@ import {
 export function StockSettingsForm({ settings, action }: { settings: StockSettings; action: (data: FormData) => Promise<ActionResult | void> }) {
   const [draft, setDraft] = useState(settings);
   const set = (patch: Partial<StockSettings>) => setDraft(current => ({ ...current, ...patch }));
+  // What was last saved: the page's settings, then each successful save (the onboarding step does not reload).
+  const [base, setBase] = useState(settings);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(base);
   return (
-    <ActionForm action={action} className="panel section-pad grid gap-5">
+    <ActionForm action={action} className="panel section-pad grid gap-5" onSuccess={() => setBase(draft)}>
       <div className="section-title">
         <h2 id="stock">Stoku</h2>
-        <button className="btn btn-primary" type="submit">Ruaj</button>
+        <span className="section-title-actions">
+          {dirty && <span className="unsaved-note" role="status">Ndryshime të paruajtura</span>}
+          <button className="btn btn-primary" type="submit">Ruaj</button>
+        </span>
       </div>
       <p className="muted-copy">
         Stoku është opsional për çdo produkt. Këtu vendos rregullat e biznesit; sasinë e çdo produkti e vendos te forma e tij, te seksioni “Gjendja”.

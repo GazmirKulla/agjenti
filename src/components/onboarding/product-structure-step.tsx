@@ -1,4 +1,6 @@
 "use client";
+// The fields editor and the stock rules are styled with the products sheet, which onboarding does not load otherwise.
+import "@/components/products/products.css";
 import { useEffect, useState } from "react";
 import { ProductFieldsSettings } from "@/components/products/product-fields-settings";
 import { StockSettingsForm } from "@/components/products/stock-settings";

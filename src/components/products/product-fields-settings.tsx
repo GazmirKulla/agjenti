@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveProductFields } from "@/lib/items/actions";
 import { fieldKey, type BusinessField } from "@/lib/items/fields";
@@ -24,6 +24,15 @@ type Props = {
 
 export function ProductFieldsSettings({ slug, fields, fixed, suggested, discovered = [] }: Props) {
   const [rows, setRows] = useState<Row[]>(fields.map(toRow));
+  // What was last saved, to show unsaved changes and keep them from being lost by leaving the page.
+  const [saved, setSaved] = useState(() => JSON.stringify(fields.map(toRow)));
+  const dirty = JSON.stringify(rows) !== saved;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
   const [pending, start] = useTransition();
   const router = useRouter();
@@ -39,7 +48,7 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
       options: r.options.split(/[,;\n]/).map(o => o.trim()).filter(Boolean), variant: r.variant }));
     const result = await saveProductFields(slug, JSON.stringify(payload));
     setMessage(result);
-    if ("fields" in result && result.fields) { setRows(result.fields.map(toRow)); router.refresh(); }
+    if ("fields" in result && result.fields) { const next = result.fields.map(toRow); setRows(next); setSaved(JSON.stringify(next)); router.refresh(); }
   });
   return (
     <section className="panel section-pad grid gap-5" aria-labelledby="product-fields-title">
@@ -95,42 +104,35 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
         </div>
       )}
       {rows.length === 0 && <p className="muted-copy">Ende nuk ke fusha. Shto të parën më poshtë.</p>}
-      <div className="grid gap-3">
+      <div className="field-rows">
+        {rows.length > 0 && (
+          <div className="field-rows-head" aria-hidden>
+            <span>Emri</span><span>Tipi</span><span>Njësia</span><span>Zgjedh klienti</span><span />
+          </div>
+        )}
         {rows.map((row, index) => (
-          <fieldset key={row.key ?? `new-${index}`} className="grid gap-3 rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
-            <legend className="sr-only">Fusha {index + 1}</legend>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="form-label">
-                Emri
-                <input className="field" value={row.label} maxLength={40} placeholder="P.sh. Gjatësia" onChange={e => update(index, { label: e.target.value })} />
-              </label>
-              <label className="form-label">
-                Lloji
-                <select className="field" value={row.variant ? "select" : row.type} disabled={row.variant} onChange={e => update(index, { type: e.target.value as Row["type"] })}>
-                  {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </label>
-              <label className="form-label">
-                Njësia (opsionale)
-                <input className="field" value={row.unit} maxLength={12} placeholder="P.sh. cm" onChange={e => update(index, { unit: e.target.value })} />
-              </label>
-            </div>
-            {row.label.trim() && fixedKeys.has(fieldKey(row.label)) && (
-              <p className="form-feedback form-feedback-error" role="alert">“{row.label.trim()}” është tashmë te fushat e gatshme. Përdor atë ose jepi këtij një emër tjetër.</p>
-            )}
+          <fieldset key={row.key ?? `new-${index}`} className="field-row">
+            <legend className="sr-only">Fusha {index + 1}{row.label.trim() ? `: ${row.label.trim()}` : ""}</legend>
+            <input className="field" aria-label="Emri" value={row.label} maxLength={40} placeholder="P.sh. Gjatësia" onChange={e => update(index, { label: e.target.value })} />
+            <select className="field" aria-label="Tipi" value={row.variant ? "select" : row.type} disabled={row.variant} onChange={e => update(index, { type: e.target.value as Row["type"] })}>
+              {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <input className="field" aria-label="Njësia (opsionale)" value={row.unit} maxLength={12} placeholder="Njësia, p.sh. cm" onChange={e => update(index, { unit: e.target.value })} />
+            <label className="field-row-toggle">
+              <input className="switch-input" type="checkbox" checked={row.variant} onChange={e => update(index, { variant: e.target.checked })} />
+              <span>Zgjedh klienti</span>
+            </label>
+            <button type="button" className="btn btn-ghost field-row-remove" aria-label={`Hiq fushën ${row.label.trim() || index + 1}`} title="Hiqe"
+              onClick={() => setRows(current => current.filter((_, i) => i !== index))}>×</button>
             {(row.variant || row.type === "select") && (
-              <label className="form-label">
+              <label className="form-label field-row-options">
                 Vlerat, të ndara me presje{row.variant ? " (opsionale: vlerat e reja shtohen edhe te variantet)" : ""}
                 <input className="field" value={row.options} placeholder="P.sh. 80 cm, 100 cm, 120 cm" onChange={e => update(index, { options: e.target.value })} />
               </label>
             )}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="toggle-label">
-                <span>Zgjedh klienti</span>
-                <input className="switch-input" type="checkbox" checked={row.variant} onChange={e => update(index, { variant: e.target.checked })} />
-              </label>
-              <button type="button" className="btn btn-ghost" onClick={() => setRows(current => current.filter((_, i) => i !== index))}>Hiqe</button>
-            </div>
+            {row.label.trim() && fixedKeys.has(fieldKey(row.label)) && (
+              <p className="form-feedback form-feedback-error field-row-options" role="alert">“{row.label.trim()}” është tashmë te fushat e gatshme. Përdor atë ose jepi këtij një emër tjetër.</p>
+            )}
           </fieldset>
         ))}
       </div>
@@ -140,6 +142,13 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
       </div>
       {message.error && <p className="form-feedback form-feedback-error" role="alert">{message.error}</p>}
       {message.success && <p className="form-feedback form-feedback-success" role="status">{message.success}</p>}
+      {dirty && (
+        <div className="unsaved-bar" role="status">
+          <span>Ke ndryshime të paruajtura te fushat.</span>
+          <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => { setRows(JSON.parse(saved)); setMessage({}); }}>Anulo</button>
+          <button type="button" className="btn btn-primary" disabled={pending} onClick={save}>{pending ? "Duke ruajtur…" : "Ruaj fushat"}</button>
+        </div>
+      )}
     </section>
   );
 }

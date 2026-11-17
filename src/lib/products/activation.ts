@@ -12,6 +12,6 @@ export async function requireCatalogActivation(businessId: string, products: (Pr
   const db = createServiceSupabase();
   for (const id of new Set(products.flatMap(p => p.product_type_id ? [p.product_type_id] : []))) {
     const { data, error } = await db.from("product_types").select("id").eq("id", id).eq("is_active", true).maybeSingle();
-    if (error || !data) throw new Error("Lloji nuk është aktiv ose nuk u verifikua. Zgjidh një lloj aktiv.");
+    if (error || !data) throw new Error("Shablloni i porosisë nuk është aktiv ose nuk u verifikua. Zgjidh një shabllon aktiv.");
   }
 }

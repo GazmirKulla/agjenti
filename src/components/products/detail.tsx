@@ -4,12 +4,14 @@ import { useState } from "react";
 import { attributeDetails, availabilityLabels, fieldsOf } from "@/lib/items/kinds";
 import { attributeFields, variantFields, type BusinessField } from "@/lib/items/fields";
 import { catalogStatus, productMoney, type Option, type ProductRow } from "@/lib/products/catalog";
-import { priceMode, priceModeLabels, priceReady } from "@/lib/products/pricing";
+import { priceMode, priceModeLabels } from "@/lib/products/pricing";
 import { usePageAssistantContext } from "@/components/business-assistant/workspace";
 import { useManualOperation } from "@/components/dashboard/operation-button";
 import { RowMenu, type RowMenuItem } from "@/components/dashboard/row-menu";
 import { Icon } from "@/components/dashboard/icon";
 import { ProductBusinessWorkflow } from "./business-workflow";
+import { ReadinessList } from "./readiness-list";
+import { filledFields, productReadiness } from "@/lib/products/readiness";
 import { countsStock, effectiveQuantity, stockCustomerSentence, stockDeductLabels, stockModeLabels, stockReasonLabels, type StockMovement, type StockSettings } from "@/lib/products/stock";
 
 const STATUS_LABEL: Record<string, string> = { archived: "I arkivuar", active: "Aktiv", draft: "Draft", unlinked: "I palidhur" };
@@ -67,12 +69,10 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
   });
   const label = (options: Record<string, string>) =>
     Object.entries(options).map(([key, value]) => `${choices.find(f => f.key === key)?.label ?? key}: ${value}`).join(" · ");
-  const ready = [
-    ["Çmimi ose “Sipas kërkesës”", priceReady(product)],
-    ["Workflow për porosinë", Boolean(product.workflow_id || product.visual_workflow || businessWorkflow?.active)],
-    ["Foto e produktit", Boolean(product.image_url)],
-    ["Aktiv në katalog", inCatalog],
-  ] as const;
+  const readiness = productReadiness({ ...product, name: product.name, description: product.description, image: product.image_url,
+    details: filledFields(fieldsOf(kindId, extra).map(f => f.key), values),
+    workflow: Boolean(product.workflow_id || product.visual_workflow || businessWorkflow?.active),
+    active: product.is_active, archived: Boolean(product.archived_at), availability: product.availability });
 
   const archive = useManualOperation(slug, product.archived_at ? "product.restore" : "product.archive");
   const removal = useManualOperation(slug, "product.delete", `/b/${slug}/products`);
@@ -123,7 +123,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
               <h2>{product.name}</h2>
               <strong className="product-detail-price">{price}</strong>
               <div className="product-detail-chips">
-                {type && <span className="product-chip">{type.name}</span>}
+                {type && <span className="product-chip" title="Shablloni i porosisë">{type.name}</span>}
                 {product.sku && <span className="product-chip">Kodi: {product.sku}</span>}
                 {product.availability && product.availability !== "available" && <span className={`product-availability is-${product.availability}`}>{availabilityLabels[product.availability]}</span>}
               </div>
@@ -144,7 +144,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
                 <Link className="btn btn-ghost" href={edit()}><Icon name="edit" size={15} /> Përditëso</Link>
               </div>
               <dl className="product-detail-rows">
-                <div><dt>Lloji</dt><dd>{type?.name ?? "Pa lloj"}</dd></div>
+                <div><dt>Shablloni i porosisë</dt><dd>{type?.name ?? "Pa shabllon"}</dd></div>
                 <div><dt>Kodi</dt><dd>{product.sku || "—"}</dd></div>
                 <div><dt>Çmimi</dt><dd>{price}<small>{priceModeLabels[priceMode(product.price_mode)]}</small></dd></div>
                 {details.map(([name, text]) => <div key={name}><dt>{name}</dt><dd>{text}</dd></div>)}
@@ -154,15 +154,9 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
             </section>
             <section className="panel product-detail-card">
               <div className="product-detail-card-head">
-                <h2>Gati për klientët</h2>
-                <span className="muted-copy">{ready.filter(([, ok]) => ok).length} nga {ready.length}</span>
+                <h2>Gati për Agjentin</h2>
               </div>
-              <ul className="product-checklist">
-                {ready.map(([text, ok]) => (
-                  <li key={text} className={ok ? "is-complete" : ""}><span aria-hidden>{ok ? "✓" : "○"}</span>{text}{text === "Foto e produktit" ? " (opsionale)" : ""}</li>
-                ))}
-              </ul>
-              <p className="muted-copy product-detail-note">Aktiv në katalog do të thotë që agjenti e gjen dhe e rekomandon. Porosia kërkon workflow dhe autorizim në server.</p>
+              <ReadinessList items={readiness} hrefFor={anchor => edit(`#${anchor}`)} />
             </section>
           </div>
         </div>
@@ -196,7 +190,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
                   </tbody>
                 </table>
               </div>
-            ) : !lists.length && <p className="muted-copy">Ky produkt nuk ka ende variante. Shtoji te “Ndrysho”, ose shto fusha “Zgjedh klienti” te <Link className="soft-link" href={`/b/${slug}/products/structure#fields`}>Struktura</Link>.</p>}
+            ) : !lists.length && <p className="muted-copy">Ky produkt nuk ka ende variante. Shtoji te “Ndrysho”, ose shto fusha “Zgjedh klienti” te <Link className="inline-link" href={`/b/${slug}/products/structure#fields`}>Struktura</Link>.</p>}
           </section>
         </div>
       )}
@@ -209,14 +203,14 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
               {product.source !== "linked" && <Link className="btn btn-ghost" href={edit("#product-stock")}><Icon name="edit" size={15} /> Ndrysho</Link>}
             </div>
             {product.source === "linked" ? <p className="muted-copy">Ky produkt vjen nga uebi i biznesit: stoku i tij mbahet atje.</p>
-              : !counted ? <p className="muted-copy">Stoku i këtij produkti nuk ndiqet. Agjenti nuk flet për sasi dhe porosia nuk kufizohet. <Link className="soft-link" href={edit("#product-stock")}>Fillo ta ndjekësh →</Link></p>
+              : !counted ? <p className="muted-copy">Stoku i këtij produkti nuk ndiqet. Agjenti nuk flet për sasi dhe porosia nuk kufizohet. <Link className="inline-link" href={edit("#product-stock")}>Fillo ta ndjekësh →</Link></p>
               : <>
                 <dl className="product-detail-rows">
                   <div><dt>Mënyra</dt><dd>{stockModeLabels[product.stock_mode ?? "off"].label}</dd></div>
                   {stockFor() !== null && <div><dt>Sasia</dt><dd>{stockFor()}{product.price_unit ? ` ${product.price_unit}` : ""}</dd></div>}
                   {variants.filter(v => v.is_active && v.stock_quantity != null).map((v, i) => <div key={v.id ?? i}><dt>{label(v.options)}</dt><dd>{v.stock_quantity}</dd></div>)}
                   <div><dt>Nëse klienti pyet</dt><dd>{variants.some(v => v.stock_quantity != null) ? "Agjenti e thotë për çdo variant veç." : stockCustomerSentence(stockFor(), stock, product.price_unit)}</dd></div>
-                  <div><dt>Porositë</dt><dd>{stockDeductLabels[stock.deduct].effect} <Link className="soft-link" href={`/b/${slug}/products/structure#stock`}>Ndrysho rregullin →</Link></dd></div>
+                  <div><dt>Porositë</dt><dd>{stockDeductLabels[stock.deduct].effect} <Link className="inline-link" href={`/b/${slug}/products/structure#stock`}>Ndrysho rregullin →</Link></dd></div>
                 </dl>
                 <h3 className="product-stock-history-title">Historiku</h3>
                 {movements.length ? (
@@ -224,7 +218,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
                     {movements.map(m => (
                       <li key={m.id}>
                         <strong className={m.delta < 0 ? "is-out" : "is-in"}>{m.delta > 0 ? "+" : ""}{m.delta}</strong>
-                        <span>{stockReasonLabels[m.reason]}{m.order_id && <> · <Link className="soft-link" href={`/b/${slug}/orders?order=${m.order_id}`}>porosia</Link></>}
+                        <span>{stockReasonLabels[m.reason]}{m.order_id && <> · <Link className="inline-link" href={`/b/${slug}/orders?order=${m.order_id}`}>porosia</Link></>}
                           {m.variant_id && variants.find(v => v.id === m.variant_id) ? ` · ${label(variants.find(v => v.id === m.variant_id)!.options)}` : ""}</span>
                         <small>{m.quantity_after !== null ? `mbeten ${m.quantity_after} · ` : ""}{formatDate(m.created_at)}</small>
                       </li>
@@ -258,7 +252,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
               <Link className="btn btn-ghost" href={edit("#product-process")}><Icon name="edit" size={15} /> Ndrysho</Link>
             </div>
             <dl className="product-detail-rows">
-              <div><dt>Lloji i produktit</dt><dd>{type?.name ?? "Pa lloj"}{type?.description && <small>{type.description}</small>}</dd></div>
+              <div><dt>Shablloni i porosisë</dt><dd>{type?.name ?? "Pa shabllon"}{type?.description && <small>{type.description}</small>}</dd></div>
               <div><dt>Proces i posaçëm</dt><dd>{product.visual_workflow?.name ?? special?.name ?? "Jo, përdoret workflow-i kryesor"}</dd></div>
             </dl>
             <ProductBusinessWorkflow slug={slug} workflow={businessWorkflow} product={product} />
