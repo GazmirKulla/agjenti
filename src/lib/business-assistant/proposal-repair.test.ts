@@ -55,3 +55,21 @@ it("stops after two corrections without preparing any action", async () => {
   expect(m.model).toHaveBeenCalledTimes(3);
   expect(m.prepare).not.toHaveBeenCalled();
 });
+
+it("does not run the same search twice and points the model at the result it already has", async () => {
+  m.model.mockResolvedValueOnce(reply(search))
+    .mockResolvedValueOnce(reply(search))
+    .mockResolvedValueOnce(reply({ action: "clarify", changes: [], message: "A" }));
+  const result = await planRequest(access, "cili produkt ka më shumë faqe?", [], context);
+  expect(inputOf(1).data.searchResult).toMatchObject({ mode: "filter", note: expect.any(String) });
+  expect(inputOf(2).data.proposalRepair).toMatchObject({ diagnostic: "repeated_search" });
+  expect(result.message).toBe("A");
+});
+
+it("returns an operation with fields outside its contract to the model instead of failing the request", async () => {
+  m.model.mockResolvedValueOnce(reply({ action: "operation", changes: [{ field: "kind", value: "product" }, { field: "sort", value: "{}" }] }))
+    .mockResolvedValueOnce(reply({ action: "clarify", changes: [], message: "ok" }));
+  const result = await planRequest(access, "cili produkt është më i shtrenjtë?", [], context);
+  expect(inputOf(1).data.proposalRepair.diagnostic).toMatch(/^invalid_proposal: /);
+  expect(result.message).toBe("ok");
+});

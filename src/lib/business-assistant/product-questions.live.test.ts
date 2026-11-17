@@ -86,6 +86,12 @@ describe.skipIf(!live)("owner assistant answers catalog questions from server-ru
     expect(says(message, 5) || ["Paketa Parashkollore", "Shkruaj dhe Mesoj", "Kafshe dhe Natyra", "Libri i Shkronjave", "Paketa Kreative 5+"].every(n => message.includes(n))).toBe(true);
   }, 120_000);
 
+  it("finds the most expensive product", async () => {
+    const { message, scanned } = await ask("Kush produkt eshte me i shtrenjte?");
+    expect(scanned).toBe(true);
+    expect(message).toContain("Paketa Kreative 5+");
+  }, 120_000);
+
   it("reproduces stored names and values exactly", async () => {
     const { message } = await ask("Më trego emrat e produkteve dhe moshën e rekomanduar për secilin.");
     for (const exact of ["Shkruaj dhe Mesoj", "Kafshe dhe Natyra", "3-5 vjec", "5-7 vjec"]) expect(message).toContain(exact);

@@ -441,10 +441,14 @@ export async function planRequest(
   // A proposal that breaks the action contract (a malformed search, an unregistered
   // operation key) goes back to the model with the server's diagnostic, at most twice.
   let proposalRepairs = 0;
+  let lastSearchKey: string | undefined;
   const repairProposal = (diagnostic: string, rejected: unknown) => {
-    if (proposalRepairs >= 2) throw new AssistantError(diagnostic === "invalid_search" ? "Kërkimi nuk u formulua saktë. Provo ta shprehësh ndryshe." : "Veprimi i propozuar nuk mbështetet. Provo ta shprehësh ndryshe.");
+    if (proposalRepairs >= 2) throw new AssistantError(diagnostic.startsWith("invalid_proposal: ") ? diagnostic.slice("invalid_proposal: ".length)
+      : diagnostic === "invalid_search" || diagnostic === "repeated_search" ? "Kërkimi nuk u formulua saktë. Provo ta shprehësh ndryshe." : "Veprimi i propozuar nuk mbështetet. Provo ta shprehësh ndryshe.");
     proposalRepairs++;
-    context.proposalRepair = { diagnostic, rejected, instruction: "Return a corrected proposal that follows the action contract. Searches use action search with changes kind, query, filters, group_by, sort, offset; operation keys must come from ownerOperations." };
+    context.proposalRepair = { diagnostic, rejected, instruction: diagnostic === "repeated_search"
+      ? "This exact search already ran; its result is data.searchResult. Answer the request from it now with action clarify and the answer in message, or run a different search only if that result cannot answer it."
+      : "Return a corrected proposal that follows the action contract. Searches use action search with changes kind, query, filters, group_by, sort, offset; operation keys must come from ownerOperations." };
   };
   const registeredOperations = new Set(assistantOperationCatalog().map(operation => operation.key));
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -518,8 +522,8 @@ export async function planRequest(
         repairWorkflow(e.message, rawProposal);
         continue;
       }
-      if (rawProposal && typeof rawProposal === "object" && (rawProposal as { action?: unknown }).action === "search" && e instanceof AssistantError) {
-        repairProposal("invalid_search", rawProposal);
+      if (rawProposal && typeof rawProposal === "object" && e instanceof AssistantError) {
+        repairProposal((rawProposal as { action?: unknown }).action === "search" ? "invalid_search" : `invalid_proposal: ${e.message}`, rawProposal);
         continue;
       }
       if (e instanceof AssistantError) throw e;
@@ -645,7 +649,15 @@ export async function planRequest(
       return finish(await applyRequestedWorkflow(access, proposal, text, history, (context.workflow as WorkflowCard | undefined)?.workspace.revision, pendingGraph));
     }
     if (proposal.action === "search") {
-      context.searchResult = await searchContext(access, proposal, productSetup);
+      // The same search twice returns the same server facts: point the model at the result it already has.
+      const searchKey = JSON.stringify([...proposal.changes].sort((x, y) => x.field.localeCompare(y.field)));
+      if (searchKey === lastSearchKey) {
+        repairProposal("repeated_search", proposal);
+        continue;
+      }
+      lastSearchKey = searchKey;
+      context.searchResult = { ...await searchContext(access, proposal, productSetup),
+        note: "Server result of the search you proposed for the current request. If it answers the request, reply now with action clarify and the answer in message; never repeat the same search." };
       continue;
     }
     if (proposal.action === "operation") {
