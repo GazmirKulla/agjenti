@@ -1,43 +1,6 @@
-/* Confirmation dialog: uses the app theme tokens so it follows light/dark mode.
- * `margin: auto` restores native <dialog> centering that the global reset removes. */
-.assistant-confirmation {
-  box-sizing: border-box;
-  margin: auto;
-  width: min(480px, calc(100vw - 32px));
-  max-height: 85dvh;
-  overflow: auto;
-  padding: 24px 24px 0;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--ink);
-  font-family: var(--font-body);
-  box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
-}
-.assistant-confirmation[open] { animation: assistant-confirmation-in 160ms ease-out; }
-@keyframes assistant-confirmation-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .assistant-confirmation[open] { animation: none; }
-}
-.assistant-confirmation::backdrop {
-  background: rgb(15 23 42 / 55%);
-  backdrop-filter: blur(4px);
-}
-
-.assistant-confirmation h2 {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  line-height: 1.35;
-}
-.assistant-confirmation p { margin: 12px 0 0; line-height: 1.55; }
-.assistant-confirmation .confirmation-subject {
-  margin-top: 4px;
-  color: var(--ink-muted);
-  font-weight: 500;
-}
+/* Confirmation dialog content; the frame is the shared Modal. */
+.assistant-confirmation .modal-body p { margin: 12px 0 0; line-height: 1.55; }
+.assistant-confirmation .modal-body > div > :first-child { margin-top: 0; }
 
 /* Changes under review: one quiet panel instead of loose label/value pairs. */
 .assistant-confirmation dl {
@@ -85,18 +48,7 @@
   font-size: 0.875rem;
 }
 
-.assistant-confirmation footer {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin: 24px -24px 0;
-  padding: 16px 24px;
-  border-top: 1px solid var(--line);
-  background: var(--surface);
-}
-.assistant-confirmation button {
+.assistant-confirmation .modal-footer button {
   padding: 10px 18px;
   border-radius: 10px;
   border: 1px solid var(--line);
@@ -109,10 +61,10 @@
 .assistant-confirmation .assistant-secondary:hover:not(:disabled) { background: var(--hover); border-color: var(--line-strong); }
 .assistant-confirmation .assistant-primary { background: var(--primary); color: var(--on-primary); border-color: transparent; }
 .assistant-confirmation .assistant-primary:hover:not(:disabled) { background: var(--primary-hover); }
-.assistant-confirmation button:disabled { opacity: 0.6; cursor: wait; }
-.assistant-confirmation button:focus-visible,
+.assistant-confirmation .modal-footer button:disabled { opacity: 0.6; cursor: wait; }
+.assistant-confirmation .modal-footer button:focus-visible,
 .assistant-confirmation summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 @media (max-width: 480px) {
-  .assistant-confirmation footer button { flex: 1; }
+  .assistant-confirmation .modal-footer button { flex: 1; }
 }

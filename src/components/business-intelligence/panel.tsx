@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AudioRecorder } from "@/components/onboarding/audio-recorder";
 import {
@@ -16,6 +16,7 @@ import {
   type Target,
 } from "@/lib/business-intelligence/model";
 import { scanKnowledge, reviewEntities, knowledgeNotice } from "@/lib/business-intelligence/scan-routing";
+import { Modal, ModalFooter } from "@/components/modal/modal";
 import "./panel.css";
 const sections: Record<string, Target> = {
   products: "product",
@@ -30,7 +31,6 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
   const router = useRouter();
   const section = pathname.split("/")[3] ?? "";
   const initialTarget = sections[section];
-  const dialog = useRef<HTMLDialogElement>(null);
   const [opened, setOpened] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -54,7 +54,6 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
   async function open() {
     setOpened(true);
     setTarget(initialTarget ?? "profile");
-    dialog.current?.showModal();
     setBusy(true);
     setError(""); setIssues([]); setKnowledgeCount(0); setNote(""); setSelected([]); setEdits({}); setResolved([]); setConfirmed(false);
     try {
@@ -185,34 +184,17 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
       >
         ✨ Plotëso me AI
       </button>
-      <dialog
-        ref={dialog}
-        className="bi-dialog"
-        aria-labelledby="bi-title"
-        onCancel={(e) => {
-          if (busy) e.preventDefault();
-          else setOpened(false);
-        }}
+      <Modal
+        size="lg"
+        open={opened}
         onClose={() => setOpened(false)}
+        dismissible={!busy}
+        className="bi-dialog"
+        title="Plotëso hapësirën tënde"
+        subtitle="Jep informacion, rishiko propozimet dhe zgjidh çfarë të ruash."
       >
         {opened && (
           <>
-            <header>
-              <div>
-                <h2 id="bi-title">Plotëso hapësirën tënde</h2>
-                <p>
-                  Jep informacion, rishiko propozimet dhe zgjidh çfarë të ruash.
-                </p>
-              </div>
-              <button
-                className="bi-close"
-                disabled={busy}
-                onClick={() => dialog.current?.close()}
-                aria-label="Mbyll"
-              >
-                ×
-              </button>
-            </header>
             <fieldset className="bi-content" disabled={busy}>
               <label>
                 Seksioni
@@ -460,7 +442,7 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                 I kontrollova të dhënat e përzgjedhura, përfshirë çmimet dhe
                 politikat.
               </label>
-              <footer>
+              <ModalFooter>
                 <button
                   className="btn btn-ghost"
                   disabled={busy || !revision}
@@ -475,11 +457,11 @@ export function BusinessIntelligencePanel({ slug }: { slug: string }) {
                 >
                   {busy ? "Duke punuar…" : "Konfirmo dhe apliko"}
                 </button>
-              </footer>
+              </ModalFooter>
             </fieldset>
           </>
         )}
-      </dialog>
+      </Modal>
     </div>
   );
 }

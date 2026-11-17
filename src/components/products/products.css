@@ -272,13 +272,6 @@
     min-height: 0;
   }
 }
-.catalog-dialog {
-  width: min(400px, 94vw);
-}
-.catalog-dialog .muted-copy {
-  margin: 0.2rem 0 0;
-  font-size: 0.85rem;
-}
 .catalog-dialog-fields {
   display: grid;
   gap: 0.9rem;
@@ -288,17 +281,12 @@
   gap: 0.35rem;
   margin: 0;
 }
-.catalog-dialog-footer,
 .catalog-dialog-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  align-items: center;
-  margin-top: 1.15rem;
-}
-.catalog-dialog-actions {
   flex-direction: column;
   align-items: stretch;
+  gap: 0.55rem;
+  width: 100%;
 }
 .catalog-dialog-actions .muted-copy {
   text-align: center;

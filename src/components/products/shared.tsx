@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { Icon } from "@/components/dashboard/icon";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { Modal } from "@/components/modal/modal";
 
 export function ProductHeading({
   slug,
@@ -22,17 +23,6 @@ export function ProductHeading({
   actions?: "all" | "add" | "none";
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreDialog = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = moreDialog.current;
-    if (!dialog) return;
-    if (moreOpen) {
-      if (!dialog.open) dialog.showModal();
-    } else if (dialog.open) {
-      dialog.close();
-    }
-  }, [moreOpen]);
 
   return (
     <header className="product-page-heading">
@@ -60,43 +50,22 @@ export function ProductHeading({
           ＋ Shto {names.singular}
         </Link>
       </div>}
-      <dialog
-        ref={moreDialog}
-        className="record-create-dialog catalog-dialog"
-        aria-labelledby="product-more-title"
-        onClose={() => setMoreOpen(false)}
-        onClick={(e) => {
-          if (e.target === moreDialog.current) setMoreOpen(false);
-        }}
-      >
-        <div className="record-create-dialog-body">
-          <header className="record-create-dialog-head">
-            <h2 id="product-more-title">Më shumë</h2>
-            <button
-              className="btn btn-ghost"
-              type="button"
-              aria-label="Mbyll"
-              onClick={() => setMoreOpen(false)}
-            >
-              ×
-            </button>
-          </header>
-          <nav className="catalog-more-links" aria-label="Veprime shtesë">
-            <Link href={`/b/${slug}/products/imports`}>
-              Importo produkte
-              <span aria-hidden>→</span>
-            </Link>
-            <Link href={`/b/${slug}/products/new?method=csv`}>
-              Ngarko CSV
-              <span aria-hidden>→</span>
-            </Link>
-            <Link href={`/b/${slug}/products/new?method=instagram`}>
-              Nga Instagram
-              <span aria-hidden>→</span>
-            </Link>
-          </nav>
-        </div>
-      </dialog>
+      <Modal size="sm" open={moreOpen} onClose={() => setMoreOpen(false)} title="Më shumë">
+        <nav className="catalog-more-links" aria-label="Veprime shtesë">
+          <Link href={`/b/${slug}/products/imports`}>
+            Importo produkte
+            <span aria-hidden>→</span>
+          </Link>
+          <Link href={`/b/${slug}/products/new?method=csv`}>
+            Ngarko CSV
+            <span aria-hidden>→</span>
+          </Link>
+          <Link href={`/b/${slug}/products/new?method=instagram`}>
+            Nga Instagram
+            <span aria-hidden>→</span>
+          </Link>
+        </nav>
+      </Modal>
     </header>
   );
 }

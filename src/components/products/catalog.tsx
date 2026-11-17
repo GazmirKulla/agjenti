@@ -4,6 +4,7 @@ import { attributeFields, type BusinessField } from "@/lib/items/fields";
 import { useCatalogAssistantContext } from "@/components/business-assistant/workspace";
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
+import { Modal } from "@/components/modal/modal";
 import { useRouter } from "next/navigation";
 import {
   catalogFilter,
@@ -122,8 +123,6 @@ export function ProductCatalog({
   >({});
   const [configId, setConfigId] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
-  const configDialog = useRef<HTMLDialogElement>(null);
-  const bulkDialog = useRef<HTMLDialogElement>(null);
   const inFlight = useRef(new Set<string>());
   const hasSavingRows = Object.keys(savingRows).length > 0;
   const catalogProducts = useMemo(
@@ -218,26 +217,6 @@ export function ProductCatalog({
       { label: "Fshi produktin", danger: true, disabled: removal.busy, onSelect: () => void removal.prepare({ id: p.id }) },
     ];
   }
-
-  useEffect(() => {
-    const dialog = configDialog.current;
-    if (!dialog) return;
-    if (configId) {
-      if (!dialog.open) dialog.showModal();
-    } else if (dialog.open) {
-      dialog.close();
-    }
-  }, [configId]);
-
-  useEffect(() => {
-    const dialog = bulkDialog.current;
-    if (!dialog) return;
-    if (bulkOpen) {
-      if (!dialog.open) dialog.showModal();
-    } else if (dialog.open) {
-      dialog.close();
-    }
-  }, [bulkOpen]);
 
   function apply(mode: "map" | "activate" | "draft") {
     if (hasSavingRows) return;
@@ -573,233 +552,166 @@ export function ProductCatalog({
       {removal.dialog}
       {bulkRemoval.dialog}
 
-      <dialog
-        ref={configDialog}
-        className="record-create-dialog catalog-dialog"
-        aria-labelledby="catalog-config-title"
+      <Modal
+        size="md"
+        open={Boolean(configProduct)}
         onClose={() => setConfigId(null)}
-        onClick={(e) => {
-          if (e.target === configDialog.current) setConfigId(null);
-        }}
+        title="Konfiguro"
+        subtitle={configProduct?.name}
+        footer={configProduct && (
+          <>
+            <Link
+              className="btn btn-ghost"
+              href={`/b/${slug}/products/${configProduct.id}`}
+            >
+              Hap produktin
+            </Link>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setConfigId(null)}
+            >
+              Mbyll
+            </button>
+          </>
+        )}
       >
         {configProduct && (
-          <div className="record-create-dialog-body">
-            <header className="record-create-dialog-head">
-              <div>
-                <h2 id="catalog-config-title">Konfiguro</h2>
-                <p className="muted-copy">{configProduct.name}</p>
-              </div>
-              <button
-                className="btn btn-ghost"
-                type="button"
-                aria-label="Mbyll"
-                onClick={() => setConfigId(null)}
-              >
-                ×
-              </button>
-            </header>
-            <div className="catalog-dialog-fields">
-              <label className="form-label">
-                Lloji
-                <select
-                  className="field"
-                  value={
-                    savingRows[configProduct.id]?.field === "product_type_id"
-                      ? String(savingRows[configProduct.id].value ?? "")
-                      : (configProduct.product_type_id ?? "")
-                  }
-                  disabled={
-                    pending || Boolean(savingRows[configProduct.id])
-                  }
-                  onChange={(event) =>
-                    void editRow(
-                      configProduct,
-                      "product_type_id",
-                      event.target.value || null,
-                    )
-                  }
-                >
-                  <option value="">Pa lloj</option>
-                  {configProduct.product_type_id &&
-                    !types.some(
-                      (type) => type.id === configProduct.product_type_id,
-                    ) && (
-                      <option value={configProduct.product_type_id} disabled>
-                        Lloji aktual (joaktiv)
-                      </option>
-                    )}
-                  {types.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <ProductBusinessWorkflow slug={slug} workflow={configProduct.business_workflow} product={configProduct} />
-              <details open={Boolean(configProduct.workflow_id)}><summary>Proces i posaçëm (opsional)</summary><label className="form-label">
-                Procesi pas zgjedhjes së produktit
-                <select
-                  className="field"
-                  value={
-                    savingRows[configProduct.id]?.field === "workflow_id"
-                      ? String(savingRows[configProduct.id].value ?? "")
-                      : (configProduct.workflow_id ?? "")
-                  }
-                  disabled={
-                    pending || Boolean(savingRows[configProduct.id])
-                  }
-                  onChange={(event) =>
-                    void editRow(
-                      configProduct,
-                      "workflow_id",
-                      event.target.value || null,
-                    )
-                  }
-                >
-                  <option value="">{configProduct.visual_workflow || configProduct.visual_draft ? "Ruaj procesin vizual ekzistues" : "Përdor workflow-in kryesor"}</option>
-                  {configProduct.workflow_id &&
-                    !workflows.some(
-                      (workflow) => workflow.id === configProduct.workflow_id,
-                    ) && (
-                      <option value={configProduct.workflow_id} disabled>
-                        Workflow aktual
-                      </option>
-                    )}
-                  {workflows.filter(w => w.id).map((workflow) => (
-                    <option key={workflow.id} value={workflow.id}>
-                      {workflow.name}
-                    </option>
-                  ))}
-                </select>
-              </label></details>
-              <label className="form-label">
-                Statusi
-                <select
-                  className="field"
-                  value={
-                    (
-                      savingRows[configProduct.id]?.field === "is_active"
-                        ? savingRows[configProduct.id].value
-                        : configProduct.is_active
-                    )
-                      ? "active"
-                      : "draft"
-                  }
-                  disabled={
-                    pending || Boolean(savingRows[configProduct.id])
-                  }
-                  onChange={(event) =>
-                    void editRow(
-                      configProduct,
-                      "is_active",
-                      event.target.value === "active",
-                    )
-                  }
-                >
-                  <option value="draft">Draft</option>
-                  <option value="active">Aktiv</option>
-                </select>
-              </label>
-              {!isMapped(configProduct) && (
-                <p className="muted-copy">
-                  Aktivizimi e bën produktin të kërkueshëm në katalog, jo të porositshëm automatikisht. Veprimet kërkojnë workflow dhe autorizim në server.
-                </p>
-              )}
-              <small
-                className={`catalog-inline-feedback${rowFeedback[configProduct.id]?.error ? " is-error" : ""}`}
-                role={
-                  rowFeedback[configProduct.id]?.error ? "alert" : "status"
-                }
-              >
-                {savingRows[configProduct.id] ? (
-                  <>
-                    <span className="catalog-saving-spinner" aria-hidden="true" />{" "}
-                    Po ruhet…
-                  </>
-                ) : (
-                  rowFeedback[configProduct.id]?.error ||
-                  rowFeedback[configProduct.id]?.success
-                )}
-              </small>
-            </div>
-            <footer className="catalog-dialog-footer">
-              <Link
-                className="btn btn-ghost"
-                href={`/b/${slug}/products/${configProduct.id}`}
-              >
-                Hap produktin
-              </Link>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setConfigId(null)}
-              >
-                Mbyll
-              </button>
-            </footer>
-          </div>
-        )}
-      </dialog>
-
-      <dialog
-        ref={bulkDialog}
-        className="record-create-dialog catalog-dialog"
-        aria-labelledby="catalog-bulk-title"
-        onClose={() => { setBulkOpen(false); setSelected([]); }}
-        onClick={(e) => {
-          if (e.target === bulkDialog.current) setBulkOpen(false);
-        }}
-      >
-        <div className="record-create-dialog-body">
-          <header className="record-create-dialog-head">
-            <div>
-              <h2 id="catalog-bulk-title">Veprime</h2>
-              <p className="muted-copy">
-                {selected.length} produkte në këtë faqe
-              </p>
-            </div>
-            <button
-              className="btn btn-ghost"
-              type="button"
-              aria-label="Mbyll"
-              onClick={() => setBulkOpen(false)}
-            >
-              ×
-            </button>
-          </header>
           <div className="catalog-dialog-fields">
             <label className="form-label">
-              Lloji i produktit
+              Lloji
               <select
                 className="field"
-                value={typeId}
-                onChange={(e) => setTypeId(e.target.value)}
+                value={
+                  savingRows[configProduct.id]?.field === "product_type_id"
+                    ? String(savingRows[configProduct.id].value ?? "")
+                    : (configProduct.product_type_id ?? "")
+                }
+                disabled={
+                  pending || Boolean(savingRows[configProduct.id])
+                }
+                onChange={(event) =>
+                  void editRow(
+                    configProduct,
+                    "product_type_id",
+                    event.target.value || null,
+                  )
+                }
               >
-                <option value="">Mos e ndrysho</option>
-                {types.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
+                <option value="">Pa lloj</option>
+                {configProduct.product_type_id &&
+                  !types.some(
+                    (type) => type.id === configProduct.product_type_id,
+                  ) && (
+                    <option value={configProduct.product_type_id} disabled>
+                      Lloji aktual (joaktiv)
+                    </option>
+                  )}
+                {types.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
                   </option>
                 ))}
               </select>
             </label>
+            <ProductBusinessWorkflow slug={slug} workflow={configProduct.business_workflow} product={configProduct} />
+            <details open={Boolean(configProduct.workflow_id)}><summary>Proces i posaçëm (opsional)</summary><label className="form-label">
+              Procesi pas zgjedhjes së produktit
+              <select
+                className="field"
+                value={
+                  savingRows[configProduct.id]?.field === "workflow_id"
+                    ? String(savingRows[configProduct.id].value ?? "")
+                    : (configProduct.workflow_id ?? "")
+                }
+                disabled={
+                  pending || Boolean(savingRows[configProduct.id])
+                }
+                onChange={(event) =>
+                  void editRow(
+                    configProduct,
+                    "workflow_id",
+                    event.target.value || null,
+                  )
+                }
+              >
+                <option value="">{configProduct.visual_workflow || configProduct.visual_draft ? "Ruaj procesin vizual ekzistues" : "Përdor workflow-in kryesor"}</option>
+                {configProduct.workflow_id &&
+                  !workflows.some(
+                    (workflow) => workflow.id === configProduct.workflow_id,
+                  ) && (
+                    <option value={configProduct.workflow_id} disabled>
+                      Workflow aktual
+                    </option>
+                  )}
+                {workflows.filter(w => w.id).map((workflow) => (
+                  <option key={workflow.id} value={workflow.id}>
+                    {workflow.name}
+                  </option>
+                ))}
+              </select>
+            </label></details>
             <label className="form-label">
-              Proces i posaçëm (opsional)
+              Statusi
               <select
                 className="field"
-                value={workflowId}
-                onChange={(e) => setWorkflowId(e.target.value)}
+                value={
+                  (
+                    savingRows[configProduct.id]?.field === "is_active"
+                      ? savingRows[configProduct.id].value
+                      : configProduct.is_active
+                  )
+                    ? "active"
+                    : "draft"
+                }
+                disabled={
+                  pending || Boolean(savingRows[configProduct.id])
+                }
+                onChange={(event) =>
+                  void editRow(
+                    configProduct,
+                    "is_active",
+                    event.target.value === "active",
+                  )
+                }
               >
-                <option value="">Mos e ndrysho</option>
-                {workflows.filter(w => w.id).map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
+                <option value="draft">Draft</option>
+                <option value="active">Aktiv</option>
               </select>
             </label>
+            {!isMapped(configProduct) && (
+              <p className="muted-copy">
+                Aktivizimi e bën produktin të kërkueshëm në katalog, jo të porositshëm automatikisht. Veprimet kërkojnë workflow dhe autorizim në server.
+              </p>
+            )}
+            <small
+              className={`catalog-inline-feedback${rowFeedback[configProduct.id]?.error ? " is-error" : ""}`}
+              role={
+                rowFeedback[configProduct.id]?.error ? "alert" : "status"
+              }
+            >
+              {savingRows[configProduct.id] ? (
+                <>
+                  <span className="catalog-saving-spinner" aria-hidden="true" />{" "}
+                  Po ruhet…
+                </>
+              ) : (
+                rowFeedback[configProduct.id]?.error ||
+                rowFeedback[configProduct.id]?.success
+              )}
+            </small>
           </div>
-          <footer className="catalog-dialog-actions">
+        )}
+      </Modal>
+
+      <Modal
+        size="md"
+        open={bulkOpen}
+        onClose={() => { setBulkOpen(false); setSelected([]); }}
+        title="Veprime"
+        subtitle={`${selected.length} produkte në këtë faqe`}
+        footer={
+          <div className="catalog-dialog-actions">
             <button
               type="button"
               className="btn btn-primary"
@@ -842,9 +754,42 @@ export function ProductCatalog({
                 Menaxho workflow-t →
               </Link>
             )}
-          </footer>
+          </div>
+        }
+      >
+        <div className="catalog-dialog-fields">
+          <label className="form-label">
+            Lloji i produktit
+            <select
+              className="field"
+              value={typeId}
+              onChange={(e) => setTypeId(e.target.value)}
+            >
+              <option value="">Mos e ndrysho</option>
+              {types.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="form-label">
+            Proces i posaçëm (opsional)
+            <select
+              className="field"
+              value={workflowId}
+              onChange={(e) => setWorkflowId(e.target.value)}
+            >
+              <option value="">Mos e ndrysho</option>
+              {workflows.filter(w => w.id).map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      </dialog>
+      </Modal>
     </div>
   );
 }

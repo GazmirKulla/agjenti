@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
+import { Modal } from "@/components/modal/modal";
 import { Icon } from "@/components/dashboard/icon";
 import "./test-inputs.css";
 
@@ -23,38 +24,23 @@ export function filledTestInputs(inputs: TestInputs): TestInputs {
 }
 
 export function TestInputsDialog({ inputs, onSave, onClose }: { inputs: TestInputs; onSave: (inputs: TestInputs) => void; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const title = useId();
+  const formId = useId();
   const [draft, setDraft] = useState<TestInputs>(inputs);
-  useEffect(() => {
-    const element = dialog.current;
-    const previous = document.activeElement;
-    element?.showModal();
-    return () => { element?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
-  }, []);
-  return <dialog ref={dialog} className="test-inputs-dialog" aria-labelledby={title}
-    onCancel={event => { event.preventDefault(); onClose(); }}
-    onClick={event => { if (event.target === dialog.current) onClose(); }}>
-    <form method="dialog" onSubmit={event => { event.preventDefault(); onSave(filledTestInputs(draft)); }}>
-      <header>
-        <div><h2 id={title}>Inputs</h2><p>Të dhënat e klientit që simulon. Vlejnë për mesazhet e ardhshme të kësaj bisede.</p></div>
-        <button type="button" className="test-inputs-close" aria-label="Mbyll" onClick={onClose}><Icon name="close" size={16} /></button>
-      </header>
-      <div className="test-inputs-fields">
-        {testInputFields.map(field => <label key={field.key} className="test-inputs-field">
-          <span className="test-inputs-label"><Icon name={field.icon} size={15} /> {field.label}</span>
-          <input type="text" value={draft[field.key] ?? ""} maxLength={field.maxLength} placeholder={field.placeholder}
-            autoComplete="off" autoCapitalize="none" spellCheck={false}
-            onChange={event => setDraft(current => ({ ...current, [field.key]: event.target.value }))} />
-          <small>{field.help}</small>
-        </label>)}
-      </div>
-      <footer>
-        <button type="button" className="test-inputs-secondary" onClick={() => setDraft({})}>Pastro</button>
-        <span />
-        <button type="button" className="test-inputs-secondary" onClick={onClose}>Anulo</button>
-        <button type="submit" className="test-inputs-primary">Ruaj</button>
-      </footer>
+  return <Modal size="sm" title="Inputs" subtitle="Të dhënat e klientit që simulon. Vlejnë për mesazhet e ardhshme të kësaj bisede." onClose={onClose}
+    footer={<>
+      <button type="button" className="test-inputs-secondary" onClick={() => setDraft({})}>Pastro</button>
+      <span className="test-inputs-spacer" />
+      <button type="button" className="test-inputs-secondary" onClick={onClose}>Anulo</button>
+      <button type="submit" form={formId} className="test-inputs-primary">Ruaj</button>
+    </>}>
+    <form id={formId} className="test-inputs-fields" onSubmit={event => { event.preventDefault(); onSave(filledTestInputs(draft)); }}>
+      {testInputFields.map(field => <label key={field.key} className="test-inputs-field">
+        <span className="test-inputs-label"><Icon name={field.icon} size={15} /> {field.label}</span>
+        <input type="text" value={draft[field.key] ?? ""} maxLength={field.maxLength} placeholder={field.placeholder}
+          autoComplete="off" autoCapitalize="none" spellCheck={false}
+          onChange={event => setDraft(current => ({ ...current, [field.key]: event.target.value }))} />
+        <small>{field.help}</small>
+      </label>)}
     </form>
-  </dialog>;
+  </Modal>;
 }

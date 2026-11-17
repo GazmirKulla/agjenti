@@ -1306,34 +1306,6 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
   font-size: 22px;
   margin-bottom: 22px;
 }
-.record-create-dialog {
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--ink);
-  width: min(440px, 94vw);
-  padding: 0;
-  margin: auto;
-  box-shadow: 0 24px 60px color-mix(in srgb, var(--brand-secondary) 20%, transparent);
-}
-.record-create-dialog::backdrop {
-  background: color-mix(in srgb, var(--brand-secondary) 40%, transparent);
-}
-.record-create-dialog-body {
-  padding: 1.25rem 1.35rem 1.4rem;
-}
-.record-create-dialog-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1.1rem;
-}
-.record-create-dialog-head h2 {
-  font-size: 1.15rem;
-  font-weight: 700;
-  margin: 0;
-}
 .detail-header {
   display: flex;
   align-items: center;

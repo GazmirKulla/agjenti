@@ -4,12 +4,12 @@ import {
   cloneElement,
   isValidElement,
   useEffect,
-  useRef,
   useState,
   type ReactElement,
   type ReactNode,
 } from "react";
 import { Icon } from "./icon";
+import { Modal } from "@/components/modal/modal";
 import { EmptyState } from "./ui";
 import { ListToolbar } from "./list-toolbar";
 import type { RowMenuItem } from "./row-menu";
@@ -76,7 +76,6 @@ export function RecordBrowser({
   const [opened, setOpened] = useState(false);
   const [chosen, setChosen] = useState<Record<string, string>>({});
   const [byTitle, setByTitle] = useState(false);
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const filtered = serverPage
     ? records
     : records.filter(
@@ -137,28 +136,17 @@ export function RecordBrowser({
   }
   const active = rows.find((r) => r.id === selected) ?? rows[0];
 
-  useEffect(() => {
-    if (!createAsModal) return;
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (creating) {
-      if (!dialog.open) dialog.showModal();
-    } else if (dialog.open) {
-      dialog.close();
-    }
-  }, [creating, createAsModal]);
-
   const detailOpen = opened || (creating && !createAsModal);
   useEffect(() => {
     if (!detailOpen) return;
     const key = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || dialogRef.current?.open || (!detailAsModal && !window.matchMedia("(max-width: 1200px)").matches)) return;
+      if (event.key !== "Escape" || (createAsModal && creating) || (!detailAsModal && !window.matchMedia("(max-width: 1200px)").matches)) return;
       setOpened(false);
       setCreating(false);
     };
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
-  }, [detailOpen, detailAsModal]);
+  }, [detailOpen, detailAsModal, createAsModal, creating]);
 
   const formWithClose =
     createAsModal && isValidElement(createForm)
@@ -417,29 +405,9 @@ export function RecordBrowser({
         )}
       </section>
       {createAsModal && createForm ? (
-        <dialog
-          ref={dialogRef}
-          className="record-create-dialog"
-          onClose={() => setCreating(false)}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setCreating(false);
-          }}
-        >
-          <div className="record-create-dialog-body">
-            <header className="record-create-dialog-head">
-              <h2>{createLabel}</h2>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                aria-label="Mbyll"
-                onClick={() => setCreating(false)}
-              >
-                ✕
-              </button>
-            </header>
-            {creating ? formWithClose : null}
-          </div>
-        </dialog>
+        <Modal size="md" open={creating} onClose={() => setCreating(false)} title={createLabel}>
+          {formWithClose}
+        </Modal>
       ) : null}
     </div>
   );

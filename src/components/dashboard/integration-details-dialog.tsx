@@ -1,39 +1,17 @@
 "use client";
 import { useDashboardTranslator } from "@/components/dashboard/language";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Icon } from "./icon";
+import { Modal } from "@/components/modal/modal";
 import styles from "./integration-card.module.css";
 
 /** `closeHref`: the page the dialog sits on (Kanalet by default; Produktet for the business website). */
 export function IntegrationDetailsDialog({ slug, name, children, closeHref }: { slug: string; name: string; children: ReactNode; closeHref?: string }) {
   const t = useDashboardTranslator();
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
   const router = useRouter();
   const close = () => router.replace(closeHref ?? `/b/${slug}/integrations`, { scroll: false });
-  useEffect(() => {
-    const dialog = ref.current;
-    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    dialog?.showModal();
-    document.body.style.overflow = "hidden";
-    return () => {
-      dialog?.close();
-      document.body.style.overflow = previousOverflow;
-      if (trigger?.isConnected) trigger.focus();
-    };
-  }, []);
-  return <dialog ref={ref} className={styles.dialog} aria-labelledby={titleId}
-    onCancel={event => { event.preventDefault(); event.stopPropagation(); close(); }}
-    onClick={event => { if (event.target === event.currentTarget) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();
-    } }}>
-    <header className={styles.dialogHeader}><h2 id={titleId}>{name} {t("· Detajet")}</h2>
-      <button type="button" className={styles.dialogClose} aria-label={t("Mbyll detajet")} onClick={close}><Icon name="close" size={20} /></button>
-    </header>
-    <div className={styles.dialogContent}>{children}</div>
-  </dialog>;
+  return <Modal size="lg" title={`${name} ${t("· Detajet")}`} closeLabel={t("Mbyll detajet")} onClose={close} bodyClassName={styles.dialogContent}>
+    {children}
+  </Modal>;
 }
