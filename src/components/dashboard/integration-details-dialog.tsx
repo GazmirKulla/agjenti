@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 import { Icon } from "./icon";
 import styles from "./integration-card.module.css";
 
-export function IntegrationDetailsDialog({ slug, name, children }: { slug: string; name: string; children: ReactNode }) {
+/** `closeHref`: the page the dialog sits on (Kanalet by default; Produktet for the business website). */
+export function IntegrationDetailsDialog({ slug, name, children, closeHref }: { slug: string; name: string; children: ReactNode; closeHref?: string }) {
   const t = useDashboardTranslator();
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const router = useRouter();
-  const close = () => router.replace(`/b/${slug}/integrations`, { scroll: false });
+  const close = () => router.replace(closeHref ?? `/b/${slug}/integrations`, { scroll: false });
   useEffect(() => {
     const dialog = ref.current;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;

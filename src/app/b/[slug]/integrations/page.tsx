@@ -1,7 +1,4 @@
 import { getDashboardTranslator } from "@/lib/dashboard/language/server";
-import Link from "next/link";
-import { Icon } from "@/components/dashboard/icon";
-import { WebsiteIntegration } from "@/components/dashboard/website-integration";
 import { Suspense } from "react";
 import InstagramAccountDetails from "@/components/instagram/account-details";
 import WhatsAppAccountDetails from "@/components/whatsapp/account-details";
@@ -22,17 +19,18 @@ export default async function IntegrationsPage({ params, searchParams }: { param
   const t = await getDashboardTranslator();
   const { slug } = await params;
   const { detail } = await searchParams;
+  // The business website moved to Produktet; old links still open it there.
+  if (detail === "website") redirect(`/b/${slug}/products?detail=website`);
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const [instagram, whatsapp, website] = await Promise.all([
+  const [instagram, whatsapp] = await Promise.all([
     db.from("instagram_connections").select("username,ig_user_id,status,expires_at,last_error,updated_at")
       .eq("business_id", access.business.id).neq("status", "disconnected").maybeSingle(),
     db.from("whatsapp_connections").select("display_phone_number,verified_name,status,last_error,updated_at")
       .eq("business_id", access.business.id).maybeSingle(),
-    db.from("integrations").select("catalog_url").eq("business_id", access.business.id).eq("kind", "http").maybeSingle(),
   ]);
   const ig = instagram.data;
   const wa = whatsapp.data;
@@ -62,23 +60,6 @@ export default async function IntegrationsPage({ params, searchParams }: { param
         activity={worded(waActivity)} health={channelHealth("whatsapp", waConnection, waActivity)}
         whatsapp={{ appId: process.env.META_APP_ID ?? "", configId: process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID ?? "", version: whatsappGraphVersion() }} />
     </div>
-    <h2 className={styles.section}>{t("Lidhje të tjera")}</h2>
-    <div className={styles.grid}>
-      <article className={styles.row} aria-label={t("Webi i biznesit")}>
-        <div className={styles.heading}>
-          <span className={`${styles.icon} ${styles.inactiveIcon}`}><Icon name="display" size={28} /></span>
-          <div className={styles.title}>
-            <h2>{t("Webi i biznesit")}</h2>
-            <p className={styles.identity}>{website.error ? t("Nuk u ngarkua konfigurimi i webit.") : website.data?.catalog_url || t("Lidh katalogun dhe porositë e webit përmes API-së")}</p>
-            <p className={styles.status}>{website.error ? t("Statusi nuk u ngarkua") : website.data?.catalog_url ? t("E konfiguruar · testo lidhjen te detajet") : t("E pakonfiguruar")}</p>
-          </div>
-        </div>
-        <div className={styles.actions}><Link className="btn btn-ghost" href={`/b/${slug}/integrations?detail=website`} scroll={false}>{t("Konfigurimi dhe specifikimet")}</Link></div>
-      </article>
-    </div>
-    {detail === "website" && <IntegrationDetailsDialog slug={slug} name={t("Webi i biznesit")}>
-      <Suspense fallback={<p role="status">{t("Duke ngarkuar konfigurimin…")}</p>}><WebsiteIntegration slug={slug} /></Suspense>
-    </IntegrationDetailsDialog>}
     {(detail === "instagram" || detail === "whatsapp") && <IntegrationDetailsDialog slug={slug} name={detail === "instagram" ? "Instagram" : "WhatsApp"}>
       <Suspense fallback={<p role="status">{t("Duke ngarkuar detajet…")}</p>}>
         {detail === "instagram" ? <InstagramAccountDetails params={params} searchParams={Promise.resolve({})} /> : <WhatsAppAccountDetails params={params} />}

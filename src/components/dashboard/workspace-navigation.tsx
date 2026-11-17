@@ -11,7 +11,7 @@ type Props = { navigation: ReturnType<typeof organizeWorkspace>; section?: Works
   /** Connected channels that need attention (expired, expiring or failing). */
   channelsAttention?: { instagram: boolean; whatsapp: boolean } };
 
-/** Kanalet with its three channels always in sight, each with its own mark. */
+/** Kanalet with its channels always in sight, each with its own mark (the business website is under Produktet). */
 function ChannelsGroup({ base, pathname, section, iconsOnly, onNavigate, attention }: {
   base: string; pathname: string; section?: WorkspaceSection; iconsOnly: boolean; onNavigate: () => void;
   attention?: { instagram: boolean; whatsapp: boolean };
@@ -21,7 +21,6 @@ function ChannelsGroup({ base, pathname, section, iconsOnly, onNavigate, attenti
   const channels = [
     { id: "instagram", label: "Instagram", icon: "instagram", href: `${base}/instagram`, attention: !!attention?.instagram },
     { id: "whatsapp", label: "WhatsApp", icon: "whatsapp", href: `${base}/whatsapp`, attention: !!attention?.whatsapp },
-    { id: "website", label: "Webi i biznesit", icon: "display", href: `${overview}?detail=website`, attention: false },
   ];
   const onOverview = pathname === overview;
   return <section className={s.group} aria-label={t("Kanalet")}>
@@ -33,7 +32,7 @@ function ChannelsGroup({ base, pathname, section, iconsOnly, onNavigate, attenti
     </div>
     <div className={s.businessLinks}>
       {channels.map(channel => {
-        const current = channel.id !== "website" && (pathname === channel.href || pathname.startsWith(`${channel.href}/`));
+        const current = pathname === channel.href || pathname.startsWith(`${channel.href}/`);
         return <Link key={channel.id} href={channel.href} aria-current={current ? "page" : undefined}
           data-tip={iconsOnly ? t(channel.label) : undefined} onClick={onNavigate}>
           <Icon name={channel.icon} size={17}/><span className="nav-label">{t(channel.label)}</span>

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import {
   catalogFilter,
   catalogStatus,
+  fromWebsite,
   isMapped,
   type ProductRow,
   type CatalogField,
@@ -44,8 +45,16 @@ const STATUS_FILTERS = [
   ["archived", "Të arkivuara"],
   ["draft", "Draft"],
   ["unlinked", "Të palidhura"],
-  ["imports", "Katalog i jashtëm"],
 ] as const;
+/** Where products come from: the business website's catalog or added here. */
+type Source = "all" | "website" | "local";
+
+/** Marks a product that comes from the business website (its data is the website's). */
+function WebsiteBadge() {
+  return <span className="product-source-web" title="Produkt i lidhur me webin e biznesit">
+    <Icon name="display" size={12} /><span>Webi</span>
+  </span>;
+}
 const SORTS = [
   ["newest", "Më të rejat"],
   ["name", "Emri (A–Z)"],
@@ -57,7 +66,7 @@ function itemSubline(p: ProductRow, extra: KindField[] = []) {
   const variants = p.variants?.filter(v => v.is_active).length ?? 0;
   const summary = [attributeSummary(p.item_kind ?? "product", p.attributes, extra), variants ? `${variants} variante` : ""].filter(Boolean).join(" · ");
   if (summary) return summary;
-  return p.sku ? `SKU: ${p.sku}` : p.source === "linked" ? "Katalog i lidhur" : "Pa SKU";
+  return p.sku ? `SKU: ${p.sku}` : "Pa SKU";
 }
 
 export function ProductCatalog({
@@ -81,6 +90,7 @@ export function ProductCatalog({
   const defaultFilter = mapping ? "unlinked" : "all";
   const [filter, setFilter] = useState(defaultFilter);
   const [typeFilter, setTypeFilter] = useState("");
+  const [source, setSource] = useState<Source>("all");
   const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
@@ -95,7 +105,7 @@ export function ProductCatalog({
   };
   useCatalogAssistantContext({
     searchQuery: query,
-    filters: { status: filter, ...(typeFilter ? { type: typeFilter } : {}) },
+    filters: { status: filter === "all" && source === "website" ? "imports" : filter, ...(typeFilter ? { type: typeFilter } : {}) },
     selectedEntityIds: selected,
     selectionLabel: selected.length === 1 ? products.find(product => product.id === selected[0])?.name : selected.length ? `${selected.length} produkte të zgjedhura` : undefined,
   });
@@ -130,9 +140,15 @@ export function ProductCatalog({
   );
   const router = useRouter();
   const filtered = useMemo(
-    () => catalogFilter(catalogProducts, query, filter, typeFilter, sort),
-    [catalogProducts, query, filter, typeFilter, sort],
+    () => catalogFilter(catalogProducts, query, filter, typeFilter, sort)
+      .filter(p => source === "all" || fromWebsite(p) === (source === "website")),
+    [catalogProducts, query, filter, typeFilter, sort, source],
   );
+  const sourceCounts = useMemo(() => {
+    const current = catalogProducts.filter(p => !p.archived_at);
+    const website = current.filter(fromWebsite).length;
+    return { all: current.length, website, local: current.length - website };
+  }, [catalogProducts]);
   const maxPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, maxPage);
   const shown = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -312,6 +328,21 @@ export function ProductCatalog({
         </div>
       )}
       <section className="panel product-catalog">
+        {!mapping && sourceCounts.website > 0 && (
+          <div className="catalog-source" role="group" aria-label="Burimi i produkteve">
+            {([
+              ["all", "Të gjitha", sourceCounts.all],
+              ["website", "Nga webi", sourceCounts.website],
+              ["local", "Të shtuara këtu", sourceCounts.local],
+            ] as const).map(([value, label, count]) => (
+              <button key={value} type="button" className={source === value ? "is-active" : ""} aria-pressed={source === value}
+                onClick={() => { setSource(value); setPage(1); }}>
+                {value === "website" && <Icon name="display" size={14} />}
+                {label}<span className="catalog-source-count">{count}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="catalog-toolbar" role="toolbar" aria-label="Lista e produkteve">
           <RowMenu
             label="Filtro produktet"
@@ -394,7 +425,7 @@ export function ProductCatalog({
                         <span className="product-no-image" aria-hidden><Icon name="products" size={22} /></span>
                       )}
                       <span className="product-card-text">
-                        <strong>{p.name}</strong>
+                        <strong>{p.name}{fromWebsite(p) && <WebsiteBadge />}</strong>
                         <small>{itemSubline(p, extra)}</small>
                         <span className="product-card-meta">
                           <span>{money(p.price_amount, p.currency, { mode: p.price_mode, max: p.price_max, unit: p.price_unit })}</span>
@@ -423,7 +454,7 @@ export function ProductCatalog({
                     <span className="product-tile-photo">
                       {p.image_url ? <img src={p.image_url} alt="" loading="lazy" /> : <Icon name="products" size={34} />}
                     </span>
-                    <strong>{p.name}</strong>
+                    <strong>{p.name}{fromWebsite(p) && <WebsiteBadge />}</strong>
                     <small>{itemSubline(p, extra)}</small>
                     <span className="product-card-meta">
                       <span>{money(p.price_amount, p.currency, { mode: p.price_mode, max: p.price_max, unit: p.price_unit })}</span>
@@ -478,7 +509,7 @@ export function ProductCatalog({
                           <span className="product-no-image" aria-hidden><Icon name="products" size={20} /></span>
                         )}
                         <span>
-                          <strong>{p.name}</strong>
+                          <strong>{p.name}{fromWebsite(p) && <WebsiteBadge />}</strong>
                           <small>{itemSubline(p, extra)}</small>
                         </span>
                       </Link>
@@ -510,7 +541,7 @@ export function ProductCatalog({
             </h3>
             <p>
               {products.length
-                ? "Ndrysho kërkimin ose filtrin."
+                ? source !== "all" ? "Ndrysho kërkimin, filtrin ose burimin." : "Ndrysho kërkimin ose filtrin."
                 : "Shto produktin e parë për ta përdorur Agjenti."}
             </p>
             <Link

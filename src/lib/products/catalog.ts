@@ -38,6 +38,10 @@ export function isMapped(p: ProductRow) {
   // Linked to the steps of an order; the product type is only the template those steps may come from.
   return Boolean(p.workflow_id || p.visual_workflow || p.business_workflow?.active);
 }
+/** Comes from the business website's catalog (linked there), not added here. */
+export function fromWebsite(p: Pick<ProductRow, "source" | "external_id">) {
+  return p.source === "linked" || Boolean(p.external_id);
+}
 export function catalogStatus(p: ProductRow) {
   return p.archived_at ? "archived" : p.is_active ? "active" : !isMapped(p) ? "unlinked" : "draft";
 }
@@ -65,7 +69,7 @@ export function catalogFilter(
         (!type || p.product_type_id === type) &&
         ((filter === "all" && !p.archived_at) ||
           (filter === "imports"
-            ? p.source === "linked" || Boolean(p.external_id)
+            ? fromWebsite(p)
             : catalogStatus(p) === filter)),
     )
     .sort((a, b) =>
