@@ -1693,6 +1693,107 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
     min-height: 0;
   }
 }
+/* Tablets and narrow desktops: the list takes the full width and the detail opens as a drawer
+   from the right, instead of landing below a long list where nobody sees it. */
+@media (min-width: 761px) and (max-width: 1200px) {
+  .table-browser .record-detail {
+    display: none;
+  }
+  .table-browser.is-detail-open .record-detail {
+    display: block;
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(560px, 100vw);
+    z-index: 70;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 18px 22px 32px;
+    border-radius: 0;
+    box-shadow: -18px 0 48px color-mix(in srgb, var(--brand-secondary) 18%, transparent);
+  }
+  .table-browser.is-detail-open .record-detail-back {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: 0 0 8px -6px;
+    padding: 0 6px;
+    color: var(--accent);
+    font-weight: 650;
+    cursor: pointer;
+  }
+}
+@media (min-width: 761px) and (max-width: 900px) {
+  .record-browser:not(.table-browser) .record-detail {
+    display: none;
+  }
+  .record-browser:not(.table-browser).is-detail-open .record-detail {
+    display: block;
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(560px, 100vw);
+    z-index: 70;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 18px 22px 32px;
+    border-radius: 0;
+    box-shadow: -18px 0 48px color-mix(in srgb, var(--brand-secondary) 18%, transparent);
+  }
+  .record-browser:not(.table-browser).is-detail-open .record-detail-back {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: 0 0 8px -6px;
+    padding: 0 6px;
+    color: var(--accent);
+    font-weight: 650;
+    cursor: pointer;
+  }
+}
+/* Wide screens: the panel beside the table stays in view and scrolls on its own. */
+@media (min-width: 1201px) {
+  .table-browser .record-detail {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+/* Inside the panel, labels and values share a line while they fit and stack when the
+   panel is narrow, so neither is squeezed into a sliver. */
+.record-detail {
+  container-type: inline-size;
+}
+.detail-header {
+  flex-wrap: wrap;
+}
+.detail-fields > div {
+  flex-wrap: wrap;
+  column-gap: 16px;
+  row-gap: 4px;
+}
+.detail-fields dt {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.detail-fields dd {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+@container (max-width: 420px) {
+  .detail-block {
+    padding: 14px;
+  }
+  .detail-fields > div {
+    display: grid;
+    gap: 2px;
+  }
+  .detail-fields dd {
+    text-align: left;
+    color: var(--ink);
+    font-weight: 600;
+  }
+}
 .configuration-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.65fr) minmax(270px, 1fr);

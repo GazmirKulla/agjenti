@@ -149,7 +149,7 @@ export function RecordBrowser({
   useEffect(() => {
     if (!detailOpen) return;
     const key = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || dialogRef.current?.open || !window.matchMedia("(max-width: 760px)").matches) return;
+      if (event.key !== "Escape" || dialogRef.current?.open || !window.matchMedia("(max-width: 1200px)").matches) return;
       setOpened(false);
       setCreating(false);
     };
