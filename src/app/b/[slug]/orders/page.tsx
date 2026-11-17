@@ -15,7 +15,8 @@ import { redirect } from "next/navigation";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { requireEnabledModule } from "@/lib/dashboard/modules/permissions";
-import { loadOrderStockMovements, stockReasonLabels } from "@/lib/products/stock-history";
+import { loadOrderStockMovements } from "@/lib/products/stock-history";
+import { stockReasonLabels } from "@/lib/products/stock";
 
 const ORDER_STATUSES = [
   ["draft", "Draft"],

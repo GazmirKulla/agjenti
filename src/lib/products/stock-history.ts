@@ -1,12 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 
-export type StockMovement = {
-  id: string; product_id: string; variant_id: string | null; order_id: string | null; delta: number; quantity_after: number | null;
-  reason: "order" | "order_release" | "adjustment" | "tracking_start"; created_at: string;
-};
-export const stockReasonLabels: Record<StockMovement["reason"], string> = {
-  order: "Porosi", order_release: "Porosia u lirua", adjustment: "Ndryshim dorazi", tracking_start: "Fillimi i ndjekjes",
-};
+import type { StockMovement } from "./stock";
+export type { StockMovement } from "./stock";
 
 /** The latest stock changes of one product, or of one order; empty when they cannot be read. */
 export async function loadStockMovements(businessId: string, filter: { productId?: string; orderId?: string }, limit = 50): Promise<StockMovement[]> {

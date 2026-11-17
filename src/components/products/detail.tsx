@@ -10,8 +10,7 @@ import { useManualOperation } from "@/components/dashboard/operation-button";
 import { RowMenu, type RowMenuItem } from "@/components/dashboard/row-menu";
 import { Icon } from "@/components/dashboard/icon";
 import { ProductBusinessWorkflow } from "./business-workflow";
-import { countsStock, effectiveQuantity, stockCustomerSentence, stockDeductLabels, stockModeLabels, type StockSettings } from "@/lib/products/stock";
-import { stockReasonLabels, type StockMovement } from "@/lib/products/stock-history";
+import { countsStock, effectiveQuantity, stockCustomerSentence, stockDeductLabels, stockModeLabels, stockReasonLabels, type StockMovement, type StockSettings } from "@/lib/products/stock";
 
 const STATUS_LABEL: Record<string, string> = { archived: "I arkivuar", active: "Aktiv", draft: "Draft", unlinked: "I palidhur" };
 type Tab = "overview" | "variants" | "stock" | "media" | "workflow";

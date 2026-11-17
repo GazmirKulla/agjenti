@@ -143,3 +143,13 @@ export function catalogStockState(product: Counted, variants: readonly { stock_q
   return quantities.some(q => q <= settings.lowThreshold) ? "low" : "in_stock";
 }
 export const stockStateLabels: Record<StockState, string> = { in_stock: "Në gjendje", low: "Pak copë", out: "Ka mbaruar" };
+
+/** One recorded stock change (stock_movements); read on the server by lib/products/stock-history. */
+export type StockMovement = {
+  id: string; product_id: string; variant_id: string | null; order_id: string | null; delta: number; quantity_after: number | null;
+  reason: "order" | "order_release" | "adjustment" | "tracking_start"; created_at: string;
+};
+export const stockReasonLabels: Record<StockMovement["reason"], string> = {
+  order: "Porosi", order_release: "Porosia u lirua", adjustment: "Ndryshim dorazi", tracking_start: "Fillimi i ndjekjes",
+};
+
