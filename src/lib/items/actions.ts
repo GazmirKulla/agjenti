@@ -4,6 +4,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, isPlatformAdmin, requireBusinessAccess } from "@/lib/tenant/access";
 import { ITEM_KINDS } from "./kinds";
 import { storeProductFields } from "./fields-store";
+import { defaultStockSettings, parseStockSettings } from "@/lib/products/stock";
 
 const name = (value: FormDataEntryValue | null) => {
   const text = String(value ?? "").trim().replace(/\s+/g, " ");
@@ -41,4 +42,22 @@ export async function saveProductFields(slug: string, fieldsJson: string) {
   if ("error" in saved) return saved;
   revalidatePath(`/b/${access.business.slug}`, "layout");
   return { success: "Fushat u ruajtën. I gjen te forma e produktit dhe te importi CSV.", fields: saved.fields };
+}
+
+/** Owner or platform administrator: how the business counts stock (the order rule, what customers are told, new products' mode). */
+export async function saveStockSettings(slug: string, formData: FormData) {
+  const user = await getSessionUser();
+  const access = user ? await requireBusinessAccess(user.id, slug) : null;
+  if (!user || !access) return { error: "Nuk ke qasje në këtë biznes." };
+  const db = createServiceSupabase();
+  const { data: member } = await db.from("business_users").select("role")
+    .eq("business_id", access.business.id).eq("user_id", user.id).maybeSingle();
+  if (member?.role !== "owner" && !(await isPlatformAdmin(user.id))) return { error: "Vetëm pronari mund ta ndryshojë këtë." };
+  const parsed = parseStockSettings({ deduct: formData.get("deduct"), display: formData.get("display"),
+    defaultMode: formData.get("defaultMode"), lowThreshold: formData.get("lowThreshold") ?? defaultStockSettings.lowThreshold });
+  if ("error" in parsed) return parsed;
+  const { error } = await db.from("businesses").update({ stock_settings: parsed.settings, updated_at: new Date().toISOString() }).eq("id", access.business.id);
+  if (error) return { error: "Cilësimet e stokut nuk u ruajtën. Provo përsëri." };
+  revalidatePath(`/b/${access.business.slug}`, "layout");
+  return { success: "Cilësimet e stokut u ruajtën. Vlejnë për porositë dhe përgjigjet e reja." };
 }

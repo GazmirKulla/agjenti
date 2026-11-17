@@ -3,24 +3,28 @@ import { useState } from "react";
 import type { BusinessField } from "@/lib/items/fields";
 import type { ProductVariant } from "@/lib/products/variants";
 
-type Row = { id?: string; options: Record<string, string>; sku: string; price: string; is_active: boolean };
-const toRow = (v: ProductVariant): Row => ({ id: v.id, options: { ...v.options }, sku: v.sku ?? "", price: v.price_amount === null ? "" : String(v.price_amount), is_active: v.is_active });
+type Row = { id?: string; options: Record<string, string>; sku: string; price: string; is_active: boolean; stock: string };
+const toRow = (v: ProductVariant): Row => ({ id: v.id, options: { ...v.options }, sku: v.sku ?? "", price: v.price_amount === null ? "" : String(v.price_amount), is_active: v.is_active,
+  stock: v.stock_quantity == null ? "" : String(v.stock_quantity) });
 
 /** The product's variants: one row per choice (e.g. 80 cm, 120 cm) with its own
  * code and, when it differs, its own price. Sent with the product form. */
-export function VariantEditor({ fields, variants, currency }: { fields: BusinessField[]; variants: ProductVariant[]; currency: string }) {
+export function VariantEditor({ fields, variants, currency, stockTracked = false }: { fields: BusinessField[]; variants: ProductVariant[]; currency: string;
+  /** The product counts stock: each variant may have its own count (blank uses the product's). */
+  stockTracked?: boolean }) {
   const [rows, setRows] = useState<Row[]>(variants.map(toRow));
   const update = (index: number, patch: Partial<Row>) => setRows(current => current.map((row, i) => i === index ? { ...row, ...patch } : row));
   const addAll = (field: BusinessField) => setRows(current => {
     const present = new Set(current.map(r => r.options[field.key]).filter(Boolean));
     const missing = (field.options ?? []).filter(o => !present.has(o));
-    return [...current, ...missing.map(value => ({ options: { [field.key]: value }, sku: "", price: "", is_active: true }))];
+    return [...current, ...missing.map(value => ({ options: { [field.key]: value }, sku: "", price: "", is_active: true, stock: "" }))];
   });
   const payload = rows.map(r => ({ ...(r.id ? { id: r.id } : {}), options: r.options, sku: r.sku, price_amount: r.price.trim() === "" ? null : r.price, is_active: r.is_active }));
   return (
     <fieldset id="product-variants" className="grid gap-3">
       <legend className="font-semibold">Variantet</legend>
       <input type="hidden" name="variants_json" value={JSON.stringify(payload)} />
+      {stockTracked && <input type="hidden" name="variant_stock_json" value={JSON.stringify(rows.map(r => ({ options: r.options, quantity: r.stock.trim() === "" ? null : r.stock })))} />}
       <p className="muted-copy">
         Shto një rresht për çdo zgjedhje që shet, p.sh. çdo gjatësi. Lëre çmimin bosh kur është i njëjtë me çmimin e produktit.
         Kur produkti ka variante, agjenti e pyet klientin cilin dëshiron dhe porosia merr çmimin e variantit.
@@ -45,6 +49,12 @@ export function VariantEditor({ fields, variants, currency }: { fields: Business
                 Çmimi ({currency})
                 <input className="field" type="number" min="0" step="0.01" value={row.price} placeholder="si produkti" onChange={e => update(index, { price: e.target.value })} />
               </label>
+              {stockTracked && (
+                <label className="form-label">
+                  Sasia
+                  <input className="field" type="number" min="0" step="any" value={row.stock} placeholder="si produkti" onChange={e => update(index, { stock: e.target.value })} />
+                </label>
+              )}
               <div className="flex items-center gap-2">
                 <label className="toggle-label">
                   <span>Në shitje</span>
@@ -61,7 +71,7 @@ export function VariantEditor({ fields, variants, currency }: { fields: Business
       ) : null)}
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn btn-ghost" disabled={rows.length >= 100}
-          onClick={() => setRows(current => [...current, { options: {}, sku: "", price: "", is_active: true }])}>+ Shto variant</button>
+          onClick={() => setRows(current => [...current, { options: {}, sku: "", price: "", is_active: true, stock: "" }])}>+ Shto variant</button>
         {fields.filter(f => f.options?.length).map(field => (
           <button key={field.key} type="button" className="btn btn-ghost" onClick={() => addAll(field)}>+ Të gjitha vlerat e “{field.label}”</button>
         ))}

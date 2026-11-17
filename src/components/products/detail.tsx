@@ -10,9 +10,11 @@ import { useManualOperation } from "@/components/dashboard/operation-button";
 import { RowMenu, type RowMenuItem } from "@/components/dashboard/row-menu";
 import { Icon } from "@/components/dashboard/icon";
 import { ProductBusinessWorkflow } from "./business-workflow";
+import { countsStock, effectiveQuantity, stockCustomerSentence, stockDeductLabels, stockModeLabels, type StockSettings } from "@/lib/products/stock";
+import { stockReasonLabels, type StockMovement } from "@/lib/products/stock-history";
 
 const STATUS_LABEL: Record<string, string> = { archived: "I arkivuar", active: "Aktiv", draft: "Draft", unlinked: "I palidhur" };
-type Tab = "overview" | "variants" | "media" | "workflow";
+type Tab = "overview" | "variants" | "stock" | "media" | "workflow";
 
 const MONTHS = ["jan", "shk", "mar", "pri", "maj", "qer", "korr", "gush", "sht", "tet", "nën", "dhj"];
 /** "14 nën 2026" in Tirana time, the same on the server and in the browser (no locale data). */
@@ -28,13 +30,17 @@ function formatDate(value?: string | null) {
 /** The product page in view mode, in the layout of the new design: a header with name, status and
  * a menu; tabs; a summary card with three tiles; the key data as label–value rows. "Përditëso"
  * opens the existing form (`?edit=1`), so every field keeps working as before. */
-export function ProductDetail({ slug, product, types, workflows, kind, fields = [] }: {
+export function ProductDetail({ slug, product, types, workflows, kind, fields = [], stock, movements = [] }: {
   slug: string;
   product: ProductRow;
   types: Option[];
   workflows: Option[];
   kind?: string;
   fields?: BusinessField[];
+  /** How the business counts stock; without it there is no stock tab. */
+  stock?: StockSettings;
+  /** The product's latest stock changes, newest first. */
+  movements?: StockMovement[];
 }) {
   usePageAssistantContext({ entityType: "product", entityId: product.id, selectionLabel: product.name });
   const [tab, setTab] = useState<Tab>("overview");
@@ -79,9 +85,15 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
   const tabs: [Tab, string][] = [
     ["overview", "Përmbledhje"],
     ...(choices.length || variants.length ? [["variants", variants.length ? `Variante (${variants.length})` : "Variante"] as [Tab, string]] : []),
+    ...(stock ? [["stock", "Gjendja"] as [Tab, string]] : []),
     ["media", "Media"],
     ["workflow", "Workflow"],
   ];
+  const counted = countsStock(product);
+  const stockFor = (variant?: { stock_quantity?: number | null }) => effectiveQuantity(product, variant);
+  const stockSummary = !stock ? null : product.source === "linked" ? "Nga uebi" : !counted ? "Nuk ndiqet"
+    : product.stock_mode === "unique" ? (stockFor() ?? 1) > 0 ? "Copë unike · në shitje" : "Copë unike · shitur"
+    : stockFor() === null ? "Sipas varianteve" : `${stockFor()}${product.price_unit ? ` ${product.price_unit}` : ""}`;
 
   return (
     <div className="product-detail">
@@ -122,6 +134,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
               <div><dt>Statusi</dt><dd>{STATUS_LABEL[status] ?? status}</dd></div>
               <div><dt>Variantet</dt><dd>{variants.length ? (activeVariants === variants.length ? variants.length : `${activeVariants} nga ${variants.length}`) : "—"}</dd></div>
               <div><dt>Në katalog</dt><dd>{inCatalog ? "Po" : "Jo"}</dd></div>
+              {stockSummary && <div><dt>Gjendja</dt><dd>{stockSummary}</dd></div>}
             </dl>
           </section>
 
@@ -184,7 +197,42 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
                   </tbody>
                 </table>
               </div>
-            ) : !lists.length && <p className="muted-copy">Ky produkt nuk ka ende variante. Shtoji te “Ndrysho”, ose shto fusha “Zgjedh klienti” te Cilësimet.</p>}
+            ) : !lists.length && <p className="muted-copy">Ky produkt nuk ka ende variante. Shtoji te “Ndrysho”, ose shto fusha “Zgjedh klienti” te <Link className="soft-link" href={`/b/${slug}/products/structure#fields`}>Struktura</Link>.</p>}
+          </section>
+        </div>
+      )}
+
+      {tab === "stock" && stock && (
+        <div className="product-detail-panel" role="tabpanel" id="product-panel-stock" aria-labelledby="product-tab-stock">
+          <section className="panel product-detail-card">
+            <div className="product-detail-card-head">
+              <h2>Gjendja</h2>
+              {product.source !== "linked" && <Link className="btn btn-ghost" href={edit("#product-stock")}><Icon name="edit" size={15} /> Ndrysho</Link>}
+            </div>
+            {product.source === "linked" ? <p className="muted-copy">Ky produkt vjen nga uebi i biznesit: stoku i tij mbahet atje.</p>
+              : !counted ? <p className="muted-copy">Stoku i këtij produkti nuk ndiqet. Agjenti nuk flet për sasi dhe porosia nuk kufizohet. <Link className="soft-link" href={edit("#product-stock")}>Fillo ta ndjekësh →</Link></p>
+              : <>
+                <dl className="product-detail-rows">
+                  <div><dt>Mënyra</dt><dd>{stockModeLabels[product.stock_mode ?? "off"].label}</dd></div>
+                  {stockFor() !== null && <div><dt>Sasia</dt><dd>{stockFor()}{product.price_unit ? ` ${product.price_unit}` : ""}</dd></div>}
+                  {variants.filter(v => v.is_active && v.stock_quantity != null).map((v, i) => <div key={v.id ?? i}><dt>{label(v.options)}</dt><dd>{v.stock_quantity}</dd></div>)}
+                  <div><dt>Nëse klienti pyet</dt><dd>{variants.some(v => v.stock_quantity != null) ? "Agjenti e thotë për çdo variant veç." : stockCustomerSentence(stockFor(), stock, product.price_unit)}</dd></div>
+                  <div><dt>Porositë</dt><dd>{stockDeductLabels[stock.deduct].effect} <Link className="soft-link" href={`/b/${slug}/products/structure#stock`}>Ndrysho rregullin →</Link></dd></div>
+                </dl>
+                <h3 className="product-stock-history-title">Historiku</h3>
+                {movements.length ? (
+                  <ul className="product-stock-history">
+                    {movements.map(m => (
+                      <li key={m.id}>
+                        <strong className={m.delta < 0 ? "is-out" : "is-in"}>{m.delta > 0 ? "+" : ""}{m.delta}</strong>
+                        <span>{stockReasonLabels[m.reason]}{m.order_id && <> · <Link className="soft-link" href={`/b/${slug}/orders?order=${m.order_id}`}>porosia</Link></>}
+                          {m.variant_id && variants.find(v => v.id === m.variant_id) ? ` · ${label(variants.find(v => v.id === m.variant_id)!.options)}` : ""}</span>
+                        <small>{m.quantity_after !== null ? `mbeten ${m.quantity_after} · ` : ""}{formatDate(m.created_at)}</small>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="muted-copy">Ende pa ndryshime.</p>}
+              </>}
           </section>
         </div>
       )}

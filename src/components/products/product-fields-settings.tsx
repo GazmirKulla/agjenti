@@ -18,15 +18,19 @@ type Props = {
   fixed: { name: string; fields: { key: string; label: string }[] };
   /** The starter fields suggested for the onboarding category. */
   suggested: { category: string | null; fields: BusinessField[] };
+  /** Fields the onboarding scan found on the business's own pages, each with the quote that shows it. */
+  discovered?: (BusinessField & { evidence: string })[];
 };
 
-export function ProductFieldsSettings({ slug, fields, fixed, suggested }: Props) {
+export function ProductFieldsSettings({ slug, fields, fixed, suggested, discovered = [] }: Props) {
   const [rows, setRows] = useState<Row[]>(fields.map(toRow));
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
   const [pending, start] = useTransition();
   const router = useRouter();
   const fixedKeys = new Set(fixed.fields.flatMap(f => [f.key, fieldKey(f.label)]));
   const missing = missingTemplateFields(suggested.fields, rows.filter(r => r.label.trim()).map(r => ({ key: r.key ?? fieldKey(r.label), label: r.label })));
+  // Filtering keeps the same objects, with their quotes.
+  const found = missingTemplateFields(discovered, rows.filter(r => r.label.trim()).map(r => ({ key: r.key ?? fieldKey(r.label), label: r.label }))) as typeof discovered;
   const addSuggested = (list: BusinessField[]) => setRows(current => [...current, ...list.map(f => ({ ...toRow(f), key: undefined }))].slice(0, 24));
   const update = (index: number, patch: Partial<Row>) => setRows(current => current.map((row, i) => i === index ? { ...row, ...patch } : row));
   const save = () => start(async () => {
@@ -55,6 +59,22 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested }: Props)
             {fixed.fields.map(f => <span key={f.key} className="product-chip">{f.label}</span>)}
           </div>
           <p className="muted-copy">Këto i ka çdo artikull dhe nuk ndryshohen. Më poshtë shton fushat e tua, që dalin pas tyre.</p>
+        </div>
+      )}
+      {found.length > 0 && (
+        <div className="grid gap-2 rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
+          <h3 className="text-sm font-semibold">Gjetur te faqet e tua</h3>
+          <ul className="grid gap-2">
+            {found.map(f => (
+              <li key={f.key} className="flex flex-wrap items-center gap-2">
+                <button type="button" className="btn btn-ghost" onClick={() => addSuggested([f])}>
+                  + {f.label}{f.unit ? ` (${f.unit})` : ""}{f.variant ? " · zgjedh klienti" : ""}
+                </button>
+                {f.evidence && <small className="muted-copy">“{f.evidence.length > 120 ? `${f.evidence.slice(0, 119)}…` : f.evidence}”</small>}
+              </li>
+            ))}
+          </ul>
+          <span className="muted-copy">Agjenti i gjeti te produktet e skanuara. Shtohen më poshtë; ndryshoji ose hiqi para se të shtypësh Ruaj.</span>
         </div>
       )}
       {missing.length > 0 && (

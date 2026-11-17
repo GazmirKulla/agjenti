@@ -1,5 +1,6 @@
 "use client";
 import { attributeSummary, availabilityLabels, type KindField } from "@/lib/items/kinds";
+import { catalogStockState, stockStateLabels, type StockSettings } from "@/lib/products/stock";
 import { attributeFields, type BusinessField } from "@/lib/items/fields";
 import { useCatalogAssistantContext } from "@/components/business-assistant/workspace";
 import { useState, useMemo, useTransition, useRef, useEffect } from "react";
@@ -77,6 +78,7 @@ export function ProductCatalog({
   workflows,
   mapping = false,
   fields = [],
+  stock,
 }: {
   slug: string;
   products: ProductRow[];
@@ -85,11 +87,20 @@ export function ProductCatalog({
   mapping?: boolean;
   /** The business's own product fields, shown under each name. */
   fields?: BusinessField[];
+  /** How the business counts stock: badges and the stock filter follow it. */
+  stock?: StockSettings;
 }) {
   const extra = attributeFields(fields);
   const [query, setQuery] = useState("");
   const defaultFilter = mapping ? "unlinked" : "all";
   const [filter, setFilter] = useState(defaultFilter);
+  const [stockFilter, setStockFilter] = useState<"" | "out" | "low">("");
+  const stockOf = (p: ProductRow) => stock ? catalogStockState(p, p.variants ?? [], stock) : null;
+  const counting = Boolean(stock) && products.some(p => stockOf(p) !== null);
+  const stockBadge = (p: ProductRow) => {
+    const state = stockOf(p);
+    return state && state !== "in_stock" ? <span className={`product-stock-badge is-${state}`}>{stockStateLabels[state]}</span> : null;
+  };
   const [typeFilter, setTypeFilter] = useState("");
   const [source, setSource] = useState<Source>("all");
   const [sort, setSort] = useState("newest");
@@ -140,8 +151,11 @@ export function ProductCatalog({
   const router = useRouter();
   const filtered = useMemo(
     () => catalogFilter(catalogProducts, query, filter, typeFilter, sort)
-      .filter(p => source === "all" || fromWebsite(p) === (source === "website")),
-    [catalogProducts, query, filter, typeFilter, sort, source],
+      .filter(p => source === "all" || fromWebsite(p) === (source === "website"))
+      .filter(p => !stockFilter || (stockFilter === "out" ? stockOf(p) === "out" : stockOf(p) === "low" || stockOf(p) === "out")),
+    // stockOf reads the props it closes over; the list recomputes when they change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [catalogProducts, query, filter, typeFilter, sort, source, stockFilter, stock],
   );
   const sourceCounts = useMemo(() => {
     const current = catalogProducts.filter(p => !p.archived_at);
@@ -158,7 +172,7 @@ export function ProductCatalog({
   // the server re-resolves each ID, archives products with history, and previews before confirming.
   const bulkRemoval = useManualOperation(slug, "product.remove");
   const removeMany = (ids: string[]) => void bulkRemoval.prepare({ scope: "ids", ids });
-  const activeFilters = Number(filter !== defaultFilter) + Number(Boolean(typeFilter));
+  const activeFilters = Number(filter !== defaultFilter) + Number(Boolean(typeFilter)) + Number(Boolean(stockFilter));
   const filterItems: RowMenuItem[] = [
     ...STATUS_FILTERS.map(([value, label]) => ({
       group: "Statusi", label, checked: filter === value,
@@ -170,8 +184,14 @@ export function ProductCatalog({
           onSelect: () => { setTypeFilter(type.id); setPage(1); },
         }))
       : []),
+    ...(counting
+      ? ([["", "E gjithë gjendja"], ["low", "Pak copë ose mbaruar"], ["out", "Ka mbaruar"]] as const).map(([value, label]) => ({
+          group: "Gjendja", label, checked: stockFilter === value,
+          onSelect: () => { setStockFilter(value); setPage(1); },
+        }))
+      : []),
     ...(activeFilters
-      ? [{ label: "Pastro filtrat", onSelect: () => { setFilter(defaultFilter); setTypeFilter(""); setPage(1); } }]
+      ? [{ label: "Pastro filtrat", onSelect: () => { setFilter(defaultFilter); setTypeFilter(""); setStockFilter(""); setPage(1); } }]
       : []),
   ];
   const sortItems: RowMenuItem[] = SORTS.map(([value, label]) => ({
@@ -409,7 +429,7 @@ export function ProductCatalog({
                         <span className="product-card-meta">
                           <span>{money(p.price_amount, p.currency, { mode: p.price_mode, max: p.price_max, unit: p.price_unit })}</span>
                           <span className={`product-status is-${status}`}>{STATUS_LABEL[status] ?? status}</span>
-                          {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}
+                          {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}{stockBadge(p)}
                         </span>
                       </span>
                     </Link>
@@ -438,7 +458,7 @@ export function ProductCatalog({
                     <span className="product-card-meta">
                       <span>{money(p.price_amount, p.currency, { mode: p.price_mode, max: p.price_max, unit: p.price_unit })}</span>
                       <span className={`product-status is-${status}`}>{STATUS_LABEL[status] ?? status}</span>
-                      {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}
+                      {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}{stockBadge(p)}
                     </span>
                   </Link>
                   <span className="product-tile-menu"><RowMenu label={`Më shumë për ${p.name}`} title={p.name} items={rowActions(p)} /></span>
@@ -499,7 +519,7 @@ export function ProductCatalog({
                       <span className={`product-status is-${status}`}>
                         {STATUS_LABEL[status] ?? status}
                       </span>
-                      {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}
+                      {p.availability && p.availability !== "available" && <span className={`product-availability is-${p.availability}`}>{availabilityLabels[p.availability]}</span>}{stockBadge(p)}
                     </td>
                     <td>
                       <RowMenu label={`Më shumë për ${p.name}`} items={rowActions(p)} />

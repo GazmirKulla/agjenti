@@ -1524,3 +1524,4 @@ a.onboarding-skip { text-decoration: none; }
 .profile-review-hint { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .profile-review-hint em { font-style: normal; color: var(--ink); }
 .profile-review-use { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.onboarding-structure { display: grid; gap: 16px; }

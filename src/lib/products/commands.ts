@@ -17,12 +17,22 @@ async function saveVariants(businessId: string, userId: string, productId: strin
   if (!error) return {};
   return { error: error.code === "23505" ? "Dy variante kanë të njëjtin kod/SKU ose të njëjtat vlera." : "Produkti u ruajt, por variantet jo. Provo përsëri." };
 }
+/** The stock section of the form, recorded by the database as adjustments with their reason. */
+async function saveStock(businessId: string, userId: string, productId: string, stock: ParsedStock | null) {
+  if (!stock) return {};
+  const { error } = await createServiceSupabase().rpc("set_product_stock", { p_business: businessId, p_user: userId, p_product: productId,
+    p_mode: stock.mode, p_quantity: stock.quantity, p_variants: stock.variants });
+  if (!error) return {};
+  return { error: error.message.includes("stock_linked") ? "Stoku i një produkti nga uebi mbahet te uebi; këtu nuk ndryshohet."
+    : "Produkti u ruajt, por stoku jo. Provo përsëri." };
+}
 async function newestProductId(businessId: string, name: string) {
   const { data } = await createServiceSupabase().from("products").select("id").eq("business_id", businessId).eq("name", name)
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   return data?.id as string | undefined;
 }
 import { requireCatalogActivation } from "./activation";
+import type { ParsedStock } from "./parse";
 import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 
 async function assertTypeAndWorkflow(
@@ -98,10 +108,12 @@ export async function createProduct(
       const check = await assertTypeAndWorkflow(access.business.id, parsed.productTypeId, null);
       if ("error" in check) return check;
       const result = await saveProductsWithVisualFlow(access.business.id, user.id, visual, "create", [rowFromParsed(access.business.id, parsed, "manual")]);
-      if (result.error || !parsed.variants?.length) return result;
+      if (result.error || !parsed.variants?.length && !parsed.stock) return result;
       const created = await newestProductId(access.business.id, parsed.name);
       const saved = created ? await saveVariants(access.business.id, user.id, created, parsed.variants) : { error: "Produkti u ruajt, por variantet jo. Hape produktin dhe shtoji përsëri." };
-      return saved.error ? saved : result;
+      if (saved.error) return saved;
+      const counted = created ? await saveStock(access.business.id, user.id, created, parsed.stock) : {};
+      return counted.error ? counted : result;
     }
   } catch { return { error: "Zgjedhja e rrjedhës nuk është e vlefshme." }; }
 
@@ -129,6 +141,8 @@ export async function createProduct(
     const saved = created?.id ? await saveVariants(access.business.id, user.id, created.id, parsed.variants) : { error: "Produkti u ruajt, por variantet jo. Hape produktin dhe shtoji përsëri." };
     if (saved.error) return saved;
   }
+  const counted = created?.id ? await saveStock(access.business.id, user.id, created.id, parsed.stock) : {};
+  if (counted.error) return counted;
   return { success: "Produkti u krijua." };
 }
 
@@ -159,7 +173,9 @@ export async function updateProduct(
       const result = await saveProductsWithVisualFlow(access.business.id, user.id, visual, "update", [{ ...rowFromParsed(access.business.id, parsed), id, expected_updated_at: form.get("updated_at") }]);
       if (result.error) return result;
       const saved = await saveVariants(access.business.id, user.id, id, parsed.variants);
-      return saved.error ? saved : result;
+      if (saved.error) return saved;
+      const counted = await saveStock(access.business.id, user.id, id, parsed.stock);
+      return counted.error ? counted : result;
     }
   } catch { return { error: "Zgjedhja e rrjedhës nuk është e vlefshme." }; }
 
@@ -190,6 +206,8 @@ export async function updateProduct(
   if (!data) return { error: "Produkti ndryshoi ose u hoq. Rifresko faqen përpara ruajtjes." };
   const saved = await saveVariants(access.business.id, user.id, id, parsed.variants);
   if (saved.error) return saved;
+  const counted = await saveStock(access.business.id, user.id, id, parsed.stock);
+  if (counted.error) return counted;
   return { success: "Ndryshimet u ruajtën." };
 }
 

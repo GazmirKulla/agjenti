@@ -2,9 +2,7 @@ import { setupGateMessage } from "@/lib/setup/model";
 import { loadSetupStatus } from "@/lib/setup/status";
 import { setBusinessAutoReply } from "@/lib/agents/auto-reply";
 import { ActionForm } from "@/components/dashboard/action-form";
-import { saveItemSetup } from "@/lib/items/actions";
 import { loadItemSetup } from "@/lib/items/business";
-import { ITEM_KINDS } from "@/lib/items/kinds";
 import Link from "next/link";
 import { PageHeading } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
@@ -115,39 +113,11 @@ export default async function SettingsPage({
                 </p>
               )}
             </ActionForm>
-            <ActionForm action={saveItemSetup.bind(null, slug)} className="panel section-pad grid gap-5">
-              <div className="section-title">
-                <h2>Çfarë shet biznesi</h2>
-                <button className="btn btn-primary" type="submit">Ruaj</button>
-              </div>
+            <section className="panel section-pad grid gap-3" aria-labelledby="product-structure-link-title">
+              <h2 id="product-structure-link-title">Struktura</h2>
               <p className="muted-copy">
-                Lloji vendos fushat e secilit artikull (p.sh. m² dhe dhoma për pronat) dhe emrin në menu.
-                Artikujt ekzistues e ruajnë llojin e tyre.
-              </p>
-              <div className="item-kind-choices">
-                {Object.values(ITEM_KINDS).map((kind) => (
-                  <label key={kind.id} className="item-kind-choice">
-                    <input type="radio" name="item_kind" value={kind.id} defaultChecked={items.kind.id === kind.id} />
-                    <span><strong>{kind.plural}</strong><small>{kind.description}</small></span>
-                  </label>
-                ))}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="form-label">
-                  Emri në menu (opsional)
-                  <input className="field" name="item_plural" maxLength={30} defaultValue={items.custom.plural ?? ""} placeholder={items.kind.plural} />
-                </label>
-                <label className="form-label">
-                  Një artikull quhet (opsional)
-                  <input className="field" name="item_singular" maxLength={30} defaultValue={items.custom.singular ?? ""} placeholder={items.kind.singular} />
-                </label>
-              </div>
-            </ActionForm>
-            <section className="panel section-pad grid gap-3" aria-labelledby="product-fields-link-title">
-              <h2 id="product-fields-link-title">Fushat</h2>
-              <p className="muted-copy">
-                Të dhënat që ka çdo {items.names.singular} (p.sh. Ngjyra, Masa) dhe vlerat që zgjedh klienti menaxhohen te {items.names.plural}.{" "}
-                <Link className="soft-link" href={`/b/${slug}/products/fields`}>Hap fushat →</Link>
+                Çfarë shet biznesi, fushat e çdo artikulli, stoku dhe si i sheh Agjenti menaxhohen në një vend te {items.names.plural}.{" "}
+                <Link className="soft-link" href={`/b/${slug}/products/structure`}>Hap strukturën →</Link>
               </p>
             </section>
       </div>

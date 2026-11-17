@@ -7,6 +7,8 @@ export type ProductVariant = {
   sku: string | null;
   price_amount: number | null;
   is_active: boolean;
+  /** The variant's own count when the product's stock is tracked; null uses the product's count. */
+  stock_quantity?: number | null;
 };
 
 export const MAX_VARIANTS = 100;
@@ -103,12 +105,14 @@ export function matchVariant(variants: ProductVariant[], chosen: Record<string, 
 function withUnit(field: BusinessField | undefined, value: string) {
   return field?.unit && !value.toLowerCase().includes(field.unit.toLowerCase()) ? `${value} ${field.unit}` : value;
 }
-export function variantDetails(variants: ProductVariant[], fields: BusinessField[], base: { price: number | null; currency: string }) {
+/** stock: the stock fact of each choice when the business counts it ("ka mbaruar"…), already limited to what customers may know. */
+export function variantDetails(variants: ProductVariant[], fields: BusinessField[], base: { price: number | null; currency: string }, stock?: (variant: ProductVariant) => string | null) {
   const byKey = new Map(fields.map(f => [f.key, f]));
   return variants.filter(v => v.is_active).map(v => {
     const name = Object.entries(v.options).map(([key, value]) => `${byKey.get(key)?.label ?? key} ${withUnit(byKey.get(key), value)}`).join(", ");
     const price = v.price_amount ?? base.price;
-    return price === null ? name : `${name}: ${price} ${base.currency}`;
+    const fact = stock?.(v);
+    return `${price === null ? name : `${name}: ${price} ${base.currency}`}${fact ? ` (${fact})` : ""}`;
   }).join("; ");
 }
 

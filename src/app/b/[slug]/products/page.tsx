@@ -35,6 +35,7 @@ export default async function ProductsPage({
         types={data.types}
         workflows={data.workflows}
         fields={data.items.fields}
+        stock={data.items.stock}
       />
       {detail === "website" && <IntegrationDetailsDialog slug={slug} name={t("Webi i biznesit")} closeHref={`/b/${slug}/products`}>
         <Suspense fallback={<p role="status">{t("Duke ngarkuar konfigurimin…")}</p>}><WebsiteIntegration slug={slug} /></Suspense>

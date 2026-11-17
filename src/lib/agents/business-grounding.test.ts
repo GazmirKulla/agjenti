@@ -153,3 +153,45 @@ it("gives the agent the business's own fields and each variant with its price", 
   expect(r.products.records[0]).toMatchObject({ details: "Druri: Ah", variants: "Gjatësia 80 cm: 500 ALL; Gjatësia 120 cm: 800 ALL" });
   expect((await exactBusinessAnswer(r, "Sa kushton Libri?"))?.reply).toContain("120 cm: 800 ALL");
 });
+
+describe("counted stock in the agent's catalog", () => {
+  const grounding = async (display: string, product: Record<string, unknown>, variants: unknown[] = []) => {
+    const tables: Record<string, unknown> = {
+      products: { data: [{ id: "p1", name: "Libri", price_amount: 500, currency: "ALL", item_kind: "product", attributes: {}, source: "manual", ...product }], count: 1, error: null },
+      businesses: { data: { product_fields: [{ key: "gjatesia", label: "Gjatësia", type: "select", variant: true }],
+        stock_settings: { deduct: "confirmed", display, defaultMode: "off", lowThreshold: 3 } }, error: null },
+      product_variants: { data: variants, error: null },
+    };
+    const from = (table: string) => {
+      const query: Record<string, unknown> = {};
+      Object.assign(query, { select: () => query, eq: () => query, neq: () => query, order: () => query,
+        limit: async () => tables[table], maybeSingle: async () => tables[table] });
+      return query;
+    };
+    return (await readBusinessGrounding({ from } as unknown as SupabaseClient, "t", ["products"])).products.records[0];
+  };
+  it("passes only the fact the business lets customers know, never the raw count", async () => {
+    const plain = await grounding("availability", { stock_mode: "tracked", stock_quantity: 2 });
+    expect(plain).toMatchObject({ stock: "në gjendje" });
+    expect(plain).not.toHaveProperty("stock_quantity");
+    expect(plain).not.toHaveProperty("stock_mode");
+    expect((await grounding("low", { stock_mode: "tracked", stock_quantity: 2 })).stock).toBe("pak copë në gjendje");
+    expect((await grounding("exact", { stock_mode: "tracked", stock_quantity: 12 })).stock).toBe("12 copë në gjendje");
+    expect((await grounding("exact", { stock_mode: "tracked", stock_quantity: 0 })).stock).toBe("ka mbaruar");
+  });
+  it("says nothing about stock that is not counted here", async () => {
+    expect(await grounding("exact", { stock_mode: "off", stock_quantity: null })).not.toHaveProperty("stock");
+    expect(await grounding("exact", { stock_mode: "tracked", stock_quantity: 5, source: "linked" })).not.toHaveProperty("stock");
+  });
+  it("marks each counted choice and the product only when every choice is out", async () => {
+    const variants = [
+      { product_id: "p1", options: { gjatesia: "80 cm" }, sku: null, price_amount: null, is_active: true, stock_quantity: 0 },
+      { product_id: "p1", options: { gjatesia: "120 cm" }, sku: null, price_amount: 800, is_active: true, stock_quantity: 4 },
+    ];
+    const some = await grounding("availability", { stock_mode: "tracked", stock_quantity: null }, variants);
+    expect(some.variants).toBe("Gjatësia 80 cm: 500 ALL (ka mbaruar); Gjatësia 120 cm: 800 ALL (në gjendje)");
+    expect(some.stock).toBe("në gjendje vetëm për disa zgjedhje");
+    const none = await grounding("availability", { stock_mode: "tracked", stock_quantity: null }, variants.map(v => ({ ...v, stock_quantity: 0 })));
+    expect(none.stock).toBe("ka mbaruar");
+  });
+});

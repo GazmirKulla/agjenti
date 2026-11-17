@@ -40,6 +40,7 @@ export function RecordBrowser({
   createLabel = "Shto të re",
   createAsModal = false,
   detailAsModal = false,
+  initialOpenId,
   facets = [],
   sortable = false,
 }: {
@@ -68,12 +69,15 @@ export function RecordBrowser({
   createAsModal?: boolean;
   /** Kur true, detajet hapen në një modal mbi listën (në desktop); në telefon mbeten në ekran të plotë. */
   detailAsModal?: boolean;
+  /** Një regjistrim që hapet menjëherë (p.sh. nga një lidhje ?order=…); injorohet kur nuk është në listë. */
+  initialOpenId?: string;
 }) {
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState(records[0]?.id ?? "");
+  const openAtStart = initialOpenId && records.some(r => r.id === initialOpenId) ? initialOpenId : "";
+  const [selected, setSelected] = useState(openAtStart || (records[0]?.id ?? ""));
   const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(0);
-  const [opened, setOpened] = useState(false);
+  const [opened, setOpened] = useState(Boolean(openAtStart));
   const [chosen, setChosen] = useState<Record<string, string>>({});
   const [byTitle, setByTitle] = useState(false);
   const filtered = serverPage

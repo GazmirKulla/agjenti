@@ -60,6 +60,7 @@ export default async function NewProductPage({
           kind={data.items.kind.id}
           fields={data.items.fields}
           usage={data.usage}
+          stock={data.items.stock}
         />
       ) : method === "website" ? (
         <ProductFromWebsite slug={slug} types={data.types} workflows={data.workflows} kind={data.items.kind.id} fields={data.items.fields} usage={data.usage} />

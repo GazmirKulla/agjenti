@@ -10,6 +10,8 @@ import { attributeFields, variantFields, type BusinessField } from "@/lib/items/
 import { shownFieldKeys, type FieldUsage } from "@/lib/items/field-visibility";
 import type { ProductVariant } from "@/lib/products/variants";
 import { VariantEditor } from "@/components/products/variant-editor";
+import { StockSection } from "@/components/products/stock-section";
+import type { StockMode, StockSettings } from "@/lib/products/stock";
 
 type ProductFieldValues = {
   id?: string;
@@ -28,6 +30,9 @@ type ProductFieldValues = {
   attributes?: Record<string, string | number | boolean | string[]>;
   availability?: string;
   variants?: ProductVariant[];
+  source?: string | null;
+  stock_mode?: StockMode;
+  stock_quantity?: number | null;
   visual_draft?: { id: string; name: string; status: string } | null;
   visual_workflow?: { flowId: string; name: string } | null;
 };
@@ -44,6 +49,7 @@ export function ProductFields({
   photoAside = false,
   usage,
   autoSuggest = false,
+  stock,
 }: {
   slug: string;
   product?: ProductFieldValues;
@@ -62,6 +68,8 @@ export function ProductFields({
   usage?: FieldUsage;
   /** Runs "Plotëso me AI" once when the form opens (a product read from a website). */
   autoSuggest?: boolean;
+  /** How the business counts stock; without it the form has no stock section. */
+  stock?: StockSettings;
 }) {
   const showAvailability = !creating && (itemKind(kind ?? "product").availability.length > 1);
   const kindDefinition = kind ? itemKind(kind) : null;
@@ -114,6 +122,8 @@ export function ProductFields({
     suggest();
   });
   const [mode, setMode] = useState(priceMode(product?.price_mode));
+  const [stockMode, setStockMode] = useState<StockMode>(product?.stock_mode ?? (product?.id ? "off" : stock?.defaultMode ?? "off"));
+  const [stockQuantity, setStockQuantity] = useState(product?.stock_quantity == null ? "" : String(product.stock_quantity));
   return (
     <>
       {itemDefinition && <input type="hidden" name="item_kind" value={itemDefinition.id} />}
@@ -218,7 +228,7 @@ export function ProductFields({
           )}
           <p className="muted-copy">
             {itemDefinition.fields.length > 0 && <>Agjenti i përdor këto të dhëna për të gjetur atë që kërkon klienti.{showAvailability ? " Artikujt e shitur nuk u ofrohen klientëve." : ""} </>}
-            <Link className="soft-link" href={`/b/${slug}/products/fields`}>{itemDefinition.fields.length > 0 ? "Ndrysho fushat" : "Shto fushat"} →</Link>
+            <Link className="soft-link" href={`/b/${slug}/products/structure#fields`}>{itemDefinition.fields.length > 0 ? "Ndrysho fushat" : "Shto fushat"} →</Link>
           </p>
         </fieldset>
       )}
@@ -238,12 +248,13 @@ export function ProductFields({
               );
             })}
           </div>
-          <p className="muted-copy">Ndaji vlerat me ;. Agjenti e pyet klientin cilën dëshiron. Kur një vlerë ka kod ose çmim tjetër, shtoje si variant më poshtë; atëherë vlejnë variantet. <Link className="soft-link" href={`/b/${slug}/products/fields`}>Ndrysho fushat →</Link></p>
+          <p className="muted-copy">Ndaji vlerat me ;. Agjenti e pyet klientin cilën dëshiron. Kur një vlerë ka kod ose çmim tjetër, shtoje si variant më poshtë; atëherë vlejnë variantet. <Link className="soft-link" href={`/b/${slug}/products/structure#fields`}>Ndrysho fushat →</Link></p>
         </fieldset>
       )}
 
       {itemDefinition && choices.length > 0 && (
-        <VariantEditor fields={choices} variants={product?.variants ?? []} currency={product?.currency ?? "ALL"} />
+        <VariantEditor fields={choices} variants={product?.variants ?? []} currency={product?.currency ?? "ALL"}
+          stockTracked={Boolean(stock) && stockMode === "tracked" && product?.source !== "linked"} />
       )}
 
       {!photoAside && <fieldset id="product-media" className="grid gap-3">
@@ -311,6 +322,11 @@ export function ProductFields({
         {mode === "request" && <p className="muted-copy">Klienti e merr çmimin nga stafi. Agjenti nuk jep çmim dhe nuk e porosit vetë këtë produkt.</p>}
         {(mode === "range" || mode === "from") && <p className="muted-copy">Agjenti e tregon këtë çmim. Porosia automatike kërkon një çmim të caktuar, p.sh. te variantet.</p>}
       </fieldset>
+
+      {itemDefinition && stock && (
+        <StockSection slug={slug} settings={stock} mode={stockMode} onMode={setStockMode} quantity={stockQuantity} onQuantity={setStockQuantity}
+          hasVariantFields={choices.length > 0} unit={product?.price_unit} linked={product?.source === "linked"} />
+      )}
 
       <fieldset id="product-process" className="grid gap-3">
         <legend className="font-semibold">Workflow dhe produkti</legend>

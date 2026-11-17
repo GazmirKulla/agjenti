@@ -3,7 +3,7 @@ import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/executi
 import { loadProcessVersion, compileProcessVersion, readOptionalCustomerFields, withCustomerPolicy } from "./version-store";
 import { TransitionError, type Instance } from "./contracts";
 import { digest } from "./definition";
-import { readOrderTerms } from "./order-context";
+import { readOrderStock, readOrderTerms } from "./order-context";
 import type { ToolAdapter, EffectResult } from "./execute";
 import type { ProcessLease } from "./persistence";
 import { composeProductCollection } from "./product-composition";
@@ -33,6 +33,10 @@ export function orderAdapter(scope?: { businessId: string; conversationId: strin
         try { chosen = typeof action.input.options === "string" ? JSON.parse(action.input.options) : {}; } catch { chosen = {}; }
         const current = await readOrderTerms(scope.businessId, action.input.productId, false, chosen && typeof chosen === "object" ? chosen : {}, action.input.quantity);
         if (digest(current) !== digest(Object.fromEntries(Object.keys(current).map(key => [key, action.input[key]])))) return { status: "failed", output: { code: "commercial_terms_changed" } };
+        // Counted stock is checked by the server at the moment of the order, never by the model.
+        const stock = await readOrderStock(scope.businessId, action.input.productId, chosen && typeof chosen === "object" ? chosen : {}, action.input.quantity);
+        if (stock === "out") return { status: "failed", output: { code: "out_of_stock" } };
+        if (stock === "unverified") return { status: "failed", output: { code: "order_configuration_unverified" } };
       } catch { return { status: "failed", output: { code: "order_configuration_unverified" } }; }
       if (context.signal.aborted) return { status: "failed", output: { code: "dispatch_cancelled" } };
       const result = await createServiceSupabase().rpc("submit_process_order", { p_business: scope.businessId, p_conversation: scope.conversationId,

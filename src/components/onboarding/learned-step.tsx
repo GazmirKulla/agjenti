@@ -5,6 +5,7 @@ import { DiscoveryScanDialog } from "@/components/setup/scan-dialog";
 import type { SourcesState } from "@/lib/discovery/sources-step";
 import { onboardingChannelPath } from "@/lib/onboarding/steps";
 import { ProfileReview } from "./profile-review";
+import { ProductStructureStep } from "./product-structure-step";
 import { ProgressRows, sourceLabel } from "./sources-step";
 
 const isRunning = (state: SourcesState | null) => state?.scans.some((scan) => ["queued", "running"].includes(scan.status)) ?? true;
@@ -21,6 +22,9 @@ export function LearnedStep({ slug }: { slug: string }) {
   // ("Gati" with its count); the owner minimizes it or moves on from it.
   const [dialogOpen, setDialogOpen] = useState<boolean | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  // After the profile (or with no scan at all): the products' structure, then the channel step.
+  const [structureStep, setStructureStep] = useState(false);
+  const goNext = useCallback(() => window.location.assign(next), [next]);
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: "no-store" }).catch(() => null);
     if (!response?.ok) return;
@@ -36,7 +40,7 @@ export function LearnedStep({ slug }: { slug: string }) {
     return () => clearInterval(timer);
   }, [state, running, load]);
   const nothing = !!state && !state.scans.length && !state.review;
-  useEffect(() => { if (nothing) window.location.replace(next); }, [nothing, next]);
+  useEffect(() => { if (nothing) setStructureStep(true); }, [nothing]);
 
   // After the review (or when it was done earlier), the profile prefilled from the scan.
   const profile = confirmed || (!!state && !running && !state.review && state.scans.length > 0);
@@ -45,15 +49,17 @@ export function LearnedStep({ slug }: { slug: string }) {
     <>
       <div className="onboarding-question">
         <span className="onboarding-eyebrow">ÇFARË MËSOI AGJENTI</span>
-        <h1>{profile ? "Profili i biznesit" : review ? "Çfarë mësoi Agjenti" : running ? "Agjenti po lexon faqet" : "Agjenti mbaroi së lexuari"}</h1>
-        <p>{profile ? ""
+        <h1>{structureStep ? "Struktura e produkteve" : profile ? "Profili i biznesit" : review ? "Çfarë mësoi Agjenti" : running ? "Agjenti po lexon faqet" : "Agjenti mbaroi së lexuari"}</h1>
+        <p>{structureStep || profile ? ""
           : review ? "Agjenti bashkoi në një listë atë që gjeti."
           : running ? "Edhe pak. Mund ta zvogëlosh pamjen dhe të vazhdosh ndërkohë; i konfirmon më vonë nga paneli."
           : ""}</p>
       </div>
       <div className="onboarding-found">
-        {profile ? (
-          <ProfileReview slug={slug} onDone={() => window.location.assign(next)} />
+        {structureStep ? (
+          <ProductStructureStep slug={slug} onDone={goNext} />
+        ) : profile ? (
+          <ProfileReview slug={slug} onDone={() => setStructureStep(true)} />
         ) : review ? (
           <SourcesReview slug={slug} review={review} onDone={() => setConfirmed(true)} />
         ) : state?.scans.length ? (
@@ -65,7 +71,7 @@ export function LearnedStep({ slug }: { slug: string }) {
         ) : (
           <div className="onboarding-learning" role="status"><span className="onboarding-spinner" aria-hidden="true" /> Duke ngarkuar…</div>
         )}
-        {!profile && (
+        {!profile && !structureStep && (
           <div className="onboarding-actions">
             <span />
             <div className="onboarding-actions-end">

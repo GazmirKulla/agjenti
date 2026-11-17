@@ -5452,3 +5452,11 @@ button.order-photo-image:hover:not(:disabled) {
     justify-content: flex-end;
   }
 }
+
+/* Orders: what an order took from or gave back to counted stock. */
+.order-stock { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.order-stock h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink-muted); font-weight: 600; }
+.order-stock ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.order-stock li { display: flex; justify-content: space-between; gap: 10px; }
+.order-stock strong.is-out { color: var(--danger); }
+.order-stock strong.is-in { color: var(--success); }

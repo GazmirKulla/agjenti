@@ -22,6 +22,7 @@ export function ProductEditor({
   fields = [],
   usage,
   draft,
+  stock,
 }: {
   slug: string;
   product?: ProductRow;
@@ -33,6 +34,8 @@ export function ProductEditor({
   usage?: import("@/lib/items/field-visibility").FieldUsage;
   /** A new product prefilled from another source (e.g. a website page); saved as a new product. */
   draft?: Partial<ProductRow>;
+  /** How the business counts stock; the form's stock section follows it. */
+  stock?: import("@/lib/products/stock").StockSettings;
 }) {
   const initial = product ?? draft;
   usePageAssistantContext(product ? { entityType: "product", entityId: product.id, selectionLabel: product.name } : {});
@@ -144,6 +147,7 @@ export function ProductEditor({
               fields={fields}
               usage={usage}
               autoSuggest={!!draft}
+              stock={stock}
               creating={!product}
               photoAside
             />

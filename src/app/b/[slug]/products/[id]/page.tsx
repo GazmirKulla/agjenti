@@ -3,6 +3,7 @@ import { loadProducts } from "@/lib/products/load";
 import { ProductHeading } from "@/components/products/shared";
 import { ProductEditor } from "@/components/products/editor";
 import { ProductDetail } from "@/components/products/detail";
+import { loadStockMovements } from "@/lib/products/stock-history";
 export default async function ProductDetailPage({
   params,
   searchParams,
@@ -16,7 +17,8 @@ export default async function ProductDetailPage({
   const product = data.products.find((p) => p.id === id);
   if (!product) notFound();
   // The page opens in view mode; "Përditëso" adds ?edit=1 for the full form.
-  if (!edit)
+  if (!edit) {
+    const movements = await loadStockMovements(data.business.id, { productId: product.id });
     return (
       <ProductDetail
         key={product.id + (product.updated_at ?? "")}
@@ -26,8 +28,11 @@ export default async function ProductDetailPage({
         workflows={data.workflows}
         kind={product.item_kind ?? data.items.kind.id}
         fields={data.items.fields}
+        stock={data.items.stock}
+        movements={movements}
       />
     );
+  }
   return (
     <>
       <ProductHeading
@@ -47,6 +52,7 @@ export default async function ProductDetailPage({
         kind={product.item_kind ?? data.items.kind.id}
         fields={data.items.fields}
         usage={data.usage}
+        stock={data.items.stock}
       />
     </>
   );

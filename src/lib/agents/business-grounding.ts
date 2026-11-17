@@ -7,6 +7,7 @@ import { attributeDetails } from "@/lib/items/kinds";
 import { attributeFields, readBusinessFields, type BusinessField } from "@/lib/items/fields";
 import { choiceDetails, choiceLists, variantDetails, type ProductVariant } from "@/lib/products/variants";
 import { customerPriceText, orderablePrice } from "@/lib/products/pricing";
+import { defaultStockSettings, effectiveQuantity, productStockFact, readStockSettings, stockFact, type StockSettings } from "@/lib/products/stock";
 
 export type ReadStatus = "complete" | "partial" | "no_match" | "unavailable" | "unsupported" | "unverified";
 /** Evidence from a server-authorized read, never an execution permission or a cache. */
@@ -27,33 +28,71 @@ export type GroundedProduct = ReferenceProduct & { description?: string | null; 
   /** Without variant rows: the values listed on the product that the customer chooses from, e.g. "Gjatësia: 2, 3, 4 m". */
   choices?: string;
   /** Present only when the item is not simply available (reserved or rented); sold items are never read. */
-  availability?: "reserved" | "rented" };
-const productColumns = "id,name,sku,description,product_type_id,workflow_id,price_amount,price_mode,price_max,price_unit,currency,item_kind,attributes,availability";
-type Extras = { fields: BusinessField[]; variants: Map<string, ProductVariant[]> };
-const noExtras: Extras = { fields: [], variants: new Map() };
+  availability?: "reserved" | "rented";
+  /** Only for counted stock, already limited by the business's display setting: "në gjendje", "ka mbaruar"… Never a raw count unless the business shows exact counts. */
+  stock?: string };
+const baseProductColumns = "id,name,sku,description,product_type_id,workflow_id,price_amount,price_mode,price_max,price_unit,currency,item_kind,attributes,availability";
+const productColumns = `${baseProductColumns},source,stock_mode,stock_quantity`;
+type Extras = { fields: BusinessField[]; variants: Map<string, ProductVariant[]>; stock: StockSettings };
+const noExtras: Extras = { fields: [], variants: new Map(), stock: defaultStockSettings };
+type StockColumns = { source?: string | null; stock_mode?: string | null; stock_quantity?: number | null };
 /** Turns the stored kind fields, the business's own fields and the variants into words the agent can match a request against. */
-function withItemDetails(row: GroundedProduct & { item_kind?: string; attributes?: unknown; availability?: string }, extras: Extras = noExtras): GroundedProduct {
-  const { item_kind, attributes, availability, ...rest } = row;
+function withItemDetails(row: GroundedProduct & StockColumns & { item_kind?: string; attributes?: unknown; availability?: string }, extras: Extras = noExtras): GroundedProduct {
+  // The raw count never reaches the agent: only the fact the business lets customers know.
+  const { item_kind, attributes, availability, source, stock_mode, stock_quantity, ...rest } = row;
+  const counted = { source, stock_mode, stock_quantity };
   const details = attributeDetails(item_kind ?? "product", attributes, attributeFields(extras.fields));
   const own = extras.variants.get(row.id) ?? [];
   // Variant rows win over the lists kept on the product; a variant without its own price
   // takes the product's price only when that is one fixed number.
-  const variants = own.length ? variantDetails(own, extras.fields, { price: orderablePrice({ price_amount: row.price_amount ?? null, currency: row.currency ?? null, price_mode: row.price_mode }), currency: row.currency ?? "ALL" }) : "";
+  const variants = own.length ? variantDetails(own, extras.fields, { price: orderablePrice({ price_amount: row.price_amount ?? null, currency: row.currency ?? null, price_mode: row.price_mode }), currency: row.currency ?? "ALL" },
+    variant => stockFact(effectiveQuantity(counted, variant), extras.stock, row.price_unit)) : "";
   const choices = own.length ? "" : choiceDetails(choiceLists(attributes), extras.fields);
-  return { ...rest, ...(details ? { details } : {}), ...(variants ? { variants } : {}), ...(choices ? { choices } : {}), ...(availability === "reserved" || availability === "rented" ? { availability } : {}) };
+  const stock = productStockFact({ ...counted, price_unit: row.price_unit }, own, extras.stock);
+  return { ...rest, ...(details ? { details } : {}), ...(variants ? { variants } : {}), ...(choices ? { choices } : {}), ...(availability === "reserved" || availability === "rented" ? { availability } : {}), ...(stock ? { stock } : {}) };
+}
+/**
+ * One product exactly as the agent reads it (the same projection as a live reply), for the owner's
+ * preview: the most recently updated active product, or the given one. Null when there is none.
+ */
+export async function agentProductView(db: SupabaseClient, businessId: string, productId?: string) {
+  const read = (columns: string) => {
+    let query = db.from("products").select(columns).eq("business_id", businessId).eq("is_active", true).is("archived_at", null);
+    query = productId ? query.eq("id", productId) : query.order("updated_at", { ascending: false });
+    return query.limit(1).maybeSingle();
+  };
+  const [counted, extras] = await Promise.all([read(productColumns), readExtras(db, businessId)]);
+  const row = (counted.error ? await read(baseProductColumns) : counted).data as unknown as (GroundedProduct & StockColumns) | null;
+  if (!row) return null;
+  const product = withItemDetails(row, extras);
+  const price = customerPriceText({ ...product, price_amount: product.price_amount ?? null, currency: product.currency ?? null });
+  return { product, line: `${product.name}${price ? ` — ${price}` : ""}` };
+}
+/** Active, unsold products. Before the stock migration the stock columns are absent: read without them. */
+async function readProducts(db: SupabaseClient, businessId: string) {
+  const read = (columns: string) => db.from("products").select(columns, { count: "exact" })
+    .eq("business_id", businessId).eq("is_active", true).neq("availability", "sold").order("id").limit(1000);
+  const counted = await read(productColumns);
+  return (counted.error ? await read(baseProductColumns) : counted) as unknown as { data: GroundedProduct[] | null; error: unknown; count: number | null };
 }
 /** The business's own fields and the active variants of its products. */
 async function readExtras(db: SupabaseClient, businessId: string): Promise<Extras> {
   try { return await readExtrasOrThrow(db, businessId); } catch { return noExtras; }
 }
 async function readExtrasOrThrow(db: SupabaseClient, businessId: string): Promise<Extras> {
-  const [business, variants] = await Promise.all([
+  const variantRead = (columns: string) => db.from("product_variants").select(columns).eq("business_id", businessId).eq("is_active", true).order("position").limit(5000);
+  const [business, settings, counted] = await Promise.all([
     db.from("businesses").select("product_fields").eq("id", businessId).maybeSingle(),
-    db.from("product_variants").select("product_id,options,sku,price_amount,is_active").eq("business_id", businessId).eq("is_active", true).order("position").limit(5000),
+    db.from("businesses").select("stock_settings").eq("id", businessId).maybeSingle(),
+    variantRead("product_id,options,sku,price_amount,is_active,stock_quantity"),
   ]);
+  // Before the stock migration the count column is absent: the variants are still read, without stock.
+  const variants = counted.error ? await variantRead("product_id,options,sku,price_amount,is_active") : counted;
   const map = new Map<string, ProductVariant[]>();
-  for (const v of variants.error ? [] : variants.data ?? []) map.set(v.product_id, [...(map.get(v.product_id) ?? []), { options: v.options, sku: v.sku, price_amount: v.price_amount, is_active: v.is_active }]);
-  return { fields: business.error ? [] : readBusinessFields(business.data?.product_fields), variants: map };
+  for (const v of (variants.error ? [] : variants.data ?? []) as unknown as (ProductVariant & { product_id: string })[])
+    map.set(v.product_id, [...(map.get(v.product_id) ?? []), { options: v.options, sku: v.sku, price_amount: v.price_amount, is_active: v.is_active, stock_quantity: v.stock_quantity ?? null }]);
+  return { fields: business.error ? [] : readBusinessFields(business.data?.product_fields), variants: map,
+    stock: settings.error ? defaultStockSettings : readStockSettings(settings.data?.stock_settings) };
 }
 export type GroundedService = ReferenceProduct & { description?: string; duration_minutes?: number; booking_enabled?: boolean };
 export type GroundedKnowledge = { id: string; title: string; body: string; intent_key?: string | null; updated_at?: string };
@@ -86,8 +125,7 @@ export async function readBusinessGrounding(db: SupabaseClient, businessId: stri
   const enabled = (module: string) => !modules || modules.includes(module);
   const absent = { data: [], error: null, count: 0 };
   const [p, s, k, extras] = await Promise.all([
-    enabled("products") ? db.from("products").select(productColumns, { count: "exact" })
-      .eq("business_id", businessId).eq("is_active", true).neq("availability", "sold").order("id").limit(1000) : absent,
+    enabled("products") ? readProducts(db, businessId) : absent,
     enabled("services") ? db.from("booking_services").select("id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled", { count: "exact" })
       .eq("business_id", businessId).eq("is_active", true).order("id").limit(500) : absent,
     enabled("knowledge") ? db.from("knowledge_entries").select("id,title,body,intent_key,updated_at", { count: "exact" })
@@ -104,9 +142,10 @@ export async function readBusinessGrounding(db: SupabaseClient, businessId: stri
   for (const item of pins) {
     const result = item.kind === "product" ? products : services;
     if (result.status === "unavailable" || result.records.some(row => row.id === item.id)) continue;
-    const extra = await db.from(item.kind === "product" ? "products" : "booking_services")
-      .select(item.kind === "product" ? productColumns : "id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled")
+    const pinned = (columns: string) => db.from(item.kind === "product" ? "products" : "booking_services").select(columns)
       .eq("business_id", businessId).eq("is_active", true).eq("id", item.id).maybeSingle();
+    let extra = await pinned(item.kind === "product" ? productColumns : "id,name,description,price_amount,currency,price_mode,duration_minutes,booking_enabled");
+    if (extra.error && item.kind === "product") extra = await pinned(baseProductColumns);
     if (extra.error) { result.status = "unavailable"; result.reason = "reference_read_failed"; result.records = []; result.total = null; break; }
     if (extra.data && "id" in extra.data && extra.data.id === item.id) { result.records.push((item.kind === "product" ? withItemDetails(extra.data as unknown as GroundedProduct, extras) : extra.data) as GroundedProduct & GroundedService); result.status = "partial"; result.reason = "selected_entity_outside_snapshot"; }
   }

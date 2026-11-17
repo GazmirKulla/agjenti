@@ -2,6 +2,7 @@ import { itemKind as kindOf, parseAttributes, parseAvailability, type Availabili
 import { attributeFields, variantFields, type BusinessField } from "@/lib/items/fields";
 import { MAX_CHOICES, parseVariants, splitChoices, type ProductVariant } from "./variants";
 import { MAX_PRICE, priceMode, type PriceMode } from "./pricing";
+import { parseStockQuantity, stockModes, type StockMode } from "./stock";
 
 export type ParsedProductFields = {
   name: string;
@@ -24,7 +25,33 @@ export type ParsedProductFields = {
   availability: Availability;
   /** Null when the form does not carry the variant table: keep the stored variants. */
   variants: ProductVariant[] | null;
+  /** Null when the form does not carry the stock section: keep what is stored. */
+  stock: ParsedStock | null;
 };
+export type ParsedStock = { mode: StockMode; quantity: number | null; variants: { options: Record<string, string>; quantity: number | null }[] };
+
+/** The stock section of the product form: the mode, the product's count and each variant's own count. */
+export function parseStockForm(form: FormData): { stock: ParsedStock | null } | { error: string } {
+  if (!form.has("stock_mode")) return { stock: null };
+  const mode = String(form.get("stock_mode"));
+  if (!stockModes.includes(mode as StockMode)) return { error: "Zgjidh si ndiqet stoku." };
+  const product = parseStockQuantity(form.get("stock_quantity"));
+  if ("error" in product) return product;
+  let raw: unknown = [];
+  try { raw = JSON.parse(String(form.get("variant_stock_json") ?? "[]")); } catch { return { error: "Stoku i varianteve nuk është i vlefshëm." }; }
+  if (!Array.isArray(raw) || raw.length > 100) return { error: "Stoku i varianteve nuk është i vlefshëm." };
+  const variants: ParsedStock["variants"] = [];
+  for (const item of raw) {
+    const row = item && typeof item === "object" ? item as { options?: unknown; quantity?: unknown } : {};
+    if (!row.options || typeof row.options !== "object" || Array.isArray(row.options)) return { error: "Stoku i varianteve nuk është i vlefshëm." };
+    const quantity = parseStockQuantity(row.quantity);
+    if ("error" in quantity) return quantity;
+    variants.push({ options: Object.fromEntries(Object.entries(row.options as Record<string, unknown>).map(([key, value]) => [key, String(value ?? "").trim().replace(/\s+/g, " ")])), quantity: quantity.quantity });
+  }
+  if (mode === "tracked" && product.quantity === null && !variants.some(v => v.quantity !== null))
+    return { error: "Vendos sasinë e produktit ose të paktën të një varianti, ose zgjidh “Nuk e ndjek stokun”." };
+  return { stock: { mode: mode as StockMode, quantity: mode === "off" ? null : product.quantity, variants: mode === "tracked" ? variants : [] } };
+}
 
 export function parseProductForm(
   form: FormData,
@@ -91,6 +118,8 @@ export function parseProductForm(
     if (values.length) attributes[field.key] = values;
   }
   const availability = parseAvailability(itemKind ?? "product", form.get("availability"));
+  const stock = parseStockForm(form);
+  if ("error" in stock) return stock;
   let variants: ProductVariant[] | null = null;
   if (form.has("variants_json")) {
     let raw: unknown;
@@ -119,6 +148,7 @@ export function parseProductForm(
     attributes,
     availability,
     variants,
+    stock: stock.stock,
   };
 }
 

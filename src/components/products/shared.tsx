@@ -43,8 +43,8 @@ export function ProductHeading({
         >
           Më shumë
         </button>}
-        <Link className="btn btn-ghost" href={`/b/${slug}/products/fields`}>
-          Fushat
+        <Link className="btn btn-ghost" href={`/b/${slug}/products/structure`}>
+          Struktura
         </Link>
         <Link className="btn btn-primary" href={`/b/${slug}/products/new`}>
           ＋ Shto {names.singular}

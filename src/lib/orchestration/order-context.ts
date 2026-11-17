@@ -7,6 +7,7 @@ import { digest, validFieldValue, validateDefinition } from "./definition";
 import { readBusinessFields, type BusinessField } from "@/lib/items/fields";
 import { choiceLists, matchVariant, variantChoices, variantFieldId, type ChoiceLists, type ProductVariant } from "@/lib/products/variants";
 import { orderablePrice } from "@/lib/products/pricing";
+import { hasStockFor } from "@/lib/products/stock";
 import type { LinkedSpec } from "@/lib/integrations/linked-catalog";
 export type OrderTerms = { productId: string; productName: string; productTypeId: string; unitAmount: number; currency: string; quantity: number };
 /** What the customer orders of a product priced per unit (m³, m…): a number in that unit, asked after the product. */
@@ -51,6 +52,26 @@ async function readOrderProduct(businessId: string, productId: string, collectio
   const spec = data.source === "linked" ? readSpec(data.external_spec) : null;
   return { basePrice, lists: choiceLists(data.attributes), priceUnit, spec,
     terms: { productId: data.id, productName: data.name, productTypeId: data.product_type_id ?? "none", unitAmount: unitAmount ?? 0, currency: data.currency ?? "unpriced", quantity } };
+}
+/**
+ * Whether the business's counted stock covers this order: the chosen variant's count, else the product's.
+ * Without a chosen variant the order needs at least one choice with enough. "unverified" when the read
+ * fails; uncounted stock (or a database before the stock migration) never blocks an order.
+ */
+export async function readOrderStock(businessId: string, productId: string, chosen: Record<string, unknown>, quantity: unknown): Promise<"ok" | "out" | "unverified"> {
+  const db = createServiceSupabase();
+  const [product, variants] = await Promise.all([
+    db.from("products").select("stock_mode,stock_quantity,source").eq("business_id", businessId).eq("id", productId).maybeSingle(),
+    db.from("product_variants").select("options,is_active,stock_quantity").eq("business_id", businessId).eq("product_id", productId).eq("is_active", true),
+  ]);
+  if (product.error?.code === "42703" || variants.error?.code === "42703") return "ok";
+  if (product.error || variants.error || !product.data) return "unverified";
+  const wanted = typeof quantity === "number" && Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+  const own = (variants.data ?? []).map(v => ({ ...v, sku: null, price_amount: null })) as ProductVariant[];
+  const variant = own.length ? matchVariant(own, chosen) : undefined;
+  const counted = product.data;
+  if (variant || !own.length) return hasStockFor(counted, variant, wanted) ? "ok" : "out";
+  return own.some(v => hasStockFor(counted, v, wanted)) ? "ok" : "out";
 }
 export async function readOrderTerms(businessId: string, productId: string, collectionOnly = false, chosen?: Record<string, unknown>, quantity?: unknown) {
   return (await readOrderProduct(businessId, productId, collectionOnly, chosen, quantity)).terms;

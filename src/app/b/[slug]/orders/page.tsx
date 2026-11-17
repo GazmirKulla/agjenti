@@ -15,6 +15,7 @@ import { redirect } from "next/navigation";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { requireEnabledModule } from "@/lib/dashboard/modules/permissions";
+import { loadOrderStockMovements, stockReasonLabels } from "@/lib/products/stock-history";
 
 const ORDER_STATUSES = [
   ["draft", "Draft"],
@@ -46,10 +47,13 @@ function orderLines(rows: OrderItemRow[] | null) {
 
 export default async function OrdersPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ order?: string }>;
 }) {
   const { slug } = await params;
+  const { order: openOrder } = await searchParams;
   await requireEnabledModule(slug, "orders");
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -64,6 +68,8 @@ export default async function OrdersPage({
     .order("created_at", { ascending: false })
     .limit(1000);
   if (error) throw new Error("Nuk u ngarkuan porositë.");
+  // What each order took from or gave back to counted stock, shown with the order.
+  const movements = await loadOrderStockMovements(access.business.id, (orders ?? []).map(o => o.id));
 
   return (
     <>
@@ -90,6 +96,7 @@ export default async function OrdersPage({
         facets={[{ key: "status", label: "Statusi", options: ORDER_STATUSES.map(([value, label]) => ({ value, label })) }]}
         sortable
         detailAsModal
+        initialOpenId={openOrder}
         emptyTitle="Ende nuk ka porosi"
         emptyDescription="Konfirmo një porosi nga biseda me klientin për ta parë këtu."
         records={(orders ?? []).map((o) => {
@@ -167,6 +174,19 @@ export default async function OrdersPage({
                       <strong>{money(o.total_amount, o.currency)}</strong>
                     </div>
                     {o.external_system && <p className="order-card-note">Pa transportin: webi i biznesit e shton te totali i vet.</p>}
+                    {(movements.get(o.id) ?? []).length > 0 && (
+                      <div className="order-stock">
+                        <h4>Stoku</h4>
+                        <ul>
+                          {(movements.get(o.id) ?? []).map((m) => (
+                            <li key={m.id}>
+                              <span>{stockReasonLabels[m.reason]}: {m.product_name ?? "Produkt i hequr"}</span>
+                              <strong className={m.delta < 0 ? "is-out" : "is-in"}>{m.delta > 0 ? "+" : ""}{m.delta}</strong>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </section>
 
                   <div className="order-detail-side">
