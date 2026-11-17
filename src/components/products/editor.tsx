@@ -225,7 +225,7 @@ export function ProductEditor({
               <OperationButton slug={slug} operation={product.archived_at ? "product.restore" : "product.archive"} input={{ id: product.id }}>
                 {product.archived_at ? "Rikthe si draft" : "Arkivo produktin"}
               </OperationButton>
-              <OperationButton slug={slug} operation="product.delete" input={{ id: product.id }} redirectTo={`/b/${slug}/products`}>Fshi produktin</OperationButton>
+              <OperationButton slug={slug} operation="product.delete" input={{ id: product.id }} redirectTo={`/b/${slug}/products`} className="catalog-bulk-danger">Fshi produktin</OperationButton>
             </div>
           </section>
           <ProductTips />

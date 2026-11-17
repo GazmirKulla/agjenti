@@ -31,9 +31,11 @@ export function useManualOperation(slug: string, operation: string, redirectTo?:
   return { prepare, busy, dialog };
 }
 
-export function OperationButton({ slug, operation, input, children, redirectTo }: {
+export function OperationButton({ slug, operation, input, children, redirectTo, className }: {
   slug: string; operation: string; input: Record<string, unknown>; children: React.ReactNode; redirectTo?: string;
+  /** Extra classes, e.g. to mark an irreversible action. */
+  className?: string;
 }) {
   const { prepare, busy, dialog } = useManualOperation(slug, operation, redirectTo);
-  return <><button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void prepare(input)}>{children}</button>{dialog}</>;
+  return <><button type="button" className={`btn btn-ghost${className ? ` ${className}` : ""}`} disabled={busy} onClick={() => void prepare(input)}>{children}</button>{dialog}</>;
 }

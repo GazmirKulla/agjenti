@@ -1615,7 +1615,7 @@
   color: var(--ink-muted); border: 1px dashed var(--line-strong, var(--line)); white-space: nowrap; }
 
 /* Archive and delete, apart from the rest of the form. */
-.product-danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+.panel.product-danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
 .product-danger-zone h2 { font-size: 15px; }
 .product-danger-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
 

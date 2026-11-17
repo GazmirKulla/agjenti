@@ -131,7 +131,7 @@ export function ProductTips() {
       <p>
         <strong>Produkti nuk përdoret nga Agjenti?</strong>
         <br />
-        Kontrollo çmimin, llojin, aktivizimin dhe workflow-in kryesor të biznesit.
+        Shiko listën “Gati për Agjentin”: çdo pikë që mungon të çon te vendi ku plotësohet.
       </p>
       <p>
         <strong>Shto përmes Agjentit</strong>
