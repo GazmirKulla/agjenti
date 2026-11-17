@@ -6,7 +6,7 @@ import { rankKnowledge } from "@/lib/catalogs/source-ranking";
 import { attributeDetails } from "@/lib/items/kinds";
 import { attributeFields, readBusinessFields, type BusinessField } from "@/lib/items/fields";
 import { choiceDetails, choiceLists, variantDetails, type ProductVariant } from "@/lib/products/variants";
-import { orderablePrice } from "@/lib/products/pricing";
+import { customerPriceText, orderablePrice } from "@/lib/products/pricing";
 
 export type ReadStatus = "complete" | "partial" | "no_match" | "unavailable" | "unsupported" | "unverified";
 /** Evidence from a server-authorized read, never an execution permission or a cache. */
@@ -145,10 +145,7 @@ type ExactReply = { reply: string; presentedProducts?: ReferenceProduct[]; prese
 const priced = (p: ReferenceProduct) => typeof p.price_amount === "number" && Number.isFinite(p.price_amount) && p.price_amount >= 0 && Boolean(p.currency?.trim());
 function price(p: ReferenceProduct) {
   if (p.price_mode === "request") return "çmimi sipas kërkesës; stafi e jep çmimin";
-  if (!priced(p)) return "çmimi nuk është i përcaktuar; kontakto biznesin";
-  const unit = p.price_unit?.trim() ? ` për ${p.price_unit.trim()}` : "";
-  if (p.price_mode === "range" && typeof p.price_max === "number" && p.price_max !== p.price_amount) return `nga ${p.price_amount} deri ${p.price_max} ${p.currency}${unit}`;
-  return `${p.price_mode === "from" ? "nga " : ""}${p.price_amount} ${p.currency}${unit}`;
+  return customerPriceText({ ...p, price_amount: p.price_amount ?? null, currency: p.currency ?? null }) ?? "çmimi nuk është i përcaktuar; kontakto biznesin";
 }
 /** Small, fixed factual operations, not a router or natural-language SQL engine.
  * Invoke only AFTER the coordinator selected an informational execution path. */

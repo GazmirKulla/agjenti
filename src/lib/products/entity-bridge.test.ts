@@ -140,3 +140,8 @@ describe("W3 verified presentation and references", () => {
     expect(migrateContext(state).entityPresentation).toBeUndefined();
   });
 });
+
+it("renders a catalog slot with the range and the unit of its price", () => {
+  const list: ReferenceProduct[] = [{ id: "tile", name: "Pllakë", price_amount: 12, price_max: 15, currency: "EUR", price_mode: "range", price_unit: "m²" }];
+  expect(renderProductReferences("Kemi [[product:tile]].", list).reply).toBe("Kemi Pllakë — nga 12 deri 15 EUR për m².");
+});

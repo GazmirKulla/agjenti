@@ -2,6 +2,7 @@ import { messageUnderstanding } from "@/lib/conversations/understanding/context"
 import { createHash, randomUUID } from "node:crypto";
 import { foldText, type ConversationStatePayload } from "@/lib/workflows/state";
 import { matchingCatalogNames } from "./match-name";
+import { customerPriceText } from "./pricing";
 import { validValue, type FieldType } from "@/lib/workflows/context";
 
 export type ReferenceProduct = { id: string; name: string; sku?: string | null; price_amount?: number | null; currency?: string | null; price_mode?: "fixed" | "from" | "range" | "request";
@@ -45,7 +46,8 @@ export function renderProductReferences(text: string, catalog: readonly Referenc
       if (products.length === MAX_PRESENTED_ENTITIES) return "[produkt shtesë — kërko listë më të shkurtër]";
       products.push(product);
     } else repeated = true;
-    return `${product.name}${product.price_mode !== "request" && product.price_amount != null && product.currency ? ` — ${product.price_mode === "from" ? "nga " : ""}${product.price_amount} ${product.currency}` : ""}`;
+    const price = customerPriceText({ ...product, price_amount: product.price_amount ?? null, currency: product.currency ?? null });
+    return `${product.name}${price ? ` — ${price}` : ""}`;
   });
   // A mixed/repeated list has no trustworthy ordinal order. Keep the answer,
   // but require explicit customer names instead of inventing presentation evidence.
