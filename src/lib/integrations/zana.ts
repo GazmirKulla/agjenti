@@ -385,8 +385,12 @@ export async function loadBusinessCatalogUrl(
 
 /** A file of an item on the business website: the customer's (input) or the store's (output, e.g. processed design). */
 export type ExternalOrderFile = { key: string; role: "input" | "output"; url: string };
+/** A status of the website's own order workflow, as its staff name it. */
+export type ExternalOrderStatus = { key: string; label: string };
 export type ExternalOrderView = {
   orderNumber?: number; status: string; total?: number; shipping?: number;
+  /** The website's name for `status`, and every status it uses (newer websites; absent otherwise). */
+  statusLabel?: string; statuses?: ExternalOrderStatus[];
   /** Whether the website still accepts a change of this order; absent when the website does not say. */
   editable?: boolean;
   items: { item: number; productName: string | null; files: ExternalOrderFile[] }[];
@@ -404,7 +408,7 @@ async function externalOrderUrl(businessId: string, externalOrderId: string, suf
 }
 
 function readView(json: unknown): ExternalOrderView | null {
-  const j = json as { ok?: unknown; orderNumber?: unknown; status?: unknown; total?: unknown; shipping?: unknown; editable?: unknown; items?: unknown } | null;
+  const j = json as { ok?: unknown; orderNumber?: unknown; status?: unknown; statusLabel?: unknown; statuses?: unknown; total?: unknown; shipping?: unknown; editable?: unknown; items?: unknown } | null;
   if (!j || j.ok !== true || !Array.isArray(j.items)) return null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
   const items = j.items.slice(0, 20).flatMap((raw, index) => {
@@ -418,7 +422,51 @@ function readView(json: unknown): ExternalOrderView | null {
   });
   return { ...(num(j.orderNumber) !== undefined ? { orderNumber: num(j.orderNumber) } : {}), status: typeof j.status === "string" ? j.status.slice(0, 40) : "",
     ...(num(j.total) !== undefined ? { total: num(j.total) } : {}), ...(num(j.shipping) !== undefined ? { shipping: num(j.shipping) } : {}),
-    ...(typeof j.editable === "boolean" ? { editable: j.editable } : {}), items };
+    ...(typeof j.editable === "boolean" ? { editable: j.editable } : {}),
+    ...(typeof j.statusLabel === "string" && j.statusLabel.trim() ? { statusLabel: j.statusLabel.trim().slice(0, 80) } : {}),
+    ...(Array.isArray(j.statuses) ? { statuses: readStatuses(j.statuses) } : {}), items };
+}
+
+/** The website's statuses: a safe key and a name each, at most 30, no key twice. */
+export function readStatuses(raw: unknown[]): ExternalOrderStatus[] {
+  const seen = new Set<string>();
+  return raw.slice(0, 30).flatMap((entry) => {
+    const s = (entry && typeof entry === "object" ? entry : {}) as { key?: unknown; label?: unknown };
+    if (typeof s.key !== "string" || !STATUS_KEY.test(s.key) || seen.has(s.key)) return [];
+    seen.add(s.key);
+    const label = typeof s.label === "string" && s.label.trim() ? s.label.trim().slice(0, 80) : s.key;
+    return [{ key: s.key, label }];
+  });
+}
+/** A website status key: short, letters, digits, "_" and "-". */
+export const STATUS_KEY = /^[A-Za-z0-9_-]{1,40}$/;
+
+/**
+ * Moves an order on the business website to another of its statuses: POST {orders_url}/{id}/status.
+ * Only the website's answer counts: accepted with the order as it now is, refused with its reason,
+ * or not known (timeout, server error), when nothing is assumed.
+ */
+export async function changeExternalOrderStatus(businessId: string, externalOrderId: string, status: string): Promise<
+  { ok: true; view: ExternalOrderView } | { ok: false; uncertain?: boolean; code?: string }> {
+  assertBusinessEffectAllowed("provider.order");
+  if (isIsolatedExecution()) refuseIsolatedEffect("provider.http", "external_order_status");
+  if (!STATUS_KEY.test(status)) return { ok: false, code: "invalid_status" };
+  const target = await externalOrderUrl(businessId, externalOrderId, "/status");
+  if (!target) return { ok: false, code: "integration_unavailable" };
+  const response = await fetch(target.url, { method: "POST", redirect: "manual", signal: AbortSignal.timeout(20_000),
+    headers: { "Content-Type": "application/json", ...(target.secret ? { Authorization: `Bearer ${target.secret}` } : {}) },
+    body: JSON.stringify({ status }) }).catch(() => null);
+  const json = await response?.json().catch(() => null) as { reason?: unknown; error?: unknown } | null;
+  const view = response?.ok ? readView(json) : null;
+  const code = [json?.reason, json?.error].find((v): v is string => typeof v === "string" && /^[a-z][a-z0-9_]{0,59}$/.test(v));
+  try {
+    await createServiceSupabase().from("integration_logs").insert({ business_id: businessId, direction: "outbound", target: "order_status",
+      status: view ? "ok" : "failed", error: view ? null : code ?? `http_${response?.status ?? 0}` });
+  } catch { /* the website's answer stands */ }
+  if (view) return { ok: true, view };
+  // No answer or a server error: the website may have applied it; it tells or is read again.
+  if (!response || response.status >= 500) return { ok: false, uncertain: true };
+  return { ok: false, ...(code ? { code } : {}) };
 }
 
 /** Reads an order on the business website, with each item's photos. Read only; null when it cannot be read. */

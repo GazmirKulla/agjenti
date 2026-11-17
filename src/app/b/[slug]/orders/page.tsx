@@ -1,5 +1,6 @@
 import { orderDelivery } from "@/lib/customers/contact";
 import { OrderEditor } from "@/components/dashboard/order-editor";
+import { WebsiteStatusControl } from "@/components/dashboard/website-status-control";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { OrderOutputPhotos } from "@/components/dashboard/order-output-photos";
 import {
@@ -57,7 +58,7 @@ export default async function OrdersPage({
   const { data: orders, error } = await createServiceSupabase()
     .from("orders")
     .select(
-      "id,status,total_amount,currency,external_order_id,external_system,created_at,delivery:payload->customer,note:payload->note,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))",
+      "id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,delivery:payload->customer,note:payload->note,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))",
     )
     .eq("business_id", access.business.id)
     .order("created_at", { ascending: false })
@@ -99,6 +100,10 @@ export default async function OrdersPage({
           const items = orderLines(o.order_items as unknown as OrderItemRow[] | null);
           // What this order was saved and sent with; the customer card may have changed since.
           const delivery = orderDelivery({ customer: o.delivery });
+          const sent = o.external_system === "external" && Boolean(o.external_order_id);
+          const websiteStatus = typeof o.external_status === "string" && o.external_status
+            ? { key: o.external_status, label: typeof o.external_status_label === "string" && o.external_status_label ? o.external_status_label : o.external_status }
+            : null;
           return {
             id: o.id,
             title: `#${o.external_order_id || o.id.slice(0, 8)}`,
@@ -106,7 +111,7 @@ export default async function OrdersPage({
             facets: { status: o.status },
             cells: [
               money(o.total_amount, o.currency),
-              <StatusBadge key="status" status={o.status} />,
+              websiteStatus ? <StatusBadge key="status" status={`website-${websiteStatus.key}`} label={websiteStatus.label} /> : <StatusBadge key="status" status={o.status} />,
               formatDate(o.created_at),
             ],
             detail: (
@@ -118,6 +123,12 @@ export default async function OrdersPage({
                   </div>
                   <StatusBadge status={o.status} />
                 </div>
+                {sent && (
+                  <div className="detail-block">
+                    <h3>Statusi në webin e biznesit</h3>
+                    <WebsiteStatusControl businessId={access.business.id} orderId={o.id} initial={websiteStatus} />
+                  </div>
+                )}
                 <div className="detail-block">
                   <h3>Kartela e klientit</h3>
                   <dl className="detail-fields">
