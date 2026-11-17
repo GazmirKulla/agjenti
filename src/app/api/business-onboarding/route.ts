@@ -5,7 +5,7 @@ import { meteredRoute } from "@/lib/ai/usage";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { answerContinuation, loadContinuation } from "@/lib/onboarding/continuation-service";
 import { ContinuationError } from "@/lib/onboarding/continuation";
-import { instructionsFromAnswers } from "@/lib/onboarding/finish";
+import { instructionsFromAnswers, starterFieldsFromAnswers } from "@/lib/onboarding/finish";
 import { suggestProfileAnswers } from "@/lib/onboarding/suggest";
 import { openOnboardingConversation } from "@/lib/onboarding/assistant-chat";
 
@@ -66,7 +66,7 @@ async function handlePATCH(request: Request) {
     const body = await request.json().catch(() => null) as { field?: unknown; answer?: unknown; finish?: unknown } | null;
     // `{ finish: true }`: the onboarding questions are done (instructions from the answers).
     if (body?.finish === true) {
-      await instructionsFromAnswers(membership.business);
+      await Promise.all([instructionsFromAnswers(membership.business), starterFieldsFromAnswers(membership.business.id)]);
       return json({ ok: true });
     }
     if (!body || typeof body.field !== "string") return json({ error: "Pyetja mungon." }, 400);

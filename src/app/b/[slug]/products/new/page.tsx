@@ -7,6 +7,7 @@ import {
 } from "@/components/products/shared";
 import { ProductEditor } from "@/components/products/editor";
 import { ProductIntake } from "@/components/dashboard/product-intake";
+import { ProductFromWebsite } from "@/components/products/product-from-website";
 import { createProduct, importProductBatch } from "@/lib/products/actions";
 import { scanInstagramProducts } from "@/lib/products/import-actions";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -21,7 +22,7 @@ export default async function NewProductPage({
   const { slug } = await params;
   const { method: requested } = await searchParams;
   // Without a method the page is the chooser: three cards and a tip.
-  const method = ["manual", "csv", "instagram"].includes(requested ?? "")
+  const method = ["manual", "csv", "instagram", "website"].includes(requested ?? "")
     ? requested!
     : null;
   const data = await loadProducts(slug);
@@ -57,8 +58,11 @@ export default async function NewProductPage({
           types={data.types}
           workflows={data.workflows}
           kind={data.items.kind.id}
-        fields={data.items.fields}
+          fields={data.items.fields}
+          usage={data.usage}
         />
+      ) : method === "website" ? (
+        <ProductFromWebsite slug={slug} types={data.types} workflows={data.workflows} kind={data.items.kind.id} fields={data.items.fields} usage={data.usage} />
       ) : (
         <div className="products-workspace">
           <ProductIntake

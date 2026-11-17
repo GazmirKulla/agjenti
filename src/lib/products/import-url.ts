@@ -10,6 +10,7 @@ import {
   productSlugFromUrl,
   type ProductDraft,
 } from "./page-extract";
+import { optionsFromHtml, optionsFromJson } from "./page-options";
 
 export type ImportResult =
   { product: ProductDraft; note: string } | { error: string };
@@ -44,13 +45,13 @@ export async function importProductFromUrl(
     const parsedJson = looksLikeJson(page) ? parseJson(page.body) : null;
     if (parsedJson) {
       const draft = draftFromJson(parsedJson, now);
-      if (draft?.name) return ready(draft);
+      if (draft?.name) return ready(withOptions(draft, optionsFromJson(parsedJson)));
     }
 
     const shell = isAppShell(page.body);
     const htmlDraft = extractProductFromHtml(page.body, page.url);
     if (!shell && htmlDraft?.name && htmlDraft.price != null)
-      return ready(htmlDraft);
+      return ready(withOptions(htmlDraft, optionsFromHtml(page.body, page.url)));
 
     const catalogDraft =
       shell || /supabase\.co/i.test(page.body)
@@ -63,7 +64,7 @@ export async function importProductFromUrl(
       now,
     );
     const merged = mergeDraft([catalogDraft, shopifyDraft, htmlDraft]);
-    if (merged?.name) return ready(merged);
+    if (merged?.name) return ready(withOptions(merged, shopifyDraft?.options?.length ? shopifyDraft.options : optionsFromHtml(page.body, page.url)));
     return {
       error:
         "Nuk gjeta emrin e produktit në këtë faqe. Kontrollo linkun, ose plotësoje dorazi.",
@@ -76,6 +77,10 @@ export async function importProductFromUrl(
     console.error("[products.import]", name || "error");
     return { error: "Faqja nuk u hap. Kontrollo linkun dhe provo përsëri." };
   }
+}
+
+function withOptions(product: ProductDraft, options: ProductDraft["options"]): ProductDraft {
+  return options?.length ? { ...product, options } : product;
 }
 
 function ready(product: ProductDraft): ImportResult {
@@ -164,7 +169,9 @@ async function draftFromShopifyUrl(
     },
   );
   if ("error" in fetched) return null;
-  return draftFromJson(parseJson(fetched.body), now);
+  const json = parseJson(fetched.body);
+  const draft = draftFromJson(json, now);
+  return draft ? withOptions(draft, optionsFromJson(json)) : null;
 }
 
 function shopifyProductJs(pageUrl: string): string | null {

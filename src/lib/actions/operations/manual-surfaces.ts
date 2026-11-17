@@ -89,6 +89,7 @@ export const manualSurfaces = {
   "src/lib/products/actions.ts#importProductBatch": {"legacy": "product_import"},
   "src/lib/products/actions.ts#bulkConfigureProducts": {"operation": "product.bulk"},
   "src/lib/products/ai-actions.ts#generateProductDescription": {"exception": "Read-only suggested text, never persisted by this action."},
+  "src/lib/products/ai-actions.ts#suggestProductFields": {"exception": "Read-only suggested field values; the owner reviews them in the form and saves through the product actions."},
   "src/lib/products/csv-import-actions.ts#uploadProductCsv": {"exception": "Attachment intake; reviewed rows are persisted by the shared product importer."},
   "src/lib/products/csv-import-actions.ts#reviewProductCsv": {"exception": "Read-only preview of uploaded rows."},
   "src/lib/products/csv-import-actions.ts#confirmProductCsv": {"legacy": "product_import"},

@@ -99,6 +99,17 @@ export function kindForCategory(category: string | null | undefined) {
   return categoryKinds[category ?? ""] ?? "product";
 }
 
+/** The onboarding category saved in the business's dashboard profile. */
+export function profileCategory(dashboardProfile: unknown): string | null {
+  const signals = (dashboardProfile as { signals?: { businessType?: unknown } } | null)?.signals;
+  return typeof signals?.businessType === "string" ? signals.businessType : null;
+}
+
+/** The kind in use: the one the owner chose, else the one the onboarding category suggests. */
+export function kindInUse(chosen: string | null | undefined, category: string | null | undefined): ItemKind {
+  return itemKind(chosen || kindForCategory(category));
+}
+
 export function itemKind(id: string | null | undefined): ItemKind {
   return ITEM_KINDS[id ?? ""] ?? ITEM_KINDS.product;
 }

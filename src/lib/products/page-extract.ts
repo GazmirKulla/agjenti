@@ -5,6 +5,8 @@ export type ProductDraft = {
   currency: string | null;
   imageUrl: string | null;
   sku: string | null;
+  /** The choices the page offers (e.g. Ngjyra: Red, Blue), when its data lists them. */
+  options?: import("./page-options").ProductOption[];
 };
 
 export type PublicCatalog = {

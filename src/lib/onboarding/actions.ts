@@ -3,7 +3,7 @@ import { getSessionUser, listMemberships, requireBusinessAccess } from "@/lib/te
 import { homeForAccess } from "@/lib/auth/destination";
 import { createStarterWorkspace } from "./starter";
 import { onboardingAfterCreate } from "./steps";
-import { instructionsFromAnswers } from "./finish";
+import { instructionsFromAnswers, starterFieldsFromAnswers } from "./finish";
 
 type OnboardingResult = {
   error?: string;
@@ -38,7 +38,7 @@ export async function finishOnboardingProfile(slug: string): Promise<{ ok: boole
     if (!user) return { ok: false };
     const access = await requireBusinessAccess(user.id, slug);
     if (!access) return { ok: false };
-    await instructionsFromAnswers(access.business);
+    await Promise.all([instructionsFromAnswers(access.business), starterFieldsFromAnswers(access.business.id)]);
     return { ok: true };
   } catch (error) {
     console.error("[onboarding profile]", error instanceof Error ? error.message : error);

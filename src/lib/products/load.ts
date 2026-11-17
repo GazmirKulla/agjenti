@@ -6,6 +6,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { productCatalogColumns, type ProductRow, type Option } from "./catalog";
 import { loadVisualBindings } from "@/lib/workflows/visual/bindings";
 import { loadItemSetup } from "@/lib/items/business";
+import { fieldUsage } from "@/lib/items/field-visibility";
 export const loadProducts = cache(async (slug: string) => {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -42,6 +43,8 @@ export const loadProducts = cache(async (slug: string) => {
   return {
     business: access.business,
     items,
+    /** How often each field is filled across the catalog, for the product form. */
+    usage: fieldUsage((products.data ?? []) as ProductRow[]),
     products: ((products.data ?? []) as ProductRow[]).map(product => {
       const binding = bindings.enabled && bindings.versionId ? bindings.products.find(item => item.id === product.id) : undefined;
       const draft = choices.flows.find(f => f.productIds.includes(product.id));

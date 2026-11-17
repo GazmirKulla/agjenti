@@ -46,6 +46,7 @@ export default async function ProductDetailPage({
         workflows={data.workflows}
         kind={product.item_kind ?? data.items.kind.id}
         fields={data.items.fields}
+        usage={data.usage}
       />
     </>
   );

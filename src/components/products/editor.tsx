@@ -20,6 +20,8 @@ export function ProductEditor({
   workflows,
   kind,
   fields = [],
+  usage,
+  draft,
 }: {
   slug: string;
   product?: ProductRow;
@@ -28,20 +30,24 @@ export function ProductEditor({
   /** The item kind (product, property…); adds its own fields to the form. */
   kind?: string;
   fields?: import("@/lib/items/fields").BusinessField[];
+  usage?: import("@/lib/items/field-visibility").FieldUsage;
+  /** A new product prefilled from another source (e.g. a website page); saved as a new product. */
+  draft?: Partial<ProductRow>;
 }) {
+  const initial = product ?? draft;
   usePageAssistantContext(product ? { entityType: "product", entityId: product.id, selectionLabel: product.name } : {});
   const businessWorkflow = workflows.find(w => w.businessWorkflow)?.businessWorkflow;
   const [preview, setPreview] = useState({
-    name: product?.name ?? "",
-    description: product?.description ?? "",
-    image: product?.image_url ?? "",
-    price: product?.price_amount ?? (null as number | null),
-    mode: (product?.price_mode ?? "fixed") as string,
-    max: product?.price_max ?? (null as number | null),
-    unit: product?.price_unit ?? "",
-    currency: product?.currency ?? "ALL",
-    workflow: product?.workflow_id ?? "",
-    active: product?.is_active ?? false,
+    name: initial?.name ?? "",
+    description: initial?.description ?? "",
+    image: initial?.image_url ?? "",
+    price: initial?.price_amount ?? (null as number | null),
+    mode: (initial?.price_mode ?? "fixed") as string,
+    max: initial?.price_max ?? (null as number | null),
+    unit: initial?.price_unit ?? "",
+    currency: initial?.currency ?? "ALL",
+    workflow: initial?.workflow_id ?? "",
+    active: initial?.is_active ?? false,
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -131,18 +137,20 @@ export function ProductEditor({
             </nav>
             <ProductFields
               slug={slug}
-              product={product}
+              product={initial}
               types={types}
               workflows={workflows}
               kind={kind}
               fields={fields}
+              usage={usage}
+              autoSuggest={!!draft}
               creating={!product}
               photoAside
             />
           </div>
         </fieldset>
         <aside className="product-side">
-          <ProductPhoto slug={slug} initial={product?.image_url ?? ""} name={preview.name}
+          <ProductPhoto slug={slug} initial={initial?.image_url ?? ""} name={preview.name}
             onChange={image => setPreview(current => ({ ...current, image }))} />
           <section className="panel section-pad">
             <h2>Plotësimi i informacionit</h2>

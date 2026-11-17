@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { ProductHeading } from "@/components/products/shared";
 import { ProductFieldsSettings } from "@/components/products/product-fields-settings";
 import { loadItemSetup } from "@/lib/items/business";
+import { fieldTemplateFor } from "@/lib/items/field-templates";
+import { supportedBusinessCategories } from "@/lib/onboarding/categories";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 
 /** The fields the business's products have, next to the products themselves. */
@@ -13,6 +15,7 @@ export default async function ProductFieldsPage({ params }: { params: Promise<{ 
   if (!access) redirect("/auth/continue");
   const slug = access.business.slug;
   const items = await loadItemSetup(access.business.id);
+  const categoryLabel = supportedBusinessCategories.find(([id]) => id === items.category)?.[1] ?? null;
   return (
     <>
       <ProductHeading
@@ -25,7 +28,12 @@ export default async function ProductFieldsPage({ params }: { params: Promise<{ 
       />
       {!items.fieldsRead
         ? <p className="form-feedback form-feedback-error" role="alert">Fushat nuk u lexuan. Rifresko faqen.</p>
-        : <ProductFieldsSettings slug={slug} fields={items.fields} />}
+        : <ProductFieldsSettings
+            slug={slug}
+            fields={items.fields}
+            fixed={{ name: items.kind.plural, fields: items.kind.fields.map(f => ({ key: f.key, label: f.label })) }}
+            suggested={{ category: categoryLabel, fields: fieldTemplateFor(items.category) }}
+          />}
     </>
   );
 }

@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { suggestProductFields } from "@/lib/products/ai-actions";
 import { priceModeLabels, priceModes, priceMode } from "@/lib/products/pricing";
 import { ProductBusinessWorkflow } from "@/components/products/business-workflow";
 import type { Option } from "@/lib/products/catalog";
 import { availabilityLabels, fieldsOf, itemKind } from "@/lib/items/kinds";
 import { attributeFields, variantFields, type BusinessField } from "@/lib/items/fields";
+import { shownFieldKeys, type FieldUsage } from "@/lib/items/field-visibility";
 import type { ProductVariant } from "@/lib/products/variants";
 import { VariantEditor } from "@/components/products/variant-editor";
 
@@ -40,6 +42,8 @@ export function ProductFields({
   fields = [],
   creating = false,
   photoAside = false,
+  usage,
+  autoSuggest = false,
 }: {
   slug: string;
   product?: ProductFieldValues;
@@ -54,11 +58,61 @@ export function ProductFields({
   creating?: boolean;
   /** The photo is edited beside the form, so there is no Media section here. */
   photoAside?: boolean;
+  /** How many of the business's products fill each field: decides which fields show at once. */
+  usage?: FieldUsage;
+  /** Runs "Plotëso me AI" once when the form opens (a product read from a website). */
+  autoSuggest?: boolean;
 }) {
   const showAvailability = !creating && (itemKind(kind ?? "product").availability.length > 1);
   const kindDefinition = kind ? itemKind(kind) : null;
   const itemDefinition = kindDefinition ? { ...kindDefinition, fields: fieldsOf(kindDefinition.id, attributeFields(fields)) } : null;
   const choices = variantFields(fields);
+  const own = attributeFields(fields);
+  const [initiallyShown] = useState(() => shownFieldKeys(own, product?.attributes, usage));
+  const [revealed, setRevealed] = useState<string[]>([]);
+  const ownKeys = new Set(own.map(f => f.key));
+  const visible = (key: string) => !ownKeys.has(key) || initiallyShown.has(key) || revealed.includes(key);
+  const waiting = itemDefinition ? itemDefinition.fields.filter(f => !visible(f.key)) : [];
+  const details = useRef<HTMLFieldSetElement>(null);
+  const [suggesting, startSuggest] = useTransition();
+  const [aiMessage, setAiMessage] = useState<{ error?: string; success?: string }>({});
+  // Fills only the empty fields: what the owner typed is never overwritten.
+  const suggest = () => startSuggest(async () => {
+    const form = details.current?.form;
+    if (!form || !itemDefinition) return;
+    setAiMessage({});
+    const result = await suggestProductFields(slug, new FormData(form));
+    if ("error" in result) { setAiMessage({ error: result.error }); return; }
+    const filled: string[] = [];
+    const input = (name: string) => form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null;
+    for (const field of itemDefinition.fields) {
+      const value = result.suggestion.values[field.key];
+      const element = input(`attr_${field.key}`);
+      if (value === undefined || !element) continue;
+      if (element instanceof HTMLInputElement && element.type === "checkbox") { if (element.checked) continue; element.checked = value === true; }
+      else { if (element.value.trim()) continue; element.value = String(value); }
+      filled.push(field.label);
+    }
+    for (const field of choices) {
+      const list = result.suggestion.choices[field.key];
+      const element = input(`choices_${field.key}`);
+      if (!list?.length || !element || element.value.trim()) continue;
+      element.value = list.join("; ");
+      filled.push(field.label);
+    }
+    const keys = [...Object.keys(result.suggestion.values)];
+    setRevealed(current => [...new Set([...current, ...keys])]);
+    setAiMessage(filled.length
+      ? { success: `AI plotësoi: ${filled.join(", ")}. Kontrolloji para se të ruash.` }
+      : { error: "AI nuk gjeti të dhëna të qarta për fushat bosh. Shto më shumë te përshkrimi ose plotësoji vetë." });
+  });
+  const hasFields = !!itemDefinition && (itemDefinition.fields.length > 0 || choices.length > 0);
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (!autoSuggest || !hasFields || autoRan.current) return;
+    autoRan.current = true;
+    suggest();
+  });
   const [mode, setMode] = useState(priceMode(product?.price_mode));
   return (
     <>
@@ -99,22 +153,34 @@ export function ProductFields({
       </fieldset>
 
       {itemDefinition && (
-        <fieldset id="product-details" className="grid gap-3">
+        <fieldset id="product-details" className="grid gap-3" ref={details}>
           <legend className="font-semibold">Të dhënat</legend>
+          {(itemDefinition.fields.length > 0 || choices.length > 0) && (
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" className="btn btn-ghost" onClick={suggest} disabled={suggesting}>
+                {suggesting ? "AI po lexon…" : "✦ Plotëso me AI"}
+              </button>
+              <span className="muted-copy">Nga emri dhe përshkrimi; plotëson vetëm fushat bosh.</span>
+            </div>
+          )}
+          {aiMessage.error && <p className="form-feedback form-feedback-error" role="alert">{aiMessage.error}</p>}
+          {aiMessage.success && <p className="form-feedback form-feedback-success" role="status">{aiMessage.success}</p>}
           {itemDefinition.fields.length === 0 && (
             <p className="muted-copy">Ende nuk ke fusha. Shto p.sh. Ngjyra, Masa ose Materiali, që Agjenti t’ua tregojë klientëve dhe t’i pyesë para porosisë.</p>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
             {itemDefinition.fields.map((field) => {
               const value = product?.attributes?.[field.key];
+              // A field waiting behind "+ Shto të dhënë" stays in the form (hidden), so saving keeps its value.
+              const hidden = visible(field.key) ? undefined : { display: "none" } as const;
               if (field.type === "boolean") return (
-                <label key={field.key} className="toggle-label">
+                <label key={field.key} className="toggle-label" style={hidden} data-field={field.key}>
                   <span>{field.label}</span>
                   <input className="switch-input" type="checkbox" name={`attr_${field.key}`} defaultChecked={value === true} />
                 </label>
               );
               if (field.type === "select") return (
-                <label key={field.key} className="form-label">
+                <label key={field.key} className="form-label" style={hidden} data-field={field.key}>
                   {field.label}
                   <select name={`attr_${field.key}`} className="field" defaultValue={typeof value === "string" ? value : ""}>
                     <option value="">—</option>
@@ -123,7 +189,7 @@ export function ProductFields({
                 </label>
               );
               return (
-                <label key={field.key} className="form-label">
+                <label key={field.key} className="form-label" style={hidden} data-field={field.key}>
                   {field.label}{field.unit ? ` (${field.unit})` : ""}
                   <input name={`attr_${field.key}`} className="field" type={field.type === "number" ? "number" : "text"}
                     min={field.type === "number" ? 0 : undefined} step={field.type === "number" ? "any" : undefined}
@@ -140,6 +206,16 @@ export function ProductFields({
               </label>
             )}
           </div>
+          {waiting.length > 0 && (
+            <label className="form-label">
+              <span className="sr-only">Shto të dhënë</span>
+              <select className="field" value="" aria-label="Shto të dhënë"
+                onChange={e => { const key = e.target.value; if (key) setRevealed(current => [...current, key]); }}>
+                <option value="">+ Shto të dhënë ({waiting.length})…</option>
+                {waiting.map(f => <option key={f.key} value={f.key}>{f.label}{f.unit ? ` (${f.unit})` : ""}</option>)}
+              </select>
+            </label>
+          )}
           <p className="muted-copy">
             {itemDefinition.fields.length > 0 && <>Agjenti i përdor këto të dhëna për të gjetur atë që kërkon klienti.{showAvailability ? " Artikujt e shitur nuk u ofrohen klientëve." : ""} </>}
             <Link className="soft-link" href={`/b/${slug}/products/fields`}>{itemDefinition.fields.length > 0 ? "Ndrysho fushat" : "Shto fushat"} →</Link>

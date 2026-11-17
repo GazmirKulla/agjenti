@@ -23,7 +23,7 @@ vi.mock("@/lib/supabase/service", () => ({
       for (const name of ["select", "eq", "not", "order", "limit"]) chain[name] = () => chain;
       chain.maybeSingle = async () => mocks.tables[table];
       chain.then = (ok: (value: unknown) => void) => ok(mocks.tables[table]);
-      chain.update = (row: unknown) => { mocks.update(table, row); const done = { eq: () => done, then: (ok: (v: unknown) => void) => ok({ error: null }) }; return done; };
+      chain.update = (row: unknown) => { mocks.update(table, row); const done = { eq: () => done, select: () => done, then: (ok: (v: unknown) => void) => ok({ error: null }) }; return done; };
       return chain;
     },
   }),
@@ -90,7 +90,21 @@ describe("onboarding step 2: instructions from the answers", () => {
     mocks.tables.ai_agents = { data: { id: "a1", instructions: basicInstructions("Zana") } };
     mocks.tables.business_discovery_jobs = { data: [{ status: "running", checkpoint: {} }] };
     await finishOnboardingProfile("biznes-1");
-    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalledWith("ai_agents", expect.anything());
+  });
+  it("gives a business without product fields the suggested fields of its category", async () => {
+    mocks.tables.businesses = { data: { product_fields: [] } };
+    expect(await finishOnboardingProfile("biznes-1")).toEqual({ ok: true });
+    expect(mocks.update).toHaveBeenCalledWith("businesses", expect.objectContaining({
+      product_fields: expect.arrayContaining([expect.objectContaining({ key: "ngjyra", variant: true })]),
+    }));
+  });
+  it("keeps the owner's own product fields, and finishes even when they cannot be read", async () => {
+    mocks.tables.businesses = { data: { product_fields: [{ key: "druri", label: "Druri", type: "text" }] } };
+    await finishOnboardingProfile("biznes-1");
+    expect(mocks.update).not.toHaveBeenCalledWith("businesses", expect.anything());
+    delete mocks.tables.businesses;
+    expect(await finishOnboardingProfile("biznes-1")).toEqual({ ok: true });
   });
   it("does nothing for a business the person cannot open", async () => {
     mocks.access.mockResolvedValue(null);

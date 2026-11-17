@@ -74,6 +74,7 @@ export const productMethods = [
   ["manual", "Dorazi", "Shto një produkt duke shkruar emrin, çmimin dhe foton.", "edit"],
   ["csv", "Skedar CSV", "Ngarko shumë produkte njëherësh nga një listë (p.sh. Excel).", "file"],
   ["instagram", "Instagram", "Nxirr produktet nga postimet e Instagram-it të biznesit.", "instagram"],
+  ["website", "Faqja e internetit", "Lexo një produkt nga linku i tij në faqen tënde.", "display"],
 ] as const;
 
 /** The ways to add products, as large cards: a row on wide screens, a column on phones.

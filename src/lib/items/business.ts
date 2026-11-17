@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { itemKind, itemNames, itemTitles, kindForCategory } from "./kinds";
+import { itemNames, itemTitles, kindInUse, profileCategory } from "./kinds";
 import { readBusinessFields } from "./fields";
 
 /** The business's main item kind and what it calls its items. Falls back to
@@ -13,10 +13,12 @@ export const loadItemSetup = cache(async (businessId: string) => {
   // Before the product-fields migration the column is absent: keep the kind and names working.
   if (read.error) read = await db.from("businesses").select("item_kind,item_plural,item_singular,dashboard_profile").eq("id", businessId).maybeSingle() as typeof read;
   const data = read.data as { item_kind?: string | null; item_plural?: string | null; item_singular?: string | null; dashboard_profile?: unknown; product_fields?: unknown } | null;
-  const signals = (data?.dashboard_profile as { signals?: { businessType?: string } } | null)?.signals;
-  const kind = itemKind(data?.item_kind ?? kindForCategory(signals?.businessType));
+  const category = profileCategory(data?.dashboard_profile);
+  const kind = kindInUse(data?.item_kind, category);
   return {
     kind,
+    /** The onboarding category, for the suggested product fields. */
+    category,
     names: itemNames(kind.id, { plural: data?.item_plural, singular: data?.item_singular }),
     titles: itemTitles(kind.id, { plural: data?.item_plural, singular: data?.item_singular }),
     custom: { plural: data?.item_plural ?? null, singular: data?.item_singular ?? null },

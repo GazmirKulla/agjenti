@@ -2,7 +2,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveProductFields } from "@/lib/items/actions";
-import type { BusinessField } from "@/lib/items/fields";
+import { fieldKey, type BusinessField } from "@/lib/items/fields";
+import { missingTemplateFields } from "@/lib/items/field-templates";
 
 type Row = { key?: string; label: string; type: BusinessField["type"]; unit: string; options: string; variant: boolean };
 const toRow = (f: BusinessField): Row => ({ key: f.key, label: f.label, type: f.type, unit: f.unit ?? "", options: (f.options ?? []).join(", "), variant: !!f.variant });
@@ -10,11 +11,23 @@ const typeLabels: Record<BusinessField["type"], string> = { text: "Tekst", numbe
 
 /** The owner names the fields their products need: a description (Druri: Ah)
  * or a choice the customer makes (Gjatësia: 80 / 100 / 120 cm). */
-export function ProductFieldsSettings({ slug, fields }: { slug: string; fields: BusinessField[] }) {
+type Props = {
+  slug: string;
+  fields: BusinessField[];
+  /** The item kind's own fields (e.g. Marka, Viti for vehicles): always there, not editable here. */
+  fixed: { name: string; fields: { key: string; label: string }[] };
+  /** The starter fields suggested for the onboarding category. */
+  suggested: { category: string | null; fields: BusinessField[] };
+};
+
+export function ProductFieldsSettings({ slug, fields, fixed, suggested }: Props) {
   const [rows, setRows] = useState<Row[]>(fields.map(toRow));
   const [message, setMessage] = useState<{ error?: string; success?: string }>({});
   const [pending, start] = useTransition();
   const router = useRouter();
+  const fixedKeys = new Set(fixed.fields.flatMap(f => [f.key, fieldKey(f.label)]));
+  const missing = missingTemplateFields(suggested.fields, rows.filter(r => r.label.trim()).map(r => ({ key: r.key ?? fieldKey(r.label), label: r.label })));
+  const addSuggested = (list: BusinessField[]) => setRows(current => [...current, ...list.map(f => ({ ...toRow(f), key: undefined }))].slice(0, 24));
   const update = (index: number, patch: Partial<Row>) => setRows(current => current.map((row, i) => i === index ? { ...row, ...patch } : row));
   const save = () => start(async () => {
     setMessage({});
@@ -35,6 +48,32 @@ export function ProductFieldsSettings({ slug, fields }: { slug: string; fields: 
         Ndize <strong>Zgjedh klienti</strong> kur klienti zgjedh një vlerë para porosisë (p.sh. Gjatësia 80 / 100 / 120 cm):
         çdo vlerë mund të ketë kodin dhe çmimin e vet te variantet e produktit.
       </p>
+      {fixed.fields.length > 0 && (
+        <div className="grid gap-2">
+          <h3 className="text-sm font-semibold">Fushat e gatshme: {fixed.name}</h3>
+          <div className="flex flex-wrap gap-2">
+            {fixed.fields.map(f => <span key={f.key} className="product-chip">{f.label}</span>)}
+          </div>
+          <p className="muted-copy">Këto i ka çdo artikull dhe nuk ndryshohen. Më poshtë shton fushat e tua, që dalin pas tyre.</p>
+        </div>
+      )}
+      {missing.length > 0 && (
+        <div className="grid gap-2 rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
+          <h3 className="text-sm font-semibold">Fusha të sugjeruara{suggested.category ? ` për ${suggested.category}` : ""}</h3>
+          <div className="flex flex-wrap gap-2">
+            {missing.map(f => (
+              <button key={f.key} type="button" className="btn btn-ghost" onClick={() => addSuggested([f])}
+                title={f.variant ? "Zgjedh klienti" : undefined}>
+                + {f.label}{f.unit ? ` (${f.unit})` : ""}{f.variant ? " · zgjedh klienti" : ""}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" className="btn btn-primary" disabled={rows.length >= 24} onClick={() => addSuggested(missing)}>Shto të gjitha ({missing.length})</button>
+            <span className="muted-copy">Shtohen më poshtë; ndryshoji ose hiqi para se të shtypësh Ruaj.</span>
+          </div>
+        </div>
+      )}
       {rows.length === 0 && <p className="muted-copy">Ende nuk ke fusha. Shto të parën më poshtë.</p>}
       <div className="grid gap-3">
         {rows.map((row, index) => (
@@ -56,6 +95,9 @@ export function ProductFieldsSettings({ slug, fields }: { slug: string; fields: 
                 <input className="field" value={row.unit} maxLength={12} placeholder="P.sh. cm" onChange={e => update(index, { unit: e.target.value })} />
               </label>
             </div>
+            {row.label.trim() && fixedKeys.has(fieldKey(row.label)) && (
+              <p className="form-feedback form-feedback-error" role="alert">“{row.label.trim()}” është tashmë te fushat e gatshme. Përdor atë ose jepi këtij një emër tjetër.</p>
+            )}
             {(row.variant || row.type === "select") && (
               <label className="form-label">
                 Vlerat, të ndara me presje{row.variant ? " (opsionale: vlerat e reja shtohen edhe te variantet)" : ""}
