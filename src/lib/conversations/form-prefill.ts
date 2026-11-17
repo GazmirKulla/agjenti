@@ -4,7 +4,9 @@ import { modelFor } from "@/lib/agents/generate";
 import { prompt } from "@/lib/ai/prompts/files";
 import { zonedParts } from "@/lib/calendar/model";
 import { compileProcessVersion, loadCurrentLinearVersions } from "@/lib/orchestration/version-store";
+import { loadOrderProducts, type OrderProduct } from "@/lib/products/order-products";
 import { fieldPresentation, loadConversationContext, type ConversationContext } from "./context";
+import { checkSelection, emptySelection, hasChoices, selectionInput, selectionSchema, type PrefillSelection } from "./order-selection-prefill";
 
 /**
  * "Krijo porosi", "Cakto takim" and "Ruaj kontaktin" read the conversation when
@@ -27,6 +29,10 @@ export type Prefill = {
   /** Extra details the business's workflow asks for (folded into the note). */
   workflowFields: string[];
   scanned: number;
+  /** The order's product as the order form shows it (variants, website choices), when one was found. */
+  product?: OrderProduct | null;
+  /** Its variant, choices, extras and fields the AI is sure of, checked against the product. */
+  selection?: PrefillSelection | null;
 };
 
 const FORM_FIELDS: Record<FormKind, PrefillKey[]> = {
@@ -128,6 +134,7 @@ const schema = {
 
 /** Null when the conversation is not in this business. */
 export async function prefillForm(db: SupabaseClient, businessId: string, conversationId: string, kind: FormKind): Promise<Prefill | null> {
+  const started = Date.now();
   // The context, messages, catalog and calendar are read at once; only the workflow
   // labels wait for the context. The model call is the slow part, so it gets the
   // rest of the time the app waits (see PREFILL_TIMEOUT in the mobile app).
@@ -180,11 +187,40 @@ export async function prefillForm(db: SupabaseClient, businessId: string, conver
 
   const { fields, missing } = mergePrefill({ kind, collected, model, optional: context.forms.order.optionalCustomer });
   const productId = fields.product_id?.value;
+  const picked = kind === "order" && productId
+    ? await pickSelection(db, businessId, productId, { lines, today, started }).catch((error: unknown) => {
+        // The form still opens with everything else; the owner picks the choices.
+        console.error("[form-prefill] selection", error instanceof Error ? error.message.slice(0, 200) : "failed");
+        return { product: null, selection: null };
+      })
+    : null;
   return {
     fields,
     productName: productId ? catalog.find((p) => p.id === productId)?.name ?? context.forms.order.productName : null,
     missing,
     workflowFields,
     scanned: lines.length,
+    ...(picked ? picked : {}),
   };
+}
+
+/** The route has 60 s; the second reading uses what the first left, and is skipped when too little is left. */
+const BUDGET_MS = 55_000;
+const SELECTION_MAX_MS = 20_000;
+
+/** The product the conversation names, with the variant and choices the customer clearly made. */
+async function pickSelection(db: SupabaseClient, businessId: string, productId: string, input: { lines: string[]; today: string; started: number }) {
+  const product = (await loadOrderProducts(db, businessId, { ids: [productId] }))?.[0] ?? null;
+  if (!product) return { product: null, selection: null };
+  const left = Math.min(SELECTION_MAX_MS, BUDGET_MS - (Date.now() - input.started));
+  if (!hasChoices(product) || !input.lines.length || !process.env.OPENAI_API_KEY || left < 5_000) return { product, selection: null };
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: left, maxRetries: 0 });
+  const result = await client.responses.create({
+    model: modelFor("assistant"), store: false,
+    instructions: prompt("agjenti-i-klienteve/zgjedhjet-e-porosise"),
+    input: JSON.stringify({ today: input.today, ...selectionInput(product), conversation: input.lines.join("\n") }),
+    text: { format: { type: "json_schema", name: "order_selection", strict: true, schema: selectionSchema } },
+  });
+  const selection = checkSelection(product, JSON.parse(result.output_text));
+  return { product, selection: emptySelection(selection) ? null : selection };
 }
