@@ -101,7 +101,10 @@ it.each([
   expect(result.steps.map(step => step.requiredCapability)).toEqual(keys);
   expect(result.steps.every(step => step.readiness === "READY" && step.supported)).toBe(true);
   for (const { table, eq } of queries) {
-    if (table !== "platform_admins") expect(eq).toHaveBeenCalledWith("business_id", "tenant-a");
+    // The business row itself is keyed by its id; every other tenant table by business_id.
+    if (table === "businesses") expect(eq).toHaveBeenCalledWith("id", "tenant-a");
+    else if (table !== "platform_admins") expect(eq).toHaveBeenCalledWith("business_id", "tenant-a");
+    expect(eq).not.toHaveBeenCalledWith("id", "foreign-tenant");
     if (["business_users", "platform_admins"].includes(table)) expect(eq).toHaveBeenCalledWith("user_id", "owner-a");
     expect(eq).not.toHaveBeenCalledWith("business_id", "foreign-tenant");
   }

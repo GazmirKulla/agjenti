@@ -63,7 +63,7 @@ export const fields: Record<string, string[]> = {
   orderflow: ["name", "steps", "scope", "product_ids"],
   linear: ["definition", "scope", "workflow_id"],
   workflow: ["operations", "version_id"],
-  search: ["kind", "query", "offset", "customer_id", "status"],
+  search: ["kind", "query", "offset", "customer_id", "status", "filters", "group_by", "sort"],
   product: ["name", "description", "sku", "price_amount", "currency"],
   service: [
     "name",

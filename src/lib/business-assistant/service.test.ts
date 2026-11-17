@@ -64,6 +64,8 @@ beforeEach(() => {
       "order",
       "limit",
       "or",
+      "in",
+      "range",
     ])
       chain[name] = (...args: unknown[]) => {
         calls.push([name, args]);

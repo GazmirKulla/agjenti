@@ -9,6 +9,7 @@ export const loadItemSetup = cache(async (businessId: string) => {
   const db = createServiceSupabase();
   let read = await db.from("businesses")
     .select("item_kind,item_plural,item_singular,dashboard_profile,product_fields").eq("id", businessId).maybeSingle();
+  const fieldsRead = !read.error;
   // Before the product-fields migration the column is absent: keep the kind and names working.
   if (read.error) read = await db.from("businesses").select("item_kind,item_plural,item_singular,dashboard_profile").eq("id", businessId).maybeSingle() as typeof read;
   const data = read.data as { item_kind?: string | null; item_plural?: string | null; item_singular?: string | null; dashboard_profile?: unknown; product_fields?: unknown } | null;
@@ -22,5 +23,7 @@ export const loadItemSetup = cache(async (businessId: string) => {
     chosen: Boolean(data?.item_kind),
     /** The business's own product fields (attributes and variant choices). */
     fields: readBusinessFields(data?.product_fields),
+    /** False when the fields could not be read: an empty list then means unknown, not none. */
+    fieldsRead,
   };
 });

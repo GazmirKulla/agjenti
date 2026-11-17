@@ -22,7 +22,8 @@ it.each(["Hiq çdo produkt nga katalogu", "Fshi të gjitha produktet", "Delete a
   process.env.OPENAI_API_KEY = "synthetic-key";
   const rows = Array.from({ length: 12 }, (_, i) => ({ id: String(i), name: `Synthetic ${i}` }));
   m.from.mockImplementation(() => {
-    const q = { select: () => q, eq: () => q, order: () => q, limit: () => q, returns: async () => ({ data: rows, count: 12, error: null }) };
+    const q = { select: () => q, eq: () => q, in: () => q, order: () => q, limit: () => q, returns: async () => ({ data: rows, count: 12, error: null }),
+      range: async () => ({ data: [], error: null }) };
     return q;
   });
   m.model.mockResolvedValue({ output_text: JSON.stringify({ action: "operation", id: null, message: "Janë 13 produkte", planRelation: "new", changes: [

@@ -35,6 +35,8 @@ import type { VisualNodeKind } from "@/lib/workflows/visual/types";
 import type { SimulationBinding } from "@/lib/workflows/visual/simulation-types";
 import type { PublicationApproval } from "@/lib/workflows/visual/publication-types";
 import { parseUIContext, type AssistantUIContext } from "./context";
+import { describeProducts, loadProductSetup, productSchema, readVariantOptions, scanCatalog, unknownProductSetup, type ProductSetup } from "./product-fields";
+import { parseProductQuery, queryFields, runProductQuery } from "./product-query";
 import OpenAI from "@/lib/ai/openai";
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -73,7 +75,7 @@ const tables: Record<string, string> = {
 };
 const columns: Record<string, string> = {
   agent: "id,name,instructions,is_active,updated_at,communication,configuration_revision,configuration_draft",
-  product: "id,name,description,sku,image_url,price_amount,currency,is_active,archived_at,product_type_id,updated_at,workflow_id",
+  product: "id,name,description,sku,image_url,price_amount,price_mode,price_max,price_unit,currency,is_active,archived_at,product_type_id,updated_at,workflow_id,item_kind,attributes,availability",
   service: serviceColumns,
   knowledge: "id,title,body,intent_key,is_active,updated_at",
   profile: "id,name,updated_at",
@@ -169,10 +171,46 @@ async function timezoneFor(businessId: string) {
     throw new AssistantError("Cilësimet e kalendarit nuk u lexuan.");
   return result.data?.timezone ?? defaultSettings.timezone;
 }
-export async function searchContext(access: Access, p: Proposal) {
+/** The server runs the model's structured product query over the whole catalog and returns
+ * exact counts and the matching products; the model then works only with this result. */
+async function productQuery(access: Access, search: Record<string, string>, setup: ProductSetup) {
+  const base = { kind: "product", mode: "filter" };
+  let scan: Awaited<ReturnType<typeof scanCatalog>>;
+  try { scan = await scanCatalog(access.businessId); }
+  catch { return { ...base, status: "unavailable", reason: "catalog_read_failed", rows: [] }; }
+  const schema = productSchema(setup, scan.rows.map(r => typeof r.item_kind === "string" ? r.item_kind : "product"));
+  const defined = new Set(schema.fields.map(f => f.key));
+  const unmapped = new Set(scan.rows.flatMap(r => r.attributes && typeof r.attributes === "object" ? Object.keys(r.attributes as Row) : []).filter(key => !defined.has(key)));
+  const fields = queryFields(schema, unmapped);
+  const parsed = parseProductQuery(search, fields);
+  if ("error" in parsed) return { ...base, status: "invalid_query", error: parsed.error, fields: [...fields.keys()], rows: [] };
+  const { query } = parsed;
+  const used = [...query.filters.map(f => f.field), query.groupBy, query.sort?.field];
+  let variants: Awaited<ReturnType<typeof readVariantOptions>> | undefined;
+  if (used.some(key => key && fields.get(key)?.variant)) {
+    try { variants = await readVariantOptions(access.businessId); }
+    catch { return { ...base, status: "unavailable", reason: "variants_read_failed", rows: [] }; }
+  }
+  const outcome = runProductQuery(scan.rows, query, fields, variants?.options);
+  const page = outcome.matched.slice(query.offset, query.offset + query.limit);
+  const described = await describeProducts(access.businessId, setup, page, PRODUCT_SEARCH_BUDGET);
+  const complete = scan.complete && (variants?.complete ?? true) && schema.status === "read";
+  return { ...base, status: complete ? "complete" : "partial",
+    ...(complete ? {} : { reason: !scan.complete ? "catalog_scan_limit" : schema.status !== "read" ? "fields_unavailable" : "variant_scan_limit" }),
+    query, scanned: outcome.scanned, matchedCount: outcome.matched.length, uncomparable: outcome.uncomparable,
+    ...(outcome.groups ? { groups: outcome.groups } : {}),
+    offset: query.offset, returnedCount: described.rows.length, more: outcome.matched.length > query.offset + described.rows.length,
+    ...(described.cut ? { rowsCut: "context_budget" } : {}), rows: described.rows };
+}
+const PRODUCT_SEARCH_BUDGET = 30_000;
+export async function searchContext(access: Access, p: Proposal, productSetup?: ProductSetup) {
   const search = Object.fromEntries(p.changes.map((c) => [c.field, c.value]));
   const kind = search.kind;
   if (isOperationalSearch(kind)) return searchOperations(access.businessId, access.userId, search as { kind: string; query: string }, access.accessToken);
+  if (kind === "product" && (search.filters || search.group_by || search.sort)) {
+    if (!access.modules.includes(moduleFor("product_update"))) throw new AssistantError("Ky funksion nuk është aktiv në hapësirën e biznesit.");
+    return productQuery(access, search, productSetup ?? unknownProductSetup());
+  }
   if (
     !["product", "service", "knowledge", "booking", "agent"].includes(kind) ||
     !search.query?.trim() ||
@@ -202,6 +240,10 @@ export async function searchContext(access: Access, p: Proposal) {
     .limit(61)
     .returns<Row[]>();
   if (error) throw new AssistantError("Kërkimi nuk përfundoi. Provo përsëri.");
+  if (kind === "product") {
+    const described = await describeProducts(access.businessId, productSetup ?? unknownProductSetup(), (data ?? []).slice(0, 60), PRODUCT_SEARCH_BUDGET);
+    return { kind, query: search.query, partial: (data?.length ?? 0) > 60 || described.cut, rows: described.rows };
+  }
   return {
     kind,
     query: search.query,
@@ -239,6 +281,9 @@ export async function planRequest(
   if (!process.env.OPENAI_API_KEY)
     throw new AssistantError("Asistenti AI nuk është konfiguruar ende.");
   const db = createServiceSupabase();
+  // A failed read leaves the definitions marked unavailable; it never reads as "no fields".
+  const productSetupRead = access.modules.includes("products")
+    ? loadProductSetup(access.businessId).catch(() => unknownProductSetup()) : Promise.resolve(undefined);
   const selectedProducts = validatedContext?.selectedEntityIds?.length && validatedContext.selectedEntityIds.length > 1
     ? await Promise.all(validatedContext.selectedEntityIds.map(id => {
       if (!access.modules.includes("products")) throw new AssistantError("Produktet nuk janë aktivë në këtë biznes.");
@@ -335,6 +380,21 @@ export async function planRequest(
     const group = context.product as {rows:Row[]};
     group.rows = [...selectedProducts, ...group.rows.filter(row => !selectedProducts.some(p => p.id === row.id))];
   }
+  const productSetup = await productSetupRead;
+  let selectedForModel = selected;
+  if (productSetup) {
+    const group = context.product as { rows: Row[]; returnedCount: number; partial: boolean; reason?: string } | undefined;
+    const productRows = group?.rows ?? (selected && validatedContext?.entityType === "product" ? [selected] : []);
+    const described = await describeProducts(access.businessId, productSetup, productRows);
+    context.productFields = { ...described.schema, variants: described.variants };
+    if (group) {
+      group.rows = described.rows;
+      group.returnedCount = described.rows.length;
+      if (described.cut) { group.partial = true; group.reason = "context_budget"; }
+    }
+    if (selected && validatedContext?.entityType === "product")
+      selectedForModel = described.rows.find(row => row.id === selected.id) ?? (await describeProducts(access.businessId, productSetup, [selected])).rows[0] ?? selected;
+  }
   if (pendingOrderFlow) {
     context.orderflows = await loadOrderFlows(access, pendingOrderFlow.before?.id as string | undefined);
     context.pendingOrderflow = { action: pendingOrderFlow.action, id: pendingOrderFlow.before?.id ?? null, ...pendingOrderFlow.values };
@@ -396,7 +456,7 @@ export async function planRequest(
           now: new Date().toISOString(),
           timezone,
           data: context,
-          uiContext: validatedContext ? {...validatedContext, selectedEntity: selected} : undefined,
+          uiContext: validatedContext ? {...validatedContext, selectedEntity: selectedForModel} : undefined,
           history,
           request: text,
           materials: materials.map(m => /\.csv$/i.test(m.name) ? { ...m, text: m.text.slice(0, 2000), note: "CSV excerpt for routing only. product_import reads the complete file and compares the full catalog." } : m),
@@ -572,7 +632,7 @@ export async function planRequest(
       return finish(await applyRequestedWorkflow(access, proposal, text, history, (context.workflow as WorkflowCard | undefined)?.workspace.revision, pendingGraph));
     }
     if (proposal.action === "search") {
-      context.searchResult = await searchContext(access, proposal);
+      context.searchResult = await searchContext(access, proposal, productSetup);
       continue;
     }
     if (selectedProducts.length && !["clarify", "operation", "operation_plan", "operation_resume"].includes(proposal.action)) return { message: "Për ndryshimet e produkteve zgjidh një produkt. Një workflow mund ta lidhësh me disa produkte njëherësh." };
