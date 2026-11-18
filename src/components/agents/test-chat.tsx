@@ -15,7 +15,7 @@ import { ChatMessage, CopyMessage } from "./chat-message";
 import { newConversation, replaySession, readHistory, transcript, batchStartIndex, batchEntry, showsReply, type TestConversation, type ChatEntry, type PendingTestTurn, reconcileTestConversation } from "./chat-history";
 import "./test-chat.css";
 const reasons: Record<string, string> = {
-  workflow_not_configured: "Produkti ka nevojë për një workflow.",
+  workflow_not_configured: "Produkti nuk ka ende një proces porosie.",
   missing_api_key: "AI nuk është konfiguruar. Po shfaqet përgjigjja rezervë.",
   provider_error: "Thirrja AI dështoi. Provo rigjenerimin.",
   empty_reply: "AI nuk ktheu tekst. Provo rigjenerimin.",
@@ -424,7 +424,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
           {chat.outbox?.filter(o => o.error).map(o => <p key={o.id}>{o.error}</p>)}
           {last?.setupNotice && <p className="agent-test-notice" role="status">{last.setupNotice}</p>}
           {last && <MessageRoutingView trace={last.visualWorkflow} state={last.nextState} message={messages.at(-1)?.text} />}
-          <h3>{last?.visualWorkflow ? "Rrjedha e bisedës" : "Workflow i porosisë"}</h3>
+          <h3>{last?.visualWorkflow ? "Rrjedha e bisedës" : "Procesi i porosisë"}</h3>
           {!last ? (
             <p className="agent-test-disclaimer">
               Pas mesazhit të parë shfaqen hapat: çfarë u plotësua dhe çfarë

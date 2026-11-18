@@ -32,7 +32,6 @@ const ready: SetupStatus = {
   connected: true,
   productCount: 2,
   usableProducts: 2,
-  unconfiguredProducts: 0,
   agentReady: true,
   signature: "signature",
   tested: true,
@@ -63,14 +62,21 @@ it("learns from the sources first, connects the channel last, and never includes
   for (const partial of [
     { connected: false },
     { usableProducts: 0 },
-    { productCount: 0 },
-    { unconfiguredProducts: 1 },
     { agentReady: false },
     { available: false },
   ])
     expect(isReady({ ...ready, ...partial })).toBe(false);
   // A test is recommended, never required to go live.
   expect(isReady({ ...ready, tested: false })).toBe(true);
+});
+it("shows what the agent does on its own, done when a process is ready, and never blocks going live for it", () => {
+  const step = (s: SetupStatus) => setupSteps(s).find((x) => x.key === "workflows")!;
+  expect(step({ ...ready, processReady: true }).done).toBe(true);
+  for (const processReady of [false, undefined]) {
+    expect(step({ ...ready, processReady }).done).toBe(false);
+    expect(isReady({ ...ready, processReady })).toBe(true);
+  }
+  expect(setupGateMessage({ ...ready, processReady: false })).toBeNull();
 });
 it("authorizes launch before touching a business", async () => {
   m.user.mockResolvedValue(null);
@@ -141,7 +147,5 @@ it("allows catalog/service-only workspaces without artificial products or order 
     expect(isReady(s)).toBe(true);
     expect(isReady({ ...s, tested: false })).toBe(true);
   }
-  expect(isReady({ ...ready, catalogCount: 1, unconfiguredProducts: 1 })).toBe(
-    false,
-  );
+  expect(isReady({ ...ready, productCount: 1, usableProducts: 0, catalogCount: 1, connected: false })).toBe(false);
 });

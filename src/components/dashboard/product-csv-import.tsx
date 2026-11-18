@@ -117,7 +117,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
   }
   function display(field: string, value: unknown) {
     if (field === "product_type_id") return configuration.types.find(t => t.id === value)?.name ?? (value ? "Lloj ekzistues" : "—");
-    if (field === "workflow_id") return configuration.workflows.find(t => t.id === value)?.name ?? (value ? "Workflow ekzistues" : "Kryesori / pa konfigurim të veçantë");
+    if (field === "workflow_id") return configuration.workflows.find(t => t.id === value)?.name ?? (value ? "Proces i posaçëm ekzistues" : "Procesi i zakonshëm i Agjentit");
     if (Array.isArray(value)) return value.join(", ");
     return String(importValueLabel(field, value) ?? "—");
   }
@@ -229,7 +229,7 @@ export function ProductCsvImport({ slug, initialSource }: { slug: string; initia
       </div>)}</fieldset>}
       <fieldset className="csv-mapping" disabled={busy}><legend>Konfigurimi (opsional)</legend>
         <label>Shablloni i hapave të porosisë (opsional)<select className="field" value={options.productTypeId ?? ""} onChange={e => change({ ...options, productTypeId: e.target.value || undefined })}><option value="">Ruaj konfigurimin ekzistues</option>{configuration.types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
-        <label>Workflow i porosisë<select className="field" value={options.workflowId ?? ""} onChange={e => change({ ...options, workflowId: e.target.value || undefined })}><option value="">Ruaj konfigurimin / workflow kryesor</option>{configuration.workflows.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+        <label>Proces i posaçëm (opsional)<select className="field" value={options.workflowId ?? ""} onChange={e => change({ ...options, workflowId: e.target.value || undefined })}><option value="">Ruaj konfigurimin / procesi i zakonshëm</option>{configuration.workflows.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
       </fieldset>
       <div className="csv-buttons"><button type="button" disabled={busy} className="btn btn-ghost" onClick={() => change({ ...options, fields: ["price_amount", "currency"] })}>Vetëm çmimet</button>
       <button type="button" disabled={busy} className="btn btn-ghost" onClick={() => change({ ...options, fields: [...importFields] })}>Të gjitha fushat</button></div>

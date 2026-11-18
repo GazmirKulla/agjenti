@@ -195,9 +195,9 @@ export function ProductReview({
           </select>
         </label>
         <label className="form-label">
-          Workflow kryesor / proces i posaçëm
+          Proces i posaçëm (opsional)
           <select className="field" value={workflowId} onChange={(event) => setWorkflowId(event.target.value)}>
-            <option value="">{workflows.find(w => !w.id)?.name ?? "Workflow-i kryesor i biznesit"}</option>
+            <option value="">{workflows.find(w => !w.id)?.name ?? "Procesi i zakonshëm i Agjentit"}</option>
             {workflows.filter(w => w.id).map((workflow) => (
               <option key={workflow.id} value={workflow.id}>
                 {workflow.name}
@@ -206,7 +206,7 @@ export function ProductReview({
           </select>
         </label>
       </div>
-      <p className="muted-copy">Produktet importohen si draft. Pas aktivizimit, workflow-i kryesor i përdor sipas kërkesës së klientit. Procesi i posaçëm është opsional.</p>
+      <p className="muted-copy">Produktet importohen si draft. Pas aktivizimit, Agjenti i porosit me procesin e zakonshëm. Procesi i posaçëm është opsional.</p>
       <button
         type="button"
         className="btn btn-primary"

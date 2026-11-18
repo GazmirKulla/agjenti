@@ -46,7 +46,7 @@ export default async function BusinessHub({ params }: { params: Promise<{ slug: 
       <Link href={`${base}/settings/business`}>Profili i biznesit →</Link>
       <Link href={`${base}/settings/modules`}>Përshtat menunë →</Link>
       <Link href={`${base}/setup`}>Onboarding →</Link>
-      {modules.includes("workflows") && <Link href={`${base}/workflows`}>Workflow Designer · prova dhe versione →</Link>}
+      {modules.includes("workflows") && <Link href={`${base}/workflows`}>Procesi i personalizuar (i avancuar) →</Link>}
       <Link href={`${base}/settings/advanced`}>Mjete të avancuara →</Link>
     </nav>
     <details className="business-hub-overview"><summary>Aktiviteti dhe përmbledhja e biznesit</summary><Overview compact business={access.business} dashboardProfile={profile}/></details>

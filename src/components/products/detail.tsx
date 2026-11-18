@@ -253,7 +253,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
             </div>
             <dl className="product-detail-rows">
               <div><dt>Shablloni i porosisë</dt><dd>{type?.name ?? "Pa shabllon"}{type?.description && <small>{type.description}</small>}</dd></div>
-              <div><dt>Proces i posaçëm</dt><dd>{product.visual_workflow?.name ?? special?.name ?? "Jo, përdoret workflow-i kryesor"}</dd></div>
+              <div><dt>Proces i posaçëm</dt><dd>{product.visual_workflow?.name ?? special?.name ?? "Jo, procesi i zakonshëm i Agjentit"}</dd></div>
             </dl>
             <ProductBusinessWorkflow slug={slug} workflow={businessWorkflow} product={product} />
           </section>

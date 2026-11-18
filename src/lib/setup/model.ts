@@ -6,7 +6,8 @@ export type SetupStatus = {
   serviceCount?: number;
   knowledgeCount?: number;
   usableProducts: number;
-  unconfiguredProducts: number;
+  /** The agent can carry out at least one process (automatic or the owner's workflow); undefined when unverified. */
+  processReady?: boolean;
   agentReady: boolean;
   signature: string;
   tested: boolean;
@@ -57,14 +58,15 @@ export function setupSteps(s: SetupStatus) {
     },
     {
       key: "workflows",
-      title: "Përcakto procesin e porosisë",
-      description:
-        s.unconfiguredProducts > 0
-          ? `${s.unconfiguredProducts} produkte kërkojnë lloj global dhe workflow të biznesit (me hapin e klientit në fund). Lidhi nga Produktet.`
-          : "Zgjidh llojin global dhe lidh ose sugjero një workflow të biznesit për çdo produkt.",
-      action: "Konfiguro procesin",
+      title: "Shiko çfarë bën Agjenti",
+      description: s.processReady
+        ? "Agjenti merr porosi, tregon statusin, rezervon ose ia kalon stafit vetë, sipas moduleve dhe produkteve. Këtu sheh çfarë është gati."
+        : "Agjenti i kryen proceset vetë kur produktet, shërbimet ose modulet janë gati. Këtu sheh çfarë i mungon.",
+      action: "Shiko",
       path: "workflows",
-      done: s.productCount > 0 && s.unconfiguredProducts === 0,
+      done: s.processReady === true,
+      // The agent answers from knowledge without any process; it never blocks going live.
+      optional: true,
     },
     {
       key: "test",
@@ -113,8 +115,6 @@ export function setupGateMessage(s: SetupStatus): string | null {
     products:
       "Përgatit njohuritë e biznesit, një produkt, një katalog ose një shërbim përpara aktivizimit.",
     agents: "Aktivizo një agjent me udhëzime te Agjentët përpara aktivizimit.",
-    workflows:
-      "Lidh llojin dhe workflow-in për çdo produkt te Produktet / Workflow përpara aktivizimit.",
   };
   return (
     tips[next.key] ??

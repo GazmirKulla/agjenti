@@ -26,9 +26,9 @@ export function TestConfiguration({ configuration, slug, agentConfigured }: {
         <div><dt>Lexuar më</dt><dd>{agent.readAt}</dd></div>
       </dl>)}
       <dl>
-        <div><dt>Workflow</dt><dd>{configuration?.workflow.mode === "draft" ? "Preview eksplicit i draftit" : configuration?.workflow.mode === "published" ? "Version i publikuar" : configuration?.workflow.mode === "pinned" ? "Version i fiksuar në këtë bisedë" : "I padisponueshëm"}</dd></div>
+        <div><dt>Procesi</dt><dd>{configuration?.workflow.mode === "draft" ? "Preview eksplicit i draftit" : configuration?.workflow.mode === "published" ? "Version i publikuar" : configuration?.workflow.mode === "pinned" ? "Version i fiksuar në këtë bisedë" : "I padisponueshëm"}</dd></div>
         <div><dt>Versioni</dt><dd>{configuration?.workflow.versionId ?? "I padisponueshëm"}</dd></div>
-        <div><dt>Burimi i përgjigjes</dt><dd>{configuration?.responseSource === "ai" ? "AI — jo provë e përputhjes me kërkesën" : configuration?.responseSource === "fallback" ? "Përgjigje rezervë / workflow — jo verifikim sjelljeje" : "I padisponueshëm"}</dd></div>
+        <div><dt>Burimi i përgjigjes</dt><dd>{configuration?.responseSource === "ai" ? "AI — jo provë e përputhjes me kërkesën" : configuration?.responseSource === "fallback" ? "Përgjigje rezervë / proces — jo verifikim sjelljeje" : "I padisponueshëm"}</dd></div>
         {responseFallback && <div><dt>Arsyeja e përgjigjes rezervë</dt><dd>{responseFallback === "provider_error" ? "Ofruesi AI nuk e përfundoi kërkesën." : responseFallback === "missing_api_key" ? "Integrimi AI nuk është konfiguruar." : "Rrjedhë ose përgjigje e kontrolluar nga sistemi; jo provë se modeli ndoqi udhëzimet."}</dd></div>}
       </dl>
     </details>

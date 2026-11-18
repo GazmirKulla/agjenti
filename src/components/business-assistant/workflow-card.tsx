@@ -182,7 +182,7 @@ export function WorkflowCard({
             : proposed
               ? "Propozim · ende i paruajtur"
               : workspace.generated
-                ? "Pa workflow · krijimi është opsional"
+                ? "Agjenti punon vetë · procesi i personalizuar është opsional"
                 : "Draft i ruajtur"}
         </p>
       </header>

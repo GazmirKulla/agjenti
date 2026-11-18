@@ -112,7 +112,7 @@ export default async function AgentsPage({
         <textarea
           name="instructions"
           defaultValue={
-            "Përgjigju në gjuhën e klientit. Përdor çmimet nga katalogu dhe mos shpik informacion. Kërko vetëm të dhënat për hapin aktual të workflow-t."
+            "Përgjigju në gjuhën e klientit. Përdor çmimet nga katalogu dhe mos shpik informacion. Kërko vetëm të dhënat që i duhen hapit aktual."
           }
           rows={12}
           className="field"

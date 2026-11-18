@@ -28,17 +28,20 @@ export function ProductBusinessWorkflow({ slug, workflow, product }: {
         <p className="muted-copy">Agjenti i ndërton vetë hapat nga produktet dhe cilësimet e tua. Konfirmon me klientin para çdo porosie ose rezervimi.</p>
       </div>
     ) : (
+      // The owner's own process decides; it stays reachable under the agent's advanced settings.
       <div className="rounded-xl border border-[var(--line)] p-4 grid gap-2">
-        <span className="muted-copy">Workflow kryesor i biznesit</span>
-        <strong>{workflow?.name ?? "Workflow kryesor ende i papublikuar"}</strong>
-        {workflow && <span className="muted-copy">{workflow.status}</span>}
-        <p className="muted-copy">Mesazhi hyn këtu. Agjenti kërkon në katalog dhe zgjedh hapin sipas kërkesës: informacion, porosi ose ndihmë.</p>
-        <Link href={`/b/${slug}/workflows`}>Hap workflow-in kryesor →</Link>
+        <span className="muted-copy">Çfarë bën Agjenti</span>
+        {workflow ? <>
+          <strong>Ndjek procesin tënd të personalizuar</strong>
+          <span className="muted-copy">{workflow.name} · {workflow.status}</span>
+          <p className="muted-copy">Agjenti kërkon në katalog dhe vazhdon sipas kërkesës së klientit: informacion, porosi ose ndihmë.</p>
+          <Link href={`/b/${slug}/workflows`}>Shiko procesin →</Link>
+        </> : <p className="muted-copy">Nuk u verifikua çfarë mund të bëjë Agjenti tani. Provo përsëri pas pak.</p>}
       </div>
     )}
     {product && (product.visual_workflow || product.visual_draft) && <details>
       <summary>Proces i posaçëm i këtij produkti</summary>
-      <p className="muted-copy">Ky përjashtim ekzistues përdoret kur klienti nis procesin për këtë produkt. Pyetjet për informacion kalojnë te workflow-i kryesor.</p>
+      <p className="muted-copy">Kur klienti porosit këtë produkt, Agjenti ndjek këtë proces. Pyetjeve për informacion u përgjigjet si zakonisht.</p>
       <EntityFlowLink slug={slug} kind="product" id={product.id} binding={product.visual_workflow} draft={product.visual_draft} />
     </details>}
   </div>;

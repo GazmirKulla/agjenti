@@ -35,14 +35,14 @@ export function LinearWorkflowCard({ data, slug, pending, onRequest }: {
         }
     }
     const products = data.productId ? data.products.filter(p => p.id === data.productId) : data.products;
-    return (<section className="assistant-preview linear-workflow-card" aria-label="Workflow-t e produkteve">
-      <h3>Workflow-t e produkteve</h3>
+    return (<section className="assistant-preview linear-workflow-card" aria-label="Proceset e posaçme të produkteve">
+      <h3>Proceset e posaçme të produkteve</h3>
       {data.partial && <p className="muted-copy">Lista është e pjesshme. Kërko produktin me emër për ta gjetur.</p>}
       {products.map(product => {
             const active = data.versions.find(v => v.workflow_id === product.workflow_id);
             return (<div className="linear-workflow-product" key={product.id}>
             <strong>{product.name}</strong>
-            <p>Aktiv: {active?.name ?? (product.workflow_id ? "Kërko hollësitë e workflow-t" : "Pa workflow")}</p>
+            <p>Aktiv: {active?.name ?? (product.workflow_id ? "Kërko hollësitë e procesit" : "Procesi i zakonshëm")}</p>
             {active && <ol>{active.steps.map(step => <li key={step.key}>{step.label ?? step.key}</li>)}</ol>}
             <button className="assistant-secondary" onClick={() => onRequest(`Më trego dhe ndihmo të ndryshoj workflow-n e produktit “${product.name}” (${product.id}).`)}>Ndrysho me AI</button>
           </div>);

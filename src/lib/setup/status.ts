@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import type { SetupStatus } from "./model";
+import { agentProcessReady } from "@/lib/orchestration/automatic-process";
 export async function loadSetupStatus(
   businessId: string,
 ): Promise<SetupStatus> {
@@ -15,7 +16,6 @@ export async function loadSetupStatus(
         connected: false,
         productCount: 0,
         usableProducts: 0,
-        unconfiguredProducts: 0,
         agentReady: false,
         signature: "",
         tested: false,
@@ -25,8 +25,11 @@ export async function loadSetupStatus(
   }
   if (!data) throw new Error("Nuk u ngarkua progresi i konfigurimit.");
   // Any scan that was not a failure counts: it runs on its own afterwards.
-  const { data: read } = await createServiceSupabase().from("business_discovery_jobs").select("id")
-    .eq("business_id", businessId).neq("status", "failed").limit(1).maybeSingle();
-  return { ...data, available: true, sourcesRead: Boolean(read) } as SetupStatus;
+  const [{ data: read }, processReady] = await Promise.all([
+    createServiceSupabase().from("business_discovery_jobs").select("id")
+      .eq("business_id", businessId).neq("status", "failed").limit(1).maybeSingle(),
+    agentProcessReady(businessId),
+  ]);
+  return { ...data, available: true, sourcesRead: Boolean(read), ...(processReady === null ? {} : { processReady }) } as SetupStatus;
 }
 export const getSetupStatus = cache(loadSetupStatus);

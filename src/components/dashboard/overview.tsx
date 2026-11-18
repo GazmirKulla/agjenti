@@ -69,7 +69,7 @@ export async function Overview({
           </div>
           <p className="muted-copy">
             {business
-              ? "Agjenti përdor katalogun, njohuritë dhe workflow-t e biznesit për t’iu përgjigjur klientëve."
+              ? "Agjenti përdor katalogun dhe njohuritë për t’iu përgjigjur klientëve, dhe merr porosi ose rezervime vetë."
               : "Ndiq aktivizimin e agjentëve dhe bisedat që janë pauzuar në platformë."}
           </p>
           <div className="summary-line">

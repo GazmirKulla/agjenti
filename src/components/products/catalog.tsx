@@ -662,7 +662,7 @@ export function ProductCatalog({
                   )
                 }
               >
-                <option value="">{configProduct.visual_workflow || configProduct.visual_draft ? "Ruaj procesin vizual ekzistues" : "Përdor workflow-in kryesor"}</option>
+                <option value="">{configProduct.visual_workflow || configProduct.visual_draft ? "Ruaj procesin vizual ekzistues" : "Procesi i zakonshëm i Agjentit"}</option>
                 {configProduct.workflow_id &&
                   !workflows.some(
                     (workflow) => workflow.id === configProduct.workflow_id,

@@ -336,7 +336,7 @@ export function ProductFields({
       )}
 
       <fieldset id="product-process" className="grid gap-3">
-        <legend className="font-semibold">Workflow dhe produkti</legend>
+        <legend className="font-semibold">Si e porosit klienti</legend>
         <ProductBusinessWorkflow slug={slug} workflow={workflows.find(w => w.businessWorkflow)?.businessWorkflow} product={product?.id ? { ...product, id: product.id } : undefined} />
         {!creating && <label className="form-label">
           <span>Shablloni i porosisë <span className="muted-copy">(opsional)</span></span>
@@ -366,7 +366,7 @@ export function ProductFields({
             className="field"
             defaultValue={product?.workflow_id ?? ""}
           >
-            <option value="">{product?.visual_workflow || product?.visual_draft ? "Ruaj procesin vizual ekzistues" : "Përdor workflow-in kryesor"}</option>
+            <option value="">{product?.visual_workflow || product?.visual_draft ? "Ruaj procesin vizual ekzistues" : "Procesi i zakonshëm i Agjentit"}</option>
             {workflows.filter(w => w.id).map((workflow) => (
               <option key={workflow.id} value={workflow.id}>
                 {workflow.name}

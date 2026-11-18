@@ -147,6 +147,19 @@ export async function loadAutomaticVersion(businessId: string): Promise<VisualVe
   }
 }
 
+/**
+ * Whether the agent can carry out at least one process for this business: its own published workflow, or
+ * an automatic capability that is ready. Null when it cannot be verified.
+ */
+export async function agentProcessReady(businessId: string): Promise<boolean | null> {
+  try {
+    if (await hasOwnWorkflow(businessId)) return true;
+    return automaticReadiness(await readAutomaticFacts(businessId)).some(r => r.ready);
+  } catch {
+    return null;
+  }
+}
+
 /** What the owner and the product pages are told: the automatic process and what it can do now. */
 export async function automaticStatus(businessId: string): Promise<{ readiness: AutomaticReadiness[]; active: boolean } | null> {
   try {

@@ -64,7 +64,7 @@ export function OrderFlowCard({
         </details>
       ))}
       <footer>
-        <Link href={`/b/${slug}/workflows`}>Hap workflow-t →</Link>
+        <Link href={`/b/${slug}/workflows`}>Hap procesin →</Link>
         <button
           type="button"
           className="assistant-secondary"

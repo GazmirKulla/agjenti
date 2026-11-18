@@ -17,7 +17,7 @@ it("keeps publication review accessible when a local simulation cannot exercise 
 it("offers optional creation without publishing an absent workflow", () => {
   const html = renderToStaticMarkup(createElement(WorkflowCard, { data: { workspace: { ...workspace, graph: emptyVisualGraph(), generated: true, revision: 0 }, published: null }, slug: "test", pending: false, onRequest: vi.fn() }));
   expect(html).toContain("Sugjero workflow");
-  expect(html).toContain("Pa workflow");
+  expect(html).toContain("Agjenti punon vetë");
   expect(html).not.toContain("Publiko draftin");
   expect(html).not.toContain("Mesazh i ri");
   expect(html).not.toContain("Duhet plotësuar para publikimit");

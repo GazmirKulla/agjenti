@@ -40,7 +40,7 @@ export default async function ImportedProductsPage({
       <ProductHeading
         slug={slug}
         title="Lidh produktet e importuara"
-        description="Rishiko produktet dhe cakto llojin e workflow-n përpara aktivizimit."
+        description="Rishiko produktet përpara aktivizimit."
       />
       <details className="panel section-pad product-import-picker">
         <summary>Importo produkte të tjera</summary>

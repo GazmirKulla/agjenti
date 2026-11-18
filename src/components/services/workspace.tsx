@@ -332,7 +332,7 @@ export function ServicesWorkspace({
     return [
       { label: "Ndrysho shërbimin", onSelect: () => setEditor(s) },
       ...(s.booking_enabled && s.is_active ? [{ label: "Rezervo", href: `/b/${slug}/calendar?service=${s.id}` }] : []),
-      { label: binding ? `Ndrysho rrjedhën: ${binding.name}` : "Lidh me një rrjedhë", href: entityWorkflowHref(slug, "service", s.id, binding?.flowId) },
+      { label: binding ? `Ndrysho procesin e posaçëm: ${binding.name}` : "Shto proces të posaçëm (opsional)", href: entityWorkflowHref(slug, "service", s.id, binding?.flowId) },
     ];
   }
   return (

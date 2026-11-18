@@ -29,7 +29,7 @@ export type LinearCard = {
 };
 function allow(access: Access) {
     if (!access.modules.includes("workflows") || !access.modules.includes("products"))
-        throw new AssistantError("Workflow-t e produkteve me AI nuk janë aktivizuar për këtë biznes.");
+        throw new AssistantError("Proceset e posaçme të produkteve me AI nuk janë aktivizuar për këtë biznes.");
 }
 export async function loadLinearContext(access: Access, productId?: string | null): Promise<LinearCard> {
     allow(access);
@@ -73,7 +73,7 @@ function describeDefinition(d?: LinearDefinition) {
 export async function prepareLinear(access: Access, p: Proposal, expected?: LinearCard) {
     const card = await loadLinearContext(access, p.id);
     if (p.action === "linear_read")
-        return { message: "Workflow-t e produkteve dhe drafti shfaqen veçmas. Publikimi zbatohet për porositë e reja.", linear: card };
+        return { message: "Proceset e posaçme të produkteve dhe drafti shfaqen veçmas. Publikimi zbatohet për porositë e reja.", linear: card };
     if (!p.id)
         throw new AssistantError("Zgjidh produktin që dëshiron të ndryshosh.");
     if (expected && (expected.draft?.revision ?? 0) !== (card.draft?.revision ?? 0))

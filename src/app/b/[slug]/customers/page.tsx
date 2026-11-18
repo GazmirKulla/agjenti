@@ -96,7 +96,7 @@ export default async function CustomersPage({
         emptyTitle={archivedView ? "Nuk ka klientë të arkivuar" : "Ende nuk ka klientë"}
         emptyDescription={archivedView
           ? "Klientët që heq nga lista shfaqen këtu. Mund t’i rikthesh ose t’i fshish përgjithmonë."
-          : "Një bisedë Instagram nuk krijon klient automatikisht. Shtoje nga Inbox ose konfirmo porosinë pasi workflow-i të jetë plotësuar."}
+          : "Një bisedë Instagram nuk krijon klient automatikisht. Shtoje nga Inbox, ose krijohet vetë kur klienti konfirmon një porosi."}
         records={(customers ?? []).map((c) => ({
           id: c.id,
           title: c.display_name || c.username || "Klient Instagram",

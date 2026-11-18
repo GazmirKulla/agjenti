@@ -3,7 +3,7 @@ vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({}) }))
 import { readinessFrom, readinessSummary } from "./readiness";
 import type { SetupStatus } from "./model";
 
-const status: SetupStatus = { available: true, connected: true, productCount: 0, usableProducts: 0, unconfiguredProducts: 0,
+const status: SetupStatus = { available: true, connected: true, productCount: 0, usableProducts: 0,
   knowledgeCount: 3, agentReady: true, signature: "s", tested: false, launched: false };
 
 it("is ready to go live without a test, and live only with replies on", () => {
