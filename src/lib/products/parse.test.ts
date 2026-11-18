@@ -77,4 +77,9 @@ describe("shortenDescription", () => {
     const on = parseProductForm(form({ ...base, agent_orders_shown: "1", agent_orders: "on" }));
     expect("error" in on ? null : on.agentOrders).toBe(true);
   });
+  it("stores which customer questions the product uses only for the ones the owner ticks", () => {
+    const fields = [{ key: "teksti", label: "Teksti në bluzë", type: "text" as const, ask: true }, { key: "pako", label: "Pako", type: "text" as const, ask: true }];
+    const parsed = parseProductForm(form({ name: "Bluzë", price: "1500", currency: "ALL", item_kind: "product", ask_teksti: "on" }), { fields });
+    expect("error" in parsed ? null : parsed.attributes).toEqual({ teksti: true });
+  });
 });

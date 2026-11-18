@@ -2,7 +2,9 @@ import type { KindField } from "./kinds";
 
 /** A product field the business names itself, e.g. "Gjatësia" or "Druri".
  * A variant field is one the customer chooses (each value can have its own
- * SKU and price); the others describe the product. */
+ * SKU and price); an ask field is a question the agent puts to the customer
+ * when they order a product that uses it (e.g. "Teksti në bluzë"); the others
+ * describe the product. */
 export type BusinessField = {
   key: string;
   label: string;
@@ -10,6 +12,8 @@ export type BusinessField = {
   unit?: string;
   options?: string[];
   variant?: boolean;
+  /** Asked of the customer when ordering a product that uses it; the product stores `true` under the key. */
+  ask?: boolean;
 };
 
 export const MAX_BUSINESS_FIELDS = 24;
@@ -40,8 +44,9 @@ export function readBusinessFields(raw: unknown): BusinessField[] {
     const options = Array.isArray(row.options) ? [...new Set(row.options.map(o => clean(o, 60)).filter(Boolean))].slice(0, 40) : [];
     if (type === "select" && !variant && !options.length) continue;
     seen.add(key);
+    const ask = !variant && row.ask === true;
     fields.push({ key, label, type, ...(clean(row.unit, 12) ? { unit: clean(row.unit, 12) } : {}),
-      ...(type === "select" && options.length ? { options } : {}), ...(variant ? { variant: true } : {}) });
+      ...(type === "select" && options.length ? { options } : {}), ...(variant ? { variant: true } : {}), ...(ask ? { ask: true } : {}) });
   }
   return fields;
 }
@@ -68,7 +73,9 @@ export function parseBusinessFields(raw: unknown, reserved: string[] = []): { fi
     if (options.length > 40) return { error: `“${label}” ka më shumë se 40 vlera.` };
     if (type === "select" && !variant && !options.length) return { error: `Shkruaj vlerat për “${label}” (p.sh. Ah, Lis, Frashër).` };
     const unit = clean(row.unit, 12);
-    fields.push({ key, label, type, ...(unit ? { unit } : {}), ...(type === "select" && options.length ? { options } : {}), ...(variant ? { variant: true } : {}) });
+    if (variant && row.ask === true) return { error: `“${label}” është ose zgjedhje e klientit ose pyetje për klientin, jo të dyja.` };
+    const ask = row.ask === true;
+    fields.push({ key, label, type, ...(unit ? { unit } : {}), ...(type === "select" && options.length ? { options } : {}), ...(variant ? { variant: true } : {}), ...(ask ? { ask: true } : {}) });
   }
   if (fields.filter(f => f.variant).length > MAX_VARIANT_FIELDS) return { error: `Mund të kesh deri në ${MAX_VARIANT_FIELDS} fusha me variante.` };
   return { fields };
@@ -76,10 +83,20 @@ export function parseBusinessFields(raw: unknown, reserved: string[] = []): { fi
 
 /** The fields that describe a product, in the same shape as an item kind's own fields. */
 export function attributeFields(fields: BusinessField[]): KindField[] {
-  return fields.filter(f => !f.variant).map(f => ({ key: f.key, label: f.label, type: f.type, summary: true,
+  return fields.filter(f => !f.variant && !f.ask).map(f => ({ key: f.key, label: f.label, type: f.type, summary: true,
     ...(f.unit ? { unit: f.unit } : {}), ...(f.options ? { options: f.options.map(o => ({ value: o, label: o })) } : {}) }));
 }
 
 export function variantFields(fields: BusinessField[]): BusinessField[] {
   return fields.filter(f => f.variant);
+}
+
+/** The questions the agent asks a customer who orders a product, e.g. "Teksti në bluzë". */
+export function askFields(fields: BusinessField[]): BusinessField[] {
+  return fields.filter(f => f.ask);
+}
+/** The ask fields this product uses: the owner turned each one on for it. */
+export function productAskFields(fields: BusinessField[], attributes: unknown): BusinessField[] {
+  const values = attributes && typeof attributes === "object" && !Array.isArray(attributes) ? attributes as Record<string, unknown> : {};
+  return askFields(fields).filter(f => values[f.key] === true);
 }

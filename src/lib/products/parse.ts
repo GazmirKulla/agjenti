@@ -1,5 +1,5 @@
 import { itemKind as kindOf, parseAttributes, parseAvailability, type Availability } from "@/lib/items/kinds";
-import { attributeFields, variantFields, type BusinessField } from "@/lib/items/fields";
+import { askFields, attributeFields, variantFields, type BusinessField } from "@/lib/items/fields";
 import { MAX_CHOICES, parseVariants, splitChoices, type ProductVariant } from "./variants";
 import { MAX_PRICE, priceMode, type PriceMode } from "./pricing";
 import { parseStockQuantity, stockModes, type StockMode } from "./stock";
@@ -115,6 +115,8 @@ export function parseProductForm(
   if ("error" in parsedAttributes && parsedAttributes.error) return { error: parsedAttributes.error };
   const attributes: ParsedProductFields["attributes"] = { ...parsedAttributes.attributes };
   // The values the customer chooses from, without one variant row per value ("2; 3; 4").
+  // The questions the agent asks a customer who orders this product: on when the owner ticks them.
+  if (itemKind) for (const field of askFields(opts?.fields ?? [])) if (form.get(`ask_${field.key}`) === "on") attributes[field.key] = true;
   if (itemKind) for (const field of variantFields(opts?.fields ?? [])) {
     if (!form.has(`choices_${field.key}`)) continue;
     const values = splitChoices(String(form.get(`choices_${field.key}`)), field.unit);

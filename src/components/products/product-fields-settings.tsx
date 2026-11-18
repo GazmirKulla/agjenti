@@ -5,8 +5,11 @@ import { saveProductFields } from "@/lib/items/actions";
 import { fieldKey, type BusinessField } from "@/lib/items/fields";
 import { missingTemplateFields } from "@/lib/items/field-templates";
 
-type Row = { key?: string; label: string; type: BusinessField["type"]; unit: string; options: string; variant: boolean };
-const toRow = (f: BusinessField): Row => ({ key: f.key, label: f.label, type: f.type, unit: f.unit ?? "", options: (f.options ?? []).join(", "), variant: !!f.variant });
+type Row = { key?: string; label: string; type: BusinessField["type"]; unit: string; options: string; variant: boolean; ask: boolean };
+const toRow = (f: BusinessField): Row => ({ key: f.key, label: f.label, type: f.type, unit: f.unit ?? "", options: (f.options ?? []).join(", "), variant: !!f.variant, ask: !!f.ask });
+// Who fills the field: the owner on the product, the customer choosing a variant, or the customer answering when ordering.
+const roles = { data: "Pronari, te produkti", variant: "Klienti zgjedh (variant)", ask: "Klienti përgjigjet kur porosit" } as const;
+const roleOf = (row: Row): keyof typeof roles => row.variant ? "variant" : row.ask ? "ask" : "data";
 const typeLabels: Record<BusinessField["type"], string> = { text: "Tekst", number: "Numër", select: "Listë vlerash", boolean: "Po / Jo" };
 
 /** The owner names the fields their products need: a description (Druri: Ah)
@@ -45,7 +48,7 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
   const save = () => start(async () => {
     setMessage({});
     const payload = rows.map(r => ({ ...(r.key ? { key: r.key } : {}), label: r.label, type: r.variant ? "select" : r.type, unit: r.unit,
-      options: r.options.split(/[,;\n]/).map(o => o.trim()).filter(Boolean), variant: r.variant }));
+      options: r.options.split(/[,;\n]/).map(o => o.trim()).filter(Boolean), variant: r.variant, ask: !r.variant && r.ask }));
     const result = await saveProductFields(slug, JSON.stringify(payload));
     setMessage(result);
     if ("fields" in result && result.fields) { const next = result.fields.map(toRow); setRows(next); setSaved(JSON.stringify(next)); router.refresh(); }
@@ -58,8 +61,9 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
       </div>
       <p className="muted-copy">
         Çdo fushë është një e dhënë që e plotëson te forma e produktit, p.sh. <strong>Druri</strong> ose <strong>Ngjyra</strong>, dhe Agjenti ua tregon klientëve.
-        Ndize <strong>Zgjedh klienti</strong> kur klienti zgjedh një vlerë para porosisë (p.sh. Gjatësia 80 / 100 / 120 cm):
-        çdo vlerë mund të ketë kodin dhe çmimin e vet te variantet e produktit.
+        Zgjidh <strong>Klienti zgjedh</strong> kur klienti zgjedh një vlerë para porosisë (p.sh. Gjatësia 80 / 100 / 120 cm):
+        çdo vlerë mund të ketë kodin dhe çmimin e vet te variantet e produktit. Zgjidh <strong>Klienti përgjigjet kur porosit</strong>
+        për një pyetje që Agjenti i bën klientit, p.sh. <strong>Teksti në bluzë</strong>: te çdo produkt zgjedh nëse e pyet.
       </p>
       {fixed.fields.length > 0 && (
         <div className="grid gap-2">
@@ -107,7 +111,7 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
       <div className="field-rows">
         {rows.length > 0 && (
           <div className="field-rows-head" aria-hidden>
-            <span>Emri</span><span>Tipi</span><span>Njësia</span><span>Zgjedh klienti</span><span />
+            <span>Emri</span><span>Tipi</span><span>Njësia</span><span>Kush e plotëson</span><span />
           </div>
         )}
         {rows.map((row, index) => (
@@ -118,10 +122,9 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
               {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
             <input className="field" aria-label="Njësia (opsionale)" value={row.unit} maxLength={12} placeholder="Njësia, p.sh. cm" onChange={e => update(index, { unit: e.target.value })} />
-            <label className="field-row-toggle">
-              <input className="switch-input" type="checkbox" checked={row.variant} onChange={e => update(index, { variant: e.target.checked })} />
-              <span>Zgjedh klienti</span>
-            </label>
+            <select className="field" aria-label="Kush e plotëson" value={roleOf(row)} onChange={e => update(index, { variant: e.target.value === "variant", ask: e.target.value === "ask" })}>
+              {Object.entries(roles).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
             <button type="button" className="btn btn-ghost field-row-remove" aria-label={`Hiq fushën ${row.label.trim() || index + 1}`} title="Hiqe"
               onClick={() => setRows(current => current.filter((_, i) => i !== index))}>×</button>
             {(row.variant || row.type === "select") && (
@@ -138,7 +141,7 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
       </div>
       <div>
         <button type="button" className="btn btn-ghost" disabled={rows.length >= 24}
-          onClick={() => setRows(current => [...current, { label: "", type: "text", unit: "", options: "", variant: false }])}>+ Shto fushë</button>
+          onClick={() => setRows(current => [...current, { label: "", type: "text", unit: "", options: "", variant: false, ask: false }])}>+ Shto fushë</button>
       </div>
       {message.error && <p className="form-feedback form-feedback-error" role="alert">{message.error}</p>}
       {message.success && <p className="form-feedback form-feedback-success" role="status">{message.success}</p>}

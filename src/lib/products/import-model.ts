@@ -68,7 +68,8 @@ export function autoMapAttributes(headers: string[], fields: BusinessField[], ta
   const mapping = { ...current };
   const used = new Set([...taken, ...Object.values(mapping)]);
   for (const field of fields) {
-    if (mapping[field.key] !== undefined) continue;
+    // A question for the customer has no value in a product row.
+    if (field.ask || mapping[field.key] !== undefined) continue;
     const at = headers.findIndex((h, i) => !used.has(i) && [fold(field.label), fold(field.key), fold(fieldKey(field.label))].includes(fold(h)));
     if (at >= 0) { mapping[field.key] = at; used.add(at); }
   }
@@ -208,7 +209,7 @@ export function buildImportPreview(raw: string, options: ImportOptions, catalog:
     // The business's own descriptive fields (Druri, Ngjyra…), from the product's first row.
     const attributes: Record<string, AttributeValue> = {};
     for (const { field, at } of attributeColumns) {
-      if (field.variant) continue;
+      if (field.variant || field.ask) continue;
       const value = cellAt(c, at);
       if (!value) continue;
       const parsed = attributeValue(field, value);

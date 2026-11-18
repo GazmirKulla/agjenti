@@ -6,7 +6,7 @@ import { priceModeLabels, priceModes, priceMode } from "@/lib/products/pricing";
 import { ProductBusinessWorkflow } from "@/components/products/business-workflow";
 import type { Option } from "@/lib/products/catalog";
 import { availabilityLabels, fieldsOf, itemKind } from "@/lib/items/kinds";
-import { attributeFields, variantFields, type BusinessField } from "@/lib/items/fields";
+import { askFields, attributeFields, variantFields, type BusinessField } from "@/lib/items/fields";
 import { shownFieldKeys, type FieldUsage } from "@/lib/items/field-visibility";
 import type { ProductVariant } from "@/lib/products/variants";
 import { VariantEditor } from "@/components/products/variant-editor";
@@ -347,6 +347,15 @@ export function ProductFields({
           <input type="hidden" name="agent_orders_shown" value="1" />
           <input className="switch-input" type="checkbox" name="agent_orders" defaultChecked={product?.agent_orders ?? true} />
         </label>
+        {itemDefinition && askFields(fields).length > 0 && <div className="grid gap-2">
+          <span>Çfarë e pyet Agjenti klientin për këtë produkt <span className="muted-copy">(pas zgjedhjes, para përmbledhjes së porosisë)</span></span>
+          {askFields(fields).map(field => (
+            <label key={field.key} className="toggle-label">
+              <span>{field.label}{field.type === "select" && field.options?.length ? <small>{field.options.join(", ")}</small> : null}</span>
+              <input className="switch-input" type="checkbox" name={`ask_${field.key}`} defaultChecked={product?.attributes?.[field.key] === true} />
+            </label>
+          ))}
+        </div>}
         {!creating && <label className="form-label">
           <span>Shablloni i porosisë <span className="muted-copy">(opsional)</span></span>
           <select

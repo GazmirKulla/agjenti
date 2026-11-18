@@ -5,6 +5,7 @@ import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { OrderOutputPhotos } from "@/components/dashboard/order-output-photos";
 import { Icon } from "@/components/dashboard/icon";
 import { OrderIntakeSetting } from "@/components/dashboard/order-intake-setting";
+import { readBusinessFields, type BusinessField } from "@/lib/items/fields";
 import {
   PageHeading,
   StatCard,
@@ -32,8 +33,13 @@ type OrderItemRow = {
   position: number | null; products: { name: string } | null;
 };
 
+/** The business's name for a stored choice key: a variant (variant_<key>), a customer question (ask_<key>) or a field. */
+function choiceLabel(key: string, fields: BusinessField[]) {
+  const own = key.replace(/^(variant_|ask_)/, "");
+  return fields.find(f => f.key === own)?.label ?? key;
+}
 /** Every item of the order in the order it was written, with its readable choices. */
-function orderLines(rows: OrderItemRow[] | null) {
+function orderLines(rows: OrderItemRow[] | null, fields: BusinessField[] = []) {
   return [...(rows ?? [])]
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
     .map((row) => {
@@ -41,7 +47,7 @@ function orderLines(rows: OrderItemRow[] | null) {
       const unit = row.unit_amount == null ? null : Number(row.unit_amount);
       const choices = Object.entries(row.options ?? {})
         .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value) && String(value).trim())
-        .map(([key, value]) => ({ key, value: value === true ? "po" : String(value) }));
+        .map(([key, value]) => ({ key, label: choiceLabel(key, fields), value: value === true ? "po" : String(value) }));
       return { id: row.id, name: row.products?.name ?? "Produkt i hequr", quantity, unit,
         total: unit == null ? null : Math.round(unit * quantity * 100) / 100, choices };
     });
@@ -75,6 +81,8 @@ export default async function OrdersPage({
   // Whether the agent registers a confirmed order or only collects it for staff (server-owned policy).
   const policy = await createServiceSupabase().from("business_automation_policies").select("local_orders").eq("business_id", access.business.id).maybeSingle();
   const localOrders = policy.error ? null : policy.data?.local_orders === true;
+  const { data: business } = await createServiceSupabase().from("businesses").select("product_fields").eq("id", access.business.id).maybeSingle();
+  const productFields = readBusinessFields(business?.product_fields);
 
   return (
     <>
@@ -111,7 +119,7 @@ export default async function OrdersPage({
             username: string | null;
             phone: string | null;
           } | null;
-          const items = orderLines(o.order_items as unknown as OrderItemRow[] | null);
+          const items = orderLines(o.order_items as unknown as OrderItemRow[] | null, productFields);
           // What this order was saved and sent with; the customer card may have changed since.
           const delivery = orderDelivery({ customer: o.delivery });
           const sent = o.external_system === "external" && Boolean(o.external_order_id);
@@ -164,7 +172,7 @@ export default async function OrdersPage({
                               {item.choices.length > 0 && (
                                 <div className="order-item-choices">
                                   {item.choices.map((choice) => (
-                                    <span key={choice.key} className="order-chip"><em>{choice.key}</em> {choice.value}</span>
+                                    <span key={choice.key} className="order-chip"><em>{choice.label}</em> {choice.value}</span>
                                   ))}
                                 </div>
                               )}

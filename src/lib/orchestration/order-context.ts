@@ -4,7 +4,7 @@ import type { ProcessVersion } from "./linear-definition";
 import { TransitionError, type Field, type Instance, type Observation, type ProcessDefinition, type Snapshot, type Value } from "./contracts";
 import { orderFields, orderQuantityBounds } from "./order-definition";
 import { digest, validFieldValue, validateDefinition } from "./definition";
-import { readBusinessFields, type BusinessField } from "@/lib/items/fields";
+import { productAskFields, readBusinessFields, type BusinessField } from "@/lib/items/fields";
 import { choiceLists, matchVariant, variantChoices, variantFieldId, type ChoiceLists, type ProductVariant } from "@/lib/products/variants";
 import { orderablePrice } from "@/lib/products/pricing";
 import { hasStockFor } from "@/lib/products/stock";
@@ -32,6 +32,8 @@ export function variantUnitAmount(variants: ProductVariant[], productPrice: numb
   return productPrice ?? (prices.length ? Math.min(...prices) : null);
 }
 type OrderProduct = { terms: OrderTerms; basePrice: number | null; lists: ChoiceLists; priceUnit: string | null;
+  /** The product's stored attributes: which of the business's customer questions it uses. */
+  attributes: unknown;
   /** A product linked to the business website: what its catalog declares the order needs. */
   spec: LinkedSpec | null };
 /** requested: the reviewed quantity. It counts only for a product priced per unit; any other product is one item. */
@@ -52,7 +54,7 @@ async function readOrderProduct(businessId: string, productId: string, collectio
   if (priceUnit && requested !== undefined && !validOrderQuantity(requested)) throw new TransitionError("invalid_quantity");
   const quantity = priceUnit && validOrderQuantity(requested) ? requested : 1;
   const spec = data.source === "linked" ? readSpec(data.external_spec) : null;
-  return { basePrice, lists: choiceLists(data.attributes), priceUnit, spec,
+  return { basePrice, lists: choiceLists(data.attributes), attributes: data.attributes, priceUnit, spec,
     terms: { productId: data.id, productName: data.name, productTypeId: data.product_type_id ?? "none", unitAmount: unitAmount ?? 0, currency: data.currency ?? "unpriced", quantity } };
 }
 /**
@@ -194,6 +196,32 @@ export function composeVariantChoices(definition: ProcessDefinition, variants: P
   if (composed.fields.length > 64 || composed.steps.length > 128) throw new TransitionError("product_composition_limit");
   return validateDefinition(composed);
 }
+/** Customer questions are kept under their own prefix, so they never collide with a variant or a catalog key. */
+export const customerQuestionPrefix = "ask_";
+const questionTypes: Record<BusinessField["type"], Field["type"]> = { text: "text", number: "number", boolean: "boolean", select: "choice" };
+/**
+ * Adds one required question per customer question the product uses (Struktura: "Klienti përgjigjet kur
+ * porosit", turned on at the product), right after the product is chosen, e.g. "Teksti në
+ * bluzë?". The answer goes with the order and is part of the review the customer approves.
+ */
+export function composeCustomerQuestions(definition: ProcessDefinition, questions: BusinessField[]): ProcessDefinition {
+  const added: Field[] = questions.flatMap(q => q.type === "select" && !q.options?.length ? [] : [{
+    id: `${customerQuestionPrefix}${q.key}`, subject: "order_line", label: q.unit ? `${q.label} (${q.unit})` : q.label,
+    type: questionTypes[q.type], required: true, ...(q.type === "select" ? { options: q.options!.slice(0, 100) } : {}) }]);
+  const fresh = added.filter(f => !definition.fields.some(existing => existing.id === f.id));
+  if (!fresh.length) return definition;
+  const composed = structuredClone(definition);
+  composed.fields.push(...fresh);
+  insertAfterProduct(definition, composed, (selectorId, destination) => {
+    const ids = fresh.map(f => `question_${digest([selectorId, f.id]).slice(0, 16)}`);
+    composed.steps.push(...fresh.map((f, i) => ({ id: ids[i], kind: "collect" as const, fieldId: f.id,
+      prompt: f.type === "choice" ? `Which ${f.label}? Options: ${f.options!.join(", ")}` : `${f.label}?`, next: ids[i + 1] ?? destination })));
+    return ids[0];
+  });
+  addToReview(definition, composed, fresh.map(f => f.id));
+  if (composed.fields.length > 64 || composed.steps.length > 128) throw new TransitionError("product_composition_limit");
+  return validateDefinition(composed);
+}
 export function orderContext(versions: ProcessVersion[]) {
   const terms = new Map<string, OrderTerms>();
   // Products the owner keeps for information only, so a started order says why it cannot go on.
@@ -201,6 +229,7 @@ export function orderContext(versions: ProcessVersion[]) {
   const variants = new Map<string, ProductVariant[]>();
   const bases = new Map<string, number | null>();
   const lists = new Map<string, ChoiceLists>();
+  const attributes = new Map<string, unknown>();
   const units = new Map<string, string | null>();
   const specs = new Map<string, LinkedSpec | null>();
   let fields: BusinessField[] = [];
@@ -214,7 +243,8 @@ export function orderContext(versions: ProcessVersion[]) {
       const measured = unit ? composeOrderQuantity(definition, unit) : definition;
       // A linked product: its catalog declares the variant and everything else, under the website's keys.
       if (spec) return composeSpecChoices(measured, spec, own);
-      return own.length || Object.keys(listed).length ? composeVariantChoices(measured, own, fields, listed) : measured;
+      const chosen = own.length || Object.keys(listed).length ? composeVariantChoices(measured, own, fields, listed) : measured;
+      return composeCustomerQuestions(chosen, productAskFields(fields, attributes.get(productId)));
     },
     /** A different product never keeps the previous product's variant answers or quantity. */
     clearVariants(instance: Instance, previousProductId: string | undefined, eventId: string) {
@@ -223,7 +253,7 @@ export function orderContext(versions: ProcessVersion[]) {
       const previousSpec = specs.get(previousProductId);
       const specIds = new Set(previousSpec ? specFieldIds(previousSpec, variants.get(previousProductId) ?? []) : []);
       for (const [id, fact] of Object.entries(instance.facts))
-        if ((id.startsWith("variant_") || id === orderQuantityField || specIds.has(id)) && fact.eventId !== eventId) delete instance.facts[id];
+        if ((id.startsWith("variant_") || id.startsWith(customerQuestionPrefix) || id === orderQuantityField || specIds.has(id)) && fact.eventId !== eventId) delete instance.facts[id];
     },
     async prepare(state: Snapshot, definitions: ProcessDefinition[], observation?: Observation) {
       const ids = new Map<string, { id: string; collectionOnly: boolean }>();
@@ -247,7 +277,7 @@ export function orderContext(versions: ProcessVersion[]) {
         ...[...ids].map(async ([cacheKey, { id, collectionOnly }]) => {
           try {
             const read = await readOrderProduct(state.businessId, id, collectionOnly);
-            terms.set(cacheKey, read.terms); bases.set(id, read.basePrice); lists.set(id, read.lists); units.set(id, read.priceUnit); specs.set(id, read.spec);
+            terms.set(cacheKey, read.terms); bases.set(id, read.basePrice); lists.set(id, read.lists); attributes.set(id, read.attributes); units.set(id, read.priceUnit); specs.set(id, read.spec);
           } catch (error) {
             terms.delete(cacheKey);
             if (error instanceof TransitionError && error.code === "product_information_only") informationOnly.add(cacheKey);
