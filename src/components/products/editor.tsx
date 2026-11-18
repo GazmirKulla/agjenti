@@ -140,7 +140,7 @@ export function ProductEditor({
               <a href="#product-details">Të dhënat</a>
               <a href="#product-pricing">Çmimi</a>
               <a href="#product-stock">Gjendja</a>
-              <a href="#product-process">Workflow</a>
+              <a href="#product-process">Porosia</a>
               <a href="#product-photo">Foto</a>
             </nav>
             <ProductFields
@@ -197,7 +197,7 @@ export function ProductEditor({
             )}
             {success && <p role="status">{success}</p>}
             <p className="muted-copy">
-              Aktiv në katalog do të thotë që Agjenti e gjen dhe e rekomandon. Porosia kërkon workflow dhe autorizim të veçantë. Draftet nuk u shfaqen klientëve.
+              Aktiv në katalog do të thotë që Agjenti e gjen dhe e rekomandon. Porosinë Agjenti e merr vetëm pasi klienti konfirmon përmbledhjen. Draftet nuk u shfaqen klientëve.
             </p>
           </div>
         </aside>
