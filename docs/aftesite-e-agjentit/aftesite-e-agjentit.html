@@ -1,0 +1,247 @@
+<title>Aftësitë e Agjentit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: one reading column; a capability audit read top to bottom, each module a bar you can open. */
+:root {
+  --bg: #f4f7f6; --surface: #ffffff; --ink: #14211e; --muted: #5b6b67; --line: #dbe4e1;
+  --accent: #0f8a5f; --accent-soft: #e2f4ec;
+  --hi: #1f9d6b; --mid: #c98a12; --lo: #c2412d;
+  --hi-soft: #e3f5ec; --mid-soft: #fbf0d9; --lo-soft: #fbe6e2;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1716; --surface: #16211f; --ink: #e6efec; --muted: #9aaba6; --line: #26332f;
+  --accent: #4fd29b; --accent-soft: #173a2d;
+  --hi: #4fd29b; --mid: #e6b04a; --lo: #f07a63;
+  --hi-soft: #173a2d; --mid-soft: #3a2f16; --lo-soft: #3d1f19; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1716; --surface: #16211f; --ink: #e6efec; --muted: #9aaba6; --line: #26332f;
+  --accent: #4fd29b; --accent-soft: #173a2d;
+  --hi: #4fd29b; --mid: #e6b04a; --lo: #f07a63;
+  --hi-soft: #173a2d; --mid-soft: #3a2f16; --lo-soft: #3d1f19; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; }
+main { max-width: 920px; margin: 0 auto; display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 42px); }
+h2 { font-size: 22px; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+header { display: grid; gap: 12px; }
+header .lead { color: var(--muted); font-size: 16px; }
+.alert { border: 1px solid var(--lo); background: var(--lo-soft); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; }
+.alert strong { font-family: var(--font-display); }
+.alert ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 6px; }
+.tile .n { font-family: var(--font-display); font-size: 44px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.tile .n small { font-size: 22px; color: var(--muted); font-weight: 600; }
+.tile .k { font-weight: 600; }
+.tile .d { color: var(--muted); font-size: 13px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); align-items: center; }
+.legend .st { margin-right: 6px; }
+section { display: grid; gap: 14px; }
+.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
+.section-head p { color: var(--muted); }
+.toggle { display: flex; gap: 8px; }
+.toggle button { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.toggle button:hover { border-color: var(--accent); }
+.toggle button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mods { display: grid; gap: 8px; }
+.mod { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.mod summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 52px; grid-template-areas: "name bar pct" "name counts counts"; gap: 4px 14px; align-items: center; padding: 12px 16px; }
+.mod summary::-webkit-details-marker { display: none; }
+.mname { grid-area: name; font-weight: 600; }
+.bar { grid-area: bar; height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.fill { display: block; height: 100%; border-radius: 999px; }
+.fill.hi { background: var(--hi); } .fill.mid { background: var(--mid); } .fill.lo { background: var(--lo); }
+.pct { grid-area: pct; text-align: right; font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; }
+.counts { grid-area: counts; font-size: 12px; color: var(--muted); }
+.caps { list-style: none; margin: 0; padding: 4px 16px 14px; display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px; }
+.cap { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 14px; }
+.st { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; text-align: center; }
+.po .st, .st.po { background: var(--hi-soft); color: var(--hi); }
+.pjes .st, .st.pjes { background: var(--mid-soft); color: var(--mid); }
+.jo .st, .st.jo { background: var(--lo-soft); color: var(--lo); }
+.note { background: var(--accent-soft); border-radius: 12px; padding: 14px 16px; }
+ol.problems { margin: 0; padding-left: 22px; display: grid; gap: 12px; }
+ol.problems li::marker { font-family: var(--font-display); font-weight: 700; color: var(--accent); }
+ol.problems strong { display: block; }
+ol.problems span { color: var(--muted); }
+.method { display: grid; gap: 10px; color: var(--muted); font-size: 14px; }
+.method strong { color: var(--ink); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (max-width: 560px) {
+  .mod summary { grid-template-columns: minmax(0, 1fr) 52px; grid-template-areas: "name pct" "bar bar" "counts counts"; }
+  .cap { grid-template-columns: 1fr; gap: 2px; }
+}
+@media (prefers-reduced-motion: no-preference) { .fill { transition: width .4s ease; } }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">Agjenti.app · analizë nga kodi · 18 nëntor 2026</span>
+    <h1>Aftësitë e Agjentit</h1>
+    <p class="lead">Çfarë di të bëjë agjenti i klientit në Instagram dhe WhatsApp, dhe agjenti i biznesit (Asistenti) për pronarin, në çdo modul të platformës. Hap një modul për të parë çdo aftësi.</p>
+  </header>
+
+  <div class="alert" role="note">
+    <strong>Gjendja reale sot, ndryshe nga aftësitë</strong>
+    <ul>
+      <li>Llogaria OpenAI nuk ka kredi: çdo mesazh dështon dhe Agjenti nuk përgjigjet, në çdo biznes.</li>
+      <li>Filiz Store nuk ka workflow të publikuar: porositë, rezervimet, statusi i porosisë dhe kalimi te stafi janë në praktikë 0%.</li>
+    </ul>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><span class="n">73<small>%</small></span><span class="k">Agjenti i klientit</span><span class="d">Mesatarja e 11 moduleve që i përkasin klientit.</span></div>
+    <div class="tile"><span class="n">54<small>%</small></span><span class="k">Agjenti i biznesit</span><span class="d">Mesatarja e 16 moduleve që i shërbejnë pronarit.</span></div>
+    <div class="tile"><span class="n">62<small>%</small></span><span class="k">Agjenti i biznesit, pa vendimet e sigurisë</span><span class="d">Pa Fushatat dhe Kanalet, që mbeten me qëllim vetëm me dorë.</span></div>
+  </div>
+
+  <div class="legend" aria-label="Si lexohen shenjat">
+    <span><span class="st po">Po</span>funksionon (1)</span>
+    <span><span class="st pjes">Pjesërisht</span>vetëm me konfigurim të caktuar ose pjesërisht (0.5)</span>
+    <span><span class="st jo">Jo</span>nuk ekziston (0)</span>
+  </div>
+
+  <section aria-labelledby="klienti">
+    <div class="section-head">
+      <h2 id="klienti">Agjenti i klientit (Instagram, WhatsApp)</h2>
+      <div class="toggle"><button type="button" id="open-all-c" data-target="c" data-open="1">Hap të gjitha</button><button type="button" id="close-all-c" data-target="c" data-open="0">Mbyll të gjitha</button></div>
+    </div>
+    <p>Raportet, Aktiviteti, Cilësimet, Agjenti, Workflow dhe Burimet nuk i përkasin klientit, prandaj nuk janë këtu.</p>
+    <div class="mods" data-group="c">
+<details class="mod" open>
+<summary><span class="mname">Fushatat</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:100%"></span></span><span class="pct">100%</span><span class="counts">2 po · 0 pjesërisht · 0 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Kupton “dua / s&#x27;dua oferta”, me evidencë nga mesazhi</span></li><li class="cap po"><span class="st">Po</span><span>Përgjigjet për ofertën e fushatës</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Bisedat</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:92%"></span></span><span class="pct">92%</span><span class="counts">5 po · 1 pjesërisht · 0 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Përgjigje automatike 24/7</span></li><li class="cap po"><span class="st">Po</span><span>Bashkon disa mesazhe të njëpasnjëshme</span></li><li class="cap po"><span class="st">Po</span><span>Kupton foto, story dhe postime të shpërndara</span></li><li class="cap po"><span class="st">Po</span><span>Ndalet kur ndërhyn stafi</span></li><li class="cap po"><span class="st">Po</span><span>Reagime me emoji</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Kalimi te stafi: vetëm me nyje në workflow</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Njohuritë</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:83%"></span></span><span class="pct">83%</span><span class="counts">2 po · 1 pjesërisht · 0 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Përgjigje nga njohuritë</span></li><li class="cap po"><span class="st">Po</span><span>Profili i biznesit: orari, adresa, kontakti</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>“Nuk e di, po të lidh me stafin”: pa workflow nuk ka kalim</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Katalogët (PDF)</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:83%"></span></span><span class="pct">83%</span><span class="counts">2 po · 1 pjesërisht · 0 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Përgjigje nga dokumentet</span></li><li class="cap po"><span class="st">Po</span><span>Jep lidhjen e dokumentit</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Lidh faqen e katalogut me produktin</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Klientët</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:83%"></span></span><span class="pct">83%</span><span class="counts">2 po · 1 pjesërisht · 0 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Mban mend emrin, telefonin dhe adresën</span></li><li class="cap po"><span class="st">Po</span><span>Njeh klientin që kthehet</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Përditëson të dhënat kur klienti i ndryshon</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Produktet</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:75%"></span></span><span class="pct">75%</span><span class="counts">5 po · 2 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Emri, çmimi, detajet, variantet</span></li><li class="cap po"><span class="st">Po</span><span>Numëron, gjen më të lirin dhe më të shtrenjtin</span></li><li class="cap po"><span class="st">Po</span><span>Dërgon foton e produktit</span></li><li class="cap po"><span class="st">Po</span><span>Gjendja e stokut</span></li><li class="cap po"><span class="st">Po</span><span>Njeh produktin nga një postim i shpërndarë</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Gjen produktin sipas nevojës: vetëm 20 më të përshtatshmit, pa filtër çmimi, jo përtej 1000 produkteve</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Sugjeron alternativa: vetëm kur produkti ka mbaruar</span></li><li class="cap jo"><span class="st">Jo</span><span>Lidhja drejt faqes së produktit</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Leads</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:75%"></span></span><span class="pct">75%</span><span class="counts">1 po · 1 pjesërisht · 0 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Lead-i krijohet vetë nga biseda</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Cilësimi i interesit të klientit</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Kanalet</span><span class="bar" aria-hidden="true"><span class="fill mid" style="width:67%"></span></span><span class="pct">67%</span><span class="counts">2 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Instagram</span></li><li class="cap po"><span class="st">Po</span><span>WhatsApp</span></li><li class="cap jo"><span class="st">Jo</span><span>Messenger ose chat në ueb</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Shërbimet</span><span class="bar" aria-hidden="true"><span class="fill mid" style="width:60%"></span></span><span class="pct">60%</span><span class="counts">2 po · 2 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Çmimi dhe kohëzgjatja</span></li><li class="cap po"><span class="st">Po</span><span>Lista e shërbimeve</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Sugjerim sipas nevojës</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Oraret e lira: vetëm brenda rezervimit</span></li><li class="cap jo"><span class="st">Jo</span><span>Foto e shërbimit</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Porositë</span><span class="bar" aria-hidden="true"><span class="fill mid" style="width:57%"></span></span><span class="pct">57%</span><span class="counts">3 po · 2 pjesërisht · 2 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Variantet, sasia dhe zgjedhjet</span></li><li class="cap po"><span class="st">Po</span><span>Konfirmimi para porosisë</span></li><li class="cap po"><span class="st">Po</span><span>Kontrolli i stokut nga serveri</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Krijimi i porosisë: vetëm me workflow ose proces të posaçëm</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Statusi i porosisë: vetëm me nyje në workflow</span></li><li class="cap jo"><span class="st">Jo</span><span>Ndryshim ose anulim nga klienti</span></li><li class="cap jo"><span class="st">Jo</span><span>Pagesa dhe kostoja e dërgesës</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Rezervimet</span><span class="bar" aria-hidden="true"><span class="fill lo" style="width:33%"></span></span><span class="pct">33%</span><span class="counts">1 po · 2 pjesërisht · 3 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Konfirmimi para rezervimit</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Krijimi: kërkon nyje, kalendar dhe leje</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Oraret e lira</span></li><li class="cap jo"><span class="st">Jo</span><span>Anulimi nga klienti</span></li><li class="cap jo"><span class="st">Jo</span><span>Ndryshimi i orës</span></li><li class="cap jo"><span class="st">Jo</span><span>Kujtesa ose statusi i rezervimit</span></li></ul></details>
+    </div>
+  </section>
+
+  <section aria-labelledby="biznesi">
+    <div class="section-head">
+      <h2 id="biznesi">Agjenti i biznesit (Asistenti)</h2>
+      <div class="toggle"><button type="button" id="open-all-b" data-target="b" data-open="1">Hap të gjitha</button><button type="button" id="close-all-b" data-target="b" data-open="0">Mbyll të gjitha</button></div>
+    </div>
+    <p>Burimi: regjistri <code>src/lib/actions/operations/manual-surfaces.ts</code>, i cili përcakton për çdo veprim të panelit nëse Asistenti e kryen ose pse jo.</p>
+    <div class="mods" data-group="b">
+<details class="mod" open>
+<summary><span class="mname">Shërbimet</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:83%"></span></span><span class="pct">83%</span><span class="counts">2 po · 1 pjesërisht · 0 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Krijo dhe ndrysho shërbimin</span></li><li class="cap po"><span class="st">Po</span><span>Oraret dhe cilësimet e kalendarit</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Fshirja: vetëm çaktivizim</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Rezervimet</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:83%"></span></span><span class="pct">83%</span><span class="counts">5 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Krijo rezervim</span></li><li class="cap po"><span class="st">Po</span><span>Ndrysho ose anulo rezervim</span></li><li class="cap po"><span class="st">Po</span><span>Riprovo sinkronizimin</span></li><li class="cap po"><span class="st">Po</span><span>Disponueshmëria</span></li><li class="cap po"><span class="st">Po</span><span>Kërko rezervime</span></li><li class="cap jo"><span class="st">Jo</span><span>Lidhja me Google Calendar</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Agjenti</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:80%"></span></span><span class="pct">80%</span><span class="counts">4 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Udhëzimet dhe stili i komunikimit</span></li><li class="cap po"><span class="st">Po</span><span>Menaxhimi i agjentit</span></li><li class="cap po"><span class="st">Po</span><span>Ruaj trajnimin</span></li><li class="cap po"><span class="st">Po</span><span>Ndrysho trajnimin</span></li><li class="cap jo"><span class="st">Jo</span><span>Provë në Chat Lab</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Workflow</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:80%"></span></span><span class="pct">80%</span><span class="counts">4 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Lexo workflow-in</span></li><li class="cap po"><span class="st">Po</span><span>Ndërto draftin</span></li><li class="cap po"><span class="st">Po</span><span>Publiko</span></li><li class="cap po"><span class="st">Po</span><span>Ndiz, fik, rikthe</span></li><li class="cap jo"><span class="st">Jo</span><span>Simulimi</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Raportet dhe Aktiviteti</span><span class="bar" aria-hidden="true"><span class="fill hi" style="width:75%"></span></span><span class="pct">75%</span><span class="counts">3 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Përmbledhja e periudhës</span></li><li class="cap po"><span class="st">Po</span><span>Njoftimet për vëmendje</span></li><li class="cap po"><span class="st">Po</span><span>Bisedat e fundit</span></li><li class="cap jo"><span class="st">Jo</span><span>Suksesi i Agjentit në procese</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Produktet</span><span class="bar" aria-hidden="true"><span class="fill mid" style="width:70%"></span></span><span class="pct">70%</span><span class="counts">6 po · 2 pjesërisht · 2 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Krijo produkt</span></li><li class="cap po"><span class="st">Po</span><span>Ndrysho produkt</span></li><li class="cap po"><span class="st">Po</span><span>Arkivo, fshi, rikthe</span></li><li class="cap po"><span class="st">Po</span><span>Konfigurim në grup</span></li><li class="cap po"><span class="st">Po</span><span>Ndrysho një fushë</span></li><li class="cap po"><span class="st">Po</span><span>Numëro dhe krahaso me query në server</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Importi</span></li><li class="cap pjes"><span class="st">Pjesërisht</span><span>Foto: vetëm me URL, pa ngarkim</span></li><li class="cap jo"><span class="st">Jo</span><span>Stoku</span></li><li class="cap jo"><span class="st">Jo</span><span>Struktura dhe fushat e produkteve</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Njohuritë</span><span class="bar" aria-hidden="true"><span class="fill mid" style="width:67%"></span></span><span class="pct">67%</span><span class="counts">2 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Shto dhe ndrysho</span></li><li class="cap po"><span class="st">Po</span><span>Fshi</span></li><li class="cap jo"><span class="st">Jo</span><span>Import FAQ nga burime të jashtme</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Bisedat</span><span class="bar" aria-hidden="true"><span class="fill mid" style="width:60%"></span></span><span class="pct">60%</span><span class="counts">3 po · 0 pjesërisht · 2 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Lexon bisedat e fundit</span></li><li class="cap po"><span class="st">Po</span><span>Ndalo dhe rinis Agjentin në një bisedë</span></li><li class="cap po"><span class="st">Po</span><span>Njoftime për bisedat që presin</span></li><li class="cap jo"><span class="st">Jo</span><span>Dërgo mesazh klientit</span></li><li class="cap jo"><span class="st">Jo</span><span>Reagime</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Porositë</span><span class="bar" aria-hidden="true"><span class="fill mid" style="width:57%"></span></span><span class="pct">57%</span><span class="counts">4 po · 0 pjesërisht · 3 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Krijo porosi nga biseda</span></li><li class="cap po"><span class="st">Po</span><span>Verifiko porosinë</span></li><li class="cap po"><span class="st">Po</span><span>Kërko porositë</span></li><li class="cap po"><span class="st">Po</span><span>Ndiz porositë për biznesin</span></li><li class="cap jo"><span class="st">Jo</span><span>Ndrysho dërgesën ose shënimin</span></li><li class="cap jo"><span class="st">Jo</span><span>Ndrysho statusin</span></li><li class="cap jo"><span class="st">Jo</span><span>Ndrysho artikujt</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Kalendari</span><span class="bar" aria-hidden="true"><span class="fill mid" style="width:50%"></span></span><span class="pct">50%</span><span class="counts">1 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Cilësimet e kalendarit</span></li><li class="cap jo"><span class="st">Jo</span><span>Lidhja me Google</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Katalogët</span><span class="bar" aria-hidden="true"><span class="fill mid" style="width:50%"></span></span><span class="pct">50%</span><span class="counts">1 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>I përdor si material</span></li><li class="cap jo"><span class="st">Jo</span><span>Ngarko dokument</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Cilësimet</span><span class="bar" aria-hidden="true"><span class="fill lo" style="width:40%"></span></span><span class="pct">40%</span><span class="counts">2 po · 0 pjesërisht · 3 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Përgjigjet automatike</span></li><li class="cap po"><span class="st">Po</span><span>Verifikimi i biznesit</span></li><li class="cap jo"><span class="st">Jo</span><span>Modulet</span></li><li class="cap jo"><span class="st">Jo</span><span>Lloji, fushat dhe stoku</span></li><li class="cap jo"><span class="st">Jo</span><span>Integrimet</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Klientët</span><span class="bar" aria-hidden="true"><span class="fill lo" style="width:33%"></span></span><span class="pct">33%</span><span class="counts">1 po · 0 pjesërisht · 2 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Kërko klientë</span></li><li class="cap jo"><span class="st">Jo</span><span>Ndrysho klientin</span></li><li class="cap jo"><span class="st">Jo</span><span>Fshi klientin</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Leads</span><span class="bar" aria-hidden="true"><span class="fill lo" style="width:33%"></span></span><span class="pct">33%</span><span class="counts">1 po · 0 pjesërisht · 2 jo</span></summary>
+<ul class="caps"><li class="cap po"><span class="st">Po</span><span>Numrat te përmbledhja</span></li><li class="cap jo"><span class="st">Jo</span><span>Ndrysho statusin e lead-it</span></li><li class="cap jo"><span class="st">Jo</span><span>Rregullat e lead-eve</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Fushatat</span><span class="bar" aria-hidden="true"><span class="fill lo" style="width:0%"></span></span><span class="pct">0%</span><span class="counts">0 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap jo"><span class="st">Jo</span><span>Krijo dhe dërgo fushatë (vetëm pronari, me konfirmim)</span></li></ul></details>
+<details class="mod" open>
+<summary><span class="mname">Kanalet</span><span class="bar" aria-hidden="true"><span class="fill lo" style="width:0%"></span></span><span class="pct">0%</span><span class="counts">0 po · 0 pjesërisht · 1 jo</span></summary>
+<ul class="caps"><li class="cap jo"><span class="st">Jo</span><span>Lidh ose shkëput Instagram/WhatsApp (OAuth)</span></li></ul></details>
+    </div>
+    <p class="note">Një pjesë e mungesave te Asistenti janë vendime sigurie të qëllimshme, me arsyen të shkruar në regjistër: dërgimi i mesazheve klientëve, fushatat, pagesat, lidhjet OAuth, anëtarët dhe fshirja e të dhënave.</p>
+  </section>
+
+  <section aria-labelledby="problemet">
+    <h2 id="problemet">Problemet kryesore</h2>
+    <ol class="problems">
+      <li><strong>Workflow-i është pikë e vetme dështimi.</strong><span>Porositë, rezervimet, statusi i porosisë dhe kalimi te stafi varen nga grafi i publikuar. Pa të bien në ~0%. Zgjidhja: workflow automatik nga modulet aktive.</span></li>
+      <li><strong>Rezervimet janë moduli më i dobët për klientin.</strong><span>Klienti nuk mund të anulojë, të ndryshojë orën apo të pyesë për rezervimin e tij.</span></li>
+      <li><strong>Porositë pas krijimit bëhen me dorë.</strong><span>Klienti nuk e ndryshon dot porosinë, dhe Asistenti nuk ndryshon dot statusin apo dërgesën.</span></li>
+      <li><strong>Asistenti nuk prek konfigurimet e reja.</strong><span>Stoku, struktura dhe fushat e produkteve duhen shtuar si operacione të rishikuara, me konfirmim.</span></li>
+      <li><strong>Nuk matet suksesi.</strong><span>As pronari, as Asistenti nuk e dinë sa porosi u braktisën ose sa mesazhe mbetën pa përgjigje.</span></li>
+      <li><strong>Varësia nga OpenAI pa sinjal.</strong><span>Kur mbarojnë kreditë, ndalet gjithçka dhe pronari nuk paralajmërohet.</span></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="metoda">
+    <h2 id="metoda">Metoda dhe kufizimet</h2>
+    <div class="method">
+      <p><strong>Çfarë mat kjo faqe.</strong> Për çdo modul janë listuar aftësitë që pritet të ketë agjenti, dhe secila u vlerësua duke lexuar kodin: Po = 1, Pjesërisht = 0.5, Jo = 0. Përqindja e modulit është mesatarja e tyre; mesatarja e agjentit është mesatarja e moduleve.</p>
+      <p><strong>Çfarë nuk mat.</strong> Kjo është masë e asaj që Agjenti di të bëjë, jo e asaj që arrin në bisedat reale. Sistemi sot nuk mban statistika për proceset e përfunduara.</p>
+      <p><strong>Hapi tjetër.</strong> Query-a vetëm-lexim <code>docs/aftesite-e-agjentit/matja-e-proceseve.sql</code> llogarit nga prodhimi, për 30 ditët e fundit, përqindjen e përgjigjeve dhe përfundimin e porosive, rezervimeve, statusit dhe kalimit te stafi.</p>
+    </div>
+  </section>
+
+  <footer>Përgatitur nga leximi i kodit të repository-t agjenti, në gjendjen e degës main më 18 nëntor 2026.</footer>
+</main>
+
+<script>
+document.querySelectorAll(".toggle button").forEach(function (button) {
+  button.addEventListener("click", function () {
+    var open = button.dataset.open === "1";
+    document.querySelectorAll('.mods[data-group="' + button.dataset.target + '"] details').forEach(function (d) { d.open = open; });
+  });
+});
+</script>
