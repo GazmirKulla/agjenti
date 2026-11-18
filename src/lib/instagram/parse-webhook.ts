@@ -1,3 +1,4 @@
+import { sharedMediaId } from "@/lib/instagram/shared-media";
 import type {
 	NormalizedAttachment,
 	NormalizedAttachmentKind,
@@ -7,7 +8,8 @@ import type {
 
 export type InstagramWebhookAttachment = {
 	type?: string;
-	payload?: { url?: string };
+	/** Shared posts/reels also carry the caption (`title`) and the media id. */
+	payload?: { url?: string; title?: string; reel_video_id?: string | number; ig_post_media_id?: string | number };
 };
 
 export type InstagramWebhookMessage = {
@@ -129,12 +131,14 @@ function buildAttachments(raw: InstagramWebhookAttachment[] | undefined): {
 			unknownTypes.push(type);
 			continue;
 		}
+		const share = kind === "share";
+		const title = share && typeof item.payload?.title === "string" ? item.payload.title.trim().slice(0, 2200) : "";
 		attachments.push({
 			kind,
-			externalMediaId: null,
+			externalMediaId: share ? sharedMediaId(item.payload?.ig_post_media_id) ?? sharedMediaId(item.payload?.reel_video_id) : null,
 			sourceUrl: url,
 			mimeType: null,
-			caption: null,
+			caption: title || null,
 			filename: null,
 			metadata: { instagramAttachmentType: type },
 		});

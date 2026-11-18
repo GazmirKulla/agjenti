@@ -1,4 +1,5 @@
 import { reviewMarketingPreference } from "@/lib/campaigns/preference";
+import { sharedMediaTurnContext } from "./shared-media-context";
 import { initialSnapshot } from "@/lib/orchestration/contracts";
 import { inboxHistory, type InboxHistoryMessage } from "./inbox-history";
 import { readStoredConversationState } from "@/lib/orchestration/stored-state";
@@ -381,7 +382,7 @@ export async function handleInboundMessage(
   // Persisted inbox history also includes customers and staff who spoke while AI
   // was paused. Never replay those messages as workflow commands or field values.
   const [{ data: historyRows, error: historyError }, { data: lastOutbound, error: outboundError }] = await Promise.all([
-    supabase.from("messages").select("body,direction,source,sent_via,delivery_status,external_message_id")
+    supabase.from("messages").select("body,direction,source,sent_via,delivery_status,external_message_id,media")
       .eq("business_id", businessId).eq("conversation_id", conversationId)
       .or("and(direction.eq.inbound,source.eq.customer),and(direction.eq.outbound,delivery_status.in.(sent,delivered,read),source.in.(agent,staff))")
       .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(10 + batch.originals.length),
@@ -393,6 +394,13 @@ export async function handleInboundMessage(
   if (historyError || outboundError) throw new Error("Conversation history unavailable");
   const history = inboxHistory((historyRows ?? []) as InboxHistoryMessage[], new Set(batch.originals.map(original => original.externalMessageId)));
   inboundState.recentMessages = history.messages;
+  const currentIds = new Set(batch.originals.map(original => original.externalMessageId));
+  // Shared posts/reels from this turn and the last few customer messages; the business's own post resolves to its product.
+  const sharedMedia = await sharedMediaTurnContext(supabase, businessId, {
+    current: message.attachments,
+    earlier: ((historyRows ?? []) as (InboxHistoryMessage & { media?: unknown })[])
+      .filter(row => row.direction === "inbound" && !currentIds.has(row.external_message_id ?? "")).slice(0, 3).map(row => row.media),
+  });
   const staffReplied = history.staffReplied || lastOutbound?.source === "staff" && lastOutbound.sent_via !== "campaign" && lastOutbound.sent_via !== "marketing_preference" && isAcceptedDelivery(lastOutbound.delivery_status);
   const resumedHandoff = runtime.handoffRequested === true;
   if (resumedHandoff) inboundState.runtime = { ...runtime, handoffRequested: false };
@@ -439,6 +447,7 @@ export async function handleInboundMessage(
     businessId,
     message: message.text ?? "",
     hasPhoto: message.attachments.some((a) => a.kind === "image"),
+    ...(sharedMedia ? { attachmentContext: sharedMedia.attachmentContext, referencedProductIds: sharedMedia.productIds, groundingHint: sharedMedia.groundingHint } : {}),
     state: inboundState,
     persistedWorkflowId: stateRow?.workflow_id ?? null,
     previousResponseId: resumedHandoff || staffReplied || unconfirmedPrompt ? null : open?.openai_previous_response_id ?? null,

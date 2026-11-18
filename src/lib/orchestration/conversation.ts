@@ -98,6 +98,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       return pins;
     }),
     ...(preview ? [{ kind: "product" as const, id: preview.productId }] : []),
+    ...(params.referencedProductIds ?? []).map(id => ({ kind: "product" as const, id })),
   ];
   const [agentRead, grounding, calendarRead, journey, profileMemory] = await Promise.all([
     db.from("ai_agents").select(agentConfigurationColumns).eq("business_id", params.businessId).eq("is_active", true).maybeSingle(),
@@ -121,7 +122,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     businessTimezone: !calendarRead.error ? calendarRead.data?.timezone ?? null : null,
     instructions: agent?.instructions ?? "", communication: agent?.communication,
     businessProcess: businessProcessContext(journey.process),
-    ...await processGroundingContext(grounding, params.message, Math.min(deadline - 18000, Date.now() + 10000), {
+    ...await processGroundingContext(grounding, [params.message, params.groundingHint].filter(Boolean).join("\n"), Math.min(deadline - 18000, Date.now() + 10000), {
       productIds: catalogPins.filter(pin => pin.kind === "product").map(pin => pin.id),
       serviceIds: catalogPins.filter(pin => pin.kind === "service").map(pin => pin.id),
     }),

@@ -17,6 +17,7 @@ import { ParticipantAvatar } from "@/components/dashboard/participant-avatar";
 import { showsInlineDelivery, threadReceipt } from "@/lib/conversations/delivery-status";
 import type { ReplyQuote } from "@/lib/conversations/reply-target";
 import { ChatMediaCard } from "@/components/dashboard/chat-media-card";
+import { sharedMediaFrom } from "@/lib/instagram/shared-media";
 
 /** What a shared item is, from the channel's own attachment type. */
 const shareLabels: Record<string, string> = {
@@ -277,9 +278,9 @@ export function ThreadClient(props: {
               {(Array.isArray(m.media) ? m.media : []).map(
                 (attachment, index) => {
                   const url = attachment?.sourceUrl;
-                  if (attachment?.kind === "share") {
-                    const type = String(attachment.metadata?.instagramAttachmentType ?? "");
-                    return <ChatMediaCard key={index} label={t(shareLabels[type] ?? "Shpërndau një postim")} url={typeof url === "string" && url.startsWith("https://") ? url : null} alt={t("Postim i shpërndarë")} />;
+                  const shared = sharedMediaFrom(attachment);
+                  if (shared) {
+                    return <ChatMediaCard key={index} label={t(shareLabels[shared.type] ?? "Shpërndau një postim")} url={null} media={shared} alt={t("Postim i shpërndarë")} openLabel={t("Hap në Instagram")} />;
                   }
                   if (typeof url !== "string" || !url.startsWith("https://"))
                     return null;

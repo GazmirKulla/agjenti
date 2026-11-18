@@ -66,6 +66,10 @@ export type AgentTurnParams = {
   supportRequest?: boolean;
   /** Server-verified excerpts from the isolated test chat; never persisted to CRM. */
   attachmentContext?: string;
+  /** Server-resolved products the customer referred to by sharing this business's own post. */
+  referencedProductIds?: string[];
+  /** Extra text for catalog relevance only (e.g. a shared post's caption); never read as the customer's message. */
+  groundingHint?: string;
   hasAttachments?: boolean;
   /** Trusted conversation_states.workflow_id, supplied only by the inbound server. */
   persistedWorkflowId?: string | null;

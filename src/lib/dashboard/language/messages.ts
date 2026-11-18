@@ -199,6 +199,7 @@ export const english: Record<string, string> = {
   "Shpërndau një reel": "Shared a reel",
   "Shpërndau një postim": "Shared a post",
   "Postim i shpërndarë": "Shared post",
+  "Hap në Instagram": "Open in Instagram",
   "Dorëzuar": "Delivered",
   "Agjenti AI": "AI agent",
   "Ekipi": "Staff",
