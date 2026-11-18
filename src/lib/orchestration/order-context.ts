@@ -38,7 +38,7 @@ type OrderProduct = { terms: OrderTerms; basePrice: number | null; lists: Choice
 async function readOrderProduct(businessId: string, productId: string, collectionOnly: boolean, chosen?: Record<string, unknown>, requested?: unknown): Promise<OrderProduct> {
   await requireRuntimeModules(businessId, collectionOnly ? ["products", "workflows"] : ["products", "orders", "workflows"]);
   const [{ data, error }, variants] = await Promise.all([
-    createServiceSupabase().from("products").select("id,name,product_type_id,price_amount,price_mode,price_unit,currency,attributes,source,external_spec")
+    createServiceSupabase().from("products").select("id,name,product_type_id,price_amount,price_mode,price_unit,currency,attributes,source,external_spec,agent_orders")
       .eq("business_id", businessId).eq("id", productId).eq("is_active", true).maybeSingle(),
     readProductVariants(businessId, productId),
   ]);
@@ -46,6 +46,8 @@ async function readOrderProduct(businessId: string, productId: string, collectio
   const basePrice = data ? orderablePrice(data) : null;
   const unitAmount = data ? variantUnitAmount(variants, basePrice, chosen) : null;
   if (error || !data || !collectionOnly && (typeof unitAmount !== "number" || unitAmount < 0 || !/^[A-Z]{3}$/.test(data.currency ?? ""))) throw new TransitionError("product_unavailable");
+  // The owner keeps this product for information only: the agent never takes an order for it.
+  if (!collectionOnly && data.agent_orders === false) throw new TransitionError("product_information_only");
   const priceUnit = priceUnitOf(data.price_unit);
   if (priceUnit && requested !== undefined && !validOrderQuantity(requested)) throw new TransitionError("invalid_quantity");
   const quantity = priceUnit && validOrderQuantity(requested) ? requested : 1;
@@ -194,6 +196,8 @@ export function composeVariantChoices(definition: ProcessDefinition, variants: P
 }
 export function orderContext(versions: ProcessVersion[]) {
   const terms = new Map<string, OrderTerms>();
+  // Products the owner keeps for information only, so a started order says why it cannot go on.
+  const informationOnly = new Set<string>();
   const variants = new Map<string, ProductVariant[]>();
   const bases = new Map<string, number | null>();
   const lists = new Map<string, ChoiceLists>();
@@ -244,7 +248,10 @@ export function orderContext(versions: ProcessVersion[]) {
           try {
             const read = await readOrderProduct(state.businessId, id, collectionOnly);
             terms.set(cacheKey, read.terms); bases.set(id, read.basePrice); lists.set(id, read.lists); units.set(id, read.priceUnit); specs.set(id, read.spec);
-          } catch { terms.delete(cacheKey); }
+          } catch (error) {
+            terms.delete(cacheKey);
+            if (error instanceof TransitionError && error.code === "product_information_only") informationOnly.add(cacheKey);
+          }
         }),
       ]);
       fields = business && "data" in business && !business.error ? readBusinessFields((business.data as { product_fields?: unknown } | null)?.product_fields) : [];
@@ -257,6 +264,7 @@ export function orderContext(versions: ProcessVersion[]) {
       const pinned = version?.linear && instance.productWorkflow?.productId === productId && instance.productWorkflow.versionId === version.id;
       if (!pinned && flow?.productIds?.length && !flow.productIds.includes(productId)) throw new TransitionError("product_outside_workflow");
       const current = terms.get(`${!!definition.collection}:${productId}`);
+      if (informationOnly.has(`${!!definition.collection}:${productId}`)) throw new TransitionError("product_information_only");
       if (!current) return {};
       const options = Object.fromEntries(definition.steps.flatMap(s => s.kind === "collect" && s.fieldId !== key("productId") && s.fieldId !== orderQuantityField && !["customer_name", "customer_phone", "customer_city", "customer_address", "customer_email"].includes(s.fieldId)
         && instance.facts[s.fieldId] ? [[s.fieldId, instance.facts[s.fieldId].value]] : []));

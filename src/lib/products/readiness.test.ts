@@ -26,3 +26,10 @@ describe("one readiness rule for the product page, the form and the list", () =>
     expect(filledFields(["mosha", "faqe", "gjuha", "ngjyra"], { mosha: "3-6", faqe: "", gjuha: [], ngjyra: ["e kuqe"] })).toEqual({ filled: 2, total: 4 });
   });
 });
+describe("a product kept for information only", () => {
+  it("needs no order process and says so", () => {
+    const items = productReadiness({ ...ready, workflow: false, informationOnly: true });
+    expect(missingReadiness(items)).toEqual([]);
+    expect(items.find(i => i.key === "workflow")?.label).toBe("Vetëm për informim");
+  });
+});

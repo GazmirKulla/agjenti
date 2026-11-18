@@ -81,6 +81,7 @@ function rowFromParsed(
     product_type_id: parsed.productTypeId,
     workflow_id: parsed.workflowId,
     is_active: parsed.isActive,
+    ...(parsed.agentOrders === null ? {} : { agent_orders: parsed.agentOrders }),
     ...(parsed.itemKind ? { item_kind: parsed.itemKind, attributes: parsed.attributes, availability: parsed.availability } : {}),
     updated_at: new Date().toISOString(),
     ...(source ? { source } : {}),

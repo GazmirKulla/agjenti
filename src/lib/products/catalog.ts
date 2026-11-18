@@ -30,6 +30,8 @@ export type ProductRow = {
   variants?: import("./variants").ProductVariant[];
   /** Counted stock (see lib/products/stock): off, tracked or unique, and the product's own count. */
   stock_mode?: import("./stock").StockMode;
+  /** False when the owner keeps the product for information only. Absent before the column existed. */
+  agent_orders?: boolean;
   stock_quantity?: number | null;
   archived_at?: string | null;
   created_at?: string;

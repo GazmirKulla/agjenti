@@ -18,6 +18,8 @@ export type ParsedProductFields = {
   productTypeId: string | null;
   workflowId: string | null;
   isActive: boolean;
+  /** Whether the agent takes orders for the product; null when the form does not carry the setting: keep what is stored. */
+  agentOrders: boolean | null;
   /** Null when the form does not carry the kind (e.g. an assistant edit): keep what is stored. */
   itemKind: string | null;
   /** Descriptive fields, and for each variant field the list of values the customer chooses from. */
@@ -106,6 +108,8 @@ export function parseProductForm(
   const productTypeId = String(form.get("product_type_id") ?? "").trim() || null;
   const workflowId = String(form.get("workflow_id") ?? "").trim() || null;
   const isActive = form.get("is_active") === "on";
+  // The switch is a checkbox: only a form that shows it (it sends the marker) can turn it off.
+  const agentOrders = form.has("agent_orders_shown") ? form.get("agent_orders") === "on" : null;
   const itemKind = form.has("item_kind") ? kindOf(String(form.get("item_kind"))).id : null;
   const parsedAttributes = itemKind ? parseAttributes(itemKind, form, attributeFields(opts?.fields ?? [])) : { attributes: {} };
   if ("error" in parsedAttributes && parsedAttributes.error) return { error: parsedAttributes.error };
@@ -144,6 +148,7 @@ export function parseProductForm(
     productTypeId,
     workflowId,
     isActive,
+    agentOrders,
     itemKind,
     attributes,
     availability,

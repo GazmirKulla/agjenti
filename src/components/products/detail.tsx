@@ -72,6 +72,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
   const readiness = productReadiness({ ...product, name: product.name, description: product.description, image: product.image_url,
     details: filledFields(fieldsOf(kindId, extra).map(f => f.key), values),
     workflow: Boolean(product.workflow_id || product.visual_workflow || businessWorkflow?.active),
+    informationOnly: product.agent_orders === false,
     active: product.is_active, archived: Boolean(product.archived_at), availability: product.availability });
 
   const archive = useManualOperation(slug, product.archived_at ? "product.restore" : "product.archive");

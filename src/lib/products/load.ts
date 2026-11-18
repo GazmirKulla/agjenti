@@ -11,7 +11,7 @@ import { fieldUsage } from "@/lib/items/field-visibility";
 async function readCatalog(businessId: string) {
   const db = createServiceSupabase();
   const read = (columns: string) => db.from("products").select(columns).eq("business_id", businessId).order("created_at", { ascending: false });
-  const counted = await read(`${productCatalogColumns},stock_mode,stock_quantity`);
+  const counted = await read(`${productCatalogColumns},stock_mode,stock_quantity,agent_orders`);
   return (counted.error ? await read(productCatalogColumns) : counted) as unknown as { data: ProductRow[] | null; error: unknown };
 }
 async function readVariants(businessId: string) {

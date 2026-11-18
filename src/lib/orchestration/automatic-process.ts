@@ -38,7 +38,7 @@ export function automaticReadiness(facts: Facts): AutomaticReadiness[] {
   return [
     { capability: "orders",
       ...(!engine || !allowed(modules, "products", "orders") ? { ready: false, reason: blocked("Ndiz Produktet dhe Porositë.") }
-        : !facts.orderableProducts ? { ready: false, reason: "Shto të paktën një produkt aktiv me çmim të caktuar, ose me variante me çmim." }
+        : !facts.orderableProducts ? { ready: false, reason: "Shto të paktën një produkt aktiv me çmim të caktuar, ose me variante me çmim, që nuk është vetëm për informim." }
         : { ready: true, reason: "Agjenti merr porosi për produktet aktive." }) },
     { capability: "orderStatus",
       ...(!engine || !allowed(modules, "orders") ? { ready: false, reason: blocked("Ndiz Porositë.") }
@@ -111,9 +111,9 @@ export async function readAutomaticFacts(businessId: string): Promise<Facts> {
   const [modules, fixed, variants, calendar, services, agent] = await Promise.all([
     runtimeModules(businessId),
     db.from("products").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", true)
-      .is("archived_at", null).neq("availability", "sold").eq("price_mode", "fixed").not("price_amount", "is", null).not("currency", "is", null),
+      .is("archived_at", null).neq("availability", "sold").eq("price_mode", "fixed").not("price_amount", "is", null).not("currency", "is", null).eq("agent_orders", true),
     db.from("product_variants").select("id,products!inner(id)", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", true)
-      .not("price_amount", "is", null).eq("products.is_active", true).is("products.archived_at", null),
+      .not("price_amount", "is", null).eq("products.is_active", true).is("products.archived_at", null).eq("products.agent_orders", true),
     db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", businessId).maybeSingle(),
     db.from("booking_services").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", true).eq("booking_enabled", true),
     db.from("ai_agents").select("communication").eq("business_id", businessId).eq("is_active", true).maybeSingle(),

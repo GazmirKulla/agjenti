@@ -30,16 +30,18 @@ export type GroundedProduct = ReferenceProduct & { description?: string | null; 
   /** Present only when the item is not simply available (reserved or rented); sold items are never read. */
   availability?: "reserved" | "rented";
   /** Only for counted stock, already limited by the business's display setting: "në gjendje", "ka mbaruar"… Never a raw count unless the business shows exact counts. */
-  stock?: string };
+  stock?: string;
+  /** Present only when the owner keeps the product for information only: the agent never takes an order for it. */
+  ordering?: "information_only" };
 const baseProductColumns = "id,name,sku,description,product_type_id,workflow_id,price_amount,price_mode,price_max,price_unit,currency,item_kind,attributes,availability";
-const productColumns = `${baseProductColumns},source,stock_mode,stock_quantity`;
+const productColumns = `${baseProductColumns},source,stock_mode,stock_quantity,agent_orders`;
 type Extras = { fields: BusinessField[]; variants: Map<string, ProductVariant[]>; stock: StockSettings };
 const noExtras: Extras = { fields: [], variants: new Map(), stock: defaultStockSettings };
-type StockColumns = { source?: string | null; stock_mode?: string | null; stock_quantity?: number | null };
+type StockColumns = { source?: string | null; stock_mode?: string | null; stock_quantity?: number | null; agent_orders?: boolean | null };
 /** Turns the stored kind fields, the business's own fields and the variants into words the agent can match a request against. */
 function withItemDetails(row: GroundedProduct & StockColumns & { item_kind?: string; attributes?: unknown; availability?: string }, extras: Extras = noExtras): GroundedProduct {
   // The raw count never reaches the agent: only the fact the business lets customers know.
-  const { item_kind, attributes, availability, source, stock_mode, stock_quantity, ...rest } = row;
+  const { item_kind, attributes, availability, source, stock_mode, stock_quantity, agent_orders, ...rest } = row;
   const counted = { source, stock_mode, stock_quantity };
   const details = attributeDetails(item_kind ?? "product", attributes, attributeFields(extras.fields));
   const own = extras.variants.get(row.id) ?? [];
@@ -49,7 +51,8 @@ function withItemDetails(row: GroundedProduct & StockColumns & { item_kind?: str
     variant => stockFact(effectiveQuantity(counted, variant), extras.stock, row.price_unit)) : "";
   const choices = own.length ? "" : choiceDetails(choiceLists(attributes), extras.fields);
   const stock = productStockFact({ ...counted, price_unit: row.price_unit }, own, extras.stock);
-  return { ...rest, ...(details ? { details } : {}), ...(variants ? { variants } : {}), ...(choices ? { choices } : {}), ...(availability === "reserved" || availability === "rented" ? { availability } : {}), ...(stock ? { stock } : {}) };
+  return { ...rest, ...(details ? { details } : {}), ...(variants ? { variants } : {}), ...(choices ? { choices } : {}), ...(availability === "reserved" || availability === "rented" ? { availability } : {}), ...(stock ? { stock } : {}),
+    ...(agent_orders === false ? { ordering: "information_only" as const } : {}) };
 }
 /**
  * One product exactly as the agent reads it (the same projection as a live reply), for the owner's

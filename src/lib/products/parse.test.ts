@@ -68,4 +68,13 @@ describe("shortenDescription", () => {
     expect(shortenDescription("a".repeat(130)).endsWith("…")).toBe(true);
     expect(shortenDescription("  shkurt  ")).toBe("shkurt");
   });
+  it("changes whether the agent takes orders only when the form shows the switch", () => {
+    const base = { name: "Libri", price: "790", currency: "ALL" };
+    const kept = parseProductForm(form(base));
+    expect("error" in kept ? null : kept.agentOrders).toBeNull();
+    const off = parseProductForm(form({ ...base, agent_orders_shown: "1" }));
+    expect("error" in off ? null : off.agentOrders).toBe(false);
+    const on = parseProductForm(form({ ...base, agent_orders_shown: "1", agent_orders: "on" }));
+    expect("error" in on ? null : on.agentOrders).toBe(true);
+  });
 });

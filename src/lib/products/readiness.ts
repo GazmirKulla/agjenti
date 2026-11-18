@@ -17,6 +17,8 @@ export type ReadinessInput = ProductPrice & {
   details: { filled: number; total: number };
   /** The business workflow is active, or the product has its own process. */
   workflow: boolean;
+  /** The owner keeps the product for information only: no order process is needed. */
+  informationOnly?: boolean;
   active: boolean;
   archived?: boolean;
   availability?: string | null;
@@ -34,8 +36,11 @@ export function productReadiness(p: ReadinessInput): ReadinessItem[] {
       anchor: "product-details", hint: "Agjenti i tregon dhe kërkon sipas tyre, p.sh. masa ose mosha." }] : []),
     { key: "photo", label: "Foto", done: Boolean(p.image?.trim()), optional: true, anchor: "product-photo",
       hint: "Agjenti e dërgon pas përgjigjes kur e sugjeron produktin." },
-    { key: "workflow", label: "Procesi i porosisë", done: p.workflow, optional: false, anchor: "product-process",
-      hint: "Pa proces gati, Agjenti informon por nuk merr porosi." },
+    p.informationOnly
+      ? { key: "workflow", label: "Vetëm për informim", done: true, optional: false, anchor: "product-process",
+        hint: "Agjenti e prezanton produktin, por nuk merr porosi për të." }
+      : { key: "workflow", label: "Procesi i porosisë", done: p.workflow, optional: false, anchor: "product-process",
+        hint: "Pa proces gati, Agjenti informon por nuk merr porosi." },
     { key: "active", label: "Aktiv në katalog", done: p.active && !p.archived && p.availability !== "sold", optional: false, anchor: "product-active",
       hint: "Produktet joaktive, të arkivuara ose të shitura nuk u ofrohen klientëve." },
   ];

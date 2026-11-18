@@ -30,6 +30,7 @@ const errors: Record<string, [string, number]> = {
   commercial_terms_changed: ["Çmimi ose monedha ndryshoi. Klienti duhet ta rikonfirmojë porosinë.", 409],
   product_changed: ["Produkti ndryshoi. Klienti duhet ta rikonfirmojë porosinë.", 409],
   product_unavailable: ["Produkti nuk është aktiv në këtë biznes.", 400],
+  product_information_only: ["Ky produkt është vetëm për informim: Agjenti nuk merr porosi për të. Porosinë mund ta regjistrojë stafi.", 409],
   price_on_request: ["Produkti nuk ka një çmim të caktuar (nga–deri ose sipas kërkesës). Stafi duhet t’i japë klientit çmimin.", 409],
   variant_required: ["Klienti duhet të zgjedhë një nga variantet e produktit.", 400],
   invalid_product_option: ["Zgjedhja e klientit nuk është më mes vlerave të produktit. Klienti duhet ta rikonfirmojë porosinë.", 409],

@@ -37,7 +37,10 @@ export function orderAdapter(scope?: { businessId: string; conversationId: strin
         const stock = await readOrderStock(scope.businessId, action.input.productId, chosen && typeof chosen === "object" ? chosen : {}, action.input.quantity);
         if (stock === "out") return { status: "failed", output: { code: "out_of_stock" } };
         if (stock === "unverified") return { status: "failed", output: { code: "order_configuration_unverified" } };
-      } catch { return { status: "failed", output: { code: "order_configuration_unverified" } }; }
+      } catch (error) {
+        // A product the owner keeps for information only is a business decision, not an unverified configuration.
+        return { status: "failed", output: { code: error instanceof TransitionError && error.code === "product_information_only" ? error.code : "order_configuration_unverified" } };
+      }
       if (context.signal.aborted) return { status: "failed", output: { code: "dispatch_cancelled" } };
       const result = await createServiceSupabase().rpc("submit_process_order", { p_business: scope.businessId, p_conversation: scope.conversationId,
         p_revision: context.revision, p_action: action.id, p_user: null, p_job: scope.lease.jobId, p_token: scope.lease.leaseToken });

@@ -28,6 +28,7 @@ type ProductFieldValues = {
   product_type_id?: string | null;
   workflow_id?: string | null;
   is_active?: boolean;
+  agent_orders?: boolean;
   attributes?: Record<string, string | number | boolean | string[]>;
   availability?: string;
   variants?: ProductVariant[];
@@ -338,6 +339,14 @@ export function ProductFields({
       <fieldset id="product-process" className="grid gap-3">
         <legend className="font-semibold">Si e porosit klienti</legend>
         <ProductBusinessWorkflow slug={slug} workflow={workflows.find(w => w.businessWorkflow)?.businessWorkflow} product={product?.id ? { ...product, id: product.id } : undefined} />
+        <label className="toggle-label">
+          <span>
+            Agjenti merr porosi për këtë produkt
+            <small>Fike kur produkti është vetëm për informim: Agjenti e prezanton dhe përgjigjet për të, por nuk merr porosi. Porosinë mund ta regjistrosh vetë.</small>
+          </span>
+          <input type="hidden" name="agent_orders_shown" value="1" />
+          <input className="switch-input" type="checkbox" name="agent_orders" defaultChecked={product?.agent_orders ?? true} />
+        </label>
         {!creating && <label className="form-label">
           <span>Shablloni i porosisë <span className="muted-copy">(opsional)</span></span>
           <select

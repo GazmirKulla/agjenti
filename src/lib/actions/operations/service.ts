@@ -169,6 +169,9 @@ function productForm(values: Record<string, unknown>) {
   form.set("price", String(values.price_amount ?? ""));
   if (values.is_active === true) form.set("is_active", "on");
   else if (values.is_active !== undefined && typeof values.is_active !== "boolean") throw Error("Gjendja e produktit nuk është e vlefshme.");
+  // Changed only when the edit names it; otherwise the stored setting stays.
+  if (typeof values.agent_orders === "boolean") { form.set("agent_orders_shown", "1"); if (values.agent_orders) form.set("agent_orders", "on"); }
+  else if (values.agent_orders !== undefined) throw Error("Cilësimi i porosive të Agjentit nuk është i vlefshëm.");
   return form;
 }
 function serviceForm(values: Record<string, unknown>) {
