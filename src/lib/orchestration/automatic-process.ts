@@ -21,6 +21,8 @@ export type AutomaticReadiness = { capability: AutomaticCapability; ready: boole
 type Facts = {
   /** The owner's wording for a handoff, from the active agent's published communication settings. */
   handoffMessage?: string;
+  /** False when the business only collects confirmed orders for staff (business_automation_policies.local_orders). */
+  localOrders?: boolean;
   modules: string[] | null;
   orderableProducts: boolean;
   bookingCalendar: boolean;
@@ -39,6 +41,7 @@ export function automaticReadiness(facts: Facts): AutomaticReadiness[] {
     { capability: "orders",
       ...(!engine || !allowed(modules, "products", "orders") ? { ready: false, reason: blocked("Ndiz Produktet dhe Porositë.") }
         : !facts.orderableProducts ? { ready: false, reason: "Shto të paktën një produkt aktiv me çmim të caktuar, ose me variante me çmim, që nuk është vetëm për informim." }
+        : facts.localOrders === false ? { ready: true, reason: "Agjenti mbledh kërkesën dhe konfirmimin e klientit; stafi e regjistron porosinë nga biseda." }
         : { ready: true, reason: "Agjenti merr porosi për produktet aktive." }) },
     { capability: "orderStatus",
       ...(!engine || !allowed(modules, "orders") ? { ready: false, reason: blocked("Ndiz Porositë.") }
@@ -108,7 +111,7 @@ export function automaticVersionId(businessId: string, graph: VisualGraphV2) {
 /** The facts the readiness rule needs, read for this business only. */
 export async function readAutomaticFacts(businessId: string): Promise<Facts> {
   const db = createServiceSupabase();
-  const [modules, fixed, variants, calendar, services, agent] = await Promise.all([
+  const [modules, fixed, variants, calendar, services, agent, policy] = await Promise.all([
     runtimeModules(businessId),
     db.from("products").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", true)
       .is("archived_at", null).neq("availability", "sold").eq("price_mode", "fixed").not("price_amount", "is", null).not("currency", "is", null).eq("agent_orders", true),
@@ -117,12 +120,14 @@ export async function readAutomaticFacts(businessId: string): Promise<Facts> {
     db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", businessId).maybeSingle(),
     db.from("booking_services").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", true).eq("booking_enabled", true),
     db.from("ai_agents").select("communication").eq("business_id", businessId).eq("is_active", true).maybeSingle(),
+    db.from("business_automation_policies").select("local_orders").eq("business_id", businessId).maybeSingle(),
   ]);
   if (fixed.error || variants.error || calendar.error || services.error || agent.error) throw new Error("automatic_process_unverified");
   // A stored policy that no longer parses keeps the default wording; it never blocks the process.
   let handoffMessage: string | undefined;
   try { handoffMessage = agent.data?.communication ? parseCommunicationPolicy(agent.data.communication).handoffMessage : undefined; } catch { handoffMessage = undefined; }
-  return { ...(handoffMessage ? { handoffMessage } : {}), modules, orderableProducts: (fixed.count ?? 0) > 0 || (variants.count ?? 0) > 0,
+  // Only the wording depends on it; the server decides at submission whether an order is registered.
+  return { ...(handoffMessage ? { handoffMessage } : {}), ...(policy.error ? {} : { localOrders: policy.data?.local_orders === true }), modules, orderableProducts: (fixed.count ?? 0) > 0 || (variants.count ?? 0) > 0,
     bookingCalendar: calendar.data?.agent_booking_enabled === true, bookableServices: (services.count ?? 0) > 0 };
 }
 

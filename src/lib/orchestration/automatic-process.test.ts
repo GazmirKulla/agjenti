@@ -16,7 +16,7 @@ import { compileVisualProcesses } from "./visual-definition";
 import { validateVisualGraph } from "@/lib/workflows/visual/model";
 
 const business = "00000000-0000-4000-8000-000000000001";
-const facts: { modules: string[] | null; orderableProducts: boolean; bookingCalendar: boolean; bookableServices: boolean } = { modules: null, orderableProducts: true, bookingCalendar: true, bookableServices: true };
+const facts: { modules: string[] | null; orderableProducts: boolean; bookingCalendar: boolean; bookableServices: boolean; localOrders?: boolean } = { modules: null, orderableProducts: true, bookingCalendar: true, bookableServices: true };
 beforeEach(() => { m.own = null; m.modules = null; m.isolated = false; m.counts = { products: 1, product_variants: 0, booking_services: 1 };
   m.calendar = { agent_booking_enabled: true }; m.agent = null; m.rpc.mockReset(); m.rpc.mockImplementation(async (_name: string, args: { p_id: string }) => ({ data: args.p_id, error: null })); });
 
@@ -55,6 +55,14 @@ describe("which processes the agent gets without a workflow of the owner's", () 
     const handoff = compileVisualProcesses({ id: "v", businessId: business, graph: own, createdAt: "" }).find(d => d.id === "auto_handoff")!;
     expect(handoff.steps).toEqual([expect.objectContaining({ kind: "handoff", label: "Ju shkruan Ana brenda 30 minutave." })]);
     expect(automaticVersionId(business, own)).not.toBe(automaticVersionId(business, automaticGraph(readiness)!));
+  });
+
+  it("tells the owner when the agent only collects confirmed orders for staff, without changing the process", () => {
+    const reason = (f: Partial<typeof facts>) => automaticReadiness({ ...facts, ...f }).find(r => r.capability === "orders")!;
+    expect(reason({ localOrders: true })).toMatchObject({ ready: true, reason: "Agjenti merr porosi për produktet aktive." });
+    expect(reason({ localOrders: false })).toMatchObject({ ready: true });
+    expect(reason({ localOrders: false }).reason).toContain("stafi e regjistron");
+    expect(automaticGraph(automaticReadiness({ ...facts, localOrders: false }))).toEqual(automaticGraph(automaticReadiness({ ...facts, localOrders: true })));
   });
 
   it("has no process at all when nothing is ready", () => {

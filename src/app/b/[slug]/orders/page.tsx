@@ -4,6 +4,7 @@ import { WebsiteStatusControl } from "@/components/dashboard/website-status-cont
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { OrderOutputPhotos } from "@/components/dashboard/order-output-photos";
 import { Icon } from "@/components/dashboard/icon";
+import { OrderIntakeSetting } from "@/components/dashboard/order-intake-setting";
 import {
   PageHeading,
   StatCard,
@@ -71,6 +72,9 @@ export default async function OrdersPage({
   if (error) throw new Error("Nuk u ngarkuan porositë.");
   // What each order took from or gave back to counted stock, shown with the order.
   const movements = await loadOrderStockMovements(access.business.id, (orders ?? []).map(o => o.id));
+  // Whether the agent registers a confirmed order or only collects it for staff (server-owned policy).
+  const policy = await createServiceSupabase().from("business_automation_policies").select("local_orders").eq("business_id", access.business.id).maybeSingle();
+  const localOrders = policy.error ? null : policy.data?.local_orders === true;
 
   return (
     <>
@@ -79,6 +83,7 @@ export default async function OrdersPage({
         title={`Porositë e ${access.business.name}`}
         description="Ndiq porositë e krijuara nga bisedat me klientët."
       />
+      <OrderIntakeSetting slug={slug} enabled={localOrders} />
       <div className="stats-grid stats-compact">
         {ORDER_STATUSES.map(([status, label]) => (
           <StatCard
