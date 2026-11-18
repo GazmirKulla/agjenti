@@ -50,7 +50,8 @@ export function productSchema(setup: ProductSetup, kinds: Iterable<string> = [])
     }
   }
   for (const f of setup.fields) {
-    if (seen.has(f.key)) continue;
+    // A customer question is asked when ordering; it holds no product value to read or edit.
+    if (f.ask || f.type === "photo" || seen.has(f.key)) continue;
     seen.add(f.key);
     fields.push({ key: f.key, label: f.label, type: f.type, ...(f.unit ? { unit: f.unit } : {}),
       ...(f.options ? { options: f.options.map(o => ({ value: o, label: o })) } : {}), ...(f.variant ? { variant: true } : {}), source: "business" });

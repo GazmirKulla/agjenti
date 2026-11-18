@@ -198,7 +198,7 @@ export function composeVariantChoices(definition: ProcessDefinition, variants: P
 }
 /** Customer questions are kept under their own prefix, so they never collide with a variant or a catalog key. */
 export const customerQuestionPrefix = "ask_";
-const questionTypes: Record<BusinessField["type"], Field["type"]> = { text: "text", number: "number", boolean: "boolean", select: "choice" };
+const questionTypes: Record<BusinessField["type"], Field["type"]> = { text: "text", number: "number", boolean: "boolean", select: "choice", photo: "photo" };
 /**
  * Adds one required question per customer question the product uses (Struktura: "Klienti përgjigjet kur
  * porosit", turned on at the product), right after the product is chosen, e.g. "Teksti në
@@ -215,7 +215,8 @@ export function composeCustomerQuestions(definition: ProcessDefinition, question
   insertAfterProduct(definition, composed, (selectorId, destination) => {
     const ids = fresh.map(f => `question_${digest([selectorId, f.id]).slice(0, 16)}`);
     composed.steps.push(...fresh.map((f, i) => ({ id: ids[i], kind: "collect" as const, fieldId: f.id,
-      prompt: f.type === "choice" ? `Which ${f.label}? Options: ${f.options!.join(", ")}` : `${f.label}?`, next: ids[i + 1] ?? destination })));
+      prompt: f.type === "choice" ? `Which ${f.label}? Options: ${f.options!.join(", ")}` : f.type === "photo" ? `Ask the customer to send the photo for: ${f.label}.` : `${f.label}?`,
+      next: ids[i + 1] ?? destination })));
     return ids[0];
   });
   addToReview(definition, composed, fresh.map(f => f.id));

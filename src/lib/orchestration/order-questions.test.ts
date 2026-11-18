@@ -4,6 +4,7 @@ vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({}) }))
 import { compileVisualProcesses } from "./visual-definition";
 import { orderFields } from "./order-definition";
 import { composeCustomerQuestions } from "./order-context";
+import { reviewLines } from "./review-summary";
 import { parseBusinessFields, productAskFields, attributeFields, type BusinessField } from "@/lib/items/fields";
 import type { VisualVersion } from "@/lib/workflows/visual/types";
 
@@ -43,5 +44,19 @@ describe("questions the agent asks a customer who orders a product", () => {
   it("keeps a field either a customer choice or a customer question, not both", () => {
     expect(parseBusinessFields([{ label: "Teksti në bluzë", type: "text", ask: true }])).toEqual({ fields: [expect.objectContaining({ key: "teksti_ne_bluze", ask: true })] });
     expect(parseBusinessFields([{ label: "Masa", type: "select", variant: true, ask: true }])).toHaveProperty("error");
+  });
+  it("asks for a photo the customer sends, and only as a customer question", () => {
+    const design: BusinessField = { key: "dizajni", label: "Dizajni", type: "photo", ask: true };
+    const composed = composeCustomerQuestions(definition(), [design]);
+    expect(composed.fields).toEqual(expect.arrayContaining([expect.objectContaining({ id: "ask_dizajni", type: "photo", required: true })]));
+    expect(composed.steps).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "collect", fieldId: "ask_dizajni", prompt: expect.stringContaining("photo") })]));
+    expect(parseBusinessFields([{ label: "Dizajni", type: "photo" }])).toHaveProperty("error");
+    expect(attributeFields([design])).toEqual([]);
+  });
+  it("shows a received photo and a yes/no answer the same way in every language", () => {
+    const fields = [{ id: "ask_dizajni", subject: "order_line", label: "Dizajni", type: "photo" as const, required: true },
+      { id: "ask_dhurate", subject: "order_line", label: "Paketim dhuratë", type: "boolean" as const, required: true }];
+    const fact = (value: boolean) => ({ value, subject: "order_line", fieldId: "", revision: 1, eventId: "e", evidence: "x" });
+    expect(reviewLines(["ask_dizajni", "ask_dhurate"], fields, { ask_dizajni: fact(true), ask_dhurate: fact(false) }).map(l => l.value)).toEqual(["📷 ✓", "✗"]);
   });
 });

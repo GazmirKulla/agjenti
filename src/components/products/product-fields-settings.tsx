@@ -10,7 +10,7 @@ const toRow = (f: BusinessField): Row => ({ key: f.key, label: f.label, type: f.
 // Who fills the field: the owner on the product, the customer choosing a variant, or the customer answering when ordering.
 const roles = { data: "Pronari, te produkti", variant: "Klienti zgjedh (variant)", ask: "Klienti përgjigjet kur porosit" } as const;
 const roleOf = (row: Row): keyof typeof roles => row.variant ? "variant" : row.ask ? "ask" : "data";
-const typeLabels: Record<BusinessField["type"], string> = { text: "Tekst", number: "Numër", select: "Listë vlerash", boolean: "Po / Jo" };
+const typeLabels: Record<BusinessField["type"], string> = { text: "Tekst", number: "Numër", select: "Listë vlerash", boolean: "Po / Jo", photo: "Foto nga klienti" };
 
 /** The owner names the fields their products need: a description (Druri: Ah)
  * or a choice the customer makes (Gjatësia: 80 / 100 / 120 cm). */
@@ -118,11 +118,11 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
           <fieldset key={row.key ?? `new-${index}`} className="field-row">
             <legend className="sr-only">Fusha {index + 1}{row.label.trim() ? `: ${row.label.trim()}` : ""}</legend>
             <input className="field" aria-label="Emri" value={row.label} maxLength={40} placeholder="P.sh. Gjatësia" onChange={e => update(index, { label: e.target.value })} />
-            <select className="field" aria-label="Tipi" value={row.variant ? "select" : row.type} disabled={row.variant} onChange={e => update(index, { type: e.target.value as Row["type"] })}>
+            <select className="field" aria-label="Tipi" value={row.variant ? "select" : row.type} disabled={row.variant} onChange={e => update(index, e.target.value === "photo" ? { type: "photo", ask: true, variant: false } : { type: e.target.value as Row["type"] })}>
               {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
             <input className="field" aria-label="Njësia (opsionale)" value={row.unit} maxLength={12} placeholder="Njësia, p.sh. cm" onChange={e => update(index, { unit: e.target.value })} />
-            <select className="field" aria-label="Kush e plotëson" value={roleOf(row)} onChange={e => update(index, { variant: e.target.value === "variant", ask: e.target.value === "ask" })}>
+            <select className="field" aria-label="Kush e plotëson" value={roleOf(row)} onChange={e => update(index, { variant: e.target.value === "variant", ask: e.target.value === "ask", ...(e.target.value !== "ask" && row.type === "photo" ? { type: "text" as const } : {}) })}>
               {Object.entries(roles).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
             <button type="button" className="btn btn-ghost field-row-remove" aria-label={`Hiq fushën ${row.label.trim() || index + 1}`} title="Hiqe"

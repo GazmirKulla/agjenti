@@ -8,7 +8,8 @@ import type { KindField } from "./kinds";
 export type BusinessField = {
   key: string;
   label: string;
-  type: "text" | "number" | "select" | "boolean";
+  /** "photo" only for a customer question: the customer sends a photo (e.g. the design to print). */
+  type: "text" | "number" | "select" | "boolean" | "photo";
   unit?: string;
   options?: string[];
   variant?: boolean;
@@ -18,7 +19,7 @@ export type BusinessField = {
 
 export const MAX_BUSINESS_FIELDS = 24;
 export const MAX_VARIANT_FIELDS = 4;
-const types = new Set<BusinessField["type"]>(["text", "number", "select", "boolean"]);
+const types = new Set<BusinessField["type"]>(["text", "number", "select", "boolean", "photo"]);
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "";
 
 /** "Gjatësia (cm)" → "gjatesia_cm": stable, accent-free keys for attributes and variants. */
@@ -45,6 +46,7 @@ export function readBusinessFields(raw: unknown): BusinessField[] {
     if (type === "select" && !variant && !options.length) continue;
     seen.add(key);
     const ask = !variant && row.ask === true;
+    if (type === "photo" && !ask) { seen.delete(key); continue; }
     fields.push({ key, label, type, ...(clean(row.unit, 12) ? { unit: clean(row.unit, 12) } : {}),
       ...(type === "select" && options.length ? { options } : {}), ...(variant ? { variant: true } : {}), ...(ask ? { ask: true } : {}) });
   }
@@ -75,6 +77,7 @@ export function parseBusinessFields(raw: unknown, reserved: string[] = []): { fi
     const unit = clean(row.unit, 12);
     if (variant && row.ask === true) return { error: `“${label}” është ose zgjedhje e klientit ose pyetje për klientin, jo të dyja.` };
     const ask = row.ask === true;
+    if (type === "photo" && !ask) return { error: `“${label}”: foto e jep vetëm klienti. Zgjidh “Klienti përgjigjet kur porosit”.` };
     fields.push({ key, label, type, ...(unit ? { unit } : {}), ...(type === "select" && options.length ? { options } : {}), ...(variant ? { variant: true } : {}), ...(ask ? { ask: true } : {}) });
   }
   if (fields.filter(f => f.variant).length > MAX_VARIANT_FIELDS) return { error: `Mund të kesh deri në ${MAX_VARIANT_FIELDS} fusha me variante.` };
@@ -83,7 +86,7 @@ export function parseBusinessFields(raw: unknown, reserved: string[] = []): { fi
 
 /** The fields that describe a product, in the same shape as an item kind's own fields. */
 export function attributeFields(fields: BusinessField[]): KindField[] {
-  return fields.filter(f => !f.variant && !f.ask).map(f => ({ key: f.key, label: f.label, type: f.type, summary: true,
+  return fields.filter((f): f is BusinessField & { type: Exclude<BusinessField["type"], "photo"> } => !f.variant && !f.ask && f.type !== "photo").map(f => ({ key: f.key, label: f.label, type: f.type, summary: true,
     ...(f.unit ? { unit: f.unit } : {}), ...(f.options ? { options: f.options.map(o => ({ value: o, label: o })) } : {}) }));
 }
 

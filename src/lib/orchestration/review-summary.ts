@@ -47,6 +47,9 @@ export function reviewLines(fieldIds: string[], fields: Field[], facts: Record<s
       return [{ id, field: "Total price", value: `${amount(fact.value * (typeof quantity === "number" ? quantity : 1))} ${currency}` }];
     }
     if (booking === "durationMinutes" && typeof fact.value === "number") return [{ id, field: field.label, value: `${fact.value} min` }];
+    // Yes/no answers and a received photo read the same in every language.
+    if (field.type === "photo") return [{ id, field: field.label, value: "📷 ✓" }];
+    if (typeof fact.value === "boolean") return [{ id, field: field.label, value: fact.value ? "✓" : "✗" }];
     return [{ id, field: field.label, value: text(fact.value) }];
   }); }
 }
