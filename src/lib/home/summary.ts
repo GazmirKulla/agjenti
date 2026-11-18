@@ -172,7 +172,7 @@ export async function loadHomeModules(
     return { id: "workflows", label: "Workflow", icon: moduleRegistry.workflows.icon, href: `${base}/workflows`, value: total, caption: "rrjedha",
       detail: visual ? (active ? `${active} aktive` : "asnjë aktive") : undefined,
       attention: unpublished ? { text: `${unpublished} të papublikuara`, href: `${base}/workflows`, tone: "warning" } : undefined,
-      empty: total ? undefined : await automaticEmpty(id, `${base}/workflows`) };
+      empty: total ? undefined : await automaticEmpty(id, `${base}/agents/process`) };
   })());
   if (provision.data === true) cards.push((async () => {
     const invitations = () => db.from("business_invitations").select("id", { count: "exact", head: true }).eq("source_business_id", id);

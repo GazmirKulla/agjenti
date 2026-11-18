@@ -22,6 +22,9 @@ export function organizeWorkspace(allItems: NavItem[]) {
   // Sources live inside Knowledge ("Nga ku mëson Agjenti"); the page stays reachable from there.
   const items = allItems.filter(item => item.id !== "sources");
   const agent: WorkspaceLink[] = items.filter(item => agentIds.has(item.id)).map(item => ({ ...item, label: item.id === "agents" ? "Identiteti dhe udhëzimet" : item.label }));
+  // What the agent does and where each part is set; the workflow editor stays under "Avancuar".
+  if (items.some(item => item.id === "agents")) agent.splice(agent.findIndex(item => item.id === "agents") + 1, 0,
+    { id: "agent-process", path: "agents/process", label: "Çfarë bën Agjenti", icon: "workflows" });
   if (items.some(item => item.id === "agents")) agent.push(
     { id: "agent-training", path: "agents/training", label: "Trajno nga bisedat", icon: "chat" },
     { id: "agent-memory", path: "agents/memory", label: "Memoria", icon: "history" },

@@ -27,6 +27,7 @@ export function ProductBusinessWorkflow({ slug, workflow, product }: {
           ))}
         </ul>
         <p className="muted-copy">Agjenti i ndërton vetë hapat nga produktet dhe cilësimet e tua. Konfirmon me klientin para çdo porosie ose rezervimi.</p>
+        <Link href={`/b/${slug}/agents/process`}>Shiko çfarë bën Agjenti →</Link>
       </div>
     ) : (
       // The owner's own process decides; it stays reachable under the agent's advanced settings.

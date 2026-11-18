@@ -7,8 +7,6 @@ import { redirect } from "next/navigation";
 import { SIMPLE_STEPS } from "@/lib/workflows/engine";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { loadBusinessProcess } from "@/lib/discovery/load-process";
-import { BusinessProcessView } from "@/components/workflows/business-process";
 import { VisualWorkflowEditor } from "@/components/workflows/visual-editor";
 import { AutomaticAgentPanel } from "@/components/workflows/automatic-agent";
 import { automaticStatus } from "@/lib/orchestration/automatic-process";
@@ -31,8 +29,8 @@ export default async function WorkflowsPage({
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
-  const [operating, visual, readiness, profile, calendar, services, bindingCatalog, query] = await Promise.all([
-    loadBusinessProcess(access.business.id), loadVisualWorkspace(access.business.id),
+  const [visual, readiness, profile, calendar, services, bindingCatalog, query] = await Promise.all([
+    loadVisualWorkspace(access.business.id),
     loadWorkflowReadiness(access.business.id), loadDashboardProfile(access.business.id),
     db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", access.business.id).maybeSingle(),
     db.from("booking_services").select("id").eq("business_id", access.business.id).eq("is_active", true).eq("booking_enabled", true).limit(1),
@@ -102,9 +100,7 @@ export default async function WorkflowsPage({
       </PageHeading>
       {automatic && <AutomaticAgentPanel readiness={automatic.readiness} />}
       <VisualWorkflowEditor slug={slug} initialWorkspace={visual} bookingEnabled={bookingEnabled} readiness={readiness} bindingCatalog={bindingCatalog} initialFlowId={query.flow} bindingFocus={bindingFocus} />
-      <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
-        <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />
-      </details>
+      <p className="vf-help">Udhëzimet nga onboarding-u dhe çfarë bën Agjenti pa proces të personalizuar: <Link href={`/b/${slug}/agents/process`}>Çfarë bën Agjenti →</Link></p>
       <details className="vf-product-details"><summary>Workflow-t linearë të mëparshëm · {workflows?.length ?? 0}</summary>
       <p className="vf-help">Produktet dhe shërbimet lidhen drejtpërdrejt te “Përdoret për” brenda rrjedhës vizuale; konfigurimet e mëparshme mund t’i menaxhosh këtu.</p>
       <div className="configuration-layout">

@@ -115,7 +115,7 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
       <div className="discovery-context-facts"><span>Lloji i biznesit <strong>{businessType === "other" ? "Profil i përgjithshëm" : label}</strong></span><span>Njohuri aktive <strong>{state?.knowledgeCount ?? 0}</strong></span><span>Produktet <strong>I shton më vonë</strong></span></div>
       <div className="discovery-actions"><Link className="btn btn-primary" href={home}>Vazhdo në panel →</Link><Link className="btn btn-ghost" href={`${home}/agents/test`}>Provo Agjentin</Link></div>
       <nav className="discovery-context-links" aria-label="Përshtatja e biznesit"><Link href={`${home}/knowledge`}>Shiko njohuritë ↗</Link><Link href={`${home}/agents`}>Udhëzimet e Agjentit ↗</Link><Link href={`${home}/settings#modules`}>Përshtat seksionet ↗</Link></nav>
-      {state?.businessProcess && <Link className="discovery-context-process" href={`${home}/workflows`}>↗ {state.businessProcess.name}<span>{state.businessProcess.stepCount} hapa · {state.businessProcess.enabled ? "Përgatitur për Agjentin" : "Nuk përdoret"}</span></Link>}
+      {state?.businessProcess && <Link className="discovery-context-process" href={`${home}/agents/process`}>↗ {state.businessProcess.name}<span>{state.businessProcess.stepCount} hapa · {state.businessProcess.enabled ? "Përgatitur për Agjentin" : "Nuk përdoret"}</span></Link>}
     </section>}
     <div className="discovery-context-sources" aria-label="Burimet e biznesit">
       <article className="discovery-context-source">

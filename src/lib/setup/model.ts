@@ -63,7 +63,7 @@ export function setupSteps(s: SetupStatus) {
         ? "Agjenti merr porosi, tregon statusin, rezervon ose ia kalon stafit vetë, sipas moduleve dhe produkteve. Këtu sheh çfarë është gati."
         : "Agjenti i kryen proceset vetë kur produktet, shërbimet ose modulet janë gati. Këtu sheh çfarë i mungon.",
       action: "Shiko",
-      path: "workflows",
+      path: "agents/process",
       done: s.processReady === true,
       // The agent answers from knowledge without any process; it never blocks going live.
       optional: true,
