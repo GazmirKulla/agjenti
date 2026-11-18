@@ -3,6 +3,7 @@ import { runtimeModules } from "@/lib/capabilities/enforcement";
 import { isIsolatedExecution } from "@/lib/runtime/execution-context";
 import { validateVisualGraph } from "@/lib/workflows/visual/model";
 import type { VisualEdge, VisualFlow, VisualGraphV2, VisualNode, VisualVersion } from "@/lib/workflows/visual/types";
+import { parseCommunicationPolicy } from "@/lib/agents/communication-policy";
 import { digest } from "./definition";
 
 /**
@@ -18,6 +19,8 @@ export type AutomaticCapability = "orders" | "orderStatus" | "bookings" | "hando
 export type AutomaticReadiness = { capability: AutomaticCapability; ready: boolean; reason: string };
 
 type Facts = {
+  /** The owner's wording for a handoff, from the active agent's published communication settings. */
+  handoffMessage?: string;
   modules: string[] | null;
   orderableProducts: boolean;
   bookingCalendar: boolean;
@@ -59,7 +62,8 @@ const edge = (source: string, target: string): VisualEdge => ({ id: `${source}_$
  * The graph for the ready capabilities, or null when none is ready. Flow purposes tell the agent's
  * interpretation when each process applies; the decision stays with the model, with evidence from the message.
  */
-export function automaticGraph(readiness: AutomaticReadiness[]): VisualGraphV2 | null {
+export const defaultHandoffMessage = "Ia kalova kërkesën tënde një personi nga ekipi; do të të shkruajë së shpejti.";
+export function automaticGraph(readiness: AutomaticReadiness[], { handoffMessage }: { handoffMessage?: string } = {}): VisualGraphV2 | null {
   const ready = new Set(readiness.filter(r => r.ready).map(r => r.capability));
   if (!ready.size) return null;
   const nodes: VisualNode[] = [node("start", "start", "Mesazh i ri", 20, 60), node("start_end", "end", "Përfundim", 300, 60)];
@@ -87,7 +91,7 @@ export function automaticGraph(readiness: AutomaticReadiness[]): VisualGraphV2 |
       purpose: "The customer wants to book an appointment or a time for one of the business's services." });
   }
   if (ready.has("handoff")) {
-    nodes.push(node("auto_handoff", "handoff", "Stafi", 20, 700, { prompt: "Ia kalova kërkesën tënde një personi nga ekipi; do të të shkruajë së shpejti." }));
+    nodes.push(node("auto_handoff", "handoff", "Stafi", 20, 700, { prompt: handoffMessage || defaultHandoffMessage }));
     flows.push({ id: "auto_handoff", label: "Kalim te stafi", kind: "support", offerPolicy: "on_request", entryNodeId: "auto_handoff",
       nodeIds: ["auto_handoff"],
       purpose: "The customer asks to talk to a person from the business, or the request needs the business's staff." });
@@ -104,7 +108,7 @@ export function automaticVersionId(businessId: string, graph: VisualGraphV2) {
 /** The facts the readiness rule needs, read for this business only. */
 export async function readAutomaticFacts(businessId: string): Promise<Facts> {
   const db = createServiceSupabase();
-  const [modules, fixed, variants, calendar, services] = await Promise.all([
+  const [modules, fixed, variants, calendar, services, agent] = await Promise.all([
     runtimeModules(businessId),
     db.from("products").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", true)
       .is("archived_at", null).neq("availability", "sold").eq("price_mode", "fixed").not("price_amount", "is", null).not("currency", "is", null),
@@ -112,9 +116,13 @@ export async function readAutomaticFacts(businessId: string): Promise<Facts> {
       .not("price_amount", "is", null).eq("products.is_active", true).is("products.archived_at", null),
     db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", businessId).maybeSingle(),
     db.from("booking_services").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", true).eq("booking_enabled", true),
+    db.from("ai_agents").select("communication").eq("business_id", businessId).eq("is_active", true).maybeSingle(),
   ]);
-  if (fixed.error || variants.error || calendar.error || services.error) throw new Error("automatic_process_unverified");
-  return { modules, orderableProducts: (fixed.count ?? 0) > 0 || (variants.count ?? 0) > 0,
+  if (fixed.error || variants.error || calendar.error || services.error || agent.error) throw new Error("automatic_process_unverified");
+  // A stored policy that no longer parses keeps the default wording; it never blocks the process.
+  let handoffMessage: string | undefined;
+  try { handoffMessage = agent.data?.communication ? parseCommunicationPolicy(agent.data.communication).handoffMessage : undefined; } catch { handoffMessage = undefined; }
+  return { ...(handoffMessage ? { handoffMessage } : {}), modules, orderableProducts: (fixed.count ?? 0) > 0 || (variants.count ?? 0) > 0,
     bookingCalendar: calendar.data?.agent_booking_enabled === true, bookableServices: (services.count ?? 0) > 0 };
 }
 
@@ -133,7 +141,8 @@ async function hasOwnWorkflow(businessId: string) {
 export async function loadAutomaticVersion(businessId: string): Promise<VisualVersion | null> {
   try {
     if (await hasOwnWorkflow(businessId)) return null;
-    const graph = automaticGraph(automaticReadiness(await readAutomaticFacts(businessId)));
+    const facts = await readAutomaticFacts(businessId);
+    const graph = automaticGraph(automaticReadiness(facts), facts);
     if (!graph || !validateVisualGraph(graph).graph) return null;
     const id = automaticVersionId(businessId, graph);
     // A test conversation never writes; it uses the same id the live version would have.

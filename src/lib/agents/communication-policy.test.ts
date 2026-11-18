@@ -18,3 +18,14 @@ it("tells the agent how much to say about a presented product according to the b
   expect(communicationPolicyInstructions(defaultCommunicationPolicy)).toContain("details that help this customer decide");
   expect(communicationPolicyInstructions({ ...defaultCommunicationPolicy, productDetails: "essentials" })).toContain("say only what the customer asked");
 });
+it("keeps the owner's handoff wording as text, the default when it is empty, and never as an authority", () => {
+  expect(parseCommunicationPolicy({ ...defaultCommunicationPolicy, handoffMessage: "  Ju shkruan Ana brenda 30 minutave.  " }).handoffMessage).toBe("Ju shkruan Ana brenda 30 minutave.");
+  expect(parseCommunicationPolicy({ ...defaultCommunicationPolicy, handoffMessage: "   " })).not.toHaveProperty("handoffMessage");
+  expect(parseCommunicationPolicy(defaultCommunicationPolicy)).not.toHaveProperty("handoffMessage");
+  expect(() => parseCommunicationPolicy({ ...defaultCommunicationPolicy, handoffMessage: "x".repeat(301) })).toThrow();
+  expect(() => parseCommunicationPolicy({ ...defaultCommunicationPolicy, handoffMessage: 5 })).toThrow();
+  const instructions = communicationPolicyInstructions({ ...defaultCommunicationPolicy, handoffMessage: "Ju shkruan Ana." });
+  expect(instructions).toContain('"Ju shkruan Ana."');
+  expect(instructions).toContain("never say it before the server reports a handoff");
+  expect(communicationPolicyInstructions(defaultCommunicationPolicy)).not.toContain("handed to the business's staff");
+});
