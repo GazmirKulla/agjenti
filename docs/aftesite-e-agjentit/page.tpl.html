@@ -94,8 +94,8 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
   <div class="alert" role="note">
     <strong>Gjendja reale sot, ndryshe nga aftësitë</strong>
     <ul>
-      <li>Llogaria OpenAI nuk ka kredi: çdo mesazh dështon dhe Agjenti nuk përgjigjet, në çdo biznes.</li>
-      <li>Procesi automatik (porosi, status, rezervim, kalim te stafi pa workflow të vizatuar) punon pasi të aplikohet migrimi <code>20261118120000_automatic_process_versions.sql</code>. Deri atëherë, bizneset pa workflow si Filiz Store vetëm informojnë.</li>
+      <li>Llogaria OpenAI është e pronarit dhe ka kredi; Agjenti përgjigjet sërish (verifikuar live më 18 nëntor).</li>
+      <li>Procesi automatik është live (migrimi u aplikua). Te Filiz Store, pa workflow të vizatuar, Agjenti e çoi porosinë deri te konfirmimi. Rezervimet atje mbeten të fikura derisa Kalendari t'i lejojë Agjentit.</li>
     </ul>
   </div>
 
@@ -142,6 +142,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
       <li><strong>Porositë pas krijimit bëhen me dorë.</strong><span>Klienti nuk e ndryshon dot porosinë, dhe Asistenti nuk ndryshon dot statusin apo dërgesën.</span></li>
       <li><strong>Asistenti nuk prek konfigurimet e reja.</strong><span>Stoku, struktura dhe fushat e produkteve duhen shtuar si operacione të rishikuara, me konfirmim.</span></li>
       <li><strong>Nuk matet suksesi.</strong><span>As pronari, as Asistenti nuk e dinë sa porosi u braktisën ose sa mesazhe mbetën pa përgjigje.</span></li>
+      <li><strong>Porosia kërkon të dhëna që nuk i duhen.</strong><span>Për një PDF që shkarkohet, Agjenti kërkon qytetin dhe adresën, një nga një. Të dhënat e kërkuara varen nga cilësimi i biznesit, jo nga mënyra si merret produkti.</span></li>
       <li><strong>Varësia nga OpenAI pa sinjal.</strong><span>Kur mbarojnë kreditë, ndalet gjithçka dhe pronari nuk paralajmërohet.</span></li>
     </ol>
   </section>
@@ -155,7 +156,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
     </div>
   </section>
 
-  <footer>Përgatitur nga leximi i kodit të repository-t agjenti, në gjendjen e degës main më 18 nëntor 2026, pas procesit automatik.</footer>
+  <footer>Përgatitur nga leximi i kodit të repository-t agjenti, në gjendjen e degës main më 18 nëntor 2026, pas procesit automatik dhe provës live në Chat Lab.</footer>
 </main>
 
 <script>

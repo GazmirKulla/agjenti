@@ -18,7 +18,7 @@ customer=[
  ("Leads",[(Y,"Lead-i krijohet vetë nga biseda"),(P,"Cilësimi i interesit të klientit")]),
  ("Kanalet",[(Y,"Instagram"),(Y,"WhatsApp"),(N,"Messenger ose chat në ueb")]),
  ("Shërbimet",[(Y,"Çmimi dhe kohëzgjatja"),(Y,"Lista e shërbimeve"),(P,"Sugjerim sipas nevojës"),(P,"Oraret e lira: vetëm brenda rezervimit"),(N,"Foto e shërbimit")]),
- ("Porositë",[(Y,"Variantet, sasia dhe zgjedhjet"),(Y,"Konfirmimi para porosisë"),(Y,"Kontrolli i stokut nga serveri"),(Y,"Krijimi i porosisë: automatik për produktet aktive me çmim të caktuar ose variant me çmim"),(Y,"Statusi i porosisë: automatik kur Porositë janë të ndezura"),(N,"Ndryshim ose anulim nga klienti"),(N,"Pagesa dhe kostoja e dërgesës")]),
+ ("Porositë",[(Y,"Variantet, sasia dhe zgjedhjet"),(Y,"Konfirmimi para porosisë, me përmbledhje të qartë në gjuhën e klientit"),(P,"Kërkon vetëm të dhënat që i duhen porosisë: kërkon qytetin dhe adresën edhe për produkte digjitale, një nga një, përveç kur biznesi i bën opsionale"),(Y,"Kontrolli i stokut nga serveri"),(Y,"Krijimi i porosisë: automatik për produktet aktive me çmim të caktuar ose variant me çmim"),(Y,"Statusi i porosisë: automatik kur Porositë janë të ndezura"),(N,"Ndryshim ose anulim nga klienti"),(N,"Pagesa dhe kostoja e dërgesës")]),
  ("Rezervimet",[(Y,"Konfirmimi para rezervimit"),(P,"Krijimi: automatik, por kërkon kalendarin me leje për Agjentin dhe shërbime që pranojnë rezervime"),(P,"Oraret e lira"),(N,"Anulimi nga klienti"),(N,"Ndryshimi i orës"),(N,"Kujtesa ose statusi i rezervimit")]),
 ]
 business=[

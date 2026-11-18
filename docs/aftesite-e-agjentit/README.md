@@ -17,4 +17,6 @@ Sa herë që një ndryshim në kod shton, heq ose kufizon një aftësi të agjen
 3. Gjenero faqen: `python3 docs/aftesite-e-agjentit/build.py`
 4. Ripubliko te i njëjti link (Artifact me `url` të mësipërm), që linku të mbetet i njëjti.
 
+Edhe kur një gjetje (provë live, review, test) tregon se një aftësi punon më keq se ç'shkruhet, ule vlerësimin e saj (`po` → `pjes` → `jo`) ose shto aftësinë që mungon, dhe shkruaje te "Problemet kryesore". Raporti mban gjendjen reale, jo atë të synuar.
+
 Vlerësimi bëhet nga leximi i kodit. Për përqindjet reale nga bisedat, ekzekuto `matja-e-proceseve.sql` te Supabase → SQL Editor.
