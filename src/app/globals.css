@@ -5508,3 +5508,13 @@ button.order-photo-image:hover:not(:disabled) {
 .unsaved-bar span { flex: 1 1 200px; font-size: 13px; }
 .section-title-actions { display: inline-flex; align-items: center; gap: 10px; }
 .unsaved-note { font-size: 12px; color: var(--accent); font-weight: 600; }
+
+/* Workflows: what the agent does by itself without a workflow of the owner's. */
+.automatic-agent { display: grid; gap: 10px; margin-bottom: 16px; }
+.automatic-agent h2 { font-size: 18px; }
+.automatic-agent-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.automatic-agent-list li { display: flex; gap: 10px; align-items: baseline; color: var(--ink-muted); }
+.automatic-agent-list li.is-ready { color: var(--success); }
+.automatic-agent-list li > span:last-child { display: grid; gap: 2px; }
+.automatic-agent-list strong { color: var(--ink); font-weight: 600; }
+.automatic-agent-list small { color: var(--ink-muted); font-size: 12px; }

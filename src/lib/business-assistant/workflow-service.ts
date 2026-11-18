@@ -40,12 +40,14 @@ export async function loadAssistantWorkflow(
   const published = workspace.publishedVersionId
     ? await loadVisualVersion(access.businessId, workspace.publishedVersionId)
     : null;
-  const { data: versions, error } = await createServiceSupabase()
-    .from("visual_workflow_versions")
-    .select("id,created_at")
-    .eq("business_id", access.businessId)
-    .order("created_at", { ascending: false })
-    .limit(10);
+  // The owner's own versions only: the automatic process is rebuilt by the server, never restored.
+  const list = (own: boolean) => {
+    const query = createServiceSupabase().from("visual_workflow_versions").select("id,created_at").eq("business_id", access.businessId);
+    return (own ? query.eq("automatic", false) : query).order("created_at", { ascending: false }).limit(10);
+  };
+  let { data: versions, error } = await list(true);
+  // Before the automatic-process migration the column does not exist yet.
+  if (error?.code === "42703") ({ data: versions, error } = await list(false));
   if (error) throw new AssistantError("Nuk u lexuan versionet e rrjedhës.");
   return {
     workspace,

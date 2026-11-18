@@ -9,17 +9,17 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 Y,P,N="po","pjes","jo"
 customer=[
- ("Bisedat",[(Y,"Përgjigje automatike 24/7"),(Y,"Bashkon disa mesazhe të njëpasnjëshme"),(Y,"Kupton foto, story dhe postime të shpërndara"),(Y,"Ndalet kur ndërhyn stafi"),(Y,"Reagime me emoji"),(P,"Kalimi te stafi: vetëm me nyje në workflow")]),
+ ("Bisedat",[(Y,"Përgjigje automatike 24/7"),(Y,"Bashkon disa mesazhe të njëpasnjëshme"),(Y,"Kupton foto, story dhe postime të shpërndara"),(Y,"Ndalet kur ndërhyn stafi"),(Y,"Reagime me emoji"),(Y,"Kalimi te stafi: automatik kur klienti kërkon një person")]),
  ("Fushatat",[(Y,"Kupton “dua / s'dua oferta”, me evidencë nga mesazhi"),(Y,"Përgjigjet për ofertën e fushatës")]),
- ("Njohuritë",[(Y,"Përgjigje nga njohuritë"),(Y,"Profili i biznesit: orari, adresa, kontakti"),(P,"“Nuk e di, po të lidh me stafin”: pa workflow nuk ka kalim")]),
+ ("Njohuritë",[(Y,"Përgjigje nga njohuritë"),(Y,"Profili i biznesit: orari, adresa, kontakti"),(Y,"“Nuk e di, po të lidh me stafin”: kalim automatik te stafi")]),
  ("Katalogët (PDF)",[(Y,"Përgjigje nga dokumentet"),(Y,"Jep lidhjen e dokumentit"),(P,"Lidh faqen e katalogut me produktin")]),
  ("Klientët",[(Y,"Mban mend emrin, telefonin dhe adresën"),(Y,"Njeh klientin që kthehet"),(P,"Përditëson të dhënat kur klienti i ndryshon")]),
  ("Produktet",[(Y,"Emri, çmimi, detajet, variantet"),(Y,"Numëron, gjen më të lirin dhe më të shtrenjtin"),(Y,"Dërgon foton e produktit"),(Y,"Gjendja e stokut"),(Y,"Njeh produktin nga një postim i shpërndarë"),(P,"Gjen produktin sipas nevojës: vetëm 20 më të përshtatshmit, pa filtër çmimi, jo përtej 1000 produkteve"),(P,"Sugjeron alternativa: vetëm kur produkti ka mbaruar"),(N,"Lidhja drejt faqes së produktit")]),
  ("Leads",[(Y,"Lead-i krijohet vetë nga biseda"),(P,"Cilësimi i interesit të klientit")]),
  ("Kanalet",[(Y,"Instagram"),(Y,"WhatsApp"),(N,"Messenger ose chat në ueb")]),
  ("Shërbimet",[(Y,"Çmimi dhe kohëzgjatja"),(Y,"Lista e shërbimeve"),(P,"Sugjerim sipas nevojës"),(P,"Oraret e lira: vetëm brenda rezervimit"),(N,"Foto e shërbimit")]),
- ("Porositë",[(Y,"Variantet, sasia dhe zgjedhjet"),(Y,"Konfirmimi para porosisë"),(Y,"Kontrolli i stokut nga serveri"),(P,"Krijimi i porosisë: vetëm me workflow ose proces të posaçëm"),(P,"Statusi i porosisë: vetëm me nyje në workflow"),(N,"Ndryshim ose anulim nga klienti"),(N,"Pagesa dhe kostoja e dërgesës")]),
- ("Rezervimet",[(Y,"Konfirmimi para rezervimit"),(P,"Krijimi: kërkon nyje, kalendar dhe leje"),(P,"Oraret e lira"),(N,"Anulimi nga klienti"),(N,"Ndryshimi i orës"),(N,"Kujtesa ose statusi i rezervimit")]),
+ ("Porositë",[(Y,"Variantet, sasia dhe zgjedhjet"),(Y,"Konfirmimi para porosisë"),(Y,"Kontrolli i stokut nga serveri"),(Y,"Krijimi i porosisë: automatik për produktet aktive me çmim të caktuar ose variant me çmim"),(Y,"Statusi i porosisë: automatik kur Porositë janë të ndezura"),(N,"Ndryshim ose anulim nga klienti"),(N,"Pagesa dhe kostoja e dërgesës")]),
+ ("Rezervimet",[(Y,"Konfirmimi para rezervimit"),(P,"Krijimi: automatik, por kërkon kalendarin me leje për Agjentin dhe shërbime që pranojnë rezervime"),(P,"Oraret e lira"),(N,"Anulimi nga klienti"),(N,"Ndryshimi i orës"),(N,"Kujtesa ose statusi i rezervimit")]),
 ]
 business=[
  ("Shërbimet",[(Y,"Krijo dhe ndrysho shërbimin"),(Y,"Oraret dhe cilësimet e kalendarit"),(P,"Fshirja: vetëm çaktivizim")]),

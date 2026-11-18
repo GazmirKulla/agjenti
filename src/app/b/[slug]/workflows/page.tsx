@@ -10,6 +10,8 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { BusinessProcessView } from "@/components/workflows/business-process";
 import { VisualWorkflowEditor } from "@/components/workflows/visual-editor";
+import { AutomaticAgentPanel } from "@/components/workflows/automatic-agent";
+import { automaticStatus } from "@/lib/orchestration/automatic-process";
 import { loadVisualWorkspace } from "@/lib/workflows/visual/store";
 import { loadWorkflowReadiness } from "@/lib/workflows/readiness";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
@@ -37,6 +39,8 @@ export default async function WorkflowsPage({
     loadFlowBindingCatalog(access.business.id), searchParams,
   ]);
   const bindingFocus = bindingCatalog.products.some(item => item.id === query.product) ? { kind: "product" as const, id: query.product! } : bindingCatalog.services.some(item => item.id === query.service) ? { kind: "service" as const, id: query.service! } : undefined;
+  // Without a published workflow of the owner's, the agent runs the automatic process.
+  const automatic = visual.publishedVersionId ? null : await automaticStatus(access.business.id);
   const bookingEnabled = profile.enabledModules.includes("bookings") && !calendar.error && !services.error && !!calendar.data?.agent_booking_enabled && !!services.data?.length;
   const [{ data: workflows, error: loadError }, { data: types }] =
     await Promise.all([
@@ -96,6 +100,7 @@ export default async function WorkflowsPage({
         </Link>
         <Link href={`/b/${slug}/services`} className="btn btn-ghost">Shërbimet →</Link></div>
       </PageHeading>
+      {automatic && <AutomaticAgentPanel readiness={automatic.readiness} />}
       <VisualWorkflowEditor slug={slug} initialWorkspace={visual} bookingEnabled={bookingEnabled} readiness={readiness} bindingCatalog={bindingCatalog} initialFlowId={query.flow} bindingFocus={bindingFocus} />
       <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
         <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />

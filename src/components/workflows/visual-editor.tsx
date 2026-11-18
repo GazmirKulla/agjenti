@@ -263,8 +263,8 @@ export function VisualWorkflowEditor({ slug, initialWorkspace, bookingEnabled = 
 
   if (workspace.generated && !definition.flows.length && !dirty && !recovery) {
     return <section className="panel section-pad" aria-label="Pa workflow">
-      <h2>Ende nuk ke workflow</h2>
-      <p className="muted-copy">Workflow është opsional. Agjenti mund të përgjigjet nga njohuritë dhe konfigurimi i biznesit pa të. Krijo një vetëm nëse dëshiron një proces me hapa të përcaktuar.</p>
+      <h2>Workflow i personalizuar (opsional)</h2>
+      <p className="muted-copy">Agjenti punon vetë me hapat që ndërton nga modulet e tua. Krijo një workflow vetëm nëse do hapa të tjerë; pasi ta publikosh, ai zëvendëson hapat automatikë.</p>
       <label className="form-label">Krijo workflow
         <select className="field" aria-label="Krijo workflow" value="" disabled={locked || !workspace.available || !recoveryChecked} onChange={event => openProcess(event.target.value as FlowTemplate, true)}>
           <option value="" disabled>Zgjidh llojin e rrjedhës</option>

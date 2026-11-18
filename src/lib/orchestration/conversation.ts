@@ -40,6 +40,7 @@ import { businessProcessContext } from "@/lib/discovery/business-process";
 import { readProcessProfile } from "@/lib/conversations/profile";
 import { prospectTurnContext } from "@/lib/prospects/turn-context";
 import { replyProductPhotos } from "@/lib/conversations/reply-photos";
+import { loadAutomaticVersion } from "./automatic-process";
 
 /** One process runtime for authenticated live channels and isolated previews. */
 export async function processConversation(params: AgentTurnParams): Promise<AgentTurnResult> {
@@ -50,7 +51,9 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   if (params.linearPreview && (!params.linearPreviewDefinition || mode !== "test")) throw new TransitionError("process_preview_required");
   const preview = params.linearPreviewDefinition;
   const current: ProcessVersion | null = preview ? linearProcessVersion({ id: preview.versionId, businessId: params.businessId, workflowId: preview.workflowId,
-    name: preview.name, steps: preview.steps, productIds: [preview.productId] }) : params.visualPreview ?? await loadVisualVersion(params.businessId);
+    name: preview.name, steps: preview.steps, productIds: [preview.productId] }) : params.visualPreview ?? await loadVisualVersion(params.businessId)
+    // Without a workflow of its own the business gets the automatic process built from its modules and settings.
+    ?? await loadAutomaticVersion(params.businessId);
   if (current && current.businessId !== params.businessId) throw new TransitionError("definition_scope_mismatch");
   const currentVersions: ProcessVersion[] = [...(current ? [current] : []), ...(!preview ? await loadCurrentLinearVersions(params.businessId) : [])];
   const versions = new Map(currentVersions.map(v => [v.id, v]));

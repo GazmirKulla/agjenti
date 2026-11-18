@@ -532,7 +532,8 @@ it("previews verified visual bindings including inactive catalog entries without
   const tenants: string[] = [];
   m.from.mockImplementation((table: string) => {
     const query = {
-      select: () => query, eq: (_key: string, tenant: string) => { tenants.push(tenant); return query; }, order: () => query,
+      // Tenant scope is the business_id filter; other filters (e.g. the owner's own versions) are not tenants.
+      select: () => query, eq: (key: string, value: unknown) => { if (key === "business_id") tenants.push(String(value)); return query; }, order: () => query,
       limit: async () => ({ data: [], error: null }),
       in: async () => ({ data: table === "products" ? [{ id: productId, name: "Filxhan", is_active: false }] : [{ id: serviceId, name: "Personalizim", is_active: false, booking_enabled: false }], error: null }),
     }; return query;
@@ -542,7 +543,7 @@ it("previews verified visual bindings including inactive catalog entries without
   expect(preview).toContain("Filxhan"); expect(preview).toContain("Personalizim");
   expect(preview).not.toContain(productId); expect(preview).not.toContain(serviceId);
   expect(openTicket(result.token!, access).values).toMatchObject({ operation: "draft", graph: { flows: [expect.objectContaining({ productIds: [productId], serviceIds: [serviceId] }), ...graph.flows.slice(1)] } });
-  expect(tenants.every(tenant => tenant === access.businessId)).toBe(true);
+  expect(tenants.length > 0 && tenants.every(tenant => tenant === access.businessId)).toBe(true);
   expect(m.rpc).not.toHaveBeenCalled();
 });
 

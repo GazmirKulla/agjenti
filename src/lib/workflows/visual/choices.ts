@@ -1,5 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { normalizeVisualDraft } from "./model";
+import { automaticBusinessWorkflow } from "./business-workflow";
+import { automaticStatus } from "@/lib/orchestration/automatic-process";
 import { loadVisualVersion } from "./store";
 import type { VisualGraph } from "./types";
 import type { BusinessWorkflow } from "./business-workflow";
@@ -27,11 +29,13 @@ export function flowChoices(draft: VisualGraph | null, published: VisualGraph | 
 export async function loadVisualFlowChoices(businessId: string): Promise<VisualFlowChoices> {
   const { data, error } = await createServiceSupabase().from("visual_workflows").select("draft,revision,published_version_id,enabled").eq("business_id", businessId).maybeSingle();
   if (error && !["42P01", "PGRST205"].includes(error.code)) throw new Error("Nuk u ngarkuan rrjedhat vizuale.");
-  if (!data) return { revision: 0, flows: [] };
+  // No published workflow of the owner's (a draft does not count): the products follow the automatic process.
+  const automatic = data?.published_version_id ? null : await automaticStatus(businessId);
+  if (!data) return { revision: 0, flows: [], ...(automatic ? { workflow: automaticBusinessWorkflow(automatic) } : {}) };
   const draft = normalizeVisualDraft(data.draft);
   if (!draft) throw new Error("Drafti i rrjedhës nuk është i vlefshëm.");
   const published = data.published_version_id ? await loadVisualVersion(businessId, data.published_version_id) : null;
   const active = Boolean(data.enabled && published);
   return { revision: data.revision, flows: flowChoices(draft, published?.graph ?? null, Boolean(data.enabled)),
-    workflow: { name: (active ? published!.graph : draft).name, active, status: active ? "Aktiv" : published ? "Publikuar · joaktiv" : "Draft" } };
+    workflow: automatic ? automaticBusinessWorkflow(automatic) : { name: (active ? published!.graph : draft).name, active, status: active ? "Aktiv" : published ? "Publikuar · joaktiv" : "Draft" } };
 }
