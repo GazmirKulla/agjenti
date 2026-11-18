@@ -8,6 +8,7 @@ import { definitionFor, type Environment } from "./transition";
 import { trainingPrompt, type TrainingContext } from "@/lib/agents/training/model";
 import { communicationPolicyInstructions, parseCommunicationPolicy } from "@/lib/agents/communication-policy";
 import { renderCatalogSlots } from "./catalog-presentation";
+import { reviewLines, type ReviewLine } from "./review-summary";
 
 /** Prompt text: prompts/agjenti-i-klienteve/pergjigja-ndaj-klientit.md */
 export const CUSTOMER_REPLY_PROMPT = () => prompt("agjenti-i-klienteve/pergjigja-ndaj-klientit");
@@ -35,21 +36,23 @@ export async function composeProcessReply(input: {
     const results = Object.fromEntries(Object.entries(receipts).flatMap(([stepId, receipt]) => receipt.status === "simulated" || receipt.status === "succeeded"
       ? [[stepId, Object.fromEntries(Object.entries(receipt.output).map(([key, value]) => [key, String(value)]))]] : []));
     return { ...n, process: process?.name, purpose: process?.purpose, text: n.text ? renderActionMessage(n.text, results) : undefined,
-      review: n.kind === "approval" && instance && reviewStep?.kind === "confirm" ? reviewStep.fieldIds.flatMap(id => {
-        const f = instance.facts[id];
-        return f ? [{ label: definition?.fields.find(field => field.id === id)?.label ?? id, value: f.value, subject: f.subject }] : [];
-      }) : undefined,
+      review: n.kind === "approval" && instance && definition && reviewStep?.kind === "confirm" ? reviewLines(reviewStep.fieldIds, definition.fields, instance.facts) : undefined,
       effect: action ? { tool: action.tool, status: action.status, output: action.output } : undefined };
   });
   const targets = [...new Set(notices.flatMap(n => n.targetId ? [n.targetId] : []))];
+  // One label per review line, written in the conversation's language; the values stay the server's.
+  const reviews = new Map(notices.flatMap(n => n.targetId && n.review?.length ? [[n.targetId, n.review] as const] : []));
   const response = await new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: Math.min(18000, remaining), maxRetries: 0 }).responses.create({
     model: modelFor("customer"), store: false, max_output_tokens: 2200,
     instructions: `${communicationPolicyInstructions(input.context.communication ? parseCommunicationPolicy(input.context.communication) : undefined)}${trainingPrompt(input.context.training)}\n${CUSTOMER_REPLY_PROMPT()}`,
     input: JSON.stringify({ message: input.message, mode: input.state.mode, history: input.history.slice(-12), business: input.context, notices,
       processes: Object.values(input.state.instances).map(i => ({ id: i.id, status: i.status, facts: i.facts, pending: i.wait, receipts: i.results ?? {} })) }),
-    text: { format: { type: "json_schema", name: "process_reply", strict: true, schema: { type: "object", additionalProperties: false, required: ["answer", "prompts"], properties: {
+    text: { format: { type: "json_schema", name: "process_reply", strict: true, schema: { type: "object", additionalProperties: false, required: ["answer", "prompts", "reviewLabels"], properties: {
       answer: { type: "string" }, prompts: { type: "object", additionalProperties: false, required: targets,
         properties: Object.fromEntries(targets.map(id => [id, { type: "string" }])) },
+      reviewLabels: { type: "object", additionalProperties: false, required: [...reviews.keys()],
+        properties: Object.fromEntries([...reviews].map(([id, lines]) => [id, { type: "object", additionalProperties: false,
+          required: lines.map(l => l.id), properties: Object.fromEntries(lines.map(l => [l.id, { type: "string" }])) }])) },
     } } } },
   });
   if (response.status !== "completed" || Date.now() > input.deadline) throw new Error("reply_incomplete");
@@ -60,7 +63,10 @@ export async function composeProcessReply(input: {
   const parts = [parsed.answer.trim(), ...targets.map(targetId => {
     const p = { targetId, text: parsed.prompts[targetId] as string };
     const notice = notices.find(n => n.targetId === p.targetId)!;
-    const review = notice.review?.map(f => `${f.label}: ${String(f.value)}`).join("\n");
+    const labels = parsed.reviewLabels?.[targetId];
+    // A label is presentation only; a missing or malformed one falls back to the field's own label.
+    const label = (line: ReviewLine) => { const l = labels?.[line.id]; return typeof l === "string" && l.trim() && l.length <= 80 && !/[\r\n]/.test(l) ? l.trim() : line.field; };
+    const review = notice.review?.map(line => `${label(line)}: ${line.value}`).join("\n");
     return review ? `${review}\n\n${p.text.trim()}` : p.text.trim();
   })].filter(Boolean);
   if (!parts.length) throw new Error("empty_process_reply");
