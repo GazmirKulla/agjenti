@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { findOwnInstagramPosts } from "@/lib/instagram/media";
 import { parseInstagramWebhookPayload } from "@/lib/instagram/parse-webhook";
 import { instagramPost, sharedMediaFrom } from "@/lib/instagram/shared-media";
 
@@ -47,5 +48,32 @@ describe("shared reels and posts from the webhook", () => {
 		const message = sharedReel({ url: "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1" }, "ig_post");
 		expect(sharedMediaFrom(message.attachments[0])).toMatchObject({ permalink: null, embedUrl: null, mediaUrl: "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1", caption: null });
 		expect(sharedMediaFrom({ kind: "image", sourceUrl: "https://lookaside.fbsbx.com/x" })).toBeNull();
+	});
+});
+
+describe("findOwnInstagramPosts", () => {
+	const page = (posts: { id: string; caption: string | null; permalink: string }[], next: string | null = null) =>
+		new Response(JSON.stringify({ data: posts, paging: next ? { next } : {} }), { status: 200 });
+	it("finds the business's own reel by its link and stops once everything is found", async () => {
+		const fetchImpl = vi.fn(async () => page([
+			{ id: "18000000000000001", caption: "Tjetër", permalink: "https://www.instagram.com/p/AAAAAAA/" },
+			{ id: "18034567890123456", caption: "Puzzle i Personalizuar Prej Druri", permalink: "https://www.instagram.com/reel/DYPUKXnM7Vk/" },
+		], "https://graph.instagram.com/v23.0/me/media?after=x"));
+		const found = await findOwnInstagramPosts("token", ["https://www.instagram.com/reel/DYPUKXnM7Vk/?igsh=1"], { fetchImpl: fetchImpl as never });
+		expect([...found]).toEqual([["https://www.instagram.com/reel/DYPUKXnM7Vk/", { id: "18034567890123456", caption: "Puzzle i Personalizuar Prej Druri" }]]);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+	it("reads at most the newest pages, never follows a foreign next link, and finds nothing on errors", async () => {
+		const many = vi.fn(async () => page([], "https://graph.instagram.com/v23.0/me/media?after=x"));
+		expect((await findOwnInstagramPosts("token", ["https://www.instagram.com/reel/DYPUKXnM7Vk/"], { fetchImpl: many as never, maxPages: 2 })).size).toBe(0);
+		expect(many).toHaveBeenCalledTimes(2);
+		const foreign = vi.fn(async () => page([], "https://evil.example/me/media"));
+		await findOwnInstagramPosts("token", ["https://www.instagram.com/reel/DYPUKXnM7Vk/"], { fetchImpl: foreign as never });
+		expect(foreign).toHaveBeenCalledTimes(1);
+		const failing = vi.fn(async () => new Response(JSON.stringify({ error: { code: 190 } }), { status: 400 }));
+		expect((await findOwnInstagramPosts("token", ["https://www.instagram.com/reel/DYPUKXnM7Vk/"], { fetchImpl: failing as never })).size).toBe(0);
+		const none = vi.fn();
+		expect((await findOwnInstagramPosts("token", ["https://lookaside.fbsbx.com/x"], { fetchImpl: none as never })).size).toBe(0);
+		expect(none).not.toHaveBeenCalled();
 	});
 });

@@ -1,5 +1,6 @@
 import { reviewMarketingPreference } from "@/lib/campaigns/preference";
 import { sharedMediaTurnContext } from "./shared-media-context";
+import { findOwnInstagramPosts } from "@/lib/instagram/media";
 import { initialSnapshot } from "@/lib/orchestration/contracts";
 import { inboxHistory, type InboxHistoryMessage } from "./inbox-history";
 import { readStoredConversationState } from "@/lib/orchestration/stored-state";
@@ -400,6 +401,7 @@ export async function handleInboundMessage(
     current: message.attachments,
     earlier: ((historyRows ?? []) as (InboxHistoryMessage & { media?: unknown })[])
       .filter(row => row.direction === "inbound" && !currentIds.has(row.external_message_id ?? "")).slice(0, 3).map(row => row.media),
+    ownPosts: message.channel === "instagram" ? links => findOwnInstagramPosts(accessToken, links) : undefined,
   });
   const staffReplied = history.staffReplied || lastOutbound?.source === "staff" && lastOutbound.sent_via !== "campaign" && lastOutbound.sent_via !== "marketing_preference" && isAcceptedDelivery(lastOutbound.delivery_status);
   const resumedHandoff = runtime.handoffRequested === true;

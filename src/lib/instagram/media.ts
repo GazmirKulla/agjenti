@@ -1,5 +1,6 @@
 import { graphVersion } from "@/lib/instagram/oauth";
 import { productFromCaption } from "@/lib/products/page-extract";
+import { instagramPost } from "@/lib/instagram/shared-media";
 
 export type InstagramPost = {
 	id: string;
@@ -126,6 +127,34 @@ export async function fetchInstagramMedia(
 	return { posts: posts.slice(0, MAX_POSTS), truncated };
 }
 
+/**
+ * The business's own recent posts behind these shared links (compared by shortcode): their media id and caption.
+ * Reads at most `maxPages` of the newest posts and stops once every link is found; a failure finds nothing.
+ */
+export async function findOwnInstagramPosts(
+	token: string,
+	permalinks: string[],
+	{ maxPages = 2, timeoutMs = 3000, fetchImpl = fetch }: { maxPages?: number; timeoutMs?: number; fetchImpl?: typeof fetch } = {},
+): Promise<Map<string, { id: string; caption: string | null }>> {
+	const found = new Map<string, { id: string; caption: string | null }>();
+	const wanted = new Set(permalinks.flatMap((link) => instagramPost(link)?.permalink ?? []));
+	const clean = token.trim();
+	if (!clean || !wanted.size) return found;
+	let next: string | null = mediaUrl("id,caption,permalink", clean);
+	for (let page = 0; next && page < maxPages && found.size < wanted.size; page += 1) {
+		const target = safeGraphUrl(next);
+		if (!target) break;
+		const result = await readJson(fetchImpl, target, timeoutMs);
+		if ("error" in result) break;
+		for (const post of result.posts) {
+			const link = instagramPost(post.permalink)?.permalink;
+			if (link && wanted.has(link)) found.set(link, { id: post.id, caption: post.caption });
+		}
+		next = result.next;
+	}
+	return found;
+}
+
 function carouselImages(raw: unknown): { id: string; url: string }[] {
 	const rows = (raw as { data?: unknown }).data;
 	if (!Array.isArray(rows)) return [];
@@ -161,9 +190,10 @@ function safeGraphUrl(value: string): URL | null {
 async function readJson(
 	fetchImpl: typeof fetch,
 	url: URL,
+	timeoutMs = 6000,
 ): Promise<{ posts: InstagramPost[]; next: string | null } | { error: string; retry?: boolean }> {
 	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), 6000);
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
 	try {
 		const response = await fetchImpl(url, {
 			signal: controller.signal,
