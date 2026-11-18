@@ -48,19 +48,19 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
       <section className="panel section-pad grid gap-2">
         <h2>Agjenti ndjek procesin tënd të personalizuar</h2>
         <p className="muted-copy">{ownProcess.enabled ? "Procesi që ke publikuar vendos hapat e Agjentit për gjithë biznesin, në vend të procesit të zakonshëm." : "Ke publikuar një proces të personalizuar, por është i fikur: Agjenti vetëm informon derisa ta ndezësh ose ta heqësh."}</p>
-        {enabled.has("workflows") && <Link className="soft-link" href={`${base}/workflows`}>Hap procesin e personalizuar →</Link>}
+        {enabled.has("workflows") && <Link className="inline-link" href={`${base}/workflows`}>Hap procesin e personalizuar →</Link>}
       </section>
     ) : automatic ? <AutomaticAgentPanel readiness={automatic.readiness} />
       : <section className="panel section-pad"><p className="muted-copy">Nuk u verifikua çfarë mund të bëjë Agjenti tani. Rifresko faqen pas pak.</p></section>}
     <section className="panel section-pad grid gap-3" aria-labelledby="agent-process-settings">
       <h2 id="agent-process-settings">Ku e ndryshon</h2>
       <ul className="grid gap-2">
-        {settings.map(item => <li key={item.href}><Link className="soft-link" href={item.href}><strong>{item.title} →</strong></Link><br /><small className="muted-copy">{item.text}</small></li>)}
+        {settings.map(item => <li key={item.href}><Link className="inline-link" href={item.href}><strong>{item.title} →</strong></Link><br /><small className="muted-copy">{item.text}</small></li>)}
       </ul>
     </section>
     <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
       <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />
     </details>
-    {enabled.has("workflows") && !ownProcess && <p className="muted-copy">Për raste të veçanta (kushte, veprime të jashtme) ekziston edhe <Link className="soft-link" href={`${base}/workflows`}>procesi i personalizuar (i avancuar)</Link>.</p>}
+    {enabled.has("workflows") && !ownProcess && <p className="muted-copy">Për raste të veçanta (kushte, veprime të jashtme) ekziston edhe <Link className="inline-link" href={`${base}/workflows`}>procesi i personalizuar (i avancuar)</Link>.</p>}
   </>;
 }
