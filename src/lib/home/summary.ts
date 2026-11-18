@@ -5,6 +5,7 @@ import { moduleDependencies, moduleRegistry } from "@/lib/dashboard/modules/regi
 import type { DashboardProfile, ModuleId } from "@/lib/dashboard/modules/types";
 import { normalizeVisualDraft } from "@/lib/workflows/visual/model";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
+import { automaticStatus } from "@/lib/orchestration/automatic-process";
 import { homeModuleSplit } from "./modules";
 import { added, homeRange, money, periodDays, type HomeCard, type HomeMessages, type HomeModuleLink, type HomePeriod } from "./model";
 
@@ -171,8 +172,7 @@ export async function loadHomeModules(
     return { id: "workflows", label: "Workflow", icon: moduleRegistry.workflows.icon, href: `${base}/workflows`, value: total, caption: "rrjedha",
       detail: visual ? (active ? `${active} aktive` : "asnjë aktive") : undefined,
       attention: unpublished ? { text: `${unpublished} të papublikuara`, href: `${base}/workflows`, tone: "warning" } : undefined,
-      empty: total ? undefined : { text: "Rrjedhat i tregojnë Agjentit hapat e bisedës: porosi, rezervim ose kërkesë.",
-        actions: [{ label: "Krijo rrjedhën e parë", href: `${base}/workflows` }] } };
+      empty: total ? undefined : await automaticEmpty(id, `${base}/workflows`) };
   })());
   if (provision.data === true) cards.push((async () => {
     const invitations = () => db.from("business_invitations").select("id", { count: "exact", head: true }).eq("source_business_id", id);
@@ -208,4 +208,14 @@ export async function loadHomeModules(
     cards: rest.filter((card): card is HomeCard => !!card).sort((a, b) => order(a) - order(b)),
     others: split.others.map(link),
   };
+}
+
+/** Without a process of the owner's, the agent works with its automatic one: say what it does now, or what is missing. */
+async function automaticEmpty(businessId: string, href: string) {
+  const status = await automaticStatus(businessId);
+  const missing = status?.readiness.find((r) => !r.ready);
+  const text = !status ? "Procesi i Agjentit nuk u verifikua. Hap faqen për ta parë."
+    : status.active ? "Agjenti ndjek procesin e zakonshëm, pa e vizatuar ti. Një proces i posaçëm është opsional."
+    : `Agjenti ende nuk merr porosi apo rezervime. ${missing?.reason ?? ""}`.trim();
+  return { text, actions: [{ label: "Shiko çfarë bën Agjenti", href }] };
 }

@@ -86,7 +86,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
     ...(choices.length || variants.length ? [["variants", variants.length ? `Variante (${variants.length})` : "Variante"] as [Tab, string]] : []),
     ...(stock ? [["stock", "Gjendja"] as [Tab, string]] : []),
     ["media", "Media"],
-    ["workflow", "Workflow"],
+    ["workflow", "Procesi"],
   ];
   const counted = countsStock(product);
   const stockFor = (variant?: { stock_quantity?: number | null }) => effectiveQuantity(product, variant);
