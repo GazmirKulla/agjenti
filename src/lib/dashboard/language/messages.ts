@@ -93,6 +93,7 @@ export const english: Record<string, string> = {
   "Llogaria jote": "Your account",
   "Profili i biznesit": "Business profile",
   "Paketa dhe përdorimi": "Billing and usage",
+  "Paketa dhe pagesat": "Plans and billing",
   "Dil nga llogaria": "Sign out",
   "Duke dalë…": "Signing out…",
   "Dalja dështoi. Provo përsëri.": "Sign out failed. Try again.",

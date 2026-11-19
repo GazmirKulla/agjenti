@@ -122,3 +122,19 @@ export async function syncPlanPayment(paymentId: string, userId?: string): Promi
   }
   return outcome;
 }
+
+export type PaymentRecord = { id: string; plan: PaidPlan; amount: number; currency: string; status: PaymentStatus; createdAt: string; paidAt: string | null; periodStart: string | null; periodEnd: string | null };
+/** The payer's own payments, newest first (only the person who pays sees them). */
+export async function loadPaymentHistory(userId: string, limit = 24): Promise<PaymentRecord[]> {
+  const { data, error } = await createServiceSupabase().from("billing_payments")
+    .select("id,plan,amount,currency,status,created_at,paid_at,period_start,period_end").eq("user_id", userId)
+    .order("created_at", { ascending: false }).limit(limit);
+  if (error) throw new BillingError("Pagesat nuk u lexuan.", 503);
+  return (data ?? []).map(row => ({ id: row.id, plan: row.plan as PaidPlan, amount: Number(row.amount), currency: row.currency, status: row.status as PaymentStatus,
+    createdAt: row.created_at, paidAt: row.paid_at, periodStart: row.period_start, periodEnd: row.period_end }));
+}
+/** One paid payment of this payer, for its receipt; null when it is not theirs or not paid. */
+export async function loadPaidPayment(userId: string, paymentId: string): Promise<PaymentRecord | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(paymentId)) return null;
+  return (await loadPaymentHistory(userId, 200)).find(payment => payment.id === paymentId && payment.status === "paid") ?? null;
+}

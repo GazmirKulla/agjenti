@@ -38,7 +38,7 @@ export function ProfilePopover({ base, name, email, compact, onNavigate, links: 
   const links: ProfileLink[] = custom ?? [
     { path: "profile", label: "Profili", icon: "customers" },
     { path: "profile", label: "Cilësimet", icon: "settings" },
-    { path: "billing", label: "Paketa dhe përdorimi", icon: "billing" },
+    { path: "billing", label: "Paketa dhe pagesat", icon: "billing" },
     { path: "preferences#language", label: "Gjuha / Language", icon: "display" },
   ].map(({ path, ...item }) => ({ ...item, href: `${base}/settings/${path}` }));
   return <div ref={root} className={s.profile} onBlur={event => {
