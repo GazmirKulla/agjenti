@@ -1,22 +1,73 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PageHeading, StatCard } from "@/components/dashboard/ui";
+import { PageHeading } from "@/components/dashboard/ui";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { loadCapabilityHealth, type CapabilityHealth } from "@/lib/tracking/health";
+import { capabilityName, exitLabel, groupOf, moduleLabels } from "@/lib/tracking/labels";
 import type { AgentKind } from "@/lib/tracking/capabilities";
+import s from "./health.module.css";
 
 export const metadata = { title: "Shëndeti i Agjentit | Agjenti.app" };
 const periods = [1, 7, 30] as const;
-const agents: Record<AgentKind, string> = { customer: "Agjenti i klientëve", assistant: "Asistenti i biznesit" };
-const percent = (value: number | null) => value === null ? "—" : `${Math.round(value * 100)}%`;
+const agents: Record<AgentKind, { title: string; hint: string }> = {
+  customer: { title: "Agjenti i klientëve", hint: "Bisedat me klientët në Instagram dhe WhatsApp" },
+  assistant: { title: "Asistenti i biznesit", hint: "Kërkesat e pronarëve te paneli" },
+};
 const num = (value: number) => value.toLocaleString("sq-AL");
+const percent = (value: number | null) => value === null ? "—" : `${Math.round(value * 100)}%`;
 const when = (value: string | null) => value ? new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Tirane" }).format(new Date(value)) : "asnjëherë";
-const day = (value: string) => new Intl.DateTimeFormat("sq-AL", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Tirane" }).format(new Date(`${value}T12:00:00Z`));
+const dayShort = (value: string) => new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "short", timeZone: "Europe/Tirane" }).format(new Date(`${value}T12:00:00Z`));
+
+const Legend = ({ handoff = true }: { handoff?: boolean }) => <div className={s.legend} aria-label="Legjenda">
+  <span><i className={`${s.swatch} ${s.success}`} />Shkoi mirë</span>
+  <span><i className={`${s.swatch} ${s.failure}`} />Shkoi keq</span>
+  {handoff && <span><i className={`${s.swatch} ${s.handoff}`} />Te stafi</span>}
+  <span><i className={`${s.swatch} ${s.neutral}`} />Pa gjykim (p.sh. klienti e mbylli vetë)</span>
+</div>;
+
+/** Outcomes as one bar: each segment sized by its count, with the figures as hover text. */
+function OutcomeBar({ item }: { item: Pick<CapabilityHealth, "success" | "failure" | "handoff" | "neutral"> }) {
+  const parts = [["success", item.success, "Mirë"], ["failure", item.failure, "Keq"], ["handoff", item.handoff, "Te stafi"], ["neutral", item.neutral, "Pa gjykim"]] as const;
+  const total = parts.reduce((sum, [, n]) => sum + n, 0);
+  const text = parts.map(([, n, label]) => `${label} ${num(n)}`).join(" · ");
+  return <div className={`${s.bar} ${total ? "" : s.barEmpty}`} title={total ? text : "Asnjë dalje"} role="img" aria-label={total ? text : "Asnjë dalje"}>
+    {parts.filter(([, n]) => n > 0).map(([key, n]) => <i key={key} className={s[key]} style={{ flexGrow: n }} />)}
+  </div>;
+}
+
+/** Stacked daily columns for one agent: good, bad and to staff; hover a day for its figures. */
+function DailyChart({ days, value }: { days: string[]; value: (day: string, outcome: string) => number }) {
+  const W = 720, H = 180, top = 14, bottom = 26, left = 8;
+  const totals = days.map(d => value(d, "success") + value(d, "failure") + value(d, "handoff"));
+  const max = Math.max(1, ...totals);
+  const step = (W - left * 2) / Math.max(days.length, 1), width = Math.min(36, step * 0.6);
+  const y = (n: number) => (H - bottom - top) * n / max;
+  return <svg className={s.chart} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Rezultatet ditë pas dite">
+    <line className="gridline" x1={0} x2={W} y1={top} y2={top} />
+    <text x={W - 4} y={top - 3} textAnchor="end">{num(max)}</text>
+    <line className="axis" x1={0} x2={W} y1={H - bottom} y2={H - bottom} />
+    {days.map((d, i) => {
+      const x = left + i * step + (step - width) / 2;
+      let base = H - bottom;
+      const segments = (["success", "failure", "handoff"] as const).map(outcome => {
+        const height = y(value(d, outcome)); base -= height;
+        return height > 0 ? <rect key={outcome} className={outcome[0]} x={x} y={base + 1} width={width} height={Math.max(height - 2, 1)} rx={3} /> : null;
+      });
+      return <g key={d}>
+        <title>{`${dayShort(d)} · Mirë ${num(value(d, "success"))} · Keq ${num(value(d, "failure"))} · Te stafi ${num(value(d, "handoff"))}`}</title>
+        <rect className="hit" x={left + i * step} y={top} width={step} height={H - bottom - top} />
+        {segments}
+        {(days.length <= 10 || i % Math.ceil(days.length / 10) === 0) && <text x={x + width / 2} y={H - 8} textAnchor="middle">{dayShort(d)}</text>}
+      </g>;
+    })}
+  </svg>;
+}
 
 /**
- * Platform Admin: what the agents did and how it ended, per capability, per day, with the reasons for each
- * failure and example conversations; and which capabilities recorded nothing or are not tracked at all.
+ * Platform Admin: what the agents did and how it ended. Per agent a headline success rate, per day a chart,
+ * per module the capabilities with their outcomes, reasons and example conversations; then the capabilities
+ * that recorded nothing and the ones not tracked at all.
  */
 export default async function AgentHealthPage({ searchParams }: { searchParams: Promise<{ days?: string; business?: string }> }) {
   const user = await getSessionUser();
@@ -30,20 +81,20 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
   const link = (params: Record<string, string | undefined>) => `/admin/health?${new URLSearchParams(Object.entries({ days: String(days), business: business?.id, ...params }).filter((e): e is [string, string] => Boolean(e[1])))}`;
 
   const heading = <PageHeading eyebrow="PLATFORMA" title="Shëndeti i Agjentit"
-    description="Çdo hyrje dhe dalje e aftësive të Agjentit të klientëve dhe të Asistentit: çfarë shkoi mirë, çfarë jo dhe pse. Vetëm bisedat reale, pa Chat Lab." />;
+    description="Çfarë bënë agjentët, si përfundoi dhe pse. Vetëm bisedat reale, pa Chat Lab. Kërkesat që nisin dhe nuk vazhdojnë shënohen “të lëna në mes” pas 24 orësh." />;
   if (!report.available) return <>{heading}<section className="panel section-pad"><p className="muted-copy">Regjistri i aftësive nuk u lexua. Kontrollo që migrimi 20261119140000_capability_events.sql është ekzekutuar.</p></section></>;
 
-  const total = (agent: AgentKind, key: keyof Pick<CapabilityHealth, "entries" | "success" | "failure" | "handoff" | "abandoned">) =>
-    report.health.filter(h => h.agent === agent).reduce((sum, h) => sum + h[key], 0);
-  const days7 = [...new Set(report.daily.map(d => d.day))].sort().reverse();
-  const dayCount = (d: string, agent: AgentKind, outcome: string) => report.daily.filter(r => r.day === d && r.agent === agent && r.outcome === outcome).reduce((s, r) => s + r.events, 0);
+  const sum = (items: CapabilityHealth[], key: "entries" | "success" | "failure" | "handoff" | "neutral" | "abandoned") => items.reduce((n, h) => n + h[key], 0);
+  const allDays = [...new Set(report.daily.map(d => d.day))].sort();
+  const dailyValue = (agent: AgentKind) => (d: string, outcome: string) => report.daily.filter(r => r.day === d && r.agent === agent && r.outcome === outcome).reduce((n, r) => n + r.events, 0);
 
-  return <>
+  return <div className={s.page}>
     {heading}
-    <section className="panel section-pad" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-      <span>Periudha:</span>
-      {periods.map(p => <Link key={p} className={p === days ? "inline-link" : "muted-copy"} href={link({ days: String(p) })}>{p === 1 ? "24 orët e fundit" : `${p} ditët e fundit`}</Link>)}
-      <form action="/admin/health" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <section className={`panel section-pad ${s.filters}`}>
+      <nav className={s.segments} aria-label="Periudha">
+        {periods.map(p => <Link key={p} href={link({ days: String(p) })} aria-current={p === days ? "page" : undefined}>{p === 1 ? "24 orë" : `${p} ditë`}</Link>)}
+      </nav>
+      <form action="/admin/health" className={s.filters}>
         <input type="hidden" name="days" value={days} />
         <select className="field" name="business" defaultValue={business?.id ?? ""} aria-label="Biznesi">
           <option value="">Të gjitha bizneset</option>
@@ -53,53 +104,75 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
       </form>
     </section>
 
+    <div className={s.agents}>
+      {(["customer", "assistant"] as const).map(agent => {
+        const items = report.health.filter(h => h.agent === agent);
+        const success = sum(items, "success"), failure = sum(items, "failure");
+        return <section key={agent} className={`panel section-pad ${s.agent}`} aria-labelledby={`agent-${agent}`}>
+          <div><h2 id={`agent-${agent}`}>{agents[agent].title}</h2><small className="muted-copy">{agents[agent].hint}</small></div>
+          <div className={s.hero}><span className={s.heroValue}>{percent(success + failure ? success / (success + failure) : null)}</span><span className={s.heroLabel}>shkuan mirë, nga ato që mund të shkonin mirë ose keq</span></div>
+          <OutcomeBar item={{ success, failure, handoff: sum(items, "handoff"), neutral: sum(items, "neutral") }} />
+          <div className={s.counts}>
+            <div className={s.count}><strong>{num(sum(items, "entries"))}</strong><span>Të nisura</span></div>
+            <div className={s.count}><strong>{num(success)}</strong><span><i className={`${s.swatch} ${s.success}`} />Mirë</span></div>
+            <div className={s.count}><strong>{num(failure)}</strong><span><i className={`${s.swatch} ${s.failure}`} />Keq</span></div>
+            {agent === "customer" && <div className={s.count}><strong>{num(sum(items, "handoff"))}</strong><span><i className={`${s.swatch} ${s.handoff}`} />Te stafi</span></div>}
+            {agent === "customer" && <div className={s.count}><strong>{num(sum(items, "abandoned"))}</strong><span>Të lëna në mes</span></div>}
+          </div>
+          {allDays.length > 0 && <><h3 className="font-semibold">Ditë pas dite</h3><DailyChart days={allDays} value={dailyValue(agent)} /></>}
+        </section>;
+      })}
+    </div>
+    <Legend />
+
     {(["customer", "assistant"] as const).map(agent => {
-      const items = report.health.filter(h => h.agent === agent).sort((a, b) => (b.failure + b.success + b.entries) - (a.failure + a.success + a.entries));
-      return <section key={agent} className="grid gap-3">
-        <h2>{agents[agent]}</h2>
-        <div className="stats-grid stats-compact">
-          <StatCard label="Hyrje" value={num(total(agent, "entries"))} hint="Aftësi të nisura" icon="spark" />
-          <StatCard label="Shkuan mirë" value={num(total(agent, "success"))} hint="Dalje me sukses" icon="orders" />
-          <StatCard label="Shkuan keq" value={num(total(agent, "failure"))} hint={`Prej tyre të lëna në mes: ${num(total(agent, "abandoned"))}`} icon="history" />
-          {agent === "customer" && <StatCard label="Te stafi" value={num(total(agent, "handoff"))} hint="Biseda të kaluara te një person" icon="inbox" />}
-        </div>
-        {items.length ? <div className="panel section-pad" style={{ overflowX: "auto" }}>
-          <table className="data-table">
-            <thead><tr><th>Aftësia</th><th>Hyrje</th><th>Mirë</th><th>Keq</th><th>Stafi</th><th>Pa gjykim</th><th>Suksesi</th><th>Më parë</th><th>Arsyet kryesore</th></tr></thead>
-            <tbody>{items.map(item => <tr key={item.capability}>
-              <td><strong>{item.label}</strong><br /><small className="muted-copy">{item.capability} · {item.module}</small></td>
-              <td>{num(item.entries)}</td><td>{num(item.success)}</td><td>{num(item.failure)}</td><td>{num(item.handoff)}</td><td>{num(item.neutral)}</td>
-              <td><strong>{percent(item.rate)}</strong></td>
-              <td>{percent(item.previousRate)}{item.rate !== null && item.previousRate !== null && <small className="muted-copy"> ({item.rate >= item.previousRate ? "+" : ""}{Math.round((item.rate - item.previousRate) * 100)})</small>}</td>
-              <td>{item.reasons.length ? <ul className="grid gap-1">{item.reasons.slice(0, 4).map(r => <li key={`${r.point}:${r.reason}`}>
-                <code>{r.point}{r.reason ? ` · ${r.reason}` : ""}</code> × {num(r.events)}
-                {r.examples.map((e, i) => slugOf.get(e.businessId) ? <span key={e.conversationId}> · <Link className="inline-link" href={`/b/${slugOf.get(e.businessId)}/inbox/${e.conversationId}`}>biseda {i + 1}</Link></span> : null)}
-              </li>)}</ul> : <span className="muted-copy">—</span>}</td>
-            </tr>)}</tbody>
-          </table>
-        </div> : <p className="muted-copy">Asnjë ngjarje në këtë periudhë.</p>}
+      const items = report.health.filter(h => h.agent === agent);
+      const groups = [...new Set(items.map(h => groupOf(h.capability, h.module)))].sort((a, b) => (moduleLabels[a] ?? a).localeCompare(moduleLabels[b] ?? b));
+      return <section key={agent} className="panel section-pad grid gap-3">
+        <h2>{agents[agent].title}: aftësitë</h2>
+        {!items.length && <p className="muted-copy">Asnjë ngjarje në këtë periudhë.</p>}
+        {groups.map(group => {
+          const rows = items.filter(h => groupOf(h.capability, h.module) === group).sort((a, b) => (b.success + b.failure + b.handoff + b.neutral) - (a.success + a.failure + a.handoff + a.neutral));
+          return <div key={group} className={s.group}>
+            <div className={s.groupTitle}><h3>{moduleLabels[group] ?? group}</h3><small>{rows.length} {rows.length === 1 ? "aftësi" : "aftësi"}</small></div>
+            {rows.map(item => <div key={item.capability} className={s.row}>
+              <div className={s.name}><strong>{capabilityName(item.capability, item.label)}</strong>
+                <small>{num(item.entries)} të nisura · {num(item.success)} mirë · {num(item.failure)} keq{item.handoff ? ` · ${num(item.handoff)} te stafi` : ""}{item.neutral ? ` · ${num(item.neutral)} pa gjykim` : ""}</small></div>
+              <OutcomeBar item={item} />
+              <div className={s.rate}><strong>{percent(item.rate)}</strong>
+                <small>{item.previousRate === null ? "pa krahasim" : item.rate === null ? `më parë ${percent(item.previousRate)}` : `${item.rate >= item.previousRate ? "▲" : "▼"} ${Math.abs(Math.round((item.rate - item.previousRate) * 100))} pikë`}</small></div>
+              {item.reasons.length > 0 && <div className={s.reasons}>{item.reasons.slice(0, 5).map(r => <span key={`${r.point}:${r.reason}`} className={s.reason}>
+                {exitLabel(r.point, r.reason)} <strong>× {num(r.events)}</strong>
+                {r.examples.map((e, i) => slugOf.get(e.businessId) ? <Link key={e.conversationId} href={`/b/${slugOf.get(e.businessId)}/inbox/${e.conversationId}`}>biseda {i + 1}</Link> : null)}
+              </span>)}</div>}
+            </div>)}
+          </div>;
+        })}
       </section>;
     })}
 
-    <section className="panel section-pad grid gap-2">
-      <h2>Ditë pas dite</h2>
-      {days7.length ? <table className="data-table">
-        <thead><tr><th>Dita</th><th>Klientët: mirë</th><th>Klientët: keq</th><th>Klientët: te stafi</th><th>Asistenti: mirë</th><th>Asistenti: keq</th></tr></thead>
-        <tbody>{days7.map(d => <tr key={d}><td>{day(d)}</td><td>{num(dayCount(d, "customer", "success"))}</td><td>{num(dayCount(d, "customer", "failure"))}</td>
-          <td>{num(dayCount(d, "customer", "handoff"))}</td><td>{num(dayCount(d, "assistant", "success"))}</td><td>{num(dayCount(d, "assistant", "failure"))}</td></tr>)}</tbody>
-      </table> : <p className="muted-copy">Asnjë ngjarje në këtë periudhë.</p>}
-    </section>
-
-    <section className="panel section-pad grid gap-2">
+    <section className="panel section-pad grid gap-3">
       <h2>Pa të dhëna në këtë periudhë · {report.silent.length}</h2>
-      <p className="muted-copy">Aftësi që ekzistojnë dhe ndiqen, por nuk regjistruan asnjë ngjarje. Mund të mos jenë përdorur, ose diçka i pengon.</p>
-      <ul className="grid gap-1">{report.silent.map(s => <li key={s.capability}>{s.label} <small className="muted-copy">· {agents[s.agent]} · {s.capability} · e fundit: {when(s.lastAt)}</small></li>)}</ul>
+      <p className="muted-copy">Aftësi që ndiqen, por nuk regjistruan asnjë ngjarje. Mund të mos jenë përdorur, ose diçka i pengon. Hap një grup për t’i parë.</p>
+      {(["customer", "assistant"] as const).map(agent => {
+        const silent = report.silent.filter(x => x.agent === agent);
+        if (!silent.length) return null;
+        const groups = [...new Set(silent.map(x => groupOf(x.capability, x.module)))].sort((a, b) => (moduleLabels[a] ?? a).localeCompare(moduleLabels[b] ?? b));
+        return <div key={agent} className="grid gap-2"><h3 className="font-semibold">{agents[agent].title} · {silent.length}</h3>
+          {groups.map(group => {
+            const list = silent.filter(x => groupOf(x.capability, x.module) === group);
+            return <details key={group} className={s.silentGroup}><summary>{moduleLabels[group] ?? group} · {list.length}</summary>
+              <div className={s.chips}>{list.map(x => <span key={x.capability} className={s.chip} title={x.capability}>{capabilityName(x.capability, x.label)} · e fundit: {when(x.lastAt)}</span>)}</div>
+            </details>;
+          })}
+        </div>;
+      })}
     </section>
 
     <section className="panel section-pad grid gap-2">
       <h2>Pa ndjekje · {report.untracked.length}</h2>
       <p className="muted-copy">Aftësi që kodi i njeh, por që nuk regjistrojnë hyrje dhe dalje. Testi i mbulimit dështon kur shtohet një aftësi e re pa ndjekje, ndaj kjo listë duhet të mbetet bosh.</p>
-      {report.untracked.length ? <ul>{report.untracked.map(u => <li key={u.capability}>{u.label} <small className="muted-copy">· {u.capability}</small></li>)}</ul> : <p>Të gjitha aftësitë ndiqen.</p>}
+      {report.untracked.length ? <div className={s.chips}>{report.untracked.map(u => <span key={u.capability} className={s.chip}>{capabilityName(u.capability, u.label)}</span>)}</div> : <p>✓ Të gjitha aftësitë ndiqen.</p>}
     </section>
-  </>;
+  </div>;
 }

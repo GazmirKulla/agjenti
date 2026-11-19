@@ -1,0 +1,66 @@
+/* Outcome colours use the app's status tokens (they follow light and dark mode); every colour is paired
+   with a label in the legend, the row figures and the hover text, never colour alone. */
+.page { display: grid; gap: 20px; }
+.filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.segments { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; }
+.segments a { padding: 6px 12px; border-radius: 999px; color: var(--ink-muted); text-decoration: none; font-size: 13px; }
+.segments a[aria-current="page"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+
+.agents { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.agent { display: grid; gap: 14px; }
+.hero { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.heroValue { font-size: 40px; font-weight: 700; line-height: 1; color: var(--ink); }
+.heroLabel { color: var(--ink-muted); font-size: 14px; }
+.counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
+.count { display: grid; gap: 2px; }
+.count strong { font-size: 18px; color: var(--ink); }
+.count span { font-size: 12px; color: var(--ink-muted); display: inline-flex; align-items: center; gap: 6px; }
+
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.success { background: var(--success); }
+.failure { background: var(--danger); }
+.handoff { background: var(--warning); }
+.neutral { background: var(--line-strong); }
+
+/* One bar per capability: segments sized by count, a 2px surface gap between them, rounded ends. */
+.bar { display: flex; gap: 2px; height: 10px; border-radius: 4px; overflow: hidden; background: var(--line); min-width: 120px; }
+.bar > i { display: block; height: 100%; min-width: 3px; }
+.barEmpty { opacity: .5; }
+
+.group { display: grid; gap: 4px; }
+.groupTitle { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 6px 0 4px; }
+.groupTitle h3 { font-size: 15px; font-weight: 600; margin: 0; }
+.groupTitle small { color: var(--ink-muted); }
+.row { display: grid; grid-template-columns: minmax(180px, 1.4fr) minmax(140px, 1fr) 72px; gap: 14px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); }
+.row + .row { margin-top: 4px; }
+.name { display: grid; gap: 2px; min-width: 0; }
+.name strong { font-size: 14px; color: var(--ink); }
+.name small { color: var(--ink-muted); font-size: 12px; }
+.rate { text-align: right; display: grid; gap: 2px; }
+.rate strong { font-size: 16px; color: var(--ink); }
+.rate small { font-size: 11px; color: var(--ink-muted); }
+.reasons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.reason { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); }
+.reason a { color: var(--accent); text-decoration: none; font-weight: 600; }
+
+/* Daily chart: stacked columns, recessive baseline, labels in ink tokens. */
+.chart { width: 100%; height: auto; display: block; }
+.chart text { fill: var(--ink-muted); font-size: 11px; }
+.chart :global(.axis) { stroke: var(--line-strong); stroke-width: 1; }
+.chart :global(.gridline) { stroke: var(--line); stroke-width: 1; }
+.chart rect:global(.s) { fill: var(--success); }
+.chart rect:global(.f) { fill: var(--danger); }
+.chart rect:global(.h) { fill: var(--warning); }
+.chart rect:global(.hit) { fill: transparent; }
+.chart g:hover rect:global(.hit) { fill: var(--line); opacity: .35; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px dashed var(--line-strong); color: var(--ink-muted); }
+.silentGroup summary { cursor: pointer; padding: 6px 0; }
+
+@media (max-width: 640px) {
+  .row { grid-template-columns: 1fr 64px; }
+  .row .bar { grid-column: 1 / -1; grid-row: 2; }
+}
