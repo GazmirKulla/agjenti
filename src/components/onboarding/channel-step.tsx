@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { Icon } from "@/components/dashboard/icon";
+import { ConversationTraining } from "@/components/training/conversation-training";
 import { launchBusiness } from "@/lib/setup/actions";
 import type { Readiness } from "@/lib/setup/readiness";
 
@@ -66,6 +67,12 @@ export function ChannelStep({ slug, businessId, readiness, justConnected }: { sl
             {readiness?.blocked && <p className="onboarding-hint">Ende mungon: {readiness.blocked}</p>}
           </div>
         )}
+        {/* The third source: the business's own past conversations, imported and reviewed before anything is learned. */}
+        <details className="onboarding-found-question">
+          <summary><strong>Mëso nga bisedat e vjetra</strong> <span className="onboarding-hint">(opsionale)</span></summary>
+          <p className="onboarding-hint">{connected ? "Agjenti lexon bisedat e mëparshme nga kanali i lidhur, ose një eksport nga Instagram-i," : "Ngarko një eksport bisedash nga Instagram-i, ose lidh kanalin dhe merri prej andej,"} dhe të propozon çfarë të mësojë: si shkruan ti, çfarë pyesin klientët dhe çfarë u përgjigjesh. Asgjë nuk ruhet pa e shqyrtuar ti.</p>
+          <ConversationTraining slug={slug} />
+        </details>
         {error && <p className="onboarding-error" role="alert">{error}</p>}
 
         <div className="onboarding-actions">

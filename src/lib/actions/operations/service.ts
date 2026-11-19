@@ -1,4 +1,9 @@
 import { loadSetupStatus } from "@/lib/setup/status";
+import { after } from "next/server";
+import { businessSources, refreshBusinessSources } from "@/lib/knowledge/source-refresh";
+import { workerOrigin } from "@/lib/discovery/continue";
+import { startInbox } from "@/lib/conversation-training/sessions";
+import { continueTraining } from "@/lib/conversation-training/continue";
 import { customProcessRefusal } from "@/lib/business-assistant/custom-process-policy";
 import { setupGateMessage } from "@/lib/setup/model";
 import { executeAgentTestTurn } from "@/lib/agents/test-chat/execute-turn";
@@ -121,6 +126,16 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     snapshot = await prepareManagedAgent(businessId, input);
     subject = String((snapshot.values as Record<string, unknown>).name);
   } else if (operation === "booking.sync") snapshot = await record(businessId, "bookings", input.id, "id,customer_name,revision,sync_status");
+  else if (operation === "sources.refresh") {
+    const sources = await businessSources(businessId);
+    if (!sources.website && !sources.instagram && !sources.connectedInstagram) throw new OperationError("Biznesi nuk ka ende burime. Shto Instagram-in ose website-in te Njohuritë.");
+    snapshot = { website: sources.website, instagram: sources.instagram ?? (sources.connectedInstagram ? "i lidhur" : null) };
+    subject = [sources.website, sources.instagram && `@${sources.instagram}`].filter(Boolean).join(" · ") || "Instagram i lidhur";
+  } else if (operation === "conversations.learn") {
+    if (input.days !== undefined && ![30, 90, 180].includes(input.days as number)) throw new OperationError("Zgjidh 30, 90 ose 180 ditët e fundit.");
+    snapshot = { days: input.days ?? 90 };
+    subject = `Bisedat e ${input.days ?? 90} ditëve të fundit`;
+  }
   else if (operation === "training.save") {
     validateTrainingInput(input as TrainingInput);
     if (input.id) snapshot = await record(businessId, "agent_training_memories", input.id, "id,instruction,revision");
@@ -258,7 +273,15 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
   } else if (key === "calendar.settings") return saveCalendarConfiguration(businessId, userId, before as Awaited<ReturnType<typeof prepareCalendarConfiguration>>);
   else if (key === "agent.communication") return saveCommunicationConfiguration(businessId, userId, before as Awaited<ReturnType<typeof prepareCommunicationConfiguration>>);
   else if (key === "agent.manage") return saveManagedAgent(businessId, userId, before as Awaited<ReturnType<typeof prepareManagedAgent>>);
-  else if (key === "booking.sync") {
+  else if (key === "sources.refresh") {
+    const queued = await refreshBusinessSources(businessId, userId, workerOrigin(null));
+    if (!queued.website && !queued.instagram) throw new OperationError("Burimet nuk u rilexuan. Provo nga Njohuritë → Nga ku mëson Agjenti.");
+    return { message: "Rifreskimi nisi. Çfarë është e re ose ndryshe do të shfaqet te Njohuritë si propozim për ta shqyrtuar.", path: "knowledge" };
+  } else if (key === "conversations.learn") {
+    await startInbox(businessId, userId, { days: input.days ?? 90 });
+    try { after(() => continueTraining(businessId, workerOrigin(null))); } catch { void continueTraining(businessId, workerOrigin(null)); }
+    return { message: "Leximi i bisedave nisi. Sugjerimet do të shfaqen te Agjenti → Trajno nga bisedat, ku i shqyrton një nga një.", path: "agents/training" };
+  } else if (key === "booking.sync") {
     const current = await record(businessId, "bookings", input.id, "id,revision");
     if (current.revision !== before.revision) throw Error("Rezervimi ndryshoi. Rishqyrto sinkronizimin.");
     await syncBooking(businessId, String(input.id));

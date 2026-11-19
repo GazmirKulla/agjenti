@@ -1,4 +1,5 @@
 import { prompt } from "@/lib/ai/prompts/files";
+import { knowledgeSource } from "@/lib/knowledge/context";
 import OpenAI from "@/lib/ai/openai";
 import { modelFor } from "@/lib/agents/generate";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -87,7 +88,7 @@ export async function applyInstructionSplit(businessId: string, userId: string, 
   const same = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
   const fresh = split.facts.filter((fact) => !(existing ?? []).some((row) => same(row.title, fact.title) && same(row.body, fact.body)));
   if (fresh.length) {
-    const { error } = await db.from("knowledge_entries").insert(fresh.map((fact) => ({ business_id: businessId, title: fact.title, body: fact.body, is_active: true })));
+    const { error } = await db.from("knowledge_entries").insert(fresh.map((fact) => ({ business_id: businessId, title: fact.title, body: fact.body, is_active: true, format: "markdown", source: knowledgeSource("instructions") })));
     if (error) throw Error("Njohuritë nuk u ruajtën. Udhëzimet mbetën të pandryshuara.");
   }
   // Same path as the editor: a draft, then its publication, so history keeps the old version.

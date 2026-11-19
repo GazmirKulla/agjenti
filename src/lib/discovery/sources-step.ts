@@ -275,7 +275,7 @@ export async function reviewSources(businessId: string, userId: string, keep: un
   const db = createServiceSupabase();
   // Only entries still waiting in this business's proposal can be edited here.
   for (const edit of changes) {
-    const { error } = await db.from("knowledge_entries").update({ title: edit.title, body: edit.body, updated_at: new Date().toISOString() })
+    const { error } = await db.from("knowledge_entries").update({ title: edit.title, body: edit.body, updated_at: new Date().toISOString(), owner_edited_at: new Date().toISOString() })
       .eq("id", edit.id).eq("business_id", businessId).eq("is_active", false);
     if (error) throw new SourcesError("Ndryshimet nuk u ruajtën. Provo përsëri.");
   }

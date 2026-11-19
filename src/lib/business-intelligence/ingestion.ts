@@ -1,4 +1,5 @@
 import { fetchPublicInstagram, PUBLIC_POST_LIMIT } from "@/lib/instagram/public-profile";
+import { htmlToStructuredText } from "./structured-text";
 import { fetchPublicPage } from "@/lib/products/import-url";
 import { extractProductFromHtml } from "@/lib/products/page-extract";
 import { fetchInstagramMedia, type InstagramPost } from "@/lib/instagram/media";
@@ -57,16 +58,11 @@ export async function extractWebsite(url: string, purpose: "catalog" | "onboardi
   const captured = pages
     .map((page, index) => {
       const product = purpose === "catalog" ? extractProductFromHtml(page.body, page.url) : null;
-      const plain = page.body
-        .replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;|&#160;/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 11000);
+      // Headings, lists and price tables keep their shape, so what is learned keeps the page's structure.
+      const structured = htmlToStructuredText(page.body).slice(0, 11000);
+      const plain = structured.replace(/\s+/g, " ");
       const title = page.body.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-      return { text: `URL: ${page.url}\n${plain}\n${product ? JSON.stringify(product) : ""}`, preview: { id: `page-${index}`, title: (title || product?.name || `${new URL(page.url).hostname}${new URL(page.url).pathname}`).slice(0, 120), excerpt: plain.slice(0, 180), imageUrl: null } };
+      return { text: `URL: ${page.url}\n${structured}\n${product ? JSON.stringify(product) : ""}`, preview: { id: `page-${index}`, title: (title || product?.name || `${new URL(page.url).hostname}${new URL(page.url).pathname}`).slice(0, 120), excerpt: plain.slice(0, 180), imageUrl: null } };
     });
   const text = captured.map(page => page.text).join("\n\n").slice(0, 65000);
   return {

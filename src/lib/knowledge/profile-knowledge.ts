@@ -1,4 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { knowledgeSource } from "./context";
 
 /** The business profile lives in Knowledge: what the owner told us during
  * onboarding (or later to the assistant) becomes entries the agent reads in
@@ -43,7 +44,7 @@ export async function syncProfileKnowledge(businessId: string, details: unknown)
     if (current && current.body.trim() === entry.body) continue;
     const result = current
       ? await db.from("knowledge_entries").update({ body: entry.body, updated_at: new Date().toISOString() }).eq("id", current.id).eq("business_id", businessId)
-      : await db.from("knowledge_entries").insert({ business_id: businessId, title: entry.title, body: entry.body, intent_key: entry.intentKey, is_active: true });
+      : await db.from("knowledge_entries").insert({ business_id: businessId, title: entry.title, body: entry.body, intent_key: entry.intentKey, is_active: true, source: knowledgeSource("profile") });
     if (result.error) throw new Error("profile_knowledge_failed");
     written++;
   }

@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { knowledgeSource } from "@/lib/knowledge/context";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { executeOperation, prepareOperation } from "@/lib/actions/operations/service";
 import { operationActor } from "@/lib/actions/operations/access";
@@ -51,6 +52,9 @@ const text = (row: ApplyRow, edited: keyof Edit, proposed: string) => String((ro
 async function knowledge(businessId: string, userId: string, row: ApplyRow, title: string, body: string) {
   const update = row.target_table === "knowledge_entries" && row.target_id && row.operation !== "create";
   const result = await run(businessId, userId, row.id, "knowledge", "knowledge.save", update ? { id: row.target_id, title, body } : { title, body, is_active: true });
+  // Learned from the business's own conversations: say so on the new entry.
+  if (!update) await createServiceSupabase().from("knowledge_entries").update({ source: knowledgeSource("conversation") })
+    .eq("business_id", businessId).eq("id", result.id ?? operationId(row.id, "knowledge"));
   return { table: "knowledge_entries", id: update ? row.target_id : result.id ?? operationId(row.id, "knowledge"), message: update ? `U përditësua njohuria «${title}».` : `U shtua njohuria «${title}».` };
 }
 

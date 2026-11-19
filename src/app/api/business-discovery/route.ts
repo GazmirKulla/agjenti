@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { refreshBusinessSources } from "@/lib/knowledge/source-refresh";
 import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -86,6 +87,11 @@ async function handlePOST(request: Request) {
     const { user, business } = await authorize(request);
     const body = await readBody(request);
     if (body.action === "resume") { wake(business.id, request); return json({ success: "Analiza vazhdon në background." }); }
+    if (body.action === "refresh_sources") {
+      const queued = await refreshBusinessSources(business.id, user.id, workerOrigin(new URL(request.url).origin));
+      if (!queued.website && !queued.instagram) return json({ error: "Nuk ka burime për të rifreskuar. Shto Instagram-in ose website-in." }, 400);
+      return json({ success: "Rifreskimi nisi. Çfarë është e re ose ndryshe të shfaqet si propozim për ta shqyrtuar; njohuritë e tua nuk mbishkruhen.", queued });
+    }
     if (body.action === "instagram_username") {
       const result = await saveInstagramUsername(business.id, user.id, body.username);
       if ("error" in result) return json({ error: result.error }, 400);

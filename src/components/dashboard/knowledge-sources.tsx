@@ -83,7 +83,10 @@ export function KnowledgeSources({ slug }: { slug: string }) {
     <section className="knowledge-sources" aria-labelledby="knowledge-sources-title">
       <header>
         <h2 id="knowledge-sources-title">Nga ku mëson Agjenti</h2>
-        <p>Agjenti lexon Instagram-in dhe website-in e biznesit dhe i shton njohuritë këtu. Ndryshimet që bën ti nuk mbishkruhen.</p>
+        <p>Agjenti lexon Instagram-in dhe website-in e biznesit dhe i shton njohuritë këtu. Ndryshimet që bën ti nuk mbishkruhen.
+          Çdo javë, për bizneset aktive, burimet rilexohen vetë; çfarë është e re ose ndryshe të vjen si propozim.</p>
+        <button type="button" className="btn btn-ghost" disabled={busy}
+          onClick={() => void post({ action: "refresh_sources" }, "Rifreskimi nisi. Çfarë është e re ose ndryshe do të shfaqet si propozim për ta shqyrtuar.")}>Rifresko burimet</button>
       </header>
       {review && <SourcesReview slug={slug} review={review} onDone={(published) => {
         setReview(null);

@@ -15,6 +15,7 @@ import { rebuildProfileFromModules } from "@/lib/dashboard/profile/generate";
 import { discoveryTextBatch } from "./text-batches";
 import { onboardingProcess } from "./process-starter";
 import { oneEntryPerTitle, reorganizeKnowledge } from "./reorganize";
+import { markWebsiteKnowledge } from "@/lib/knowledge/source-check";
 
 type Checkpoint = {
   text?: string; reference?: string; note?: string; website?: string | null;
@@ -162,6 +163,8 @@ export async function processDiscoveryStep(job: Job) {
       return checkpoint(job, { ...data, organizeTried: true, ...(organized ? { organized } : {}) }, "finish");
     }
     // Knowledge waits inactive; the panel, agent and process wait for the owner.
+    // The website read again: mark what it no longer says (the owner decides what to do with it).
+    if (job.source === "website") await markWebsiteKnowledge(job.business_id, data.text ?? "").catch(() => undefined);
     const proposal = await db.rpc("finish_discovery_review", { p_job: job.id, p_lease: job.lease_token, p_revision: state.revision, p_draft: draft, p_signals: signals, p_knowledge: oneEntryPerTitle(data.organized ?? knowledge), p_review: { profile: setup.profile, agent: setup.agent, process } });
     if (proposal.error) throw new Error(["PGRST202", "42883"].includes(proposal.error.code) ? "scan_migration_required" : proposal.error.message);
     if (!proposal.data) return checkpoint(job, data, "finish");

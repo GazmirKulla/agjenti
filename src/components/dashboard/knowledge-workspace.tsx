@@ -1,4 +1,6 @@
 import { createKnowledgeEntry } from "@/lib/knowledge/commands";
+import { knowledgeSource, knowledgeSourceLabel } from "@/lib/knowledge/context";
+import { KnowledgeText, knowledgePreview } from "@/components/knowledge/knowledge-text";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { PageHeading } from "@/components/dashboard/ui";
@@ -40,7 +42,7 @@ export async function KnowledgeWorkspace({
   const db = createServiceSupabase();
   const { data: entries, error: loadError } = await db
     .from("knowledge_entries")
-    .select("id,title,body,intent_key,is_active,updated_at")
+    .select("id,title,body,intent_key,is_active,updated_at,format,source,owner_edited_at")
     .eq("business_id", access.business.id)
     .order("sort_order");
   const visibleEntries = services
@@ -92,9 +94,9 @@ export async function KnowledgeWorkspace({
       if (typeof entry.question !== "string" || typeof entry.answer !== "string" || !entry.question.trim()) continue;
       const values = { title: entry.question.trim(), body: entry.answer, intent_key: entry.intent_key === "service" ? null : entry.intent_key, sort_order: entry.sort_order ?? 0 };
       const existing = byTitle.get(values.title.toLocaleLowerCase());
-      if (existing) await db.from("knowledge_entries").update({ ...values, updated_at: new Date().toISOString() }).eq("id", existing).eq("business_id", acc.business.id).throwOnError();
+      if (existing) await db.from("knowledge_entries").update({ ...values, format: "markdown", updated_at: new Date().toISOString(), owner_edited_at: new Date().toISOString() }).eq("id", existing).eq("business_id", acc.business.id).throwOnError();
       else {
-        const { data: created } = await db.from("knowledge_entries").insert({ business_id: acc.business.id, ...values }).select("id").single().throwOnError();
+        const { data: created } = await db.from("knowledge_entries").insert({ business_id: acc.business.id, ...values, format: "markdown", source: knowledgeSource("owner") }).select("id").single().throwOnError();
         if (created) byTitle.set(values.title.toLocaleLowerCase(), created.id);
       }
     }
@@ -157,7 +159,7 @@ export async function KnowledgeWorkspace({
         records={visibleEntries.map((e) => ({
           id: e.id,
           title: e.title,
-          subtitle: e.body,
+          subtitle: knowledgePreview(e.body),
           badge: (
             <span key={e.id} className={`status-badge ${e.is_active ? "status-connected" : "status-paused"}`}>
               {e.is_active ? "Aktive" : "Joaktive"}
@@ -170,16 +172,22 @@ export async function KnowledgeWorkspace({
               <div className="detail-header">
                 <div>
                   <h2>{e.title}</h2>
-                  <p>{knowledgeOrigin(e.intent_key, services)}</p>
+                  <p>{services || !e.source ? knowledgeOrigin(e.intent_key, services) : knowledgeSourceLabel(e.source, e.owner_edited_at)}</p>
                 </div>
                 {!services && <OperationButton slug={slug} operation="knowledge.delete" input={{ id: e.id }}>Fshi njohurinë</OperationButton>}
               </div>
               {!e.is_active && <p className="knowledge-inactive-note">Kjo njohuri nuk përdoret nga Agjenti. Kontrolloje dhe aktivizoje kur është e saktë.</p>}
+              <div className="detail-block grid gap-2">
+                <small className="muted-copy">Si e lexon Agjenti</small>
+                <KnowledgeText text={e.body} format={e.format} />
+                {typeof e.source?.evidence === "string" && <details><summary className="muted-copy">Teksti në burim</summary><blockquote className="muted-copy" style={{ whiteSpace: "pre-wrap" }}>{e.source.evidence}</blockquote></details>}
+              </div>
               <ActionForm action={saveKnowledgeEntry.bind(null, slug)} className="grid gap-4 detail-block">
                 <input type="hidden" name="id" value={e.id} />
                 <input type="hidden" name="updated_at" value={e.updated_at} />
                 <label className="form-label">Titulli<input name="title" className="field" defaultValue={e.title} required maxLength={500} /></label>
-                <label className="form-label">Përmbajtja<textarea name="body" className="field" rows={10} defaultValue={e.body} required maxLength={8000} /></label>
+                <label className="form-label">Përmbajtja<textarea name="body" className="field" rows={10} defaultValue={e.body} required maxLength={8000} />
+                  <small className="muted-copy">Listat me “- ”, hapat me “1. ”, tabelat me “| … |”. Agjenti i lexon siç i shkruan.</small></label>
                 <label className="toggle-label knowledge-active-toggle">
                   <span>
                     Përdore në përgjigjet e Agjentit

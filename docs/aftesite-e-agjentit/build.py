@@ -11,7 +11,7 @@ Y,P,N="po","pjes","jo"
 customer=[
  ("Bisedat",[(Y,"Përgjigje automatike 24/7"),(Y,"Bashkon disa mesazhe të njëpasnjëshme"),(Y,"Postime, reels dhe story të shpërndara: lexon përshkrimin"),(P,"Fotot që dërgon klienti: i ruan për porosinë, por nuk i shikon"),(N,"Mesazhet zanore dhe videot e klientit"),(Y,"Përgjigjet në gjuhën e klientit"),(Y,"Ndalet kur ndërhyn stafi"),(Y,"Reagime me emoji"),(Y,"Kalimi te stafi: automatik kur klienti kërkon një person; mesazhin për klientin e cakton pronari te Komunikimi"),(N,"Kupton vetë kur klienti është i pakënaqur dhe i duhet njeri"),(N,"Jashtë orarit, i thotë klientit kur do t'i përgjigjet stafi"),(N,"Komentet në postime: përgjigje ose mesazh privat në DM")]),
  ("Fushatat",[(Y,"Kupton “dua / s'dua oferta”, me evidencë nga mesazhi"),(Y,"Përgjigjet për ofertën e fushatës")]),
- ("Njohuritë",[(Y,"Përgjigje nga njohuritë"),(Y,"Profili i biznesit: orari, adresa, kontakti"),(Y,"“Nuk e di, po të lidh me stafin”: kalim automatik te stafi")]),
+ ("Njohuritë",[(Y,"Përgjigje nga njohuritë"),(Y,"Njohuritë ruajnë formën (lista, tabela) dhe burimin nga erdhën"),(Y,"Profili i biznesit: orari, adresa, kontakti"),(Y,"“Nuk e di, po të lidh me stafin”: kalim automatik te stafi")]),
  ("Katalogët (PDF)",[(Y,"Përgjigje nga dokumentet"),(Y,"Jep lidhjen e dokumentit"),(P,"Lidh faqen e katalogut me produktin")]),
  ("Klientët",[(Y,"Mban mend emrin, telefonin dhe adresën"),(Y,"Njeh klientin që kthehet"),(P,"Përditëson të dhënat kur klienti i ndryshon")]),
  ("Produktet",[(Y,"Emri, çmimi, detajet, variantet"),(Y,"Numëron, gjen më të lirin dhe më të shtrenjtin"),(Y,"Dërgon foton e produktit"),(Y,"Gjendja e stokut"),(Y,"Njeh produktin nga një postim i shpërndarë"),(P,"Gjen produktin sipas nevojës: vetëm 20 më të përshtatshmit, pa filtër çmimi, jo përtej 1000 produkteve"),(P,"Sugjeron alternativa: vetëm kur produkti ka mbaruar"),(N,"Sugjeron produkte shtesë që shkojnë me zgjedhjen (sipas cilësimit të biznesit)"),(N,"Lidhja drejt faqes së produktit")]),
@@ -37,7 +37,7 @@ business=[
  ("Klientët",[(Y,"Kërko klientë"),(N,"Ndrysho klientin"),(N,"Fshi klientin")]),
  ("Leads",[(Y,"Numrat te përmbledhja"),(N,"Ndrysho statusin e lead-it"),(N,"Rregullat e lead-eve")]),
  ("Fushatat",[(N,"Krijo dhe dërgo fushatë (vetëm pronari, me konfirmim)")]),
- ("Burimet dhe Onboarding",[(Y,"Pyetjet e profilit të biznesit në bisedë"),(N,"Rifreskon njohuritë nga Instagram-i dhe faqja e biznesit"),(N,"Mëson nga bisedat e vjetra (importi i bisedave)")]),
+ ("Burimet dhe Onboarding",[(Y,"Pyetjet e profilit të biznesit në bisedë"),(Y,"Rifreskon njohuritë nga Instagram-i dhe faqja e biznesit, si propozim për shqyrtim"),(Y,"Mëson nga bisedat e vjetra (importi i bisedave), me shqyrtim nga pronari")]),
  ("Integrimet",[(N,"Lidh faqen ose katalogun e jashtëm (kredenciale)")]),
  ("Pagesat dhe Ekipi",[(N,"Abonimi dhe pagesat"),(N,"Anëtarët dhe ftesat")]),
  ("Kanalet",[(N,"Lidh ose shkëput Instagram/WhatsApp (OAuth)")]),
