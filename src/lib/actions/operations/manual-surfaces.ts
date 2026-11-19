@@ -30,6 +30,7 @@ export const manualSurfaces = {
   "src/app/b/[slug]/agents/page.tsx#configure": {"operation": "agent.communication"},
   "src/lib/agents/handoff-actions.ts#saveHandoffMessage": {"operation": "agent.communication"},
   "src/lib/agents/behavior-actions.ts#saveAgentBehavior": {"operation": "agent.behavior"},
+  "src/lib/billing/actions.ts#payWithPok": {"exception": "The person who pays the plan pays on POK's own page; the plan changes only after the server confirms the order with POK. Never through the Assistant or the customer agent."},
   "src/lib/team/actions.ts#inviteTeamMember": {"exception": "Team membership and invitations are managed in Platform Admin → Bizneset → Ekipi (owner or platform administrator, enforced in SQL; a business keeps at least one owner); never through the Assistant or the customer agent."},
   "src/lib/team/actions.ts#revokeTeamInvitation": {"exception": "Team membership and invitations are managed in Platform Admin → Bizneset → Ekipi (owner or platform administrator, enforced in SQL; a business keeps at least one owner); never through the Assistant or the customer agent."},
   "src/lib/team/actions.ts#removeTeamMember": {"exception": "Team membership and invitations are managed in Platform Admin → Bizneset → Ekipi (owner or platform administrator, enforced in SQL; a business keeps at least one owner); never through the Assistant or the customer agent."},

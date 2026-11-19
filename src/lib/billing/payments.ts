@@ -97,6 +97,45 @@ export async function startPlanPayment(userId: string, plan: PaidPlan) {
   }
 }
 
+/** Only POK's own https page is followed; anything else is refused. */
+export function pokPageUrl(value: unknown, prefill: { email?: string | null }) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !(url.hostname === "pokpay.io" || url.hostname.endsWith(".pokpay.io"))) return null;
+    url.searchParams.set("language", "AL");
+    if (prefill.email) url.searchParams.set("email", prefill.email);
+    return url.href;
+  } catch { return null; }
+}
+
+/**
+ * One month of the plan paid on POK's own payment page: the order carries where POK sends the payer back
+ * (paid or failed). The return only triggers a check with POK (syncPlanPayment); it never counts as paid.
+ */
+export async function startHostedPayment(userId: string, plan: PaidPlan, returnPath: string, email?: string | null) {
+  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  if (!base?.startsWith("https://") || !returnPath.startsWith("/")) throw new BillingError("Adresa e aplikacionit nuk është konfiguruar për pagesat.", 503);
+  const amount = plans[plan].monthlyPrice;
+  const db = createServiceSupabase();
+  const { data: payment, error } = await db.from("billing_payments")
+    .insert({ user_id: userId, plan, amount, currency: PAYMENT_CURRENCY, environment: pokEnvironment() })
+    .select("id").single();
+  if (error || !payment) throw new BillingError("Pagesa nuk u nis. Provo përsëri.", 500);
+  const back = (outcome: string) => `${base}${returnPath}${returnPath.includes("?") ? "&" : "?"}payment=${payment.id}&return=${outcome}`;
+  try {
+    const order = await createOrder({ amount, currencyCode: PAYMENT_CURRENCY, description: `Agjenti — paketa ${plans[plan].name}, 1 muaj`,
+      reference: payment.id, webhookUrl: webhookUrl(payment.id), redirectUrl: back("paid"), failRedirectUrl: back("failed") });
+    await db.from("billing_payments").update({ pok_order_id: order.id }).eq("id", payment.id);
+    const page = pokPageUrl(order._self?.confirmUrl, { email });
+    if (!page) throw new BillingError("POK nuk ktheu faqen e pagesës. Provo përsëri.", 502);
+    return { paymentId: payment.id as string, url: page };
+  } catch (cause) {
+    await db.from("billing_payments").update({ status: "failed" }).eq("id", payment.id);
+    throw cause instanceof PokError ? new BillingError(cause.message, cause.status) : cause;
+  }
+}
+
 /** Asks POK for the order's real state and records it. Neither the browser nor
  * the webhook body is trusted; both only trigger this check. */
 export async function syncPlanPayment(paymentId: string, userId?: string): Promise<PaymentStatus> {

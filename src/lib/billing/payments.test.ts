@@ -23,3 +23,14 @@ describe("orderOutcome", () => {
     expect(orderOutcome(payment, order({ expiresAt: "2026-01-03T00:00:00Z" }), Date.parse("2026-01-02T00:00:00Z"))).toBe("pending");
   });
 });
+
+import { pokPageUrl } from "./payments";
+describe("POK's own payment page", () => {
+  it("follows only POK's https page, in Albanian, with the payer's email", () => {
+    expect(pokPageUrl("https://pay-staging.pokpay.io/sdk-orders/abc", { email: "ana@shembull.com" }))
+      .toBe("https://pay-staging.pokpay.io/sdk-orders/abc?language=AL&email=ana%40shembull.com");
+    expect(pokPageUrl("https://pokpay.io.evil.com/x", {})).toBeNull();
+    expect(pokPageUrl("http://pay.pokpay.io/x", {})).toBeNull();
+    expect(pokPageUrl(undefined, {})).toBeNull();
+  });
+});

@@ -14,6 +14,8 @@ export type PokOrder = {
   isRefunded?: boolean;
   merchantCustomReference?: string | null;
   expiresAt?: string;
+  /** POK's own payment page for this order, and the deeplink into the POK app. */
+  _self?: { confirmUrl?: string; confirmDeeplink?: string };
 };
 
 export type PokPayerAuthentication = {
@@ -106,7 +108,7 @@ export async function cardLabel(cardId: string, fallbackNumber?: string) {
   return last4 ? `Karta •••• ${last4}` : "Karta e ruajtur";
 }
 
-export async function createOrder(input: { amount: number; currencyCode: string; description: string; reference: string; webhookUrl?: string }) {
+export async function createOrder(input: { amount: number; currencyCode: string; description: string; reference: string; webhookUrl?: string; redirectUrl?: string; failRedirectUrl?: string }) {
   const data = await authorized<{ sdkOrder: PokOrder }>("/merchants/:merchantId/sdk-orders", "POST", {
     amount: input.amount,
     currencyCode: input.currencyCode,
@@ -116,6 +118,8 @@ export async function createOrder(input: { amount: number; currencyCode: string;
     merchantCustomReference: input.reference,
     expiresAfterMinutes: 30,
     ...(input.webhookUrl ? { webhookUrl: input.webhookUrl } : {}),
+    ...(input.redirectUrl ? { redirectUrl: input.redirectUrl } : {}),
+    ...(input.failRedirectUrl ? { failRedirectUrl: input.failRedirectUrl } : {}),
   });
   return data.sdkOrder;
 }

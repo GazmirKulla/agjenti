@@ -2,10 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { billingState, loadBillingUsage, loadUsageBreakdown, plans, type BillingPlan } from "@/lib/billing/service";
-import { isPaidPlan, loadPaymentCard, loadPaymentHistory } from "@/lib/billing/payments";
+import { isPaidPlan, loadPaymentHistory, syncPlanPayment } from "@/lib/billing/payments";
 import { pokConfigured, pokEnvironment } from "@/lib/billing/pok";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { BillingCheckout } from "@/components/dashboard/billing-checkout";
+import { PokPayButton } from "@/components/dashboard/pok-pay-button";
 import s from "./billing.module.css";
 
 // Every plan has every feature; plans differ only in AI messages per month (and priority support).
@@ -31,7 +31,7 @@ const meterClass = (pct: number) => `${s.meter} ${pct >= 100 ? s.full : pct >= 8
  * pace, per business), Paketat (the plans side by side, each with its button) and Faturimi (card, payment,
  * every payment with its receipt). Only the person who pays the plan changes it.
  */
-export default async function BillingPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ tab?: string; plan?: string }> }) {
+export default async function BillingPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ tab?: string; plan?: string; payment?: string; return?: string }> }) {
   const { slug: requestedSlug } = await params;
   const query = await searchParams;
   const tab: Tab = tabs.some(([id]) => id === query.tab) ? query.tab as Tab : "usage";
@@ -40,19 +40,20 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
   const access = await requireBusinessAccess(user.id, requestedSlug);
   if (!access) redirect("/auth/continue");
   const base = `/b/${access.business.slug}/settings/billing`;
+  // Back from POK's page: the return is only a signal; POK is asked for the order's real state.
+  const returned = query.payment && /^[0-9a-f-]{36}$/i.test(query.payment)
+    ? await syncPlanPayment(query.payment, user.id).catch(() => "unverified" as const) : null;
   const usage = await loadBillingUsage(access.business.id);
   const state = billingState(usage);
   const payer = usage.scope === "account" && usage.billingUserId === user.id;
   const current = plans[usage.plan];
   const canPay = payer && pokConfigured();
-  const [breakdown, card, history, payerEmail] = await Promise.all([
+  const [breakdown, history, payerEmail] = await Promise.all([
     tab === "usage" && usage.billingUserId ? loadUsageBreakdown(usage.billingUserId, usage.periodStart).catch(() => []) : Promise.resolve([]),
-    canPay ? loadPaymentCard(user.id).catch(() => null) : Promise.resolve(null),
     tab === "billing" && payer ? loadPaymentHistory(user.id).catch(() => null) : Promise.resolve([]),
     !payer && usage.billingUserId ? createServiceSupabase().from("profiles").select("email").eq("id", usage.billingUserId).maybeSingle().then(r => r.data?.email ?? null, () => null) : Promise.resolve(null),
   ]);
   const selected = isPaidPlan(query.plan) ? query.plan : null;
-  const paidOptions = planOrder.filter(isPaidPlan).map((key) => ({ key, name: plans[key].name, price: plans[key].monthlyPrice }));
   const higher = planOrder.find(key => plans[key].monthlyPrice > current.monthlyPrice);
 
   // At this pace, will the messages last until the period renews?
@@ -143,9 +144,16 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
           <div className={s.row}><span><strong>{usage.paidUntil ? "Paguar deri më" : "Rinovimi"}</strong><small>{usage.paidUntil ? "Paguaj sërish para kësaj date që të vazhdojë; përndryshe kthehet në Free." : usage.plan === "free" ? "Paketa falas rifillon çdo muaj." : "Paketa e vendosur nga administratori."}</small></span><span />
             <span className={s.pct}>{usage.paidUntil ? fullDate(usage.paidUntil) : fullDate(usage.periodEnd)}</span></div>
         </div>
-        {selected && <p className={s.notice}>Po kalon në {plans[selected].name} · {money(plans[selected].monthlyPrice)} / muaj</p>}
-        {canPay ? <BillingCheckout env={pokEnvironment()} card={card ? { label: card.label } : null} currentPlan={usage.plan} paidUntil={usage.paidUntil} plans={paidOptions} selected={selected} />
-          : <p className="muted-copy">Pagesat me kartë (POK) aktivizohen së shpejti. Deri atëherë paketën e vendos administratori.</p>}
+        {returned && <p className={`form-feedback ${returned === "paid" ? "" : "form-feedback-error"}`} role="status">{returned === "paid" ? `Pagesa u krye. Paketa jote tani është ${current.name}.`
+          : returned === "pending" ? "Pagesa po përpunohet nga POK. Rifresko faqen pas pak." : returned === "failed" ? "Pagesa nuk u krye. Mund të provosh përsëri." : "Pagesa nuk u verifikua ende me POK. Rifresko faqen pas pak."}</p>}
+        {canPay ? (() => {
+          const chosen = selected ?? (usage.paidUntil && isPaidPlan(usage.plan) ? usage.plan : null);
+          return chosen ? <div className="grid gap-2">
+            <p className={s.notice}>{chosen === usage.plan ? `Rinovo ${plans[chosen].name}` : `Po kalon në ${plans[chosen].name}`} · {money(plans[chosen].monthlyPrice)} / muaj</p>
+            <p className="muted-copy" style={{ margin: 0 }}>Paguan në faqen e sigurt të POK me kartë ose me llogarinë POK, dhe kthehesh këtu. Paketa vlen një muaj nga pagesa.{pokEnvironment() === "staging" ? " Mjedis prove: përdor vetëm kartat e provës së POK." : ""}</p>
+            <PokPayButton slug={access.business.slug} plan={chosen} label={`Paguaj me POK · ${money(plans[chosen].monthlyPrice)}`} />
+          </div> : <p className="muted-copy">Zgjidh një paketë te <Link className="inline-link" href={`${base}?tab=plans`}>Paketat</Link> për ta paguar me POK.</p>;
+        })() : <p className="muted-copy">Pagesat me POK aktivizohen së shpejti. Deri atëherë paketën e vendos administratori.</p>}
         <h3 className={s.section}>Pagesat</h3>
         {history === null ? <p className="muted-copy">Pagesat nuk u lexuan. Rifresko faqen.</p>
           : !history.length ? <p className="muted-copy">Ende nuk ke pagesa.</p>
