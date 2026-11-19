@@ -1,10 +1,10 @@
+import Link from "next/link";
 import { orderDelivery } from "@/lib/customers/contact";
 import { OrderEditor } from "@/components/dashboard/order-editor";
 import { WebsiteStatusControl } from "@/components/dashboard/website-status-control";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
 import { OrderOutputPhotos } from "@/components/dashboard/order-output-photos";
 import { Icon } from "@/components/dashboard/icon";
-import { OrderIntakeSetting } from "@/components/dashboard/order-intake-setting";
 import { readBusinessFields, type BusinessField } from "@/lib/items/fields";
 import {
   PageHeading,
@@ -91,7 +91,10 @@ export default async function OrdersPage({
         title={`Porositë e ${access.business.name}`}
         description="Ndiq porositë e krijuara nga bisedat me klientët."
       />
-      <OrderIntakeSetting slug={slug} enabled={localOrders} />
+      {localOrders !== null && <p className="muted-copy">
+        {localOrders ? "Agjenti e regjistron porosinë sapo klienti konfirmon përmbledhjen." : "Agjenti vetëm mbledh kërkesën: stafi e shqyrton te biseda dhe e regjistron."}{" "}
+        <Link className="inline-link" href={`/b/${slug}/agents/process`}>Ndrysho te Çfarë bën Agjenti →</Link>
+      </p>}
       <div className="stats-grid stats-compact">
         {ORDER_STATUSES.map(([status, label]) => (
           <StatCard
