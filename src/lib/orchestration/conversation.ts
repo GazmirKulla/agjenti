@@ -13,6 +13,7 @@ import { initialSnapshot, TransitionError, type Snapshot, type ToolPolicy } from
 import { visualNodeForStep } from "./visual-definition";
 import { interpretCustomer } from "./interpret";
 import { recordPresentation, definitionFor, type Environment } from "./transition";
+import { processCapabilityEvents } from "@/lib/tracking/process-events";
 import { runProcessTurn } from "./run-turn";
 import { businessProvisionAdapter } from "./business-provision";
 import { processPreparedRequest } from "./prepared-request";
@@ -175,6 +176,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       definitionForInstance: id => state.instances[id] } : undefined),
     orderStatusAdapter(transport ? { businessId: params.businessId, conversationId: state.conversationId, identity: params.customerIdentity } : undefined),
     orderAdapter(transport ? { businessId: params.businessId, conversationId: state.conversationId, lease: transport, instance: id => state.instances[id] } : undefined)];
+  // The process state before this turn, to tell which capabilities started or ended in it.
+  const startState = structuredClone(state);
   const result = await runProcessTurn({ state, event, env, deadline, lease: transport, adapters,
     onState: currentState => { state = currentState; },
     validate: transition => {
@@ -202,6 +205,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   });
   state = result.state;
   const notices = result.notices;
+  const capabilityEvents = processCapabilityEvents(startState, state, notices, instance => { try { return definitionFor(state, instance, env); } catch { return undefined; } });
   const handoff = notices.some(n => n.kind === "handoff");
   if (handoff && modules && !modules.includes("inbox")) throw new CapabilityEnforcementError("module_disabled", "Kalimi te stafi është çaktivizuar.");
   if (handoff && mode === "test") recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "process_runtime_no_staff_notification" });
@@ -252,7 +256,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const version = active ? versions.get(active.versionId) : current;
   const nextState = { ...emptyState(), runtime: state, step_key: active?.stepId ?? null,
     recentMessages: state.history };
-  return { ...(active && definition && version ? { preparedRequest: processPreparedRequest(active, definition, version, Date.now()) } : {}), ...(transport ? { processCheckpoint: { event: { ...event, id: `job:${transport.jobId}:reply` }, expectedRevision, targetIds: composed.targetIds } } : {}), reply: composed.reply, nextState, previousResponseId: null, workflowId: null, productName: null,
+  return { ...(active && definition && version ? { preparedRequest: processPreparedRequest(active, definition, version, Date.now()) } : {}), ...(transport ? { processCheckpoint: { event: { ...event, id: `job:${transport.jobId}:reply` }, expectedRevision, targetIds: composed.targetIds } } : {}), reply: composed.reply, nextState, previousResponseId: null, workflowId: null, productName: null, capabilityEvents,
     ...(composed.presented?.kind === "product" ? { presentedProducts: [...composed.presented.items] } : {}),
     ...(productPhotos.length ? { productPhotos } : {}),
     ...(composed.presented?.kind === "service" ? { presentedServices: [...composed.presented.items] } : {}),

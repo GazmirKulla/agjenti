@@ -41,6 +41,7 @@ import OpenAI from "@/lib/ai/openai";
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { customProcessRefusal } from "./custom-process-policy";
+import { assistantCapability, proposalOperationKey, trackAssistantExecution, trackAssistantPreparation } from "@/lib/tracking/assistant-events";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/tokens";
 import { modelFor } from "@/lib/agents/generate";
 import { assessBusinessCapabilities, summarizeCapabilityAssessments } from "@/lib/capabilities/assessment";
@@ -706,7 +707,12 @@ export async function planRequest(
       "Nuk arrita ta përcaktoj veprimin. Më trego emrin e rrjedhës ose elementit dhe ndryshimin që dëshiron.",
   };
 }
-export async function prepareProposal(
+/** Every request the Assistant prepares is recorded as a capability entry and exit. */
+export async function prepareProposal(access: Access, p: Proposal, timezone: string, expected?: Row): Promise<PlanResult> {
+  return trackAssistantPreparation(access.businessId, assistantCapability(p.action, proposalOperationKey(p)), randomUUID(),
+    () => prepareProposalOnce(access, p, timezone, expected));
+}
+async function prepareProposalOnce(
   access: Access,
   p: Proposal,
   timezone: string,
@@ -856,7 +862,13 @@ export async function prepareProposal(
     token: encryptSecret(JSON.stringify(ticket)),
   };
 }
+/** Every confirmed proposal is recorded as executed or failed, under the capability it was prepared as. */
 export async function executeTicket(access: Access, token: string) {
+  const t = openTicket(token, access);
+  const key = t.action === "operation" ? (t.values.operation as { key?: string } | undefined)?.key : undefined;
+  return trackAssistantExecution(access.businessId, assistantCapability(t.action, key), t.id, () => executeTicketOnce(access, token));
+}
+async function executeTicketOnce(access: Access, token: string) {
   const t = openTicket(token, access);
   if (t.action === "operation_plan" || t.action === "operation_resume") return executeOperationPlan(access.businessId, access.userId, t.values.plan as PreparedPlan, access.accessToken);
   if (t.action === "operation") return executeOperation(access.businessId, access.userId, t.values.operation as PreparedOperation, access.accessToken);

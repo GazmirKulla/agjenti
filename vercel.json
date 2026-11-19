@@ -45,6 +45,10 @@
     {
       "path": "/api/cron/participant-avatars",
       "schedule": "40 4 * * *"
+    },
+    {
+      "path": "/api/cron/capability-health",
+      "schedule": "30 2 * * *"
     }
   ]
 }

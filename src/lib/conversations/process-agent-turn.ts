@@ -5,6 +5,8 @@ import type { ConversationStatePayload, WorkflowProgressItem, WorkflowStepDef } 
 export type AgentTurnResult = {
   /** Server-owned delivery envelope. Never supplied by a customer or model. */
   processCheckpoint?: { event: import("@/lib/orchestration/contracts").CustomerEvent; expectedRevision: number; targetIds: string[] };
+  /** Capability entries and exits of this turn; recorded only once the turn is committed. */
+  capabilityEvents?: Omit<import("@/lib/tracking/events").CapabilityEvent, "businessId" | "mode">[];
   preparedRequest?: import("./prepared-request").PreparedRequest;
   /** Authorized test entry points only; observation, never permission or behavioral proof. */
   configuration?: import("@/lib/agents/configuration-contract").TestConfigurationProvenance;

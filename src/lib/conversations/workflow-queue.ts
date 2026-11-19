@@ -1,5 +1,6 @@
 import { withAiUsage } from "@/lib/ai/usage";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { recordCapabilityEvents } from "@/lib/tracking/events";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { encryptSecret } from "@/lib/crypto/tokens";
 import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/types";
@@ -70,6 +71,8 @@ export async function prepareWorkflowReply(job: WorkflowJob, conversationId: str
             job.reply = data.reply;
             job.reply_media = replyMedia(data.reply_media);
         } else {
+            // Committed just now (never on a replay): what this turn started and ended.
+            await recordCapabilityEvents((turn.capabilityEvents ?? []).map(event => ({ ...event, businessId: job.business_id, mode: "live" as const })));
             job.reply = turn.reply;
             job.reply_media = turn.productPhotos?.length ? await attachReplyMedia(job, turn.productPhotos.map(photo => photo.productId)) : null;
         }
@@ -144,7 +147,13 @@ async function sendPrepared(job: WorkflowJob) {
     for (let attempt = 0; attempt < 2; attempt++) {
         try {
             const { error: finishError } = await db.rpc("finish_workflow_send", receipt);
-            if (!finishError) return;
+            if (!finishError) {
+                // The customer's reply, once its receipt is stored. Staff messages are not the agent's.
+                if (job.operation_kind !== "staff") await recordCapabilityEvents([{ businessId: job.business_id, capability: "customer.reply", mode: "live",
+                    point: confirmed ? "sent" : "failed", reason: confirmed ? undefined : !allowed ? "window_closed" : sent.ok ? "receipt_missing" : "provider_error",
+                    conversationId: job.conversation_id ?? undefined, ref: `job:${job.id}` }]);
+                return;
+            }
         } catch { /* Retry receipt persistence only; sending is never replayed. */ }
     }
     throw new Error("Send receipt unavailable");
@@ -208,7 +217,10 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
             if (job.status === "prepared")
                 await sendPrepared(job);
             else
+            {
                 await db.from("workflow_inbound_queue").update({ status: "ignored", leased_until: null }).eq("id", job.id).eq("lease_token", job.lease_token).eq("status", "processing").throwOnError();
+                await recordCapabilityEvents([{ businessId: job.business_id, capability: "customer.reply", point: "ignored", mode: "live", ref: `job:${job.id}` }]);
+            }
             processed++;
             });
         }
@@ -216,6 +228,9 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
             // Retain prepared output after a pre-send failure. A send with an unknown result is never replayed.
             const detail = error instanceof InboundPersistenceError ? error.message : "Workflow processing failed";
             await db.from("workflow_inbound_queue").update({ leased_until: new Date(Date.now() + 30000).toISOString(), error: detail }).eq("id", job.id).eq("lease_token", job.lease_token).eq("status", job.status).throwOnError();
+            // Each failed attempt is counted; the job is retried and may still be sent.
+            if (job.operation_kind !== "staff") await recordCapabilityEvents([{ businessId: job.business_id, capability: "customer.reply", point: "attempt_failed", mode: "live",
+                reason: error instanceof InboundPersistenceError ? "persistence_failed" : job.status === "prepared" ? "send_failed" : "turn_failed", ref: `job:${job.id}` }]);
         }
     }
     return processed;

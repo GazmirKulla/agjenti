@@ -66,3 +66,7 @@ vi.mock("@/lib/conversations/understanding/selection", async original => {
     return structuredClone(fixture.matches);
   }) };
 });
+
+// Capability events are measurement, recorded after the work they describe; unit tests of that work assert
+// its own database calls, so recording is off here. src/lib/tracking tests exercise the real row building.
+vi.mock("@/lib/tracking/events", async importOriginal => ({ ...(await importOriginal<typeof import("@/lib/tracking/events")>()), recordCapabilityEvents: async () => undefined }));

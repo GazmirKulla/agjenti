@@ -46,6 +46,7 @@ Zbatohen në të gjithë këtë repository. Lexoji para planifikimit dhe ndryshi
 - Verifiko pamjen herët për punë UI, para investimit të madh në implementim. Kontrollet teknike nuk zëvendësojnë përputhjen me përvojën e kërkuar.
 - Në dorëzim krahaso rezultatin me kriteret fillestare. Thuaj çfarë funksionon, çfarë u testua dhe çfarë mungon; dallo kodin lokal, provën me të dhëna reale dhe publikimin.
 - Mos shpall të përfunduar një kërkesë të gjerë kur ke realizuar vetëm një pjesë të saj.
+- Çdo aftësi e agjentit të klientit ose e Asistentit regjistrohet te `src/lib/tracking/capabilities.ts` me hyrjen dhe daljet e saj, dhe kodi i regjistron pasi puna të jetë ruajtur (vetëm kode, pa tekst mesazhesh). Testi i mbulimit dështon për një aftësi pa ndjekje; mos e anashkalo. Rezultatet shihen te Platform Admin → Shëndeti i Agjentit.
 - Kur një ndryshim shton, heq ose kufizon një aftësi të agjentit të klientit ose të Asistentit, përditëso në të njëjtin ndryshim raportin `docs/aftesite-e-agjentit/` (udhëzimet te README-ja e tij) dhe ripublikoje te i njëjti link. Po ashtu, kur një gjetje (provë live, review, test) tregon se agjenti i klientit ose Asistenti punon më keq se ç'shkruan raporti, ul vlerësimin dhe shënoje te problemet e raportit.
 
 ## Ndryshimet ekzistuese dhe kthimi prapa
