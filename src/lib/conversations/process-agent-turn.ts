@@ -7,6 +7,8 @@ export type AgentTurnResult = {
   processCheckpoint?: { event: import("@/lib/orchestration/contracts").CustomerEvent; expectedRevision: number; targetIds: string[] };
   /** Capability entries and exits of this turn; recorded only once the turn is committed. */
   capabilityEvents?: Omit<import("@/lib/tracking/events").CapabilityEvent, "businessId" | "mode">[];
+  /** The customer needs a person (unhappy, complaint, not helped) and what the business chose: hand off or notify. */
+  escalation?: { reason: string; action: "handoff" | "notify" };
   preparedRequest?: import("./prepared-request").PreparedRequest;
   /** Authorized test entry points only; observation, never permission or behavioral proof. */
   configuration?: import("@/lib/agents/configuration-contract").TestConfigurationProvenance;

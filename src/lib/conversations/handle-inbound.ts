@@ -1,4 +1,8 @@
 import { reviewMarketingPreference } from "@/lib/campaigns/preference";
+import { notifyStaffOfUnhappyCustomer } from "./escalation";
+import { messageWithVoice, transcribeMessageMedia } from "./voice-media";
+import { loadAgentBehavior } from "@/lib/agents/behavior";
+import { recordCapabilityEvents } from "@/lib/tracking/events";
 import { sharedMediaTurnContext } from "./shared-media-context";
 import { findOwnInstagramPosts } from "@/lib/instagram/media";
 import { initialSnapshot } from "@/lib/orchestration/contracts";
@@ -290,6 +294,8 @@ export async function handleInboundMessage(
   let reactionMessageId: string | null = null;
   let onlyMarketingWithdrawal = batch.originals.length > 0;
   let persistenceStage: InboundPersistenceError["stage"] = "message_insert";
+  // Stored customer messages with a voice message or video, transcribed before the agent reads the turn.
+  const voiceMessageIds: string[] = [];
   try {
     for (const original of batch.originals) {
       persistenceStage = "message_insert";
@@ -326,6 +332,7 @@ export async function handleInboundMessage(
         if (!insertedMessage?.id) throw new Error("Inbound insert not confirmed");
         reactionMessageId = insertedMessage.id;
       }
+      if (reactionMessageId && original.attachments.some(a => a.kind === "audio" || a.kind === "video")) voiceMessageIds.push(reactionMessageId);
       const preference = reactionMessageId ? await reviewMarketingPreference(businessId, reactionMessageId) : undefined;
       onlyMarketingWithdrawal = onlyMarketingWithdrawal && preference?.onlyWithdrawal === true;
     }
@@ -427,6 +434,11 @@ export async function handleInboundMessage(
     if (unconfirmedPrompt || (attempted && attempted.reply !== deliveredReply)) deliveredReply = null;
     if (unconfirmedPrompt) throw new Error("delivery_unverified");
   }
+  // What the customer said in voice messages and videos, when the business lets the agent read them.
+  const voice = voiceMessageIds.length && !isIsolatedExecution() && (await loadAgentBehavior(businessId)).voice
+    ? (await Promise.all(voiceMessageIds.map(id => transcribeMessageMedia(businessId, conversationId, id).catch(() => [])))).flat() : [];
+  if (voice.length) await recordCapabilityEvents(voice.map(v => ({ businessId, capability: "customer.voice", mode: "live" as const, conversationId,
+    point: v.transcript ? "transcribed" : "not_heard", reason: v.failure ? `${v.kind}_${v.failure}` : v.kind })));
   // Capture pre-turn evidence before the coordinator may update/suspend state.
   const reactionHistory = history.messages.map(message => ({ ...message }));
   const reactionPendingWork = hasUnfinishedWork(inboundState);
@@ -447,7 +459,7 @@ export async function handleInboundMessage(
     processTransport: job ? { jobId: job.id, leaseToken: job.lease_token, conversationId, revision: stateRow?.revision ?? 0 } : undefined,
     canAct,
     businessId,
-    message: message.text ?? "",
+    message: voice.length ? messageWithVoice(message.text, voice) : message.text ?? "",
     hasPhoto: message.attachments.some((a) => a.kind === "image"),
     ...(sharedMedia ? { attachmentContext: sharedMedia.attachmentContext, referencedProductIds: sharedMedia.productIds, groundingHint: sharedMedia.groundingHint } : {}),
     state: inboundState,
@@ -457,6 +469,12 @@ export async function handleInboundMessage(
   const state = turn.nextState;
   if(job) {
     await prepareWorkflowReply(job,conversationId,stateRow?.revision??0,turn);
+    // Committed: the customer needs a person. Staff are told in both cases; with a handoff the conversation pauses after this reply.
+    if (turn.escalation) {
+      await recordCapabilityEvents([{ businessId, capability: "customer.escalation", mode: "live", conversationId,
+        point: turn.escalation.action === "handoff" ? "handed_off" : "notified", reason: turn.escalation.reason }]);
+      await notifyStaffOfUnhappyCustomer(businessId, conversationId, turn.escalation).catch(() => undefined);
+    }
     // Persist the normal reply first. Optional acknowledgements never replace it
     // or turn a reaction persistence/provider failure into a message retry.
     if (reactionMessageId && autoOn && conversationStatus==='active' && !(turn.handoff && !turn.advisoryHandoff) && !isIsolatedExecution()) {

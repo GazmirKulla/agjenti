@@ -1,4 +1,7 @@
 import { campaignContext } from "@/lib/campaigns/service";
+import { loadAgentBehavior } from "@/lib/agents/behavior";
+import { parseCommunicationPolicy } from "@/lib/agents/communication-policy";
+import { defaultHandoffMessage } from "./automatic-process";
 import { randomUUID } from "node:crypto";
 import type { AgentTurnParams, AgentTurnResult } from "@/lib/conversations/process-agent-turn";
 import { emptyState } from "@/lib/workflows/state";
@@ -178,6 +181,9 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     orderAdapter(transport ? { businessId: params.businessId, conversationId: state.conversationId, lease: transport, instance: id => state.instances[id] } : undefined)];
   // The process state before this turn, to tell which capabilities started or ended in it.
   const startState = structuredClone(state);
+  // The interpretation's reading that this customer needs a person, and what the business wants then.
+  let escalation: import("./contracts").Escalation | undefined;
+  const behaviorRead = loadAgentBehavior(params.businessId);
   const result = await runProcessTurn({ state, event, env, deadline, lease: transport, adapters,
     onState: currentState => { state = currentState; },
     validate: transition => {
@@ -198,6 +204,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       if (hasOrders) await orders.prepare(state, definitions, interpretation.observation);
       await services.prepare(state, definitions, interpretation.observation);
       modelUsed = interpretation.model;
+      escalation = interpretation.observation.escalation;
       trace?.({ stage: "ai", label: "Process observation validated", data: { ...interpretation.observation, model: interpretation.model,
         responseId: interpretation.responseId, usage: { input_tokens: interpretation.inputTokens, output_tokens: interpretation.outputTokens } } });
       return interpretation.observation;
@@ -206,6 +213,16 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   state = result.state;
   const notices = result.notices;
   const capabilityEvents = processCapabilityEvents(startState, state, notices, instance => { try { return definitionFor(state, instance, env); } catch { return undefined; } });
+  // Counted only when its quote is in what the customer wrote (or said, transcribed); then the business's choice applies.
+  const quoted = (quote: string) => params.message.toLocaleLowerCase().replace(/\s+/g, " ").includes(quote.toLocaleLowerCase().replace(/\s+/g, " ").trim());
+  const behavior = await behaviorRead;
+  const unhappy = escalation && quoted(escalation.evidence) && behavior.escalation !== "off" && (!modules || modules.includes("inbox"))
+    && !notices.some(n => n.kind === "handoff") ? { reason: escalation.reason, action: behavior.escalation } : undefined;
+  if (unhappy?.action === "handoff") {
+    let wording: string | undefined;
+    try { wording = agent?.communication ? parseCommunicationPolicy(agent.communication).handoffMessage : undefined; } catch { wording = undefined; }
+    notices.push({ kind: "handoff", text: `${wording ?? defaultHandoffMessage} (The customer needs a person: ${unhappy.reason}. Acknowledge how they feel briefly, without arguing.)` });
+  }
   const handoff = notices.some(n => n.kind === "handoff");
   if (handoff && modules && !modules.includes("inbox")) throw new CapabilityEnforcementError("module_disabled", "Kalimi te stafi është çaktivizuar.");
   if (handoff && mode === "test") recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "process_runtime_no_staff_notification" });
@@ -257,6 +274,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const nextState = { ...emptyState(), runtime: state, step_key: active?.stepId ?? null,
     recentMessages: state.history };
   return { ...(active && definition && version ? { preparedRequest: processPreparedRequest(active, definition, version, Date.now()) } : {}), ...(transport ? { processCheckpoint: { event: { ...event, id: `job:${transport.jobId}:reply` }, expectedRevision, targetIds: composed.targetIds } } : {}), reply: composed.reply, nextState, previousResponseId: null, workflowId: null, productName: null, capabilityEvents,
+    ...(unhappy ? { escalation: unhappy } : {}),
     ...(composed.presented?.kind === "product" ? { presentedProducts: [...composed.presented.items] } : {}),
     ...(productPhotos.length ? { productPhotos } : {}),
     ...(composed.presented?.kind === "service" ? { presentedServices: [...composed.presented.items] } : {}),

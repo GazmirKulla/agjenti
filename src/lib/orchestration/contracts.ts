@@ -121,7 +121,9 @@ export type CustomerCommand =
   | { kind: "skip_field"; instanceId: string; waitId: string; evidence: string }
   | { kind: "suspend" | "resume" | "cancel"; instanceId: string; evidence: string };
 export type ConditionObservation = { definitionId: string; versionId: string; instanceId: string | null; stepId: string; outcome: "yes" | "no" | "unclear"; evidence: string };
-export type Observation = { revision: number; commands: CustomerCommand[]; conditions?: ConditionObservation[]; needsClarification: boolean };
+/** The interpretation's reading that the customer needs a person: unhappy, complaining, or not being helped; with a quote from the message. */
+export type Escalation = { reason: "dissatisfied" | "complaint" | "not_helped"; evidence: string };
+export type Observation = { revision: number; commands: CustomerCommand[]; conditions?: ConditionObservation[]; needsClarification: boolean; escalation?: Escalation };
 export type FactInput = { fieldId: string; value: Value; evidence: string };
 export type CustomerEvent = { id: string; businessId: string; conversationId: string; message: string; actor: "customer" };
 export type RuntimeEvent = { id: string; businessId: string; conversationId: string; actor: "runtime";

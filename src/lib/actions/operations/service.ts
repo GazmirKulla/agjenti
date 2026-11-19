@@ -1,4 +1,5 @@
 import { loadSetupStatus } from "@/lib/setup/status";
+import { loadAgentBehavior, storeAgentBehavior } from "@/lib/agents/behavior";
 import { executeSettingsOperation, isSettingsOperation, prepareSettingsOperation } from "@/lib/settings/operations";
 import { after } from "next/server";
 import { businessSources, refreshBusinessSources } from "@/lib/knowledge/source-refresh";
@@ -127,7 +128,11 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     snapshot = await prepareManagedAgent(businessId, input);
     subject = String((snapshot.values as Record<string, unknown>).name);
   } else if (operation === "booking.sync") snapshot = await record(businessId, "bookings", input.id, "id,customer_name,revision,sync_status");
-  else if (operation === "sources.refresh") {
+  else if (operation === "agent.behavior") {
+    if (input.voice !== undefined && typeof input.voice !== "boolean") throw new OperationError("Zgjidh Po ose Jo për mesazhet zanore.");
+    if (input.escalation !== undefined && !["handoff", "notify", "off"].includes(String(input.escalation))) throw new OperationError("Zgjidh: ia kalon stafit, vetëm njofton stafin, ose asgjë.");
+    snapshot = { ...(await loadAgentBehavior(businessId)) };
+  } else if (operation === "sources.refresh") {
     const sources = await businessSources(businessId);
     if (!sources.website && !sources.instagram && !sources.connectedInstagram) throw new OperationError("Biznesi nuk ka ende burime. Shto Instagram-in ose website-in te Njohuritë.");
     snapshot = { website: sources.website, instagram: sources.instagram ?? (sources.connectedInstagram ? "i lidhur" : null) };
@@ -290,6 +295,12 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
   else if (isSettingsOperation(key)) {
     try { return await executeSettingsOperation(businessId, userId, key, input as Record<string, unknown>, before as Record<string, unknown>); }
     catch (error) { throw new OperationError(error instanceof Error ? error.message : "Ndryshimi nuk u ruajt."); }
+  } else if (key === "agent.behavior") {
+    const current = await loadAgentBehavior(businessId);
+    if (JSON.stringify(current) !== JSON.stringify({ voice: before.voice, escalation: before.escalation })) throw new OperationError("Cilësimi ndryshoi. Kërkoje përsëri.");
+    const saved = await storeAgentBehavior(businessId, userId, input as { voice?: unknown; escalation?: unknown });
+    if ("error" in saved) throw new OperationError(saved.error);
+    return { message: "U ruajt. Vlen për mesazhet e reja.", path: "agents/process" };
   } else if (key === "sources.refresh") {
     const queued = await refreshBusinessSources(businessId, userId, workerOrigin(null));
     if (!queued.website && !queued.instagram) throw new OperationError("Burimet nuk u rilexuan. Provo nga Njohuritë → Nga ku mëson Agjenti.");

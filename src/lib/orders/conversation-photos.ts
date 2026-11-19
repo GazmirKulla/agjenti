@@ -49,8 +49,12 @@ export async function listCustomerPhotos(db: SupabaseClient, businessId: string,
   })).slice(0, LIST_PHOTOS);
 }
 
-async function readCapped(response: Response): Promise<Buffer | null> {
-  if (Number(response.headers.get("content-length") ?? 0) > MAX_ORDER_PHOTO_BYTES) return null;
+/** What a download accepts: the media types (to a file extension) and the largest size. Photos by default. */
+export type MediaLimits = { types: Record<string, string>; maxBytes: number };
+const photoLimits: MediaLimits = { types: ORDER_PHOTO_TYPES, maxBytes: MAX_ORDER_PHOTO_BYTES };
+
+async function readCapped(response: Response, maxBytes = MAX_ORDER_PHOTO_BYTES): Promise<Buffer | null> {
+  if (Number(response.headers.get("content-length") ?? 0) > maxBytes) return null;
   const reader = response.body?.getReader();
   if (!reader) return null;
   const chunks: Uint8Array[] = [];
@@ -59,7 +63,7 @@ async function readCapped(response: Response): Promise<Buffer | null> {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_ORDER_PHOTO_BYTES) {
+    if (total > maxBytes) {
       await reader.cancel().catch(() => undefined);
       return null;
     }
@@ -70,7 +74,7 @@ async function readCapped(response: Response): Promise<Buffer | null> {
 
 const GONE = "Kjo foto nuk merret më nga biseda (lidhja e kanalit ka skaduar). Ngarkoje vetë.";
 
-async function download(url: string, token?: string, declaredType?: string): Promise<PhotoRead> {
+async function download(url: string, token?: string, declaredType?: string, limits: MediaLimits = photoLimits): Promise<PhotoRead> {
   const response = await fetch(url, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     signal: AbortSignal.timeout(20_000), cache: "no-store",
@@ -79,14 +83,14 @@ async function download(url: string, token?: string, declaredType?: string): Pro
   // An expired CDN link answers 403/404/410.
   if (!response.ok) return response.status >= 500 ? { error: "Fotoja nuk u lexua nga kanali. Provo përsëri.", status: 502 } : { error: GONE, status: 410 };
   const type = (response.headers.get("content-type") ?? declaredType ?? "").split(";")[0]!.trim().toLowerCase();
-  if (!ORDER_PHOTO_TYPES[type]) return { error: "Kjo bashkëngjitje nuk është foto JPG, PNG, WEBP ose HEIC.", status: 415 };
-  const bytes = await readCapped(response).catch(() => null);
+  if (!limits.types[type]) return { error: "Kjo bashkëngjitje nuk është foto JPG, PNG, WEBP ose HEIC.", status: 415 };
+  const bytes = await readCapped(response, limits.maxBytes).catch(() => null);
   if (!bytes) return { error: "Fotoja duhet të jetë deri në 10 MB.", status: 413 };
   return { bytes, type };
 }
 
 /** WhatsApp keeps only a media id: the connection's token reads its short-lived link, then the bytes. */
-async function downloadWhatsApp(businessId: string, conversationId: string, mediaId: string): Promise<PhotoRead> {
+async function downloadWhatsApp(businessId: string, conversationId: string, mediaId: string, limits: MediaLimits = photoLimits): Promise<PhotoRead> {
   const db = createServiceSupabase();
   const { data: conversation } = await db.from("conversations").select("whatsapp_connection_id")
     .eq("id", conversationId).eq("business_id", businessId).maybeSingle();
@@ -100,7 +104,18 @@ async function downloadWhatsApp(businessId: string, conversationId: string, medi
     headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20_000), cache: "no-store",
   }).then((r) => (r.ok ? r.json() : null), () => null) as { url?: unknown; mime_type?: unknown } | null;
   if (!meta || typeof meta.url !== "string" || !isMetaUrl(meta.url)) return { error: GONE, status: 410 };
-  return download(meta.url, token, typeof meta.mime_type === "string" ? meta.mime_type : undefined);
+  return download(meta.url, token, typeof meta.mime_type === "string" ? meta.mime_type : undefined, limits);
+}
+
+/**
+ * Any customer attachment of this conversation from its channel, within the given types and size: by its
+ * Meta CDN link (Instagram) or its media id through the connection's token (WhatsApp). Only Meta hosts.
+ */
+export function downloadConversationMedia(businessId: string, conversationId: string, attachment: unknown, limits: MediaLimits): Promise<PhotoRead> {
+  const a = (attachment && typeof attachment === "object" ? attachment : {}) as Attachment;
+  if (typeof a.sourceUrl === "string" && isMetaUrl(a.sourceUrl)) return download(a.sourceUrl, undefined, undefined, limits);
+  if (typeof a.externalMediaId === "string" && /^\d{1,40}$/.test(a.externalMediaId)) return downloadWhatsApp(businessId, conversationId, a.externalMediaId, limits);
+  return Promise.resolve({ error: "media_unavailable", status: 404 });
 }
 
 /** The bytes of one photo of this conversation, the customer's or the business's (an id from listCustomerPhotos). */

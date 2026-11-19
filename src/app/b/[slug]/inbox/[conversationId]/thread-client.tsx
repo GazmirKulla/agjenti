@@ -282,6 +282,12 @@ export function ThreadClient(props: {
                   if (shared) {
                     return <ChatMediaCard key={index} label={t(shareLabels[shared.type] ?? "Shpërndau një postim")} url={null} media={shared} alt={t("Postim i shpërndarë")} openLabel={t("Hap në Instagram")} />;
                   }
+                  // What the customer said in a voice message or video, as the agent read it.
+                  if ((attachment.kind === "audio" || attachment.kind === "video") && (attachment.transcript || attachment.transcriptFailure))
+                    return <div key={index} className="chat-attachment" style={{ display: "grid", gap: 4 }}>
+                      <small>{attachment.kind === "audio" ? t("🎤 Mesazh zanor") : t("🎬 Video")}{typeof url === "string" && url.startsWith("https://") && <> · <a href={url} target="_blank" rel="noopener noreferrer">{t("Hap")} ↗</a></>}</small>
+                      {attachment.transcript ? <span>“{attachment.transcript}”</span> : <span className="muted-copy">{t("Nuk u dëgjua; Agjenti i kërkoi klientit ta shkruajë.")}</span>}
+                    </div>;
                   if (typeof url !== "string" || !url.startsWith("https://"))
                     return null;
                   return (

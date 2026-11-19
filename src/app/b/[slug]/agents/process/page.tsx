@@ -4,7 +4,8 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import { BusinessProcessView } from "@/components/workflows/business-process";
 import { OrderIntakeSetting } from "@/components/dashboard/order-intake-setting";
-import { AgentBookingSwitch, CustomerQuestionsEditor, HandoffMessageForm } from "@/components/agents/capability-settings";
+import { AgentBehaviorSetting, AgentBookingSwitch, CustomerQuestionsEditor, HandoffMessageForm } from "@/components/agents/capability-settings";
+import { loadAgentBehavior } from "@/lib/agents/behavior";
 import { parseCommunicationPolicy } from "@/lib/agents/communication-policy";
 import { automaticStatus, defaultHandoffMessage, type AutomaticCapability, type AutomaticReadiness } from "@/lib/orchestration/automatic-process";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
@@ -43,6 +44,7 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
     db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", businessId).maybeSingle(),
     db.from("ai_agents").select("communication,updated_at").eq("business_id", businessId).eq("is_active", true).maybeSingle(),
   ]);
+  const behavior = await loadAgentBehavior(businessId);
   let handoffMessage = "";
   try { handoffMessage = agent.data?.communication ? parseCommunicationPolicy(agent.data.communication).handoffMessage ?? "" : ""; } catch { handoffMessage = ""; }
   const ownProcess = !own.error && own.data?.published_version_id ? { enabled: own.data.enabled === true } : null;
@@ -104,8 +106,16 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
         <small className="muted-copy">Orari: <Link className="inline-link" href={`${base}/calendar`}>Kalendari →</Link> · Shërbimet që pranojnë rezervime: <Link className="inline-link" href={`${base}/services`}>Shërbimet →</Link></small>
       </>)}
 
-    {card("handoff", agent.error || !agent.data ? <p className="muted-copy">Agjenti aktiv nuk u gjet. Krijoje ose aktivizoje te <Link className="inline-link" href={`${base}/agents`}>Udhëzimet</Link>.</p>
-      : <HandoffMessageForm slug={slug} message={handoffMessage} updatedAt={agent.data.updated_at} fallback={defaultHandoffMessage} />)}
+    {card("handoff", <>
+      {agent.error || !agent.data ? <p className="muted-copy">Agjenti aktiv nuk u gjet. Krijoje ose aktivizoje te <Link className="inline-link" href={`${base}/agents`}>Udhëzimet</Link>.</p>
+        : <HandoffMessageForm slug={slug} message={handoffMessage} updatedAt={agent.data.updated_at} fallback={defaultHandoffMessage} />}
+      <AgentBehaviorSetting slug={slug} kind="escalation" value={behavior.escalation} />
+    </>)}
+
+    <section className="panel section-pad grid gap-3" aria-labelledby="capability-voice">
+      <div className="section-title"><h2 id="capability-voice">Lexon mesazhet zanore dhe videot</h2></div>
+      <AgentBehaviorSetting slug={slug} kind="voice" value={behavior.voice} />
+    </section>
 
     <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
       <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />

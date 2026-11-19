@@ -1,5 +1,5 @@
 import { prompt } from "@/lib/ai/prompts/files";
-import { TransitionError, type ConditionObservation, type CustomerCommand, type FactInput, type Observation, type Snapshot, type Value } from "./contracts";
+import { TransitionError, type ConditionObservation, type CustomerCommand, type Escalation, type FactInput, type Observation, type Snapshot, type Value } from "./contracts";
 import { definitionFor, type Environment } from "./transition";
 
 type ObjectValue = Record<string, unknown>;
@@ -18,9 +18,16 @@ function parseFacts(value: unknown): FactInput[] {
     return { fieldId: fact.fieldId, value: fact.value, evidence: fact.evidence };
   });
 }
+/** Only a reading with a reason and a quote counts; "none" or a missing quote is no escalation. */
+function parseEscalation(value: unknown): Escalation | undefined {
+  if (value === undefined) return undefined;
+  if (!object(value) || !keys(value, ["needed", "reason", "evidence"]) || typeof value.needed !== "boolean" || typeof value.evidence !== "string"
+    || !["dissatisfied", "complaint", "not_helped", "none"].includes(String(value.reason))) reject();
+  return value.needed && value.reason !== "none" && text(value.evidence) ? { reason: value.reason as Escalation["reason"], evidence: value.evidence } : undefined;
+}
 /** Reject extra authority-bearing properties, malformed references and unbounded model output. */
 export function parseObservation(value: unknown): Observation {
-  if (!object(value) || !keys(value, ["revision", "commands", "needsClarification", ...(Object.hasOwn(value, "conditions") ? ["conditions"] : [])]) || !Number.isSafeInteger(value.revision)
+  if (!object(value) || !keys(value, ["revision", "commands", "needsClarification", ...(Object.hasOwn(value, "conditions") ? ["conditions"] : []), ...(Object.hasOwn(value, "escalation") ? ["escalation"] : [])]) || !Number.isSafeInteger(value.revision)
     || (value.revision as number) < 0 || typeof value.needsClarification !== "boolean" || !Array.isArray(value.commands) || value.commands.length > 32) reject();
   const commands: CustomerCommand[] = value.commands.map((command: unknown): CustomerCommand => {
     if (!object(command) || !text(command.kind)) reject();
@@ -59,7 +66,9 @@ export function parseObservation(value: unknown): Observation {
       || (c.outcome !== "yes" && c.outcome !== "no" && c.outcome !== "unclear")) reject();
     return { definitionId: c.definitionId, versionId: c.versionId, instanceId: c.instanceId, stepId: c.stepId, outcome: c.outcome, evidence: c.evidence };
   });
-  return { revision: value.revision as number, commands, needsClarification: value.needsClarification, ...(parsedConditions.length ? { conditions: parsedConditions } : {}) };
+  const escalation = parseEscalation(value.escalation);
+  return { revision: value.revision as number, commands, needsClarification: value.needsClarification, ...(parsedConditions.length ? { conditions: parsedConditions } : {}),
+    ...(escalation ? { escalation } : {}) };
 }
 
 const string = { type: "string" };
@@ -81,6 +90,7 @@ export const observationSchema = shape({
     command(["approve", "decline", "skip_field"], { instanceId: string, waitId: string, ...evidence }),
     command(["cancel", "resume", "suspend"], { instanceId: string, ...evidence }),
   ] } },
+  escalation: shape({ needed: { type: "boolean" }, reason: { type: "string", enum: ["dissatisfied", "complaint", "not_helped", "none"] }, ...evidence }),
 });
 
 /** Every declared field is included, including unanswered custom fields. No profile aliasing. */

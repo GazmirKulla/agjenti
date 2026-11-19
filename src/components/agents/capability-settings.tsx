@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { saveCustomerQuestions } from "@/lib/items/actions";
 import { saveAgentBooking } from "@/lib/calendar/actions";
 import { saveHandoffMessage } from "@/lib/agents/handoff-actions";
+import { saveAgentBehavior } from "@/lib/agents/behavior-actions";
 import { handoffMessageLimit } from "@/lib/agents/communication-policy";
 import type { BusinessField } from "@/lib/items/fields";
 
@@ -94,4 +95,35 @@ export function HandoffMessageForm({ slug, message, updatedAt, fallback }: { slu
     <div><button type="button" className="btn btn-primary" disabled={pending || value.trim() === message.trim()} onClick={save}>{pending ? "Duke ruajtur…" : "Ruaj mesazhin"}</button></div>
     <Feedback result={result} />
   </div>;
+}
+
+/** Whether the agent reads voice messages and videos, and what it does when a customer needs a person. */
+export function AgentBehaviorSetting({ slug, kind, value }: { slug: string; kind: "voice" | "escalation"; value: boolean | string }) {
+  const router = useRouter();
+  const [result, setResult] = useState<Result>({});
+  const [pending, start] = useTransition();
+  const save = (patch: { voice?: boolean; escalation?: string }) => start(async () => {
+    setResult({});
+    const response = await saveAgentBehavior(slug, patch);
+    setResult(response);
+    if (!response.error) router.refresh();
+  });
+  if (kind === "voice") return <div className="grid gap-2">
+    <label className="toggle-label">
+      <span>Lexo mesazhet zanore dhe videot<small>Agjenti e kthen në tekst atë që thotë klienti dhe i përgjigjet si një mesazhi të shkruar. Nga videoja kupton vetëm çfarë thuhet. Transkripti shfaqet te biseda.</small></span>
+      <input className="switch-input" type="checkbox" checked={value === true} disabled={pending} onChange={e => save({ voice: e.target.checked })} />
+    </label>
+    <Feedback result={result} />
+  </div>;
+  const options = [["handoff", "Ia kalon stafit", "Agjenti i thotë klientit mesazhin e kalimit dhe nuk përgjigjet më derisa ta rifillosh bisedën."],
+    ["notify", "Vetëm të njofton", "Agjenti vazhdon të përgjigjet dhe ti merr njoftim te paneli."],
+    ["off", "Asgjë", "Agjenti vazhdon si zakonisht."]] as const;
+  return <fieldset className="grid gap-2" style={{ border: 0, padding: 0, margin: 0 }}>
+    <legend className="font-semibold">Kur klienti duket i pakënaqur, ankohet ose Agjenti nuk po e ndihmon</legend>
+    {options.map(([option, title, hint]) => <label key={option} className="form-label" style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      <input type="radio" name="escalation" checked={value === option} disabled={pending} onChange={() => save({ escalation: option })} />
+      <span><strong>{title}</strong><br /><small className="muted-copy">{hint}</small></span>
+    </label>)}
+    <Feedback result={result} />
+  </fieldset>;
 }

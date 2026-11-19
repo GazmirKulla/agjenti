@@ -15,6 +15,9 @@ export interface NormalizedAttachment {
 	metadata?: Record<string, unknown> | null;
 	caption?: string | null;
 	filename?: string | null;
+	/** Set by the server after it transcribed a customer's voice message or video. */
+	transcript?: string;
+	transcriptFailure?: string;
 }
 
 export interface NormalizedIncomingMessage {
