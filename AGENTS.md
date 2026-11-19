@@ -24,7 +24,8 @@ Zbatohen në të gjithë këtë repository. Lexoji para planifikimit dhe ndryshi
 ## Ruajtja e funksionalitetit
 - Inspekto routes, komponentët, shërbimet, kontratat e të dhënave dhe testet përkatëse para se të propozosh zëvendësime.
 - Ripërdor funksionalitetin ekzistues. Ndryshimi i pamjes nuk autorizon heqjen, fshehjen pa hyrje alternative ose thjeshtimin e aftësive.
-- Workflow-t duhet të ruajnë editorin, nyjet, kushtet, lidhjet, validimin, provat, versionet dhe publikimin që sistemi mbështet realisht.
+- Procesi i zakonshëm i Agjentit ndërtohet nga serveri prej produkteve dhe cilësimeve të biznesit. Një sjellje e re e Agjentit shtohet si cilësim biznesi, jo si nyje workflow që pronari duhet ta vizatojë.
+- Editori i workflow-ve mbetet mjet i avancuar për bizneset që kanë publikuar procesin e vet (p.sh. veprime të jashtme). Ruaj editorin, nyjet, kushtet, lidhjet, validimin, provat, versionet dhe publikimin që sistemi mbështet realisht; mos e hiq pa kaluar më parë bizneset që e përdorin.
 - Ruaj aksesin manual; mos detyro përdorimin e chat-it për procese që kanë ndërfaqe funksionale.
 - Mos ndërto një implementim paralel vetëm sepse është më i lehtë për demonstrim. Nëse nevojitet migrim gradual, përcakto mënyrën e kalimit dhe shmang dy burime të së vërtetës.
 - Të dhënat sintetike dhe simulimet lejohen vetëm në prototipe të izoluara, të etiketuara qartë. Mos i paraqit si integrim real.

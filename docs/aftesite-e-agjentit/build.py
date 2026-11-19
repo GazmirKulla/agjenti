@@ -25,7 +25,7 @@ business=[
  ("Shërbimet",[(Y,"Krijo dhe ndrysho shërbimin"),(Y,"Oraret dhe cilësimet e kalendarit"),(P,"Fshirja: vetëm çaktivizim")]),
  ("Rezervimet",[(Y,"Krijo rezervim"),(Y,"Ndrysho ose anulo rezervim"),(Y,"Riprovo sinkronizimin"),(Y,"Disponueshmëria"),(Y,"Kërko rezervime"),(N,"Lidhja me Google Calendar")]),
  ("Agjenti",[(Y,"Udhëzimet dhe stili i komunikimit"),(Y,"Menaxhimi i agjentit"),(Y,"Ruaj trajnimin"),(Y,"Ndrysho trajnimin"),(N,"Provë në Chat Lab")]),
- ("Workflow",[(Y,"Lexo workflow-in"),(Y,"Ndërto draftin"),(Y,"Publiko"),(Y,"Ndiz, fik, rikthe"),(N,"Simulimi")]),
+ ("Proceset",[(Y,"Lexo procesin"),(Y,"Drejton te cilësimi përkatës në vend që të krijojë proces"),(P,"Ndrysho, publiko, ndiz, rikthe: vetëm për biznes që ka publikuar procesin e vet"),(Y,"Fik procesin e personalizuar"),(N,"Simulimi")]),
  ("Produktet",[(Y,"Krijo produkt"),(Y,"Ndrysho produkt"),(Y,"Arkivo, fshi, rikthe"),(Y,"Konfigurim në grup"),(Y,"Ndrysho një fushë"),(Y,"Produkt vetëm për informim"),(Y,"Numëro dhe krahaso me query në server"),(P,"Importi"),(P,"Foto: vetëm me URL, pa ngarkim"),(N,"Stoku"),(N,"Struktura dhe fushat e produkteve")]),
  ("Raportet dhe Aktiviteti",[(Y,"Përmbledhja e periudhës"),(Y,"Njoftimet për vëmendje"),(Y,"Bisedat e fundit"),(N,"Suksesi i Agjentit në procese"),(N,"Pyetjet që Agjenti nuk diti, me propozim për njohuri të reja")]),
  ("Njohuritë",[(Y,"Shto dhe ndrysho"),(Y,"Fshi"),(N,"Import FAQ nga burime të jashtme")]),

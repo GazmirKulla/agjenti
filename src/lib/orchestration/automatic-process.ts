@@ -138,6 +138,13 @@ async function hasOwnWorkflow(businessId: string) {
   return Boolean(data?.published_version_id);
 }
 
+/** For a gate: whether the owner has published a process of their own. Throws when it cannot be verified. */
+export async function ownProcessPublished(businessId: string): Promise<boolean> {
+  const { data, error } = await createServiceSupabase().from("visual_workflows").select("published_version_id").eq("business_id", businessId).maybeSingle();
+  if (error) throw new Error("own_process_unverified");
+  return Boolean(data?.published_version_id);
+}
+
 /**
  * The automatic version for a business without its own workflow, stored once so conversations can be
  * pinned to it and the database can verify it. Null when the business has its own workflow, when nothing

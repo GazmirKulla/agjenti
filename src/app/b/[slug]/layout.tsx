@@ -11,6 +11,7 @@ import {
 import { AppShell } from "@/components/dashboard/shell";
 import { getAppSettings } from "@/lib/platform/settings";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
+import { ownProcessPublished } from "@/lib/orchestration/automatic-process";
 import { loadNavigationProfile } from "@/lib/dashboard/profile/service";
 import { loadBillingUsage } from "@/lib/billing/service";
 import { loadItemSetup } from "@/lib/items/business";
@@ -43,14 +44,21 @@ export default async function BusinessLayout({
     channelAttention(business.id),
     loadReadiness(business),
   ]);
-  const items = await loadItemSetup(business.id);
+  const [items, ownProcess] = await Promise.all([
+    loadItemSetup(business.id),
+    // When it cannot be verified, the editor stays in the menu rather than hiding a process that runs.
+    ownProcessPublished(business.id).catch(() => true),
+  ]);
   const sectionLabels = { products: items.names.plural };
-  const navigationItems = buildNavigationItems(dashboardProfile, "desktop", sectionLabels);
-  const mobileNavigationItems = buildNavigationItems(
+  // The workflow editor is in the menu only for a business that published a process of its own; for the
+  // others it stays under Cilësimet → Mjete të avancuara and Agjenti → Çfarë bën Agjenti.
+  const menu = (list: ReturnType<typeof buildNavigationItems>) => ownProcess ? list : list.filter(item => item.id !== "workflows");
+  const navigationItems = menu(buildNavigationItems(dashboardProfile, "desktop", sectionLabels));
+  const mobileNavigationItems = menu(buildNavigationItems(
     dashboardProfile,
     "mobile",
     sectionLabels,
-  );
+  ));
   return (
     <DashboardLanguageProvider language={language}>
     <AssistantWorkspaceProvider key={`${user.id}:${business.slug}`} userId={user.id} userName={typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : typeof user.user_metadata?.name === "string" ? user.user_metadata.name : undefined} slug={business.slug} name={business.name} modules={dashboardProfile.navigationItems} external={business.catalog_source === "external"}>

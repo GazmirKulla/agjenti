@@ -40,6 +40,7 @@ import { parseProductQuery, queryFields, runProductQuery } from "./product-query
 import OpenAI from "@/lib/ai/openai";
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { customProcessRefusal } from "./custom-process-policy";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/tokens";
 import { modelFor } from "@/lib/agents/generate";
 import { assessBusinessCapabilities, summarizeCapabilityAssessments } from "@/lib/capabilities/assessment";
@@ -724,6 +725,7 @@ export async function prepareProposal(
     ] };
   }
   if (p.action === "clarify") return { clarifying: true, message: p.message, ...(p.choices?.length?{choices:p.choices}:{}) };
+  await assertCustomProcessChange(access.businessId, p.action);
   if(p.action.startsWith("linear_")) return prepareLinear(access,p);
   if (p.action.startsWith("orderflow_")) return prepareOrderFlow(access, p);
   if (p.action.startsWith("workflow_")) return prepareWorkflow(access, p, expected?.revision as number | undefined);
@@ -947,4 +949,10 @@ export async function executeTicket(access: Access, token: string) {
     message: configurationEffect ? configurationEffectMessage(configurationEffect) : "Ndryshimet u ruajtën.",
     path: kind === "profile" ? "settings" : moduleFor(t.action),
   };
+}
+
+/** The Assistant's gate before a process-changing action; see custom-process-policy. */
+async function assertCustomProcessChange(businessId: string, action: string) {
+  const refusal = await customProcessRefusal(businessId, action);
+  if (refusal) throw new AssistantError(refusal);
 }

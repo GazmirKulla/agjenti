@@ -1,4 +1,5 @@
 import { loadSetupStatus } from "@/lib/setup/status";
+import { customProcessRefusal } from "@/lib/business-assistant/custom-process-policy";
 import { setupGateMessage } from "@/lib/setup/model";
 import { executeAgentTestTurn } from "@/lib/agents/test-chat/execute-turn";
 import { createIsolatedExecution, runWithExecution } from "@/lib/runtime/execution-context";
@@ -58,6 +59,8 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     if (!Array.isArray(input.messages) || !input.messages.length || input.messages.length > 8 || input.messages.some(m => typeof m !== "string" || !m.trim() || m.length > 2000)) throw new OperationError("Prova kërkon 1–8 mesazhe të vlefshme.");
   }
   if (operation === "workflow.configure") {
+    const refusal = await customProcessRefusal(businessId, operation);
+    if (refusal) throw new OperationError(refusal);
     if (!["draft","publish"].includes(String(input.mode)) || typeof input.request !== "string" || !input.request.trim() || input.request.length > 12000 || input.mode === "draft" && !Array.isArray(input.operations) || input.mode === "publish" && input.operations !== undefined) throw new OperationError("Konfigurim workflow i pavlefshëm.");
     const result = await prepareWorkflow({businessId,userId,accessToken,modules:await loadAllowedModules(businessId),catalogSource:actor.business.catalog_source}, {
       action: input.mode === "draft" ? "workflow_draft" : "workflow_publish", id:null, message:input.request, requestedText:input.request,
