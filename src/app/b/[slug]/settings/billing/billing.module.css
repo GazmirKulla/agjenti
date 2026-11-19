@@ -43,3 +43,4 @@
   .row { grid-template-columns: 1fr 70px; }
   .row .meter { grid-column: 1 / -1; grid-row: 2; }
 }
+.includes li.includesHead::before { content: none; }
