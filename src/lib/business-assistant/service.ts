@@ -1,4 +1,5 @@
 import { prompt } from "@/lib/ai/prompts/files";
+import { settingsContext } from "@/lib/settings/store";
 import { OperationError } from "@/lib/actions/operations/error";
 import { applyRequestedWorkflow } from "./workflow-apply";
 import { configurationInstructions, orderFlowInstructions, linearInstructions, workflowPlanningContract, automationInstructions, actionPlanInstructions, workflowEditorInstructions as baseWorkflowInstructions } from "./prompts";
@@ -383,6 +384,8 @@ export async function planRequest(
     group.rows = [...selectedProducts, ...group.rows.filter(row => !selectedProducts.some(p => p.id === row.id))];
   }
   const productSetup = await productSetupRead;
+  // The settings the owner can ask to change (stock, fields, questions, kind, sections, integrations), as stored.
+  try { context.businessSettings = await settingsContext(access.businessId, access.modules); } catch { context.businessSettings = { status: "unavailable" }; }
   let selectedForModel = selected;
   if (productSetup) {
     const group = context.product as { rows: Row[]; returnedCount: number; partial: boolean; reason?: string } | undefined;

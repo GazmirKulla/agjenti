@@ -1,40 +1,19 @@
 "use server";
-import { createServiceSupabase } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { loadAllowedModules } from "./entitlements";
-import { loadDashboardProfile } from "../profile/service";
-import { rebuildProfileFromModules } from "../profile/generate";
-import { moduleRegistry, toggleableModules } from "./registry";
-import type { ModuleId } from "./types";
+import { toggleableModules } from "./registry";
 import { showModuleFor } from "./show";
+import { storeModules } from "@/lib/settings/store";
 
 export async function saveModules(slug: string, formData: FormData) {
   const user = await getSessionUser();
   const access = user ? await requireBusinessAccess(user.id, slug) : null;
   if (!user || !access) return { error: "Nuk ke qasje në këtë biznes." };
   try {
-    const [profile, permitted] = await Promise.all([
-      loadDashboardProfile(access.business.id),
-      loadAllowedModules(access.business.id),
-    ]);
-    const selected = toggleableModules.filter(id => formData.get(`module_${id}`) === "on");
-    const allowed = new Set(permitted);
-    if (selected.some(id => !allowed.has(id)))
-      return { error: "Qasja te një seksion nuk u verifikua. Rifresko faqen." };
-    const enabled = new Set<ModuleId>([
-      ...profile.enabledModules.filter(id => moduleRegistry[id].core), ...selected,
-    ]);
-    const preferences = { ...rebuildProfileFromModules([...enabled], profile.signals),
-      enabledModules: [...enabled], hiddenModules: toggleableModules.filter(id => !selected.includes(id)) };
-    const { error } = await createServiceSupabase().rpc("save_business_modules", {
-      p_business: access.business.id,
-      p_user: user.id,
-      p_profile: preferences,
-    });
-    if (error) return { error: "Pamja nuk u ruajt. Vetëm pronari ose administratori mund ta ndryshojë; kontrollo edhe lejet aktuale." };
+    const result = await storeModules(access.business.id, user.id, toggleableModules.filter(id => formData.get(`module_${id}`) === "on"));
+    if ("error" in result) return result;
     revalidatePath(`/b/${access.business.slug}`, "layout");
-    return { success: "Seksionet e panelit u përditësuan. Aftësitë e asistentit nuk ndryshuan." };
+    return result;
   } catch {
     return { error: "Pamja nuk u ruajt. Rifresko faqen dhe provo përsëri." };
   }

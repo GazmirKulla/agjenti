@@ -1,4 +1,5 @@
 import { loadSetupStatus } from "@/lib/setup/status";
+import { executeSettingsOperation, isSettingsOperation, prepareSettingsOperation } from "@/lib/settings/operations";
 import { after } from "next/server";
 import { businessSources, refreshBusinessSources } from "@/lib/knowledge/source-refresh";
 import { workerOrigin } from "@/lib/discovery/continue";
@@ -163,6 +164,14 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     snapshot.stateRevision = state.data.revision;
     subject = String(snapshot.participant_display_name ?? id);
   }
+  // Settings: the preview compares the stored settings with the proposed ones, in the owner's words.
+  let settingsLines: { label: string; before: string; after: string }[] | null = null;
+  if (isSettingsOperation(operation)) {
+    try {
+      const prepared = await prepareSettingsOperation(businessId, operation, input);
+      snapshot = prepared.snapshot; subject = prepared.subject; settingsLines = prepared.lines;
+    } catch (error) { throw new OperationError(error instanceof Error ? error.message : "Cilësimet nuk u verifikuan."); }
+  }
   const previewInput = operation === "product.field" ? { [String(input.field)]: input.value } : input;
   const previous = operation === "calendar.settings" || operation === "agent.manage" ? (snapshot.before ?? {}) as Record<string, unknown> : operation === "business.autoreply" ? { enabled: snapshot.auto_reply } : snapshot;
   const preview: Preview = { title: operationCatalog[operation].title, subject,
@@ -171,6 +180,11 @@ export async function prepareOperation(businessId: string, userId: string, key: 
       : operation === "knowledge.delete" ? "Fshirja është përfundimtare. Kjo njohuri nuk do të përdoret më në përgjigjet e Agjentit."
       : operation === "agent.manage" && (snapshot.values as Record<string, unknown>).is_active ? `Agjenti aktiv zëvendësohet. Aktualisht: ${(snapshot.activeNames as string[]).join(", ") || "asnjë"}.`
       : operation === "product.restore" ? "Produkti rikthehet si draft joaktiv." : undefined };
+  if (settingsLines) {
+    preview.fields = settingsLines;
+    if (operation === "modules.configure") preview.notice = "Fshehja e një seksioni e heq vetëm nga menuja: të dhënat dhe aftësitë e Agjentit nuk ndryshojnë.";
+    if (operation === "integrations.check") preview.notice = "Vetëm provë: nuk ndryshon lidhjen dhe as produktet.";
+  }
   if (operation === "agent.communication") {
     const current = snapshot.before as Record<string, unknown>;
     const proposed = snapshot.preview as Record<string, unknown> | null;
@@ -273,7 +287,10 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
   } else if (key === "calendar.settings") return saveCalendarConfiguration(businessId, userId, before as Awaited<ReturnType<typeof prepareCalendarConfiguration>>);
   else if (key === "agent.communication") return saveCommunicationConfiguration(businessId, userId, before as Awaited<ReturnType<typeof prepareCommunicationConfiguration>>);
   else if (key === "agent.manage") return saveManagedAgent(businessId, userId, before as Awaited<ReturnType<typeof prepareManagedAgent>>);
-  else if (key === "sources.refresh") {
+  else if (isSettingsOperation(key)) {
+    try { return await executeSettingsOperation(businessId, userId, key, input as Record<string, unknown>, before as Record<string, unknown>); }
+    catch (error) { throw new OperationError(error instanceof Error ? error.message : "Ndryshimi nuk u ruajt."); }
+  } else if (key === "sources.refresh") {
     const queued = await refreshBusinessSources(businessId, userId, workerOrigin(null));
     if (!queued.website && !queued.instagram) throw new OperationError("Burimet nuk u rilexuan. Provo nga Njohuritë → Nga ku mëson Agjenti.");
     return { message: "Rifreskimi nisi. Çfarë është e re ose ndryshe do të shfaqet te Njohuritë si propozim për ta shqyrtuar.", path: "knowledge" };
