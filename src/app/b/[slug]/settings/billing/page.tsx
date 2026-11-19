@@ -1,35 +1,40 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PageHeading } from "@/components/dashboard/ui";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { billingState, loadBillingUsage, loadUsageBreakdown, plans } from "@/lib/billing/service";
+import { billingState, loadBillingUsage, loadUsageBreakdown, plans, type BillingPlan } from "@/lib/billing/service";
 import { isPaidPlan, loadPaymentCard, loadPaymentHistory } from "@/lib/billing/payments";
 import { pokConfigured, pokEnvironment } from "@/lib/billing/pok";
+import { createServiceSupabase } from "@/lib/supabase/service";
 import { BillingCheckout } from "@/components/dashboard/billing-checkout";
+import s from "./billing.module.css";
 
-const planFeatures = {
-  // Every plan has every feature; plans differ only in AI messages per month.
-  free: ["1,000 mesazhe AI në muaj", "Të gjitha modulet dhe kanalet", "Biznese pa kufi", "Rinovim më datë 1 të muajit"],
-  starter: ["10,000 mesazhe AI në muaj", "Të gjitha modulet dhe kanalet", "Biznese pa kufi", "Rinovim në datën e abonimit"],
-  professional: ["50,000 mesazhe AI në muaj", "Të gjitha modulet dhe kanalet", "Biznese pa kufi", "Rinovim në datën e abonimit"],
-  enterprise: ["200,000 mesazhe AI në muaj", "Të gjitha modulet dhe kanalet", "Biznese pa kufi", "Suport prioritar"],
-} as const;
-const planTaglines = { free: "Për të nisur", starter: "Për biznese të vogla", professional: "Për biznese në rritje", enterprise: "Për volum të lartë" } as const;
-const tabs = [["plans", "Paketat"], ["usage", "Përdorimi"], ["billing", "Faturimi"]] as const;
+// Every plan has every feature; plans differ only in AI messages per month (and priority support).
+const planOrder: BillingPlan[] = ["free", "starter", "professional", "enterprise"];
+const planCopy: Record<BillingPlan, { tag: string; icon: string; includes: string[] }> = {
+  free: { tag: "Për të nisur", icon: "F", includes: ["1,000 mesazhe AI në muaj", "Të gjitha modulet dhe kanalet", "Biznese pa kufi"] },
+  starter: { tag: "Për biznese të vogla", icon: "S", includes: ["10,000 mesazhe AI në muaj", "Rinovim në datën e pagesës"] },
+  professional: { tag: "Për biznese në rritje", icon: "P", includes: ["50,000 mesazhe AI në muaj", "Për disa biznese me shumë biseda"] },
+  enterprise: { tag: "Për volum të lartë", icon: "E", includes: ["200,000 mesazhe AI në muaj", "Suport prioritar"] },
+};
+const tabs = [["usage", "Përdorimi"], ["plans", "Paketat"], ["billing", "Faturimi"]] as const;
 type Tab = (typeof tabs)[number][0];
 const statusLabels = { paid: "Paguar", pending: "Në përpunim", failed: "Nuk u krye" } as const;
+const day = 86400000;
 
-const dateLabel = (value: string) => new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Tirane" }).format(new Date(value));
-const money = (amount: number, currency: string) => `${amount.toLocaleString("sq-AL")} ${currency === "ALL" ? "lekë" : currency}`;
+const dateLabel = (value: string | number) => new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "long", timeZone: "Europe/Tirane" }).format(new Date(value));
+const fullDate = (value: string) => new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Tirane" }).format(new Date(value));
+const money = (amount: number) => `${amount.toLocaleString("sq-AL")} lekë`;
+const meterClass = (pct: number) => `${s.meter} ${pct >= 100 ? s.full : pct >= 80 ? s.warn : ""}`;
 
 /**
- * Cilësimet → Paketa dhe pagesat, in three parts like the AI platforms: the plans side by side, the usage of
- * this period, and billing (the saved card, the next payment, every payment with its receipt).
+ * Cilësimet → Paketa dhe pagesat, like the AI platforms: Përdorimi (how much of this period is used, at what
+ * pace, per business), Paketat (the plans side by side, each with its button) and Faturimi (card, payment,
+ * every payment with its receipt). Only the person who pays the plan changes it.
  */
-export default async function BillingPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ tab?: string }> }) {
+export default async function BillingPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ tab?: string; plan?: string }> }) {
   const { slug: requestedSlug } = await params;
-  const requestedTab = (await searchParams).tab;
-  const tab: Tab = tabs.some(([id]) => id === requestedTab) ? requestedTab as Tab : "plans";
+  const query = await searchParams;
+  const tab: Tab = tabs.some(([id]) => id === query.tab) ? query.tab as Tab : "usage";
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, requestedSlug);
@@ -38,97 +43,122 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
   const usage = await loadBillingUsage(access.business.id);
   const state = billingState(usage);
   const payer = usage.scope === "account" && usage.billingUserId === user.id;
-  const currentPlan = plans[usage.plan];
-  // Only the person who pays sees card payments; POK must be configured first.
+  const current = plans[usage.plan];
   const canPay = payer && pokConfigured();
-  const [breakdown, card, history] = await Promise.all([
-    tab === "usage" && payer && usage.billingUserId ? loadUsageBreakdown(usage.billingUserId, usage.periodStart).catch(() => []) : Promise.resolve([]),
+  const [breakdown, card, history, payerEmail] = await Promise.all([
+    tab === "usage" && usage.billingUserId ? loadUsageBreakdown(usage.billingUserId, usage.periodStart).catch(() => []) : Promise.resolve([]),
     canPay ? loadPaymentCard(user.id).catch(() => null) : Promise.resolve(null),
     tab === "billing" && payer ? loadPaymentHistory(user.id).catch(() => null) : Promise.resolve([]),
+    !payer && usage.billingUserId ? createServiceSupabase().from("profiles").select("email").eq("id", usage.billingUserId).maybeSingle().then(r => r.data?.email ?? null, () => null) : Promise.resolve(null),
   ]);
-  const paidOptions = (Object.keys(plans) as Array<keyof typeof plans>).filter(isPaidPlan).map((key) => ({ key, name: plans[key].name, price: plans[key].monthlyPrice }));
-  const renewal = usage.paidUntil ? `Paguar deri më ${dateLabel(usage.paidUntil)}; pastaj kthehet në Free nëse nuk paguhet muaji tjetër.` : usage.plan === "free" ? "Paketa falas rifillon çdo muaj." : "Paketa e vendosur nga administratori.";
+  const selected = isPaidPlan(query.plan) ? query.plan : null;
+  const paidOptions = planOrder.filter(isPaidPlan).map((key) => ({ key, name: plans[key].name, price: plans[key].monthlyPrice }));
+  const higher = planOrder.find(key => plans[key].monthlyPrice > current.monthlyPrice);
 
-  return <>
-    <PageHeading eyebrow="Cilësimet" title="Paketa dhe pagesat"
-      description="Paketa që përdor, sa mesazhe AI ke përdorur këtë periudhë dhe pagesat e tua. Çdo përgjigje AI numërohet si një mesazh: te klientët dhe nga asistenti për ty." />
-    <nav className="billing-tabs" aria-label="Paketa dhe pagesat" style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--line)", marginBottom: 16 }}>
-      {tabs.map(([id, label]) => <Link key={id} href={`${base}?tab=${id}`} aria-current={tab === id ? "page" : undefined}
-        style={{ padding: "8px 14px", borderBottom: tab === id ? "2px solid var(--accent)" : "2px solid transparent", color: tab === id ? "var(--ink)" : "var(--ink-muted)", fontWeight: tab === id ? 600 : 500, textDecoration: "none" }}>{label}</Link>)}
+  // At this pace, will the messages last until the period renews?
+  const start = Date.parse(usage.periodStart), end = Date.parse(usage.periodEnd), now = Date.now();
+  const elapsed = Math.max(day / 4, now - start), pace = state.counted / elapsed;
+  const runsOutAt = pace > 0 ? now + state.monthlyRemaining / pace : null;
+  const heading = state.exhausted ? "Mesazhet e kësaj periudhe janë përdorur. Përgjigjet automatike dhe asistenti janë në pauzë deri në rinovim."
+    : runsOutAt && runsOutAt < end ? `Kujdes: me këtë ritëm mesazhet mbarojnë rreth ${dateLabel(runsOutAt)}, para rinovimit më ${dateLabel(end)}.`
+    : state.counted ? `Me këtë ritëm, mesazhet të mjaftojnë deri në rinovimin më ${dateLabel(end)}.` : `Mesazhet rifillojnë më ${dateLabel(end)}.`;
+  const who = payer ? null : payerEmail ? `Paketën e menaxhon ${payerEmail}, që e paguan.` : "Paketën e menaxhon pronari që e paguan.";
+
+  return <div className={s.panel}>
+    <div><p className="page-eyebrow">Cilësimet</p><h1 style={{ margin: 0 }}>Paketa dhe pagesat</h1></div>
+    <nav className={s.tabs} aria-label="Paketa dhe pagesat">
+      {tabs.map(([id, label]) => <Link key={id} href={`${base}?tab=${id}`} aria-current={tab === id ? "page" : undefined}>{label}</Link>)}
     </nav>
 
-    {tab === "plans" && <>
-      <section className="panel section-pad billing-summary">
-        <div className="billing-summary-copy">
-          <p className="page-eyebrow">{usage.scope === "account" ? (payer ? "Paketa jote" : "Paketa e pronarit të biznesit") : "Paketa e biznesit"}</p>
-          <h2>{currentPlan.name}</h2>
-          <p className="muted-copy">{renewal}</p>
-          {usage.scope === "account" && <p className="muted-copy">{payer ? "Vlen për të gjitha bizneset e tua, me një kuotë të përbashkët." : "Paketën e menaxhon pronari që paguan."}</p>}
+    {tab === "usage" && <section className={s.panel} aria-label="Përdorimi">
+      <h2 className={s.title}>Përdorimi yt <span className={s.badge}>{current.name}</span></h2>
+      <p className={s.notice}>{heading}</p>
+      <div className={s.actions}>
+        {higher && <Link className="btn btn-primary" href={`${base}?tab=plans`}>Kalo në një paketë më të madhe</Link>}
+        <button type="button" className="btn btn-ghost" disabled title="Së shpejti">Bli mesazhe shtesë · së shpejti</button>
+      </div>
+      {who && <p className="muted-copy" style={{ margin: 0 }}>{who}</p>}
+      <div className={s.rows}>
+        <div className={s.row}>
+          <span><strong>Këtë periudhë</strong><small>Rifillon më {dateLabel(end)}</small></span>
+          <div className={meterClass(state.percentage)} role="img" aria-label={`${state.percentage}% e përdorur`}><span style={{ width: `${Math.min(100, state.percentage)}%` }} /></div>
+          <span className={s.pct}>{state.percentage}% e përdorur</span>
         </div>
-      </section>
-      <section className="billing-plans" aria-label="Paketat">
-        {(Object.keys(plans) as Array<keyof typeof plans>).map((key) => {
-          const plan = plans[key];
-          const current = key === usage.plan;
-          const higher = plan.monthlyPrice > currentPlan.monthlyPrice;
-          return <article className={`panel billing-plan ${current ? "is-current" : ""}`} key={key}>
-            <div className="billing-plan-head"><h2>{plan.name}</h2>{current && <span className="billing-current">Aktual</span>}</div>
-            <p className="muted-copy">{planTaglines[key]}</p>
-            <p className="billing-price">{plan.monthlyPrice === 0 ? "Falas" : `${plan.monthlyPrice.toLocaleString("sq-AL")} lekë`}<small>{plan.monthlyPrice === 0 ? "" : " / muaj"}</small></p>
-            <ul>{planFeatures[key].map((feature) => <li key={feature}>{feature}</li>)}</ul>
-            {current ? <span className="billing-plan-status">Në përdorim</span>
-              : key === "free" ? <span className="billing-plan-status muted">Kthehesh këtu kur mbaron koha e paguar.</span>
-              : canPay ? <Link className={higher ? "btn btn-primary" : "btn btn-ghost"} href={`${base}?tab=billing&plan=${key}`}>{higher ? `Kalo në ${plan.name}` : `Zgjidh ${plan.name}`}</Link>
-              : <span className="billing-plan-status muted">{payer ? "Pagesat me kartë do të aktivizohen së shpejti." : "Paketën e ndryshon pronari që paguan."}</span>}
+        <div className={s.row}>
+          <span><strong>Mesazhe AI</strong><small>Përgjigjet te klientët dhe nga asistenti</small></span>
+          <span style={{ color: "var(--ink-muted)" }}>{state.counted.toLocaleString("sq-AL")} nga {usage.limit.toLocaleString("sq-AL")}</span>
+          <span className={s.pct}>{state.monthlyRemaining.toLocaleString("sq-AL")} mbetur</span>
+        </div>
+        <div className={s.row}>
+          <span><strong>Mesazhe shtesë</strong><small>Përdoren kur mbarojnë mesazhet e paketës</small></span>
+          <span />
+          <span className={s.pct}>{Math.max(0, usage.extra - usage.extraReserved).toLocaleString("sq-AL")}</span>
+        </div>
+      </div>
+      {breakdown.length > 0 && <>
+        <h3 className={s.section}>Përdorimi sipas biznesit</h3>
+        <div className={s.rows}>{breakdown.map(row => {
+          const share = state.counted ? Math.round(row.used / Math.max(1, state.counted) * 100) : 0;
+          return <div key={row.id} className={s.row}>
+            <span><strong>{row.name}</strong><small>{row.used.toLocaleString("sq-AL")} mesazhe</small></span>
+            <div className={s.meter} role="img" aria-label={`${share}% e përdorimit`}><span style={{ width: `${share}%` }} /></div>
+            <span className={s.pct}>{share}%</span>
+          </div>;
+        })}</div>
+      </>}
+    </section>}
+
+    {tab === "plans" && <section className={s.upgrade} aria-label="Paketat">
+      <h2 className={s.upgradeTitle}>Paketa që rriten me biznesin tënd</h2>
+      {who && <p className="muted-copy" style={{ margin: 0 }}>{who}</p>}
+      <div className={s.cards}>
+        {planOrder.map((key, index) => {
+          const plan = plans[key], isCurrent = key === usage.plan, up = plan.monthlyPrice > current.monthlyPrice;
+          const previous = index > 0 ? plans[planOrder[index - 1]].name : null;
+          return <article key={key} className={`${s.card} ${isCurrent ? s.current : ""}`}>
+            <span className={s.icon} aria-hidden>{planCopy[key].icon}</span>
+            <div><h3 className={s.cardName}>{plan.name}</h3><p className={s.cardTag}>{planCopy[key].tag}</p></div>
+            <div className={s.price}><strong>{plan.monthlyPrice ? plan.monthlyPrice.toLocaleString("sq-AL") : "0"}</strong><span>lekë / muaj{plan.monthlyPrice ? <><br />paguhet çdo muaj</> : <><br />falas</>}</span></div>
+            {isCurrent ? <button type="button" className={`btn btn-ghost ${s.cta}`} disabled>Paketa jote</button>
+              : key === "free" ? <button type="button" className={`btn btn-ghost ${s.cta}`} disabled>Kthehesh këtu kur mbaron koha e paguar</button>
+              : !payer ? <button type="button" className={`btn btn-ghost ${s.cta}`} disabled>E ndryshon pronari që paguan</button>
+              : <Link className={`btn ${up ? "btn-primary" : "btn-ghost"} ${s.cta}`} href={`${base}?tab=billing&plan=${key}`}>{up ? `Kalo në ${plan.name}` : `Zgjidh ${plan.name}`}</Link>}
+            {!isCurrent && key !== "free" && payer && <p className={s.ctaNote}>{canPay ? "Pa angazhim · paguan muaj për muaj" : "Pagesat me kartë aktivizohen së shpejti"}</p>}
+            <ul className={s.includes}>
+              <li className={s.includesHead} style={{ display: "block" }}>{previous ? `Gjithçka te ${previous}, plus:` : "Përfshin:"}</li>
+              {planCopy[key].includes.map(item => <li key={item}>{item}</li>)}
+            </ul>
           </article>;
         })}
-      </section>
-    </>}
+      </div>
+      <p className={s.footnote}>Çdo përgjigje AI numërohet si një mesazh: te klientët dhe nga asistenti për ty. Mesazhet hyrëse dhe përgjigjet që shkruan vetë nuk numërohen. Paketa vlen për të gjitha bizneset e pronarit që paguan.</p>
+    </section>}
 
-    {tab === "usage" && <>
-      <section className="panel section-pad billing-summary">
-        <div className="billing-summary-copy">
-          <p className="page-eyebrow">Mesazhe AI në këtë periudhë</p>
-          <h2>{state.percentage}% e përdorur</h2>
-          <p className="muted-copy">Rifillon më {dateLabel(usage.periodEnd)}.</p>
+    {tab === "billing" && <section className={s.panel} aria-label="Faturimi">
+      <h2 className={s.title}>Faturimi <span className={s.badge}>{current.name}</span></h2>
+      {!payer ? <p className="muted-copy">{who} Ti sheh paketën dhe përdorimin.</p> : <>
+        <div className={s.rows}>
+          <div className={s.row}><span><strong>Paketa</strong><small>{current.monthlyPrice ? `${money(current.monthlyPrice)} / muaj` : "Falas"}</small></span><span />
+            <span className={s.pct}><Link className="inline-link" href={`${base}?tab=plans`}>Ndrysho</Link></span></div>
+          <div className={s.row}><span><strong>{usage.paidUntil ? "Paguar deri më" : "Rinovimi"}</strong><small>{usage.paidUntil ? "Paguaj sërish para kësaj date që të vazhdojë; përndryshe kthehet në Free." : usage.plan === "free" ? "Paketa falas rifillon çdo muaj." : "Paketa e vendosur nga administratori."}</small></span><span />
+            <span className={s.pct}>{usage.paidUntil ? fullDate(usage.paidUntil) : fullDate(usage.periodEnd)}</span></div>
         </div>
-        <div className="billing-total" aria-label={`${state.counted} nga ${usage.limit} mesazhe të përdorura`}>
-          <strong>{state.counted.toLocaleString("sq-AL")}</strong><span>nga {usage.limit.toLocaleString("sq-AL")} mesazhe</span>
-        </div>
-        <div className="billing-meter" aria-hidden="true"><span style={{ width: `${state.percentage}%` }} /></div>
-        <p className="billing-availability">
-          {state.exhausted ? "Mesazhet e paketës janë përdorur. Përgjigjet automatike dhe asistenti janë në pauzë deri në rinovim ose deri sa të kalosh në një paketë më të madhe."
-            : state.percentage >= 80 ? `Po afrohesh te kufiri: kanë mbetur ${state.monthlyRemaining.toLocaleString("sq-AL")} mesazhe.`
-            : `Kanë mbetur ${state.monthlyRemaining.toLocaleString("sq-AL")} mesazhe në këtë periudhë.`}
-          {usage.extra > 0 && ` Ke edhe ${Math.max(0, usage.extra - usage.extraReserved).toLocaleString("sq-AL")} mesazhe shtesë.`}
-        </p>
-      </section>
-      {breakdown.length > 0 && <section className="panel section-pad billing-breakdown" aria-label="Mesazhet sipas biznesit">
-        <h2>Sipas biznesit</h2>
-        <ul>{breakdown.map((row) => <li key={row.id}><span>{row.name}</span><strong>{row.used.toLocaleString("sq-AL")}</strong></li>)}</ul>
-      </section>}
-      <p className="muted-copy">Numërohen përgjigjet AI te klientët dhe përgjigjet e asistentit për ty. Mesazhet hyrëse dhe përgjigjet që shkruan vetë nuk numërohen.</p>
-    </>}
-
-    {tab === "billing" && <>
-      {!payer ? <section className="panel section-pad"><p className="muted-copy">Pagesat i menaxhon pronari që paguan paketën. Ti sheh paketën dhe përdorimin.</p></section> : <>
-        {canPay ? <BillingCheckout env={pokEnvironment()} card={card ? { label: card.label } : null} currentPlan={usage.plan} paidUntil={usage.paidUntil} plans={paidOptions} />
-          : <section className="panel section-pad"><h2>Mënyra e pagesës</h2><p className="muted-copy">Pagesat me kartë (POK) do të aktivizohen së shpejti. Deri atëherë paketën e vendos administratori.</p></section>}
-        <section className="panel section-pad grid gap-3" aria-labelledby="billing-history">
-          <h2 id="billing-history">Pagesat</h2>
-          {history === null ? <p className="muted-copy">Pagesat nuk u lexuan. Rifresko faqen.</p>
-            : !history.length ? <p className="muted-copy">Ende nuk ke pagesa.</p>
-            : <div style={{ overflowX: "auto" }}><table className="data-table">
-              <thead><tr><th>Data</th><th>Paketa</th><th>Periudha</th><th>Shuma</th><th>Gjendja</th><th /></tr></thead>
-              <tbody>{history.map(p => <tr key={p.id}>
-                <td>{dateLabel(p.paidAt ?? p.createdAt)}</td><td>{plans[p.plan].name}</td>
-                <td>{p.periodStart && p.periodEnd ? `${dateLabel(p.periodStart)} – ${dateLabel(p.periodEnd)}` : "—"}</td>
-                <td>{money(p.amount, p.currency)}</td><td>{statusLabels[p.status]}</td>
-                <td>{p.status === "paid" && <Link className="inline-link" href={`${base}/receipt/${p.id}`}>Mandati</Link>}</td>
-              </tr>)}</tbody>
-            </table></div>}
-        </section>
+        {selected && <p className={s.notice}>Po kalon në {plans[selected].name} · {money(plans[selected].monthlyPrice)} / muaj</p>}
+        {canPay ? <BillingCheckout env={pokEnvironment()} card={card ? { label: card.label } : null} currentPlan={usage.plan} paidUntil={usage.paidUntil} plans={paidOptions} selected={selected} />
+          : <p className="muted-copy">Pagesat me kartë (POK) aktivizohen së shpejti. Deri atëherë paketën e vendos administratori.</p>}
+        <h3 className={s.section}>Pagesat</h3>
+        {history === null ? <p className="muted-copy">Pagesat nuk u lexuan. Rifresko faqen.</p>
+          : !history.length ? <p className="muted-copy">Ende nuk ke pagesa.</p>
+          : <div style={{ overflowX: "auto" }}><table className="data-table">
+            <thead><tr><th>Data</th><th>Paketa</th><th>Periudha</th><th>Shuma</th><th>Gjendja</th><th /></tr></thead>
+            <tbody>{history.map(p => <tr key={p.id}>
+              <td>{fullDate(p.paidAt ?? p.createdAt)}</td><td>{plans[p.plan].name}</td>
+              <td>{p.periodStart && p.periodEnd ? `${dateLabel(p.periodStart)} – ${dateLabel(p.periodEnd)}` : "—"}</td>
+              <td>{money(p.amount)}</td><td>{statusLabels[p.status]}</td>
+              <td>{p.status === "paid" && <Link className="inline-link" href={`${base}/receipt/${p.id}`}>Mandati</Link>}</td>
+            </tr>)}</tbody>
+          </table></div>}
       </>}
-    </>}
-  </>;
+    </section>}
+  </div>;
 }

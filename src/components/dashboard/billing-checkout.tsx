@@ -23,12 +23,14 @@ async function post<T>(url: string, body?: unknown, method = "POST"): Promise<T>
   return data as T;
 }
 
-export function BillingCheckout({ env, card, currentPlan, paidUntil, plans }: {
+export function BillingCheckout({ env, card, currentPlan, paidUntil, plans, selected }: {
   env: "staging" | "production";
   card: { label: string } | null;
   currentPlan: string;
   paidUntil: string | null;
   plans: PlanOption[];
+  /** The plan the owner chose under Paketat: only its payment is offered. */
+  selected?: string | null;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -118,7 +120,7 @@ export function BillingCheckout({ env, card, currentPlan, paidUntil, plans }: {
     </div>}
 
     {card && !adding && <div className="billing-checkout-plans">
-      {plans.map((plan) => {
+      {(plans.some(plan => plan.key === selected) ? plans.filter(plan => plan.key === selected) : plans).map((plan) => {
         const renew = plan.key === currentPlan && activePaid;
         return <button key={plan.key} type="button" className={renew ? "btn btn-primary" : "btn btn-ghost"} disabled={!!busy} onClick={() => pay(plan)}>
           {busy === plan.key ? "Po paguhet…" : `${renew ? "Rinovo" : "Paguaj"} ${plan.name} · ${plan.price.toLocaleString("sq-AL")} lekë`}

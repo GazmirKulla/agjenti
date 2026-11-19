@@ -12,7 +12,7 @@ async function owner(slug: string) {
   return { userId: user.id, businessId: access.business.id, slug: access.business.slug };
 }
 const run = async (slug: string, work: (a: Awaited<ReturnType<typeof owner>>) => Promise<Result>): Promise<Result> => {
-  try { const a = await owner(slug); const result = await work(a); revalidatePath(`/b/${a.slug}/settings/team`); return result; }
+  try { const a = await owner(slug); const result = await work(a); revalidatePath(`/admin/businesses/${a.businessId}/team`); return result; }
   catch (error) { return { error: error instanceof TeamError ? error.message : "Veprimi nuk u krye. Provo përsëri." }; }
 };
 

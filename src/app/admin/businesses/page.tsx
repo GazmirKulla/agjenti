@@ -400,7 +400,8 @@ export default async function AdminBusinessesPage() {
                 <div className="detail-block">
                   <h3>Ekipi me akses</h3>
                   <p className="muted-copy">
-                    Përdoruesit që mund të hapin panelin e këtij biznesi.
+                    Përdoruesit që mund të hapin panelin e këtij biznesi.{" "}
+                    <Link className="inline-link" href={`/admin/businesses/${b.id}/team`}>Rolet dhe ftesat me lidhje →</Link>
                   </p>
                   {team.length === 0 ? (
                     <p className="muted-copy mt-4">
