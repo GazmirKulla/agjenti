@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ActionForm, type ActionResult } from "@/components/dashboard/action-form";
-import { handoffMessageLimit, type CommunicationPolicy } from "@/lib/agents/communication-policy";
+import type { CommunicationPolicy } from "@/lib/agents/communication-policy";
 
 export type CommunicationEditorAgent = {
   id: string; name: string; instructions: string; is_active: boolean; updated_at: string;
@@ -53,10 +53,7 @@ export function CommunicationEditor({ agent, slug, versions, action }: {
           <label className="form-label">Fotot e produkteve<select name="productPhotos" className="field" defaultValue={policy.productPhotos}><option value="send">Dërgo foton kur sugjeron një produkt</option><option value="off">Vetëm emri dhe çmimi</option></select></label>
           <label className="form-label">Informacioni për produktin<select name="productDetails" className="field" defaultValue={policy.productDetails}><option value="helpful">Detajet që e ndihmojnë klientin të vendosë</option><option value="essentials">Vetëm çfarë pyet klienti</option></select></label>
         </div>
-        <label className="form-label">Kur ia kalon bisedën stafit (opsionale)
-          <small>Çfarë i thotë Agjenti klientit kur biseda kalon te një person nga ekipi, p.sh. kur do t&apos;i shkruajnë. Bosh: “Ia kalova kërkesën tënde një personi nga ekipi; do të të shkruajë së shpejti.”</small>
-          <textarea className="field" name="handoffMessage" rows={2} maxLength={handoffMessageLimit} defaultValue={policy.handoffMessage ?? ""} />
-        </label>
+        <p className="muted-copy">Kur ia kalon bisedën stafit: {policy.handoffMessage ? `“${policy.handoffMessage}”` : "mesazhi i zakonshëm"}. <Link className="inline-link" href={`/b/${slug}/agents/process`}>Ndrysho te Çfarë bën Agjenti →</Link></p>
       </fieldset>
       <div className="agent-editor-footer">
         <button className="btn btn-primary" type="submit">Ruaj si draft</button>

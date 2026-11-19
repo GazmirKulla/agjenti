@@ -8,8 +8,9 @@ import { missingTemplateFields } from "@/lib/items/field-templates";
 type Row = { key?: string; label: string; type: BusinessField["type"]; unit: string; options: string; variant: boolean; ask: boolean };
 const toRow = (f: BusinessField): Row => ({ key: f.key, label: f.label, type: f.type, unit: f.unit ?? "", options: (f.options ?? []).join(", "), variant: !!f.variant, ask: !!f.ask });
 // Who fills the field: the owner on the product, the customer choosing a variant, or the customer answering when ordering.
-const roles = { data: "Pronari, te produkti", variant: "Klienti zgjedh (variant)", ask: "Klienti përgjigjet kur porosit" } as const;
-const roleOf = (row: Row): keyof typeof roles => row.variant ? "variant" : row.ask ? "ask" : "data";
+// The customer's questions when ordering are set under Agjenti → Çfarë bën Agjenti; the server keeps them when this saves.
+const roles = { data: "Pronari, te produkti", variant: "Klienti zgjedh (variant)" } as const;
+const roleOf = (row: Row): keyof typeof roles => row.variant ? "variant" : "data";
 const typeLabels: Record<BusinessField["type"], string> = { text: "Tekst", number: "Numër", select: "Listë vlerash", boolean: "Po / Jo", photo: "Foto nga klienti" };
 
 /** The owner names the fields their products need: a description (Druri: Ah)
@@ -26,7 +27,8 @@ type Props = {
 };
 
 export function ProductFieldsSettings({ slug, fields, fixed, suggested, discovered = [] }: Props) {
-  const [rows, setRows] = useState<Row[]>(fields.map(toRow));
+  const own = (list: BusinessField[]) => list.filter(f => !f.ask).map(toRow);
+  const [rows, setRows] = useState<Row[]>(own(fields));
   // What was last saved, to show unsaved changes and keep them from being lost by leaving the page.
   const [saved, setSaved] = useState(() => JSON.stringify(fields.map(toRow)));
   const dirty = JSON.stringify(rows) !== saved;
@@ -48,10 +50,10 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
   const save = () => start(async () => {
     setMessage({});
     const payload = rows.map(r => ({ ...(r.key ? { key: r.key } : {}), label: r.label, type: r.variant ? "select" : r.type, unit: r.unit,
-      options: r.options.split(/[,;\n]/).map(o => o.trim()).filter(Boolean), variant: r.variant, ask: !r.variant && r.ask }));
+      options: r.options.split(/[,;\n]/).map(o => o.trim()).filter(Boolean), variant: r.variant }));
     const result = await saveProductFields(slug, JSON.stringify(payload));
     setMessage(result);
-    if ("fields" in result && result.fields) { const next = result.fields.map(toRow); setRows(next); setSaved(JSON.stringify(next)); router.refresh(); }
+    if ("fields" in result && result.fields) { const next = own(result.fields); setRows(next); setSaved(JSON.stringify(next)); router.refresh(); }
   });
   return (
     <section className="panel section-pad grid gap-5" aria-labelledby="product-fields-title">
@@ -62,8 +64,8 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
       <p className="muted-copy">
         Çdo fushë është një e dhënë që e plotëson te forma e produktit, p.sh. <strong>Druri</strong> ose <strong>Ngjyra</strong>, dhe Agjenti ua tregon klientëve.
         Zgjidh <strong>Klienti zgjedh</strong> kur klienti zgjedh një vlerë para porosisë (p.sh. Gjatësia 80 / 100 / 120 cm):
-        çdo vlerë mund të ketë kodin dhe çmimin e vet te variantet e produktit. Zgjidh <strong>Klienti përgjigjet kur porosit</strong>
-        për një pyetje që Agjenti i bën klientit, p.sh. <strong>Teksti në bluzë</strong>: te çdo produkt zgjedh nëse e pyet.
+        çdo vlerë mund të ketë kodin dhe çmimin e vet te variantet e produktit. Pyetjet që Agjenti i bën klientit kur porosit
+        (p.sh. <strong>Teksti në bluzë</strong> ose një foto) i vendos te <a className="inline-link" href={`/b/${slug}/agents/process`}>Çfarë bën Agjenti</a>.
       </p>
       {fixed.fields.length > 0 && (
         <div className="grid gap-2">
@@ -118,11 +120,11 @@ export function ProductFieldsSettings({ slug, fields, fixed, suggested, discover
           <fieldset key={row.key ?? `new-${index}`} className="field-row">
             <legend className="sr-only">Fusha {index + 1}{row.label.trim() ? `: ${row.label.trim()}` : ""}</legend>
             <input className="field" aria-label="Emri" value={row.label} maxLength={40} placeholder="P.sh. Gjatësia" onChange={e => update(index, { label: e.target.value })} />
-            <select className="field" aria-label="Tipi" value={row.variant ? "select" : row.type} disabled={row.variant} onChange={e => update(index, e.target.value === "photo" ? { type: "photo", ask: true, variant: false } : { type: e.target.value as Row["type"] })}>
-              {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            <select className="field" aria-label="Tipi" value={row.variant ? "select" : row.type} disabled={row.variant} onChange={e => update(index, { type: e.target.value as Row["type"] })}>
+              {Object.entries(typeLabels).filter(([value]) => value !== "photo").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
             <input className="field" aria-label="Njësia (opsionale)" value={row.unit} maxLength={12} placeholder="Njësia, p.sh. cm" onChange={e => update(index, { unit: e.target.value })} />
-            <select className="field" aria-label="Kush e plotëson" value={roleOf(row)} onChange={e => update(index, { variant: e.target.value === "variant", ask: e.target.value === "ask", ...(e.target.value !== "ask" && row.type === "photo" ? { type: "text" as const } : {}) })}>
+            <select className="field" aria-label="Kush e plotëson" value={roleOf(row)} onChange={e => update(index, { variant: e.target.value === "variant" })}>
               {Object.entries(roles).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
             <button type="button" className="btn btn-ghost field-row-remove" aria-label={`Hiq fushën ${row.label.trim() || index + 1}`} title="Hiqe"

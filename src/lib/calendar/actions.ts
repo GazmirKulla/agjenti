@@ -30,6 +30,8 @@ function refresh(slug: string) {
 export async function saveCalendarSettings(slug: string, form: FormData) {
   try {
     const id = await access(slug);
+    // The agent's own switch is set under Çfarë bën Agjenti; a form without it keeps the stored value.
+    const stored = form.has("agentBooking") ? null : (await prepareCalendarConfiguration(id, {})).before;
     const settings = parseSettings({
       timezone: String(form.get("timezone") ?? ""),
       hours: JSON.parse(String(form.get("hours") ?? "[]")),
@@ -39,7 +41,7 @@ export async function saveCalendarSettings(slug: string, form: FormData) {
       confirmation_mode: form.get(
         "confirmationMode",
       ) as CalendarSettings["confirmation_mode"],
-      agent_booking_enabled: form.get("agentBooking") === "on",
+      agent_booking_enabled: form.has("agentBooking") ? form.get("agentBooking") === "on" : stored?.agent_booking_enabled === true,
     });
     const user = await getSessionUser();
     if (!user) throw Error("Sesioni ka skaduar.");
@@ -163,5 +165,23 @@ export async function disconnectGoogleCalendar(slug: string) {
     };
   } catch {
     return { error: "Lidhja nuk u shkëput." };
+  }
+}
+
+/** Çfarë bën Agjenti: only whether the agent books by itself; the hours and the rest stay as stored. */
+export async function saveAgentBooking(slug: string, enabled: boolean, seen: boolean) {
+  try {
+    if (typeof enabled !== "boolean" || typeof seen !== "boolean") throw Error("Zgjedhja nuk është e vlefshme.");
+    const id = await access(slug);
+    const user = await getSessionUser();
+    if (!user) throw Error("Sesioni ka skaduar.");
+    const proposal = await prepareCalendarConfiguration(id, { agent_booking_enabled: enabled });
+    if ((proposal.before?.agent_booking_enabled === true) !== seen) throw Error("Cilësimi ndryshoi. Rifresko faqen përpara ruajtjes.");
+    await saveCalendarConfiguration(id, user.id, proposal);
+    refresh(slug);
+    revalidatePath(`/b/${slug}/agents/process`);
+    return { success: enabled ? "Agjenti rezervon vetë sipas orarit." : "Agjenti nuk rezervon më vetë." };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Cilësimi nuk u ruajt." };
   }
 }

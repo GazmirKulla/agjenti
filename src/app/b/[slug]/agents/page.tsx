@@ -56,7 +56,7 @@ export default async function AgentsPage({
       const mode = String(formData.get("mode") ?? "");
       const input = { id: String(formData.get("id") ?? ""), mode,
         ...(mode === "draft" ? { instructions: String(formData.get("instructions") ?? ""), communication: {
-          version: 1, ...Object.fromEntries(["language", "tone", "length", "questions", "emoji", "productPhotos", "productDetails", "handoffMessage"].map(key => [key, String(formData.get(key) ?? "")])) } } : {}),
+          version: 1, ...Object.fromEntries(["language", "tone", "length", "questions", "emoji", "productPhotos", "productDetails"].map(key => [key, String(formData.get(key) ?? "")])) } } : {}),
         ...(mode === "restore" ? { revision: Number(formData.get("revision")) } : {}),
       };
       const proposal = await prepareCommunicationConfiguration(current.business.id, input);

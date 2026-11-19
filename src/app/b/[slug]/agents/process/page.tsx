@@ -4,7 +4,9 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import { BusinessProcessView } from "@/components/workflows/business-process";
 import { OrderIntakeSetting } from "@/components/dashboard/order-intake-setting";
-import { automaticStatus, type AutomaticCapability, type AutomaticReadiness } from "@/lib/orchestration/automatic-process";
+import { AgentBookingSwitch, CustomerQuestionsEditor, HandoffMessageForm } from "@/components/agents/capability-settings";
+import { parseCommunicationPolicy } from "@/lib/agents/communication-policy";
+import { automaticStatus, defaultHandoffMessage, type AutomaticCapability, type AutomaticReadiness } from "@/lib/orchestration/automatic-process";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { askFields, readBusinessFields } from "@/lib/items/fields";
@@ -15,7 +17,6 @@ export const metadata = { title: "Çfarë bën Agjenti | Agjenti.app" };
 const titles: Record<AutomaticCapability, string> = {
   orders: "Merr porosi", orderStatus: "Tregon statusin e porosisë", bookings: "Rezervon", handoff: "Ia kalon bisedën stafit",
 };
-const questionTypes: Record<string, string> = { text: "tekst", number: "numër", select: "zgjedhje", boolean: "po / jo", photo: "foto" };
 
 /**
  * Everything the customer agent does, one card per capability: whether it is ready (or why not) and the
@@ -30,7 +31,7 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
   if (!access) redirect("/auth/continue");
   const businessId = access.business.id, base = `/b/${encodeURIComponent(slug)}`;
   const db = createServiceSupabase();
-  const [own, automatic, operating, profile, policy, business, informationOnly] = await Promise.all([
+  const [own, automatic, operating, profile, policy, business, informationOnly, calendar, agent] = await Promise.all([
     db.from("visual_workflows").select("published_version_id,enabled").eq("business_id", businessId).maybeSingle(),
     automaticStatus(businessId),
     loadBusinessProcess(businessId),
@@ -39,7 +40,11 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
     db.from("businesses").select("product_fields").eq("id", businessId).maybeSingle(),
     db.from("products").select("id,name", { count: "exact" }).eq("business_id", businessId).eq("is_active", true).is("archived_at", null)
       .eq("agent_orders", false).order("name").limit(8),
+    db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", businessId).maybeSingle(),
+    db.from("ai_agents").select("communication,updated_at").eq("business_id", businessId).eq("is_active", true).maybeSingle(),
   ]);
+  let handoffMessage = "";
+  try { handoffMessage = agent.data?.communication ? parseCommunicationPolicy(agent.data.communication).handoffMessage ?? "" : ""; } catch { handoffMessage = ""; }
   const ownProcess = !own.error && own.data?.published_version_id ? { enabled: own.data.enabled === true } : null;
   const enabled = new Set(profile.enabledModules);
   const readiness = new Map<AutomaticCapability, AutomaticReadiness>((automatic?.readiness ?? []).map(r => [r.capability, r]));
@@ -74,10 +79,8 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
       <OrderIntakeSetting slug={slug} enabled={localOrders} embedded />
       <div className="grid gap-2">
         <h3 className="font-semibold">Çfarë e pyet klientin kur porosit</h3>
-        {questions === null ? <p className="muted-copy">Pyetjet nuk u lexuan. Rifresko faqen.</p>
-          : questions.length ? <ul className="grid gap-1">{questions.map(q => <li key={q.key}>{q.label} <small className="muted-copy">· {questionTypes[q.type] ?? q.type}{q.options?.length ? `: ${q.options.join(", ")}` : ""}</small></li>)}</ul>
-          : <p className="muted-copy">Asnjë pyetje shtesë: Agjenti pyet vetëm produktin, zgjedhjet e tij dhe të dhënat e klientit.</p>}
-        <small className="muted-copy">Te çdo produkt zgjedh cilat nga këto pyetje bën Agjenti. <Link className="inline-link" href={`${base}/products/structure`}>Shto ose ndrysho pyetjet →</Link></small>
+        <small className="muted-copy">Agjenti i bën pasi klienti zgjedh produktin, para përmbledhjes, dhe përgjigja shkon me porosinë. Te çdo produkt, te “Si e porosit klienti”, zgjedh cilat bën.</small>
+        {questions === null ? <p className="muted-copy">Pyetjet nuk u lexuan. Rifresko faqen.</p> : <CustomerQuestionsEditor slug={slug} questions={questions} />}
       </div>
       <div className="grid gap-2">
         <h3 className="font-semibold">Produkte vetëm për informim</h3>
@@ -94,9 +97,15 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
     {enabled.has("orders") && card("orderStatus", null)}
 
     {(enabled.has("bookings") || enabled.has("services")) && card("bookings",
-      <small className="muted-copy">Orari dhe leja për të rezervuar vetë: <Link className="inline-link" href={`${base}/calendar`}>Kalendari →</Link> · Shërbimet që pranojnë rezervime: <Link className="inline-link" href={`${base}/services`}>Shërbimet →</Link></small>)}
+      <>
+        {calendar.error ? <p className="muted-copy">Kalendari nuk u lexua. Rifresko faqen.</p>
+          : calendar.data ? <AgentBookingSwitch slug={slug} enabled={calendar.data.agent_booking_enabled === true} />
+          : <p className="muted-copy">Cakto fillimisht orarin te <Link className="inline-link" href={`${base}/calendar`}>Kalendari</Link>.</p>}
+        <small className="muted-copy">Orari: <Link className="inline-link" href={`${base}/calendar`}>Kalendari →</Link> · Shërbimet që pranojnë rezervime: <Link className="inline-link" href={`${base}/services`}>Shërbimet →</Link></small>
+      </>)}
 
-    {card("handoff", <small className="muted-copy">Çfarë i thotë klientit kur ia kalon bisedën stafit: <Link className="inline-link" href={`${base}/agents`}>Komunikimi →</Link></small>)}
+    {card("handoff", agent.error || !agent.data ? <p className="muted-copy">Agjenti aktiv nuk u gjet. Krijoje ose aktivizoje te <Link className="inline-link" href={`${base}/agents`}>Udhëzimet</Link>.</p>
+      : <HandoffMessageForm slug={slug} message={handoffMessage} updatedAt={agent.data.updated_at} fallback={defaultHandoffMessage} />)}
 
     <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
       <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />

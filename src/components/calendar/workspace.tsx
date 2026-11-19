@@ -570,14 +570,10 @@ export function CalendarWorkspace({
                     placeholder="2026-12-25, një datë për rresht"
                   />
                 </label>
-                <label className="calendar-check">
-                  <input
-                    type="checkbox"
-                    name="agentBooking"
-                    defaultChecked={data.settings.agent_booking_enabled}
-                  />{" "}
-                  Lejo Agjentin të marrë rezervime nga biseda
-                </label>
+                <p className="muted-copy">
+                  {data.settings.agent_booking_enabled ? "Agjenti rezervon vetë sipas këtij orari." : "Agjenti nuk rezervon vetë."}{" "}
+                  <Link className="inline-link" href={`/b/${slug}/agents/process`}>Ndrysho te Çfarë bën Agjenti →</Link>
+                </p>
                 <button className="btn btn-primary">Ruaj orarin</button>
               </ActionForm>
             </section>
