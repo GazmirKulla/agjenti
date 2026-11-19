@@ -20,7 +20,20 @@ const tabs = [["usage", "Përdorimi"], ["plans", "Paketat"], ["billing", "Faturi
 type Tab = (typeof tabs)[number][0];
 const statusLabels = { paid: "Paguar", pending: "Në përpunim", failed: "Nuk u krye" } as const;
 const day = 86400000;
+/** A renewal is offered from this many days before the paid time ends. */
+const RENEW_DAYS = 7;
 
+/** The payer's payments: unfinished POK orders are checked with POK first (an abandoned one expires as failed),
+ * then the paid ones and those still in progress are shown; failed and abandoned attempts are left out. */
+async function settledHistory(userId: string) {
+  try {
+    const all = await loadPaymentHistory(userId);
+    const stale = all.filter(p => p.status === "pending" && Date.now() - Date.parse(p.createdAt) > 2 * 60000).slice(0, 5);
+    if (stale.length) await Promise.all(stale.map(p => syncPlanPayment(p.id, userId).catch(() => null)));
+    const list = stale.length ? await loadPaymentHistory(userId) : all;
+    return list.filter(p => p.status !== "failed");
+  } catch { return null; }
+}
 const dateLabel = (value: string | number) => new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "long", timeZone: "Europe/Tirane" }).format(new Date(value));
 const fullDate = (value: string) => new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Tirane" }).format(new Date(value));
 const money = (amount: number) => `${amount.toLocaleString("sq-AL")} lekë`;
@@ -50,10 +63,11 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
   const canPay = payer && pokConfigured();
   const [breakdown, history, payerEmail] = await Promise.all([
     tab === "usage" && usage.billingUserId ? loadUsageBreakdown(usage.billingUserId, usage.periodStart).catch(() => []) : Promise.resolve([]),
-    tab === "billing" && payer ? loadPaymentHistory(user.id).catch(() => null) : Promise.resolve([]),
+    tab === "billing" && payer ? settledHistory(user.id) : Promise.resolve([]),
     !payer && usage.billingUserId ? createServiceSupabase().from("profiles").select("email").eq("id", usage.billingUserId).maybeSingle().then(r => r.data?.email ?? null, () => null) : Promise.resolve(null),
   ]);
   const selected = isPaidPlan(query.plan) ? query.plan : null;
+  const daysLeft = usage.paidUntil ? Math.ceil((Date.parse(usage.paidUntil) - Date.now()) / day) : null;
   const higher = planOrder.find(key => plans[key].monthlyPrice > current.monthlyPrice);
 
   // At this pace, will the messages last until the period renews?
@@ -66,7 +80,7 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
   const who = payer ? null : payerEmail ? `Paketën e menaxhon ${payerEmail}, që e paguan.` : "Paketën e menaxhon pronari që e paguan.";
 
   return <div className={s.panel}>
-    <div><p className="page-eyebrow">Cilësimet</p><h1 style={{ margin: 0 }}>Paketa dhe pagesat</h1></div>
+    <h1 style={{ margin: 0, fontSize: 24 }}>Paketa dhe pagesat</h1>
     <nav className={s.tabs} aria-label="Paketa dhe pagesat">
       {tabs.map(([id, label]) => <Link key={id} href={`${base}?tab=${id}`} aria-current={tab === id ? "page" : undefined}>{label}</Link>)}
     </nav>
@@ -136,23 +150,31 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
     </section>}
 
     {tab === "billing" && <section className={s.panel} aria-label="Faturimi">
-      <h2 className={s.title}>Faturimi <span className={s.badge}>{current.name}</span></h2>
       {!payer ? <p className="muted-copy">{who} Ti sheh paketën dhe përdorimin.</p> : <>
-        <div className={s.rows}>
-          <div className={s.row}><span><strong>Paketa</strong><small>{current.monthlyPrice ? `${money(current.monthlyPrice)} / muaj` : "Falas"}</small></span><span />
-            <span className={s.pct}><Link className="inline-link" href={`${base}?tab=plans`}>Ndrysho</Link></span></div>
-          <div className={s.row}><span><strong>{usage.paidUntil ? "Paguar deri më" : "Rinovimi"}</strong><small>{usage.paidUntil ? "Paguaj sërish para kësaj date që të vazhdojë; përndryshe kthehet në Free." : usage.plan === "free" ? "Paketa falas rifillon çdo muaj." : "Paketa e vendosur nga administratori."}</small></span><span />
-            <span className={s.pct}>{usage.paidUntil ? fullDate(usage.paidUntil) : fullDate(usage.periodEnd)}</span></div>
-        </div>
         {returned && <p className={`form-feedback ${returned === "paid" ? "" : "form-feedback-error"}`} role="status">{returned === "paid" ? `Pagesa u krye. Paketa jote tani është ${current.name}.`
           : returned === "pending" ? "Pagesa po përpunohet nga POK. Rifresko faqen pas pak." : returned === "failed" ? "Pagesa nuk u krye. Mund të provosh përsëri." : "Pagesa nuk u verifikua ende me POK. Rifresko faqen pas pak."}</p>}
+        <div className={s.rows}>
+          <div className={s.row}><span><strong>Paketa · {current.name}</strong><small>{current.monthlyPrice ? `${money(current.monthlyPrice)} / muaj` : "Falas"}</small></span><span />
+            <span className={s.pct}><Link className="inline-link" href={`${base}?tab=plans`}>Ndrysho</Link></span></div>
+          <div className={s.row}><span><strong>{usage.paidUntil ? "Aktive deri më" : "Rinovimi"}</strong><small>{usage.paidUntil ? (daysLeft !== null && daysLeft > 0 ? `Edhe ${daysLeft} ditë. Pas kësaj date kthehet në Free nëse nuk rinovohet.` : "Ka skaduar; rinovoje që të vazhdojë.") : usage.plan === "free" ? "Paketa falas rifillon çdo muaj." : "Paketa e vendosur nga administratori."}</small></span><span />
+            <span className={s.pct}>{usage.paidUntil ? fullDate(usage.paidUntil) : fullDate(usage.periodEnd)}</span></div>
+        </div>
         {canPay ? (() => {
-          const chosen = selected ?? (usage.paidUntil && isPaidPlan(usage.plan) ? usage.plan : null);
-          return chosen ? <div className="grid gap-2">
-            <p className={s.notice}>{chosen === usage.plan ? `Rinovo ${plans[chosen].name}` : `Po kalon në ${plans[chosen].name}`} · {money(plans[chosen].monthlyPrice)} / muaj</p>
-            <p className="muted-copy" style={{ margin: 0 }}>Paguan në faqen e sigurt të POK me kartë ose me llogarinë POK, dhe kthehesh këtu. Paketa vlen një muaj nga pagesa.{pokEnvironment() === "staging" ? " Mjedis prove: përdor vetëm kartat e provës së POK." : ""}</p>
-            <PokPayButton slug={access.business.slug} plan={chosen} label={`Paguaj me POK · ${money(plans[chosen].monthlyPrice)}`} />
-          </div> : <p className="muted-copy">Zgjidh një paketë te <Link className="inline-link" href={`${base}?tab=plans`}>Paketat</Link> për ta paguar me POK.</p>;
+          const renewing = isPaidPlan(usage.plan) && Boolean(usage.paidUntil);
+          const chosen = selected ?? (renewing && isPaidPlan(usage.plan) ? usage.plan : null);
+          if (!chosen) return <p className="muted-copy">Zgjidh një paketë te <Link className="inline-link" href={`${base}?tab=plans`}>Paketat</Link> për ta paguar me POK.</p>;
+          const same = chosen === usage.plan && renewing;
+          // A renewal opens 7 days before the paid time ends; paying earlier adds the next month after it.
+          const early = same && daysLeft !== null && daysLeft > RENEW_DAYS;
+          const how = same ? `Muaji i ri shtohet pas ${dateLabel(usage.paidUntil!)}, pa humbur ditët që ke.`
+            : renewing ? `Kalimi në ${plans[chosen].name} nis një muaj të ri nga dita e pagesës; ditët e mbetura të ${current.name} nuk barten.` : "Paketa vlen një muaj nga dita e pagesës.";
+          return <div className={s.pay}>
+            <div>
+              <strong>{same ? (early ? "Rinovimi" : `Rinovo ${plans[chosen].name}`) : `Kalo në ${plans[chosen].name}`} · {money(plans[chosen].monthlyPrice)} / muaj</strong>
+              <small>{early ? `Rinovimi hapet më ${dateLabel(Date.parse(usage.paidUntil!) - RENEW_DAYS * day)}, 7 ditë para skadimit. Mund ta paguash edhe tani: ${how.charAt(0).toLowerCase()}${how.slice(1)}` : how} Paguan në faqen e POK, me kartë ose me llogarinë POK.{pokEnvironment() === "staging" ? " Mjedis prove: vetëm kartat e provës së POK." : ""}</small>
+            </div>
+            <PokPayButton slug={access.business.slug} plan={chosen} quiet={early} label={early ? "Paguaj muajin tjetër që tani" : `Paguaj me POK · ${money(plans[chosen].monthlyPrice)}`} />
+          </div>;
         })() : <p className="muted-copy">Pagesat me POK aktivizohen së shpejti. Deri atëherë paketën e vendos administratori.</p>}
         <h3 className={s.section}>Pagesat</h3>
         {history === null ? <p className="muted-copy">Pagesat nuk u lexuan. Rifresko faqen.</p>

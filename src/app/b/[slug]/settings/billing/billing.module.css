@@ -1,16 +1,16 @@
 /* Paketa dhe pagesat, laid out like the AI platforms' settings: usage rows with a bar, an upgrade page
    with plan cards, and billing. Colours come from the app's tokens (light and dark). */
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 .tabs a { padding: 8px 14px; border-bottom: 2px solid transparent; color: var(--ink-muted); text-decoration: none; font-weight: 500; }
 .tabs a[aria-current="page"] { border-bottom-color: var(--accent); color: var(--ink); font-weight: 600; }
 
-.panel { display: grid; gap: 18px; }
-.title { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 20px; }
+.panel { display: grid; gap: 12px; max-width: 880px; }
+.title { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 18px; }
 .badge { font-size: 13px; color: var(--ink-muted); font-weight: 500; }
 .notice { margin: 0; font-weight: 600; color: var(--ink); }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .rows { display: grid; border-top: 1px solid var(--line); }
-.row { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(160px, 2fr) 110px; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.row { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(140px, 2fr) 110px; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .row strong { display: block; color: var(--ink); font-weight: 500; }
 .row small { color: var(--ink-muted); }
 .meter { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
@@ -18,7 +18,11 @@
 .meter.warn > span { background: var(--warning); }
 .meter.full > span { background: var(--danger); }
 .pct { text-align: right; color: var(--ink-muted); font-size: 14px; }
-.section { margin: 8px 0 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+.section { margin: 6px 0 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+.pay { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; }
+.pay > div:first-child { display: grid; gap: 4px; max-width: 560px; }
+.pay strong { color: var(--ink); }
+.pay small { color: var(--ink-muted); line-height: 1.4; }
 
 .upgrade { display: grid; gap: 22px; justify-items: center; }
 .upgradeTitle { font-size: 30px; margin: 4px 0 0; text-align: center; font-weight: 600; letter-spacing: -0.01em; }
