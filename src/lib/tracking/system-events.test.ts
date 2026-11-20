@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { exitLabel, failureKind } from "./labels";
 
 const recorded = vi.hoisted(() => [] as { capability: string; point: string; reason?: string; businessId: string | null }[]);
-vi.mock("./events", () => ({ recordCapabilityEvents: async (events: typeof recorded) => { recorded.push(...events); } }));
+const last = vi.hoisted(() => ({ at: null as string | null }));
+vi.mock("./events", () => ({ recordCapabilityEvents: async (events: typeof recorded) => { recorded.push(...events); }, lastRecordedAt: async () => last.at }));
 const { metaCode, recordStepFailed, trackScheduledJob } = await import("./system-events");
 
 describe("platform tracking", () => {
@@ -13,6 +14,17 @@ describe("platform tracking", () => {
     await trackScheduledJob("source-refresh", async () => Response.json({ error: "x" }, { status: 503 }));
     expect(recorded.map(e => [e.capability, e.point, e.reason ?? null, e.businessId])).toEqual([
       ["system.cron.source_refresh", "completed", null, null], ["system.cron.source_refresh", "failed", "http_503", null]]);
+  });
+
+  it("keeps every failure of a frequent run, but a success at most once an hour", async () => {
+    recorded.length = 0;
+    last.at = new Date(Date.now() - 5 * 60000).toISOString();
+    await trackScheduledJob("workflow-inbound", async () => Response.json({ processed: 0 }));
+    await trackScheduledJob("workflow-inbound", async () => Response.json({ error: "x" }, { status: 503 }));
+    last.at = new Date(Date.now() - 61 * 60000).toISOString();
+    await trackScheduledJob("workflow-inbound", async () => Response.json({ processed: 0 }));
+    last.at = null;
+    expect(recorded.map(e => e.point)).toEqual(["failed", "completed"]);
   });
 
   it("keeps the step and the code of a failed job step", async () => {

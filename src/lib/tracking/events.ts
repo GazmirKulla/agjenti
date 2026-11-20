@@ -44,3 +44,12 @@ export async function recordCapabilityEvents(events: CapabilityEvent[]) {
     console.error("capability_events_unavailable", error instanceof Error ? error.message : "unknown");
   }
 }
+
+/** When a capability last recorded this point (live), or null; used to thin out frequent successes. */
+export async function lastRecordedAt(capability: string, point: string): Promise<string | null> {
+  try {
+    const { data } = await createServiceSupabase().from("capability_events").select("created_at").eq("capability", capability).eq("point", point)
+      .eq("mode", "live").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    return data?.created_at ?? null;
+  } catch { return null; }
+}

@@ -28,6 +28,8 @@ export async function recordCompleted(capability: string, businessId: string, re
   await recordSystem(capability, "completed", { businessId, ref });
 }
 
+const SUCCESS_EVERY_MS = 3600000;
+
 /** One scheduled run (a folder of src/app/api/cron): how it ended, then its own response. */
 export async function trackScheduledJob(job: string, work: () => Promise<Response>): Promise<Response> {
   const capability = scheduledJobCapability(job), started = Date.now();
@@ -36,6 +38,12 @@ export async function trackScheduledJob(job: string, work: () => Promise<Respons
     // A call without the scheduler's secret is not a run.
     if (response.status === 401) return response;
     const ok = response.ok || response.status === 202;
+    // Some runs come every minute: every failure is kept, a success at most once an hour per job.
+    if (ok) {
+      const { lastRecordedAt } = await import("./events");
+      const last = await lastRecordedAt(capability, "completed");
+      if (last && Date.now() - Date.parse(last) < SUCCESS_EVERY_MS) return response;
+    }
     await recordSystem(capability, ok ? "completed" : "failed", { reason: ok ? undefined : `http_${response.status}`, ref: job, durationMs: Date.now() - started });
     return response;
   } catch (error) {
