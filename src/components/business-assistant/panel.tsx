@@ -92,6 +92,16 @@ type Result = {
   saved?: boolean;
   path?: string;
 };
+/** "para 2 orësh", "dje", "12 nën": when a conversation was last active. */
+function lastActive(value: string) {
+  const minutes = Math.round((Date.now() - Date.parse(value)) / 60000);
+  if (!Number.isFinite(minutes) || minutes < 1) return "tani";
+  if (minutes < 60) return `para ${minutes} min`;
+  if (minutes < 24 * 60) return `para ${Math.round(minutes / 60)} orësh`;
+  if (minutes < 48 * 60) return "dje";
+  return new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "short", timeZone: "Europe/Tirane" }).format(new Date(value));
+}
+
 export function BusinessAssistant({
   materialDraft,
   external,
@@ -522,6 +532,16 @@ export function BusinessAssistant({
     setError("");
     setMode("text");
   }
+  // Reopened after the conversation went quiet (30 minutes, nothing waiting): start on a new one and offer the old.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpen.current && !busy && !locked.current && archive.idle()) {
+      const quiet = archive.view?.conversation ?? null;
+      reset();
+      archive.rememberPrevious(quiet);
+    }
+    wasOpen.current = open;
+  });
   useEffect(() => {
     resetRef.current = reset;
     return () => { resetRef.current = null; };
@@ -617,6 +637,11 @@ export function BusinessAssistant({
           }} />
           {mode === "text" && !history.length && !result && (
             <div className="assistant-welcome">
+              {archive.previous && !archive.loading && <button type="button" className="assistant-continue" disabled={Boolean(busy)}
+                onClick={() => { if (locked.current) return; reset(); void archive.continuePrevious(); }}>
+                <Icon name="history" size={16} />
+                <span>Vazhdo bisedën e fundit<small>{archive.previous.title || "Bisedë"} · {lastActive(archive.previous.updated_at)}</small></span>
+              </button>}
               <h3>Çfarë dëshiron të ndryshosh?</h3>
               <p>
                 Menaxho produktet, shërbimet, njohuritë dhe takimet me një kërkesë.

@@ -1,12 +1,27 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryMessage } from "@/lib/business-assistant/history";
-import type { ConversationView, StoredConversation, PlanningPreferences, StoredMessage } from "@/lib/business-assistant/persistence-model";
+import { hasRecoverableWork, type ConversationView, type StoredConversation, type PlanningPreferences, type StoredMessage } from "@/lib/business-assistant/persistence-model";
 import type { FileCardItem } from "./file-card";
 export { AssistantHistoryDrawer as AssistantHistory } from "./history-drawer";
 
 export type ChatMessage = HistoryMessage & { materials?: FileCardItem[]; kind?: StoredMessage["kind"]; meta?: StoredMessage["meta"] };
 type View = ConversationView & { recovery?: { verified: boolean; message: string } };
+
+/** A conversation untouched for this long is history: the Assistant opens on a new one. */
+export const RESUME_WINDOW_MS = 30 * 60000;
+/**
+ * Whether opening the Assistant continues this conversation: work still in it (a request without a confirmed
+ * reply, a proposal or plan to review, an onboarding question waiting), or activity within the last 30 minutes.
+ * Otherwise a new conversation starts and this one stays one click away.
+ */
+export function shouldResume(view: Pick<ConversationView, "conversation" | "messages" | "plan">, now = Date.now()) {
+  if (view.conversation.pending_request) return true;
+  if (hasRecoverableWork(view.plan?.snapshot)) return true;
+  if (view.messages.at(-1)?.kind === "onboarding") return true;
+  const last = Date.parse(view.messages.at(-1)?.created_at ?? view.conversation.updated_at);
+  return Number.isFinite(last) && now - last < RESUME_WINDOW_MS;
+}
 export function useAssistantHistory(userId: string, slug: string) {
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [threads, setThreads] = useState<StoredConversation[]>([]);
@@ -16,6 +31,8 @@ export function useAssistantHistory(userId: string, slug: string) {
   const [loading, setLoading] = useState(true);
   const [listLoading, setListLoading] = useState(false);
   const [next, setNext] = useState<string | null>(null);
+  /** The last conversation, when the Assistant opened on a new one instead: offered to continue. */
+  const [previous, setPrevious] = useState<StoredConversation | null>(null);
   const current = useRef<View | null>(null);
   const inFlight = useRef(false);
   const generation = useRef(0);
@@ -61,11 +78,19 @@ export function useAssistantHistory(userId: string, slug: string) {
       setThreads(data.conversations); setNext(data.next);
       let id: string | null = null;
       try { id = localStorage.getItem(selectedKey); } catch {}
-      if (id) await load(id);
-      else setLoading(false);
+      const latest = (data.conversations as StoredConversation[])[0] ?? null;
+      if (!id) { setPrevious(latest); setLoading(false); return; }
+      // Read it first, then decide: continue it, or open on a new conversation and offer it.
+      try {
+        const stored = await request(`&id=${encodeURIComponent(id)}&assess=1`) as View;
+        if (!alive || g !== generation.current) return;
+        if (shouldResume(stored)) accept(stored, true);
+        else { setPrevious(stored.conversation); try { localStorage.removeItem(selectedKey); } catch {} }
+      } catch (e) { if (alive && g === generation.current) { setPrevious(latest); setWarning((e as Error).message); } }
+      finally { if (alive && g === generation.current) setLoading(false); }
     }).catch(e => { if (alive) { setWarning(e.message); setLoading(false); } });
     return () => { alive = false; fence.current++; };
-  }, [request, load, selectedKey]);
+  }, [request, accept, selectedKey]);
   useEffect(() => {
     const sync = async () => {
       const active = current.current;
@@ -81,7 +106,11 @@ export function useAssistantHistory(userId: string, slug: string) {
     const interval = window.setInterval(sync, 15000);
     return () => { clearInterval(interval); window.removeEventListener("focus", sync); document.removeEventListener("visibilitychange", sync); };
   }, [request, accept]);
-  return { history, setHistory, threads, warning, view, loading, listLoading, restoration, next, inFlight, accept,
+  return { history, setHistory, threads, warning, view, loading, listLoading, restoration, next, inFlight, accept, previous,
+    /** True when the open conversation has gone quiet and holds no work: reopening should start a new one. */
+    idle() { return !!current.current && !inFlight.current && !shouldResume(current.current); },
+    continuePrevious() { const thread = previous; setPrevious(null); return thread ? load(thread.id) : Promise.resolve(); },
+    rememberPrevious(thread: StoredConversation | null) { setPrevious(thread); },
     async ensureConversation() {
       if (loading) throw new Error("Prit ngarkimin e historikut.");
       if (current.current) return current.current.conversation;
@@ -92,7 +121,7 @@ export function useAssistantHistory(userId: string, slug: string) {
       generation.current++; current.current = null; setView(null); setHistory([]); setWarning(""); setLoading(false); setRestoration(n => n + 1);
       try { localStorage.removeItem(selectedKey); } catch {}
     },
-    selectThread(thread: Pick<StoredConversation, "id">) { return load(thread.id); },
+    selectThread(thread: Pick<StoredConversation, "id">) { setPrevious(null); return load(thread.id); },
     async refreshThreads() {
       const g = generation.current;
       setListLoading(true);

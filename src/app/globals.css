@@ -4439,6 +4439,11 @@ html[data-resolved="dark"] .dashboard-shell .status-badge.status-paused {
 .assistant-mark { display: grid; place-items: center; width: 44px; height: 44px; background: var(--accent-soft); color: var(--accent); border-radius: 14px; }
 .assistant-close { margin-left: auto; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--paper-2); color: var(--ink-muted); font-size: 28px; line-height: 1; }
 .assistant-body { padding: 24px; overflow: auto; overscroll-behavior: contain; min-height: 80px; flex: 1; }
+.assistant-continue { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 16px; padding: 10px 14px; text-align: left; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.assistant-continue:hover { border-color: var(--accent); background: var(--accent-soft); }
+.assistant-continue svg { flex-shrink: 0; color: var(--accent); }
+.assistant-continue span { display: grid; gap: 2px; min-width: 0; }
+.assistant-continue small { color: var(--ink-muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .assistant-welcome h3 { font-size: 24px; letter-spacing: -.6px; margin: 4px 0 8px; }
 .assistant-welcome p { color: var(--ink-muted); font-size: 14px; line-height: 1.6; margin: 0 0 20px; }
 .assistant-examples { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
