@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runAvatarBackfill } from "@/lib/conversations/avatar-backfill";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { trackScheduledJob } from "@/lib/tracking/system-events";
 
 export const maxDuration = 180;
 
@@ -11,7 +12,7 @@ function isAuthorizedCron(request: Request): boolean {
 }
 
 /** Daily: profile photos for contacts who have not written since their photo was last checked. */
-export async function GET(request: Request) {
+async function runJob(request: Request) {
 	if (!isAuthorizedCron(request)) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
@@ -24,3 +25,6 @@ export async function GET(request: Request) {
 		return NextResponse.json({ ok: false }, { status: 503 });
 	}
 }
+
+/** Each run is recorded in Shëndeti i Agjentit: how it ended and, when it failed, why. */
+export const GET = (request: Request) => trackScheduledJob("participant-avatars", () => runJob(request));

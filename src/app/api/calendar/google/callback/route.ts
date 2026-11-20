@@ -8,6 +8,7 @@ import {
   googleConnection,
   writableCalendars,
 } from "@/lib/calendar/google";
+import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
 export async function GET(request: NextRequest) {
   const origin =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     });
     return response;
   };
-  let slug = "";
+  let slug = "", businessId: string | null = null;
   try {
     const payload = JSON.parse(
       decryptSecret(request.cookies.get("agjenti_calendar_oauth")?.value ?? ""),
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
     if (!access || access.business.id !== payload.businessId)
       return finish("/account");
     slug = access.business.slug;
+    businessId = access.business.id;
     const profile = await loadDashboardProfile(access.business.id);
     if (!profile.enabledModules.includes("calendar"))
       return finish(`/b/${encodeURIComponent(slug)}`);
@@ -67,8 +69,10 @@ export async function GET(request: NextRequest) {
       .from("google_calendar_connections")
       .upsert(values, { onConflict: "business_id" })
       .throwOnError();
+    await recordSystem("system.google_connect", "connected", { businessId });
     return finish(`/b/${encodeURIComponent(slug)}/calendar?google=connected`);
-  } catch {
+  } catch (error) {
+    if (businessId) await recordSystem("system.google_connect", "failed", { businessId, reason: stepFailure("system.google_connect", "connect", error) });
     return finish(
       slug
         ? `/b/${encodeURIComponent(slug)}/calendar?google=error`

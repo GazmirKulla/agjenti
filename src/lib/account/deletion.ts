@@ -1,3 +1,4 @@
+import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
 import { deleteBusinessCompletely } from "@/lib/businesses/delete-business";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
@@ -113,10 +114,12 @@ export async function purgeDueAccountDeletions() {
         .eq("user_id", userId)
         .eq("status", "purging");
       if (done) console.error("[account-deletion] completion", done.message);
+      await recordSystem("system.account_deletion", "completed", { ref: userId });
       completed++;
     } catch (e) {
       failed++;
       console.error("[account-deletion] purge", userId, e instanceof Error ? e.message : e);
+      await recordSystem("system.account_deletion", "step_failed", { ref: userId, reason: stepFailure("system.account_deletion", "purge", e, userId) });
       await db
         .from("account_deletions")
         .update({ status: "scheduled", updated_at: new Date().toISOString() })

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { overlaps, type Booking } from "./model";
@@ -327,8 +328,10 @@ export async function syncBooking(businessId: string, bookingId: string) {
       .eq("id", bookingId)
       .eq("sync_lease", lease)
       .throwOnError();
+    await recordSystem("system.google_sync", "synced", { businessId, ref: bookingId });
     return saved;
-  } catch {
+  } catch (error) {
+    await recordSystem("system.google_sync", "failed", { businessId, ref: bookingId, reason: stepFailure("system.google_sync", "sync", error, bookingId) });
     await db
       .from("bookings")
       .update({

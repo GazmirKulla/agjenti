@@ -60,13 +60,16 @@ export default async function InstagramAccountDetails({
     }
   }
 
+  // Connected, but Meta did not turn on the account's messages: nothing reaches the agent until it is fixed.
+  const messagesOff = conn?.status === "connected" && /^(subscribed_apps|profile_incomplete):/.test(conn.last_error ?? "");
+  const shownStatus = messagesOff ? "messages_off" : conn?.status || "disconnected";
   return (
     <>
       {query.disconnected === "1" && (
         <p className="mb-5 rounded-lg bg-danger-soft p-4 text-sm text-danger">
           {t("Llogaria Instagram u shkëput.")}</p>
       )}
-      <IntegrationAccountPanel name="Instagram" status={conn?.status || "disconnected"}>
+      <IntegrationAccountPanel name="Instagram" status={shownStatus}>
           <InstagramAccountProfile profile={profile} username={conn ? conn.username || conn.ig_user_id : null} businessName={access.business.name} />
           {conn && (
             <div className="detail-block">
@@ -74,7 +77,7 @@ export default async function InstagramAccountDetails({
                 <div>
                   <dt>{t("Statusi i lidhjes")}</dt>
                   <dd>
-                    <LocalizedStatusBadge status={conn.status} />
+                    <LocalizedStatusBadge status={shownStatus} />
                   </dd>
                 </div>
                 <div>
@@ -95,7 +98,13 @@ export default async function InstagramAccountDetails({
               )}
             </div>
           )}
-          {conn?.last_error && (
+          {messagesOff ? (
+            <div className="mt-5 rounded-lg bg-danger-soft p-4 text-sm text-danger grid gap-2">
+              <strong>{t("Mesazhet e Instagram-it nuk vijnë te Agjenti.")}</strong>
+              <span>{t("Meta nuk e aktivizoi marrjen e mesazheve për këtë llogari. Zakonisht ndodh kur llogaria nuk është profesionale (Business ose Creator) ose kur gjatë lidhjes nuk u dhanë të gjitha lejet. Kontrollo llojin e llogarisë te Instagram → Cilësimet → Lloji i llogarisë, pastaj Rilidh llogarinë dhe prano të gjitha lejet.")}</span>
+              <small>{t("Detaji teknik")}: {conn?.last_error}</small>
+            </div>
+          ) : conn?.last_error && (
             <p className="mt-5 rounded-lg bg-danger-soft p-4 text-sm text-danger">
               {conn.last_error}
             </p>

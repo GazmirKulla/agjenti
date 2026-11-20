@@ -76,10 +76,10 @@ export async function loadCapabilityHealth(days: number, businessId: string | nu
     daily: (daily.data ?? []).map((row: { day: string; agent: AgentKind; outcome: Outcome | "entry"; events: number }) => ({ ...row, events: Number(row.events) })) as { day: string; agent: AgentKind; outcome: Outcome | "entry"; events: number }[] };
 }
 
-export type FailureEvent = { id: number; businessId: string; agent: AgentKind; capability: string; point: string; reason: string | null;
+export type FailureEvent = { id: number; businessId: string | null; agent: AgentKind; capability: string; point: string; reason: string | null;
   conversationId: string | null; ref: string | null; durationMs: number | null; createdAt: string };
 const failureColumns = "id,business_id,agent,capability,point,reason,conversation_id,ref,duration_ms,created_at";
-const toFailure = (row: Record<string, unknown>): FailureEvent => ({ id: Number(row.id), businessId: String(row.business_id), agent: row.agent as AgentKind,
+const toFailure = (row: Record<string, unknown>): FailureEvent => ({ id: Number(row.id), businessId: (row.business_id as string | null) ?? null, agent: row.agent as AgentKind,
   capability: String(row.capability), point: String(row.point), reason: (row.reason as string | null) ?? null, conversationId: (row.conversation_id as string | null) ?? null,
   ref: (row.ref as string | null) ?? null, durationMs: row.duration_ms === null ? null : Number(row.duration_ms), createdAt: String(row.created_at) });
 
@@ -105,9 +105,10 @@ export async function loadFailure(id: number) {
   const { data } = await db.from("capability_events").select(failureColumns).eq("id", id).maybeSingle();
   if (!data) return null;
   const event = toFailure(data);
-  const trail = event.ref ? await db.from("capability_events").select(failureColumns).eq("ref", event.ref).eq("business_id", event.businessId).order("id") : null;
+  const trailQuery = event.ref ? db.from("capability_events").select(failureColumns).eq("ref", event.ref).eq("capability", event.capability) : null;
+  const trail = trailQuery ? await (event.businessId ? trailQuery.eq("business_id", event.businessId) : trailQuery.is("business_id", null)).order("id").limit(50) : null;
   let turn: AssistantTurn | null = null;
-  if (event.agent === "assistant") {
+  if (event.agent === "assistant" && event.businessId) {
     const read = (rows: unknown, matched: AssistantTurn["matched"]): AssistantTurn | null => Array.isArray(rows) && rows.length
       ? { matched, messages: rows.map(row => ({ role: row.role, kind: row.kind, content: String(row.content ?? "").slice(0, 4000), at: row.created_at })) } : null;
     if (isUuid(event.ref)) {
@@ -128,4 +129,39 @@ export async function loadFailure(id: number) {
     }
   }
   return { event, trail: (trail?.data ?? []).map(toFailure), turn };
+}
+
+export type Attention = { kind: "connection" | "stuck"; title: string; detail: string; businessId: string; since: string | null; href: string | null };
+const STUCK_MS = 30 * 60000;
+/**
+ * What looks fine but does not work: channel connections that are "connected" with an error (or expired),
+ * and background jobs waiting or running past their time. Read from the jobs' own tables, not from events.
+ */
+export async function loadAttention(businessId: string | null, now = Date.now()): Promise<Attention[]> {
+  const db = createServiceSupabase();
+  const late = new Date(now - STUCK_MS).toISOString();
+  const read = async (table: string, columns: string, filter: (q: ReturnType<ReturnType<typeof db.from>["select"]>) => typeof q, limit: number) => {
+    let query = filter(db.from(table).select(columns));
+    if (businessId) query = query.eq("business_id", businessId);
+    const { data } = await query.limit(limit);
+    return (data ?? []) as unknown as Record<string, string | number | null>[];
+  };
+  const connection = "business_id,status,last_error,updated_at", job = "business_id,source,stage,status,attempts,next_attempt_at,leased_until,updated_at";
+  const [instagram, whatsapp, discovery, training] = await Promise.all([
+    read("instagram_connections", connection, q => q.neq("status", "disconnected"), 500),
+    read("whatsapp_connections", connection, q => q.neq("status", "disconnected"), 500),
+    read("business_discovery_jobs", job, q => q.in("status", ["queued", "running"]), 200),
+    read("conversation_training_sessions", job, q => q.in("status", ["queued", "running"]), 200),
+  ]);
+  const out: Attention[] = [];
+  for (const [name, rows] of [["Instagram", instagram], ["WhatsApp", whatsapp]] as const)
+    for (const row of rows) if (row.status !== "connected" || row.last_error)
+      out.push({ kind: "connection", title: `${name}: ${row.status === "connected" ? "i lidhur, por me gabim" : row.status}`, detail: String(row.last_error ?? "Lidhja nuk është aktive.").slice(0, 300),
+        businessId: String(row.business_id), since: row.updated_at as string | null, href: name === "Instagram" ? "instagram" : "whatsapp" });
+  const due = (row: Record<string, string | number | null>) => (row.status === "queued" ? row.next_attempt_at : row.leased_until) as string | null;
+  for (const [label, rows] of [["Analiza e biznesit", discovery], ["Importi i bisedave", training]] as const)
+    for (const row of rows) if (due(row) && due(row)! < late)
+      out.push({ kind: "stuck", title: `${label} (${row.source}) ka ngecur`, detail: `${row.status === "queued" ? "Në radhë" : "Në punë"} te hapi “${row.stage}”, ${row.attempts} prova. Pritej të vazhdonte që nga ${new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Tirane" }).format(new Date(due(row)!))}.`,
+        businessId: String(row.business_id), since: row.updated_at as string | null, href: null });
+  return out;
 }

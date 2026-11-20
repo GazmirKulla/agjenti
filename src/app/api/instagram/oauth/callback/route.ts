@@ -8,6 +8,7 @@ import {
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { enqueueDiscovery, runDiscoveryQueue } from "@/lib/discovery/queue";
 import { getAppSettings } from "@/lib/platform/settings";
+import { metaCode, recordSystem, stepFailure } from "@/lib/tracking/system-events";
 export const maxDuration = 180;
 
 export async function GET(request: Request) {
@@ -47,13 +48,17 @@ export async function GET(request: Request) {
 				expires_at: exchanged.expiresAt?.toISOString() ?? null,
 				refreshed_at: new Date().toISOString(),
 				status: "connected",
-				last_error: subscription.ok ? null : `subscribed_apps: ${subscription.error}`,
+				last_error: !subscription.ok ? `subscribed_apps: ${subscription.error}` : !exchanged.profileComplete ? "profile_incomplete: Meta nuk ktheu llogarinë profesionale të Instagram-it." : null,
 				updated_at: new Date().toISOString(),
 				discovery_generation: crypto.randomUUID(),
 			},
 			{ onConflict: "ig_user_id" },
 		);
 		if (saved.error) throw new Error("Instagram connection was not saved");
+		await recordSystem("system.instagram_connect", !subscription.ok ? "webhook_failed" : !exchanged.profileComplete ? "profile_incomplete" : "connected", {
+			businessId: state.businessId,
+			reason: !subscription.ok ? metaCode(subscription.meta) : !exchanged.profileComplete ? metaCode(exchanged.profileError) : undefined,
+		});
 		const { data: business } = await supabase
 			.from("businesses")
 			.select("slug")
@@ -81,6 +86,7 @@ export async function GET(request: Request) {
 		return NextResponse.redirect(new URL(destination, url.origin));
 	} catch (error) {
 		console.error("[instagram oauth]", error);
+		await recordSystem("system.instagram_connect", "failed", { businessId: state.businessId, reason: stepFailure("system.instagram_connect", "connect", error) });
 		return NextResponse.redirect(new URL(`/auth/continue?ig=error`, url.origin));
 	}
 }

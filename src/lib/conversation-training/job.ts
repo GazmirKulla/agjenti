@@ -1,4 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { recordCompleted, recordStepFailed } from "@/lib/tracking/system-events";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { instagramGraph, instagramHistoryPage } from "@/lib/conversation-learning/instagram-history";
 import { loadLearningSettings } from "@/lib/conversation-learning/settings";
@@ -384,8 +385,13 @@ export async function runTrainingQueue(businessId: string | null = null, budgetM
     if (claim.error) throw new Error("training_queue_unavailable");
     const session = (claim.data as TrainingSession[] | null)?.[0];
     if (!session) break;
-    try { await processTrainingStep(session); }
+    try {
+      await processTrainingStep(session);
+      const { data: after } = await createServiceSupabase().from("conversation_training_sessions").select("status").eq("id", session.id).maybeSingle();
+      if (after && ["ready", "completed"].includes(after.status)) await recordCompleted("system.training", session.business_id, session.id);
+    }
     catch (error) {
+      await recordStepFailed("system.training", session.business_id, `${session.source}_${session.stage}`, error, session.id);
       const message = error instanceof TrainingStepError ? error.message : "Importi u ndërpre. Do të provohet përsëri.";
       if (!(error instanceof TrainingStepError)) console.error("[conversation-training]", session.source, session.stage, error instanceof Error ? error.message.slice(0, 200) : "unknown");
       // A file that cannot be read will not improve on retry.

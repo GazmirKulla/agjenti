@@ -13,8 +13,11 @@ import { loadLinearContext } from "./linear-service";
 import { loadOrderFlows } from "./orderflow-service";
 import { safePlanSnapshot, modelHistory, retainedPlanForReply, type PlanningPreferences, type RecoverablePlan, type ConversationView, type StoredConversation, type StoredMessage, type StoredPlan } from "./persistence-model";
 
+const persistenceCodes: Record<number, string> = { 400: "invalid_input", 403: "unauthorized", 404: "not_found", 409: "stale", 429: "limit", 503: "unavailable" };
 export class PersistenceError extends Error {
   constructor(message: string, public status = 503) { super(message); }
+  /** The code Shëndeti i Agjentit records for this failure. */
+  get failure() { return persistenceCodes[this.status] ?? "check_failed"; }
 }
 export const isUuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export function storageError(message: string): never {

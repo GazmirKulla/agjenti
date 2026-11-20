@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/tokens";
 import { refreshLongLivedToken } from "@/lib/instagram/oauth";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { recordSystem, stepFailure, trackScheduledJob } from "@/lib/tracking/system-events";
 
 function isAuthorizedCron(request: Request): boolean {
 	const secret = process.env.CRON_SECRET?.trim();
@@ -10,14 +11,14 @@ function isAuthorizedCron(request: Request): boolean {
 	return header === `Bearer ${secret}`;
 }
 
-export async function GET(request: Request) {
+async function runJob(request: Request) {
 	if (!isAuthorizedCron(request)) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 	const supabase = createServiceSupabase();
 	const { data: rows } = await supabase
 		.from("instagram_connections")
-		.select("id,access_token_ciphertext,expires_at,refreshed_at,status")
+		.select("id,business_id,access_token_ciphertext,expires_at,refreshed_at,status")
 		.eq("status", "connected");
 	let refreshed = 0;
 	for (const row of rows ?? []) {
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
 					.from("instagram_connections")
 					.update({ status: "expired", last_error: "refresh_failed" })
 					.eq("id", row.id);
+				await recordSystem("system.instagram_token", "refresh_failed", { businessId: row.business_id, reason: "token_rejected", ref: row.id });
 				continue;
 			}
 			await supabase
@@ -42,13 +44,19 @@ export async function GET(request: Request) {
 					expires_at: next.expiresAt.toISOString(),
 					refreshed_at: new Date().toISOString(),
 					status: "connected",
-					last_error: null,
 				})
 				.eq("id", row.id);
+			// Only the refresh's own error is cleared: a webhook subscription error stays visible.
+			await supabase.from("instagram_connections").update({ last_error: null }).eq("id", row.id).eq("last_error", "refresh_failed");
+			await recordSystem("system.instagram_token", "refreshed", { businessId: row.business_id, ref: row.id });
 			refreshed += 1;
 		} catch (err) {
 			console.error("[cron refresh]", err);
+			await recordSystem("system.instagram_token", "refresh_failed", { businessId: row.business_id, reason: stepFailure("system.instagram_token", "refresh", err, row.id), ref: row.id });
 		}
 	}
 	return NextResponse.json({ ok: true, refreshed });
 }
+
+/** Each run is recorded in Shëndeti i Agjentit: how it ended and, when it failed, why. */
+export const GET = (request: Request) => trackScheduledJob("refresh-instagram-tokens", () => runJob(request));

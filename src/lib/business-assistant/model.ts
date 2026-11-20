@@ -57,6 +57,8 @@ export type Preview = {
 };
 export class AssistantError extends Error {
   constructor(message: string, public publication?: import("@/lib/workflows/visual/publication-types").PublicationReadiness) { super(message); }
+  /** The code Shëndeti i Agjentit records: the Assistant refused with a message for the owner. */
+  readonly failure = "assistant_refusal";
 }
 export const fields: Record<string, string[]> = {
   operation: ["key", "input"],

@@ -1,4 +1,5 @@
 import { catalogAccess } from "@/lib/catalogs/access";
+import { recordCompleted, recordStepFailed } from "@/lib/tracking/system-events";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { indexCatalog } from "@/lib/catalogs/indexing";
 import type { Catalog } from "@/lib/catalogs/model";
@@ -35,8 +36,10 @@ async function handlePOST(
         { status: 409 },
       );
     await indexCatalog(catalog);
+    await recordCompleted("system.catalog_index", catalog.business_id, catalog.id);
     return Response.json({ success: true });
   } catch (e) {
+    if (catalog) await recordStepFailed("system.catalog_index", catalog.business_id, "index", e, catalog.id);
     if (catalog)
       await createServiceSupabase()
         .from("catalogs")

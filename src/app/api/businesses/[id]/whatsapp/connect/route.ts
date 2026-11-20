@@ -2,6 +2,7 @@ import { encryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { whatsappGraph, whatsappGraphVersion } from "@/lib/whatsapp/api";
+import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "Forbidden" }, { status: 403 });
@@ -20,15 +21,19 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     typeof input.pin !== "string" || !/^\d{6}$/.test(input.pin)) return Response.json({ error: "Plotëso lidhjen dhe PIN-in me 6 shifra." }, { status: 400 });
   const appId = process.env.META_APP_ID?.trim(), secret = process.env.META_APP_SECRET?.trim();
   if (!appId || !secret) return Response.json({ error: "Lidhja WhatsApp nuk është konfiguruar ende." }, { status: 503 });
+  // The step the connection is in, so a failure says where it stopped.
+  let step = "lookup";
   try {
     const { data: existing, error: lookupError } = await db.from("whatsapp_connections").select("phone_number_id").eq("business_id", id).maybeSingle();
     if (lookupError) throw new Error("Nuk u lexua lidhja.");
     if (existing && existing.phone_number_id !== input.phoneId) return Response.json({ error: "Ky biznes ka një numër tjetër të lidhur. Ndryshimi i numrit kërkon ndihmën e administratorit." }, { status: 409 });
+    step = "authorize";
     const params = new URLSearchParams({ client_id: appId, client_secret: secret, code: input.code });
     const response = await fetch(`https://graph.facebook.com/${whatsappGraphVersion()}/oauth/access_token?${params}`, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
     const auth = await response.json();
     if (!response.ok || typeof auth.access_token !== "string") throw new Error("Autorizimi ka skaduar. Hape përsëri lidhjen me Meta.");
     const token = auth.access_token as string;
+    step = "phone";
     // Confirm the submitted phone belongs to the WABA granted by this token.
     let after: string | undefined;
     let phone: { id: string; display_phone_number?: string; verified_name?: string } | undefined;
@@ -40,17 +45,22 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       after = phones.paging.cursors.after;
     }
     if (!phone) throw new Error("Numri nuk i përket llogarisë WhatsApp të autorizuar.");
+    step = "subscribe";
     const subscribed = await whatsappGraph<{ success?: boolean }>(`${input.wabaId}/subscribed_apps`, token, {});
     if (!subscribed.success) throw new Error("Nuk u aktivizua marrja e mesazheve.");
+    step = "register";
     const registered = await whatsappGraph<{ success?: boolean }>(`${input.phoneId}/register`, token, { messaging_product: "whatsapp", pin: input.pin });
     if (!registered.success) throw new Error("Numri nuk u aktivizua në WhatsApp.");
     const { error } = await db.from("whatsapp_connections").upsert({ business_id: id, phone_number_id: input.phoneId, waba_id: input.wabaId,
       display_phone_number: phone.display_phone_number ?? null, verified_name: phone.verified_name ?? null,
       access_token_ciphertext: encryptSecret(token), status: "connected", last_error: null, updated_at: new Date().toISOString(),
     }, { onConflict: "business_id" });
+    step = "save";
     if (error) throw new Error("Lidhja nuk u ruajt. Numri mund të jetë i lidhur me një biznes tjetër.");
+    await recordSystem("system.whatsapp_connect", "connected", { businessId: id });
     return Response.json({ ok: true });
   } catch (error) {
+    await recordSystem("system.whatsapp_connect", "failed", { businessId: id, reason: stepFailure("system.whatsapp_connect", step, error) });
     return Response.json({ error: error instanceof Error ? error.message : "Lidhja dështoi." }, { status: 400 });
   }
 }

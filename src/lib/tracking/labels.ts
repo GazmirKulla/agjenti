@@ -3,6 +3,7 @@
 export const moduleLabels: Record<string, string> = {
   inbox: "Bisedat dhe stafi", orders: "Porositë", bookings: "Rezervimet", workflows: "Proceset e personalizuara", products: "Produktet",
   services: "Shërbimet", knowledge: "Njohuritë", agents: "Agjenti dhe trajnimi", business: "Biznesi dhe cilësimet", assistant: "Biseda me Asistentin",
+  jobs: "Punët në sfond", integrations: "Integrimet",
 };
 
 /** The Assistant's actions by the module they work on; operations bring their own module. */
@@ -14,6 +15,7 @@ const actionModules: Record<string, string> = {
 };
 const operationModules: Record<string, string> = { calendar: "bookings", booking: "bookings", training: "agents", conversation: "inbox", attention: "business", order: "orders" };
 export function groupOf(capability: string, module: string): string {
+  if (capability.startsWith("system.")) return module;
   const key = capability.replace(/^assistant\./, "");
   if (actionModules[key]) return actionModules[key];
   if (/^(workflow|orderflow|linear)[_.]/.test(key)) return "workflows";
@@ -38,6 +40,8 @@ export function capabilityName(capability: string, label: string) {
 const pointLabels: Record<string, string> = {
   failed: "Dështoi", blocked: "U ndal nga serveri", abandoned: "U la në mes", refused: "U refuzua", execution_failed: "Ekzekutimi dështoi",
   attempt_failed: "Përpjekje e dështuar", handed_off: "Kaloi te stafi",
+  step_failed: "Një hap dështoi", webhook_failed: "Mesazhet nuk u aktivizuan", profile_incomplete: "Meta nuk ktheu llogarinë profesionale",
+  refresh_failed: "Rifreskimi dështoi", checkout_failed: "Faqja e pagesës nuk u hap", payment_failed: "Pagesa dështoi",
 };
 const reasonLabels: Record<string, string> = {
   out_of_stock: "produkti ka mbaruar", price_on_request: "pa çmim të caktuar", product_information_only: "produkt vetëm për informim",
@@ -51,6 +55,8 @@ const reasonLabels: Record<string, string> = {
   invalid_input: "vlerë e pavlefshme", stale: "të dhënat ndryshuan ndërkohë", unauthorized: "pa leje ose sesion i skaduar",
   not_found: "nuk gjendet më", limit: "u arrit kufiri", unavailable: "shërbimi nuk ishte i disponueshëm", check_failed: "nuk kaloi një kontroll", no_exit_after_24h: "klienti nuk vazhdoi brenda 24 orëve", semantic_condition_unresolved: "kushti nuk u kuptua",
   unknown: "rezultat i pasigurt", other: "arsye tjetër", module_disabled: "moduli është i fikur",
+  timeout: "nuk u përgjigj në kohë", nothing_queued: "asnjë burim për t'u lexuar", token_rejected: "Meta e refuzoi token-in",
+  order_mismatch: "porosia në POK nuk përputhet", paid_not_applied: "u pagua, por paketa nuk u përditësua", meta_unknown: "Meta pa kod gabimi",
 };
 /** Codes of a controlled check: the system worked and stopped the change; "unexpected" is a bug. */
 export const controlledReasons = new Set(["assistant_refusal", "invalid_input", "stale", "unauthorized", "not_found", "limit", "unavailable", "check_failed"]);
@@ -62,10 +68,30 @@ export const reasonHelp: Record<string, string> = {
   stale: "Të dhënat ndryshuan mes përgatitjes dhe ruajtjes; pronari duhet ta kërkojë përsëri.",
   unauthorized: "Përdoruesi nuk kishte leje, ose sesioni kishte skaduar.",
   not_found: "Objekti nuk ekzistonte më.", limit: "U arrit një kufi i platformës.", unavailable: "Një shërbim ose tabelë nuk ishte e disponueshme.",
-  check_failed: "Një kontroll tjetër i serverit e ndali; mesazhi iu shfaq pronarit.", assistant_refusal: "Asistenti e refuzoi kërkesën me një mesazh për pronarin.",
+  check_failed: "Një kontroll tjetër i serverit e ndali; mesazhi iu shfaq pronarit.",
+  timeout: "Shërbimi tjetër nuk u përgjigj brenda kohës.", token_rejected: "Meta nuk e pranoi më token-in: llogaria duhet rilidhur.", assistant_refusal: "Asistenti e refuzoi kërkesën me një mesazh për pronarin.",
 };
-/** "Dështoi: produkti ka mbaruar"; an unknown code is shown as it is, so nothing is hidden. */
+/** A provider's code, readable: "Meta, kodi 100/33", "POK, statusi 502", "HTTP 503". */
+function codeLabel(code: string) {
+  if (reasonLabels[code]) return reasonLabels[code];
+  const meta = /^meta_(\d+)(?:_(\d+))?$/.exec(code);
+  if (meta) return `Meta refuzoi (kodi ${meta[1]}${meta[2] ? `/${meta[2]}` : ""})`;
+  const status = /^(pok|provider|http)_(\d{3})$/.exec(code);
+  if (status) return `${status[1] === "pok" ? "POK" : status[1] === "provider" ? "shërbimi i jashtëm" : "HTTP"} ktheu ${status[2]}`;
+  return code;
+}
+/** "Dështoi: produkti ka mbaruar"; a step code reads "capture: gabim në kod"; an unknown code is shown as it is. */
 export function exitLabel(point: string, reason: string | null) {
   const head = pointLabels[point] ?? point;
-  return reason ? `${head}: ${reasonLabels[reason] ?? reason}` : head;
+  if (!reason) return head;
+  const at = reason.lastIndexOf(":");
+  return at > 0 ? `${head} (${reason.slice(0, at).replace(/_/g, " ")}): ${codeLabel(reason.slice(at + 1))}` : `${head}: ${codeLabel(reason)}`;
 }
+/** What kind of failure a code is: a bug in our code, a refusal of another service, or a controlled check. */
+export function failureKind(reason: string | null): "bug" | "external" | "check" {
+  const code = reason ? reason.slice(reason.lastIndexOf(":") + 1) : "";
+  if (!code || code === "unexpected" || code === "error") return "bug";
+  if (/^(meta|pok|provider|http)_/.test(code) || ["timeout", "token_rejected", "order_mismatch"].includes(code)) return "external";
+  return "check";
+}
+export const failureKindLabels = { bug: "Gabim në kod", external: "Shërbim i jashtëm", check: "Kontroll" } as const;

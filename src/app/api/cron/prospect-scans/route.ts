@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { runDueProspectScans, runProspectScan } from "@/lib/prospects/instagram-scan";
+import { trackScheduledJob } from "@/lib/tracking/system-events";
 export const runtime = "nodejs";
 export const maxDuration = 180;
 
@@ -9,7 +10,7 @@ function authorized(request: Request) {
 }
 
 /** Daily safety net: scans whose wake-up was lost, and expired reads removed. */
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try { return Response.json({ processed: await runDueProspectScans() }); }
   catch { return Response.json({ error: "Prospect scan worker unavailable" }, { status: 503 }); }
@@ -23,3 +24,6 @@ export async function POST(request: Request) {
   after(() => runProspectScan(scan).catch(() => console.error("[prospect-scan] worker failed")));
   return Response.json({ accepted: true }, { status: 202 });
 }
+
+/** Each run is recorded in Shëndeti i Agjentit: how it ended and, when it failed, why. */
+export const GET = (request: Request) => trackScheduledJob("prospect-scans", () => runJob(request));

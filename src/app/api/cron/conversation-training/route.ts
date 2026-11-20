@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { continueTraining, MAX_HOPS, workerOrigin } from "@/lib/conversation-training/continue";
 import { purgeExpiredTraining, runTrainingQueue } from "@/lib/conversation-training/job";
+import { trackScheduledJob } from "@/lib/tracking/system-events";
 export const runtime = "nodejs";
 export const maxDuration = 180;
 
@@ -10,7 +11,7 @@ function authorized(request: Request) {
 }
 
 /** Daily safety net: imports still due, and deletion of imports past retention. */
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const purged = await purgeExpiredTraining().catch(() => 0);
@@ -29,3 +30,6 @@ export async function POST(request: Request) {
   after(() => continueTraining(business, workerOrigin(url.origin), hop));
   return Response.json({ accepted: true }, { status: 202 });
 }
+
+/** Each run is recorded in Shëndeti i Agjentit: how it ended and, when it failed, why. */
+export const GET = (request: Request) => trackScheduledJob("conversation-training", () => runJob(request));

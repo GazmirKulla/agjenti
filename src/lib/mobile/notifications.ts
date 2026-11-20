@@ -1,3 +1,4 @@
+import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireBusinessAccess } from "@/lib/tenant/access";
 type Delivery = {
@@ -30,6 +31,7 @@ export async function deliverMobileNotifications() {
   if (error) throw Error("Notification queue unavailable");
   await Promise.all(
     ((data ?? []) as Delivery[]).map(async (delivery) => {
+      let businessId: string | null = null;
       try {
         const { data: event } = await db
           .from("mobile_notification_events")
@@ -48,6 +50,7 @@ export async function deliverMobileNotifications() {
               .eq("id", event.business_id)
               .maybeSingle()
           : { data: null };
+        businessId = event?.business_id ?? null;
         const access =
           event && business && device?.user_id === event.user_id
             ? await requireBusinessAccess(event.user_id, business.slug)
@@ -123,7 +126,9 @@ export async function deliverMobileNotifications() {
             next_attempt: new Date(Date.now() + 15 * 60000).toISOString(),
           })
           .eq("id", delivery.id);
-      } catch {
+        if (delivery.receipt_id) await recordSystem("system.mobile_push", "delivered", { businessId, ref: delivery.id });
+      } catch (error) {
+        await recordSystem("system.mobile_push", "step_failed", { businessId, ref: delivery.id, reason: stepFailure("system.mobile_push", delivery.receipt_id ? "receipt" : "send", error, delivery.id) });
         await db
           .from("mobile_notification_deliveries")
           .update({

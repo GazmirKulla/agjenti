@@ -6,7 +6,8 @@ import { capabilities, outcomeOf } from "./capabilities";
  * entry to its exit (a process instance, an Assistant request); `reason` is the server's code.
  */
 export type CapabilityEvent = {
-  businessId: string;
+  /** Null only for platform work that serves no single business (a scheduled run). */
+  businessId: string | null;
   capability: string;
   point: string;
   reason?: string;
@@ -23,6 +24,7 @@ export function capabilityRows(events: CapabilityEvent[]) {
   return events.map(event => {
     const outcome = outcomeOf(event.capability, event.point);
     if (!outcome) throw new Error(`undeclared_capability_point:${event.capability}:${event.point}`);
+    if (!event.businessId && capabilities[event.capability].agent !== "system") throw new Error(`capability_without_business:${event.capability}`);
     return { business_id: event.businessId, agent: capabilities[event.capability].agent, capability: event.capability, point: event.point,
       outcome, reason: safeCode(event.reason), mode: event.mode, conversation_id: event.conversationId ?? null,
       ref: event.ref ? event.ref.slice(0, 200) : null, duration_ms: event.durationMs ?? null };

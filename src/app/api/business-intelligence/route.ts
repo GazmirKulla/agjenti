@@ -1,4 +1,5 @@
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { recordCompleted, recordStepFailed } from "@/lib/tracking/system-events";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
 import { transcribeAudio } from "@/lib/business-intelligence/transcription";
@@ -64,7 +65,7 @@ async function handleGET(request: Request) {
   }
 }
 async function handlePOST(request: Request) {
-  let sourceId: string | null = null;
+  let sourceId: string | null = null, sourceBusiness: string | null = null, sourceKind = "";
   try {
     if (request.headers.get("origin") !== new URL(request.url).origin)
       return json({ error: "Kërkesë e pavlefshme." }, 403);
@@ -252,6 +253,7 @@ async function handlePOST(request: Request) {
       });
       if (claim.error) throw claim.error;
       sourceId = claim.data;
+      sourceBusiness = business.id; sourceKind = source;
       let text = "";
       let reference = "";
       let note = "";
@@ -312,6 +314,7 @@ async function handlePOST(request: Request) {
         .update({ extracted: entities, status: "completed" })
         .eq("id", sourceId);
       if (history.error) throw history.error;
+      await recordCompleted("system.intelligence", business.id, sourceId ?? undefined);
       const saved = await db.rpc(knowledge.length ? "save_scanned_intelligence" : "save_intelligence_draft", {
         p_business: business.id,
         p_revision: revision,
@@ -337,6 +340,7 @@ async function handlePOST(request: Request) {
     if (saved.error) throw saved.error;
     return json({ draft, revision: saved.data });
   } catch (error) {
+    if (sourceId && sourceBusiness) await recordStepFailed("system.intelligence", sourceBusiness, sourceKind || "read", error, sourceId);
     if (sourceId)
       await createServiceSupabase()
         .from("business_intelligence_sources")

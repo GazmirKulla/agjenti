@@ -1,5 +1,8 @@
 import { actions } from "@/lib/business-assistant/model";
 import { operationCatalog } from "@/lib/actions/operations/catalog";
+import { scheduledJobCapability, scheduledJobs } from "./scheduled-jobs";
+
+export { scheduledJobCapability, scheduledJobs };
 
 /**
  * Every capability the agents have, with its entry and its exits. Only these can be recorded
@@ -10,7 +13,7 @@ import { operationCatalog } from "@/lib/actions/operations/catalog";
  * e.g. the customer closed the request or a message needed no reply).
  */
 export type Outcome = "success" | "failure" | "handoff" | "neutral";
-export type AgentKind = "customer" | "assistant";
+export type AgentKind = "customer" | "assistant" | "system";
 export type CapabilitySpec = {
   agent: AgentKind;
   module: string;
@@ -77,8 +80,46 @@ const assistantCapabilities: Record<string, CapabilitySpec> = Object.fromEntries
     emittedBy: ["src/lib/tracking/assistant-events.ts"] } satisfies CapabilitySpec];
 }));
 
+const systemEvents = "src/lib/tracking/system-events.ts";
+const scheduledCapabilities: Record<string, CapabilitySpec> = Object.fromEntries(Object.entries(scheduledJobs).map(([job, label]) =>
+  [scheduledJobCapability(job), { agent: "system", module: "jobs", label, entry: null, exits: { completed: "success", failed: "failure" },
+    emittedBy: [`src/app/api/cron/${job}/route.ts`, systemEvents] } satisfies CapabilitySpec]));
+
+/** Platform work behind the agents: background jobs of one business and integrations with other services. */
+export const systemCapabilities: Record<string, CapabilitySpec> = {
+  "system.discovery": { agent: "system", module: "jobs", label: "Analiza e biznesit (Instagram, website)", entry: null,
+    exits: { completed: "success", step_failed: "failure" }, emittedBy: ["src/lib/discovery/queue.ts", systemEvents] },
+  "system.training": { agent: "system", module: "jobs", label: "Importi dhe analiza e bisedave", entry: null,
+    exits: { completed: "success", step_failed: "failure" }, emittedBy: ["src/lib/conversation-training/job.ts", systemEvents] },
+  "system.source_refresh": { agent: "system", module: "jobs", label: "Rifreskimi i burimeve të një biznesi", entry: null,
+    exits: { queued: "success", failed: "failure" }, emittedBy: ["src/app/api/cron/source-refresh/route.ts"] },
+  "system.instagram_connect": { agent: "system", module: "integrations", label: "Lidhja me Instagram", entry: null,
+    exits: { connected: "success", webhook_failed: "failure", profile_incomplete: "failure", failed: "failure" }, emittedBy: ["src/app/api/instagram/oauth/callback/route.ts"] },
+  "system.instagram_token": { agent: "system", module: "integrations", label: "Rifreskimi i token-it të Instagram", entry: null,
+    exits: { refreshed: "success", refresh_failed: "failure" }, emittedBy: ["src/app/api/cron/refresh-instagram-tokens/route.ts"] },
+  "system.whatsapp_connect": { agent: "system", module: "integrations", label: "Lidhja me WhatsApp", entry: null,
+    exits: { connected: "success", failed: "failure" }, emittedBy: ["src/app/api/businesses/[id]/whatsapp/connect/route.ts"] },
+  "system.google_connect": { agent: "system", module: "integrations", label: "Lidhja me Google Calendar", entry: null,
+    exits: { connected: "success", failed: "failure" }, emittedBy: ["src/app/api/calendar/google/callback/route.ts"] },
+  "system.google_sync": { agent: "system", module: "integrations", label: "Rezervimi në Google Calendar", entry: null,
+    exits: { synced: "success", failed: "failure" }, emittedBy: ["src/lib/calendar/google.ts"] },
+  "system.pok_payment": { agent: "system", module: "integrations", label: "Pagesa me POK", entry: null,
+    exits: { checkout_opened: "success", checkout_failed: "failure", paid: "success", payment_failed: "failure", left_unpaid: "neutral" }, emittedBy: ["src/lib/billing/payments.ts"] },
+  "system.intelligence": { agent: "system", module: "jobs", label: "Leximi i një burimi për biznesin (zë, website, Instagram)", entry: null,
+    exits: { completed: "success", step_failed: "failure" }, emittedBy: ["src/app/api/business-intelligence/route.ts", systemEvents] },
+  "system.catalog_index": { agent: "system", module: "jobs", label: "Analiza e një katalogu", entry: null,
+    exits: { completed: "success", step_failed: "failure" }, emittedBy: ["src/app/api/catalogs/[id]/index/route.ts", systemEvents] },
+  "system.prospect_scan": { agent: "system", module: "jobs", label: "Leximi i profilit të një klienti", entry: null,
+    exits: { read: "success", not_found: "neutral", failed: "failure" }, emittedBy: ["src/lib/prospects/instagram-scan.ts"] },
+  "system.account_deletion": { agent: "system", module: "jobs", label: "Fshirja e një llogarie", entry: null,
+    exits: { completed: "success", step_failed: "failure" }, emittedBy: ["src/lib/account/deletion.ts"] },
+  "system.mobile_push": { agent: "system", module: "integrations", label: "Njoftimi në celular", entry: null,
+    exits: { delivered: "success", step_failed: "failure" }, emittedBy: ["src/lib/mobile/notifications.ts"] },
+  ...scheduledCapabilities,
+};
+
 export type CustomerCapability = keyof typeof customerCapabilities;
-export const capabilities: Record<string, CapabilitySpec> = { ...customerCapabilities, ...assistantCapabilities };
+export const capabilities: Record<string, CapabilitySpec> = { ...customerCapabilities, ...assistantCapabilities, ...systemCapabilities };
 
 /** The outcome a point counts as, or null when the capability does not declare it. */
 export function outcomeOf(capability: string, point: string): Outcome | "entry" | null {

@@ -1,4 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
 import { fetchPublicInstagram, normalizeInstagramUsername, publicScanAvailable, PublicInstagramError } from "@/lib/instagram/public-profile";
 import type { InstagramBusinessProfile } from "@/lib/instagram/business-profile";
 import type { InstagramPost } from "@/lib/instagram/media";
@@ -111,6 +112,8 @@ export async function runProspectScan(id: string, deps: RunDeps = {}): Promise<P
   const done = (fields: Record<string, unknown>) => db.from("prospect_scans")
     .update({ ...fields, leased_until: null, updated_at: new Date().toISOString() }).eq("id", scan.id).eq("status", "running");
   const read = await readPublicAccount(scan.username, { ...deps, db });
+  await recordSystem("system.prospect_scan", read.status === "ready" ? "read" : read.status === "not_found" ? "not_found" : "failed",
+    { businessId: scan.business_id, ref: scan.id, reason: read.status === "failed" ? read.code : undefined });
   await done(read.status === "ready" ? { status: "ready", profile: read.profile, posts: read.posts, stats: read.stats, error: null, fetched_at: read.fetched_at }
     : { status: read.status, error: read.error });
   return read.status;
@@ -118,7 +121,7 @@ export async function runProspectScan(id: string, deps: RunDeps = {}): Promise<P
 
 /** One public read of an account: a recent read is reused, captions are kept
  * short, and a private or unknown account is told apart from a failure. */
-export async function readPublicAccount(username: string, deps: RunDeps = {}): Promise<Pick<ProspectScan, "status" | "profile" | "posts" | "stats" | "error" | "fetched_at">> {
+export async function readPublicAccount(username: string, deps: RunDeps = {}): Promise<Pick<ProspectScan, "status" | "profile" | "posts" | "stats" | "error" | "fetched_at"> & { code?: string }> {
   try {
     // The same public account read in the last hours (another chat, an onboarding) is reused.
     const recent = await (deps.recent ?? recentPublicRead)(username, deps.db).catch(() => null);
@@ -128,7 +131,8 @@ export async function readPublicAccount(username: string, deps: RunDeps = {}): P
   } catch (error) {
     const notFound = error instanceof PublicInstagramError && error.reason === "not_found";
     return { status: notFound ? "not_found" : "failed", profile: null, posts: null, stats: null, fetched_at: null,
-      error: error instanceof PublicInstagramError ? error.message : "Instagram nuk u lexua." };
+      error: error instanceof PublicInstagramError ? error.message : "Instagram nuk u lexua.",
+      code: error instanceof PublicInstagramError ? `instagram_${error.reason}` : stepFailure("system.prospect_scan", "read", error) };
   }
 }
 

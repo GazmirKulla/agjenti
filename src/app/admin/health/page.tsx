@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { PageHeading } from "@/components/dashboard/ui";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { loadCapabilityHealth, loadRecentFailures, type CapabilityHealth } from "@/lib/tracking/health";
-import { capabilityName, controlledReasons, exitLabel, groupOf, moduleLabels } from "@/lib/tracking/labels";
+import { loadAttention, loadCapabilityHealth, loadRecentFailures, type CapabilityHealth } from "@/lib/tracking/health";
+import { capabilityName, exitLabel, failureKind, failureKindLabels, groupOf, moduleLabels } from "@/lib/tracking/labels";
 import { capabilities } from "@/lib/tracking/capabilities";
 import type { AgentKind } from "@/lib/tracking/capabilities";
 import s from "./health.module.css";
@@ -14,6 +14,7 @@ const periods = [1, 7, 30] as const;
 const agents: Record<AgentKind, { title: string; hint: string }> = {
   customer: { title: "Agjenti i klientëve", hint: "Bisedat me klientët në Instagram dhe WhatsApp" },
   assistant: { title: "Asistenti i biznesit", hint: "Kërkesat e pronarëve te paneli" },
+  system: { title: "Platforma", hint: "Punët në sfond dhe integrimet: Instagram, WhatsApp, Google, POK" },
 };
 const num = (value: number) => value.toLocaleString("sq-AL");
 const percent = (value: number | null) => value === null ? "—" : `${Math.round(value * 100)}%`;
@@ -77,7 +78,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
   const days = periods.find(p => String(p) === query.days) ?? 7;
   const { data: businesses } = await createServiceSupabase().from("businesses").select("id,name,slug").order("name").limit(500);
   const business = businesses?.find(b => b.id === query.business) ?? null;
-  const [report, failures] = await Promise.all([loadCapabilityHealth(days, business?.id ?? null), loadRecentFailures(days, business?.id ?? null)]);
+  const [report, failures, attention] = await Promise.all([loadCapabilityHealth(days, business?.id ?? null), loadRecentFailures(days, business?.id ?? null), loadAttention(business?.id ?? null)]);
   const nameOf = new Map((businesses ?? []).map(b => [b.id, b.name]));
   const slugOf = new Map((businesses ?? []).map(b => [b.id, b.slug]));
   const link = (params: Record<string, string | undefined>) => `/admin/health?${new URLSearchParams(Object.entries({ days: String(days), business: business?.id, ...params }).filter((e): e is [string, string] => Boolean(e[1])))}`;
@@ -107,7 +108,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
     </section>
 
     <div className={s.agents}>
-      {(["customer", "assistant"] as const).map(agent => {
+      {(["customer", "assistant", "system"] as const).map(agent => {
         const items = report.health.filter(h => h.agent === agent);
         const success = sum(items, "success"), failure = sum(items, "failure");
         return <section key={agent} className={`panel section-pad ${s.agent}`} aria-labelledby={`agent-${agent}`}>
@@ -127,7 +128,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
     </div>
     <Legend />
 
-    {(["customer", "assistant"] as const).map(agent => {
+    {(["customer", "assistant", "system"] as const).map(agent => {
       const items = report.health.filter(h => h.agent === agent);
       const groups = [...new Set(items.map(h => groupOf(h.capability, h.module)))].sort((a, b) => (moduleLabels[a] ?? a).localeCompare(moduleLabels[b] ?? b));
       return <section key={agent} className="panel section-pad grid gap-3">
@@ -153,14 +154,26 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
       </section>;
     })}
 
+    <section className="panel section-pad grid gap-3" aria-labelledby="attention">
+      <h2 id="attention">Kërkon vëmendje tani · {attention.length}</h2>
+      <p className="muted-copy">Lidhje që duken aktive, por nuk punojnë, dhe punë në sfond që kanë ngecur më shumë se 30 minuta.</p>
+      {!attention.length ? <p>✓ Asgjë e ngecur dhe asnjë lidhje me gabim.</p> : <ul className={s.failures}>
+        {attention.map((a, i) => <li key={i}>
+          <span className={`${s.kind} ${a.kind === "stuck" ? s.kind_check : s.kind_external}`}>{a.kind === "stuck" ? "E ngecur" : "Lidhje"}</span>
+          <div className={s.failureText}><strong>{a.title}</strong><small>{nameOf.get(a.businessId) ?? "Biznes"} · {a.detail}</small></div>
+          {a.href && slugOf.get(a.businessId) ? <Link className="btn btn-ghost" href={`/b/${slugOf.get(a.businessId)}/${a.href}`}>Hap</Link> : <span />}
+        </li>)}
+      </ul>}
+    </section>
+
     <section className="panel section-pad grid gap-3" aria-labelledby="failures">
       <h2 id="failures">Dështimet e fundit · {failures.length}</h2>
-      <p className="muted-copy">Çdo dështim me shkakun e tij. “Gabim në kod” do të thotë diçka që kodi nuk e priste; të tjerat janë kontrolle që e ndaluan ndryshimin. Hap një për të parë çfarë ndodhi.</p>
+      <p className="muted-copy">Çdo dështim me shkakun e tij. “Gabim në kod” do të thotë diçka që kodi nuk e priste; “Shërbim i jashtëm” që Meta, POK, Google ose AI e refuzoi; “Kontroll” që serveri e ndaloi me qëllim. Hap një për të parë çfarë ndodhi.</p>
       {!failures.length ? <p>✓ Asnjë dështim në këtë periudhë.</p> : <ul className={s.failures}>
         {failures.map(f => <li key={f.id}>
-          <span className={`${s.kind} ${f.reason && controlledReasons.has(f.reason) ? s.kindCheck : s.kindBug}`}>{f.reason && controlledReasons.has(f.reason) ? "Kontroll" : "Gabim në kod"}</span>
+          <span className={`${s.kind} ${s[`kind_${failureKind(f.reason)}`]}`}>{failureKindLabels[failureKind(f.reason)]}</span>
           <div className={s.failureText}><strong>{capabilityName(f.capability, capabilities[f.capability]?.label ?? f.capability)}</strong>
-            <small>{exitLabel(f.point, f.reason)} · {nameOf.get(f.businessId) ?? "Biznes"} · {when(f.createdAt)}</small></div>
+            <small>{exitLabel(f.point, f.reason)} · {f.businessId ? nameOf.get(f.businessId) ?? "Biznes" : "Platforma"} · {when(f.createdAt)}</small></div>
           <Link className="btn btn-ghost" href={`/admin/health/failure/${f.id}`}>Hap</Link>
         </li>)}
       </ul>}
@@ -169,7 +182,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
     <section className="panel section-pad grid gap-3">
       <h2>Pa të dhëna në këtë periudhë · {report.silent.length}</h2>
       <p className="muted-copy">Aftësi që ndiqen, por nuk regjistruan asnjë ngjarje. Mund të mos jenë përdorur, ose diçka i pengon. Hap një grup për t’i parë.</p>
-      {(["customer", "assistant"] as const).map(agent => {
+      {(["customer", "assistant", "system"] as const).map(agent => {
         const silent = report.silent.filter(x => x.agent === agent);
         if (!silent.length) return null;
         const groups = [...new Set(silent.map(x => groupOf(x.capability, x.module)))].sort((a, b) => (moduleLabels[a] ?? a).localeCompare(moduleLabels[b] ?? b));

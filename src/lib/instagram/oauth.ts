@@ -69,6 +69,8 @@ export async function exchangeInstagramCode(code: string): Promise<{
 	userId: string;
 	expiresAt: Date | null;
 	username: string | null;
+	profileComplete: boolean;
+	profileError: { code?: number; error_subcode?: number } | null;
 }> {
 	const clientId = process.env.INSTAGRAM_APP_ID?.trim();
 	const clientSecret = process.env.INSTAGRAM_APP_SECRET?.trim();
@@ -122,7 +124,11 @@ export async function exchangeInstagramCode(code: string): Promise<{
 		user_id?: string | number;
 		username?: string;
 		name?: string;
+		error?: { code?: number; error_subcode?: number };
 	};
+	// Without the professional account id from /me, webhooks and messages will not match this connection.
+	const profileComplete = meRes.ok && Boolean(me.user_id);
+	if (!profileComplete) console.error("[instagram oauth] profile incomplete", { status: meRes.status, code: me.error?.code, subcode: me.error?.error_subcode });
 	const igProfessionalId = String(me.user_id || shortJson.user_id || "").trim();
 	if (!igProfessionalId) {
 		throw new Error("Mungon Instagram professional account ID (user_id).");
@@ -132,6 +138,8 @@ export async function exchangeInstagramCode(code: string): Promise<{
 		userId: igProfessionalId,
 		expiresAt,
 		username: me.username ?? null,
+		profileComplete,
+		profileError: profileComplete ? null : { code: me.error?.code ?? meRes.status, error_subcode: me.error?.error_subcode },
 	};
 }
 
@@ -164,7 +172,7 @@ const DEFAULT_WEBHOOK_FIELDS =
 export async function subscribeInstagramAccountWebhooks(
 	accessToken: string,
 	subscribedFields: string = DEFAULT_WEBHOOK_FIELDS,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; meta: { code?: number; error_subcode?: number } }> {
 	const url = new URL(
 		`https://graph.instagram.com/${graphVersion()}/me/subscribed_apps`,
 	);
@@ -183,7 +191,7 @@ export async function subscribeInstagramAccountWebhooks(
 		const error =
 			data.error?.message || `subscribed_apps failed (${response.status})`;
 		console.error("[instagram oauth] subscribed_apps failed", data);
-		return { ok: false, error };
+		return { ok: false, error, meta: { code: data.error?.code ?? response.status, error_subcode: (data.error as { error_subcode?: number } | undefined)?.error_subcode } };
 	}
 	console.log("[instagram oauth] subscribed_apps ok", { subscribedFields });
 	return { ok: true };

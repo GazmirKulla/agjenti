@@ -1,4 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
 import { plans, type BillingPlan } from "./service";
 import { cardLabel, createOrder, getOrder, PokError, pokEnvironment, setupSavedCard3ds, tokenizeCard, type PokOrder } from "./pok";
 
@@ -129,9 +130,12 @@ export async function startHostedPayment(userId: string, plan: PaidPlan, returnP
     await db.from("billing_payments").update({ pok_order_id: order.id }).eq("id", payment.id);
     const page = pokPageUrl(order._self?.confirmUrl, { email });
     if (!page) throw new BillingError("POK nuk ktheu faqen e pagesës. Provo përsëri.", 502);
+    await recordSystem("system.pok_payment", "checkout_opened", { ref: payment.id });
     return { paymentId: payment.id as string, url: page };
   } catch (cause) {
     await db.from("billing_payments").update({ status: "failed" }).eq("id", payment.id);
+    await recordSystem("system.pok_payment", "checkout_failed", { ref: payment.id,
+      reason: cause instanceof PokError || cause instanceof BillingError ? `pok_${cause.status}` : stepFailure("system.pok_payment", "checkout", cause, payment.id) });
     throw cause instanceof PokError ? new BillingError(cause.message, cause.status) : cause;
   }
 }
@@ -153,10 +157,14 @@ export async function syncPlanPayment(paymentId: string, userId?: string): Promi
     const { error } = await db.rpc("apply_billing_payment", { p_payment: payment.id });
     if (error) {
       console.error("[billing] apply payment", error.message);
+      await recordSystem("system.pok_payment", "payment_failed", { ref: payment.id, reason: "paid_not_applied" });
       throw new BillingError("Pagesa u krye, por paketa nuk u përditësua ende. Rifresko faqen pas pak.", 500);
     }
+    await recordSystem("system.pok_payment", "paid", { ref: payment.id });
   } else if (outcome === "failed") {
     if (order.isCompleted) console.error("[billing] completed POK order does not match payment", payment.id);
+    // An order the payer left is not a fault; a completed order that does not match is.
+    await recordSystem("system.pok_payment", order.isCompleted ? "payment_failed" : "left_unpaid", { ref: payment.id, reason: order.isCompleted ? "order_mismatch" : undefined });
     await db.from("billing_payments").update({ status: "failed" }).eq("id", payment.id).eq("status", "pending");
   }
   return outcome;

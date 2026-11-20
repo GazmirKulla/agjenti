@@ -7,4 +7,6 @@ export type FailureCode = "invalid_input" | "stale" | "unauthorized" | "not_foun
 /** An actionable, public message; infrastructure errors stay private. */
 export class OperationError extends Error {
   constructor(message: string, public code: FailureCode = "check_failed") { super(message); }
+  /** The code Shëndeti i Agjentit records for this failure. */
+  get failure() { return this.code; }
 }

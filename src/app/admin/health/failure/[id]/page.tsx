@@ -5,7 +5,7 @@ import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { loadFailure } from "@/lib/tracking/health";
 import { capabilities } from "@/lib/tracking/capabilities";
-import { capabilityName, controlledReasons, exitLabel, reasonHelp } from "@/lib/tracking/labels";
+import { capabilityName, exitLabel, failureKind, failureKindLabels, reasonHelp } from "@/lib/tracking/labels";
 import s from "../../health.module.css";
 
 export const metadata = { title: "Dështimi | Shëndeti i Agjentit" };
@@ -21,19 +21,20 @@ export default async function FailurePage({ params }: { params: Promise<{ id: st
   const found = await loadFailure(id);
   if (!found) notFound();
   const { event, trail, turn } = found;
-  const { data: business } = await createServiceSupabase().from("businesses").select("name,slug").eq("id", event.businessId).maybeSingle();
-  const controlled = !!event.reason && controlledReasons.has(event.reason);
+  const { data: business } = event.businessId ? await createServiceSupabase().from("businesses").select("name,slug").eq("id", event.businessId).maybeSingle() : { data: null };
+  const kind = failureKind(event.reason);
+  const code = event.reason ? event.reason.slice(event.reason.lastIndexOf(":") + 1) : "";
   const name = capabilityName(event.capability, capabilities[event.capability]?.label ?? event.capability);
 
   return <div className={s.detail}>
     <PageHeading eyebrow="SHËNDETI I AGJENTIT" title={name} description={exitLabel(event.point, event.reason)} />
     <Link href="/admin/health" className="btn btn-ghost" style={{ justifySelf: "start" }}>← Shëndeti i Agjentit</Link>
     <section className="panel section-pad grid gap-3">
-      <span className={`${s.kind} ${controlled ? s.kindCheck : s.kindBug}`} style={{ justifySelf: "start" }}>{controlled ? "Kontroll" : "Gabim në kod"}</span>
-      <p>{reasonHelp[event.reason ?? ""] ?? "Kod i panjohur; shiko log-un e serverit."}</p>
+      <span className={`${s.kind} ${s[`kind_${kind}`]}`} style={{ justifySelf: "start" }}>{failureKindLabels[kind]}</span>
+      <p>{reasonHelp[code] ?? (kind === "external" ? "Shërbimi tjetër e refuzoi kërkesën me këtë kod. Kodi tregon arsyen te dokumentimi i atij shërbimi." : "Kod i panjohur; shiko log-un e serverit.")}</p>
       <dl className={s.facts}>
         <div><dt>Kur</dt><dd>{when(event.createdAt)}</dd></div>
-        <div><dt>Biznesi</dt><dd>{business?.name ?? event.businessId}</dd></div>
+        <div><dt>Biznesi</dt><dd>{business?.name ?? event.businessId ?? "Platforma"}</dd></div>
         <div><dt>Hapi</dt><dd>{event.point}</dd></div>
         <div><dt>Kodi</dt><dd>{event.reason ?? "—"}</dd></div>
         <div><dt>Aftësia</dt><dd>{event.capability}</dd></div>
@@ -55,7 +56,7 @@ export default async function FailurePage({ params }: { params: Promise<{ id: st
       <ol className={s.trail}>{trail.map(t => <li key={t.id}>{when(t.createdAt)} · {exitLabel(t.point, t.reason)}{t.durationMs !== null ? ` · ${(t.durationMs / 1000).toLocaleString("sq-AL")} s` : ""}</li>)}</ol>
     </section>}
 
-    {!controlled && <section className="panel section-pad grid gap-2">
+    {kind === "bug" && <section className="panel section-pad grid gap-2">
       <h2>Ku ta kërkosh</h2>
       <p className="muted-copy">Për dështimet e regjistruara pas 20 nëntorit, log-u i serverit (Vercel → Logs) ka rreshtin <code>capability_unexpected_failure</code> me <code>ref</code> “{event.ref ?? "—"}”, emrin e gabimit dhe vendin në kod.</p>
     </section>}

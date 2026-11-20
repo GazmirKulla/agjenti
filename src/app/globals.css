@@ -1025,7 +1025,8 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
   background: var(--danger-soft);
   color: var(--danger);
 }
-.status-paused {
+.status-paused,
+.status-messages_off {
   background: var(--warning-soft);
   color: var(--warning);
 }
