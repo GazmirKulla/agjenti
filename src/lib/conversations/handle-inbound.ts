@@ -48,10 +48,14 @@ async function alreadyHandled(externalId: string): Promise<boolean> {
   return Boolean(data?.id);
 }
 
+/** Why an incoming message got no reply from the agent, as a code for Shëndeti i Agjentit. */
+export type NoReplyReason = "meta_test" | "account_missing" | "already_handled" | "unknown_account" | "token_unreadable" | "no_conversation"
+  | "duplicate" | "marketing_preference" | "auto_reply_off" | "conversation_paused" | "conversation_closed";
+
 export async function handleInboundMessage(
   message: NormalizedIncomingMessage,
   job?: WorkflowJob,
-): Promise<void> {
+): Promise<{ skipped: NoReplyReason } | void> {
   if (isIsolatedExecution()) refuseIsolatedEffect("webhook", "inbound_delivery");
   const batch = inboundBatch(message, job);
   message = batch.message;
@@ -60,7 +64,7 @@ export async function handleInboundMessage(
 
   if (isMetaDashboardTestMessage(message)) {
     if (await alreadyHandled(message.externalMessageId)) {
-      return;
+      return { skipped: "meta_test" };
     }
     const supabase = createServiceSupabase();
     const { error: webhookEventError } = await supabase
@@ -78,7 +82,7 @@ export async function handleInboundMessage(
         error: webhookEventError.message,
       });
     }
-    return;
+    return { skipped: "meta_test" };
   }
 
   console.log("[inbound] start", {
@@ -90,13 +94,13 @@ export async function handleInboundMessage(
 
   if (!accountId) {
     console.warn("[inbound] early return: missing instagramAccountId");
-    return;
+    return { skipped: "account_missing" };
   }
   if (!job && await alreadyHandled(message.externalMessageId)) {
     console.warn("[inbound] early return: alreadyHandled", {
       externalMessageId: message.externalMessageId,
     });
-    return;
+    return { skipped: "already_handled" };
   }
 
   const supabase = createServiceSupabase();
@@ -133,7 +137,7 @@ export async function handleInboundMessage(
         logError.message,
       );
     }
-    return;
+    return { skipped: "unknown_account" };
   }
   const conn = connection as ConnectionRow;
   const businessId = conn.business_id;
@@ -156,7 +160,7 @@ export async function handleInboundMessage(
       .from(adapter.table)
       .update({ status: "revoked", last_error: "decrypt_failed" })
       .eq("id", conn.id);
-    return;
+    return { skipped: "token_unreadable" };
   }
 
   let username = message.senderUsername;
@@ -274,7 +278,7 @@ export async function handleInboundMessage(
   if (!conversationId) {
     if(job) throw new Error("Queued conversation unavailable");
     console.warn("[inbound] early return: no conversationId");
-    return;
+    return { skipped: "no_conversation" };
   }
   if (message.channel === "instagram" && avatarIsStale(open?.participant_avatar_checked_at as string | null | undefined)) {
     await refreshInstagramParticipantAvatar({
@@ -344,7 +348,7 @@ export async function handleInboundMessage(
       const { data: receipt, error } = await supabase.from("webhook_events")
         .insert({ external_event_id: message.externalMessageId, status: "received" })
         .select("id").maybeSingle();
-      if (error?.code === "23505") return;
+      if (error?.code === "23505") return { skipped: "duplicate" };
       if (error) throw error;
       if (!receipt?.id) throw new Error("Inbound receipt not confirmed");
     }
@@ -357,7 +361,7 @@ export async function handleInboundMessage(
     });
     throw failure;
   }
-  if (onlyMarketingWithdrawal) return; // Preference acknowledgement is separate; preserve the workflow exactly.
+  if (onlyMarketingWithdrawal) return { skipped: "marketing_preference" }; // Preference acknowledgement is separate; preserve the workflow exactly.
   const conversationStatus = createdFresh ? "active" : open?.status;
   const convAuto = createdFresh ? business?.auto_reply : open?.auto_reply;
   const autoOn = convAuto ?? business?.auto_reply ?? false;
@@ -368,7 +372,7 @@ export async function handleInboundMessage(
       autoOn,
       conversationStatus: conversationStatus ?? null,
     });
-    return;
+    return { skipped: !autoOn ? "auto_reply_off" : conversationStatus === "paused" ? "conversation_paused" : "conversation_closed" };
   }
 
   const { data: rawState, error: stateReadError } = await supabase

@@ -7,7 +7,7 @@ export type CapabilityHealth = {
   entries: number; success: number; failure: number; handoff: number; neutral: number; abandoned: number;
   /** success / (success + failure), null without either. */
   rate: number | null; previousRate: number | null;
-  reasons: { point: string; reason: string | null; events: number; examples: { businessId: string; conversationId: string }[] }[];
+  reasons: { point: string; outcome: Outcome; reason: string | null; events: number; examples: { businessId: string; conversationId: string }[] }[];
   lastAt: string | null;
 };
 
@@ -27,7 +27,8 @@ export function summarizeHealth(current: HealthRow[], previous: HealthRow[], las
     if (row.outcome === "entry") item.entries += row.events;
     else item[row.outcome] += row.events;
     if (row.point === "abandoned") item.abandoned += row.events;
-    if (row.outcome === "failure" || row.outcome === "handoff") item.reasons.push({ point: row.point, reason: row.reason, events: row.events,
+    // Neutral exits with a reason say why nothing happened (e.g. no reply: auto replies off).
+    if (row.outcome === "failure" || row.outcome === "handoff" || row.outcome === "neutral" && row.reason) item.reasons.push({ point: row.point, outcome: row.outcome, reason: row.reason, events: row.events,
       examples: row.examples.flatMap(example => { const [businessId, conversationId] = example.split(":"); return businessId && conversationId ? [{ businessId, conversationId }] : []; }) });
   }
   const before = new Map<string, { success: number; failure: number }>();
@@ -39,7 +40,8 @@ export function summarizeHealth(current: HealthRow[], previous: HealthRow[], las
     item.rate = rate(item.success, item.failure);
     const prior = before.get(item.capability);
     item.previousRate = prior ? rate(prior.success, prior.failure) : null;
-    item.reasons.sort((a, b) => b.events - a.events);
+    // What went wrong first, then why nothing happened.
+    item.reasons.sort((a, b) => Number(a.outcome === "neutral") - Number(b.outcome === "neutral") || b.events - a.events);
     item.lastAt = lastSeen[item.capability] ?? null;
   }
   return [...byCapability.values()];

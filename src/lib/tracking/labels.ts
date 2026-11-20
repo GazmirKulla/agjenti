@@ -39,7 +39,7 @@ export function capabilityName(capability: string, label: string) {
 
 const pointLabels: Record<string, string> = {
   failed: "Dështoi", blocked: "U ndal nga serveri", abandoned: "U la në mes", refused: "U refuzua", execution_failed: "Ekzekutimi dështoi",
-  attempt_failed: "Përpjekje e dështuar", handed_off: "Kaloi te stafi",
+  attempt_failed: "Përpjekje e dështuar", handed_off: "Kaloi te stafi", ignored: "Pa përgjigje", left_unpaid: "U la pa paguar",
   step_failed: "Një hap dështoi", webhook_failed: "Mesazhet nuk u aktivizuan", profile_incomplete: "Meta nuk ktheu llogarinë profesionale",
   refresh_failed: "Rifreskimi dështoi", checkout_failed: "Faqja e pagesës nuk u hap", payment_failed: "Pagesa dështoi",
 };
@@ -55,6 +55,10 @@ const reasonLabels: Record<string, string> = {
   invalid_input: "vlerë e pavlefshme", stale: "të dhënat ndryshuan ndërkohë", unauthorized: "pa leje ose sesion i skaduar",
   not_found: "nuk gjendet më", limit: "u arrit kufiri", unavailable: "shërbimi nuk ishte i disponueshëm", check_failed: "nuk kaloi një kontroll", no_exit_after_24h: "klienti nuk vazhdoi brenda 24 orëve", semantic_condition_unresolved: "kushti nuk u kuptua",
   unknown: "rezultat i pasigurt", other: "arsye tjetër", module_disabled: "moduli është i fikur",
+  meta_test: "mesazh prove nga Meta", account_missing: "mesazhi s'kishte llogarinë", already_handled: "ishte përpunuar më parë",
+  unknown_account: "llogari e panjohur", token_unreadable: "token-i nuk u lexua", no_conversation: "biseda nuk u krijua", duplicate: "mesazh i dyfishtë",
+  marketing_preference: "klienti ndryshoi pëlqimin për oferta", auto_reply_off: "përgjigjet automatike janë të fikura",
+  conversation_paused: "biseda është te stafi", conversation_closed: "biseda është e mbyllur", no_reply_prepared: "Agjenti nuk përgatiti përgjigje",
   timeout: "nuk u përgjigj në kohë", nothing_queued: "asnjë burim për t'u lexuar", token_rejected: "Meta e refuzoi token-in",
   order_mismatch: "porosia në POK nuk përputhet", paid_not_applied: "u pagua, por paketa nuk u përditësua", meta_unknown: "Meta pa kod gabimi",
 };

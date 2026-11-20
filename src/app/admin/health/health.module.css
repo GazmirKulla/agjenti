@@ -83,3 +83,4 @@
 .trail { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 @media (max-width: 640px) { .failures li { grid-template-columns: 1fr auto; } .failures li .kind { grid-column: 1 / -1; justify-self: start; } }
 .kind_external { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.reasonNeutral { opacity: .8; border-style: dashed; }

@@ -25,7 +25,7 @@ const Legend = ({ handoff = true }: { handoff?: boolean }) => <div className={s.
   <span><i className={`${s.swatch} ${s.success}`} />Shkoi mirë</span>
   <span><i className={`${s.swatch} ${s.failure}`} />Shkoi keq</span>
   {handoff && <span><i className={`${s.swatch} ${s.handoff}`} />Te stafi</span>}
-  <span><i className={`${s.swatch} ${s.neutral}`} />Pa gjykim (p.sh. klienti e mbylli vetë)</span>
+  <span><i className={`${s.swatch} ${s.neutral}`} />Pa gjykim: mbaroi pa rezultat për t’u gjykuar (p.sh. pa përgjigje sepse përgjigjet automatike janë të fikura, ose një propozim që pret konfirmim)</span>
 </div>;
 
 /** Outcomes as one bar: each segment sized by its count, with the figures as hover text. */
@@ -144,7 +144,8 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
               <OutcomeBar item={item} />
               <div className={s.rate}><strong>{percent(item.rate)}</strong>
                 <small>{item.previousRate === null ? "pa krahasim" : item.rate === null ? `më parë ${percent(item.previousRate)}` : `${item.rate >= item.previousRate ? "▲" : "▼"} ${Math.abs(Math.round((item.rate - item.previousRate) * 100))} pikë`}</small></div>
-              {item.reasons.length > 0 && <div className={s.reasons}>{item.reasons.slice(0, 5).map(r => <span key={`${r.point}:${r.reason}`} className={s.reason}>
+              {item.reasons.length > 0 && <div className={s.reasons}>{item.reasons.slice(0, 8).map(r => <span key={`${r.point}:${r.reason}`} className={`${s.reason} ${r.outcome === "neutral" ? s.reasonNeutral : ""}`}>
+                {r.outcome === "neutral" && "Pa gjykim · "}
                 {exitLabel(r.point, r.reason)} <strong>× {num(r.events)}</strong>
                 {r.examples.map((e, i) => slugOf.get(e.businessId) ? <Link key={e.conversationId} href={`/b/${slugOf.get(e.businessId)}/inbox/${e.conversationId}`}>biseda {i + 1}</Link> : null)}
               </span>)}</div>}

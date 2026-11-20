@@ -210,16 +210,17 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
                 processed++;
                 return;
             }
+            let skipped: string | undefined;
             if (job.status !== "prepared") {
                 const { handleInboundMessage } = await import("./handle-inbound");
-                await handleInboundMessage({ ...job.payload, timestamp: new Date(job.payload.timestamp) }, job);
+                skipped = (await handleInboundMessage({ ...job.payload, timestamp: new Date(job.payload.timestamp) }, job))?.skipped;
             }
             if (job.status === "prepared")
                 await sendPrepared(job);
             else
             {
                 await db.from("workflow_inbound_queue").update({ status: "ignored", leased_until: null }).eq("id", job.id).eq("lease_token", job.lease_token).eq("status", "processing").throwOnError();
-                await recordCapabilityEvents([{ businessId: job.business_id, capability: "customer.reply", point: "ignored", mode: "live", ref: `job:${job.id}` }]);
+                await recordCapabilityEvents([{ businessId: job.business_id, capability: "customer.reply", point: "ignored", reason: skipped ?? "no_reply_prepared", mode: "live", ref: `job:${job.id}` }]);
             }
             processed++;
             });
