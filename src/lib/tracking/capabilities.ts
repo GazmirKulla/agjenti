@@ -105,6 +105,8 @@ export const systemCapabilities: Record<string, CapabilitySpec> = {
     exits: { synced: "success", failed: "failure" }, emittedBy: ["src/lib/calendar/google.ts"] },
   "system.pok_payment": { agent: "system", module: "integrations", label: "Pagesa me POK", entry: null,
     exits: { checkout_opened: "success", checkout_failed: "failure", paid: "success", payment_failed: "failure", left_unpaid: "neutral" }, emittedBy: ["src/lib/billing/payments.ts"] },
+  "system.order_dispatch": { agent: "system", module: "integrations", label: "Dërgimi i porosisë te webi i biznesit", entry: null,
+    exits: { accepted: "success", rejected: "failure", unverified: "failure", local_only: "neutral" }, emittedBy: ["src/lib/integrations/zana.ts"] },
   "system.intelligence": { agent: "system", module: "jobs", label: "Leximi i një burimi për biznesin (zë, website, Instagram)", entry: null,
     exits: { completed: "success", step_failed: "failure" }, emittedBy: ["src/app/api/business-intelligence/route.ts", systemEvents] },
   "system.catalog_index": { agent: "system", module: "jobs", label: "Analiza e një katalogu", entry: null,

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { refusalText } from "@/lib/orders/dispatch-detail";
 import { orderDelivery } from "@/lib/customers/contact";
 import { OrderEditor } from "@/components/dashboard/order-editor";
 import { WebsiteStatusControl } from "@/components/dashboard/website-status-control";
@@ -67,14 +68,14 @@ export default async function OrdersPage({
   if (!user) redirect("/login");
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
-  const { data: orders, error } = await createServiceSupabase()
-    .from("orders")
-    .select(
-      "id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,delivery:payload->customer,note:payload->note,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))",
-    )
-    .eq("business_id", access.business.id)
-    .order("created_at", { ascending: false })
-    .limit(1000);
+  const db = createServiceSupabase();
+  let { data: orders, error } = await db.from("orders")
+    .select("id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,order_submissions(rejection),delivery:payload->customer,note:payload->note,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))")
+    .eq("business_id", access.business.id).order("created_at", { ascending: false }).limit(1000);
+  // Before migration 20261120140000 the refusal is not there yet; the orders still load without it.
+  if (error) ({ data: orders, error } = await db.from("orders")
+    .select("id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,delivery:payload->customer,note:payload->note,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))")
+    .eq("business_id", access.business.id).order("created_at", { ascending: false }).limit(1000) as unknown as { data: typeof orders; error: typeof error });
   if (error) throw new Error("Nuk u ngarkuan porositë.");
   // What each order took from or gave back to counted stock, shown with the order.
   const movements = await loadOrderStockMovements(access.business.id, (orders ?? []).map(o => o.id));
@@ -129,6 +130,9 @@ export default async function OrdersPage({
           const websiteStatus = typeof o.external_status === "string" && o.external_status
             ? { key: o.external_status, label: typeof o.external_status_label === "string" && o.external_status_label ? o.external_status_label : o.external_status }
             : null;
+          // Why a failed order failed: the website's refusal, kept with the order.
+          const submission = o.order_submissions as unknown as { rejection: { code?: string; field?: string; item?: number } | null } | { rejection: { code?: string; field?: string; item?: number } | null }[] | null;
+          const refusal = o.status === "failed" ? refusalText((Array.isArray(submission) ? submission[0] : submission)?.rejection) : null;
           return {
             id: o.id,
             title: `#${o.external_order_id || o.id.slice(0, 8)}`,
@@ -136,7 +140,8 @@ export default async function OrdersPage({
             facets: { status: o.status },
             cells: [
               money(o.total_amount, o.currency),
-              websiteStatus ? <StatusBadge key="status" status={`website-${websiteStatus.key}`} label={websiteStatus.label} /> : <StatusBadge key="status" status={o.status} />,
+              websiteStatus ? <StatusBadge key="status" status={`website-${websiteStatus.key}`} label={websiteStatus.label} />
+                : <span key="status" className="order-status-cell"><StatusBadge status={o.status} />{o.status === "failed" && <small>{refusal ?? "Shkaku nuk u ruajt"}</small>}</span>,
               formatDate(o.created_at),
             ],
             detail: (
@@ -160,6 +165,7 @@ export default async function OrdersPage({
                     </div>
                   </div>
                 </header>
+                {o.status === "failed" && <p className="order-failure" role="note"><strong>Pse dështoi:</strong> {refusal ?? "Shkaku nuk u ruajt (porosi e vjetër). Kontrollo porosinë te webi i biznesit."}</p>}
 
                 <div className="order-detail-grid">
                   <section className="order-card">

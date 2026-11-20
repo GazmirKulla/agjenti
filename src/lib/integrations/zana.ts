@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { recordSystem } from "@/lib/tracking/system-events";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isIsolatedExecution, refuseIsolatedEffect, assertBusinessEffectAllowed } from "@/lib/runtime/execution-context";
@@ -355,6 +356,16 @@ export async function submitExternalOrder(params: {
     // Timeouts/network errors can occur AFTER the provider committed the order.
     result = unknown();
   }
+  // The refusal is kept with the order, so staff see why it failed.
+  // Best effort: the submission ledger already holds the outcome.
+  if (result.status === "rejected") try {
+    await supabase.from("order_submissions").update({ rejection: { code: result.code ?? "refused",
+      ...(result.field ? { field: result.field } : {}), ...(result.item ? { item: result.item } : {}) } })
+      .eq("business_id", params.businessId).eq("attempt_id", params.attemptId);
+  } catch { /* shown as "not recorded" on the order */ }
+  await recordSystem("system.order_dispatch", result.status === "accepted" ? "accepted" : result.status === "rejected" ? "rejected" : result.status === "local_only" ? "local_only" : "unverified", {
+    businessId: params.businessId, ref: params.attemptId,
+    reason: result.status === "rejected" ? `${result.code ?? "refused"}${result.field ? `:${result.field}` : ""}`.slice(0, 80) : undefined });
   // Logging must not erase a verified provider response; the submission ledger is authoritative.
   try {
     await supabase.from("integration_logs").insert({ business_id: params.businessId,

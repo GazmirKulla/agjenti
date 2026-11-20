@@ -45,3 +45,13 @@ describe("rejectionDetail", () => {
     expect(itemHas({ files: [{ key: "photo" }] }, "photo")).toBe(true);
   });
 });
+
+describe("why the website refused an order", () => {
+  it("names the refusal and the field in the owner's words", async () => {
+    const { refusalText } = await import("./dispatch-detail");
+    expect(refusalText({ code: "missing_field", field: "customer.address" })).toBe("Webi e refuzoi: mungon një fushë (Adresa)");
+    expect(refusalText({ code: "missing_payload" })).toBe("Webi e refuzoi: porosia mbërriti pa të dhëna");
+    expect(refusalText({ code: "new_code_x" })).toBe("Webi e refuzoi: new_code_x");
+    expect(refusalText(null)).toBeNull();
+  });
+});

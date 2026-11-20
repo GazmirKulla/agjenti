@@ -5524,3 +5524,7 @@ button.order-photo-image:hover:not(:disabled) {
 .automatic-agent-list li > span:last-child { display: grid; gap: 2px; }
 .automatic-agent-list strong { color: var(--ink); font-weight: 600; }
 .automatic-agent-list small { color: var(--ink-muted); font-size: 12px; }
+
+.order-status-cell { display: inline-grid; gap: 4px; justify-items: start; }
+.order-status-cell small { color: var(--danger); font-size: 12px; line-height: 1.35; max-width: 260px; }
+.order-failure { margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; background: var(--danger-soft); color: var(--danger); font-size: 14px; }

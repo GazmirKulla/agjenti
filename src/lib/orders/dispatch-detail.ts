@@ -52,3 +52,15 @@ export function rejectionDetail(input: {
   const fieldLabel = pool.find((f) => f.key === field)?.label ?? LABELS[field];
   return { field, ...(fieldLabel ? { fieldLabel } : {}), ...(line ? { line } : {}) };
 }
+
+const REFUSALS: Record<string, string> = {
+  missing_field: "mungon një fushë", missing_payload: "porosia mbërriti pa të dhëna", price_changed: "çmimi ndryshoi",
+  out_of_stock: "produkti ka mbaruar", invalid_field: "një fushë nuk u pranua", unmapped_product: "produkti nuk lidhet me webin",
+  unmapped_variant: "varianti nuk lidhet me webin",
+};
+/** "Webi e refuzoi: mungon një fushë (Adresa)"; an unknown code is shown as it is, so nothing is hidden. */
+export function refusalText(rejection: { code?: string; field?: string; item?: number } | null | undefined) {
+  if (!rejection?.code) return null;
+  const field = rejection.field ? LABELS[rejection.field] ?? rejection.field : null;
+  return `Webi e refuzoi: ${REFUSALS[rejection.code] ?? rejection.code}${field ? ` (${field}${rejection.item ? `, artikulli ${rejection.item}` : ""})` : ""}`;
+}
