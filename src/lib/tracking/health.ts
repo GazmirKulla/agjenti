@@ -75,3 +75,57 @@ export async function loadCapabilityHealth(days: number, businessId: string | nu
   return { available: true as const, health, silent: silentCapabilities(health, lastSeen), untracked: untrackedCapabilities(),
     daily: (daily.data ?? []).map((row: { day: string; agent: AgentKind; outcome: Outcome | "entry"; events: number }) => ({ ...row, events: Number(row.events) })) as { day: string; agent: AgentKind; outcome: Outcome | "entry"; events: number }[] };
 }
+
+export type FailureEvent = { id: number; businessId: string; agent: AgentKind; capability: string; point: string; reason: string | null;
+  conversationId: string | null; ref: string | null; durationMs: number | null; createdAt: string };
+const failureColumns = "id,business_id,agent,capability,point,reason,conversation_id,ref,duration_ms,created_at";
+const toFailure = (row: Record<string, unknown>): FailureEvent => ({ id: Number(row.id), businessId: String(row.business_id), agent: row.agent as AgentKind,
+  capability: String(row.capability), point: String(row.point), reason: (row.reason as string | null) ?? null, conversationId: (row.conversation_id as string | null) ?? null,
+  ref: (row.ref as string | null) ?? null, durationMs: row.duration_ms === null ? null : Number(row.duration_ms), createdAt: String(row.created_at) });
+
+/** Platform Admin: the newest failures of the period, each one openable. */
+export async function loadRecentFailures(days: number, businessId: string | null, limit = 25, now = new Date()) {
+  let query = createServiceSupabase().from("capability_events").select(failureColumns).eq("mode", "live").eq("outcome", "failure")
+    .gte("created_at", new Date(now.getTime() - days * 86400000).toISOString());
+  if (businessId) query = query.eq("business_id", businessId);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(limit);
+  return error ? [] : (data ?? []).map(toFailure);
+}
+
+const isUuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+export type AssistantTurn = { matched: "request" | "time"; messages: { role: string; kind: string; content: string; at: string }[] };
+
+/**
+ * One failure with what led to it: the other events of the same request, and for the Assistant the owner's
+ * request and the reply it got. Events recorded since requests are linked carry the request id; older ones
+ * are matched to the business's Assistant request just before the failure, and say so.
+ */
+export async function loadFailure(id: number) {
+  const db = createServiceSupabase();
+  const { data } = await db.from("capability_events").select(failureColumns).eq("id", id).maybeSingle();
+  if (!data) return null;
+  const event = toFailure(data);
+  const trail = event.ref ? await db.from("capability_events").select(failureColumns).eq("ref", event.ref).eq("business_id", event.businessId).order("id") : null;
+  let turn: AssistantTurn | null = null;
+  if (event.agent === "assistant") {
+    const read = (rows: unknown, matched: AssistantTurn["matched"]): AssistantTurn | null => Array.isArray(rows) && rows.length
+      ? { matched, messages: rows.map(row => ({ role: row.role, kind: row.kind, content: String(row.content ?? "").slice(0, 4000), at: row.created_at })) } : null;
+    if (isUuid(event.ref)) {
+      const { data: rows } = await db.from("assistant_messages").select("role,kind,content,created_at,assistant_conversations!inner(business_id)")
+        .eq("request_id", event.ref).eq("assistant_conversations.business_id", event.businessId).order("seq");
+      turn = read(rows, "request");
+    }
+    if (!turn) {
+      const at = Date.parse(event.createdAt);
+      const { data: asked } = await db.from("assistant_messages").select("request_id,conversation_id,assistant_conversations!inner(business_id)")
+        .eq("assistant_conversations.business_id", event.businessId).eq("role", "user")
+        .gte("created_at", new Date(at - 120000).toISOString()).lte("created_at", new Date(at + 1000).toISOString())
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (asked) {
+        const { data: rows } = await db.from("assistant_messages").select("role,kind,content,created_at").eq("conversation_id", asked.conversation_id).eq("request_id", asked.request_id).order("seq");
+        turn = read(rows, "time");
+      }
+    }
+  }
+  return { event, trail: (trail?.data ?? []).map(toFailure), turn };
+}

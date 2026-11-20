@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { PageHeading } from "@/components/dashboard/ui";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { loadCapabilityHealth, type CapabilityHealth } from "@/lib/tracking/health";
-import { capabilityName, exitLabel, groupOf, moduleLabels } from "@/lib/tracking/labels";
+import { loadCapabilityHealth, loadRecentFailures, type CapabilityHealth } from "@/lib/tracking/health";
+import { capabilityName, controlledReasons, exitLabel, groupOf, moduleLabels } from "@/lib/tracking/labels";
+import { capabilities } from "@/lib/tracking/capabilities";
 import type { AgentKind } from "@/lib/tracking/capabilities";
 import s from "./health.module.css";
 
@@ -76,7 +77,8 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
   const days = periods.find(p => String(p) === query.days) ?? 7;
   const { data: businesses } = await createServiceSupabase().from("businesses").select("id,name,slug").order("name").limit(500);
   const business = businesses?.find(b => b.id === query.business) ?? null;
-  const report = await loadCapabilityHealth(days, business?.id ?? null);
+  const [report, failures] = await Promise.all([loadCapabilityHealth(days, business?.id ?? null), loadRecentFailures(days, business?.id ?? null)]);
+  const nameOf = new Map((businesses ?? []).map(b => [b.id, b.name]));
   const slugOf = new Map((businesses ?? []).map(b => [b.id, b.slug]));
   const link = (params: Record<string, string | undefined>) => `/admin/health?${new URLSearchParams(Object.entries({ days: String(days), business: business?.id, ...params }).filter((e): e is [string, string] => Boolean(e[1])))}`;
 
@@ -150,6 +152,19 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
         })}
       </section>;
     })}
+
+    <section className="panel section-pad grid gap-3" aria-labelledby="failures">
+      <h2 id="failures">Dështimet e fundit · {failures.length}</h2>
+      <p className="muted-copy">Çdo dështim me shkakun e tij. “Gabim në kod” do të thotë diçka që kodi nuk e priste; të tjerat janë kontrolle që e ndaluan ndryshimin. Hap një për të parë çfarë ndodhi.</p>
+      {!failures.length ? <p>✓ Asnjë dështim në këtë periudhë.</p> : <ul className={s.failures}>
+        {failures.map(f => <li key={f.id}>
+          <span className={`${s.kind} ${f.reason && controlledReasons.has(f.reason) ? s.kindCheck : s.kindBug}`}>{f.reason && controlledReasons.has(f.reason) ? "Kontroll" : "Gabim në kod"}</span>
+          <div className={s.failureText}><strong>{capabilityName(f.capability, capabilities[f.capability]?.label ?? f.capability)}</strong>
+            <small>{exitLabel(f.point, f.reason)} · {nameOf.get(f.businessId) ?? "Biznes"} · {when(f.createdAt)}</small></div>
+          <Link className="btn btn-ghost" href={`/admin/health/failure/${f.id}`}>Hap</Link>
+        </li>)}
+      </ul>}
+    </section>
 
     <section className="panel section-pad grid gap-3">
       <h2>Pa të dhëna në këtë periudhë · {report.silent.length}</h2>

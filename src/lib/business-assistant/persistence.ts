@@ -1,4 +1,5 @@
 import { readConfigurationProgress } from "@/lib/actions/operations/plans";
+import { withAssistantRequest } from "@/lib/tracking/assistant-request";
 import { bearerClient } from "@/lib/auth/request";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -156,7 +157,7 @@ export async function persistedTurn(
   }
   try {
     const history = modelHistory(view.messages.filter(m => m.request_id !== requestId));
-    const data = await run(history, view.plan?.snapshot, view.plan?.preferences ?? {});
+    const data = await withAssistantRequest(requestId, () => run(history, view.plan?.snapshot, view.plan?.preferences ?? {}));
     const ticket = data.token ? openTicket(data.token, access) : undefined;
     const targetKind = ticket?.action.split("_")[0];
     const retained = retainedPlanForReply(view.plan?.snapshot, data);

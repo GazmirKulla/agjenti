@@ -47,8 +47,22 @@ const reasonLabels: Record<string, string> = {
   booking_terms_changed: "kushtet e rezervimit ndryshuan", booking_terms_unavailable: "orari nuk u verifikua", invalid_booking_input: "të dhëna rezervimi të pavlefshme",
   booking_definition_unavailable: "procesi i rezervimit nuk u gjet", window_closed: "dritarja 24-orëshe ishte mbyllur", provider_error: "kanali refuzoi dërgimin",
   receipt_missing: "kanali nuk konfirmoi", turn_failed: "Agjenti nuk e përfundoi përgjigjen", send_failed: "dërgimi dështoi", persistence_failed: "ruajtja dështoi",
-  assistant_refusal: "Asistenti e refuzoi", error: "gabim i papritur", no_exit_after_24h: "klienti nuk vazhdoi brenda 24 orëve", semantic_condition_unresolved: "kushti nuk u kuptua",
+  assistant_refusal: "Asistenti e refuzoi", error: "gabim pa kod (para 20 nëntorit)", unexpected: "gabim në kod",
+  invalid_input: "vlerë e pavlefshme", stale: "të dhënat ndryshuan ndërkohë", unauthorized: "pa leje ose sesion i skaduar",
+  not_found: "nuk gjendet më", limit: "u arrit kufiri", unavailable: "shërbimi nuk ishte i disponueshëm", check_failed: "nuk kaloi një kontroll", no_exit_after_24h: "klienti nuk vazhdoi brenda 24 orëve", semantic_condition_unresolved: "kushti nuk u kuptua",
   unknown: "rezultat i pasigurt", other: "arsye tjetër", module_disabled: "moduli është i fikur",
+};
+/** Codes of a controlled check: the system worked and stopped the change; "unexpected" is a bug. */
+export const controlledReasons = new Set(["assistant_refusal", "invalid_input", "stale", "unauthorized", "not_found", "limit", "unavailable", "check_failed"]);
+/** What a code means for whoever looks into it. */
+export const reasonHelp: Record<string, string> = {
+  unexpected: "Një gabim që kodi nuk e priste. Detajet (vendi në kod) janë në log-un e serverit me “capability_unexpected_failure”.",
+  error: "Regjistruar para se dështimet të kishin kod: shkaku nuk u ruajt.",
+  invalid_input: "Modeli ose formulari dërgoi një vlerë që kontrolli nuk e pranon.",
+  stale: "Të dhënat ndryshuan mes përgatitjes dhe ruajtjes; pronari duhet ta kërkojë përsëri.",
+  unauthorized: "Përdoruesi nuk kishte leje, ose sesioni kishte skaduar.",
+  not_found: "Objekti nuk ekzistonte më.", limit: "U arrit një kufi i platformës.", unavailable: "Një shërbim ose tabelë nuk ishte e disponueshme.",
+  check_failed: "Një kontroll tjetër i serverit e ndali; mesazhi iu shfaq pronarit.", assistant_refusal: "Asistenti e refuzoi kërkesën me një mesazh për pronarin.",
 };
 /** "Dështoi: produkti ka mbaruar"; an unknown code is shown as it is, so nothing is hidden. */
 export function exitLabel(point: string, reason: string | null) {

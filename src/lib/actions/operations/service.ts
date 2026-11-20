@@ -94,7 +94,7 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     if (operation === "product.delete") {
       const batch = await prepareProductRemoval(businessId, userId, { scope: "ids", ids: [input.id] });
       if (batch.rows[0].operation === "archive") throw new OperationError("Produkti ka histori të lidhur dhe nuk mund të fshihet. Përgatit arkivimin për shqyrtim.");
-      if (Date.parse(batch.rows[0].updated_at) !== Date.parse(String(snapshot.updated_at))) throw new OperationError("Produkti ndryshoi gjatë përgatitjes. Rishqyrtoje.");
+      if (Date.parse(batch.rows[0].updated_at) !== Date.parse(String(snapshot.updated_at))) throw new OperationError("Produkti ndryshoi gjatë përgatitjes. Rishqyrtoje.", "stale");
     }
     if (["product.edit", "product.field"].includes(operation) && snapshot.archived_at) throw Error("Rikthe fillimisht produktin e arkivuar.");
     if (operation === "product.field" && !["workflow_id", "product_type_id", "is_active"].includes(String(input.field))) throw Error("Fushë e pavlefshme e produktit.");
@@ -129,8 +129,8 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     subject = String((snapshot.values as Record<string, unknown>).name);
   } else if (operation === "booking.sync") snapshot = await record(businessId, "bookings", input.id, "id,customer_name,revision,sync_status");
   else if (operation === "agent.behavior") {
-    if (input.voice !== undefined && typeof input.voice !== "boolean") throw new OperationError("Zgjidh Po ose Jo për mesazhet zanore.");
-    if (input.escalation !== undefined && !["handoff", "notify", "off"].includes(String(input.escalation))) throw new OperationError("Zgjidh: ia kalon stafit, vetëm njofton stafin, ose asgjë.");
+    if (input.voice !== undefined && typeof input.voice !== "boolean") throw new OperationError("Zgjidh Po ose Jo për mesazhet zanore.", "invalid_input");
+    if (input.escalation !== undefined && !["handoff", "notify", "off"].includes(String(input.escalation))) throw new OperationError("Zgjidh: ia kalon stafit, vetëm njofton stafin, ose asgjë.", "invalid_input");
     snapshot = { ...(await loadAgentBehavior(businessId)) };
   } else if (operation === "sources.refresh") {
     const sources = await businessSources(businessId);
@@ -249,7 +249,7 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
   }
   if (key === "business.orders") {
     const result = await db.rpc("configure_business_automation", {p_business:businessId,p_user:userId,p_enabled:input.enabled,p_revision:before.revision});
-    if (result.error || !Number.isInteger(result.data)) throw new OperationError("Leja e porosive ndryshoi ose nuk u ruajt.");
+    if (result.error || !Number.isInteger(result.data)) throw new OperationError("Leja e porosive ndryshoi ose nuk u ruajt.", "stale");
     return {message: input.enabled ? "Regjistrimi lokal pas konfirmimit të klientit u autorizua." : "Regjistrimi automatik u çaktivizua.",path:"orders"};
   }
   if (key === "product.create") checked(await createProduct(actor, productForm(input)));
@@ -261,7 +261,7 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
     if (result.error) throw new OperationError(result.error.code === "23503"
       ? "Kjo njohuri është e lidhur me një shërbim dhe nuk mund të fshihet. Menaxhoje te Shërbimet."
       : "Njohuria nuk u fshi. Provo përsëri.");
-    if (!result.data) throw new OperationError("Njohuria ndryshoi ose u hoq. Rifresko faqen dhe rishqyrto fshirjen.");
+    if (!result.data) throw new OperationError("Njohuria ndryshoi ose u hoq. Rifresko faqen dhe rishqyrto fshirjen.", "stale");
     return { message: "Njohuria u fshi.", path: "knowledge" };
   }
   else if (key === "knowledge.save") {
@@ -297,9 +297,9 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
     catch (error) { throw new OperationError(error instanceof Error ? error.message : "Ndryshimi nuk u ruajt."); }
   } else if (key === "agent.behavior") {
     const current = await loadAgentBehavior(businessId);
-    if (JSON.stringify(current) !== JSON.stringify({ voice: before.voice, escalation: before.escalation })) throw new OperationError("Cilësimi ndryshoi. Kërkoje përsëri.");
+    if (JSON.stringify(current) !== JSON.stringify({ voice: before.voice, escalation: before.escalation })) throw new OperationError("Cilësimi ndryshoi. Kërkoje përsëri.", "stale");
     const saved = await storeAgentBehavior(businessId, userId, input as { voice?: unknown; escalation?: unknown });
-    if ("error" in saved) throw new OperationError(saved.error);
+    if ("error" in saved) throw new OperationError(saved.error ?? "Cilësimi nuk u ruajt. Provo përsëri.");
     return { message: "U ruajt. Vlen për mesazhet e reja.", path: "agents/process" };
   } else if (key === "sources.refresh") {
     const queued = await refreshBusinessSources(businessId, userId, workerOrigin(null));

@@ -1,3 +1,4 @@
+import { OperationError } from "./error";
 /** Shared operation metadata. Adding a definition exposes it to the owner assistant;
  * execution remains a server handler with fresh authorization and confirmation. */
 export const operationCatalog = {
@@ -44,10 +45,10 @@ export function isOperationKey(value: unknown): value is OperationKey {
   return typeof value === "string" && Object.hasOwn(operationCatalog, value);
 }
 export function parseOperation(key: unknown, input: unknown): { key: OperationKey; input: OperationInput } {
-  if (!isOperationKey(key) || !input || typeof input !== "object" || Array.isArray(input)) throw Error("Veprimi nuk është i vlefshëm.");
+  if (!isOperationKey(key) || !input || typeof input !== "object" || Array.isArray(input)) throw new OperationError("Veprimi nuk është i vlefshëm.", "invalid_input");
   const fields: readonly string[] = operationCatalog[key].fields;
   if (Object.keys(input).some(field => !fields.includes(field)) || JSON.stringify(input).length > 24000)
-    throw Error("Veprimi përmban fusha të palejuara.");
+    throw new OperationError("Veprimi përmban fusha të palejuara.", "invalid_input");
   return { key, input: input as OperationInput };
 }
 export function assistantOperationCatalog() {
