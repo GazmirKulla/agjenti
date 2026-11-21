@@ -12,6 +12,10 @@ export type ChannelHealth = {
 
 const DAY = 86_400_000;
 
+/** Meta rejected the connection's token (password changed, session invalidated or expired early). */
+export const isRejectedTokenError = (lastError: string | null | undefined) => /^token_rejected:/.test(lastError ?? "");
+export const TOKEN_REJECTED_NOTE = "Meta nuk e pranon më lidhjen, zakonisht pasi u ndryshua fjalëkalimi i Instagram-it. Agjenti nuk lexon dhe nuk u përgjigjet mesazheve derisa të klikosh Rilidh Instagram-in.";
+
 /** Effective status: a connected Instagram token past its expiry is expired. */
 export function effectiveStatus(c: ChannelConnection | null, now = Date.now()) {
   if (!c) return "disconnected";
@@ -23,6 +27,7 @@ export function channelHealth(channel: ChannelId, c: ChannelConnection | null, a
   const status = effectiveStatus(c, now);
   if (status === "disconnected") return { level: "off", notes: [], info: [] };
   if (status !== "connected") {
+    if (isRejectedTokenError(c?.lastError)) return { level: "error", notes: [TOKEN_REJECTED_NOTE], info: [] };
     return { level: "error", notes: [status === "expired"
       ? "Autorizimi skadoi. Mesazhet e reja nuk vijnë derisa ta rilidhësh."
       : "Lidhja kërkon rilidhje. Mesazhet e reja mund të mos vijnë."], info: [] };

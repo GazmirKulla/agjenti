@@ -34,3 +34,12 @@ it("words how long ago a message came", () => {
   expect(timeAgo(new Date(now - 3 * 3_600_000).toISOString(), now)).toBe("3 orë më parë");
   expect(timeAgo(null, now)).toBeNull();
 });
+
+it("asks to reconnect Instagram when Meta rejected the token", () => {
+  const health = channelHealth("instagram", { status: "expired", expiresAt: inDays(40), lastError: "token_rejected: meta_190_460" }, null, now);
+  expect(health.level).toBe("error");
+  expect(health.notes.join(" ")).toContain("Rilidh Instagram-in");
+  expect(needsAttention("instagram", { status: "expired", lastError: "token_rejected: meta_190" }, now)).toBe(true);
+  // A webhook subscription error on a working token keeps its own warning.
+  expect(channelHealth("instagram", { status: "connected", expiresAt: inDays(40), lastError: "subscribed_apps: Unsupported request" }, null, now).level).toBe("warning");
+});

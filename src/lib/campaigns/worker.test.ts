@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), send: vi.fn() }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), send: vi.fn(), updates: [] as unknown[] }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ rpc: mocks.rpc, from: mocks.from }) }));
 vi.mock("@/lib/crypto/tokens", () => ({ decryptSecret: () => "fixture-token" }));
 vi.mock("./confirmation", () => ({ confirmMarketingWithdrawal: vi.fn() }));
@@ -7,11 +7,12 @@ vi.mock("@/lib/conversations/channel", () => ({ channelAdapter: () => ({ table: 
 import { runCampaignQueue } from "./worker";
 const claim = { id: "recipient", token: "lease", participant_id: "customer", body: "Owner-approved text", channel: "instagram" };
 beforeEach(() => {
-  vi.useFakeTimers(); vi.clearAllMocks();
+  vi.useFakeTimers(); vi.clearAllMocks(); mocks.updates = [];
   mocks.from.mockImplementation((table: string) => {
     const result = { data: table === "marketing_campaigns" ? [{ id: "campaign", business_id: "business", channel: "instagram" }] : table === "marketing_campaign_recipients" ? [{ id: "recipient", connection_id: "connection", participant_id: "customer" }] : table === "instagram_connections" ? { id: "connection", access_token_ciphertext: "encrypted", ig_user_id: "account" } : [], error: null };
     const builder: Record<string, unknown> = {};
-    for (const method of ["select", "eq", "gte", "order", "limit", "update"]) builder[method] = () => builder;
+    for (const method of ["select", "eq", "gte", "order", "limit"]) builder[method] = () => builder;
+    builder.update = (values: unknown) => { mocks.updates.push({ table, values }); return builder; };
     builder.maybeSingle = () => Promise.resolve(result);
     builder.then = (resolve: (r: unknown) => unknown) => Promise.resolve(result).then(resolve);
     return builder;
@@ -39,6 +40,11 @@ describe("campaign external-send boundary", () => {
   it("pauses on a revoked token through the durable finish boundary", async () => {
     mocks.send.mockResolvedValue({ ok: false, code: "token_revoked", parts: [{ status: "failed" }] });
     await run(); expect(mocks.rpc).toHaveBeenCalledWith("finish_marketing_send", expect.objectContaining({ p_status: "failed", p_reason: "token_revoked" }));
+  });
+  it("asks the owner to reconnect Instagram when Meta rejects the token", async () => {
+    mocks.send.mockResolvedValue({ ok: false, code: "token_revoked", parts: [{ status: "failed" }] });
+    await run();
+    expect(mocks.updates).toContainEqual({ table: "instagram_connections", values: expect.objectContaining({ status: "expired", last_error: "token_rejected: meta_190" }) });
   });
   it("does not treat a receipt-write failure as permission to send again", async () => {
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "begin_marketing_send" ? claim : null, error: name === "finish_marketing_send" ? { message: "database offline" } : null }));

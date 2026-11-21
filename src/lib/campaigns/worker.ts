@@ -2,6 +2,7 @@ import { confirmMarketingWithdrawal } from "./confirmation";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { channelAdapter, type MessagingChannel } from "@/lib/conversations/channel";
+import { markInstagramTokenRejected } from "@/lib/instagram/token-health";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 import { workerOrigin } from "@/lib/discovery/continue";
 
@@ -58,6 +59,8 @@ export async function runCampaignQueue(businessId?: string) {
       } catch { /* A timeout or lost acknowledgement is never retried. */ }
       const finish = await db.rpc("finish_marketing_send", { p_recipient: send.id, p_token: send.token, p_status: status, p_external: external, p_reason: status === "sent" ? null : providerCode === "token_revoked" || providerCode === "rate_limited" ? providerCode : status === "failed" ? "provider_failed" : "uncertain" });
       if (finish.error) throw new Error("campaign_receipt_unavailable");
+      if (providerCode === "token_revoked" && campaign.channel !== "whatsapp")
+        await markInstagramTokenRejected(db, { id: String(connection.data.id), businessId: campaign.business_id }, "campaign").catch(() => console.error("[campaign] token state not saved"));
       if (status === "uncertain" || providerCode === "token_revoked" || providerCode === "rate_limited") break;
       await new Promise(resolve => setTimeout(resolve, 1050));
     }

@@ -4,6 +4,7 @@ import { refreshLongLivedToken } from "@/lib/instagram/oauth";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { runBusinessLogoRefresh } from "@/lib/businesses/logo";
 import { recordSystem, stepFailure, trackScheduledJob } from "@/lib/tracking/system-events";
+import { checkInstagramToken, markInstagramTokenRejected } from "@/lib/instagram/token-health";
 
 function isAuthorizedCron(request: Request): boolean {
 	const secret = process.env.CRON_SECRET?.trim();
@@ -21,10 +22,22 @@ async function runJob(request: Request) {
 	const supabase = createServiceSupabase();
 	const { data: rows } = await supabase
 		.from("instagram_connections")
-		.select("id,business_id,access_token_ciphertext,expires_at,refreshed_at,status")
+		.select("id,business_id,ig_user_id,access_token_ciphertext,expires_at,refreshed_at,status")
 		.eq("status", "connected");
 	let refreshed = 0;
 	for (const row of rows ?? []) {
+		// Every connected token, not only those close to expiring: Meta also rejects a token early
+		// (password changed, session invalidated). Such a connection is no longer shown as connected.
+		try {
+			const check = await checkInstagramToken(row.ig_user_id, decryptSecret(row.access_token_ciphertext));
+			if (check.valid === false) {
+				await markInstagramTokenRejected(supabase, { id: row.id, businessId: row.business_id }, "check", check.error);
+				continue;
+			}
+		} catch (err) {
+			// An unreadable token is left to the refresh below, which records it.
+			console.error("[cron token check]", err instanceof Error ? err.message : err);
+		}
 		const expires = row.expires_at ? new Date(row.expires_at).getTime() : 0;
 		if (expires && expires - Date.now() > 7 * 24 * 60 * 60 * 1000) continue;
 		const refreshedAt = row.refreshed_at ? new Date(row.refreshed_at).getTime() : 0;

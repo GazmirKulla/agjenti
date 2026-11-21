@@ -133,6 +133,19 @@ export async function loadFailure(id: number) {
   return { event, trail: (trail?.data ?? []).map(toFailure), turn };
 }
 
+type ConnectionRow = Record<string, string | number | null>;
+/** Pure: a channel connection that needs someone, or null when it works. */
+export function connectionAttention(name: "Instagram" | "WhatsApp", row: ConnectionRow): Attention | null {
+  if (row.status === "connected" && !row.last_error) return null;
+  const lastError = row.last_error === null ? null : String(row.last_error);
+  // Meta rejected the token: the agent cannot read or answer until the owner reconnects.
+  const rejected = /^token_rejected:/.test(lastError ?? "");
+  return { kind: "connection",
+    title: rejected ? `${name}: Meta e refuzoi token-in, duhet rilidhur` : `${name}: ${row.status === "connected" ? "i lidhur, por me gabim" : row.status}`,
+    detail: (rejected ? `Agjenti nuk lexon dhe nuk u përgjigjet mesazheve. Pronari duhet të klikojë “Rilidh ${name}-in” te Integrimet. (${lastError})` : lastError ?? "Lidhja nuk është aktive.").slice(0, 300),
+    businessId: String(row.business_id), since: row.updated_at as string | null, href: name === "Instagram" ? "instagram" : "whatsapp" };
+}
+
 export type Attention = { kind: "connection" | "stuck"; title: string; detail: string; businessId: string; since: string | null; href: string | null };
 const STUCK_MS = 30 * 60000;
 /**
@@ -157,9 +170,7 @@ export async function loadAttention(businessId: string | null, now = Date.now())
   ]);
   const out: Attention[] = [];
   for (const [name, rows] of [["Instagram", instagram], ["WhatsApp", whatsapp]] as const)
-    for (const row of rows) if (row.status !== "connected" || row.last_error)
-      out.push({ kind: "connection", title: `${name}: ${row.status === "connected" ? "i lidhur, por me gabim" : row.status}`, detail: String(row.last_error ?? "Lidhja nuk është aktive.").slice(0, 300),
-        businessId: String(row.business_id), since: row.updated_at as string | null, href: name === "Instagram" ? "instagram" : "whatsapp" });
+    for (const row of rows) { const item = connectionAttention(name, row); if (item) out.push(item); }
   const due = (row: Record<string, string | number | null>) => (row.status === "queued" ? row.next_attempt_at : row.leased_until) as string | null;
   for (const [label, rows] of [["Analiza e biznesit", discovery], ["Importi i bisedave", training]] as const)
     for (const row of rows) if (due(row) && due(row)! < late)

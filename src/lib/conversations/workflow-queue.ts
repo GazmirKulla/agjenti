@@ -9,6 +9,7 @@ import { isMetaDashboardTestMessage } from "@/lib/instagram/parse-webhook";
 import { channelAdapter } from "./channel";
 import { MAX_REPLY_PHOTOS, sendReplyWithPhotos } from "./reply-photos";
 import { instagramReplyWindow, isInstagramMessagingWindowOpen } from "@/lib/instagram/window";
+import { markInstagramTokenRejected } from "@/lib/instagram/token-health";
 import type { AgentTurnResult } from "./process-agent-turn";
 import { InboundPersistenceError } from "./inbound-persistence-error";
 import { isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
@@ -139,6 +140,10 @@ async function sendPrepared(job: WorkflowJob) {
         : adapter.send({ ...target, body: job.reply ?? "" }))
       : { ok: false as const, error: "Dritarja 24-orëshe ka mbaruar." };
     const confirmed = sent.ok && typeof sent.messageId === "string" && Boolean(sent.messageId.trim());
+    // Meta rejected the token: the connection stops showing as connected and the owner is asked to reconnect.
+    const tokenRejected = !sent.ok && "code" in sent && sent.code === "token_revoked";
+    if (tokenRejected && job.payload.channel !== "whatsapp")
+        await markInstagramTokenRejected(db, { id: job.connection_id, businessId: job.business_id }, "send").catch(() => console.error("[workflow send] token state not saved"));
     const receipt = { p_id: job.id, p_token: job.lease_token, p_ok: confirmed,
         p_external: confirmed && sent.ok ? sent.messageId! : null,
         p_error: confirmed ? null : sent.ok ? "Provider receipt missing" : sent.error };
@@ -150,7 +155,7 @@ async function sendPrepared(job: WorkflowJob) {
             if (!finishError) {
                 // The customer's reply, once its receipt is stored. Staff messages are not the agent's.
                 if (job.operation_kind !== "staff") await recordCapabilityEvents([{ businessId: job.business_id, capability: "customer.reply", mode: "live",
-                    point: confirmed ? "sent" : "failed", reason: confirmed ? undefined : !allowed ? "window_closed" : sent.ok ? "receipt_missing" : "provider_error",
+                    point: confirmed ? "sent" : "failed", reason: confirmed ? undefined : !allowed ? "window_closed" : sent.ok ? "receipt_missing" : tokenRejected ? "token_rejected" : "provider_error",
                     conversationId: job.conversation_id ?? undefined, ref: `job:${job.id}` }]);
                 return;
             }

@@ -265,3 +265,18 @@ it("never sends photos a prepared job carries in a malformed shape", async () =>
     expect(m.send).toHaveBeenCalledOnce();
     expect(m.sendImage).not.toHaveBeenCalled();
 });
+it("marks the Instagram connection for reconnection when Meta rejects the token, and still stores the receipt", async () => {
+    m.send.mockResolvedValue({ ok: false, error: "Token i Instagramit është i pavlefshëm.", code: "token_revoked" });
+    m.rpc.mockResolvedValueOnce({ data: [structuredClone(job)], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: [], error: null });
+    await runWorkflowQueue();
+    expect(m.send).toHaveBeenCalledTimes(1);
+    expect(m.writes).toContainEqual(expect.objectContaining({ status: "expired", last_error: "token_rejected: meta_190" }));
+    expect(m.filters).toContainEqual(["status", "connected"]);
+    expect(m.rpc).toHaveBeenCalledWith("finish_workflow_send", expect.objectContaining({ p_ok: false }));
+});
+it("leaves the connection as it is after an ordinary send failure", async () => {
+    m.send.mockResolvedValue({ ok: false, error: "Instagram API error (400)" });
+    m.rpc.mockResolvedValueOnce({ data: [structuredClone(job)], error: null }).mockResolvedValueOnce({ data: true, error: null }).mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: [], error: null });
+    await runWorkflowQueue();
+    expect(m.writes).not.toContainEqual(expect.objectContaining({ status: "expired" }));
+});

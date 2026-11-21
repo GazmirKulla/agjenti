@@ -10,6 +10,7 @@ import { decryptSecret } from "@/lib/crypto/tokens";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { capturedInstagramProfile } from "@/lib/instagram/captured-profile";
+import { isRejectedTokenError, TOKEN_REJECTED_NOTE } from "@/lib/channels/health";
 import { InstagramAccountProfile } from "@/components/instagram/account-profile";
 
 export default async function InstagramAccountDetails({
@@ -63,6 +64,8 @@ export default async function InstagramAccountDetails({
   // Connected, but Meta did not turn on the account's messages: nothing reaches the agent until it is fixed.
   const messagesOff = conn?.status === "connected" && /^(subscribed_apps|profile_incomplete):/.test(conn.last_error ?? "");
   const shownStatus = messagesOff ? "messages_off" : conn?.status || "disconnected";
+  // Meta rejected the token: the agent cannot read or answer until the owner reconnects.
+  const tokenRejected = conn?.status !== "connected" && isRejectedTokenError(conn?.last_error);
   return (
     <>
       {query.disconnected === "1" && (
@@ -98,7 +101,13 @@ export default async function InstagramAccountDetails({
               )}
             </div>
           )}
-          {messagesOff ? (
+          {tokenRejected ? (
+            <div className="mt-5 rounded-lg bg-danger-soft p-4 text-sm text-danger grid gap-2">
+              <strong>{t("Lidhja me Instagram-in nuk punon më.")}</strong>
+              <span>{t(TOKEN_REJECTED_NOTE)}</span>
+              <small>{t("Detaji teknik")}: {conn?.last_error}</small>
+            </div>
+          ) : messagesOff ? (
             <div className="mt-5 rounded-lg bg-danger-soft p-4 text-sm text-danger grid gap-2">
               <strong>{t("Mesazhet e Instagram-it nuk vijnë te Agjenti.")}</strong>
               <span>{t("Meta nuk e aktivizoi marrjen e mesazheve për këtë llogari. Zakonisht ndodh kur llogaria nuk është profesionale (Business ose Creator) ose kur gjatë lidhjes nuk u dhanë të gjitha lejet. Kontrollo llojin e llogarisë te Instagram → Cilësimet → Lloji i llogarisë, pastaj Rilidh llogarinë dhe prano të gjitha lejet.")}</span>
@@ -117,7 +126,7 @@ export default async function InstagramAccountDetails({
               rel="noopener noreferrer"
               aria-describedby="instagram-browser-help"
             >
-              {conn ? t("Rilidh llogarinë") : t("Lidh Instagram")}
+              {tokenRejected ? t("Rilidh Instagram-in") : conn ? t("Rilidh llogarinë") : t("Lidh Instagram")}
             </a>
             {conn && (
               <form
