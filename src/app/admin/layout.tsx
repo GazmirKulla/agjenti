@@ -26,8 +26,7 @@ export default async function AdminLayout({
           user.user_metadata.name) ||
         undefined
       }
-      navigationItems={buildAdminNavigation("desktop")}
-      mobileNavigationItems={buildAdminNavigation("mobile")}
+      navigationItems={buildAdminNavigation()}
     >
       {children}
     </DashboardShell>

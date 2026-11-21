@@ -33,20 +33,8 @@ export function buildNavigationItems(
   return items;
 }
 
-export function buildAdminNavigation(variant: "desktop" | "mobile" = "desktop"): NavItem[] {
-  if (variant === "mobile") {
-    return [
-      { id: "dashboard", path: "", label: "Kreu", icon: "dashboard" },
-      { id: "customers", path: "businesses", label: "Bizneset", icon: "businesses" },
-    { id: "users", path: "users", label: "Përdoruesit", icon: "customers" },
-    { id: "usage", path: "usage", label: "Statistikat", icon: "billing" },
-    { id: "reports", path: "health", label: "Shëndeti i Agjentit", icon: "reports" },
-      { id: "inbox", path: "conversations", label: "Integrime", icon: "inbox" },
-      { id: "pricing", path: "pricing", label: "Çmimet", icon: "billing" },
-    { id: "actions", path: "actions", label: "Modulet dhe aftësitë", icon: "spark" },
-      { id: "settings", path: "settings", label: "Cilësimet", icon: "settings" },
-    ];
-  }
+/** The Platform Admin menu: the sidebar on desktop and the drawer on mobile. */
+export function buildAdminNavigation(): NavItem[] {
   return [
     { id: "dashboard", path: "", label: "Dashboard", icon: "dashboard" },
     { id: "customers", path: "businesses", label: "Bizneset", icon: "businesses" },

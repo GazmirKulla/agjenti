@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { isDashboardRoute } from "./navigation";
 import { organizeWorkspace, workspaceSection, workspaceLabel } from "@/lib/dashboard/navigation/workspace";
 import { WorkspaceNavigation } from "./workspace-navigation";
+import { WorkspacePicker } from "./workspace-picker";
 import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
@@ -25,7 +26,6 @@ export function AppShell({
   platformAdmin = false,
   businesses = [],
   navigationItems,
-  mobileNavigationItems,
   nativeHost: embedded = false,
   aiUsage,
   channelsAttention,
@@ -40,7 +40,6 @@ export function AppShell({
   platformAdmin?: boolean;
   businesses?: { id: string; name: string; slug: string }[];
   navigationItems: NavItem[];
-  mobileNavigationItems: NavItem[];
   nativeHost?: boolean;
   /** This month's OpenAI usage, present only for business owners and platform administrators. */
   aiUsage?: { calls: number; tokens: number };
@@ -215,8 +214,6 @@ export function AppShell({
       t(label).toLocaleLowerCase().includes(search.toLocaleLowerCase()),
     ),
   ).filter((item, index, matches) => matches.findIndex(other => other.path === item.path) === index);
-  const primaryItems = mobileNavigationItems;
-  const mobilePaths = new Set(primaryItems.map((item) => item.path));
   if (nativeHost && !admin) return <main className="native-business-content">{children}</main>;
   return (
     <div
@@ -255,42 +252,7 @@ export function AppShell({
             ×
           </button>
         </div>
-        <details className="workspace-picker">
-          <summary className="workspace-switch" data-tip={iconRail ? name : undefined}>
-            <span className="workspace-avatar">
-              {admin ? "A" : name.slice(0, 2).toUpperCase()}
-            </span>
-            <span className="nav-label">{name}</span>
-            <span className="ml-auto" aria-hidden="true">⌄</span>
-          </summary>
-          <div className="workspace-options">
-            {(platformAdmin || admin) && (
-              <Link href="/admin" onClick={() => setOpen(false)}>
-                Platform Admin
-              </Link>
-            )}
-            {businesses.map((b) => (
-              <Link
-                key={b.id}
-                prefetch={false}
-                href={`/b/${b.slug}`}
-                aria-current={b.slug === slug ? "page" : undefined}
-                onClick={() => setOpen(false)}
-              >
-                {b.name}
-              </Link>
-            ))}
-            {admin ? (
-              <Link href="/admin/businesses" onClick={() => setOpen(false)}>
-                + Menaxho bizneset
-              </Link>
-            ) : !platformAdmin && (
-              <Link href="/onboarding?new=1" prefetch={false} onClick={() => setOpen(false)}>
-                + {t("Krijo biznes të ri")}
-              </Link>
-            )}
-          </div>
-        </details>
+        <WorkspacePicker name={name} slug={slug} admin={admin} platformAdmin={platformAdmin} businesses={businesses} compact={iconRail} onNavigate={() => setOpen(false)} />
         <nav
           aria-label={admin ? "Menuja e administratorit" : t("Menuja e biznesit")}
         >
@@ -304,7 +266,7 @@ export function AppShell({
                 aria-current={active ? "page" : undefined}
                 data-tip={iconRail ? item.label : undefined}
                 onClick={() => setOpen(false)}
-                className={`dashboard-nav ${active ? "active" : ""} ${admin && mobilePaths.has(item.path) ? "mobile-primary-item" : ""}`}
+                className={`dashboard-nav ${active ? "active" : ""}`}
               >
                 <Icon name={item.icon} />
                 <span className="nav-label">{admin ? item.label : t(item.label)}</span>
@@ -440,29 +402,6 @@ export function AppShell({
           {children}
         </main>
       </div>
-      {admin && <nav
-        className="mobile-bottom-nav"
-        aria-label={admin ? "Navigimi kryesor i adminit" : "Navigimi kryesor"}
-      >
-        {primaryItems.map((item) => (
-          <Link
-            key={item.id}
-            href={`${base}${item.path ? `/${item.path}` : ""}`}
-            prefetch={false}
-            aria-current={
-              isDashboardRoute(pathname, base, item.path) ? "page" : undefined
-            }
-            onClick={() => {
-              setOpen(false);
-              setSearchOpen(false);
-              setSearch("");
-            }}
-          >
-            <Icon name={item.icon} size={22} />
-            <span>{admin ? item.label : t(item.label)}</span>
-          </Link>
-        ))}
-      </nav>}
 
     </div>
   );

@@ -24,22 +24,8 @@ it("keeps four principal tabs for legacy mobile nav", () => {
   ]);
 });
 
-it("keeps admin actions and pricing reachable on mobile", () => {
-  expect(buildAdminNavigation("mobile").map((item) => item.path)).toEqual([
-    "",
-    "businesses",
-    "users",
-    "usage",
-    "health",
-    "conversations",
-    "pricing",
-    "actions",
-    "settings",
-  ]);
-});
-
-it("includes onboarding map in admin desktop nav", () => {
-  expect(buildAdminNavigation("desktop").map((item) => item.path)).toEqual([
+it("keeps every admin page, onboarding and pricing included, in the one admin menu", () => {
+  expect(buildAdminNavigation().map((item) => item.path)).toEqual([
     "",
     "businesses",
     "users",

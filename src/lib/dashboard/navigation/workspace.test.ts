@@ -46,7 +46,7 @@ it("does not expose optional modules omitted by the business profile", () => {
 });
 
 it("leaves administrator navigation independent of the business grouping", () => {
-  expect(buildAdminNavigation("mobile").map(item => item.path)).toEqual(["", "businesses", "users", "usage", "health", "conversations", "pricing", "actions", "settings"]);
+  expect(buildAdminNavigation().map(item => item.path)).toEqual(["", "businesses", "users", "usage", "health", "product-types", "conversations", "pricing", "actions", "chat-lab", "prompts", "flows", "onboarding", "settings"]);
 });
 
 it("keeps manual offers, knowledge, channels, behavior and operations in task groups without duplicates", () => {

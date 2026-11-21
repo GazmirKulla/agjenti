@@ -54,11 +54,6 @@ export default async function BusinessLayout({
   // others it stays under Cilësimet → Mjete të avancuara and Agjenti → Çfarë bën Agjenti.
   const menu = (list: ReturnType<typeof buildNavigationItems>) => ownProcess ? list : list.filter(item => item.id !== "workflows");
   const navigationItems = menu(buildNavigationItems(dashboardProfile, "desktop", sectionLabels));
-  const mobileNavigationItems = menu(buildNavigationItems(
-    dashboardProfile,
-    "mobile",
-    sectionLabels,
-  ));
   return (
     <DashboardLanguageProvider language={language}>
     <AssistantWorkspaceProvider key={`${user.id}:${business.slug}`} userId={user.id} userName={typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : typeof user.user_metadata?.name === "string" ? user.user_metadata.name : undefined} slug={business.slug} name={business.name} modules={dashboardProfile.navigationItems} external={business.catalog_source === "external"}>
@@ -76,7 +71,6 @@ export default async function BusinessLayout({
         undefined
       }
       navigationItems={navigationItems}
-      mobileNavigationItems={mobileNavigationItems}
       nativeHost={nativeHost}
       aiUsage={aiUsage ? aiUsageSummary(aiUsage) : undefined}
       channelsAttention={channelsAttention}
