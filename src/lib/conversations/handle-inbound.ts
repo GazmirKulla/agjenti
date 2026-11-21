@@ -1,5 +1,6 @@
 import { reviewMarketingPreference } from "@/lib/campaigns/preference";
 import { notifyStaffOfUnhappyCustomer } from "./escalation";
+import { readCustomerInterest } from "./interest-reading";
 import { messageWithVoice, transcribeMessageMedia } from "./voice-media";
 import { loadAgentBehavior } from "@/lib/agents/behavior";
 import { recordCapabilityEvents } from "@/lib/tracking/events";
@@ -372,6 +373,8 @@ export async function handleInboundMessage(
       autoOn,
       conversationStatus: conversationStatus ?? null,
     });
+    // The agent does not read this turn, so a light reading notes buying interest: the conversation is still a lead.
+    await noteInterestWithoutAgent(businessId, conversationId, batch.originals.map(original => original.text ?? "").join("\n"));
     return { skipped: !autoOn ? "auto_reply_off" : conversationStatus === "paused" ? "conversation_paused" : "conversation_closed" };
   }
 
@@ -479,6 +482,12 @@ export async function handleInboundMessage(
         point: turn.escalation.action === "handoff" ? "handed_off" : "notified", reason: turn.escalation.reason }]);
       await notifyStaffOfUnhappyCustomer(businessId, conversationId, turn.escalation).catch(() => undefined);
     }
+    // Committed: the customer showed buying interest, so the conversation is (again) a lead with what they asked about.
+    if (turn.interest) {
+      const { error } = await createServiceSupabase().rpc("note_conversation_interest", { p_business: businessId, p_conversation: conversationId, p_interest: turn.interest.summary });
+      await recordCapabilityEvents([{ businessId, capability: "customer.lead", mode: "live", conversationId,
+        point: error ? "failed" : "recorded", reason: error ? "store_failed" : turn.interest.kind }]);
+    }
     // Persist the normal reply first. Optional acknowledgements never replace it
     // or turn a reaction persistence/provider failure into a message retry.
     if (reactionMessageId && autoOn && conversationStatus==='active' && !(turn.handoff && !turn.advisoryHandoff) && !isIsolatedExecution()) {
@@ -490,5 +499,27 @@ export async function handleInboundMessage(
       } catch { /* Normal prepared reply remains authoritative and sendable. */ }
     }
     return;
+  }
+}
+
+/**
+ * Buying interest for a turn the customer agent does not answer (automatic replies off, conversation with staff
+ * or closed). Best effort: a failed reading or store never affects the stored message.
+ */
+async function noteInterestWithoutAgent(businessId: string, conversationId: string, text: string) {
+  if (!text.trim()) return;
+  try {
+    const supabase = createServiceSupabase();
+    const { data: recent } = await supabase.from("messages").select("direction,source,body")
+      .eq("business_id", businessId).eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(8);
+    const history = (recent ?? []).slice(1).reverse().filter(m => typeof m.body === "string" && m.body.trim())
+      .map(m => ({ role: m.direction === "inbound" ? "user" as const : "assistant" as const, content: m.body as string }));
+    const interest = await readCustomerInterest(text, history);
+    if (!interest) return;
+    const { error } = await supabase.rpc("note_conversation_interest", { p_business: businessId, p_conversation: conversationId, p_interest: interest.summary });
+    await recordCapabilityEvents([{ businessId, capability: "customer.lead", mode: "live", conversationId,
+      point: error ? "failed" : "recorded", reason: error ? "store_failed" : interest.kind }]);
+  } catch (error) {
+    console.warn("[inbound] interest reading failed", error instanceof Error ? error.message : error);
   }
 }

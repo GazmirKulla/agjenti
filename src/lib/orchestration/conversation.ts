@@ -195,6 +195,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const startState = structuredClone(state);
   // The interpretation's reading that this customer needs a person, and what the business wants then.
   let escalation: import("./contracts").Escalation | undefined;
+  // The interpretation's reading that the customer shows buying interest: the conversation's lead.
+  let interest: import("./contracts").Interest | undefined;
   const behaviorRead = loadAgentBehavior(params.businessId);
   const result = await runProcessTurn({ state, event, env, deadline, lease: transport, adapters,
     onState: currentState => { state = currentState; },
@@ -218,6 +220,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       await services.prepare(state, definitions, interpretation.observation);
       modelUsed = interpretation.model;
       escalation = interpretation.observation.escalation;
+      interest = interpretation.observation.interest;
       trace?.({ stage: "ai", label: "Process observation validated", data: { ...interpretation.observation, model: interpretation.model,
         responseId: interpretation.responseId, usage: { input_tokens: interpretation.inputTokens, output_tokens: interpretation.outputTokens } } });
       return interpretation.observation;
@@ -236,6 +239,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     try { wording = agent?.communication ? parseCommunicationPolicy(agent.communication).handoffMessage : undefined; } catch { wording = undefined; }
     notices.push({ kind: "handoff", text: `${wording ?? defaultHandoffMessage} (The customer needs a person: ${unhappy.reason}. Acknowledge how they feel briefly, without arguing.)` });
   }
+  const lead = interest && quoted(interest.evidence) ? { kind: interest.kind, summary: interest.summary } : undefined;
   const handoff = notices.some(n => n.kind === "handoff");
   if (handoff && modules && !modules.includes("inbox")) throw new CapabilityEnforcementError("module_disabled", "Kalimi te stafi është çaktivizuar.");
   if (handoff && mode === "test") recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "process_runtime_no_staff_notification" });
@@ -302,6 +306,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     recentMessages: state.history };
   return { ...(active && definition && version ? { preparedRequest: processPreparedRequest(active, definition, version, Date.now()) } : {}), ...(transport ? { processCheckpoint: { event: { ...event, id: `job:${transport.jobId}:reply` }, expectedRevision, targetIds: composed.targetIds } } : {}), reply: composed.reply, nextState, previousResponseId: null, workflowId: null, productName: null, capabilityEvents,
     ...(unhappy ? { escalation: unhappy } : {}),
+    ...(lead ? { interest: lead } : {}),
     ...(composed.presented?.kind === "product" ? { presentedProducts: [...composed.presented.items] } : {}),
     ...(productPhotos.length ? { productPhotos } : {}),
     ...(composed.presented?.kind === "service" ? { presentedServices: [...composed.presented.items] } : {}),

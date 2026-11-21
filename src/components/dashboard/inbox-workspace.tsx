@@ -10,6 +10,7 @@ import { getSessionUser } from "@/lib/tenant/access";
 import { ConversationPanel } from "./conversation-panel";
 import { loadConversationContext } from "@/lib/conversations/context";
 import { InboxList } from "./inbox-list";
+import type { LeadFilter } from "@/lib/leads/model";
 import { EmptyState, PageHeading } from "./ui";
 
 export async function InboxWorkspace({
@@ -17,11 +18,14 @@ export async function InboxWorkspace({
   slug,
   conversationId,
   view,
+  lead = null,
 }: {
   businessId: string;
   slug: string;
   conversationId?: string;
   view?: "customer";
+  /** Bisedat filtered by lead (the old Leads page opens here). */
+  lead?: LeadFilter | null;
 }) {
   const t = await getDashboardTranslator();
   const user = await getSessionUser();
@@ -34,7 +38,7 @@ export async function InboxWorkspace({
   const [instagram, whatsapp, rowsResult, conversationResult, messageResult, contextResult, logResult, versionResult] = await Promise.all([
     db.from("instagram_connections").select("status,expires_at").eq("business_id", businessId).neq("status", "disconnected").maybeSingle(),
     db.from("whatsapp_connections").select("status").eq("business_id", businessId).maybeSingle(),
-    settle(loadInboxPage(db, businessId)),
+    settle(loadInboxPage(db, businessId, { lead })),
     selected ? settle(loadThreadConversation(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
     selected ? settle(loadThreadPage(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
     selected ? settle(loadConversationContext(db, businessId, selected)) : Promise.resolve({ data: null, error: null }),
@@ -70,7 +74,7 @@ export async function InboxWorkspace({
         {heading}
         <InboxRefresh title="Inbox" businessId={businessId} version={version} />
         <div className="inbox-workspace inbox-list-home">
-          <InboxList rows={inboxRows} next={nextRows} slug={slug} channels={channels} />
+          <InboxList rows={inboxRows} next={nextRows} slug={slug} channels={channels} lead={lead} />
           <section className="panel chat-panel">
             <EmptyState
               title={t(inboxRows.length ? "Zgjidh një bisedë" : "Inbox-i yt është gati")}
@@ -110,6 +114,7 @@ export async function InboxWorkspace({
         className={`inbox-workspace ${conversationId ? "has-selection" : "inbox-list-home"} ${view === "customer" ? "is-mobile-customer" : ""}`}
       >
         <InboxList
+          lead={lead}
           next={nextRows}
           channels={channels}
           slug={slug}

@@ -1,5 +1,5 @@
 import { prompt } from "@/lib/ai/prompts/files";
-import { TransitionError, type ConditionObservation, type CustomerCommand, type Escalation, type FactInput, type Observation, type Snapshot, type Value } from "./contracts";
+import { TransitionError, type ConditionObservation, type CustomerCommand, type Escalation, type FactInput, type Interest, type Observation, type Snapshot, type Value } from "./contracts";
 import { definitionFor, type Environment } from "./transition";
 
 type ObjectValue = Record<string, unknown>;
@@ -25,9 +25,17 @@ function parseEscalation(value: unknown): Escalation | undefined {
     || !["dissatisfied", "complaint", "not_helped", "none"].includes(String(value.reason))) reject();
   return value.needed && value.reason !== "none" && text(value.evidence) ? { reason: value.reason as Escalation["reason"], evidence: value.evidence } : undefined;
 }
+/** Buying interest counts only with a kind, a short summary and a quote; "none" or a missing quote is no interest. */
+function parseInterest(value: unknown): Interest | undefined {
+  if (value === undefined) return undefined;
+  if (!object(value) || !keys(value, ["shown", "kind", "summary", "evidence"]) || typeof value.shown !== "boolean" || typeof value.summary !== "string"
+    || typeof value.evidence !== "string" || !["price", "availability", "contact", "purchase", "none"].includes(String(value.kind))) reject();
+  const summary = value.summary.trim().slice(0, 300);
+  return value.shown && value.kind !== "none" && text(value.evidence) && summary ? { kind: value.kind as Interest["kind"], summary, evidence: value.evidence } : undefined;
+}
 /** Reject extra authority-bearing properties, malformed references and unbounded model output. */
 export function parseObservation(value: unknown): Observation {
-  if (!object(value) || !keys(value, ["revision", "commands", "needsClarification", ...(Object.hasOwn(value, "conditions") ? ["conditions"] : []), ...(Object.hasOwn(value, "escalation") ? ["escalation"] : [])]) || !Number.isSafeInteger(value.revision)
+  if (!object(value) || !keys(value, ["revision", "commands", "needsClarification", ...(Object.hasOwn(value, "conditions") ? ["conditions"] : []), ...(Object.hasOwn(value, "escalation") ? ["escalation"] : []), ...(Object.hasOwn(value, "interest") ? ["interest"] : [])]) || !Number.isSafeInteger(value.revision)
     || (value.revision as number) < 0 || typeof value.needsClarification !== "boolean" || !Array.isArray(value.commands) || value.commands.length > 32) reject();
   const commands: CustomerCommand[] = value.commands.map((command: unknown): CustomerCommand => {
     if (!object(command) || !text(command.kind)) reject();
@@ -67,8 +75,9 @@ export function parseObservation(value: unknown): Observation {
     return { definitionId: c.definitionId, versionId: c.versionId, instanceId: c.instanceId, stepId: c.stepId, outcome: c.outcome, evidence: c.evidence };
   });
   const escalation = parseEscalation(value.escalation);
+  const interest = parseInterest(value.interest);
   return { revision: value.revision as number, commands, needsClarification: value.needsClarification, ...(parsedConditions.length ? { conditions: parsedConditions } : {}),
-    ...(escalation ? { escalation } : {}) };
+    ...(escalation ? { escalation } : {}), ...(interest ? { interest } : {}) };
 }
 
 const string = { type: "string" };
@@ -91,6 +100,7 @@ export const observationSchema = shape({
     command(["cancel", "resume", "suspend"], { instanceId: string, ...evidence }),
   ] } },
   escalation: shape({ needed: { type: "boolean" }, reason: { type: "string", enum: ["dissatisfied", "complaint", "not_helped", "none"] }, ...evidence }),
+  interest: shape({ shown: { type: "boolean" }, kind: { type: "string", enum: ["price", "availability", "contact", "purchase", "none"] }, summary: string, ...evidence }),
 });
 
 /** Every declared field is included, including unanswered custom fields. No profile aliasing. */

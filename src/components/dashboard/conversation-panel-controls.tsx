@@ -163,7 +163,8 @@ const leadOptions: { value: LeadStatus; label: string }[] = [
   { value: "lost", label: "Humbur" },
 ];
 
-export function LeadStatusControl(props: { businessId: string; conversationId: string; leadId: string; status: LeadStatus }) {
+/** The conversation's lead status; without one, the owner can mark the conversation as a lead. */
+export function LeadStatusControl(props: { businessId: string; conversationId: string; status: LeadStatus | null }) {
   const t = useDashboardTranslator();
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -174,13 +175,13 @@ export function LeadStatusControl(props: { businessId: string; conversationId: s
         {t("Statusi i kontaktit")}
         <select
           className="field"
-          value={props.status}
+          value={props.status ?? ""}
           disabled={pending}
           onChange={async (event) => {
             setPending(true);
             setError(null);
             try {
-              await post(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/lead`, { leadId: props.leadId, status: event.target.value });
+              await post(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/lead`, { status: event.target.value });
               router.refresh();
             } catch (e) {
               setError(e instanceof Error ? e.message : "Statusi nuk u ndryshua. Provo përsëri.");
@@ -189,6 +190,7 @@ export function LeadStatusControl(props: { businessId: string; conversationId: s
             }
           }}
         >
+          {!props.status && <option value="" disabled>{t("Nuk është lead")}</option>}
           {leadOptions.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
         </select>
       </label>

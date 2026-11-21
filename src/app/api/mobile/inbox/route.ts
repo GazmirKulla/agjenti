@@ -1,4 +1,5 @@
 import { InboxReadError, loadInboxPage, parseCursor } from "@/lib/conversations/inbox-read";
+import { leadFilter } from "@/lib/leads/model";
 import { mobileInboxAccess, mobileInboxError, mobileInboxHeaders } from "@/lib/mobile/inbox";
 
 export const runtime = "nodejs";
@@ -13,6 +14,7 @@ export async function GET(request: Request) {
       before: parseCursor(url.searchParams.get("before")),
       limit: Number(url.searchParams.get("limit")) || undefined,
       query: url.searchParams.get("q"),
+      lead: leadFilter(url.searchParams.get("lead")),
     });
     return Response.json({ businessId: access.businessId, conversations: page.rows, next: page.next }, { headers: mobileInboxHeaders });
   } catch (error) {

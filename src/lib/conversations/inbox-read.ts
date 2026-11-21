@@ -3,6 +3,7 @@ import { conversationDisplayName } from "./ensure-customer";
 import { participantAvatarUrl } from "./participant-avatar";
 import { loadReplyQuotes } from "./reply-target";
 import { ORDER_ITEMS_SELECT, orderItemSummary, type OrderItemSummary } from "@/lib/orders/item-summary";
+import { followUpHours, type LeadFilter } from "@/lib/leads/model";
 
 /** Shared by the web Inbox and the native app, so both read the same rows and tenant filters. */
 export class InboxReadError extends Error {
@@ -28,7 +29,7 @@ export type InboxSignals = {
   email: boolean;
   /** Orders of this conversation or its linked customer, drafts and failures excluded. */
   orders: number;
-  /** The customer's open lead, else their latest one. */
+  /** The conversation's lead status (new, contacted, won, lost); null when it is not a lead. */
   lead: "new" | "contacted" | "won" | "lost" | null;
   /** Linked to a (non-archived) customer record of this business. */
   customer: boolean;
@@ -121,7 +122,7 @@ export function inboxQuery(raw: unknown): string | null {
 export async function loadInboxPage(
   db: SupabaseClient,
   businessId: string,
-  options: { before?: PageCursor | null; limit?: number; query?: string | null } = {},
+  options: { before?: PageCursor | null; limit?: number; query?: string | null; lead?: LeadFilter | null } = {},
 ): Promise<{ rows: InboxRow[]; next: string | null }> {
   const limit = pageSize(options.limit, INBOX_PAGE, 100);
   // Search: the name or username on the channel, the last message, or the saved customer's name, username or phone.
@@ -145,6 +146,13 @@ export async function loadInboxPage(
     const like = `*${query}*`;
     read = read.or([`participant_display_name.ilike.${like}`, `participant_username.ilike.${like}`, `last_message_preview.ilike.${like}`,
       ...(customerIds.length ? [`customer_id.in.(${customerIds.join(",")})`] : [])].join(","));
+  }
+  // Leads are a state of the conversation: the interested ones, those still unanswered past the follow-up time, won or lost.
+  if (options.lead === "open") read = read.in("lead_status", ["new", "contacted"]);
+  else if (options.lead === "won" || options.lead === "lost") read = read.eq("lead_status", options.lead);
+  else if (options.lead === "waiting") {
+    const { data: business } = await db.from("businesses").select("lead_settings").eq("id", businessId).maybeSingle();
+    read = read.eq("lead_status", "new").lt("lead_at", new Date(Date.now() - followUpHours(business?.lead_settings) * 3_600_000).toISOString());
   }
   const before = options.before;
   if (before)

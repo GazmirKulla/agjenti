@@ -146,13 +146,11 @@ export async function ConversationPanel({ context, businessId, slug }: { context
         </section>
       )}
 
-      {context.lead && (
-        <section className="panel section-pad">
-          <h2 className="text-base mb-4">{t("Kontakti")}</h2>
-          {context.lead.interest && <p className="muted-copy mb-3">{context.lead.interest}</p>}
-          <LeadStatusControl businessId={businessId} conversationId={conversation.id} leadId={context.lead.id} status={context.lead.status} />
-        </section>
-      )}
+      <section className="panel section-pad">
+        <h2 className="text-base mb-4">{t("Kontakti")}</h2>
+        {context.lead?.interest && <p className="muted-copy mb-3">{context.lead.interest}</p>}
+        <LeadStatusControl businessId={businessId} conversationId={conversation.id} status={context.lead?.status ?? null} />
+      </section>
 
       {(context.invitation || context.prospectScans.length > 0) && (
         <section className="panel section-pad">

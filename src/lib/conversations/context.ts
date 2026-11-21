@@ -183,8 +183,7 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       : db.from("orders").select(`id,status,total_amount,currency,created_at,external_system,external_order_id,external_status,external_status_label,delivery:payload->customer,${ORDER_ITEMS_SELECT}`).eq("business_id", businessId)
           .eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(10),
     db.from("workflow_booking_effects").select("booking_id").eq("business_id", businessId).eq("conversation_id", conversationId).limit(20),
-    db.from("leads").select("id,status,interest,updated_at").eq("business_id", businessId).eq("conversation_id", conversationId)
-      .order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+    db.from("conversations").select("lead_status,lead_interest").eq("business_id", businessId).eq("id", conversationId).maybeSingle(),
     db.from("action_executions").select("id").eq("business_id", businessId).eq("action_key", "business.provision")
       .eq("conversation_id", conversationId).eq("status", "succeeded").order("created_at", { ascending: false }).limit(5),
     db.from("prospect_scans").select("username,status,posts,fetched_at").eq("business_id", businessId)
@@ -404,8 +403,9 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       status: booking.status,
       statusLabel: label(bookingStatusLabels, booking.status),
     })),
-    lead: leadRow
-      ? { id: leadRow.id, status: leadRow.status as LeadStatus, statusLabel: leadStatusLabels[leadRow.status as LeadStatus] ?? leadRow.status, interest: leadRow.interest ?? "" }
+    // The lead is the conversation's own state; its id is the conversation's (app versions send it back).
+    lead: leadRow?.lead_status
+      ? { id: conversationId, status: leadRow.lead_status as LeadStatus, statusLabel: leadStatusLabels[leadRow.lead_status as LeadStatus] ?? leadRow.lead_status, interest: leadRow.lead_interest ?? "" }
       : null,
     invitation,
     prospectScans: (scans.data ?? []).map((scan) => ({

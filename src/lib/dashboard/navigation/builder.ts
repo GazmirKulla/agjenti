@@ -15,10 +15,8 @@ export function buildNavigationItems(
   variant: "desktop" | "mobile" = "desktop",
   labels: Partial<Record<ModuleId, string>> = {},
 ): NavItem[] {
-  const ids =
-    variant === "mobile"
-      ? profile.mobileNavigationItems
-      : profile.navigationItems;
+  // Leads are a filter of Bisedat ("Të interesuar"), not a menu entry, even in profiles saved with it.
+  const ids = (variant === "mobile" ? profile.mobileNavigationItems : profile.navigationItems).filter(id => id !== "leads");
   const items: NavItem[] = ids.map((id) => {
     const mod = moduleRegistry[id];
     return {

@@ -40,3 +40,19 @@ describe("semantic observation boundary", () => {
     expect(context.catalog.products).toEqual([{ id: "p2", name: "Second" }]);
   });
 });
+
+describe("buying interest reading", () => {
+  const base = { revision: 0, commands: [], needsClarification: false };
+  it("keeps interest only with a kind, a summary and a quote", () => {
+    expect(parseObservation({ ...base, interest: { shown: true, kind: "price", summary: "Çmimi i bluzës me foto", evidence: "sa kushton bluza" } }).interest)
+      .toEqual({ kind: "price", summary: "Çmimi i bluzës me foto", evidence: "sa kushton bluza" });
+    expect(parseObservation({ ...base, interest: { shown: false, kind: "none", summary: "", evidence: "" } }).interest).toBeUndefined();
+    expect(parseObservation({ ...base, interest: { shown: true, kind: "price", summary: "", evidence: "sa kushton" } }).interest).toBeUndefined();
+    expect(parseObservation({ ...base, interest: { shown: true, kind: "contact", summary: "Do ta telefonojnë", evidence: "" } }).interest).toBeUndefined();
+    expect(parseObservation(base).interest).toBeUndefined();
+  });
+  it("rejects malformed or extra interest fields", () => {
+    expect(() => parseObservation({ ...base, interest: { shown: true, kind: "discount", summary: "x", evidence: "x" } })).toThrow();
+    expect(() => parseObservation({ ...base, interest: { shown: true, kind: "price", summary: "x", evidence: "x", leadStatus: "won" } })).toThrow();
+  });
+});

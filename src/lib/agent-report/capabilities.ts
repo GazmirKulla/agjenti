@@ -80,8 +80,9 @@ export const customerCapabilities: CapabilityModule[] = [
   {
     name: "Leads",
     items: [
-      ["po", "Lead-i krijohet vetë nga biseda"],
-      ["pjes", "Cilësimi i interesit të klientit"],
+      ["po", "Biseda shënohet lead kur klienti shfaq interes: agjenti e kupton nga kuptimi i mesazhit (çmim, disponueshmëri, kontakt, blerje), me citim"],
+      ["po", "Statusi i lead-it është te biseda: fitohet vetë me porosi ose rezervim, kalon “në kontakt” kur përgjigjet stafi"],
+      ["pjes", "Vetëm kur agjenti e përpunon mesazhin: me përgjigjet automatike të fikura, interesi nuk shënohet"],
     ],
   },
   {
@@ -275,7 +276,6 @@ export const businessCapabilities: CapabilityModule[] = [
     items: [
       ["po", "Numrat te përmbledhja"],
       ["jo", "Ndrysho statusin e lead-it"],
-      ["jo", "Rregullat e lead-eve"],
     ],
   },
   {

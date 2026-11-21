@@ -195,7 +195,6 @@ export const toggleableModules: ModuleId[] = [
   "bookings",
   "calendar",
   "catalogs",
-  "leads",
   "customers",
   "knowledge",
   "workflows",

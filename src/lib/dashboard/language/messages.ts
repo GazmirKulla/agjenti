@@ -170,6 +170,8 @@ export const english: Record<string, string> = {
   "Ka numër telefoni": "Phone number shared",
   "Ka email": "Email shared",
   "Lead i ri": "New lead",
+  "Nuk është lead": "Not a lead",
+  "Të interesuar": "Interested",
   "Lead në kontakt": "Lead contacted",
   "Lead i fituar": "Lead won",
   "Lead i humbur": "Lead lost",

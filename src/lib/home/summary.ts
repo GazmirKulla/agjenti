@@ -1,5 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { leadSettings } from "@/lib/leads/model";
+import { followUpHours } from "@/lib/leads/model";
 import { loadBusinessReport } from "@/lib/reports/service";
 import { moduleDependencies, moduleRegistry } from "@/lib/dashboard/modules/registry";
 import type { DashboardProfile, ModuleId } from "@/lib/dashboard/modules/types";
@@ -29,8 +29,8 @@ export async function loadHomeModules(
   const [{ data: settings }, { data: usedModules }, leadsRecorded, provision] = await Promise.all([
     db.from("businesses").select("timezone,lead_settings").eq("id", id).maybeSingle(),
     db.rpc("business_used_modules", { p_business: id }),
-    // business_used_modules does not cover leads yet.
-    count("leads").limit(1),
+    // business_used_modules does not cover leads yet: a conversation that is (or was) a lead.
+    count("conversations").not("lead_status", "is", null).limit(1),
     // Creating businesses for clients is a partner capability: only those who have it see invitations.
     db.rpc("can_execute_business_action", { p_business: id, p_user: userId, p_action: "business.provision", p_automated: false }),
   ]);
@@ -103,17 +103,19 @@ export async function loadHomeModules(
       empty: used.has("bookings") ? undefined : { text: "Klientët rezervojnë në bisedë sipas shërbimeve dhe orarit tënd.",
         actions: [{ label: "Cakto orarin", href: `${base}/calendar` }] } };
   })());
+  // Leads are the conversations whose customer showed buying interest (conversations.lead_status).
   if (on("leads")) cards.push((async () => {
-    const followUp = leadSettings(settings?.lead_settings).followUpHours * 3_600_000;
+    const followUp = followUpHours(settings?.lead_settings) * 3_600_000;
+    const open = () => count("conversations").in("lead_status", ["new", "contacted"]);
     const [total, fresh, waiting] = await Promise.all([
-      count("leads"), since("leads"),
-      count("leads").eq("status", "new").lt("last_interest_at", new Date(now.getTime() - followUp).toISOString()),
+      open(), open().gte("lead_at", range.from),
+      count("conversations").eq("lead_status", "new").lt("lead_at", new Date(now.getTime() - followUp).toISOString()),
     ]);
-    return { id: "leads", label: "Leads", icon: moduleRegistry.leads.icon, href: `${base}/leads`, value: n(total), caption: "gjithsej",
+    return { id: "leads", label: "Të interesuar", icon: moduleRegistry.leads.icon, href: `${base}/inbox?lead=open`, value: n(total), caption: "biseda",
       detail: added(n(fresh), "të reja"), detailTone: "up",
-      attention: n(waiting) ? { text: `${n(waiting)} presin përgjigje`, href: `${base}/leads?view=waiting`, tone: "warning" } : undefined,
-      empty: n(total) ? undefined : { text: "Këtu dalin klientët që treguan interes në bisedë, por ende nuk blenë.",
-        actions: [{ label: "Hap leads", href: `${base}/leads` }] } };
+      attention: n(waiting) ? { text: `${n(waiting)} presin përgjigje`, href: `${base}/inbox?lead=waiting`, tone: "warning" } : undefined,
+      empty: n(total) ? undefined : { text: "Këtu dalin bisedat ku klienti tregoi interes, por ende nuk bleu.",
+        actions: [{ label: "Hap bisedat", href: `${base}/inbox` }] } };
   })());
   if (on("customers")) cards.push((async () => {
     const [total, fresh] = await Promise.all([count("customers").is("archived_at", null), since("customers").is("archived_at", null)]);

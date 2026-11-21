@@ -3,6 +3,7 @@ import { useDashboardTranslator } from "@/components/dashboard/language";
 import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "./icon";
+import { leadFilterLabels, type LeadFilter } from "@/lib/leads/model";
 import { ParticipantAvatar } from "./participant-avatar";
 export type InboxSignals = {
   phone: boolean;
@@ -53,7 +54,10 @@ export function InboxList({
   slug,
   selected,
   channels,
+  lead = null,
 }: {
+  /** Server-side filter by lead; the rows are already only those conversations. */
+  lead?: LeadFilter | null;
   rows: InboxRow[];
   /** Reads the conversations after the first page; null when there are none. */
   next?: string | null;
@@ -74,7 +78,7 @@ export function InboxList({
     setLoadingMore(true);
     setMoreError(false);
     try {
-      const res = await fetch(`/api/mobile/inbox?slug=${encodeURIComponent(slug)}&before=${encodeURIComponent(next)}`);
+      const res = await fetch(`/api/mobile/inbox?slug=${encodeURIComponent(slug)}&before=${encodeURIComponent(next)}${lead ? `&lead=${lead}` : ""}`);
       const json = (await res.json()) as { conversations?: InboxRow[]; next?: string | null };
       if (!res.ok || !Array.isArray(json.conversations)) throw new Error("load");
       setMore((current) => ({ rows: [...(current?.rows ?? []), ...json.conversations!], next: json.next ?? null }));
@@ -112,6 +116,14 @@ export function InboxList({
               className="inbox-channel inactive" aria-label={`${label}. ${t("Hap integrimet")}`} title={`${label}. ${t("Hap integrimet")}`}>{content}</Link>;
         })}
       </nav>
+      {/* Leads are a state of the conversation: this filter replaces the old Leads page. */}
+      <div className="inbox-filters inbox-lead-filters">
+        <Link href={lead === "open" ? `/b/${slug}/inbox` : `/b/${slug}/inbox?lead=open`} aria-pressed={lead === "open" || lead === "waiting"}
+          aria-label={lead ? t("Shfaq të gjitha bisedat") : t("Të interesuar")}>
+          <Icon name="lead" size={14} /> {lead ? t(leadFilterLabels[lead]) : t("Të interesuar")}{lead && <span aria-hidden="true"> ×</span>}
+        </Link>
+        {lead === "open" && <Link href={`/b/${slug}/inbox?lead=waiting`}>{t("Pa përgjigje")}</Link>}
+      </div>
       <div className="inbox-filters">
         {[
           ["all", t("Të gjitha")],

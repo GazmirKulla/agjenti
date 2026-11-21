@@ -1,6 +1,6 @@
 import { authenticatedReadClient } from "@/lib/auth/read-client";
 import { requireBusinessAccess } from "@/lib/tenant/access";
-import { leadSettings } from "@/lib/leads/model";
+import { followUpHours } from "@/lib/leads/model";
 import { reportingRange, type Briefing, type BriefingPeriod, type MetricId, type Reading } from "./briefing-model";
 
 export class BriefingError extends Error {
@@ -69,10 +69,10 @@ export async function loadBriefing(slug: string, period: BriefingPeriod, now = n
       .eq("business_id", id).eq("conversations.business_id", id).eq("conversations.status", "paused")
       .or("collected->>staffHandoff.eq.true,and(collected->visual->>status.eq.handoff,or(collected->visual->>advisory.is.null,collected->visual->>advisory.eq.false))"), false),
     read("inbox", "activity", () => count("integration_logs").eq("status", "failed")),
-    // Current snapshot: new leads nobody has answered within the owner's follow-up time.
-    read("leads", "leads?view=waiting", () => db.from("leads").select("id", { count: "exact", head: true })
-      .eq("business_id", id).eq("status", "new")
-      .lt("last_interest_at", new Date(now.getTime() - leadSettings(business.lead_settings).followUpHours * 3_600_000).toISOString()), false),
+    // Current snapshot: conversations with new interest nobody has answered within the owner's follow-up time.
+    read("leads", "inbox?lead=waiting", () => db.from("conversations").select("id", { count: "exact", head: true })
+      .eq("business_id", id).eq("lead_status", "new")
+      .lt("lead_at", new Date(now.getTime() - followUpHours(business.lead_settings) * 3_600_000).toISOString()), false),
   ]);
   // Discard the result after membership/config changes; RLS-denied empty rows must not become zero.
   const latest = await configuration();

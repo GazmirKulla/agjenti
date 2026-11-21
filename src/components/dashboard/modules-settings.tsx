@@ -6,10 +6,10 @@ import { ModulesManager, type ModuleGroup } from "./modules-manager";
 /** Names as the menu shows them; the business's own name for its items wins. */
 const menuLabels: Partial<Record<ModuleId, string>> = {
   activity: "Aktiviteti", reports: "Raportet", services: "Shërbimet", orders: "Porositë", bookings: "Rezervimet",
-  calendar: "Kalendari", catalogs: "Katalogët", leads: "Leads", customers: "Klientët", knowledge: "Njohuritë", workflows: "Workflow",
+  calendar: "Kalendari", catalogs: "Katalogët", customers: "Klientët", knowledge: "Njohuritë", workflows: "Workflow",
 };
 const groups: { title: string; description: string; ids: ModuleId[] }[] = [
-  { title: "Kryesore", description: "Në krye të menusë.", ids: ["activity", "reports", "customers", "leads"] },
+  { title: "Kryesore", description: "Në krye të menusë.", ids: ["activity", "reports", "customers"] },
   { title: "Oferta", description: "Te Menaxhimi: çfarë shet ose ofron biznesi.", ids: ["products", "services", "catalogs"] },
   { title: "Operacionet", description: "Te Menaxhimi: porositë dhe takimet.", ids: ["orders", "bookings", "calendar"] },
   { title: "Agjenti", description: "Te Agjenti i klientëve: çfarë di dhe si punon.", ids: ["knowledge", "workflows"] },
