@@ -118,7 +118,7 @@ export function LiveMark({ slug, readiness }: { slug: string; readiness: Readine
     <Link href={readiness.live ? `/b/${slug}/integrations` : `/b/${slug}`} className={`live-mark ${readiness.live ? "is-live" : ""}`}
       title={readiness.live ? "Agjenti u përgjigjet klientëve vetë" : "Agjenti nuk u përgjigjet ende klientëve vetë"}>
       <span className="live-mark-dot" aria-hidden="true" />
-      {readiness.live ? `Live${channel ? ` · ${both ? "Instagram, WhatsApp" : channel}` : ""}` : "Jo live"}
+      {readiness.live ? <>Live{channel && <span className="live-mark-channels"> · {both ? "Instagram, WhatsApp" : channel}</span>}</> : "Jo live"}
     </Link>
   );
 }

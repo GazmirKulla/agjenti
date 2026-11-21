@@ -10,10 +10,15 @@
 .assistant-heading .personal-assistant-settings { margin-left: auto; }
 .assistant-heading > div { min-width: 0; }
 .assistant-heading h2 { overflow-wrap: anywhere; }
+/* Phones: one header row. The assistant is a small pill at its end, not a row of its own. */
 @media (max-width: 760px) {
-  .assistant-first-mobile { --mobile-header-height: calc(138px + env(safe-area-inset-top, 0px)); }
-  .assistant-first-mobile .dashboard-topbar { flex-wrap: wrap; align-content: center; gap: 6px 8px; padding-bottom: 6px; }
-  .personal-assistant-slot { order: 10; flex: 0 0 100%; height: 58px; }
-  .personal-assistant-widget, .personal-assistant-open { width: 100%; height: 58px; }
+  .assistant-first-mobile { --mobile-header-height: calc(64px + env(safe-area-inset-top, 0px)); }
+  .assistant-first-mobile .dashboard-topbar { flex-wrap: nowrap; align-items: center; gap: 6px; }
+  .assistant-first-mobile .dashboard-topbar .live-mark { margin-left: auto; flex: none; }
+  .personal-assistant-slot { flex: none; margin-left: 0; }
+  .personal-assistant-open { min-height: 40px; height: 40px; padding: 0 12px 0 10px; gap: 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+  .personal-assistant-open:hover { background: var(--accent-soft); }
+  .personal-assistant-open .personal-assistant-avatar { color: var(--accent); }
+  .personal-assistant-open strong { font-size: 13px; }
   .personal-assistant-settings { width: 44px; }
 }

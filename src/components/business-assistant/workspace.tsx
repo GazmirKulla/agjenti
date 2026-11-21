@@ -14,11 +14,8 @@ import { useMaterialDraft } from "./materials";
 import { BusinessAssistant } from "./panel";
 import { defaultPersonalAssistantName } from "@/lib/business-assistant/identity";
 import { clearLegacyAssistantAppearance } from "./appearance";
-import { Icon } from "@/components/dashboard/icon";
-import { contextualAction } from "./presentation";
 import {
   contextFromPath,
-  contextLabel,
   type AssistantUIContext,
 } from "@/lib/business-assistant/context";
 
@@ -195,19 +192,5 @@ export function AssistantWorkspaceSurface() {
       panelWidth={w.panelWidth}
       setPanelWidth={w.setPanelWidth}
     />
-  );
-}
-export function AssistantEntry() {
-  const w = useAssistantWorkspace();
-  if (!w) return null;
-  const action = contextualAction(w.context, w.modules);
-  if (!action) return null;
-  return (
-    <section className="assistant-context-entry" aria-label={`${w.assistantName} · ${contextLabel(w.context)}`}>
-      <button type="button" onClick={() => w.launch()} aria-haspopup="dialog" title={action}>
-        <Icon name="spark" size={16} /><span className="assistant-entry-label">{action}</span>
-      </button>
-      {w.selectionLabel && <span className="assistant-selection-label">{w.selectionLabel}</span>}
-    </section>
   );
 }

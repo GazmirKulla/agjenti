@@ -42,7 +42,8 @@
 .live-mark-dot { width: 8px; height: 8px; border-radius: 50%; background: #f5a524; }
 .live-mark.is-live { color: var(--ink); }
 .live-mark.is-live .live-mark-dot { background: #12b76a; box-shadow: 0 0 0 3px color-mix(in srgb, #12b76a 20%, transparent); }
-@media (max-width: 760px) { .live-mark { padding: 4px 8px; } }
+/* Phones: just the state; the channels are in the link's title and on Integrimet. */
+@media (max-width: 760px) { .live-mark { padding: 4px 8px; } .live-mark-channels { display: none; } }
 .auto-reply-panel { display: grid; gap: 10px; margin-bottom: 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .auto-reply-panel.is-live { border-color: color-mix(in srgb, #12b76a 40%, var(--line)); }
 .auto-reply-panel.is-live .live-mark-dot { background: #12b76a; box-shadow: 0 0 0 3px color-mix(in srgb, #12b76a 20%, transparent); }

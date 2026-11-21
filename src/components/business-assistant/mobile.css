@@ -1,4 +1,4 @@
-.mobile-assistant-tools, .mobile-business-selector { display: none; }
+.mobile-assistant-tools { display: none; }
 .assistant-recovery { margin: 12px 0; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); }
 .assistant-recovery p { font-size: 13px; color: var(--ink-muted); }
 .assistant-recovery button { min-height: 44px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
@@ -33,14 +33,16 @@
   .assistant-first-mobile .dashboard-topbar > .dashboard-search,
   .assistant-first-mobile .dashboard-topbar > .mobile-search-toggle,
   .assistant-first-mobile .dashboard-topbar > .topbar-actions { display: none; }
-  .mobile-business-selector { display: grid; min-width: 0; flex: 1; gap: 2px; }
-  .assistant-first-mobile .dashboard-topbar .mobile-business-selector select:not([multiple]):not([size]) { width: 100%; min-height: 28px; padding: 0 24px 0 0; border: 0; border-radius: 0; background-color: transparent; font-size: 14px; font-weight: 650; box-shadow: none; }
-  .mobile-business-selector small { color: var(--ink-muted); font-size: 11px; }
+  /* The business as its logo or initials, with ⌄: opens the business picker. */
+  .topbar-workspace-switch { display: inline-flex; align-items: center; gap: 2px; flex: none; min-height: 44px; padding: 4px 4px 4px 2px; border: 0; border-radius: 14px; background: transparent; color: var(--ink-muted); font: inherit; cursor: pointer; }
+  .topbar-workspace-switch:hover { background: var(--paper); }
+  .topbar-workspace-switch:focus-visible { outline: 2px solid var(--accent); }
+  .workspace-picker.is-topbar { margin: 0; flex: none; }
+  .topbar-workspace-chevron { flex: none; color: var(--ink-muted); }
   .mobile-assistant-tools { display: flex; gap: 2px; flex: none; }
   .mobile-assistant-tools button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 14px; color: var(--ink); background: transparent; }
   .mobile-assistant-tools button:focus-visible { outline: 2px solid var(--accent); }
   .mobile-assistant-home .dashboard-content { display: none; }
-  .assistant-first-mobile .assistant-context-entry { display: none; }
   .assistant-first-mobile .dashboard-sidebar { background: var(--surface); }
   .assistant-first-mobile .dashboard-nav.active { background: var(--accent-soft); color: var(--accent); }
   .assistant-first-mobile.drawer-open .assistant-inline-home { visibility: hidden; }

@@ -40,24 +40,7 @@ export function planStepLabel(step: ActionPlanStep, decision?: "approved" | "rej
   return "Kërkon konfigurim";
 }
 
-/** Presentation only: server capability and authorization checks remain authoritative.
- * A short "Ndihmë me …" link naming what the page is about; the assistant's name
- * stays in the panel itself. */
-export function contextualAction(context: AssistantUIContext, modules: string[]) {
-  const page = context.page;
-  if (["business", "activity", "integrations", "account", "setup"].includes(page)) return "Ndihmë me këtë faqe";
-  if (!modules.includes(page)) return null;
-  switch (page) {
-    // On the list itself "Asistenti AI" in the header already helps; the entry earns its place for one product or a selection.
-    case "products": return context.entityId ? "Ndihmë me këtë produkt" : context.selectedEntityIds?.length ? "Ndihmë me produktet e zgjedhura" : null;
-    case "services": return `Ndihmë me ${context.entityId ? "këtë shërbim" : "shërbimet"}`;
-    case "knowledge": return "Ndihmë me njohuritë";
-    case "agents": return "Ndihmë me agjentin";
-    case "workflows": return "Ndihmë me këtë rrjedhë";
-    default: return "Ndihmë me këtë faqe";
-  }
-}
-
+/** Presentation only: server capability and authorization checks remain authoritative. */
 export function businessGoals(context: AssistantUIContext, modules: string[], external: boolean) {
   if (context.page !== "home") return assistantSuggestions(context, modules, external);
   return [

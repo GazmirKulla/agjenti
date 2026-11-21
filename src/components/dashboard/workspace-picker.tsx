@@ -12,7 +12,7 @@ type Business = { id: string; name: string; slug: string; logo_url?: string | nu
  * The workspace switch at the top of the sidebar: shows the current workspace and opens the list of
  * businesses (and Platform Admin) in the app's modal, with a search once the list grows.
  */
-export function WorkspacePicker({ name, slug, admin, platformAdmin, businesses, compact, onNavigate }: {
+export function WorkspacePicker({ name, slug, admin, platformAdmin, businesses, compact, topbar, onNavigate }: {
   name: string;
   slug?: string;
   admin: boolean;
@@ -20,6 +20,8 @@ export function WorkspacePicker({ name, slug, admin, platformAdmin, businesses, 
   businesses: Business[];
   /** The icon-only sidebar: the name shows as a tooltip. */
   compact?: boolean;
+  /** The phone header: only the logo (or initials) and ⌄; the name is the button's label. */
+  topbar?: boolean;
   /** Runs after a choice, e.g. to close the mobile drawer. */
   onNavigate: () => void;
 }) {
@@ -32,12 +34,18 @@ export function WorkspacePicker({ name, slug, admin, platformAdmin, businesses, 
   const shown = needle ? businesses.filter(b => b.name.toLocaleLowerCase().includes(needle)) : businesses;
   const showAdmin = (platformAdmin || admin) && (!needle || "platform admin".includes(needle));
 
-  return <div className="workspace-picker">
-    <button type="button" className="workspace-switch" data-tip={compact ? name : undefined} aria-haspopup="dialog" onClick={() => setOpen(true)}>
-      {admin ? <BusinessAvatar name={name} initials="A" /> : <BusinessAvatar name={name} logoUrl={businesses.find(b => b.slug === slug)?.logo_url} />}
-      <span className="nav-label">{name}</span>
-      <span className="ml-auto" aria-hidden="true">⌄</span>
-    </button>
+  const avatar = admin ? <BusinessAvatar name={name} initials="A" size={topbar ? 32 : undefined} />
+    : <BusinessAvatar name={name} logoUrl={businesses.find(b => b.slug === slug)?.logo_url} size={topbar ? 32 : undefined} />;
+  return <div className={`workspace-picker${topbar ? " is-topbar" : ""}`}>
+    {topbar
+      ? <button type="button" className="topbar-workspace-switch" title={name} aria-label={`${t("Zgjidh biznesin")}: ${name}`} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+          {avatar}<svg className="topbar-workspace-chevron" aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+      : <button type="button" className="workspace-switch" data-tip={compact ? name : undefined} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+          {avatar}
+          <span className="nav-label">{name}</span>
+          <span className="ml-auto" aria-hidden="true">⌄</span>
+        </button>}
     <Modal open={open} onClose={close} title={t("Zgjidh biznesin")} subtitle={`${businesses.length} ${t("biznese")}`}
       footer={admin
         ? <Link className="btn btn-ghost" href="/admin/businesses" onClick={choose}>{t("Menaxho bizneset")}</Link>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activationFeedback, businessGoals, contextualAction, uncertainActivation } from "./presentation";
+import { activationFeedback, businessGoals, uncertainActivation } from "./presentation";
 import { assistantContextKey, pinnedWorkflowContext } from "./request-context";
 import type { AssistantUIContext } from "@/lib/business-assistant/context";
 import type { CapabilityActivationResult } from "@/lib/business-assistant/activation-contract";
@@ -14,18 +14,6 @@ describe("one Migo presentation", () => {
     expect(goals.some(goal => /publik|workflow/i.test(goal.text))).toBe(false);
     expect(businessGoals(home, ["workflows"], false)).toEqual([]);
     expect(businessGoals(home, ["products", "knowledge"], true).map(goal => goal.module)).toEqual(["knowledge"]);
-  });
-  it("names the page subject and selected record in contextual entry labels", () => {
-    expect(contextualAction(product, ["products"])).toBe("Ndihmë me këtë produkt");
-    expect(contextualAction({ ...product, entityId: undefined, selectedEntityIds: ["p1", "p2"] }, ["products"])).toBe("Ndihmë me produktet e zgjedhura");
-    expect(contextualAction({ page: "services", entityId: "s1", entryPoint: "contextual" }, ["services"])).toBe("Ndihmë me këtë shërbim");
-    expect(contextualAction({ page: "knowledge", entryPoint: "contextual" }, ["knowledge"])).toBe("Ndihmë me njohuritë");
-    expect(contextualAction({ page: "agents", entryPoint: "contextual" }, ["agents"])).toBe("Ndihmë me agjentin");
-    expect(contextualAction(product, [])).toBeNull();
-    expect(contextualAction({ page: "products", entryPoint: "contextual" }, ["products"])).toBeNull();
-  });
-  it.each(["business", "activity", "integrations", "settings", "account", "setup"])("keeps the assistant reachable from %s", page => {
-    expect(contextualAction({ page, entryPoint: "contextual" }, ["settings"])).toBe("Ndihmë me këtë faqe");
   });
   it("uses the actual request history boundary for page, selection, filter and tenant notices", () => {
     const key = assistantContextKey("shop", product);

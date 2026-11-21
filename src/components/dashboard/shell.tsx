@@ -12,7 +12,7 @@ import { WorkspacePicker } from "./workspace-picker";
 import type { NavItem } from "@/lib/dashboard/navigation/builder";
 import { BrandLogo } from "@/components/brand/logo";
 import { Icon } from "./icon";
-import { AssistantWorkspaceSurface, AssistantEntry, useAssistantWorkspace } from "@/components/business-assistant/workspace";
+import { AssistantWorkspaceSurface, useAssistantWorkspace } from "@/components/business-assistant/workspace";
 import { LiveMark, ReadyStrip } from "./ready-strip";
 import type { Readiness } from "@/lib/setup/readiness";
 
@@ -309,12 +309,13 @@ export function AppShell({
           >
             <Icon name="menu" size={28} />
           </button>
-          {!admin && mobile ? <label className="mobile-business-selector"><span className="sr-only">Biznesi aktiv</span><select value={slug} onChange={event => { window.location.assign(event.target.value === "__new" ? "/onboarding?new=1" : `/b/${encodeURIComponent(event.target.value)}`); }} aria-label="Biznesi aktiv">{businesses.map(b => <option key={b.id} value={b.slug}>{b.name}</option>)}{!platformAdmin && <option value="__new">+ {t("Krijo biznes të ri")}</option>}</select><small>Agjenti.app</small></label> : <Link className="mobile-workspace-title" href={base}>
+          {/* Phone header: the business as its logo or initials; the name and the other businesses open in the picker. */}
+          {!admin && mobile ? <WorkspacePicker name={name} slug={slug} admin={false} platformAdmin={platformAdmin} businesses={businesses} topbar onNavigate={() => setOpen(false)} /> : <Link className="mobile-workspace-title" href={base}>
             <strong>{name}</strong>
             <small>{admin ? "Administrimi" : "Agjenti.app"}</small>
           </Link>}
-          {!admin && <div className="mobile-assistant-tools">
-            <button type="button" aria-label="Historiku i asistentit" aria-expanded={assistant?.historyOpen} aria-controls="assistant-history" onClick={() => assistant?.setHistoryOpen(true)}><Icon name="history" size={21}/></button>
+          {/* A new chat belongs to the assistant's conversation, open on the home page; its history is inside the assistant. */}
+          {!admin && pathname === base && <div className="mobile-assistant-tools">
             <button type="button" aria-label="Bisedë e re me asistentin" disabled={assistant?.sending} onClick={() => { assistant?.resetRef.current?.(); assistant?.setOpen(true); }}><Icon name="edit" size={21}/></button>
           </div>}
           <button
@@ -398,7 +399,6 @@ export function AppShell({
           {/* Stable placement retains pending cards and the composer across navigation. */}
           {!admin && readiness && slug && pathname === base && <ReadyStrip slug={slug} readiness={readiness} />}
           {!admin && <AssistantWorkspaceSurface/>}
-          {!admin && pathname !== base && <AssistantEntry/>}
           {children}
         </main>
       </div>
