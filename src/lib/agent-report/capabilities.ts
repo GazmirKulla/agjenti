@@ -10,7 +10,7 @@
 export type CapabilityStatus = "po" | "pjes" | "jo";
 export type CapabilityModule = { name: string; items: [CapabilityStatus, string][] };
 
-export const capabilityReportUpdated = "2026-11-20";
+export const capabilityReportUpdated = "2026-11-21";
 
 export const customerCapabilities: CapabilityModule[] = [
   {
@@ -98,7 +98,7 @@ export const customerCapabilities: CapabilityModule[] = [
       ["po", "Çmimi dhe kohëzgjatja"],
       ["po", "Lista e shërbimeve"],
       ["pjes", "Sugjerim sipas nevojës"],
-      ["pjes", "Oraret e lira: vetëm brenda rezervimit"],
+      ["pjes", "Oraret e lira: vetëm brenda procesit të rezervimit (edhe para se klienti të zgjedhë datën)"],
       ["jo", "Foto e shërbimit"],
     ],
   },
@@ -129,11 +129,13 @@ export const customerCapabilities: CapabilityModule[] = [
     name: "Rezervimet",
     items: [
       ["po", "Konfirmimi para rezervimit"],
-      ["pjes", "Krijimi: automatik, por kërkon kalendarin me leje për Agjentin dhe shërbime që pranojnë rezervime"],
-      ["pjes", "Oraret e lira"],
-      ["jo", "Anulimi nga klienti"],
-      ["jo", "Ndryshimi i orës"],
-      ["jo", "Kujtesa ose statusi i rezervimit"],
+      ["po", "Krijimi nga oraret e lira, pasi pronari ndez “Agjenti rezervon vetë” dhe shërbimet, të dyja te Çfarë bën Agjenti"],
+      ["po", "Oraret e lira: për ditën që zgjodhi klienti ose ditët në vijim, edhe në Chat Lab"],
+      ["po", "Statusi i rezervimit të vet (rezervimet e bëra në bisedë)"],
+      ["po", "Anulimi nga klienti, pas konfirmimit të tij"],
+      ["po", "Zhvendosja në një orë tjetër të lirë, pas konfirmimit të tij"],
+      ["pjes", "Kujtesa në mëngjes të ditës së rezervimit: vetëm kur klienti ka shkruar në 24 orët e fundit"],
+      ["pjes", "Klienti mëson kur stafi e konfirmon, anulon ose zhvendos rezervimin: vetëm brenda 24 orëve"],
     ],
   },
 ];
@@ -155,7 +157,9 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Riprovo sinkronizimin"],
       ["po", "Disponueshmëria"],
       ["po", "Kërko rezervime"],
-      ["jo", "Lidhja me Google Calendar"],
+      ["po", "Konfirmo ose anulo kërkesat në pritje; klientit i shkon mesazh brenda 24 orëve"],
+      ["po", "Njoftim te Kreu për çdo rezervim, anulim ose zhvendosje nga Agjenti"],
+      ["jo", "Lidhja me Google Calendar: e bën vetëm pronari te Kalendari, me qëllim"],
     ],
   },
   {
@@ -238,7 +242,7 @@ export const businessCapabilities: CapabilityModule[] = [
     name: "Kalendari",
     items: [
       ["po", "Cilësimet e kalendarit"],
-      ["jo", "Lidhja me Google"],
+      ["jo", "Lidhja me Google: vetëm pronari te Kalendari, me qëllim; sinkronizimi dhe oraret e zëna punojnë pasi lidhet"],
     ],
   },
   {
@@ -315,7 +319,7 @@ export const securityOnlyModules = ["Fushatat", "Kanalet", "Integrimet", "Pagesa
 /** Ku gjendja reale sot ndryshon nga ajo që thonë aftësitë. */
 export const currentState = [
   "Llogaria OpenAI është e pronarit dhe ka kredi; Agjenti përgjigjet sërish (verifikuar live më 18 nëntor).",
-  "Procesi automatik është live (migrimi u aplikua). Te Filiz Store, pa workflow të vizatuar, Agjenti e çoi porosinë deri te konfirmimi. Rezervimet atje mbeten të fikura derisa Kalendari t'i lejojë Agjentit.",
+  "Procesi automatik është live (migrimi u aplikua). Te Filiz Store, pa workflow të vizatuar, Agjenti e çoi porosinë deri te konfirmimi. Rezervimet janë të fikura te çdo biznes: askush nuk ka ndezur ende “Agjenti rezervon vetë” dhe asnjë shërbim nuk pranon rezervime, ndaj platforma ka 0 rezervime.",
   "Të gjitha cilësimet e Agjentit janë në një vend, te “Çfarë bën Agjenti”: porositë (regjistrim ose vetëm kërkesë), pyetjet për klientin, rezervimet, kalimi te stafi, mesazhet zanore dhe klienti i pakënaqur.",
   "Çdo hyrje dhe dalje e aftësive regjistrohet, edhe punët në sfond dhe integrimet (Instagram, WhatsApp, Google, POK); skeda Shëndeti tregon çfarë shkoi keq me kodin e shkakut, lidhjet që duken aktive por nuk punojnë dhe punët e ngecura. Të dhënat reale janë ende pak.",
   "Te Lende Drusore Destani, Instagram-i është i lidhur por Meta nuk aktivizoi mesazhet (subscribed_apps): Agjenti nuk merr DM derisa llogaria të rilidhet si profesionale me të gjitha lejet.",
@@ -325,7 +329,7 @@ export const currentState = [
 
 export const mainProblems: { title: string; detail: string }[] = [
   { title: "Editori i workflow-ve nuk hiqet dot plotësisht.", detail: "Pa proces të publikuar, serveri e ndërton vetë procesin nga produktet dhe cilësimet, dhe të gjitha cilësimet e Agjentit janë te “Çfarë bën Agjenti”. Agjenti.app ka ende nevojë për editorin, sepse rrjedha “Regjistrim biznesi” krijon biznes dhe ftesë, gjë që procesi i zakonshëm nuk e bën." },
-  { title: "Rezervimet janë moduli më i dobët për klientin.", detail: "Klienti nuk mund të anulojë, të ndryshojë orën apo të pyesë për rezervimin e tij." },
+  { title: "Rezervimet nuk janë provuar me klientë të vërtetë.", detail: "Klienti rezervon, pyet, anulon dhe zhvendos rezervimin e tij, por asnjë biznes nuk i ka ndezur ende. Kujtesat dhe mesazhet për vendimet e stafit dërgohen vetëm brenda 24 orëve nga mesazhi i fundit i klientit (rregulli i Instagram/WhatsApp, pa shabllone)." },
   { title: "Porositë pas krijimit bëhen me dorë.", detail: "Klienti nuk e ndryshon dot porosinë, dhe Asistenti nuk ndryshon dot statusin apo dërgesën." },
   { title: "Asistenti nuk lidh integrimet.", detail: "Asistenti ndryshon stokun, fushat, pyetjet, llojin dhe seksionet, provon lidhjen me webin dhe rifreskon produktet, por lidhjen e re, kredencialet dhe shkëputjen i bën vetëm pronari te Integrimet." },
   { title: "Pronari nuk e sheh suksesin e Agjentit.", detail: "Platforma e mat tani çdo hyrje dhe dalje të aftësive (skeda Shëndeti), por pronari te paneli i vet dhe Asistenti nuk e dinë sa porosi u lanë në mes ose sa mesazhe mbetën pa përgjigje." },

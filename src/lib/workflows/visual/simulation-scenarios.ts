@@ -67,7 +67,7 @@ export function generateSimulationScenarios(before: VisualGraph, graph: VisualGr
         values: { [node.config.fieldKey!]: value }, sharedValues: { [node.config.fieldKey!]: value },
         expectation: { kind: "existing", nodeId: node.id, value, target: graph.edges.find(e => e.source === node.id && e.port === "next")?.target } });
     }
-    if (["knowledge", "product", "booking", "order_status", "handoff"].includes(node.kind)) add({
+    if (["knowledge", "product", "booking", "booking_manage", "order_status", "handoff"].includes(node.kind)) add({
       ...base, id: `action:${node.id}`, description: "Kufiri i një veprimi që kërkon shërbim real", category: "capability", expectation: { kind: "complete" },
     });
   }

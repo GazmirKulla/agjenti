@@ -11,7 +11,7 @@ import { getCapability, type CapabilityAssessment } from "@/lib/capabilities/reg
 import { capabilityFinding, readinessFinding } from "@/lib/capabilities/diagnostics";
 import { nodeCapabilityKeys } from "@/lib/capabilities/graph";
 
-const externalActions = new Set(["action", "knowledge", "product", "booking", "order_status", "handoff"]);
+const externalActions = new Set(["action", "knowledge", "product", "booking", "booking_manage", "order_status", "handoff"]);
 const limits = { scenarios: 192, turns: 40, durationMs: 2000 };
 const redacted = "[vlerë sintetike / konfigurimi e fshehur]";
 const expectedLabels = {

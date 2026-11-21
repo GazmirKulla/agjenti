@@ -7,6 +7,8 @@ export type ExternalActionDisposition = "SIMULATED" | "UNVERIFIED" | "BLOCKED" |
 export type ExternalActionKind =
   | "booking.availability"
   | "booking.create"
+  | "booking.change"
+  | "booking.status"
   | "order.create"
   | "orders.status"
   | "payment.process"

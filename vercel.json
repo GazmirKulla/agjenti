@@ -39,6 +39,10 @@
       "schedule": "15 3 * * *"
     },
     {
+      "path": "/api/cron/booking-reminders",
+      "schedule": "30 6 * * *"
+    },
+    {
       "path": "/api/cron/campaigns",
       "schedule": "20 5 * * *"
     },

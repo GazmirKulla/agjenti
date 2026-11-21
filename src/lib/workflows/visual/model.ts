@@ -1,7 +1,7 @@
 import { validActionBinding } from "@/lib/actions/catalog";
 import type { BusinessProcess } from "@/lib/discovery/business-process";
 import type { VisualGraph, VisualGraphV2, VisualFlow, VisualFlowKind, VisualNodeKind, VisualPort } from "./types";
-export const nodeLabels: Record<VisualNodeKind, string> = { action: "Ekzekuto veprim", start: "Mesazh i ri", condition: "Kusht", knowledge: "Përgjigje nga njohuritë", order_status: "Statusi i porosisë", collect: "Kërko të dhëna", confirm: "Konfirmim", product: "Produkti i porosisë", booking: "Rezervim", handoff: "Kalo te stafi", end: "Përfundim" };
+export const nodeLabels: Record<VisualNodeKind, string> = { action: "Ekzekuto veprim", start: "Mesazh i ri", condition: "Kusht", knowledge: "Përgjigje nga njohuritë", order_status: "Statusi i porosisë", collect: "Kërko të dhëna", confirm: "Konfirmim", product: "Produkti i porosisë", booking: "Rezervim", booking_manage: "Rezervimi i klientit", handoff: "Kalo te stafi", end: "Përfundim" };
 export function outputPorts(kind: VisualNodeKind): VisualPort[] { return kind === "action" || kind === "condition" || kind === "confirm" ? ["yes", "no"] : kind === "handoff" || kind === "end" ? [] : ["next"]; }
 const idPattern = /^[a-zA-Z0-9_-]{1,80}$/;
 const fieldPattern = /^[a-zA-Z][a-zA-Z0-9_]{0,59}$/;
@@ -15,7 +15,7 @@ export function normalizeVisualDraft(raw: unknown): VisualGraph | null {
   for (const n of g.nodes) {
     if (!n || typeof n.id !== "string" || !idPattern.test(n.id) || badKeys.has(n.id) || ids.has(n.id) || !Object.hasOwn(nodeLabels,n.kind) || typeof n.label !== "string" || n.label.length > 100 || !n.position || !Number.isFinite(n.position.x) || !Number.isFinite(n.position.y) || Math.abs(n.position.x)>5000 || Math.abs(n.position.y)>5000 || !n.config || typeof n.config !== "object" || Array.isArray(n.config)) return null;
     ids.add(n.id);
-    if (g.version === 1 && (n.kind === "action" || n.kind === "booking" || n.kind === "order_status")) return null;
+    if (g.version === 1 && (n.kind === "action" || n.kind === "booking" || n.kind === "booking_manage" || n.kind === "order_status")) return null;
     const c=n.config;
     if (c.subject !== undefined && (typeof c.subject !== "string" || !fieldPattern.test(c.subject) || badKeys.has(c.subject))) return null;
     if (c.required !== undefined && typeof c.required !== "boolean") return null;
@@ -90,7 +90,7 @@ export function validateVisualGraph(raw: unknown): { graph?: VisualGraph; errors
   for(const n of graph.nodes) if(!reached.has(n.id)) errors.push({nodeId:n.id,message:"Ky hap nuk lidhet me fillimin."});
   // Cycles must cross an actual wait, never run indefinitely within one turn.
   const checked=new Set<string>(), visiting=new Set<string>();
-  function cycle(id:string):boolean {const n=graph!.nodes.find(n=>n.id===id)!;if(['collect','confirm','product','booking'].includes(n.kind)||checked.has(id))return false;if(visiting.has(id))return true;visiting.add(id);const bad=graph!.edges.filter(e=>e.source===id).some(e=>cycle(e.target));visiting.delete(id);checked.add(id);return bad;}
+  function cycle(id:string):boolean {const n=graph!.nodes.find(n=>n.id===id)!;if(['collect','confirm','product','booking','booking_manage'].includes(n.kind)||checked.has(id))return false;if(visiting.has(id))return true;visiting.add(id);const bad=graph!.edges.filter(e=>e.source===id).some(e=>cycle(e.target));visiting.delete(id);checked.add(id);return bad;}
   if(graph.nodes.some(n=>cycle(n.id))) errors.push({message:"Një cikël duhet të përmbajë një hap që pret përgjigjen e klientit."});
   if(!graph.nodes.some(n=>n.kind==='end'||n.kind==='handoff')) errors.push({message:"Shto një përfundim ose kalim te stafi."});
   return errors.length?{errors}:{graph,errors};
@@ -119,7 +119,7 @@ export function starterVisualGraph(process?: BusinessProcess | null): VisualGrap
 export function upgradeVisualGraph(graph: VisualGraph): VisualGraphV2 {
   if (graph.version === 2) return structuredClone(graph);
   const upgraded = structuredClone(graph);
-  const kinds: Partial<Record<VisualNodeKind, VisualFlowKind>> = {product:"order",booking:"booking",knowledge:"information",order_status:"information",handoff:"support"};
+  const kinds: Partial<Record<VisualNodeKind, VisualFlowKind>> = {product:"order",booking:"booking",booking_manage:"booking",knowledge:"information",order_status:"information",handoff:"support"};
   let entries = upgraded.nodes.filter(n => kinds[n.kind]);
   if (!entries.length) entries = upgraded.nodes.filter(n => ["collect","confirm"].includes(n.kind)).slice(0,1);
   const entryIds = new Set(entries.map(n => n.id)), assigned = new Set<string>();

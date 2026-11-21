@@ -98,6 +98,8 @@ export function observationContext(state: Snapshot, env: Environment, extras?: {
   catalog?: { kind: "product" | "service"; entities: { id: string; displayOrder: number; available: boolean; name?: string }[] };
   products?: { id: string; name: string }[];
   services?: { id: string; name: string }[];
+  /** The verified upcoming bookings of this customer only (booking_manage processes). */
+  customerBookings?: { id: string; service: string; date: string; time: string; status: string; changeable: boolean }[];
 }) {
   return {
     photoReceived: env.photoReceived === true,
@@ -107,6 +109,7 @@ export function observationContext(state: Snapshot, env: Environment, extras?: {
     profileMemory: state.profileMemory ?? {},
     catalogPresentation: extras?.catalog ?? null,
     catalog: { products: extras?.products ?? [], services: extras?.services ?? [] },
+    ...(extras?.customerBookings ? { customerBookings: extras.customerBookings } : {}),
     processes: env.definitions.filter(d => d.businessId === state.businessId && (env.startableVersionIds.has(d.versionId)
       || Object.values(state.instances).some(i => i.versionId === d.versionId && i.definitionId === d.id)))
       .map(d => ({ id: d.id, versionId: d.versionId, name: d.name, purpose: d.purpose, offerPolicy: d.offerPolicy,

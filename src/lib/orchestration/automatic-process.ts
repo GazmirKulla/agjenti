@@ -15,7 +15,7 @@ import { digest } from "./definition";
  * Each capability is offered only when the business can actually deliver it; what decides that is data
  * and settings, never the wording of a message.
  */
-export type AutomaticCapability = "orders" | "orderStatus" | "bookings" | "handoff";
+export type AutomaticCapability = "orders" | "orderStatus" | "bookings" | "bookingChanges" | "handoff";
 export type AutomaticReadiness = { capability: AutomaticCapability; ready: boolean; reason: string };
 
 type Facts = {
@@ -51,6 +51,10 @@ export function automaticReadiness(facts: Facts): AutomaticReadiness[] {
         : !facts.bookingCalendar ? { ready: false, reason: "Ndiz “Agjenti rezervon vetë” te Çfarë bën Agjenti, pasi të kesh orarin te Kalendari." }
         : !facts.bookableServices ? { ready: false, reason: "Shto të paktën një shërbim aktiv që pranon rezervime." }
         : { ready: true, reason: "Agjenti rezervon sipas orarit të kalendarit." }) },
+    { capability: "bookingChanges",
+      ...(!engine || !allowed(modules, "bookings", "services") ? { ready: false, reason: blocked("Ndiz Shërbimet dhe Rezervimet.") }
+        : !facts.bookingCalendar ? { ready: false, reason: "Ndiz “Agjenti rezervon vetë” te Çfarë bën Agjenti." }
+        : { ready: true, reason: "Klienti pyet për rezervimin e tij, e anulon ose e zhvendos në një orë të lirë, pas konfirmimit." }) },
     { capability: "handoff",
       ...(!engine || !allowed(modules, "inbox") ? { ready: false, reason: blocked("Ndiz Bisedat.") }
         : { ready: true, reason: "Agjenti ia kalon bisedën stafit kur klienti kërkon një person." }) },
@@ -92,6 +96,13 @@ export function automaticGraph(readiness: AutomaticReadiness[], { handoffMessage
     flows.push({ id: "auto_booking", label: "Rezervim", kind: "booking", offerPolicy: "when_relevant", entryNodeId: "auto_booking",
       nodeIds: ["auto_booking", "auto_booking_end"],
       purpose: "The customer wants to book an appointment or a time for one of the business's services." });
+  }
+  if (ready.has("bookingChanges")) {
+    nodes.push(node("auto_booking_manage", "booking_manage", "Rezervimi i klientit", 20, 620), node("auto_booking_manage_end", "end", "Rezervimi u trajtua", 300, 620));
+    edges.push(edge("auto_booking_manage", "auto_booking_manage_end"));
+    flows.push({ id: "auto_booking_manage", label: "Rezervimi i klientit", kind: "booking", offerPolicy: "on_request", entryNodeId: "auto_booking_manage",
+      nodeIds: ["auto_booking_manage", "auto_booking_manage_end"],
+      purpose: "The customer asks about a booking they already made with this business, or wants to cancel it or move it to another time." });
   }
   if (ready.has("handoff")) {
     nodes.push(node("auto_handoff", "handoff", "Stafi", 20, 700, { prompt: handoffMessage || defaultHandoffMessage }));

@@ -29,7 +29,10 @@ import { orderContext } from "./order-context";
 import { orderFields, orderToolPolicy } from "./order-definition";
 import { bookingContext } from "./booking-context";
 import { bookingToolPolicy, bookingFields } from "./booking-definition";
-import { availableSlots } from "@/lib/calendar/service";
+import { availableSlots, nextFreeSlots } from "@/lib/calendar/service";
+import { zonedParts } from "@/lib/calendar/model";
+import { bookingManageContext, bookingChangeAdapter, bookingStatusAdapter, readOwnBookings } from "./booking-manage";
+import { bookingChangeToolPolicy, bookingManageFields, bookingMineToolPolicy } from "./booking-manage-definition";
 import { loadCurrentLinearVersions, loadProcessVersion, compileProcessVersion, readOptionalCustomerFields, withCustomerPolicy } from "./version-store";
 import { linearProcessVersion, type ProcessVersion } from "./linear-definition";
 import { processTrainingContext } from "./training-context";
@@ -71,7 +74,11 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   // The business's optional customer details shape the order questions and the review.
   const optionalCustomer = await readOptionalCustomerFields(params.businessId);
   for (const version of versions.values()) withCustomerPolicy(version, optionalCustomer);
-  const definitions = [...versions.values()].flatMap(compileProcessVersion);
+  // The customer's own bookings, read by the verified channel identity: the only ones a process can show or change.
+  const hasManage = [...versions.values()].some(v => v.graph.nodes.some(n => n.kind === "booking_manage"));
+  const ownIdentity = params.customerIdentity && (!params.processTransport || params.customerIdentity.conversationId === params.processTransport.conversationId) ? params.customerIdentity : undefined;
+  const manage = bookingManageContext([...versions.values()], hasManage ? await readOwnBookings(params.businessId, ownIdentity) : []);
+  const definitions = manage.definitions([...versions.values()].flatMap(compileProcessVersion));
   const editorStep = (version: ProcessVersion, stepId: string) => {
     if (version.linear) return stepId;
     for (const dependency of versions.values()) if (dependency.linear) {
@@ -91,6 +98,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const modules = await runtimeModules(params.businessId);
   if (definitions.length && modules && !modules.includes("workflows")) throw new CapabilityEnforcementError("module_disabled", "Workflow është çaktivizuar. Progresi yt është ruajtur.");
   const hasBookings = [...versions.values()].some(v => v.graph.nodes.some(n => n.kind === "booking"));
+  const hasBookingCalendar = hasBookings || hasManage;
   let state: Snapshot = existing ? structuredClone(existing) : { ...initialSnapshot(params.businessId, transport?.conversationId ?? randomUUID(), mode), revision: transport?.revision ?? 0 };
   const identity = params.customerIdentity;
   const catalogPins = [
@@ -110,7 +118,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const [agentRead, grounding, calendarRead, journey, profileMemory] = await Promise.all([
     db.from("ai_agents").select(agentConfigurationColumns).eq("business_id", params.businessId).eq("is_active", true).maybeSingle(),
     readBusinessGrounding(db, params.businessId, modules, catalogPins),
-    hasBookings ? db.from("business_calendar_settings").select("timezone").eq("business_id", params.businessId).maybeSingle() : { data: null, error: null },
+    hasBookingCalendar ? db.from("business_calendar_settings").select("timezone").eq("business_id", params.businessId).maybeSingle() : { data: null, error: null },
     loadBusinessProcess(params.businessId),
     identity?.instagramParticipantId ? readProcessProfile(params.businessId, identity.instagramParticipantId, identity.channel ?? "instagram") : Promise.resolve(undefined),
   ]);
@@ -146,6 +154,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const hasOrders = definitions.some(d => d.fields.some(f => f.id === orderFields(d.id).key("productId")));
   if (definitions.some(d => d.steps.some(s => s.kind === "effect" && s.tool === "order.create"))) tools.push({ ...orderToolPolicy(), allowed: !modules || modules.includes("orders") && modules.includes("products") });
   if (hasBookings) tools.push(bookingToolPolicy(!modules || modules.includes("bookings") && modules.includes("services")));
+  if (definitions.some(d => d.steps.some(s => s.kind === "effect" && s.tool === "booking.mine"))) tools.push(bookingMineToolPolicy(!modules || modules.includes("bookings")));
+  if (definitions.some(d => d.steps.some(s => s.kind === "effect" && s.tool === "booking.change"))) tools.push(bookingChangeToolPolicy(!modules || modules.includes("bookings") && modules.includes("services")));
   if (definitions.some(d => d.steps.some(s => s.kind === "effect" && s.tool === "business.provision"))) {
     const permission = await db.rpc("can_execute_business_action", { p_business: params.businessId, p_user: null, p_action: "business.provision", p_automated: true });
     tools.push({ key: "business.provision", version: 1, effect: "write", approval: "required", allowed: !permission.error && permission.data === true && !!current,
@@ -160,7 +170,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       orders.clearVariants(instance, previous, eventId);
     },
     resolveDefinition: (definition, instance) => orders.withVariants(dependencies.resolveDefinition(definition, instance), instance),
-    serverFacts: (definition, instance) => ({ ...booking.serverFacts(definition, instance), ...orders.serverFacts(definition, instance), ...services.serverFacts(definition, instance) }), photoReceived: params.hasPhoto,
+    serverFacts: (definition, instance) => ({ ...booking.serverFacts(definition, instance), ...manage.serverFacts(definition, instance), ...orders.serverFacts(definition, instance), ...services.serverFacts(definition, instance) }), photoReceived: params.hasPhoto,
     onStep: step => {
       const version = versions.get(step.versionId);
       const editorNodeId = version ? editorStep(version, step.stepId) : step.stepId;
@@ -178,7 +188,9 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     bookingAdapter(transport ? { businessId: params.businessId, conversationId: state.conversationId, lease: transport,
       definitionForInstance: id => state.instances[id] } : undefined),
     orderStatusAdapter(transport ? { businessId: params.businessId, conversationId: state.conversationId, identity: params.customerIdentity } : undefined),
-    orderAdapter(transport ? { businessId: params.businessId, conversationId: state.conversationId, lease: transport, instance: id => state.instances[id] } : undefined)];
+    orderAdapter(transport ? { businessId: params.businessId, conversationId: state.conversationId, lease: transport, instance: id => state.instances[id] } : undefined),
+    bookingStatusAdapter(transport ? { businessId: params.businessId, conversationId: state.conversationId, identity: ownIdentity } : undefined),
+    bookingChangeAdapter(transport ? { businessId: params.businessId, conversationId: state.conversationId, identity: ownIdentity, lease: transport } : undefined)];
   // The process state before this turn, to tell which capabilities started or ended in it.
   const startState = structuredClone(state);
   // The interpretation's reading that this customer needs a person, and what the business wants then.
@@ -199,6 +211,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
           }) } : undefined,
           products: context.products.records.map(row => ({ id: row.id, name: row.name })),
           services: context.services.records.map(row => ({ id: row.id, name: row.name })),
+          ...(hasManage ? { customerBookings: manage.observation } : {}),
         } });
       if (hasBookings) await booking.prepare(state, definitions, interpretation.observation);
       if (hasOrders) await orders.prepare(state, definitions, interpretation.observation);
@@ -226,18 +239,32 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const handoff = notices.some(n => n.kind === "handoff");
   if (handoff && modules && !modules.includes("inbox")) throw new CapabilityEnforcementError("module_disabled", "Kalimi te stafi është çaktivizuar.");
   if (handoff && mode === "test") recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "process_runtime_no_staff_notification" });
+  // Free times the server verified, in the business's local time: for the day the customer chose, or the
+  // first free times of the coming days while no date is known yet. Chat Lab reads them from the hours only.
   const availability: { instanceId: string; serviceId: string; date: string; starts: string[]; status: string }[] = [];
-  if (hasBookings && mode === "live") {
+  const timezone = context.businessTimezone ?? "Europe/Tirane";
+  const localTimes = (slots: { start: string }[]) => slots.map(slot => { const p = zonedParts(slot.start, timezone); return `${p.date} ${p.time}`; });
+  const addAvailability = async (instanceId: string, serviceId: string, date: unknown, excludeBookingId?: string) => {
+    try {
+      if (typeof date === "string") {
+        const slots = await availableSlots(params.businessId, serviceId, date, excludeBookingId);
+        availability.push({ instanceId, serviceId, date, starts: localTimes(slots.slice(0, 12)), status: slots.length > 12 ? "partial" : "complete" });
+      } else availability.push({ instanceId, serviceId, date: "next_days", starts: localTimes(await nextFreeSlots(params.businessId, serviceId, timezone, 7, 8, excludeBookingId)), status: "partial" });
+    } catch { availability.push({ instanceId, serviceId, date: typeof date === "string" ? date : "next_days", starts: [], status: "unverified" }); }
+  };
+  if (hasBookingCalendar && (mode === "live" || isIsolatedExecution())) {
     for (const instance of Object.values(state.instances).filter(i => i.id === state.focusId && (i.status === "waiting_input" || i.status === "waiting_approval"))) {
       const version = versions.get(instance.versionId);
       if (definitions.find(d => d.id === instance.definitionId && d.versionId === instance.versionId)?.collection) continue;
       for (const node of version?.graph.nodes.filter(n => n.kind === "booking") ?? []) {
-        const { key } = bookingFields(node.id), serviceId = instance.facts[key("serviceId")]?.value, date = instance.facts[key("date")]?.value;
-        if (typeof serviceId !== "string" || typeof date !== "string") continue;
-        try {
-          const slots = await availableSlots(params.businessId, serviceId, date);
-          availability.push({ instanceId: instance.id, serviceId, date, starts: slots.slice(0, 12).map(s => s.start), status: slots.length > 12 ? "partial" : "complete" });
-        } catch { availability.push({ instanceId: instance.id, serviceId, date, starts: [], status: "unverified" }); }
+        const { key } = bookingFields(node.id), serviceId = instance.facts[key("serviceId")]?.value;
+        if (typeof serviceId === "string") await addAvailability(instance.id, serviceId, instance.facts[key("date")]?.value);
+      }
+      for (const node of version?.graph.nodes.filter(n => n.kind === "booking_manage") ?? []) {
+        const { key } = bookingManageFields(node.id), serviceId = instance.facts[key("serviceId")]?.value, bookingId = instance.facts[key("bookingId")]?.value;
+        // Moving a booking: its own time does not count as taken. Chat Lab never reads a live booking.
+        if (instance.facts[key("action")]?.value === "reschedule" && typeof serviceId === "string" && typeof bookingId === "string" && !isIsolatedExecution())
+          await addAvailability(instance.id, serviceId, instance.facts[key("date")]?.value, bookingId);
       }
     }
   }

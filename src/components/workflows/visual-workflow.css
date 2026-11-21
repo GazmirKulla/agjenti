@@ -170,7 +170,7 @@
 .vf-assistant-actions .vf-button { white-space: normal; text-align: left; }
 
 /* Message hub and editable process navigation. */
-.vf-kind-booking { --node-tint: #4c9c8a; }
+.vf-kind-booking, .vf-kind-booking_manage { --node-tint: #4c9c8a; }
 .vf-readiness { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 23px; color: var(--ink-muted); border-bottom: 1px solid var(--line); font-size: 11px; background: color-mix(in srgb, var(--vf-amber) 5%, transparent); }
 .vf-readiness.is-ready { color: var(--vf-green); background: color-mix(in srgb, var(--vf-green) 5%, transparent); }
 .vf-readiness details { margin-left: auto; max-width: 100%; }

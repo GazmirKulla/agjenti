@@ -1,7 +1,7 @@
 import type { AutomaticCapability, AutomaticReadiness } from "@/lib/orchestration/automatic-process";
 
 const labels: Record<AutomaticCapability, string> = {
-  orders: "Merr porosi", orderStatus: "Tregon statusin e porosisë", bookings: "Rezervon", handoff: "Ia kalon bisedën stafit",
+  orders: "Merr porosi", orderStatus: "Tregon statusin e porosisë", bookings: "Rezervon", bookingChanges: "Tregon, anulon ose zhvendos rezervimin e klientit", handoff: "Ia kalon bisedën stafit",
 };
 
 /** For a business without its own workflow: what the agent does by itself, and what is missing for the rest. */

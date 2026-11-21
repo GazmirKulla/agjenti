@@ -3,6 +3,7 @@ import type { VisualVersion, VisualNode, VisualPort } from "@/lib/workflows/visu
 import { TransitionError, type Field, type ProcessDefinition, type Step } from "./contracts";
 import { validateDefinition, validFieldValue, digest, destinations } from "./definition";
 import { expandBooking } from "./booking-definition";
+import { expandBookingManage } from "./booking-manage-definition";
 import { parseCollectionPolicy } from "@/lib/runtime/collection-policy";
 import { orderFields, finishOrder } from "./order-definition";
 import { serviceFields } from "./service-definition";
@@ -16,6 +17,8 @@ export function visualNodeForStep(version: VisualVersion, stepId: string): strin
   if (version.graph.nodes.some(n => n.id === stepId)) return stepId;
   const booking = version.graph.nodes.find(n => n.kind === "booking" && expandBooking(n.id, "projection").steps.some(s => s.id === stepId));
   if (booking) return booking.id;
+  const manage = version.graph.nodes.find(n => n.kind === "booking_manage" && expandBookingManage(n.id, "projection").steps.some(s => s.id === stepId));
+  if (manage) return manage.id;
   const graph = upgradeVisualGraph(version.graph);
   const selectedFlow = graph.flows.find(f => orderFields(f.id).key("select") === stepId);
   if (selectedFlow) return selectedFlow.entryNodeId;
@@ -95,6 +98,16 @@ export function compileVisualProcesses(version: VisualVersion): ProcessDefinitio
           const owner = graph.flows.find(f => f.nodeIds.includes(node.id));
           const collect = collectionOnly || policy?.scopes.some(s => s.versionId === version.id && s.flowId === owner?.id && s.mode === "collection_only");
           const expanded = expandBooking(node.id, target(node, "next"), collect);
+          for (const field of expanded.fields) {
+            if (fields.has(field.id)) throw new TransitionError("conflicting_field_schema");
+            fields.set(field.id, field);
+          }
+          return expanded.steps;
+        }
+        case "booking_manage": {
+          // Changing a booking is never part of a collection-only process.
+          if (collectionOnly) return { id: node.id, kind: "end", label: "Bookings are collected only here; staff handle changes to existing bookings." };
+          const expanded = expandBookingManage(node.id, target(node, "next"));
           for (const field of expanded.fields) {
             if (fields.has(field.id)) throw new TransitionError("conflicting_field_schema");
             fields.set(field.id, field);

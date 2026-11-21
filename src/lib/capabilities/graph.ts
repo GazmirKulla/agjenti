@@ -4,7 +4,7 @@ import { getCapability } from "./registry";
 export function nodeCapabilityKeys(node: VisualNode): string[] {
   if (node.kind === "action" && node.config.action) return [node.config.action.actionKey];
   return ({ knowledge: ["knowledge.answer"], product: ["product.search", "order.prepare"],
-    booking: ["booking.availability.read", "booking.create"], order_status: ["order.status.read"], handoff: ["staff.handoff"] } as Record<string, string[]>)[node.kind] ?? [];
+    booking: ["booking.availability.read", "booking.create"], booking_manage: ["booking.status.read", "booking.availability.read", "booking.change"], order_status: ["order.status.read"], handoff: ["staff.handoff"] } as Record<string, string[]>)[node.kind] ?? [];
 }
 
 export function flowCapabilityKeys(flow: VisualFlow): string[] {

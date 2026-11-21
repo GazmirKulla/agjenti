@@ -4,7 +4,7 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
 import { BusinessProcessView } from "@/components/workflows/business-process";
 import { OrderIntakeSetting } from "@/components/dashboard/order-intake-setting";
-import { AgentBehaviorSetting, AgentBookingSwitch, CustomerQuestionsEditor, HandoffMessageForm } from "@/components/agents/capability-settings";
+import { AgentBehaviorSetting, AgentBookingSwitch, CustomerQuestionsEditor, HandoffMessageForm, ServiceBookingSwitches } from "@/components/agents/capability-settings";
 import { loadAgentBehavior } from "@/lib/agents/behavior";
 import { parseCommunicationPolicy } from "@/lib/agents/communication-policy";
 import { automaticStatus, defaultHandoffMessage, type AutomaticCapability, type AutomaticReadiness } from "@/lib/orchestration/automatic-process";
@@ -16,7 +16,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 export const metadata = { title: "Çfarë bën Agjenti | Agjenti.app" };
 
 const titles: Record<AutomaticCapability, string> = {
-  orders: "Merr porosi", orderStatus: "Tregon statusin e porosisë", bookings: "Rezervon", handoff: "Ia kalon bisedën stafit",
+  orders: "Merr porosi", orderStatus: "Tregon statusin e porosisë", bookings: "Rezervon", bookingChanges: "Tregon, anulon ose zhvendos rezervimin e klientit", handoff: "Ia kalon bisedën stafit",
 };
 
 /**
@@ -32,7 +32,7 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
   if (!access) redirect("/auth/continue");
   const businessId = access.business.id, base = `/b/${encodeURIComponent(slug)}`;
   const db = createServiceSupabase();
-  const [own, automatic, operating, profile, policy, business, informationOnly, calendar, agent] = await Promise.all([
+  const [own, automatic, operating, profile, policy, business, informationOnly, calendar, bookableServices, agent] = await Promise.all([
     db.from("visual_workflows").select("published_version_id,enabled").eq("business_id", businessId).maybeSingle(),
     automaticStatus(businessId),
     loadBusinessProcess(businessId),
@@ -42,6 +42,7 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
     db.from("products").select("id,name", { count: "exact" }).eq("business_id", businessId).eq("is_active", true).is("archived_at", null)
       .eq("agent_orders", false).order("name").limit(8),
     db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", businessId).maybeSingle(),
+    db.from("booking_services").select("id,name,booking_enabled,updated_at").eq("business_id", businessId).eq("is_active", true).order("name").limit(50),
     db.from("ai_agents").select("communication,updated_at").eq("business_id", businessId).eq("is_active", true).maybeSingle(),
   ]);
   const behavior = await loadAgentBehavior(businessId);
@@ -101,10 +102,13 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
     {(enabled.has("bookings") || enabled.has("services")) && card("bookings",
       <>
         {calendar.error ? <p className="muted-copy">Kalendari nuk u lexua. Rifresko faqen.</p>
-          : calendar.data ? <AgentBookingSwitch slug={slug} enabled={calendar.data.agent_booking_enabled === true} />
-          : <p className="muted-copy">Cakto fillimisht orarin te <Link className="inline-link" href={`${base}/calendar`}>Kalendari</Link>.</p>}
-        <small className="muted-copy">Orari: <Link className="inline-link" href={`${base}/calendar`}>Kalendari →</Link> · Shërbimet që pranojnë rezervime: <Link className="inline-link" href={`${base}/services`}>Shërbimet →</Link></small>
+          : <AgentBookingSwitch slug={slug} enabled={calendar.data?.agent_booking_enabled === true} />}
+        {!calendar.error && !calendar.data && <small className="muted-copy">Pa orar të ruajtur, Agjenti përdor orarin bazë: e hënë–e premte, 09:00–17:00. E ndryshon te Kalendari.</small>}
+        {bookableServices.error ? <p className="muted-copy">Shërbimet nuk u lexuan. Rifresko faqen.</p> : <ServiceBookingSwitches slug={slug} services={bookableServices.data ?? []} />}
+        <small className="muted-copy">Orari: <Link className="inline-link" href={`${base}/calendar`}>Kalendari →</Link> · Kohëzgjatja dhe orari i secilit shërbim: <Link className="inline-link" href={`${base}/services`}>Shërbimet →</Link></small>
       </>)}
+
+    {enabled.has("bookings") && card("bookingChanges", <small className="muted-copy">Vetëm rezervimet e bëra në bisedat me të njëjtin klient. Ti merr njoftim te Kreu për çdo anulim ose zhvendosje; kur konfirmon, anulon ose zhvendos vetë një rezervim, klientit i shkon mesazh brenda 24 orëve nga mesazhi i tij i fundit.</small>)}
 
     {card("handoff", <>
       {agent.error || !agent.data ? <p className="muted-copy">Agjenti aktiv nuk u gjet. Krijoje ose aktivizoje te <Link className="inline-link" href={`${base}/agents`}>Udhëzimet</Link>.</p>

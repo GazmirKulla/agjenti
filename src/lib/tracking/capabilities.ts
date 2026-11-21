@@ -46,6 +46,9 @@ export const customerCapabilities = {
   "customer.booking": { agent: "customer", module: "bookings", label: "Rezervon", entry: "started",
     exits: { booked: "success", requested: "success", closed: "neutral", blocked: "failure", failed: "failure", handed_off: "handoff", ...abandoned },
     emittedBy: [processEvents] },
+  "customer.booking_manage": { agent: "customer", module: "bookings", label: "Statusi, anulimi dhe zhvendosja e rezervimit nga klienti", entry: "started",
+    exits: { answered: "success", cancelled: "success", moved: "success", no_booking: "neutral", closed: "neutral", blocked: "failure", failed: "failure", handed_off: "handoff", ...abandoned },
+    emittedBy: [processEvents] },
   "customer.handoff": { agent: "customer", module: "inbox", label: "Ia kalon bisedën stafit", entry: "started",
     exits: { handed_off: "handoff", closed: "neutral", blocked: "failure", failed: "failure", ...abandoned },
     emittedBy: [processEvents] },
@@ -62,6 +65,8 @@ export const processToolCapability: Record<string, keyof typeof customerCapabili
   "order.create": "customer.order",
   "orders.status": "customer.order_status",
   "booking.create": "customer.booking",
+  "booking.mine": "customer.booking_manage",
+  "booking.change": "customer.booking_manage",
   "business.provision": "customer.business_action",
 };
 
@@ -115,6 +120,8 @@ export const systemCapabilities: Record<string, CapabilitySpec> = {
     exits: { read: "success", not_found: "neutral", failed: "failure" }, emittedBy: ["src/lib/prospects/instagram-scan.ts"] },
   "system.account_deletion": { agent: "system", module: "jobs", label: "Fshirja e një llogarie", entry: null,
     exits: { completed: "success", step_failed: "failure" }, emittedBy: ["src/lib/account/deletion.ts"] },
+  "system.booking_message": { agent: "system", module: "integrations", label: "Mesazhi për klientin për rezervimin (kujtesë ose vendim i stafit)", entry: null,
+    exits: { sent: "success", skipped_window: "neutral", failed: "failure" }, emittedBy: ["src/lib/calendar/notices.ts"] },
   "system.mobile_push": { agent: "system", module: "integrations", label: "Njoftimi në celular", entry: null,
     exits: { delivered: "success", step_failed: "failure" }, emittedBy: ["src/lib/mobile/notifications.ts"] },
   ...scheduledCapabilities,

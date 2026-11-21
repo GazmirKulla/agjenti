@@ -211,7 +211,7 @@ function productForm(values: Record<string, unknown>) {
   else if (values.agent_orders !== undefined) throw Error("Cilësimi i porosive të Agjentit nuk është i vlefshëm.");
   return form;
 }
-function serviceForm(values: Record<string, unknown>) {
+export function serviceForm(values: Record<string, unknown>) {
   const form = new FormData();
   const defaults = { duration_minutes: 30, buffer_minutes: 0, price_mode: "request", currency: "EUR", ...values };
   for (const [field, source] of Object.entries({ name: "name", description: "description", category: "category", price: "price_amount", currency: "currency", priceMode: "price_mode", duration: "duration_minutes", buffer: "buffer_minutes" }))

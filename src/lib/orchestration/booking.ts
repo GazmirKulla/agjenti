@@ -10,6 +10,7 @@ import type { ProcessLease } from "./persistence";
 import { loadVisualVersion } from "@/lib/workflows/visual/store";
 import { compileVisualProcesses } from "./visual-definition";
 import { bookingFields } from "./booking-definition";
+import { notifyOwnerOfBooking } from "@/lib/calendar/notices";
 
 export type BookingTerms = { serviceId: string; serviceName: string; durationMinutes: number; bufferMinutes: number; timezone: string; confirmationMode: "manual" | "automatic" };
 export async function readBookingTerms(businessId: string, serviceId: string, collectionOnly = false): Promise<BookingTerms> {
@@ -62,6 +63,9 @@ export function bookingAdapter(scope?: { businessId: string; conversationId: str
       const result = await persistBooking(scope.businessId, { serviceId, name, contact, start, notes: "",
         status: current.confirmationMode === "automatic" ? "confirmed" : "pending", requestKey: `ig:${scope.conversationId}:${action.id}` },
         { ...scope.lease, conversationId: scope.conversationId, revision: context.revision });
+      // The owner hears about every booking the agent makes; a failed notice never undoes the booking.
+      await notifyOwnerOfBooking(scope.businessId, { bookingId: result.booking.id, conversationId: scope.conversationId,
+        kind: result.booking.status === "confirmed" ? "booked" : "requested", ref: action.id }).catch(() => undefined);
       return { status: "succeeded", output: { bookingId: result.booking.id, status: result.booking.status,
         startsAt: result.booking.starts_at, serviceName: result.booking.service_name, calendarSync: result.syncError ? "unverified" : result.booking.sync_status } };
     },

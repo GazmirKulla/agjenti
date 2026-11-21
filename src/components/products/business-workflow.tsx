@@ -4,7 +4,7 @@ import { EntityFlowLink } from "@/components/workflows/entity-flow-link";
 import type { AutomaticCapability } from "@/lib/orchestration/automatic-process";
 
 const automaticLabels: Record<AutomaticCapability, string> = {
-  orders: "Merr porosi", orderStatus: "Tregon statusin e porosisë", bookings: "Rezervon", handoff: "Ia kalon bisedën stafit",
+  orders: "Merr porosi", orderStatus: "Tregon statusin e porosisë", bookings: "Rezervon", bookingChanges: "Tregon, anulon ose zhvendos rezervimin e klientit", handoff: "Ia kalon bisedën stafit",
 };
 
 export function ProductBusinessWorkflow({ slug, workflow, product }: {

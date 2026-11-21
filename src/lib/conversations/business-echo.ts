@@ -55,7 +55,10 @@ export async function persistBusinessEcho(echo: NormalizedBusinessEcho, options:
     const confirmation = await db.from("marketing_preference_events").select("id", { count: "exact", head: true })
       .eq("connection_id", connection.id).eq("participant_id", echo.externalParticipantId).eq("confirmation_status", "sending");
     if (confirmation.error && confirmation.error.code !== "42P01" && confirmation.error.code !== "PGRST205") throw new Error("Echo preference check failed");
-    if (!count && !campaign.count && !confirmation.count) break;
+    const booking = await db.from("booking_customer_messages").select("id", { count: "exact", head: true })
+      .eq("connection_id", connection.id).eq("participant_id", echo.externalParticipantId).eq("status", "sending");
+    if (booking.error && booking.error.code !== "42P01" && booking.error.code !== "PGRST205") throw new Error("Echo booking message check failed");
+    if (!count && !campaign.count && !confirmation.count && !booking.count) break;
     if (Date.now() >= deadline) return "in_flight";
     await sleep(options.pollMs ?? 2_000);
   }

@@ -25,6 +25,7 @@ import {
   type BookingService,
   type CalendarSettings,
 } from "./model";
+import { messageCustomerAboutBooking, staffChangeKind } from "./notices";
 export const bookingColumns =
   "id,service_id,service_name,customer_name,customer_contact,starts_at,ends_at,blocked_until,status,notes,sync_status,google_event_id,google_calendar_id,revision";
 export type CalendarData = {
@@ -316,7 +317,11 @@ export async function persistBooking(businessId: string, input: BookingInput, gu
   const booking = (
     Array.isArray(result.data) ? result.data[0] : result.data
   ) as Booking;
-  return synchronizeSavedBooking(businessId, booking);
+  const saved = await synchronizeSavedBooking(businessId, booking);
+  // A staff decision the customer should know about (confirmed, cancelled, moved), inside the messaging window only.
+  const change = !guard ? staffChangeKind(existing, booking) : null;
+  if (change) await messageCustomerAboutBooking(businessId, booking.id, change, `${change}:${booking.id}:${booking.revision}`).catch(() => undefined);
+  return saved;
 }
 async function synchronizeSavedBooking(businessId: string, booking: Booking) {
   let syncError: string | null = null;
@@ -340,4 +345,48 @@ export function weekDates(date: string) {
 }
 export function today(timezone: string) {
   return zonedParts(new Date(), timezone).date;
+}
+
+/**
+ * The first free times for a service from a day on, across the coming days, for an agent that has no date
+ * from the customer yet. Same rules as availableSlots (hours, closed days, bookings, Google busy times).
+ */
+export async function nextFreeSlots(businessId: string, serviceId: string, timezone: string, days = 7, limit = 8, excludeBookingId?: string) {
+  const first = today(timezone);
+  const dates = Array.from({ length: days }, (_, i) => {
+    const day = new Date(`${first}T12:00:00Z`);
+    day.setUTCDate(day.getUTCDate() + i);
+    return day.toISOString().slice(0, 10);
+  });
+  const slots: { start: string }[] = [];
+  for (const date of dates) {
+    if (slots.length >= limit) break;
+    const free = await availableSlots(businessId, serviceId, date, excludeBookingId);
+    // A few per day, so the customer sees more than one day.
+    slots.push(...free.slice(0, Math.max(2, Math.ceil(limit / 3))).map(slot => ({ start: slot.start })));
+  }
+  return slots.slice(0, limit);
+}
+
+export type BookingChangeInput = { bookingId: string; bookingRevision: number; action: "cancel" | "reschedule"; start: string | null; requestKey: string };
+/**
+ * The customer agent's cancellation or move of the customer's own booking. Only through
+ * change_workflow_booking, which checks the job lease, the conversation, the reviewed action and that the
+ * booking belongs to this customer; the calendar rules stay in save_calendar_booking.
+ */
+export async function changeWorkflowBooking(businessId: string, input: BookingChangeInput, guard: BookingEffectGuard) {
+  assertBusinessEffectAllowed("booking.change");
+  if (isIsolatedExecution()) refuseIsolatedEffect("booking.change");
+  await requireRuntimeModules(businessId, ["bookings", "services"]);
+  if (!uuid(input.bookingId) || !Number.isInteger(input.bookingRevision) || input.bookingRevision < 1 || !["cancel", "reschedule"].includes(input.action)
+    || (input.action === "reschedule" && !Number.isFinite(Date.parse(input.start ?? ""))) || !input.requestKey.startsWith(`ig:${guard.conversationId}:`))
+    throw new Error("invalid_booking_change");
+  const result = await createServiceSupabase().rpc("change_workflow_booking", {
+    p_job: guard.jobId, p_token: guard.leaseToken, p_conversation: guard.conversationId, p_revision: guard.revision,
+    p_booking: input.bookingId, p_booking_revision: input.bookingRevision, p_action: input.action,
+    p_start: input.action === "reschedule" ? input.start : null, p_request_key: input.requestKey,
+  });
+  if (result.error) throw new Error(result.error.code === "23P01" ? "slot_unavailable" : result.error.message || "booking_change_failed");
+  const booking = (Array.isArray(result.data) ? result.data[0] : result.data) as Booking;
+  return synchronizeSavedBooking(businessId, booking);
 }

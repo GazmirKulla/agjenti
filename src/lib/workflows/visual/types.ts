@@ -1,4 +1,4 @@
-export type VisualNodeKind = "action" | "start" | "condition" | "knowledge" | "order_status" | "collect" | "confirm" | "product" | "booking" | "handoff" | "end";
+export type VisualNodeKind = "action" | "start" | "condition" | "knowledge" | "order_status" | "collect" | "confirm" | "product" | "booking" | "booking_manage" | "handoff" | "end";
 export type VisualPort = "next" | "yes" | "no";
 export type VisualIntent = "order" | "booking" | "support" | "question" | "unknown";
 export type VisualNode = {
@@ -49,7 +49,7 @@ export type VisualFieldValidation = {
 };
 export type VisualExecution = {
   state: VisualRunState;
-  action: { kind: "action" | "knowledge" | "order_status" | "product" | "booking" | "prompt" | "handoff" | "end"; nodeId: string; communication?: import("@/lib/conversations/process-communication").ProcessCommunication };
+  action: { kind: "action" | "knowledge" | "order_status" | "product" | "booking" | "booking_manage" | "prompt" | "handoff" | "end"; nodeId: string; communication?: import("@/lib/conversations/process-communication").ProcessCommunication };
   traversedNodeIds: string[];
   inputConsumed: boolean;
   fieldValidation?: VisualFieldValidation[];

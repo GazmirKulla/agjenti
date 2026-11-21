@@ -26,7 +26,7 @@ const behaviors: Record<VisualNode["kind"], string> = {
   start: "Fillimi i kërkesës së klientit", condition: "Zgjedhja e rrugës sipas një rregulli",
   knowledge: "Përgjigje nga informacioni i biznesit", collect: "Kërkimi i një të dhëne nga klienti",
   confirm: "Kërkimi i konfirmimit të klientit", product: "Vazhdimi i procesit të produktit",
-  booking: "Përdorimi i procesit të rezervimit", order_status: "Leximi i statusit të porosisë",
+  booking: "Përdorimi i procesit të rezervimit", booking_manage: "Statusi, anulimi ose zhvendosja e rezervimit nga klienti", order_status: "Leximi i statusit të porosisë",
   handoff: "Orientimi te stafi", end: "Përfundimi i kësaj rruge",
 };
 function describe(node?: VisualNode): string {

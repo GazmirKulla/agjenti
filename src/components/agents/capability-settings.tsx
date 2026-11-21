@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveCustomerQuestions } from "@/lib/items/actions";
 import { saveAgentBooking } from "@/lib/calendar/actions";
+import { saveServiceBooking } from "@/lib/services/actions";
 import { saveHandoffMessage } from "@/lib/agents/handoff-actions";
 import { saveAgentBehavior } from "@/lib/agents/behavior-actions";
 import { handoffMessageLimit } from "@/lib/agents/communication-policy";
@@ -71,6 +72,28 @@ export function AgentBookingSwitch({ slug, enabled }: { slug: string; enabled: b
       <span>Agjenti rezervon vetë<small>Sipas orarit të Kalendarit, për shërbimet që pranojnë rezervime. Konfirmon me klientin para çdo rezervimi.</small></span>
       <input className="switch-input" type="checkbox" checked={enabled} disabled={pending} onChange={e => toggle(e.target.checked)} />
     </label>
+    <Feedback result={result} />
+  </div>;
+}
+
+/** Which active services accept bookings, so the agent books without a trip to each service's form. */
+export function ServiceBookingSwitches({ slug, services }: { slug: string; services: { id: string; name: string; booking_enabled: boolean; updated_at: string }[] }) {
+  const router = useRouter();
+  const [result, setResult] = useState<Result>({});
+  const [pending, start] = useTransition();
+  const toggle = (service: { id: string; updated_at: string }, next: boolean) => start(async () => {
+    setResult({});
+    const response = await saveServiceBooking(slug, service.id, next, service.updated_at);
+    setResult(response);
+    if (!response.error) router.refresh();
+  });
+  if (!services.length) return <p className="muted-copy">Nuk ka ende shërbime aktive. Shtoji te Shërbimet; Agjenti rezervon vetëm për shërbimet që pranojnë rezervime.</p>;
+  return <div className="grid gap-2">
+    <p className="muted-copy">Shërbimet që Agjenti rezervon:</p>
+    {services.map(service => <label key={service.id} className="toggle-label">
+      <span>{service.name}</span>
+      <input className="switch-input" type="checkbox" aria-label={`${service.name} pranon rezervime`} checked={service.booking_enabled} disabled={pending} onChange={e => toggle(service, e.target.checked)} />
+    </label>)}
     <Feedback result={result} />
   </div>;
 }

@@ -8,7 +8,7 @@ import "./visual-workflow.css";
 
 export const nodeIcons: Record<VisualNodeKind, string> = {
   action: "spark", start: "inbox", condition: "workflows", knowledge: "knowledge", order_status: "search", collect: "orders",
-  confirm: "check", product: "products", booking: "calendar", handoff: "customers", end: "finish",
+  confirm: "check", product: "products", booking: "calendar", booking_manage: "calendar", handoff: "customers", end: "finish",
 };
 export function FlowIcon({ kind, size = 20 }: { kind: VisualNodeKind; size?: number }) {
   if (kind === "confirm" || kind === "end") return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{kind === "end" ? <><circle cx="12" cy="12" r="8" /><path d="m8 12 3 3 5-6" /></> : <path d="m5 12 4 4L19 6" />}</svg>;

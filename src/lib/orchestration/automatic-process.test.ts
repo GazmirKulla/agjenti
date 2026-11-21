@@ -23,12 +23,13 @@ beforeEach(() => { m.own = null; m.modules = null; m.isolated = false; m.counts 
 describe("which processes the agent gets without a workflow of the owner's", () => {
   it("offers each process only when the business can deliver it, and says why not", () => {
     const ready = (f: Partial<typeof facts>) => Object.fromEntries(automaticReadiness({ ...facts, ...f }).map(r => [r.capability, r.ready]));
-    expect(ready({})).toEqual({ orders: true, orderStatus: true, bookings: true, handoff: true });
+    expect(ready({})).toEqual({ orders: true, orderStatus: true, bookings: true, bookingChanges: true, handoff: true });
     expect(ready({ orderableProducts: false })).toMatchObject({ orders: false, orderStatus: true });
-    expect(ready({ bookingCalendar: false })).toMatchObject({ bookings: false });
-    expect(ready({ bookableServices: false })).toMatchObject({ bookings: false });
-    expect(ready({ modules: ["workflows", "inbox", "products"] })).toEqual({ orders: false, orderStatus: false, bookings: false, handoff: true });
-    expect(ready({ modules: ["products", "orders", "inbox"] })).toEqual({ orders: false, orderStatus: false, bookings: false, handoff: false });
+    expect(ready({ bookingCalendar: false })).toMatchObject({ bookings: false, bookingChanges: false });
+    // A customer can still ask about, cancel or move a booking when no service takes new ones.
+    expect(ready({ bookableServices: false })).toMatchObject({ bookings: false, bookingChanges: true });
+    expect(ready({ modules: ["workflows", "inbox", "products"] })).toEqual({ orders: false, orderStatus: false, bookings: false, bookingChanges: false, handoff: true });
+    expect(ready({ modules: ["products", "orders", "inbox"] })).toEqual({ orders: false, orderStatus: false, bookings: false, bookingChanges: false, handoff: false });
     expect(automaticReadiness({ ...facts, orderableProducts: false }).find(r => r.capability === "orders")?.reason).toContain("çmim");
   });
 
@@ -37,12 +38,17 @@ describe("which processes the agent gets without a workflow of the owner's", () 
     expect(validateVisualGraph(graph).errors).toEqual([]);
     const definitions = compileVisualProcesses({ id: "v", businessId: business, graph, createdAt: "" });
     const tools = (id: string) => definitions.find(d => d.id === id)!.steps.flatMap(s => s.kind === "effect" ? [s.tool] : s.kind === "handoff" ? ["handoff"] : []);
-    expect(definitions.map(d => d.id)).toEqual(["auto_order", "auto_order_status", "auto_booking", "auto_handoff"]);
+    expect(definitions.map(d => d.id)).toEqual(["auto_order", "auto_order_status", "auto_booking", "auto_booking_manage", "auto_handoff"]);
     expect(tools("auto_order")).toContain("order.create");
     expect(definitions.find(d => d.id === "auto_order")!.steps.some(s => s.kind === "confirm")).toBe(true);
     expect(tools("auto_order_status")).toEqual(["orders.status"]);
     expect(tools("auto_booking")).toContain("booking.create");
     expect(tools("auto_handoff")).toEqual(["handoff"]);
+    // Status first (a read), then a cancellation or a move only after the customer's confirmation.
+    const manage = definitions.find(d => d.id === "auto_booking_manage")!;
+    expect(tools("auto_booking_manage")).toEqual(["booking.mine", "booking.change", "booking.change"]);
+    for (const step of manage.steps.filter(s => s.kind === "effect" && s.tool === "booking.change"))
+      expect(manage.steps.some(s => s.kind === "confirm" && s.yes === step.id)).toBe(true);
   });
 
   it("hands off with the owner's wording when there is one, and gives that setting its own version", () => {

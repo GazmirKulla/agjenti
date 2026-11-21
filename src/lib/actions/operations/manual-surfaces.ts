@@ -111,6 +111,7 @@ export const manualSurfaces = {
   "src/lib/products/import-actions.ts#scanInstagramProducts": {"exception": "Read-only product suggestions from the connected channel."},
   "src/lib/products/inline-actions.ts#updateCatalogField": {"operation": "product.field"},
   "src/lib/services/actions.ts#saveBusinessService": {"operation": "service.save"},
+  "src/lib/services/actions.ts#saveServiceBooking": {"operation": "service.save"},
   "src/lib/setup/actions.ts#launchBusiness": {"operation": "business.autoreply"},
   "src/lib/workflows/linear-test-actions.ts#simulateProductWorkflow": {"exception": "Isolated workflow simulation."},
   "src/lib/workflows/visual/actions.ts#saveVisualWorkflow": {"legacy": "workflow_draft"},
