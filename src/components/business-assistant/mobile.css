@@ -36,7 +36,8 @@
   .topbar-workspace-switch { display: inline-flex; align-items: center; gap: 2px; flex: none; min-height: 44px; padding: 4px 4px 4px 2px; border: 0; border-radius: 14px; background: transparent; color: var(--ink-muted); font: inherit; cursor: pointer; }
   .topbar-workspace-switch:hover { background: var(--paper); }
   .topbar-workspace-switch:focus-visible { outline: 2px solid var(--accent); }
-  .workspace-picker.is-topbar { margin: 0; flex: none; }
+  /* Beats the sidebar picker's bottom margin, which would lift it 2px off the header's centre. */
+  .dashboard-topbar .workspace-picker.is-topbar { margin: 0; flex: none; display: flex; align-items: center; }
   .topbar-workspace-chevron { flex: none; color: var(--ink-muted); }
   .mobile-assistant-home .dashboard-content { display: none; }
   .assistant-first-mobile .dashboard-sidebar { background: var(--surface); }
