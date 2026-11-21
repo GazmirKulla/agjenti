@@ -7,6 +7,7 @@ import { loadAttention, loadCapabilityHealth, loadRecentFailures, type Capabilit
 import { capabilityName, exitLabel, failureKind, failureKindLabels, groupOf, moduleLabels } from "@/lib/tracking/labels";
 import { capabilities } from "@/lib/tracking/capabilities";
 import type { AgentKind } from "@/lib/tracking/capabilities";
+import { HealthTabs } from "./tabs";
 import s from "./health.module.css";
 
 export const metadata = { title: "Shëndeti i Agjentit | Agjenti.app" };
@@ -85,7 +86,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
 
   const heading = <PageHeading eyebrow="PLATFORMA" title="Shëndeti i Agjentit"
     description="Çfarë bënë agjentët, si përfundoi dhe pse. Vetëm bisedat reale, pa Chat Lab. Kërkesat që nisin dhe nuk vazhdojnë shënohen “të lëna në mes” pas 24 orësh." />;
-  if (!report.available) return <>{heading}<section className="panel section-pad"><p className="muted-copy">Regjistri i aftësive nuk u lexua. Kontrollo që migrimi 20261119140000_capability_events.sql është ekzekutuar.</p></section></>;
+  if (!report.available) return <div className={s.page}>{heading}<HealthTabs current="health" /><section className="panel section-pad"><p className="muted-copy">Regjistri i aftësive nuk u lexua. Kontrollo që migrimi 20261119140000_capability_events.sql është ekzekutuar.</p></section></div>;
 
   const sum = (items: CapabilityHealth[], key: "entries" | "success" | "failure" | "handoff" | "neutral" | "abandoned") => items.reduce((n, h) => n + h[key], 0);
   const allDays = [...new Set(report.daily.map(d => d.day))].sort();
@@ -93,6 +94,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
 
   return <div className={s.page}>
     {heading}
+    <HealthTabs current="health" />
     <section className={`panel section-pad ${s.filters}`}>
       <nav className={s.segments} aria-label="Periudha">
         {periods.map(p => <Link key={p} href={link({ days: String(p) })} aria-current={p === days ? "page" : undefined}>{p === 1 ? "24 orë" : `${p} ditë`}</Link>)}

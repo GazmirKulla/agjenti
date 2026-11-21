@@ -1,0 +1,42 @@
+/* Aftësitë e Agjentit: tiles, then modules as bars that open to their capabilities. Status colours use the
+   app's status tokens (light and dark) and always sit next to their label, never colour alone. */
+.tiles { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.tileLabel { font-size: 15px; font-weight: 600; margin: 8px 0 2px; }
+
+.list { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 6px; color: var(--ink-muted); font-size: 14px; }
+
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-muted); }
+.legend > span { display: inline-flex; align-items: center; gap: 6px; }
+
+.modules { display: grid; gap: 6px; margin-top: 14px; }
+.module { border: 1px solid var(--line); border-radius: 12px; }
+.module summary { display: grid; grid-template-columns: minmax(130px, 1.1fr) minmax(100px, 2fr) 44px minmax(150px, auto); gap: 14px; align-items: center; padding: 10px 12px; cursor: pointer; list-style: none; }
+.module summary::-webkit-details-marker { display: none; }
+.module summary strong { font-size: 14px; color: var(--ink); }
+.module summary small { color: var(--ink-muted); font-size: 12px; text-align: right; }
+.module[open] summary { border-bottom: 1px solid var(--line); }
+.pct { font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+
+.bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 4px; }
+.hi { background: var(--success); }
+.mid { background: var(--warning); }
+.lo { background: var(--danger); }
+
+.caps { list-style: none; margin: 0; padding: 8px 12px 12px; display: grid; gap: 6px; }
+.caps li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 14px; }
+
+
+.problems { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 10px; }
+.problems li { display: grid; gap: 2px; font-size: 14px; }
+
+.method { display: grid; gap: 8px; font-size: 14px; color: var(--ink-muted); }
+.method p { margin: 0; }
+.method strong { color: var(--ink); }
+
+@media (max-width: 640px) {
+  .module summary { grid-template-columns: minmax(0, 1fr) 44px; }
+  .module summary .bar { grid-column: 1 / -1; grid-row: 2; }
+  .module summary small { grid-column: 1 / -1; text-align: left; }
+  .caps li { grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+}
