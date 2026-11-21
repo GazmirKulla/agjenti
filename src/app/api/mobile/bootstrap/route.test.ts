@@ -92,3 +92,10 @@ it("reports backend failures instead of fabricating an empty workspace", async (
     (await GET(new Request("https://app.test/api/mobile/bootstrap"))).status,
   ).toBe(503);
 });
+it("passes each business's logo to the app, and null when it has none", async () => {
+  mocks.memberships.mockResolvedValue({
+    businesses: [{ id: "b1", slug: "one", name: "One", logo_url: "https://x.supabase.co/storage/v1/object/public/business-logos/b1/instagram-1.jpg" }, { id: "b2", slug: "two", name: "Two", logo_url: null }],
+  });
+  const data = await (await GET(new Request("https://app.test/api/mobile/bootstrap"))).json();
+  expect(data.businesses.map((b: { logo_url: string | null }) => b.logo_url)).toEqual(["https://x.supabase.co/storage/v1/object/public/business-logos/b1/instagram-1.jpg", null]);
+});
