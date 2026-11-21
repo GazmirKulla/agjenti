@@ -68,6 +68,8 @@ export const english: Record<string, string> = {
   "Rifreskim manual": "Manual refresh",
   "Kreu": "Home",
   "Bisedat": "Conversations",
+  "Fushatat": "Campaigns",
+  "Oferta për kontaktet që kanë pranuar marketingun": "Offers for contacts who accepted marketing",
   "Produktet": "Products",
   "Produkte": "Products",
   "Porositë": "Orders",

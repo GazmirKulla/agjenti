@@ -34,6 +34,7 @@ describe("Scoped dashboard language", () => {
     expect(english).toContain("Klienti");
     expect(render("sq", thread)).toContain("Opsionet e bisedës");
     expect(translator("en")("Rifillo Agjentin AI")).toBe("Resume AI agent");
+    expect(translator("en")("Fushatat")).toBe("Campaigns");
   });
   it("translates connection actions without altering account identities or URLs", () => {
     const connected = render("en", h(IntegrationCard, { channel: "instagram", businessId: "b1", slug: "shop", status: "connected", identity: "@dyqani" }));
