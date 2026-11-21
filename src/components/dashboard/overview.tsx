@@ -13,6 +13,8 @@ import { TrendChart } from "./trend-chart";
 import type { DashboardProfile } from "@/lib/dashboard/modules/types";
 import { legacyDashboardProfile } from "@/lib/dashboard/profile/legacy";
 import { resolveWidgets } from "@/lib/dashboard/widgets/resolver";
+import { loadBusinessLogos } from "@/lib/businesses/logo";
+import { BusinessAvatar } from "./business-avatar";
 
 export async function Overview({
   business,
@@ -48,6 +50,7 @@ export async function Overview({
     throw new Error("Nuk u ngarkuan të dhënat e panelit.");
   const recent = recentResult.data;
   const businesses = businessesResult.data;
+  const logos = await loadBusinessLogos(db, (businesses ?? []).map(b => b.id));
   const { agents, paused, trend } = stats;
   const widgets = resolveWidgets(dashboardProfile, stats, {
     business: Boolean(business),
@@ -161,7 +164,7 @@ export async function Overview({
           ) : businesses?.length ? (
             businesses.map((b) => (
               <Link className="recent-row" key={b.id} href={`/b/${b.slug}`}>
-                <span className="workspace-avatar">{b.name.slice(0, 2)}</span>
+                <BusinessAvatar name={b.name} logoUrl={logos.get(b.id)} />
                 <div>
                   <strong>{b.name}</strong>
                   <p>/{b.slug}</p>

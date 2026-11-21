@@ -9,6 +9,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { enqueueDiscovery, runDiscoveryQueue } from "@/lib/discovery/queue";
 import { getAppSettings } from "@/lib/platform/settings";
 import { metaCode, recordSystem, stepFailure } from "@/lib/tracking/system-events";
+import { refreshInstagramBusinessLogo } from "@/lib/businesses/logo";
 export const maxDuration = 180;
 
 export async function GET(request: Request) {
@@ -59,6 +60,8 @@ export async function GET(request: Request) {
 			businessId: state.businessId,
 			reason: !subscription.ok ? metaCode(subscription.meta) : !exchanged.profileComplete ? metaCode(exchanged.profileError) : undefined,
 		});
+		// The account's profile photo becomes the business's logo, unless the owner uploaded one.
+		after(async () => { await refreshInstagramBusinessLogo(supabase, state.businessId).catch(() => console.error("[business logo] copy failed")); });
 		const { data: business } = await supabase
 			.from("businesses")
 			.select("slug")

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/tokens";
 import { refreshLongLivedToken } from "@/lib/instagram/oauth";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { runBusinessLogoRefresh } from "@/lib/businesses/logo";
 import { recordSystem, stepFailure, trackScheduledJob } from "@/lib/tracking/system-events";
 
 function isAuthorizedCron(request: Request): boolean {
@@ -10,6 +11,8 @@ function isAuthorizedCron(request: Request): boolean {
 	const header = request.headers.get("authorization");
 	return header === `Bearer ${secret}`;
 }
+
+export const maxDuration = 120;
 
 async function runJob(request: Request) {
 	if (!isAuthorizedCron(request)) {
@@ -55,7 +58,11 @@ async function runJob(request: Request) {
 			await recordSystem("system.instagram_token", "refresh_failed", { businessId: row.business_id, reason: stepFailure("system.instagram_token", "refresh", err, row.id), ref: row.id });
 		}
 	}
-	return NextResponse.json({ ok: true, refreshed });
+	// With fresh tokens: copy each connected account's profile photo as the business logo, weekly.
+	let logos: Awaited<ReturnType<typeof runBusinessLogoRefresh>> | null = null;
+	try { logos = await runBusinessLogoRefresh(supabase, { budgetMs: 45_000 }); }
+	catch (err) { console.error("[cron business logos]", err instanceof Error ? err.message : err); }
+	return NextResponse.json({ ok: true, refreshed, logos });
 }
 
 /** Each run is recorded in Shëndeti i Agjentit: how it ended and, when it failed, why. */

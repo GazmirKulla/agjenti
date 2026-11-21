@@ -9,6 +9,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
+import { loadBusinessLogo } from "@/lib/businesses/logo";
+import { BusinessLogoSettings } from "@/components/settings/business-logo";
 
 export default async function SettingsPage({
   params,
@@ -44,6 +46,11 @@ export default async function SettingsPage({
   if (integrationError) throw new Error("Nuk u ngarkua integrimi i biznesit.");
 
   const linked = Boolean(integration?.catalog_url?.trim());
+  const db = createServiceSupabase();
+  const [logo, { data: instagram }] = await Promise.all([
+    loadBusinessLogo(db, access.business.id),
+    db.from("instagram_connections").select("id").eq("business_id", access.business.id).eq("status", "connected").maybeSingle(),
+  ]);
   const items = await loadItemSetup(access.business.id);
   const autoReplyBlocked = access.business.auto_reply
     ? null
@@ -60,6 +67,8 @@ export default async function SettingsPage({
               Përshkrimi i biznesit, oferta dhe pyetjet e shpeshta ruhen te{" "}
               <Link className="soft-link" href={`/b/${slug}/knowledge`}>Njohuritë</Link>, ku i lexon Agjenti.
             </p>
+            <BusinessLogoSettings slug={slug} name={access.business.name} logoUrl={logo?.url ?? null} source={logo?.source ?? null}
+              instagramConnected={Boolean(instagram)} available={Boolean(logo)} />
             <ActionForm
               action={saveBusiness}
               className="panel section-pad grid gap-5"

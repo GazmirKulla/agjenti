@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { attributeAiUsage } from "@/lib/ai/usage";
+import { loadBusinessLogos } from "@/lib/businesses/logo";
 
 export type BusinessRow = {
   id: string;
@@ -9,6 +10,8 @@ export type BusinessRow = {
   slug: string;
   catalog_source: "internal" | "external";
   auto_reply: boolean;
+  /** From business-logos; null shows the initials. */
+  logo_url?: string | null;
 };
 
 export const getSessionUser = cache(async function getSessionUser() {
@@ -31,6 +34,12 @@ export const isPlatformAdmin = cache(async function isPlatformAdmin(
   return Boolean(data?.user_id);
 });
 
+/** Adds each business's logo; before the logo migration the rows stay as they are. */
+async function withLogos(db: ReturnType<typeof createServiceSupabase>, rows: BusinessRow[]): Promise<BusinessRow[]> {
+  const logos = await loadBusinessLogos(db, rows.map(row => row.id));
+  return rows.map(row => ({ ...row, logo_url: logos.get(row.id) ?? null }));
+}
+
 export const listMemberships = cache(async function listMemberships(
   userId: string,
 ) {
@@ -41,7 +50,7 @@ export const listMemberships = cache(async function listMemberships(
       .from("businesses")
       .select("id,name,slug,catalog_source,auto_reply")
       .order("name");
-    return { admin: true, businesses: (data ?? []) as BusinessRow[] };
+    return { admin: true, businesses: await withLogos(supabase, (data ?? []) as BusinessRow[]) };
   }
 
   // Query në dy hapa — më i besueshëm se embed nested.
@@ -69,7 +78,7 @@ export const listMemberships = cache(async function listMemberships(
     return { admin: false, businesses: [] as BusinessRow[] };
   }
 
-  return { admin: false, businesses: (businesses ?? []) as BusinessRow[] };
+  return { admin: false, businesses: await withLogos(supabase, (businesses ?? []) as BusinessRow[]) };
 });
 
 export async function requireBusinessAccess(userId: string, slug: string) {

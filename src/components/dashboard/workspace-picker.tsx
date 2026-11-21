@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { Modal } from "@/components/modal/modal";
 import { useDashboardTranslator } from "./language";
+import { BusinessAvatar } from "./business-avatar";
 
-type Business = { id: string; name: string; slug: string };
+type Business = { id: string; name: string; slug: string; logo_url?: string | null };
 
 /**
  * The workspace switch at the top of the sidebar: shows the current workspace and opens the list of
@@ -33,7 +34,7 @@ export function WorkspacePicker({ name, slug, admin, platformAdmin, businesses, 
 
   return <div className="workspace-picker">
     <button type="button" className="workspace-switch" data-tip={compact ? name : undefined} aria-haspopup="dialog" onClick={() => setOpen(true)}>
-      <span className="workspace-avatar">{admin ? "A" : name.slice(0, 2).toUpperCase()}</span>
+      {admin ? <BusinessAvatar name={name} initials="A" /> : <BusinessAvatar name={name} logoUrl={businesses.find(b => b.slug === slug)?.logo_url} />}
       <span className="nav-label">{name}</span>
       <span className="ml-auto" aria-hidden="true">⌄</span>
     </button>
@@ -45,10 +46,10 @@ export function WorkspacePicker({ name, slug, admin, platformAdmin, businesses, 
         placeholder={t("Kërko biznesin")} aria-label={t("Kërko biznesin")} autoFocus />}
       <nav className="workspace-list" aria-label={t("Bizneset")}>
         {showAdmin && <Link href="/admin" aria-current={admin ? "page" : undefined} onClick={choose}>
-          <span className="workspace-avatar">A</span><span>Platform Admin</span>
+          <BusinessAvatar name="Platform Admin" initials="A" /><span>Platform Admin</span>
         </Link>}
         {shown.map(b => <Link key={b.id} prefetch={false} href={`/b/${b.slug}`} aria-current={b.slug === slug ? "page" : undefined} onClick={choose}>
-          <span className="workspace-avatar">{b.name.slice(0, 2).toUpperCase()}</span><span>{b.name}</span>
+          <BusinessAvatar name={b.name} logoUrl={b.logo_url} /><span>{b.name}</span>
         </Link>)}
         {!shown.length && !showAdmin && <p className="muted-copy">{t("Asnjë biznes me këtë emër.")}</p>}
       </nav>

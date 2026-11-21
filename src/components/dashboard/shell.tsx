@@ -38,7 +38,7 @@ export function AppShell({
   email?: string;
   userName?: string;
   platformAdmin?: boolean;
-  businesses?: { id: string; name: string; slug: string }[];
+  businesses?: { id: string; name: string; slug: string; logo_url?: string | null }[];
   navigationItems: NavItem[];
   nativeHost?: boolean;
   /** This month's OpenAI usage, present only for business owners and platform administrators. */
