@@ -26,7 +26,6 @@ export default async function ProductsPage({
         actions="add"
         names={data.items.names}
         title={data.items.names.plural}
-        description={data.items.kind.id === "product" ? "Shto dhe menaxho produktet që përdor Agjenti." : `${data.items.kind.description} Agjenti i përdor për t’u përgjigjur klientëve.`}
       />
       <WebsiteConnection slug={slug} businessId={data.business.id} linkedCount={data.products.filter(p => fromWebsite(p) && !p.archived_at).length} />
       <ProductCatalog

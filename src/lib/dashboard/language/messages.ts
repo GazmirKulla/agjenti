@@ -247,6 +247,7 @@ export const english: Record<string, string> = {
   "produkte nga webi": "products from the website",
   "Lidh webin që produktet, çmimet dhe porositë të vijnë drejt nga webi.": "Connect the website so products, prices and orders come straight from it.",
   "Sinkronizo produktet": "Sync products",
+  "Sinkronizo": "Sync",
   "Cilësimet e lidhjes": "Connection settings",
   "Merr produktet nga webi": "Get products from the website",
   "Duke ngarkuar detajet…": "Loading details…",

@@ -217,6 +217,7 @@ export function ProductCatalog({
     { group: "Shto", label: "Ngarko CSV", href: `/b/${slug}/products/new?method=csv` },
     { group: "Shto", label: "Nga Instagram", href: `/b/${slug}/products/new?method=instagram` },
     { group: "Shto", label: "Importo / lidh katalog", href: `/b/${slug}/products/imports` },
+    { group: "Cilësimet", label: "Struktura", hint: "Llojet, fushat dhe stoku i produkteve", href: `/b/${slug}/products/structure` },
     {
       group: "Veprime",
       label: `Konfiguro produktet e kësaj faqeje (${shown.length})`,
@@ -331,7 +332,8 @@ export function ProductCatalog({
         </div>
       )}
       <section className="panel product-catalog">
-        {!mapping && sourceCounts.website > 0 && (
+        {/* Only when products come from both places: with one source the split repeats "Të gjitha". */}
+        {!mapping && sourceCounts.website > 0 && sourceCounts.local > 0 && (
           <div className="catalog-source" role="group" aria-label="Burimi i produkteve">
             {([
               ["all", "Të gjitha", sourceCounts.all],
@@ -416,7 +418,8 @@ export function ProductCatalog({
             <button type="button" className="catalog-bulk-clear" onClick={() => setSelected([])}>Pastro</button>
           </div>
         )}
-        {shown.length > 0 && <p className="catalog-count">{filtered.length} produkte</p>}
+        {/* The count only when a search or filter narrows the list; otherwise the tabs or the list say it. */}
+        {shown.length > 0 && filtered.length !== sourceCounts[source] && <p className="catalog-count">{filtered.length} produkte</p>}
         {shown.length > 0 && (
           <div className="product-cards">
             <ul>

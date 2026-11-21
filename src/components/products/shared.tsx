@@ -14,18 +14,19 @@ export function ProductHeading({
 }: {
   slug: string;
   title: string;
-  description: string;
+  /** Left out on the list, where the products themselves say what the page is for. */
+  description?: string;
   /** true: back to the list; or a specific page (e.g. the product when editing it). */
   back?: boolean | { href: string; label: string };
   /** What the business calls its items (e.g. "Listimet" / "listim"). */
   names?: { plural: string; singular: string };
-  /** "add": only the add button (the list keeps the rest in its toolbar); "none": no buttons. */
+  /** "add": only the add button, beside the title (the list keeps Struktura and the rest in its ⋯ menu); "none": no buttons. */
   actions?: "all" | "add" | "none";
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <header className="product-page-heading">
+    <header className={`product-page-heading${actions === "add" ? " is-list" : ""}`}>
       <div>
         {back && (
           <Link className="muted-copy" href={typeof back === "object" ? back.href : `/b/${slug}/products`}>
@@ -33,7 +34,7 @@ export function ProductHeading({
           </Link>
         )}
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description && <p>{description}</p>}
       </div>
       {actions !== "none" && <div className="product-heading-actions">
         {actions === "all" && <button
@@ -43,9 +44,9 @@ export function ProductHeading({
         >
           Më shumë
         </button>}
-        <Link className="btn btn-ghost" href={`/b/${slug}/products/structure`}>
+        {actions === "all" && <Link className="btn btn-ghost" href={`/b/${slug}/products/structure`}>
           Struktura
-        </Link>
+        </Link>}
         <Link className="btn btn-primary" href={`/b/${slug}/products/new`}>
           ＋ Shto {names.singular}
         </Link>

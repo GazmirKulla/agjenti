@@ -22,6 +22,7 @@ describe("one Migo presentation", () => {
     expect(contextualAction({ page: "knowledge", entryPoint: "contextual" }, ["knowledge"])).toBe("Ndihmë me njohuritë");
     expect(contextualAction({ page: "agents", entryPoint: "contextual" }, ["agents"])).toBe("Ndihmë me agjentin");
     expect(contextualAction(product, [])).toBeNull();
+    expect(contextualAction({ page: "products", entryPoint: "contextual" }, ["products"])).toBeNull();
   });
   it.each(["business", "activity", "integrations", "settings", "account", "setup"])("keeps the assistant reachable from %s", page => {
     expect(contextualAction({ page, entryPoint: "contextual" }, ["settings"])).toBe("Ndihmë me këtë faqe");

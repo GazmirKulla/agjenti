@@ -4,9 +4,10 @@ import { getDashboardTranslator } from "@/lib/dashboard/language/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
 
 /**
- * The business website on Produktet: whether its catalog is connected, how many
- * products come from it. Linked: sync its products or open the connection's
- * settings. Not linked: only "Merr produktet nga webi", which opens the form.
+ * The business website on Produktet, as one thin row above the list so the products stay in view.
+ * Linked: its address, "I lidhur", "Sinkronizo" and the connection's settings behind a gear.
+ * Not linked: only "Merr produktet nga webi", which opens the connection form.
+ * How many products came from it is told by the list's "Nga webi" tab, not repeated here.
  */
 export async function WebsiteConnection({ slug, businessId, linkedCount }: { slug: string; businessId: string; linkedCount: number }) {
   const t = await getDashboardTranslator();
@@ -15,26 +16,26 @@ export async function WebsiteConnection({ slug, businessId, linkedCount }: { slu
   const url = data?.catalog_url?.trim() || null;
   const host = url ? (() => { try { return new URL(url).host; } catch { return url; } })() : null;
   const settings = `/b/${slug}/products?detail=website`;
-  // Unlinked, it is a small suggestion beside the catalog, not the first thing on the page.
-  return <section className={`website-connection${url ? " is-linked" : " is-compact"}`} aria-label={t("Webi i biznesit")}>
-    <span className="website-connection-icon" aria-hidden><Icon name="globe" size={22} /></span>
-    <div className="website-connection-text">
-      <strong>
-        {t("Webi i biznesit")}
-        <span className={`website-connection-state${url ? " is-on" : ""}`}>{error ? t("Statusi nuk u ngarkua") : url ? t("I lidhur") : t("I palidhur")}</span>
-      </strong>
-      <p>{error ? t("Nuk u ngarkua konfigurimi i webit.")
-        : url ? `${host} · ${linkedCount === 1 ? t("1 produkt nga webi") : `${linkedCount} ${t("produkte nga webi")}`}`
-        : linkedCount ? `${linkedCount === 1 ? t("1 produkt erdhi nga webi") : `${linkedCount} ${t("produkte erdhën nga webi")}`}. ${t("Lidhe që çmimet dhe porositë të përditësohen vetë.")}`
-        : t("Lidh webin që produktet, çmimet dhe porositë të vijnë drejt nga webi.")}</p>
-    </div>
-    <div className="website-connection-actions">
-      {/* Linked: bring the website's products in and up to date, or change the connection.
-          Not linked: one way in, which opens the connection form. */}
-      {url ? <>
-        <Link className="btn btn-primary" href={`/b/${slug}/products/imports`}>{t("Sinkronizo produktet")}</Link>
-        <Link className="btn btn-ghost" href={settings} scroll={false}>{t("Cilësimet e lidhjes")}</Link>
-      </> : <Link className="btn btn-ghost" href={settings} scroll={false}><Icon name="link" size={16} /> {t("Merr produktet nga webi")}</Link>}
-    </div>
+
+  if (error) return <section className="website-connection" aria-label={t("Webi i biznesit")}>
+    <Icon name="globe" size={18} />
+    <span className="website-connection-text">{t("Nuk u ngarkua konfigurimi i webit.")}</span>
+    <Link className="website-connection-settings" href={settings} scroll={false} aria-label={t("Cilësimet e lidhjes")} title={t("Cilësimet e lidhjes")}><Icon name="settings" size={18} /></Link>
+  </section>;
+
+  if (!url) return <Link className="website-connection is-unlinked" href={settings} scroll={false}
+    title={linkedCount ? t("Lidhe që çmimet dhe porositë të përditësohen vetë.") : t("Lidh webin që produktet, çmimet dhe porositë të vijnë drejt nga webi.")}>
+    <Icon name="link" size={16} /> {t("Merr produktet nga webi")}
+  </Link>;
+
+  return <section className="website-connection is-linked" aria-label={t("Webi i biznesit")}>
+    <span className="website-connection-icon" aria-hidden><Icon name="globe" size={18} /></span>
+    <span className="website-connection-text"><strong>{host}</strong><span className="website-connection-state is-on">{t("I lidhur")}</span></span>
+    <Link className="btn btn-ghost website-connection-sync" href={`/b/${slug}/products/imports`} title={t("Sinkronizo produktet")}>
+      <Icon name="refresh" size={16} /> {t("Sinkronizo")}
+    </Link>
+    <Link className="website-connection-settings" href={settings} scroll={false} aria-label={t("Cilësimet e lidhjes")} title={t("Cilësimet e lidhjes")}>
+      <Icon name="settings" size={18} />
+    </Link>
   </section>;
 }

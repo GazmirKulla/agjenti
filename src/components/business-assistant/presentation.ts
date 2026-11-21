@@ -48,7 +48,8 @@ export function contextualAction(context: AssistantUIContext, modules: string[])
   if (["business", "activity", "integrations", "account", "setup"].includes(page)) return "Ndihmë me këtë faqe";
   if (!modules.includes(page)) return null;
   switch (page) {
-    case "products": return `Ndihmë me ${context.entityId ? "këtë produkt" : context.selectedEntityIds?.length ? "produktet e zgjedhura" : "produktet"}`;
+    // On the list itself "Asistenti AI" in the header already helps; the entry earns its place for one product or a selection.
+    case "products": return context.entityId ? "Ndihmë me këtë produkt" : context.selectedEntityIds?.length ? "Ndihmë me produktet e zgjedhura" : null;
     case "services": return `Ndihmë me ${context.entityId ? "këtë shërbim" : "shërbimet"}`;
     case "knowledge": return "Ndihmë me njohuritë";
     case "agents": return "Ndihmë me agjentin";
