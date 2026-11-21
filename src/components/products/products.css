@@ -592,9 +592,6 @@
   border-bottom: 1px solid var(--line);
   padding: 1rem 0;
 }
-.bi-entry:has(> button[hidden]) {
-  margin: 0;
-}
 .product-intake [role="tablist"][hidden] {
   display: none;
 }

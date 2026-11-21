@@ -28,10 +28,6 @@ export function withoutScanKnowledge(draft: Draft, knowledge: Entity[]): Draft {
   return withMissing({ ...draft, entities: draft.entities.filter(entity => !ids.has(entity.id)), conflicts: draft.conflicts.filter(conflict => !ids.has(conflict.entityId)), ...(draft.reviewPreferences ? { reviewPreferences: { ...draft.reviewPreferences, excludedEntityIds: draft.reviewPreferences.excludedEntityIds.filter(id => !ids.has(id)) } } : {}) });
 }
 
-export function reviewEntities(draft: Draft, target?: Entity["target"]) {
-  return draft.entities.filter(entity => target ? entity.target === target : entity.target !== "knowledge");
-}
-
 export function knowledgeNotice(count: number) {
   return count === 1 ? "1 njohuri u dërgua te moduli Njohuritë." : `${count} njohuri u dërguan te moduli Njohuritë.`;
 }

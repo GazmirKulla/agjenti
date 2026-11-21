@@ -1,7 +1,6 @@
 import { DashboardLanguageProvider } from "@/components/dashboard/language";
 import { getDashboardLanguage } from "@/lib/dashboard/language/server";
 import { AssistantWorkspaceProvider } from "@/components/business-assistant/workspace";
-import { BusinessIntelligencePanel } from "@/components/business-intelligence/panel";
 import { redirect } from "next/navigation";
 import {
   getSessionUser,
@@ -86,7 +85,6 @@ export default async function BusinessLayout({
       )}
       <BillingUsageNotice slug={business.slug} usage={billingUsage}
         canUpgrade={billingUsage.scope !== "account" || billingUsage.billingUserId === user.id} />
-      <BusinessIntelligencePanel slug={business.slug} />
       {children}
         </AppShell>
     </AssistantWorkspaceProvider>

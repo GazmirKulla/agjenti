@@ -127,7 +127,6 @@ export const manualSurfaces = {
   "src/app/api/business-assistant/route.ts#POST": {"exception": "Owner assistant dispatcher for reviewed capabilities."},
   "src/app/api/business-assistant/upload/route.ts#POST": {"exception": "User-selected attachment intake."},
   "src/app/api/business-discovery/route.ts#POST": {"exception": "Onboarding source analysis and reviewed discovery draft."},
-  "src/app/api/business-intelligence/route.ts#POST": {"exception": "Read-only business intelligence generation."},
   "src/app/api/businesses/[id]/conversations/[conversationId]/[action]/route.ts#POST": {"exception": "Conversation control uses the shared control service; destructive history cleanup remains manual."},
   "src/app/api/businesses/[id]/conversations/[conversationId]/customer/route.ts#POST": {"exception": "Verified customer-profile editing remains in the conversation identity UI."},
   "src/app/api/businesses/[id]/conversations/[conversationId]/order/route.ts#POST": {"exception": "The owner records an order from the conversation; catalog prices, membership and the linked product's declared choices are enforced by create_manual_order. A linked product's order is sent once to the business website configured by the owner (begin_order_dispatch); the customer agent never reaches this route."},

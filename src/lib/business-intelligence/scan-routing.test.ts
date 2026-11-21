@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyDraft, mergeDraft, normalizeDraftCurrencies, parseEntities, value, entityValidationIssues } from "./model";
-import { scanKnowledge, withoutScanKnowledge, reviewEntities } from "./scan-routing";
+import { scanKnowledge, withoutScanKnowledge } from "./scan-routing";
 
 const knowledge = () => parseEntities([{ target: "knowledge", facts: [{ field: "title", value: "Dërgesa", evidence: "Dërgesa" }, { field: "body", value: "Dërgojmë brenda dy ditësh.", evidence: "Dërgojmë brenda dy ditësh." }] }], "website", "https://shop.test", "Dërgesa Dërgojmë brenda dy ditësh.")[0];
 const product = (priceEvidence: string) => parseEntities([{ target: "product", facts: [{ field: "name", value: "Puzzle", evidence: "Puzzle" }, { field: "price", value: "12", evidence: priceEvidence, confidence: .9 }] }], "instagram", "ig:post", `Puzzle ${priceEvidence}`)[0];
@@ -11,7 +11,6 @@ describe("automatic source routing", () => {
     const draft = { ...emptyDraft(), entities: [faq, offer] };
     expect(scanKnowledge(draft).map(entity => entity.id)).toEqual([faq.id]);
     expect(withoutScanKnowledge(draft, scanKnowledge(draft)).entities).toEqual([offer]);
-    expect(reviewEntities(draft, "product")).toEqual([offer]);
   });
   it("respects disabled sections, excluded entries, incomplete and manual knowledge", () => {
     const faq = knowledge(); const draft = { ...emptyDraft(), entities: [faq] };
