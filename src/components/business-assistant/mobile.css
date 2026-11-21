@@ -1,4 +1,3 @@
-.mobile-assistant-tools { display: none; }
 .assistant-recovery { margin: 12px 0; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); }
 .assistant-recovery p { font-size: 13px; color: var(--ink-muted); }
 .assistant-recovery button { min-height: 44px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
@@ -39,9 +38,6 @@
   .topbar-workspace-switch:focus-visible { outline: 2px solid var(--accent); }
   .workspace-picker.is-topbar { margin: 0; flex: none; }
   .topbar-workspace-chevron { flex: none; color: var(--ink-muted); }
-  .mobile-assistant-tools { display: flex; gap: 2px; flex: none; }
-  .mobile-assistant-tools button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 14px; color: var(--ink); background: transparent; }
-  .mobile-assistant-tools button:focus-visible { outline: 2px solid var(--accent); }
   .mobile-assistant-home .dashboard-content { display: none; }
   .assistant-first-mobile .dashboard-sidebar { background: var(--surface); }
   .assistant-first-mobile .dashboard-nav.active { background: var(--accent-soft); color: var(--accent); }

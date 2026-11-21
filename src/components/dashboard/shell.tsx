@@ -314,10 +314,6 @@ export function AppShell({
             <strong>{name}</strong>
             <small>{admin ? "Administrimi" : "Agjenti.app"}</small>
           </Link>}
-          {/* A new chat belongs to the assistant's conversation, open on the home page; its history is inside the assistant. */}
-          {!admin && pathname === base && <div className="mobile-assistant-tools">
-            <button type="button" aria-label="Bisedë e re me asistentin" disabled={assistant?.sending} onClick={() => { assistant?.resetRef.current?.(); assistant?.setOpen(true); }}><Icon name="edit" size={21}/></button>
-          </div>}
           <button
             className="mobile-search-toggle btn btn-ghost"
             type="button"

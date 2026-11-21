@@ -5480,7 +5480,7 @@ button.order-photo-image:hover:not(:disabled) {
 .order-failure { margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; background: var(--danger-soft); color: var(--danger); font-size: 14px; }
 
 /* The business's logo: in the avatar square instead of its initials; and its row in Cilësimet. */
-.workspace-avatar.has-logo { overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
+.workspace-avatar.has-logo { overflow: hidden; background: transparent; }
 .workspace-avatar.has-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .business-logo-settings { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .business-logo-settings .workspace-avatar { border-radius: 14px; }
