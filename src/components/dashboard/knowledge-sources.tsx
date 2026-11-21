@@ -128,7 +128,7 @@ export function KnowledgeSources({ slug }: { slug: string }) {
           </div>
         </article>
         <article className="knowledge-source">
-          <span className="knowledge-source-icon"><Icon name="display" size={20} /></span>
+          <span className="knowledge-source-icon"><Icon name="globe" size={20} /></span>
           <div className="knowledge-source-body">
             <h3>Website</h3>
             <p>{websiteJob?.website ?? "Shto faqen e biznesit që Agjenti të lexojë ofertën dhe kontaktet."}</p>

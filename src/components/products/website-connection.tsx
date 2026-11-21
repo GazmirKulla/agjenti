@@ -5,8 +5,8 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 
 /**
  * The business website on Produktet: whether its catalog is connected, how many
- * products come from it, and the way to connect or manage it (the same
- * configuration that used to sit under Kanalet).
+ * products come from it. Linked: sync its products or open the connection's
+ * settings. Not linked: only "Merr produktet nga webi", which opens the form.
  */
 export async function WebsiteConnection({ slug, businessId, linkedCount }: { slug: string; businessId: string; linkedCount: number }) {
   const t = await getDashboardTranslator();
@@ -17,7 +17,7 @@ export async function WebsiteConnection({ slug, businessId, linkedCount }: { slu
   const settings = `/b/${slug}/products?detail=website`;
   // Unlinked, it is a small suggestion beside the catalog, not the first thing on the page.
   return <section className={`website-connection${url ? " is-linked" : " is-compact"}`} aria-label={t("Webi i biznesit")}>
-    <span className="website-connection-icon" aria-hidden><Icon name="display" size={22} /></span>
+    <span className="website-connection-icon" aria-hidden><Icon name="globe" size={22} /></span>
     <div className="website-connection-text">
       <strong>
         {t("Webi i biznesit")}
@@ -29,10 +29,12 @@ export async function WebsiteConnection({ slug, businessId, linkedCount }: { slu
         : t("Lidh webin që produktet, çmimet dhe porositë të vijnë drejt nga webi.")}</p>
     </div>
     <div className="website-connection-actions">
+      {/* Linked: bring the website's products in and up to date, or change the connection.
+          Not linked: one way in, which opens the connection form. */}
       {url ? <>
-        <Link className="btn btn-primary" href={`/b/${slug}/products/imports`}>{t("Lidh produktet e webit")}</Link>
-        <Link className="btn btn-ghost" href={settings} scroll={false}>{t("Menaxho lidhjen")}</Link>
-      </> : <Link className="btn btn-ghost" href={settings} scroll={false}><Icon name="link" size={16} /> {t("Lidh me webin")}</Link>}
+        <Link className="btn btn-primary" href={`/b/${slug}/products/imports`}>{t("Sinkronizo produktet")}</Link>
+        <Link className="btn btn-ghost" href={settings} scroll={false}>{t("Cilësimet e lidhjes")}</Link>
+      </> : <Link className="btn btn-ghost" href={settings} scroll={false}><Icon name="link" size={16} /> {t("Merr produktet nga webi")}</Link>}
     </div>
   </section>;
 }

@@ -24,7 +24,7 @@ export function ProgressRows({ rows }: { rows: Row[] }) {
         {rows.map((row) => (
           <li key={row.source} className={`is-${row.state}`}>
             <span className={`sources-progress-icon${row.source === "instagram" ? " is-instagram" : ""}`}>
-              <Icon name={row.source === "instagram" ? "instagram" : "display"} size={18} />
+              <Icon name={row.source === "instagram" ? "instagram" : "globe"} size={18} />
             </span>
             <div className="sources-progress-body">
               <div className="sources-progress-line">
@@ -193,7 +193,7 @@ export function SourcesStep({ slug, initialInstagram = "", initialWebsite = "", 
             <article className={`onboarding-confirm-card is-${decision.website ?? "open"}`}>
               <div className="onboarding-confirm-identity">
                 {siteOk?.logo ? <Image className="onboarding-confirm-logo" src={siteOk.logo} alt="" referrerPolicy="no-referrer" width={64} height={64} unoptimized />
-                  : <span className="onboarding-found-icon"><Icon name="display" size={24} /></span>}
+                  : <span className="onboarding-found-icon"><Icon name="globe" size={24} /></span>}
                 <div>
                   <h2>{siteOk?.title || site.url}</h2>
                   <p className="onboarding-found-meta">{site.url}</p>

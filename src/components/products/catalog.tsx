@@ -55,7 +55,7 @@ type Source = "all" | "website" | "local";
 /** Marks a product that comes from the business website (its data is the website's). */
 function WebsiteBadge() {
   return <span className="product-source-web" title="Produkt i lidhur me webin e biznesit">
-    <Icon name="display" size={12} /><span>Webi</span>
+    <Icon name="globe" size={12} /><span>Webi</span>
   </span>;
 }
 const SORTS = [
@@ -340,7 +340,7 @@ export function ProductCatalog({
             ] as const).map(([value, label, count]) => (
               <button key={value} type="button" className={source === value ? "is-active" : ""} aria-pressed={source === value}
                 onClick={() => { setSource(value); setPage(1); }}>
-                {value === "website" && <Icon name="display" size={14} />}
+                {value === "website" && <Icon name="globe" size={14} />}
                 {label}<span className="catalog-source-count">{count}</span>
               </button>
             ))}
