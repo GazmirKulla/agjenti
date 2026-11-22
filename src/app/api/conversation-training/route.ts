@@ -5,6 +5,7 @@ import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { continueTraining, workerOrigin } from "@/lib/conversation-training/continue";
 import { compareReplies, listTestMessages, recordTestFeedback } from "@/lib/conversation-training/compare";
 import { applyApproved, approveSafe, confirmUpload, decideSuggestion, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, retryInboxHistory, stalled, startInbox } from "@/lib/conversation-training/sessions";
+import { requestOrigin } from "@/lib/http/request-origin";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -22,7 +23,7 @@ const failure = (error: unknown) => {
   return json({ error: error instanceof PersistenceError ? error.message : "Veprimi nuk u krye. Provo përsëri." }, error instanceof PersistenceError ? error.status : 503);
 };
 function wake(businessId: string, request: Request) {
-  const origin = workerOrigin(new URL(request.url).origin);
+  const origin = workerOrigin(requestOrigin(request));
   after(() => continueTraining(businessId, origin));
 }
 

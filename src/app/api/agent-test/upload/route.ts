@@ -4,11 +4,12 @@ import { inspectAttachment, readAttachmentForm, sealAttachment } from "@/lib/age
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
 import { transcribeAudio } from "@/lib/business-intelligence/transcription";
 import { meteredRoute } from "@/lib/ai/usage";
+import { requestOrigin } from "@/lib/http/request-origin";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 async function handlePOST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) return json({ error: "Kërkesë e palejuar." }, 403);
+  if (request.headers.get("origin") !== requestOrigin(request)) return json({ error: "Kërkesë e palejuar." }, 403);
   const user = await getSessionUser();
   if (!user) return json({ error: "Hyr përsëri në llogari." }, 401);
   const url = new URL(request.url);

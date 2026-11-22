@@ -5,6 +5,7 @@ import { transportAccess, isTransportId } from "@/lib/conversations/transport-ac
 import { decryptSecret } from "@/lib/crypto/tokens";
 import { runPanelChat } from "@/lib/agents/panel-chat/execute";
 import { applyPanelInputs, readPanelInputs } from "@/lib/agents/panel-chat/inputs";
+import { requestOrigin } from "@/lib/http/request-origin";
 export const maxDuration = 180;
 async function accessFor(request: Request) {
   const user = await getSessionUser();
@@ -16,7 +17,7 @@ async function accessFor(request: Request) {
   return !error && data === true ? { ...current, businessId: access.business.id } : null;
 }
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) return NextResponse.json({ error: "Kërkesë e palejuar." }, { status: 403 });
+  if (request.headers.get("origin") !== requestOrigin(request)) return NextResponse.json({ error: "Kërkesë e palejuar." }, { status: 403 });
   const access = await accessFor(request);
   if (!access) return NextResponse.json({ error: "Real chat është i disponueshëm vetëm për administratorët e platformës në ChatLab." }, { status: 403 });
   try {

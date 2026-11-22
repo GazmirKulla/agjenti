@@ -4,6 +4,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { indexCatalog } from "@/lib/catalogs/indexing";
 import type { Catalog } from "@/lib/catalogs/model";
 import { meteredRoute } from "@/lib/ai/usage";
+import { requestOrigin } from "@/lib/http/request-origin";
 export const runtime = "nodejs";
 export const maxDuration = 180;
 async function handlePOST(
@@ -12,7 +13,7 @@ async function handlePOST(
 ) {
   let catalog: Catalog | null = null;
   try {
-    if (request.headers.get("origin") !== new URL(request.url).origin)
+    if (request.headers.get("origin") !== requestOrigin(request))
       return Response.json({ error: "Kërkesë e pavlefshme." }, { status: 403 });
     const { business } = await catalogAccess(
       new URL(request.url).searchParams.get("slug") ?? "",

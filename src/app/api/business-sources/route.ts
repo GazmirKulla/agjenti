@@ -3,6 +3,7 @@ import { getRequestUser, permittedWrite } from "@/lib/auth/request";
 import { requireBusinessAccess } from "@/lib/tenant/access";
 import { continueDiscovery, workerOrigin } from "@/lib/discovery/continue";
 import { learnFromSources, previewSources, reviewSources, sourcesState, SourcesError } from "@/lib/discovery/sources-step";
+import { requestOrigin } from "@/lib/http/request-origin";
 
 /** Onboarding step 2 for the web and the mobile app: preview the public
  * Instagram and website, start learning from them, review what was found. */
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     if (body.action === "preview") return json(await previewSources(access.business.id, { username: body.username, website: body.website }));
     if (body.action === "learn") {
       const started = await learnFromSources(access.business.id, access.user.id, body.confirmed && typeof body.confirmed === "object" ? body.confirmed as Record<string, unknown> : {});
-      const origin = workerOrigin(new URL(request.url).origin);
+      const origin = workerOrigin(requestOrigin(request));
       after(() => continueDiscovery(access.business.id, origin));
       return json({ started });
     }

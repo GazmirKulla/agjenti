@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import { NATIVE_EMBED_COOKIE } from "@/lib/native/embedded";
 import { dashboardLanguage, LANGUAGE_COOKIE } from "@/lib/dashboard/language/core";
+import { requestOrigin } from "@/lib/http/request-origin";
 
 export const runtime = "nodejs";
 const failure = (status: number) => NextResponse.json({ error: "Hyrja në aplikacion nuk përfundoi. Provo përsëri." }, { status, headers: { "Cache-Control": "no-store" } });
@@ -23,7 +24,7 @@ function accessTokenTtl(token: string) {
 export async function POST(request: Request) {
   const origin = request.headers.get("origin");
   if (!request.headers.get("content-type")?.startsWith("application/json") ||
-      (origin && origin !== "null" && origin !== new URL(request.url).origin) ||
+      (origin && origin !== "null" && origin !== requestOrigin(request)) ||
       request.headers.get("sec-fetch-site") === "cross-site") return failure(403);
   try {
     const reader = request.body?.getReader();
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
         !body.access_token || !body.refresh_token || body.access_token.length > 8192 || body.refresh_token.length > 8192) return failure(400);
     const next = typeof body.next === "string" && /^\/(?:b\/[^\\?#]+|onboarding|account)(?:[?][^\\#]*)?$/.test(body.next)
       ? body.next : "/auth/mobile/continue";
-    const response = NextResponse.redirect(new URL(next, request.url), 303);
+    const response = NextResponse.redirect(new URL(next, requestOrigin(request)), 303);
     response.headers.set("Cache-Control", "no-store");
     response.headers.set("Referrer-Policy", "no-referrer");
     // A previous account's session (plain or chunked) would otherwise shadow the new one.

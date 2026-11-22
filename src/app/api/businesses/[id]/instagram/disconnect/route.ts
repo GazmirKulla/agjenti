@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
+import { requestOrigin } from "@/lib/http/request-origin";
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) {
+  if (request.headers.get("origin") !== requestOrigin(request)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await context.params;
@@ -44,9 +45,9 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
 
-  const fallback = new URL("/admin/conversations", request.url);
+  const fallback = new URL("/admin/conversations", requestOrigin(request));
   const destination = business?.slug
-    ? new URL(`/b/${business.slug}/instagram?disconnected=1`, request.url)
+    ? new URL(`/b/${business.slug}/instagram?disconnected=1`, requestOrigin(request))
     : fallback;
   return NextResponse.redirect(destination, 303);
 }

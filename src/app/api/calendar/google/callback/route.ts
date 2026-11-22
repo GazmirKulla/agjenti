@@ -9,10 +9,11 @@ import {
   writableCalendars,
 } from "@/lib/calendar/google";
 import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
+import { requestOrigin } from "@/lib/http/request-origin";
 export async function GET(request: NextRequest) {
   const origin =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    request.nextUrl.origin;
+    requestOrigin(request);
   const finish = (path: string) => {
     const response = NextResponse.redirect(`${origin}${path}`);
     response.cookies.set("agjenti_calendar_oauth", "", {

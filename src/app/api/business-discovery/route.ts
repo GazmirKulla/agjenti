@@ -19,6 +19,7 @@ import { parseBusinessProcess } from "@/lib/discovery/business-process";
 import { meteredRoute } from "@/lib/ai/usage";
 import { saveInstagramUsername } from "@/lib/discovery/instagram-username";
 import { publicScanAvailable } from "@/lib/instagram/public-profile";
+import { requestOrigin } from "@/lib/http/request-origin";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -31,7 +32,7 @@ async function authorize(request: Request) {
   return { user, business: access.business };
 }
 function wake(businessId: string, request: Request) {
-  const origin = workerOrigin(new URL(request.url).origin);
+  const origin = workerOrigin(requestOrigin(request));
   after(() => continueDiscovery(businessId, origin));
 }
 async function readBody(request: Request) {
@@ -83,12 +84,12 @@ async function handleGET(request: Request) {
 
 async function handlePOST(request: Request) {
   try {
-    if (request.headers.get("origin") !== new URL(request.url).origin) throw new Error("unauthorized");
+    if (request.headers.get("origin") !== requestOrigin(request)) throw new Error("unauthorized");
     const { user, business } = await authorize(request);
     const body = await readBody(request);
     if (body.action === "resume") { wake(business.id, request); return json({ success: "Analiza vazhdon në background." }); }
     if (body.action === "refresh_sources") {
-      const queued = await refreshBusinessSources(business.id, user.id, workerOrigin(new URL(request.url).origin));
+      const queued = await refreshBusinessSources(business.id, user.id, workerOrigin(requestOrigin(request)));
       if (!queued.website && !queued.instagram) return json({ error: "Nuk ka burime për të rifreskuar. Shto Instagram-in ose website-in." }, 400);
       return json({ success: "Rifreskimi nisi. Çfarë është e re ose ndryshe të shfaqet si propozim për ta shqyrtuar; njohuritë e tua nuk mbishkruhen.", queued });
     }

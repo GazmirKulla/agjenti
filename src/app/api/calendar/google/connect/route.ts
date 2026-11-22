@@ -4,10 +4,11 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
 import { encryptSecret } from "@/lib/crypto/tokens";
 import { googleAuthorizeUrl } from "@/lib/calendar/google";
+import { requestOrigin } from "@/lib/http/request-origin";
 export async function POST(request: Request) {
   const origin =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    new URL(request.url).origin;
+    requestOrigin(request);
   if (request.headers.get("origin") !== origin)
     return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
   const form = await request.formData(),

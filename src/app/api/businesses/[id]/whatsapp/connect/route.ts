@@ -3,9 +3,10 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { whatsappGraph, whatsappGraphVersion } from "@/lib/whatsapp/api";
 import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
+import { requestOrigin } from "@/lib/http/request-origin";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "Forbidden" }, { status: 403 });
+  if (request.headers.get("origin") !== requestOrigin(request)) return Response.json({ error: "Forbidden" }, { status: 403 });
   const user = await getSessionUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await context.params;

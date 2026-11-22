@@ -8,11 +8,12 @@ import {
 	parseMetaSignedRequest,
 	readSignedRequestFromRequest,
 } from "@/lib/instagram/signed-request";
+import { requestOrigin } from "@/lib/http/request-origin";
 
 function appBaseUrl(request: Request): string {
 	const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
 	if (configured) return configured;
-	return new URL(request.url).origin;
+	return requestOrigin(request);
 }
 
 export async function POST(request: Request) {

@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { catalogAccess } from "@/lib/catalogs/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { requestOrigin } from "@/lib/http/request-origin";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   let path: string | null = null;
   try {
-    if (request.headers.get("origin") !== new URL(request.url).origin)
+    if (request.headers.get("origin") !== requestOrigin(request))
       return Response.json({ error: "Kërkesë e pavlefshme." }, { status: 403 });
     const slug = new URL(request.url).searchParams.get("slug") ?? "";
     const { business } = await catalogAccess(slug);

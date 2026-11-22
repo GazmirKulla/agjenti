@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSessionUser } from "@/lib/tenant/access";
+import { requestOrigin } from "@/lib/http/request-origin";
 
 export function bearerToken(request: Request): string | undefined {
   const value = request.headers.get("authorization");
@@ -14,9 +15,9 @@ export function permittedWrite(request: Request): boolean {
   if (request.headers.has("authorization"))
     return (
       Boolean(bearerToken(request)) &&
-      (!origin || origin === new URL(request.url).origin)
+      (!origin || origin === requestOrigin(request))
     );
-  return origin === new URL(request.url).origin;
+  return origin === requestOrigin(request);
 }
 export function bearerClient(token: string) {
   return createClient(

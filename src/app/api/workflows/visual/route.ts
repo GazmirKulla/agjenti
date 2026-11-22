@@ -2,13 +2,14 @@ import { mutateVisualWorkflow } from "@/lib/workflows/visual/save-service";
 import { unconfirmedSaveMessage } from "@/lib/workflows/visual/save-result";
 import type { WorkflowOperation } from "@/lib/workflows/visual/mutations";
 import { meteredRoute } from "@/lib/ai/usage";
+import { requestOrigin } from "@/lib/http/request-origin";
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 const operations = new Set<WorkflowOperation>(["draft", "publish", "enable", "disable"]);
 
 /** Stable URL: an editor left open across a deployment can still save its draft. */
 async function handlePOST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin)
+  if (request.headers.get("origin") !== requestOrigin(request))
     return json({ error: "Kërkesë e palejuar." }, 403);
   if (!request.headers.get("content-type")?.startsWith("application/json"))
     return json({ error: "Kërkesë e pavlefshme." }, 400);

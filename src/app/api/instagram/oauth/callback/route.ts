@@ -10,18 +10,19 @@ import { enqueueDiscovery, runDiscoveryQueue } from "@/lib/discovery/queue";
 import { getAppSettings } from "@/lib/platform/settings";
 import { metaCode, recordSystem, stepFailure } from "@/lib/tracking/system-events";
 import { refreshInstagramBusinessLogo } from "@/lib/businesses/logo";
+import { requestOrigin } from "@/lib/http/request-origin";
 export const maxDuration = 180;
 
 export async function GET(request: Request) {
 	const url = new URL(request.url);
 	const err = url.searchParams.get("error");
 	if (err) {
-		return NextResponse.redirect(new URL(`/auth/continue?ig=denied`, url.origin));
+		return NextResponse.redirect(new URL(`/auth/continue?ig=denied`, requestOrigin(request)));
 	}
 	const state = verifyOAuthState(url.searchParams.get("state"));
 	const code = url.searchParams.get("code");
 	if (!state || !code) {
-		return NextResponse.redirect(new URL(`/login?error=oauth`, url.origin));
+		return NextResponse.redirect(new URL(`/login?error=oauth`, requestOrigin(request)));
 	}
 	try {
 		const exchanged = await exchangeInstagramCode(code);
@@ -86,10 +87,10 @@ export async function GET(request: Request) {
 			: business?.slug
 			? `/b/${encodeURIComponent(business.slug)}/${discovery ? "sources" : "instagram"}?${connectedQuery}`
 			: `/auth/continue?ig=connected`;
-		return NextResponse.redirect(new URL(destination, url.origin));
+		return NextResponse.redirect(new URL(destination, requestOrigin(request)));
 	} catch (error) {
 		console.error("[instagram oauth]", error);
 		await recordSystem("system.instagram_connect", "failed", { businessId: state.businessId, reason: stepFailure("system.instagram_connect", "connect", error) });
-		return NextResponse.redirect(new URL(`/auth/continue?ig=error`, url.origin));
+		return NextResponse.redirect(new URL(`/auth/continue?ig=error`, requestOrigin(request)));
 	}
 }
