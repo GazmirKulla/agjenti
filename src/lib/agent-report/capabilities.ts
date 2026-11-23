@@ -328,6 +328,7 @@ export const currentState = [
 ];
 
 export const mainProblems: { title: string; detail: string }[] = [
+  { title: "Realtime në pajisje dhe vazhdimi i punëve kërkojnë verifikim.", detail: "Migrimi realtime është aplikuar në databazën reale dhe kanali privat, izolimi dhe marrja e njoftimit janë verifikuar. Worker-i çdo minutë është aktiv. Publikimi i klientëve, rikuperimi pas humbjes së vazhdimit dhe sjellja në sfond në pajisje reale mbeten të paverifikuara." },
   { title: "Editori i workflow-ve nuk hiqet dot plotësisht.", detail: "Pa proces të publikuar, serveri e ndërton vetë procesin nga produktet dhe cilësimet, dhe të gjitha cilësimet e Agjentit janë te “Çfarë bën Agjenti”. Agjenti.app ka ende nevojë për editorin, sepse rrjedha “Regjistrim biznesi” krijon biznes dhe ftesë, gjë që procesi i zakonshëm nuk e bën." },
   { title: "Rezervimet nuk janë provuar me klientë të vërtetë.", detail: "Klienti rezervon, pyet, anulon dhe zhvendos rezervimin e tij, por asnjë biznes nuk i ka ndezur ende. Kujtesat dhe mesazhet për vendimet e stafit dërgohen vetëm brenda 24 orëve nga mesazhi i fundit i klientit (rregulli i Instagram/WhatsApp, pa shabllone)." },
   { title: "Porositë pas krijimit bëhen me dorë.", detail: "Klienti nuk e ndryshon dot porosinë, dhe Asistenti nuk ndryshon dot statusin apo dërgesën." },

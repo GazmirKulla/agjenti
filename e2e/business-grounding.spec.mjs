@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // R2: actual local Auth/browser/API/PostgREST/SQL, no model or live channels.
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
@@ -41,7 +42,7 @@ test.beforeAll(() => { expect(project).toBe('agjenti-e2e-local-recovery-3a-20261
 test.beforeEach(async ({ page, context }) => {
   await observeServerActions(page);
   await context.route('**/*', r => [origin, keys.api].includes(new URL(r.request().url()).origin) ? r.continue() : r.abort());
-  await context.routeWebSocket('**/*', r => new URL(r.url()).origin === 'ws://localhost:3103' ? r.connectToServer() : r.close());
+  await context.routeWebSocket('**/*', r => isLocalWebSocket(r.url()) ? r.connectToServer() : r.close());
 });
 
 test('R2 authoritative product count, changed prices, missing values, partial catalog and cross-tenant RLS', async ({ page }) => {

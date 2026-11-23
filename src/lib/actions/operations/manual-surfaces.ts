@@ -7,6 +7,7 @@ import type { Action } from "@/lib/business-assistant/model";
 type Coverage = { operation: OperationKey } | { legacy: Action } | { exception: string };
 export const manualSurfaces = {
   "src/app/api/campaigns/route.ts#POST": { exception: "Members prepare immutable campaign drafts; only the current business owner confirms sends, manages preferences or changes settings. No assistant or customer-agent send capability." },
+  "src/app/api/cron/workflow-inbound/route.ts#POST": { exception: "CRON_SECRET authenticated handoff of persisted inbound, staff and private test/panel work; it creates no new operation and database claims retain membership, scope, lease and idempotency guards." },
   "src/app/api/cron/campaigns/route.ts#POST": { exception: "CRON_SECRET authenticated continuation of owner-confirmed campaigns; every send rechecks consent, membership, quiet hours and shared quota in the database." },
   "src/app/api/agent-real/turns/route.ts#POST": { "exception": "Owner-only panel transport; effects pass the existing workflow action guards and explicit real-session confirmation." },
 

@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // Real local Auth/PostgREST/PostgreSQL certification. Only the plan presented to
 // the UI is a synthetic fixture; activation requests/responses are never mocked.
 import { test, expect } from '@playwright/test';
@@ -113,7 +114,7 @@ test.beforeEach(async ({ page, context }) => {
     update public.businesses set dashboard_profile=${json(profile(modules))} where id=${quote(businessId)};
     update public.${table} set is_active=false,${catalog ? 'price_amount=20' : "body='  Synthetic reviewed information.  '"},updated_at=clock_timestamp() where id=${quote(productId)} and business_id=${quote(businessId)};
     commit;`);
-  await context.routeWebSocket('**/*', route => new URL(route.url()).origin === 'ws://localhost:3103' ? route.connectToServer() : route.close({ code: 1008 }));
+  await context.routeWebSocket('**/*', route => isLocalWebSocket(route.url()) ? route.connectToServer() : route.close({ code: 1008 }));
   await context.route('**/*', route => [origin, keys.api].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort('blockedbyclient'));
   await login(page);
 });

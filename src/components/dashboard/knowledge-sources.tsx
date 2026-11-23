@@ -1,4 +1,5 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./icon";
@@ -52,12 +53,10 @@ export function KnowledgeSources({ slug }: { slug: string }) {
   useEffect(() => { void load(); }, [load]);
   const instagramJob = state?.jobs.find((j) => j.source === "instagram");
   const websiteJob = state?.jobs.find((j) => j.source === "website");
-  const scanning = running(instagramJob) || running(websiteJob);
   useEffect(() => {
-    if (!scanning) return;
-    const timer = setInterval(() => void load(), 5000);
-    return () => clearInterval(timer);
-  }, [scanning, load]);
+    const unsubscribe = subscribeChanges(["discovery"], async () => { await load(); });
+    return () => unsubscribe();
+  }, [load]);
 
   async function post(body: Record<string, unknown>, success: string) {
     setBusy(true); setMessage(null);

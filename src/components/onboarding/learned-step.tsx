@@ -1,4 +1,5 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
 import { useCallback, useEffect, useState } from "react";
 import { SourcesReview } from "@/components/dashboard/sources-review";
 import { DiscoveryScanDialog } from "@/components/setup/scan-dialog";
@@ -33,12 +34,11 @@ export function LearnedStep({ slug }: { slug: string }) {
     setDialogOpen((open) => open ?? data.scans.length > 0);
   }, [endpoint]);
   const running = isRunning(state);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, slug]);
   useEffect(() => {
-    if (state && !running) return;
-    const timer = setInterval(() => void load(), 3000);
-    return () => clearInterval(timer);
-  }, [state, running, load]);
+    const unsubscribe = subscribeChanges(["discovery"], load, false, slug);
+    return () => unsubscribe();
+  }, [load, slug]);
   const nothing = !!state && !state.scans.length && !state.review;
   useEffect(() => { if (nothing) setStructureStep(true); }, [nothing]);
 

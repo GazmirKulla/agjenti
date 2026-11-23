@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -25,7 +26,7 @@ test.beforeAll(() => {
 test.afterAll(() => { sql(`delete from public.businesses where id='${id}';`); });
 test.beforeEach(async ({ context, page }) => {
   await page.setViewportSize({ width: 1440, height: 1080 });
-  await context.routeWebSocket('**/*', r => new URL(r.url()).origin === 'ws://localhost:3103' ? r.connectToServer() : r.close());
+  await context.routeWebSocket('**/*', r => isLocalWebSocket(r.url()) ? r.connectToServer() : r.close());
   await context.route('**/*', r => ['http://localhost:3103', keys.api].includes(new URL(r.request().url()).origin) ? r.continue() : r.abort());
   await page.addInitScript(() => localStorage.setItem('agjenti-theme', 'dark'));
 });

@@ -265,6 +265,7 @@ export const english: Record<string, string> = {
   "Shkëputja e llogarisë kërkon autorizim për ta rilidhur.": "Reconnecting this account will require authorization.",
   "Provo përsëri": "Try again",
   "Rilidh": "Reconnect",
+  "Përditësimi automatik u ndërpre. Të dhënat mund të mos jenë të fundit.": "Live updates were interrupted. The data may be out of date.",
   "Lidh": "Connect",
   "Lidhja kërkon vëmendje. Shiko detajet.": "This connection needs attention. View details.",
   "Lidhja kërkon vëmendje. Rilidhe llogarinë.": "This connection needs attention. Reconnect the account.",

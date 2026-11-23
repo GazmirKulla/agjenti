@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // Authenticated local HTTP + PostgreSQL gate. C1 intent/tickets are prepared by
 // recovery-fixtures.test.ts using the real proposal service, NOT an LLM.
 import { test, expect } from '@playwright/test';
@@ -40,7 +41,7 @@ test.beforeAll(() => { expect(project).toMatch(/^agjenti-e2e-local-recovery-[a-z
 test.beforeEach(async ({ context, page }) => {
   await observeServerActions(page);
   await context.route('**/*', r => [origin, keys.api].includes(new URL(r.request().url()).origin) ? r.continue() : r.abort('blockedbyclient'));
-  await context.routeWebSocket('**/*', r => new URL(r.url()).origin === 'ws://localhost:3103' ? r.connectToServer() : r.close());
+  await context.routeWebSocket('**/*', r => isLocalWebSocket(r.url()) ? r.connectToServer() : r.close());
 });
 test('C1 natural-language planning is explicitly unavailable offline, not a simulated success', async ({ page }) => {
   const t = tenant('retail'); await login(page, t);

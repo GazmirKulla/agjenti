@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 import { communicationResponse } from './communication-response.mjs';
 // Real local UI/Auth/actions/sealed sessions + SQL; deterministic model only.
 // Uses the existing app-r3 loopback transport. No separate provider process.
@@ -54,7 +55,7 @@ function decode(token){const[,iv,tag,data]=token.split('.');const d=createDeciph
 async function login(page,context,t){
   await observeServerActions(page);
   await context.route('**/*',r=>[origin,keys.api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
-  await context.routeWebSocket('**/*',r=>new URL(r.url()).origin==='ws://localhost:3103'?r.connectToServer():r.close());
+  await context.routeWebSocket('**/*',r=>isLocalWebSocket(r.url())?r.connectToServer():r.close());
   await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(t.email);await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(f.password);
   await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${t.slug}`);
   await page.goto(`/b/${t.slug}/agents/test`);

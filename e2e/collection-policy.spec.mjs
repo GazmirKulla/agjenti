@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // Real local Auth -> application action -> published runtime -> sealed state.
 // No LLM/provider stubs. Booking extraction remains unverified offline.
 import { test, expect } from '@playwright/test';
@@ -77,7 +78,7 @@ test.beforeAll(() => {
 test.beforeEach(async ({ page, context }) => {
   await observeServerActions(page);
   await context.route('**/*', r => [origin, keys.api].includes(new URL(r.request().url()).origin) ? r.continue() : r.abort());
-  await context.routeWebSocket('**/*', r => new URL(r.url()).origin === 'ws://localhost:3103' ? r.connectToServer() : r.close());
+  await context.routeWebSocket('**/*', r => isLocalWebSocket(r.url()) ? r.connectToServer() : r.close());
 });
 test('digital request: configured fields -> email only -> reviewed; no shipping or automatic transaction', async ({ page }) => {
   const t = tenant('retail'); await login(page, t);

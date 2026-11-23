@@ -1,3 +1,4 @@
+import { continueTransport } from "@/lib/conversations/continue";
 import { parseWhatsAppEchoes, parseWhatsAppWebhook } from "@/lib/whatsapp/parse-webhook";
 import { persistBusinessEchoes } from "@/lib/conversations/business-echo";
 import type { NormalizedBusinessEcho } from "@/lib/instagram/types";
@@ -5,7 +6,7 @@ import { parseProviderReceipts, persistProviderReceipts } from "@/lib/conversati
 import { parseProviderReactions, persistProviderReactions } from "@/lib/conversations/provider-reactions";
 import { parseProviderMessageChanges, persistProviderMessageChanges } from "@/lib/conversations/provider-message-changes";
 import { verifyMetaSignature } from "@/lib/instagram/meta-webhook";
-import { enqueueWorkflowMessage, runWorkflowQueue } from "@/lib/conversations/workflow-queue";
+import { enqueueWorkflowMessage } from "@/lib/conversations/workflow-queue";
 import { after, NextResponse } from "next/server";
 import { handleInboundMessage } from "@/lib/conversations/handle-inbound";
 import {
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
             for (const message of messages) await enqueueWorkflowMessage(message);
             // Business-app echoes are never enqueued: no agent turn can follow them.
             storeEchoesLater(parseWhatsAppEchoes(payload));
-            if (messages.length) after(async () => { await runWorkflowQueue(); });
+            if (messages.length) after(async () => { await continueTransport(); });
             return NextResponse.json({ received: true });
         }
 
@@ -96,7 +97,7 @@ export async function POST(request: Request) {
 		}
 		if (messages.length) after(async () => {
 			try {
-				await runWorkflowQueue();
+				await continueTransport();
 			} catch (err) {
 				console.error("[meta webhook][POST] processing error:", err);
 			}

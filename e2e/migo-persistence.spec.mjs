@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // Real local Auth, routed APIs, RLS and persisted history. Plans below are
 // explicitly synthetic fixtures inserted through the same storage RPC, not AI output.
 import { test, expect, chromium } from '@playwright/test';
@@ -37,7 +38,7 @@ async function seed(preview = false) {
   return { id, title };
 }
 async function guard(context) {
-  await context.routeWebSocket('**/*', route => new URL(route.url()).origin === 'ws://localhost:3103' ? route.connectToServer() : route.close());
+  await context.routeWebSocket('**/*', route => isLocalWebSocket(route.url()) ? route.connectToServer() : route.close());
   await context.route('**/*', route => ['http://localhost:3103', keys.api].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort('blockedbyclient'));
 }
 async function login(page, who = tenant) {

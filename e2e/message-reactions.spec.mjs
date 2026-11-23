@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // Actual UI/API/Auth/RLS; Meta is a strict loopback synthetic provider.
 import http from 'node:http';
 import {readFileSync} from 'node:fs';
@@ -27,7 +28,7 @@ test.afterAll(async()=>{server?.closeAllConnections();if(server)await new Promis
 function token(){const iv=randomBytes(12),c=createCipheriv('aes-256-gcm',Buffer.from(f.encryptionKey,'hex'),iv);const data=Buffer.concat([c.update('synthetic-transport-local-only'),c.final()]);return ['v1',iv.toString('base64url'),c.getAuthTag().toString('base64url'),data.toString('base64url')].join('.');}
 async function login(page,context){
  await context.route('**/*',r=>[origin,keys.api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
- await context.routeWebSocket('**/*',r=>new URL(r.url()).origin==='ws://localhost:3103'?r.connectToServer():r.close());
+ await context.routeWebSocket('**/*',r=>isLocalWebSocket(r.url())?r.connectToServer():r.close());
  await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(tenant.email);await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(f.password);
  await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${tenant.slug}`);
 }

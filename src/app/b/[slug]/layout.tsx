@@ -1,3 +1,4 @@
+import { RealtimeStatus } from "@/components/dashboard/realtime-status";
 import { DashboardLanguageProvider } from "@/components/dashboard/language";
 import { getDashboardLanguage } from "@/lib/dashboard/language/server";
 import { AssistantWorkspaceProvider } from "@/components/business-assistant/workspace";
@@ -75,6 +76,7 @@ export default async function BusinessLayout({
       channelsAttention={channelsAttention}
       readiness={readiness}
     >
+      <RealtimeStatus />
       {settings.announcement && (
         <div
           role="status"

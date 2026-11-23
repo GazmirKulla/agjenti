@@ -1,5 +1,7 @@
 "use client";
-import { blockedByFailedTurn, hasInFlightTurns, needsTestChatPolling, TestChatPolling } from "./test-chat-polling";
+import { subscribeChanges } from "@/lib/realtime/browser";
+import { invalidationTask } from "@/lib/realtime/invalidation";
+import { blockedByFailedTurn, hasInFlightTurns, hasRecoverableTurns } from "./test-chat-state";
 import { TestConfiguration } from "./test-configuration";
 import { AssistantComposer } from "@/components/business-assistant/composer";
 import { MessageRoutingView } from "@/components/workflows/message-routing";
@@ -30,7 +32,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   // Chat Lab inputs: details of the simulated customer (e.g. their Instagram account).
   const [inputs, setInputs] = useState<TestInputs>({});
   const [inputsOpen, setInputsOpen] = useState(false);
-  // Read at send time, so changing inputs does not restart the polling loop.
+  // Read at send time, so changing inputs does not restart the change subscription.
   const inputsRef = useRef<TestInputs>({});
   useEffect(() => { inputsRef.current = inputs; }, [inputs]);
   const inputCount = Object.keys(inputs).length;
@@ -64,7 +66,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   const [trainingBusy, setTrainingBusy] = useState(false);
   const [trainingFeedback, setTrainingFeedback] = useState<TrainingFeedback | null>(null);
   const chatLog = useRef<HTMLDivElement>(null);
-  // Follow new messages only while the reader is at the bottom; polling or a
+  // Follow new messages only while the reader is at the bottom; an incoming event or a
   // re-render must never pull someone back down while they read older messages.
   const followLatest = useRef(true);
   const focusComposer = () => document.getElementById("agent-test-message")?.focus();
@@ -81,7 +83,10 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   const last = messages.at(-1)?.result ?? null;
   const preparing = pending !== null || trainingBusy || voiceBusy || changingMode;
   const busy = preparing || hasInFlightTurns(chat);
-  const waiting = needsTestChatPolling(chat);
+  const waiting = hasRecoverableTurns(chat);
+  const syncTurns = useRef<() => void>(() => {});
+  const localTurns = JSON.stringify(chats.map(c => [c.id, c.outbox?.filter(o => !o.accepted).map(o => [o.id, o.status])]));
+  useEffect(() => { syncTurns.current(); }, [localTurns]);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
   // Keep former testing history available in ChatLab. Business conversations
@@ -125,16 +130,14 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   useEffect(() => {
     if (!ready) return;
     let disposed = false, running = false;
-    const polling = new TestChatPolling();
     const abort = new AbortController();
     async function sync() {
       if (disposed || running || document.hidden || !navigator.onLine) return;
       running = true;
       let stream: string | undefined;
       try {
-        polling.retain(chatsRef.current.map(c => c.id));
         for (const current of chatsRef.current) {
-          if (!polling.due(current, Date.now())) continue;
+          if (!hasRecoverableTurns(current)) continue;
           stream = current.id;
           const url = `/api/${current.mode === "real" ? "agent-real" : "agent-test"}/turns?slug=${encodeURIComponent(slug)}`;
           const response = await fetch(`${url}&stream=${current.id}`, { cache: "no-store", signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]) });
@@ -162,11 +165,11 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         }
       } finally { running = false; }
     }
-    const interval = window.setInterval(() => void sync(), 1000);
-    const reconnect = () => { polling.reconnect(); void sync(); };
-    window.addEventListener("online", reconnect);
-    document.addEventListener("visibilitychange", reconnect);
-    return () => { disposed = true; abort.abort(); clearInterval(interval); window.removeEventListener("online", reconnect); document.removeEventListener("visibilitychange", reconnect); };
+    const task = invalidationTask(sync, () => !document.hidden && navigator.onLine, 0);
+    syncTurns.current = task.invalidate;
+    task.invalidate();
+    const unsubscribe = subscribeChanges(["transport"], task.invalidate);
+    return () => { disposed = true; abort.abort(); task.stop(); unsubscribe(); syncTurns.current = () => {}; };
   }, [ready, slug, configurationDraft]);
   async function retryOperation(operation: PendingTestTurn) {
     try {

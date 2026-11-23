@@ -1,4 +1,5 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { AttentionSnapshot } from "@/lib/business-assistant/attention-model";
@@ -28,11 +29,10 @@ export function AssistantAttention({ slug, active, onResume }: {
       } catch { if (alive) { setError(true); setSnapshot(null); } }
       finally { pending = false; }
     }
-    void read();
-    const interval = window.setInterval(() => void read(), 60000);
+    const unsubscribe = subscribeChanges(["assistant", "inbox", "business", "discovery"], read, true);
     document.addEventListener("visibilitychange", read);
     window.addEventListener("focus", read);
-    return () => { alive = false; controller.abort(); clearInterval(interval);
+    return () => { alive = false; controller.abort(); unsubscribe();
       document.removeEventListener("visibilitychange", read); window.removeEventListener("focus", read); };
   }, [slug, active, refresh]);
   if (!active) return null;

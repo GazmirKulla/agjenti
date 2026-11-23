@@ -1,4 +1,5 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { reactionCapabilities, type MessageReaction } from "@/lib/conversations/reactions";
 import { useDashboardTranslator } from "@/components/dashboard/language";
@@ -40,12 +41,12 @@ export function useMessageReactions(endpoint: string, storageKey: string) {
       if (stored && typeof stored.messageId === "string" && typeof stored.requestId === "string" && Number.isInteger(stored.revision) && typeof stored.emoji === "string") save(stored);
     } catch { /* Ignore malformed local hints, never trust them for authorization. */ }
     void refresh();
-    // Visible tabs only; returning to the tab reads at once. Reactions are not worth a read every 3s.
+    // Changes and returning to a visible tab refresh reactions without periodic reads.
     const tick = () => { if (!busy.current && document.visibilityState === "visible") void refresh(); };
-    const timer = setInterval(tick, 10_000);
+    const unsubscribe = subscribeChanges(["reactions"], refresh);
     const reconnect = () => void refresh(); window.addEventListener("online", reconnect);
     document.addEventListener("visibilitychange", tick);
-    return () => { alive.current = false; clearInterval(timer); window.removeEventListener("online", reconnect); document.removeEventListener("visibilitychange", tick); };
+    return () => { alive.current = false; unsubscribe(); window.removeEventListener("online", reconnect); document.removeEventListener("visibilitychange", tick); };
   }, [refresh, save, storageKey]);
   const submit = async (approval: Approval) => {
     if (busy.current) return;

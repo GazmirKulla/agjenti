@@ -1,4 +1,5 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HistoryMessage } from "@/lib/business-assistant/history";
 import { hasRecoverableWork, type ConversationView, type StoredConversation, type PlanningPreferences, type StoredMessage } from "@/lib/business-assistant/persistence-model";
@@ -94,17 +95,21 @@ export function useAssistantHistory(userId: string, slug: string) {
   useEffect(() => {
     const sync = async () => {
       const active = current.current;
-      if (!active || inFlight.current || document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible") return;
       const g = generation.current;
       try {
+        const list = await request();
+        if (g !== generation.current) return;
+        setThreads(list.conversations); setNext(list.next);
+        if (!active || inFlight.current) return;
         const data = await request(`&id=${active.conversation.id}&assess=1`);
         if (g === generation.current && !inFlight.current && data.conversation.revision !== current.current?.conversation.revision) accept(data, true);
       } catch (e) { if (g === generation.current) setWarning((e as Error).message); }
     };
     window.addEventListener("focus", sync);
     document.addEventListener("visibilitychange", sync);
-    const interval = window.setInterval(sync, 15000);
-    return () => { clearInterval(interval); window.removeEventListener("focus", sync); document.removeEventListener("visibilitychange", sync); };
+    const unsubscribe = subscribeChanges(["assistant"], sync);
+    return () => { unsubscribe(); window.removeEventListener("focus", sync); document.removeEventListener("visibilitychange", sync); };
   }, [request, accept]);
   return { history, setHistory, threads, warning, view, loading, listLoading, restoration, next, inFlight, accept, previous,
     /** True when the open conversation has gone quiet and holds no work: reopening should start a new one. */

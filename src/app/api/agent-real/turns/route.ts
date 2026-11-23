@@ -1,9 +1,9 @@
+import { continueTransport } from "@/lib/conversations/continue";
 import { after, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { getSessionUser, isPlatformAdmin, requireBusinessAccess } from "@/lib/tenant/access";
 import { transportAccess, isTransportId } from "@/lib/conversations/transport-access";
 import { decryptSecret } from "@/lib/crypto/tokens";
-import { runPanelChat } from "@/lib/agents/panel-chat/execute";
 import { applyPanelInputs, readPanelInputs } from "@/lib/agents/panel-chat/inputs";
 import { requestOrigin } from "@/lib/http/request-origin";
 export const maxDuration = 180;
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const { error } = await access.db.rpc("enqueue_panel_chat", { p_business: access.businessId, p_user: access.userId, p_stream: data.streamId,
       p_request: data.requestId, p_sequence: data.sequence, p_message: message, p_fingerprint: fingerprint });
     if (error) return NextResponse.json({ error: "Kërkesa nuk u pranua. Biseda mund të jetë ndalur ose ka skaduar; kontrollo statusin." }, { status: 409 });
-    after(() => runPanelChat({ businessId: access.businessId, userId: access.userId, streamId: data.streamId }));
+    after(() => continueTransport({ kind: "panel", scope: { businessId: access.businessId, userId: access.userId, streamId: data.streamId } }));
     return NextResponse.json({ accepted: true, requestId: data.requestId }, { status: 202 });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Kërkesë e pavlefshme." }, { status: 400 }); }
 }
@@ -59,6 +59,5 @@ export async function GET(request: Request) {
   const jobs = (data ?? []).map(job => ({ requestId: job.client_request_id, sequence: job.client_sequence,
     status: job.status !== "sent" && Date.parse(job.expires_at) <= Date.now() ? "failed" : job.status,
     error: job.error, message: job.payload.message, result: job.result_ciphertext ? JSON.parse(decryptSecret(job.result_ciphertext)) : null }));
-  if (jobs.some(job => ["queued", "processing"].includes(job.status))) after(() => runPanelChat({ businessId: access.businessId, userId: access.userId, streamId: stream }));
   return NextResponse.json({ jobs }, { headers: { "Cache-Control": "no-store" } });
 }

@@ -1,4 +1,6 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
+import { invalidationTask } from "@/lib/realtime/invalidation";
 import { useEffect, useRef, useState } from "react";
 export type ReplyOperation = { requestId: string; body: string; status: string; error?: string; accepted?: boolean; canRetry?: boolean; attempts?: number };
 /** Transport UI only: persisted IDs are reconciled with the authoritative outbox. */
@@ -7,6 +9,7 @@ export function useReplyOutbox(url: string, storageKey: string, onRefresh: () =>
   const [error, setError] = useState("");
   const current = useRef<ReplyOperation[]>([]);
   const refresh = useRef(onRefresh);
+  const wake = useRef<() => void>(() => {});
   const retrying = useRef(new Set<string>());
   refresh.current = onRefresh;
   useEffect(() => {
@@ -28,6 +31,7 @@ export function useReplyOutbox(url: string, storageKey: string, onRefresh: () =>
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || "Statusi nuk u ngarkua.");
         if (disposed) return;
+        const previous = JSON.stringify(current.current);
         const jobs = body.jobs as ReplyOperation[];
         if (!Array.isArray(jobs)) throw new Error("Status i pavlefshëm.");
         const merged = current.current.map(local => {
@@ -45,14 +49,16 @@ export function useReplyOutbox(url: string, storageKey: string, onRefresh: () =>
           save(current.current.map(o => o.requestId === next.requestId ? { ...o, accepted: sent.ok, status: sent.ok ? result.status : "failed", error: result.error } : o));
         }
         setError("");
-        refresh.current();
+        if (previous !== JSON.stringify(current.current)) refresh.current();
+        if (current.current.find(o => !o.accepted)?.status === "queued") wake.current();
       } catch { if (!disposed) setError("Lidhja nuk u konfirmua. Kërkesa ruhet me të njëjtin identitet; po kontrollojmë statusin."); }
       finally { running = false; }
     }
-    void sync();
-    const interval = setInterval(() => void sync(), 2000);
-    window.addEventListener("online", sync);
-    return () => { disposed = true; clearInterval(interval); window.removeEventListener("online", sync); };
+    const task = invalidationTask(sync, () => !document.hidden, 0);
+    wake.current = task.invalidate;
+    task.invalidate();
+    const unsubscribe = subscribeChanges(["transport"], task.invalidate);
+    return () => { disposed = true; task.stop(); unsubscribe(); wake.current = () => {}; };
   }, [url, storageKey]);
   const save = (next: ReplyOperation[]) => {
     sessionStorage.setItem(storageKey, JSON.stringify(next));
@@ -62,7 +68,7 @@ export function useReplyOutbox(url: string, storageKey: string, onRefresh: () =>
     try {
       if (current.current.filter(o => !["sent", "failed"].includes(o.status)).length >= 40) throw new Error("Radha është plot; prit përfundimin e mesazheve.");
       save([...current.current, { requestId: crypto.randomUUID(), body, status: "queued" }]);
-      setError(""); return true;
+      setError(""); wake.current(); return true;
     } catch { setError("Mesazhi nuk u vu në radhë. Kontrollo ruajtjen e shfletuesit dhe kapacitetin e radhës."); return false; }
   }
   async function retry(requestId: string) {
@@ -81,6 +87,7 @@ export function useReplyOutbox(url: string, storageKey: string, onRefresh: () =>
     // Only an unaccepted enqueue can be safely retried here. An uncertain
     // provider send requires reconciliation, not a second provider request.
     save(current.current.map(o => o.requestId === requestId && !o.accepted ? { ...o, status: "queued", error: undefined } : o));
+    wake.current();
   }
   return { operations, enqueue, retry, error };
 }

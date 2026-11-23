@@ -1,3 +1,4 @@
+import { waitForStoredChange } from "@/lib/realtime/wait";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { recordSystem, stepFailure } from "@/lib/tracking/system-events";
 import { fetchPublicInstagram, normalizeInstagramUsername, publicScanAvailable, PublicInstagramError } from "@/lib/instagram/public-profile";
@@ -149,15 +150,12 @@ export async function wakeProspectScan(id: string, origin: string | null, fetche
 }
 
 /** Waits briefly for a scan that is being read, so a fast read answers at once. */
-export async function waitForProspectScan(id: string, until: number, db: Db = createServiceSupabase(), sleep = (ms: number) => new Promise(r => setTimeout(r, ms))) {
-  let last: ProspectScan | null = null;
-  while (Date.now() < until) {
-    const { data } = await db.from("prospect_scans").select(columns).eq("id", id).maybeSingle();
-    last = (data as ProspectScan | null) ?? last;
-    if (last && !["queued", "running"].includes(last.status)) return last;
-    await sleep(1500);
-  }
-  return last;
+export async function waitForProspectScan(id: string, until: number, db: Db = createServiceSupabase()) {
+  return waitForStoredChange(db, `internal:prospect:${id}`, until, async () => {
+    const { data, error } = await db.from("prospect_scans").select(columns).eq("id", id).maybeSingle();
+    if (error) throw new Error("Prospect state unavailable");
+    return (data as ProspectScan | null) ?? null;
+  }, scan => Boolean(scan && !["queued", "running"].includes(scan.status)));
 }
 
 /** Due scans whose wake-up was lost, and expired reads removed. Daily cron. */

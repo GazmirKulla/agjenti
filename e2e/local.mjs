@@ -117,7 +117,7 @@ async function up() {
   if (!networks.includes(network)) run('docker', ['network', 'create', '--internal', '--opt', 'com.docker.network.bridge.host_binding_ipv4=127.0.0.1', '--label', `agjenti.e2e=${project}`, network]);
   verifyNetwork();
   // CLI output may contain disposable local keys: keep it private, not in logs.
-  supabase(['start', '-x', 'studio,postgres-meta,logflare,vector,realtime,edge-runtime,supavisor,imgproxy']);
+  supabase(['start', '-x', 'studio,postgres-meta,logflare,vector,edge-runtime,supavisor,imgproxy']);
   verifyContainers();
   replay(true);
   console.log('Local Supabase ready; production credentials never loaded.');
@@ -166,4 +166,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     else if (command === 'status') { verifyContainers(); console.log('Local dependencies isolated and available.'); }
     else throw new Error('Use up | app | status | down');
   } catch (error) { console.error(error.message); process.exitCode = 1; }
+}
+
+/** Only the isolated local app and Supabase realtime endpoint are reachable in browser tests. */
+export function isLocalWebSocket(value) {
+  try {
+    const url = new URL(value);
+    return url.origin === 'ws://localhost:3103'
+      || (url.origin === 'ws://127.0.0.1:55321' && url.pathname === '/realtime/v1/websocket');
+  } catch { return false; }
 }

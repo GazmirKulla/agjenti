@@ -18,7 +18,7 @@ enabled = false
 [db.pooler]
 enabled = false
 [realtime]
-enabled = false
+enabled = true
 [studio]
 enabled = false
 [local_smtp]

@@ -31,13 +31,16 @@ describe("every capability the agents have is tracked at its entry and its exits
     for (const [id, spec] of Object.entries(capabilities)) {
       if (!spec.emittedBy.length) { missing.push(`${id}: no source`); continue; }
       const text = spec.emittedBy.map(path => readFileSync(path, "utf8")).join("\n");
+      const sql = spec.emittedBy.filter(path => path.endsWith(".sql")).map(path => readFileSync(path, "utf8")).join("\n");
+      // SQL emits single-quoted literals; keep the same entry/exit coverage for database triggers.
+      const emits = (literal: string) => text.includes(`"${literal}"`) || sql.includes(`'${literal}'`);
       const job = Object.keys(scheduledJobs).find(name => scheduledJobCapability(name) === id);
-      const named = id.startsWith("assistant.") || spec.emittedBy.some(path => path.endsWith("process-events.ts")) || text.includes(`"${id}"`)
+      const named = id.startsWith("assistant.") || spec.emittedBy.some(path => path.endsWith("process-events.ts")) || emits(id)
         || (job !== undefined && text.includes(`trackScheduledJob("${job}"`));
       if (!named) missing.push(`${id}: not named in ${spec.emittedBy.join(", ")}`);
       // The daily job records abandoned processes in SQL.
       for (const point of [spec.entry, ...Object.keys(spec.exits)].filter((p): p is string => Boolean(p) && p !== "abandoned"))
-        if (!text.includes(`"${point}"`)) missing.push(`${id}.${point}`);
+        if (!emits(point)) missing.push(`${id}.${point}`);
     }
     expect(missing, `Declared but never emitted: ${missing.join(", ")}`).toEqual([]);
   });

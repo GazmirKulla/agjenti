@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -30,7 +31,7 @@ async function navigate(page, path) {
 }
 test.beforeAll(() => verifyContainers());
 test.beforeEach(async ({ context }) => {
-  await context.routeWebSocket('**/*', route => new URL(route.url()).origin === 'ws://localhost:3103' ? route.connectToServer() : route.close());
+  await context.routeWebSocket('**/*', route => isLocalWebSocket(route.url()) ? route.connectToServer() : route.close());
   await context.route('**/*', route => ['http://localhost:3103', keys.api].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort('blockedbyclient'));
 });
 

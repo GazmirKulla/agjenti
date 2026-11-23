@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 import { communicationResponse } from './communication-response.mjs';
 // Failure confirmation through actual UI/Auth/API/coordinator. Only model output
 // is synthetic. Run with isolated app-r3 and WITHOUT a separate r3-provider.
@@ -85,7 +86,7 @@ for(const spec of domains) test(`R4 ${spec.label}: authenticated private configu
   const t=fixtures.tenants.find(t=>t.kind===spec.kind);
   await observeServerActions(page);
   await context.route('**/*',r=>[origin,keys.api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
-  await context.routeWebSocket('**/*',r=>new URL(r.url()).origin==='ws://localhost:3103'?r.connectToServer():r.close());
+  await context.routeWebSocket('**/*',r=>isLocalWebSocket(r.url())?r.connectToServer():r.close());
   await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(t.email);
   await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(fixtures.password);
   await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${t.slug}`);
@@ -135,7 +136,7 @@ test('R4 critical claims must be corrected before reaching the customer',async({
   test.setTimeout(90000);
   await observeServerActions(page);
   await context.route('**/*',r=>[origin,keys.api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
-  await context.routeWebSocket('**/*',r=>new URL(r.url()).origin==='ws://localhost:3103'?r.connectToServer():r.close());
+  await context.routeWebSocket('**/*',r=>isLocalWebSocket(r.url())?r.connectToServer():r.close());
   await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(tenant.email);
   await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(fixtures.password);
   await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${tenant.slug}`);

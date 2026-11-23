@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // Real isolated Auth and routed settings. AI responses below are explicitly
 // synthetic UI fixtures; no provider, activation or publication is performed.
 import { test, expect } from '@playwright/test';
@@ -30,7 +31,7 @@ async function settings(page, label = 'Cilësimet') {
 test.beforeAll(() => verifyContainers());
 test.beforeEach(async ({ context, page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await context.routeWebSocket('**/*', r => new URL(r.url()).origin === 'ws://localhost:3103' ? r.connectToServer() : r.close());
+  await context.routeWebSocket('**/*', r => isLocalWebSocket(r.url()) ? r.connectToServer() : r.close());
   await context.route('**/*', r => ['http://localhost:3103', keys.api].includes(new URL(r.request().url()).origin) ? r.continue() : r.abort('blockedbyclient'));
   await page.addInitScript(() => { if (!localStorage.getItem('agjenti-theme')) localStorage.setItem('agjenti-theme', 'dark'); });
 });

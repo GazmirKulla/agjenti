@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // Real local Auth/PostgREST. Stored messages below are labeled synthetic fixtures.
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
@@ -30,7 +31,7 @@ async function seed(title) {
 test.beforeAll(() => verifyContainers());
 test.beforeEach(async ({ context, page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await context.routeWebSocket('**/*', r => new URL(r.url()).origin === 'ws://localhost:3103' ? r.connectToServer() : r.close());
+  await context.routeWebSocket('**/*', r => isLocalWebSocket(r.url()) ? r.connectToServer() : r.close());
   await context.route('**/*', r => ['http://localhost:3103', keys.api].includes(new URL(r.request().url()).origin) ? r.continue() : r.abort());
   await page.addInitScript(() => localStorage.setItem('agjenti-theme', 'dark'));
 });

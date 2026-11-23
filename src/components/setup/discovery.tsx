@@ -1,4 +1,5 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
 import Link from "next/link";
 import Image from "next/image";
 import type { InstagramBusinessProfile } from "@/lib/instagram/business-profile";
@@ -64,8 +65,8 @@ export function DiscoverySetup({ slug, businessId }: { slug: string; businessId:
       } catch (err) { if (!cancelled) setError(err instanceof Error ? err.message : "Analiza nuk u ngarkua."); }
     };
     void poll();
-    const timer = setInterval(() => void poll(), 5000);
-    return () => { cancelled = true; clearInterval(timer); };
+    const unsubscribe = subscribeChanges(["discovery"], poll);
+    return () => { cancelled = true; unsubscribe(); };
   }, [endpoint, load]);
 
   const active = state?.jobs.some(job => ["queued", "running"].includes(job.status)) ?? false;

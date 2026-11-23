@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { createDecipheriv, createCipheriv, randomBytes, randomUUID } from 'node:crypto';
@@ -58,7 +59,7 @@ test.beforeEach(async ({ context, page }) => {
   await observeServerActions(page);
   await context.routeWebSocket('**/*', route => {
     const url = new URL(route.url());
-    if (url.origin === 'ws://localhost:3103') route.connectToServer();
+    if (isLocalWebSocket(url.href)) route.connectToServer();
     else route.close({ code: 1008, reason: 'Local E2E only' });
   });
   await context.route('**/*', async route => {

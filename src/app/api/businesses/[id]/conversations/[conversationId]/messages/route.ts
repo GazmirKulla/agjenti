@@ -1,7 +1,7 @@
+import { continueTransport } from "@/lib/conversations/continue";
 import { after, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { transportAccess, isTransportId } from "@/lib/conversations/transport-access";
-import { runWorkflowQueue } from "@/lib/conversations/workflow-queue";
 import { staffPhotoToSend } from "@/lib/conversations/staff-photo";
 
 export const maxDuration = 180;
@@ -32,7 +32,7 @@ export async function POST(request: Request, context: Context) {
       p_payload: photo ? { body: text, media: { kind: "image", url: photo.url } } : { body: text },
     });
     if (error) return NextResponse.json({ error: "Mesazhi nuk u pranua. Kontrollo bisedën, lejet dhe afatin e përgjigjes (Instagram manual: 7 ditë; WhatsApp: 24 orë).", code: "transport_rejected" }, { status: 409 });
-    after(() => runWorkflowQueue().then(() => {}));
+    after(() => continueTransport());
     return NextResponse.json({ accepted: true, requestId: body.requestId, status: data.status }, { status: 202 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Kërkesë e pavlefshme." }, { status: 400 });
@@ -53,7 +53,6 @@ export async function GET(request: Request, context: Context) {
   if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { data, error } = jobs;
   if (error) return NextResponse.json({ error: "Statusi nuk u ngarkua." }, { status: 503 });
-  if (data?.some(j => ["queued", "prepared", "processing", "sending"].includes(j.status))) after(() => runWorkflowQueue().then(() => {}));
   return NextResponse.json({ jobs: (data ?? []).reverse().map(j => ({ requestId: j.client_request_id, status: j.status, error: j.error, body: j.reply, createdAt: j.created_at, attempts: j.attempts,
     canRetry: j.operator_user_id === access.userId && j.status === "uncertain" && j.attempts < 3 && j.message_transport_parts?.length === 1 && j.message_transport_parts[0].part_index === 0 && j.message_transport_parts[0].status === "failed" && !j.message_transport_parts[0].external_message_id,
   })) }, { headers: { "Cache-Control": "no-store" } });

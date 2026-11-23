@@ -1,4 +1,5 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { CampaignDashboard, CampaignDetail } from "@/lib/campaigns/service";
@@ -31,9 +32,12 @@ export function Campaigns({ businessId, businessName, slug, owner, initialData }
     finally { setBusy(false); }
   }
   useEffect(() => {
-    if (selected?.status !== "running") return;
-    const timer = setInterval(() => { refresh(selected.id).catch(() => setError("Përditësimi dështoi. Dërgimet mund të vazhdojnë në server.")); }, 5000);
-    return () => clearInterval(timer);
+
+    const unsubscribe = subscribeChanges(["campaigns"], async () => {
+      try { await refresh(); if (selected?.id) await refresh(selected.id); }
+      catch { setError("Përditësimi dështoi. Dërgimet mund të vazhdojnë në server."); }
+    });
+    return unsubscribe;
   }, [selected?.id, selected?.status, refresh]);
   const preview = `${form.body.split("{{emri}}").join("Arta").split("{{biznesi}}").join(businessName)}${form.terms ? `\n\n${form.terms}` : ""}\n\n${FOOTER}`;
   const bytes = new TextEncoder().encode(preview).length;

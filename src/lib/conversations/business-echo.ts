@@ -1,3 +1,4 @@
+import { waitForStoredChange } from "@/lib/realtime/wait";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NormalizedBusinessEcho } from "@/lib/instagram/types";
 import { initialSnapshot } from "@/lib/orchestration/contracts";
@@ -17,7 +18,7 @@ import { channelAdapter } from "./channel";
  */
 export type EchoOutcome = "stored" | "duplicate" | "ours" | "unknown_connection" | "in_flight" | "failed";
 
-type Options = { db?: SupabaseClient; waitMs?: number; pollMs?: number; sleep?: (ms: number) => Promise<void> };
+type Options = { db?: SupabaseClient; waitMs?: number };
 const OWN_SEND_TEXT_WINDOW_MS = 10 * 60_000;
 const ACCEPTED_PART = ["sending", "sent", "delivered", "read", "uncertain"];
 
@@ -35,7 +36,6 @@ export async function persistBusinessEchoes(echoes: NormalizedBusinessEcho[], op
 
 export async function persistBusinessEcho(echo: NormalizedBusinessEcho, options: Options = {}): Promise<EchoOutcome> {
   const db = options.db ?? createServiceSupabase();
-  const sleep = options.sleep ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
   const adapter = channelAdapter(echo.channel);
   const { data: connection, error: connectionError } = await db.from(adapter.table).select("id,business_id")
     .eq(adapter.account, echo.accountId).eq("status", "connected").maybeSingle();
@@ -45,7 +45,7 @@ export async function persistBusinessEcho(echo: NormalizedBusinessEcho, options:
   // An Agjenti send may still be between the provider response and its DB
   // receipt; wait for it so its own echo is recognised instead of duplicated.
   const deadline = Date.now() + (options.waitMs ?? 20_000);
-  for (;;) {
+  const clear = await waitForStoredChange(db, `internal:transport:${connection.id}:${echo.externalParticipantId}`, deadline, async () => {
     const { count, error } = await db.from("workflow_inbound_queue").select("id", { count: "exact", head: true })
       .eq("connection_id", connection.id).eq("participant_id", echo.externalParticipantId).eq("status", "sending");
     if (error) throw new Error("Echo in-flight check failed");
@@ -58,10 +58,9 @@ export async function persistBusinessEcho(echo: NormalizedBusinessEcho, options:
     const booking = await db.from("booking_customer_messages").select("id", { count: "exact", head: true })
       .eq("connection_id", connection.id).eq("participant_id", echo.externalParticipantId).eq("status", "sending");
     if (booking.error && booking.error.code !== "42P01" && booking.error.code !== "PGRST205") throw new Error("Echo booking message check failed");
-    if (!count && !campaign.count && !confirmation.count && !booking.count) break;
-    if (Date.now() >= deadline) return "in_flight";
-    await sleep(options.pollMs ?? 2_000);
-  }
+    return !count && !campaign.count && !confirmation.count && !booking.count;
+  }, value => value);
+  if (!clear) return "in_flight";
 
   const { data: ownPart, error: partError } = await db.from("message_transport_parts").select("id")
     .eq("connection_id", connection.id).eq("external_message_id", echo.externalMessageId).limit(1).maybeSingle();

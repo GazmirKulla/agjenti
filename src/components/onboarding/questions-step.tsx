@@ -1,4 +1,5 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
 import { useCallback, useEffect, useState } from "react";
 import { ProfileQuestions } from "@/components/dashboard/profile-questions";
 import { finishOnboardingProfile } from "@/lib/onboarding/actions";
@@ -40,15 +41,13 @@ export function QuestionsStep({ slug }: { slug: string }) {
     const response = await fetch(endpoint, { cache: "no-store" }).catch(() => null);
     if (response?.ok) setState(await response.json());
   }, [endpoint]);
-  const running = state?.scans.some((scan) => ["queued", "running"].includes(scan.status)) ?? true;
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, slug]);
   useEffect(() => {
-    if (state && !running) return;
-    const timer = setInterval(() => void load(), 3000);
-    return () => clearInterval(timer);
-  }, [state, running, load]);
+    const unsubscribe = subscribeChanges(["discovery"], load, false, slug);
+    return () => unsubscribe();
+  }, [load, slug]);
 
   const finish = useCallback(() => {
     setLeaving(true);

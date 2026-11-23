@@ -1,10 +1,10 @@
+import { continueTransport } from "@/lib/conversations/continue";
 import { after, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { transportAccess, isTransportId } from "@/lib/conversations/transport-access";
 import { readTestSession } from "@/lib/agents/test-chat/session";
 import { decryptSecret } from "@/lib/crypto/tokens";
-import { runWorkflowQueue } from "@/lib/conversations/workflow-queue";
 import { fragmentKind } from "@/lib/conversations/message-batch";
 import { withAiUsage } from "@/lib/ai/usage";
 import type { TestChatInput, TestChatResult } from "@/lib/agents/test-chat/types";
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
         .eq("id", job.id).eq("operator_user_id", access.userId).eq("status", "failed").lt("attempts", 3).gt("expires_at", new Date().toISOString()).select("id").maybeSingle();
       if (retryError || !retried) return NextResponse.json({ error: "Retry nuk u pranua: kufiri i provave ose sesioni ka skaduar." }, { status: 409 });
     }
-    after(() => runWorkflowQueue(10, { businessId: access.businessId, userId: access.userId, streamId: data.streamId }).then(() => {}));
+    after(() => continueTransport({ kind: "test", scope: { businessId: access.businessId, userId: access.userId, streamId: data.streamId } }));
     return NextResponse.json({ requestId: data.requestId, accepted: true }, { status: 202 });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Kërkesë e pavlefshme." }, { status: 400 }); }
 }
@@ -77,6 +77,5 @@ export async function GET(request: Request) {
     const grouped = job.batch_parent_id || rows.some(row => row.batch_parent_id === job.id);
     return { requestId: job.client_request_id, sequence: job.client_sequence, batchId: grouped ? owner.client_request_id : undefined, status: expired && owner.status !== "sent" ? "failed" : owner.status, error: expired ? "Sesioni ka skaduar; rezultati nuk mund të rikthehet." : owner.error, failure: result && "error" in result ? result.labObservation : undefined, result: result && "error" in result ? null : result };
   });
-  if (jobs.some(j => ["queued", "processing"].includes(j.status))) after(() => runWorkflowQueue(10, { businessId: access.businessId, userId: access.userId, streamId: stream }).then(() => {}));
   return NextResponse.json({ jobs }, { headers: { "Cache-Control": "no-store" } });
 }

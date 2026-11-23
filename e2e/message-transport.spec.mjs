@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 import { communicationResponse } from './communication-response.mjs';
 // Actual browser → HTTP queue → SQL → coordinator/executor. Model only is synthetic.
 import http from 'node:http';
@@ -204,7 +205,7 @@ for(const channel of ['instagram','whatsapp'])test(`Inbox ${channel}: three send
 test.afterAll(async()=>{try{expect(counts()).toBe(before);}finally{server?.closeAllConnections();if(server)await new Promise(r=>server.close(r));}});
 async function login(page,context){
  await context.route('**/*',r=>[origin,keys.api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
- await context.routeWebSocket('**/*',r=>new URL(r.url()).origin==='ws://localhost:3103'?r.connectToServer():r.close());
+ await context.routeWebSocket('**/*',r=>isLocalWebSocket(r.url())?r.connectToServer():r.close());
  await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(t.email);await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(f.password);
  await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${t.slug}`);await page.goto(`/b/${t.slug}/agents/test`);
 }

@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // R1: real local Auth/application/sealed state and PostgreSQL; no LLM call.
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
@@ -54,7 +55,7 @@ test.beforeAll(() => { expect(project).toBe('agjenti-e2e-local-recovery-3a-20261
 test.beforeEach(async ({ page, context }) => {
   await observeServerActions(page);
   await context.route('**/*', r => [origin, keys.api].includes(new URL(r.request().url()).origin) ? r.continue() : r.abort());
-  await context.routeWebSocket('**/*', r => new URL(r.url()).origin === 'ws://localhost:3103' ? r.connectToServer() : r.close());
+  await context.routeWebSocket('**/*', r => isLocalWebSocket(r.url()) ? r.connectToServer() : r.close());
 });
 test('R1 authenticated declarations survive 25 turns, corrections, reload and real SQL CAS without profile promotion', async ({ page }) => {
   test.setTimeout(120000);

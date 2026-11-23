@@ -11,11 +11,12 @@ export type PanelScope = { businessId: string; userId: string; streamId: string 
 export async function runPanelChat(scope: PanelScope) {
   const db = createServiceSupabase();
   const started = Date.now();
+  let processed = 0;
   for (let count = 0; count < 10 && Date.now() - started < 45000; count++) {
     const { data, error } = await db.rpc("claim_panel_chat", { p_business: scope.businessId, p_user: scope.userId, p_stream: scope.streamId });
     if (error) throw new Error("Real chat queue unavailable");
     const job = data?.[0];
-    if (!job) return;
+    if (!job) return processed;
     try {
       if (job.operation_kind !== "panel" || job.business_id !== scope.businessId || job.operator_user_id !== scope.userId || job.test_stream_id !== scope.streamId) throw new Error("Panel identity mismatch");
       const [conversation, saved, outbound] = await Promise.all([
@@ -58,6 +59,7 @@ export async function runPanelChat(scope: PanelScope) {
           p_reply: turn.reply, p_targets: checkpoint.targetIds, p_result: encryptSecret(JSON.stringify(result)),
           p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });
         if (committed.error) throw new Error("Panel process result commit failed");
+        processed++;
         continue;
       }
       throw new Error("Native panel checkpoint required");
@@ -66,7 +68,8 @@ export async function runPanelChat(scope: PanelScope) {
       // if an effect committed before the transcript receipt was lost.
       await db.from("workflow_inbound_queue").update({ leased_until: new Date(Date.now() + 30000).toISOString(), error: "Përpunimi nuk u konfirmua. Po kontrollojmë të njëjtën kërkesë." })
         .eq("id", job.id).eq("lease_token", job.lease_token).eq("status", "processing").throwOnError();
-      return;
+      return processed;
     }
   }
+  return processed;
 }

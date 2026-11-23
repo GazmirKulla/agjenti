@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // Actual local Auth -> Agent Test -> coordinator -> sealed state -> SQL.
 // Requires `node e2e/r3-provider.mjs` + `node e2e/local.mjs app-r3`.
 // Model output is controlled, not real LLM certification. No raw prompt artifacts.
@@ -40,7 +41,7 @@ const health=await fetch('http://127.0.0.1:55325/health',{headers:{connection:'c
 const before=effects(),evidence=[];
 await observeServerActions(page);
 await context.route('**/*',r=>[origin,keys.api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
-await context.routeWebSocket('**/*',r=>new URL(r.url()).origin==='ws://localhost:3103'?r.connectToServer():r.close());
+await context.routeWebSocket('**/*',r=>isLocalWebSocket(r.url())?r.connectToServer():r.close());
 await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(t.email);await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(f.password);await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${t.slug}`);await page.goto(`/b/${t.slug}/agents/test`);
 async function send(message){const input=page.locator('#agent-test-message');await input.fill(message);const{result}=await readServerAction(page,()=>input.press('Enter'));expect(result.error).toBeUndefined();const turn=result.turn??result,state=decode(result.session);await expect(page.getByText(turn.reply,{exact:true}).last()).toBeVisible();evidence.push({turn:evidence.length+1,source:turn.debug.source,reason:turn.debug.fallbackReason,route:turn.conversationRouting?.process,declaredKeys:Object.keys(state.customerDeclaredFacts??{}),profileKeys:Object.keys(state.context?.profile??{}),workflow:turn.configuration?.workflow});expect(state.processes?.order).toBeUndefined();expect(state.processes?.booking).toBeUndefined();return{state,turn};}
 await send('Përshëndetje');await send('Çfarë ofron Agjenti.app?');
@@ -84,7 +85,7 @@ test('P0 duplicate partial answer exits clarification loop without losing accept
   test.setTimeout(90000);verifyContainers();const before=effects();
   await observeServerActions(page);
   await context.route('**/*',r=>[origin,keys.api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
-  await context.routeWebSocket('**/*',r=>new URL(r.url()).origin==='ws://localhost:3103'?r.connectToServer():r.close());
+  await context.routeWebSocket('**/*',r=>isLocalWebSocket(r.url())?r.connectToServer():r.close());
   await page.goto('/login');await page.getByLabel('Email-i',{exact:true}).fill(t.email);await page.getByPlaceholder('Fjalëkalimi yt',{exact:true}).fill(f.password);
   await page.getByRole('button',{name:'Hyr në panel →',exact:true}).click();await expect(page).toHaveURL(`${origin}/b/${t.slug}`);await page.goto(`/b/${t.slug}/agents/test`);
   async function send(message){const input=page.locator('#agent-test-message');await input.fill(message);const{result}=await readServerAction(page,()=>input.press('Enter'));expect(result.error).toBeUndefined();await expect(page.getByText(result.reply,{exact:true}).last()).toBeVisible();expect(result.externalActions??[]).toEqual([]);return{state:decode(result.session),reply:result.reply};}

@@ -1,3 +1,4 @@
+import { isLocalWebSocket } from "./local.mjs";
 // Real local Auth/navigation; explicitly synthetic AI plans and activation responses.
 // Real authorized writes, expiry, revisions and replay run in capability-cases.mjs.
 import { test, expect } from '@playwright/test';
@@ -43,7 +44,7 @@ async function showPlan(page, steps, user) {
 }
 test.beforeAll(() => verifyContainers());
 test.beforeEach(async ({ context }) => {
-  await context.routeWebSocket('**/*', route => new URL(route.url()).origin === 'ws://localhost:3103' ? route.connectToServer() : route.close());
+  await context.routeWebSocket('**/*', route => isLocalWebSocket(route.url()) ? route.connectToServer() : route.close());
   await context.route('**/*', route => ['http://localhost:3103', keys.api].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort('blockedbyclient'));
 });
 

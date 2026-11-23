@@ -1,4 +1,5 @@
 "use client";
+import { subscribeChanges } from "@/lib/realtime/browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./conversation-training.css";
 import { TrainingReview } from "./training-review";
@@ -50,12 +51,11 @@ export function ConversationTraining({ slug }: { slug: string }) {
 
   useEffect(() => { void load(); }, [load]);
   const active = state?.sessions.find((s) => ACTIVE.has(s.status));
-  // While an import runs, its progress is read every few seconds.
+  // Progress follows persisted import changes, including work started on another device.
   useEffect(() => {
-    if (!active) return;
-    const timer = setInterval(() => { void load(); }, 3000);
-    return () => clearInterval(timer);
-  }, [active, load]);
+    const unsubscribe = subscribeChanges(["training"], async () => { await load(); });
+    return () => unsubscribe();
+  }, [load]);
 
   async function post(body: Record<string, unknown>) {
     const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

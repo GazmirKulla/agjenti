@@ -95,20 +95,30 @@ describe("business app echoes", () => {
 
   it("waits for an in-flight Agjenti send to settle before deciding", async () => {
     let checks = 0;
-    const sleep = vi.fn(async () => {});
+    vi.useFakeTimers();
     const { db } = fakeDb(call => {
       if (call.table === "instagram_connections") return connection;
       if (call.table === "workflow_inbound_queue") return { count: checks++ === 0 ? 1 : 0 };
       if (call.table === "message_transport_parts" && has(call, "external_message_id", "mid-1")) return { data: { id: "part-1" } };
       return {};
     });
-    expect(await persistBusinessEcho(echo, { db, sleep, pollMs: 1 })).toBe("ours");
-    expect(sleep).toHaveBeenCalledOnce();
+    let changed!: () => void;
+    const channel = { on: (_type: string, _filter: unknown, callback: () => void) => { changed=callback; return channel; },
+      subscribe: (callback: (status: string) => void) => { callback("SUBSCRIBED"); return channel; } };
+    Object.assign(db, { channel: vi.fn(() => channel), removeChannel: vi.fn(async () => {}) });
+    try {
+      const result = persistBusinessEcho(echo, { db });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(checks).toBe(1); // No repeated reads while the send is in flight.
+      changed(); await vi.advanceTimersByTimeAsync(1);
+      expect(await result).toBe("ours");
+      expect(checks).toBe(2);
+    } finally { vi.useRealTimers(); }
   });
 
   it("gives up rather than risk a duplicate when a send stays in flight", async () => {
     const { db, calls } = fakeDb(call => call.table === "instagram_connections" ? connection : call.table === "workflow_inbound_queue" ? { count: 1 } : {});
-    expect(await persistBusinessEcho(echo, { db, waitMs: 0, sleep: async () => {} })).toBe("in_flight");
+    expect(await persistBusinessEcho(echo, { db, waitMs: 0 })).toBe("in_flight");
     expect(calls.some(c => c.op === "insert")).toBe(false);
   });
 
