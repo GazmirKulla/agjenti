@@ -47,7 +47,6 @@ export default async function ProductDetailPage({
         key={product.id + JSON.stringify(product)}
         slug={slug}
         product={product}
-        types={data.types}
         workflows={data.workflows}
         kind={product.item_kind ?? data.items.kind.id}
         fields={data.items.fields}

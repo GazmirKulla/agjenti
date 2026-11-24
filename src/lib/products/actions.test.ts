@@ -91,7 +91,9 @@ it("edits an active product linked to a published visual flow without demanding 
   const form = new FormData();
   Object.entries({ name: "Puzzle", currency: "EUR", price: "25", product_type_id: "00000000-0000-4000-8000-000000000003", product_id: id, updated_at: "2026-11-04T00:00:00Z", is_active: "on" }).forEach(([key,value])=>form.set(key,value));
   expect((await updateProduct("test", form)).success).toBeTruthy();
-  expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ workflow_id: null, is_active: true }));
+  expect(m.update).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }));
+  // The form no longer carries the order process: a save keeps whatever is stored.
+  expect(m.update.mock.calls.at(-1)?.[0]).not.toHaveProperty("workflow_id");
 });
 const payload = {
   ids: [id],
@@ -106,7 +108,8 @@ describe("catalog writes", () => {
     Object.entries({ name: "Libri i Shkronjave", price: "520", product_type_id: "type", is_active: "on" }).forEach(([key, value]) => form.set(key, value));
     expect(await createProduct("test", form)).toHaveProperty("success");
     expect(businessWorkflow).not.toHaveBeenCalled();
-    expect(m.insert).toHaveBeenCalledWith(expect.objectContaining({ workflow_id: null, is_active: true }));
+    expect(m.insert).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }));
+    expect(m.insert.mock.calls.at(-1)?.[0]).not.toHaveProperty("workflow_id");
     expect(m.rpc).not.toHaveBeenCalled();
   });
   it("bulk activates products inheriting the main workflow without adding branch assignments", async () => {

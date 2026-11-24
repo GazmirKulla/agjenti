@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, isPlatformAdmin, requireBusinessAccess } from "@/lib/tenant/access";
 import { PageHeading } from "@/components/dashboard/ui";
 import { TrainingMemory } from "@/components/agents/training-memory";
+import { BackLink } from "@/components/dashboard/ui";
 
 export const metadata = { title: "Memoria e Agjentit | Agjenti.app" };
 export default async function AgentMemoryPage({ params, searchParams }: {
@@ -17,7 +17,7 @@ export default async function AgentMemoryPage({ params, searchParams }: {
   const fromLab = (await searchParams).from === "chat-lab" && await isPlatformAdmin(user.id);
   return <>
     <PageHeading title="Memoria e Agjentit" description="Një vend për të kontrolluar dhe përsosur mënyrën si komunikon biznesi yt.">
-      <Link className="soft-link" href={fromLab ? "/admin/chat-lab" : `/b/${slug}/agents/test`}>← {fromLab ? "Chat Lab" : "Kthehu te prova"}</Link>
+      <BackLink href={fromLab ? "/admin/chat-lab" : `/b/${slug}/agents/test`}>{fromLab ? "Chat Lab" : "Kthehu te prova"}</BackLink>
     </PageHeading>
     <TrainingMemory target={{ slug }} />
   </>;

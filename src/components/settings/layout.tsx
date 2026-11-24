@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import { useDashboardTranslator } from "@/components/dashboard/language";
 import { settingsGroups } from "@/lib/dashboard/navigation/settings";
 import s from "./settings.module.css";
+import { BackLink } from "@/components/dashboard/ui";
 
 export function SettingsLayout({ slug, name, children }: { slug: string; name: string; children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,7 +21,7 @@ export function SettingsLayout({ slug, name, children }: { slug: string; name: s
     return () => media.removeEventListener("change", sync);
   }, [pathname]);
   return <section className={s.workspace} aria-label={t("Cilësimet")}>
-    <header className={s.heading}><div><h1>{t("Cilësimet")}</h1><p>{name}</p></div><Link href={base}>← {t("Kthehu te asistenti")}</Link></header>
+    <header className={s.heading}><div><h1>{t("Cilësimet")}</h1><p>{name}</p></div><BackLink inline href={base}>{t("Kthehu te asistenti")}</BackLink></header>
     <div className={s.body}>
       <details ref={navigation} className={s.navigation} open key={pathname}>
         <summary>{t("Seksionet e cilësimeve")}</summary>

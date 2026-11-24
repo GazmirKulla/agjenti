@@ -5506,3 +5506,14 @@ button.order-photo-image:hover:not(:disabled) {
 .business-logo-text { flex: 1 1 220px; display: grid; gap: 4px; }
 .business-logo-text h2, .business-logo-text p { margin: 0; }
 .business-logo-actions { display: flex; gap: 8px; }
+
+/* Back to the parent page (BackLink): one look everywhere, quiet until hovered. */
+.back-link { display: inline-flex; align-items: center; gap: 6px; width: fit-content; max-width: 100%; min-height: 32px; margin: 0 0 10px -10px; padding: 5px 12px 5px 10px; border-radius: 999px; color: var(--ink-muted); font-size: 13px; font-weight: 600; line-height: 1.2; text-decoration: none; transition: background-color .15s, color .15s; }
+.back-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.back-link svg { flex: none; transition: transform .15s; }
+.back-link:hover { background: var(--hover); color: var(--ink); }
+.back-link:hover svg { transform: scaleX(-1) translateX(2px) !important; }
+.back-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Beside a title (in PageHeading's actions) or in a toolbar it is a quiet pill, not a margin above. */
+.page-heading > .back-link, .back-link.is-inline { margin: 0; }
+.page-heading > .back-link { flex: none; border: 1px solid var(--line); }

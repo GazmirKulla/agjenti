@@ -2,7 +2,6 @@
 .heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 4px 0 24px; border-bottom: 1px solid var(--line); }
 .heading h1 { margin: 0; font-size: 26px; font-weight: 650; }
 .heading p { margin: 4px 0 0; font-size: 13px; color: var(--ink-muted); }
-.heading a { color: var(--accent); font-size: 13px; padding: 10px 0; }
 .body { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 36px; padding-top: 24px; }
 .navigation { align-self: start; position: sticky; top: 100px; }
 .navigation>summary { display: none; }

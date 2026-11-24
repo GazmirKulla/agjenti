@@ -1,5 +1,14 @@
 import Link from "next/link";
 import { Icon } from "./icon";
+/** The one way back to a parent page: an arrow and its name, small and above (or beside) the title. */
+export function BackLink({ href, children, inline = false }: { href: string; children: React.ReactNode; inline?: boolean }) {
+  return (
+    <Link className={inline ? "back-link is-inline" : "back-link"} href={href}>
+      <Icon name="arrow" size={15} style={{ transform: "scaleX(-1)" }} />
+      <span>{children}</span>
+    </Link>
+  );
+}
 export function PageHeading({
   eyebrow,
   title,

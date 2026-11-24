@@ -203,7 +203,7 @@ export function ProductIntake({
           Plotëso fushat dhe ruaj produktin.
         </p>
         <ActionForm action={createAction} className="grid gap-5">
-          <ProductFields slug={slug} types={types} workflows={workflows} />
+          <ProductFields slug={slug} workflows={workflows} />
           <button className="btn btn-primary" type="submit">
             Ruaj produktin
           </button>

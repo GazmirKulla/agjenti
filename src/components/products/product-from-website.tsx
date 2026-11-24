@@ -11,9 +11,8 @@ import { ProductEditor } from "./editor";
 /** "Nga faqja e internetit": the owner pastes a product page link, the server
  * reads it, and the usual product form opens prefilled. Nothing is saved
  * until the owner checks it and presses save. */
-export function ProductFromWebsite({ slug, types, workflows, kind, fields, usage }: {
+export function ProductFromWebsite({ slug, workflows, kind, fields, usage }: {
   slug: string;
-  types: Option[];
   workflows: Option[];
   kind: string;
   fields: BusinessField[];
@@ -58,7 +57,7 @@ export function ProductFromWebsite({ slug, types, workflows, kind, fields, usage
           </p>
         )}
       </form>
-      {draft && <ProductEditor key={draft.id} slug={slug} types={types} workflows={workflows} kind={kind} fields={fields} usage={usage} draft={draft.product} />}
+      {draft && <ProductEditor key={draft.id} slug={slug} workflows={workflows} kind={kind} fields={fields} usage={usage} draft={draft.product} />}
     </div>
   );
 }

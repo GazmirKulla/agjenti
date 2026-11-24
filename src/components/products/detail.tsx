@@ -13,6 +13,7 @@ import { ProductBusinessWorkflow } from "./business-workflow";
 import { ReadinessList } from "./readiness-list";
 import { filledFields, productReadiness } from "@/lib/products/readiness";
 import { countsStock, effectiveQuantity, stockCustomerSentence, stockDeductLabels, stockModeLabels, stockReasonLabels, type StockMovement, type StockSettings } from "@/lib/products/stock";
+import { BackLink } from "@/components/dashboard/ui";
 
 const STATUS_LABEL: Record<string, string> = { archived: "I arkivuar", active: "Aktiv", draft: "Draft", unlinked: "I palidhur" };
 type Tab = "overview" | "variants" | "stock" | "media" | "workflow";
@@ -98,7 +99,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
   return (
     <div className="product-detail">
       <header className="product-detail-head">
-        <Link className="muted-copy" href={`/b/${slug}/products`}>‹ Produktet</Link>
+        <BackLink href={`/b/${slug}/products`}>Produktet</BackLink>
         <div className="product-detail-title">
           <h1>{product.name}</h1>
           <span className={`product-status is-${status}`}>{STATUS_LABEL[status] ?? status}</span>

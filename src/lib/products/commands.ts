@@ -37,8 +37,8 @@ import { capabilityModules, requireRuntimeModules } from "@/lib/capabilities/enf
 
 async function assertTypeAndWorkflow(
   businessId: string,
-  productTypeId: string | null,
-  workflowId: string | null,
+  productTypeId: string | null | undefined,
+  workflowId: string | null | undefined,
 ) {
   const db = createServiceSupabase();
   if (productTypeId) {
@@ -78,8 +78,8 @@ function rowFromParsed(
     price_amount: parsed.price,
     ...(parsed.priceMode ? { price_mode: parsed.priceMode, price_max: parsed.priceMax, price_unit: parsed.priceUnit } : {}),
     currency: parsed.currency,
-    product_type_id: parsed.productTypeId,
-    workflow_id: parsed.workflowId,
+    ...(parsed.productTypeId === undefined ? {} : { product_type_id: parsed.productTypeId }),
+    ...(parsed.workflowId === undefined ? {} : { workflow_id: parsed.workflowId }),
     is_active: parsed.isActive,
     ...(parsed.agentOrders === null ? {} : { agent_orders: parsed.agentOrders }),
     ...(parsed.itemKind ? { item_kind: parsed.itemKind, attributes: parsed.attributes, availability: parsed.availability } : {}),

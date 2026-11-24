@@ -42,9 +42,7 @@ type ProductFieldValues = {
 export function ProductFields({
   slug,
   product,
-  types,
   workflows,
-  requireType = false,
   kind,
   fields = [],
   creating = false,
@@ -55,9 +53,7 @@ export function ProductFields({
 }: {
   slug: string;
   product?: ProductFieldValues;
-  types: { id: string; name: string }[];
   workflows: Option[];
-  requireType?: boolean;
   /** The item kind; when given, its own fields and availability are part of the form. */
   kind?: string;
   /** The business's own product fields and variant choices. */
@@ -356,43 +352,17 @@ export function ProductFields({
             </label>
           ))}
         </div>}
-        {!creating && <label className="form-label">
-          <span>Shablloni i porosisë <span className="muted-copy">(opsional)</span></span>
-          <select
-            name="product_type_id"
-            className="field"
-            defaultValue={product?.product_type_id ?? ""}
-            required={requireType}
-          >
-            <option value="">
-              {requireType ? "Zgjidh shabllonin" : "Pa shabllon (te një produkt i ri zgjidhet vetë)"}
-            </option>
-            {types.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
-              </option>
-            ))}
-          </select>
-        </label>}
-        <details open={Boolean(product?.workflow_id)}>
-          <summary>Proces i posaçëm i porosisë (opsional)</summary>
-        <label className="form-label">
-          Procesi pas zgjedhjes së produktit
-          <select
-            name="workflow_id"
-            key={workflows.map(workflow => workflow.id).join("|")}
-            className="field"
-            defaultValue={product?.workflow_id ?? ""}
-          >
-            <option value="">{product?.visual_workflow || product?.visual_draft ? "Ruaj procesin vizual ekzistues" : "Procesi i zakonshëm i Agjentit"}</option>
-            {workflows.filter(w => w.id).map((workflow) => (
-              <option key={workflow.id} value={workflow.id}>
-                {workflow.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        </details>
+        {/* Left over from drawn workflows: shown only to detach a product that still has its own process. */}
+        {product?.workflow_id && <div className="grid gap-2">
+          <label className="form-label">
+            Procesi i vjetër i porosisë
+            <small className="muted-copy">Ky produkt ndjek ende një proces të veçantë porosie. Zgjidh “Procesi automatik i Agjentit” që ta porosisë si produktet e tjera.</small>
+            <select name="workflow_id" key={workflows.map(workflow => workflow.id).join("|")} className="field" defaultValue={product.workflow_id}>
+              <option value="">Procesi automatik i Agjentit</option>
+              {workflows.filter(w => w.id).map(workflow => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}
+            </select>
+          </label>
+        </div>}
       </fieldset>
 
       <label className="toggle-label" id="product-active">

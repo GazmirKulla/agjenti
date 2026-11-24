@@ -89,7 +89,6 @@ export const manualSurfaces = {
   "src/lib/product-types/actions.ts#createGlobalProductType": {"exception": "Global product type administration affects every business."},
   "src/lib/product-types/actions.ts#updateGlobalProductType": {"exception": "Global product type administration affects every business."},
   "src/lib/product-types/actions.ts#deleteGlobalProductType": {"exception": "Global product type administration affects every business."},
-  "src/lib/product-types/actions.ts#applyTypeSuggestion": {"exception": "Global product type administration affects every business."},
   "src/lib/products/actions.ts#createProduct": {"operation": "product.create"},
   "src/lib/products/actions.ts#updateProduct": {"operation": "product.edit"},
   "src/lib/products/actions.ts#deleteProduct": {"operation": "product.delete"},

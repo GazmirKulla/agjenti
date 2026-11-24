@@ -11,8 +11,6 @@ import {
   createProduct,
   updateProduct,
 } from "@/lib/products/actions";
-import { applyTypeSuggestion } from "@/lib/product-types/actions";
-import { ActionForm } from "@/components/dashboard/action-form";
 import { ProductTips } from "./shared";
 import { ProductPhoto } from "./product-photo";
 import type { ProductRow, Option } from "@/lib/products/catalog";
@@ -20,7 +18,6 @@ import { usePageAssistantContext } from "@/components/business-assistant/workspa
 export function ProductEditor({
   slug,
   product,
-  types,
   workflows,
   kind,
   fields = [],
@@ -30,7 +27,6 @@ export function ProductEditor({
 }: {
   slug: string;
   product?: ProductRow;
-  types: Option[];
   workflows: Option[];
   /** The item kind (product, property…); adds its own fields to the form. */
   kind?: string;
@@ -146,7 +142,6 @@ export function ProductEditor({
             <ProductFields
               slug={slug}
               product={initial}
-              types={types}
               workflows={workflows}
               kind={kind}
               fields={fields}
@@ -204,17 +199,6 @@ export function ProductEditor({
       </form>
       {product && (
         <div className="products-workspace product-detail-extras">
-          {product.product_type_id && !product.visual_workflow && types.find((t) => t.id === product.product_type_id)?.description && (
-            <section className="panel section-pad">
-              <h2>Sugjerimi i shabllonit</h2>
-              <p className="muted-copy">{types.find((t) => t.id === product.product_type_id)?.description}</p>
-              <ActionForm action={applyTypeSuggestion.bind(null, slug)}>
-                <input type="hidden" name="product_id" value={product.id} />
-                <input type="hidden" name="product_type_id" value={product.product_type_id} />
-                <button className="btn btn-ghost">Përdor sugjerimin e shabllonit</button>
-              </ActionForm>
-            </section>
-          )}
           <section className="panel section-pad product-danger-zone" aria-labelledby="product-danger-title">
             <h2 id="product-danger-title">Arkivo ose fshi</h2>
             <p className="muted-copy">

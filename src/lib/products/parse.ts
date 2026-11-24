@@ -15,8 +15,10 @@ export type ParsedProductFields = {
   priceMax: number | null;
   priceUnit: string | null;
   currency: string;
-  productTypeId: string | null;
-  workflowId: string | null;
+  /** Undefined when the form does not carry the field: keep what is stored. */
+  productTypeId: string | null | undefined;
+  /** Undefined when the form does not carry the field: keep what is stored. */
+  workflowId: string | null | undefined;
   isActive: boolean;
   /** Whether the agent takes orders for the product; null when the form does not carry the setting: keep what is stored. */
   agentOrders: boolean | null;
@@ -105,8 +107,8 @@ export function parseProductForm(
   if (!/^[A-Z]{3}$/.test(currency))
     return { error: "Monedha duhet të jetë kodi me 3 shkronja (p.sh. ALL)." };
 
-  const productTypeId = String(form.get("product_type_id") ?? "").trim() || null;
-  const workflowId = String(form.get("workflow_id") ?? "").trim() || null;
+  const productTypeId = form.has("product_type_id") ? String(form.get("product_type_id") ?? "").trim() || null : undefined;
+  const workflowId = form.has("workflow_id") ? String(form.get("workflow_id") ?? "").trim() || null : undefined;
   const isActive = form.get("is_active") === "on";
   // The switch is a checkbox: only a form that shows it (it sends the marker) can turn it off.
   const agentOrders = form.has("agent_orders_shown") ? form.get("agent_orders") === "on" : null;

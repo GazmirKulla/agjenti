@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   parseMetadata,
   metadataLabels,
@@ -10,6 +9,7 @@ import { saveCatalog } from "@/lib/catalogs/actions";
 import { IndexCatalog } from "./create";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { PageHeading } from "@/components/dashboard/ui";
+import { BackLink } from "@/components/dashboard/ui";
 export function CatalogDetail({
   c,
   slug,
@@ -29,7 +29,7 @@ export function CatalogDetail({
   const id = c.id;
   return (
     <>
-      <Link href={`/b/${slug}/catalogs`}>← Katalogët</Link>
+      <BackLink href={`/b/${slug}/catalogs`}>Katalogët</BackLink>
       <PageHeading
         eyebrow="Detajet e katalogut"
         title={c.title}

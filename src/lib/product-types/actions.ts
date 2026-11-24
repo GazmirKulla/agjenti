@@ -1,10 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSessionUser, isPlatformAdmin, requireBusinessAccess } from "@/lib/tenant/access";
+import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { normalizeExternalKey } from "./keys";
-import { enforceOrderWorkflow } from "@/lib/capabilities/workflow";
 
 type StepInput = {
   key: string;
@@ -184,101 +183,4 @@ export async function deleteGlobalProductType(form: FormData) {
   if (error || !data) return { error: "Lloji nuk u fshi." };
   revalidatePath("/admin/product-types");
   return { success: "Lloji u fshi." };
-}
-
-/** Copy global type template steps into a new business workflow and link the product. */
-export async function applyTypeSuggestion(slug: string, form: FormData) {
-  const user = await getSessionUser();
-  if (!user) return { error: "Sesioni ka skaduar. Hyr përsëri." };
-  const access = await requireBusinessAccess(user.id, slug);
-  if (!access) return { error: "Nuk ke qasje në këtë biznes." };
-
-  const productId = String(form.get("product_id") ?? "");
-  const typeId = String(form.get("product_type_id") ?? "");
-  if (!productId || !typeId)
-    return { error: "Zgjidh produktin dhe llojin." };
-  try { await enforceOrderWorkflow(access.business.id, user.id, [productId]); }
-  catch { return { error: "Kontrollo modulet e porosive dhe produktin aktiv para lidhjes së workflow-t." }; }
-
-  const db = createServiceSupabase();
-  const [{ data: product }, { data: type }, { data: templateSteps }] =
-    await Promise.all([
-      db
-        .from("products")
-        .select("id,name")
-        .eq("id", productId)
-        .eq("business_id", access.business.id)
-        .maybeSingle(),
-      db
-        .from("product_types")
-        .select("id,name")
-        .eq("id", typeId)
-        .eq("is_active", true)
-        .maybeSingle(),
-      db
-        .from("product_type_steps")
-        .select("key,position,kind,config")
-        .eq("product_type_id", typeId)
-        .order("position"),
-    ]);
-  if (!product) return { error: "Produkti nuk u gjet në këtë biznes." };
-  if (!type) return { error: "Lloji global nuk u gjet." };
-  if (!templateSteps?.length)
-    return { error: "Ky lloj nuk ka template workflow për t’u kopjuar." };
-
-  const workflowName = `Workflow – ${type.name}`;
-  const { data: existing } = await db
-    .from("workflows")
-    .select("id")
-    .eq("business_id", access.business.id)
-    .eq("name", workflowName)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  let workflowId = existing?.id ?? null;
-  if (!workflowId) {
-    const { data: wf } = await db
-      .from("workflows")
-      .insert({
-        business_id: access.business.id,
-        name: workflowName,
-      })
-      .select("id")
-      .single()
-      .throwOnError();
-    if (!wf) return { error: "Workflow-i nuk u krijua." };
-    workflowId = wf.id;
-    await db
-      .from("workflow_steps")
-      .insert(
-        templateSteps.map((s) => ({
-          workflow_id: workflowId!,
-          key: s.key,
-          position: s.position,
-          kind: s.kind,
-          required: true,
-          config: s.config ?? {},
-        })),
-      )
-      .throwOnError();
-  }
-
-  await db
-    .from("products")
-    .update({
-      product_type_id: typeId,
-      workflow_id: workflowId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", productId)
-    .eq("business_id", access.business.id)
-    .throwOnError();
-
-  revalidatePath(`/b/${slug}`, "layout");
-  return {
-    success: existing
-      ? `Sugjerimi u aplikua: u ripërdor workflow “${type.name}”.`
-      : `Sugjerimi u aplikua: workflow “${type.name}” u lidh me produktin.`,
-  };
 }

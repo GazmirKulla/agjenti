@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { loadPaidPayment } from "@/lib/billing/payments";
 import { plans } from "@/lib/billing/service";
 import { PrintButton } from "./print-button";
+import { BackLink } from "@/components/dashboard/ui";
 
 export const metadata = { title: "Mandati i pagesës | Agjenti.app" };
 const dateLabel = (value: string) => new Intl.DateTimeFormat("sq-AL", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Tirane" }).format(new Date(value));
@@ -31,7 +31,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ slug: 
   ];
   return <main style={{ maxWidth: 640, margin: "24px auto", padding: "0 16px", display: "grid", gap: 16 }}>
     <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-      <Link className="inline-link" href={`/b/${access.business.slug}/settings/billing?tab=billing`}>← Pagesat</Link>
+      <BackLink inline href={`/b/${access.business.slug}/settings/billing?tab=billing`}>Pagesat</BackLink>
       <PrintButton />
     </div>
     <section className="panel section-pad grid gap-3">

@@ -55,7 +55,6 @@ export default async function NewProductPage({
       ) : method === "manual" ? (
         <ProductEditor
           slug={slug}
-          types={data.types}
           workflows={data.workflows}
           kind={data.items.kind.id}
           fields={data.items.fields}
@@ -63,7 +62,7 @@ export default async function NewProductPage({
           stock={data.items.stock}
         />
       ) : method === "website" ? (
-        <ProductFromWebsite slug={slug} types={data.types} workflows={data.workflows} kind={data.items.kind.id} fields={data.items.fields} usage={data.usage} />
+        <ProductFromWebsite slug={slug} workflows={data.workflows} kind={data.items.kind.id} fields={data.items.fields} usage={data.usage} />
       ) : (
         <div className="products-workspace">
           <ProductIntake

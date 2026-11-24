@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Icon } from "@/components/dashboard/icon";
 import { useState } from "react";
 import { Modal } from "@/components/modal/modal";
+import { BackLink } from "@/components/dashboard/ui";
 
 export function ProductHeading({
   slug,
@@ -29,9 +30,9 @@ export function ProductHeading({
     <header className={`product-page-heading${actions === "add" ? " is-list" : ""}`}>
       <div>
         {back && (
-          <Link className="muted-copy" href={typeof back === "object" ? back.href : `/b/${slug}/products`}>
-            ‹ {typeof back === "object" ? back.label : names.plural}
-          </Link>
+          <BackLink href={typeof back === "object" ? back.href : `/b/${slug}/products`}>
+            {typeof back === "object" ? back.label : names.plural}
+          </BackLink>
         )}
         <h1>{title}</h1>
         {description && <p>{description}</p>}

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Icon } from "./icon";
 import { activeWorkspaceLink, workspaceLabel, type WorkspaceLink, type organizeWorkspace, type WorkspaceSection } from "@/lib/dashboard/navigation/workspace";
 import s from "./workspace-navigation.module.css";
+import { BackLink } from "@/components/dashboard/ui";
 
 type Props = { navigation: ReturnType<typeof organizeWorkspace>; section?: WorkspaceSection; base: string; pathname: string; onNavigate: () => void; iconsOnly?: boolean;
   /** Connected channels that need attention (expired, expiring or failing). */
@@ -101,7 +102,7 @@ export function WorkspaceNavigation({ navigation, section, base, pathname, onNav
 
 export function WorkspaceSectionNavigation({ navigation, section, base, pathname }: Omit<Props, "onNavigate">) {
   const t = useDashboardTranslator();
-  if (section === "integrations") return pathname === `${base}/integrations` ? null : <div className={s.context}><Link className="soft-link" href={`${base}/integrations`}>{t("← Kanalet")}</Link></div>;
+  if (section === "integrations") return pathname === `${base}/integrations` ? null : <div className={s.context}><BackLink inline href={`${base}/integrations`}>{t("Kanalet")}</BackLink></div>;
   const links = section === "agent" ? navigation.agent : section === "settings" ? navigation.settings : section === "business" ? navigation.business : [];
   if (!links.length) return null;
   const title = section === "agent" ? "Agjenti i klientëve" : section === "settings" ? "Cilësimet" : "Biznesi";

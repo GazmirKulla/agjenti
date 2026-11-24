@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { PageHeading } from "@/components/dashboard/ui";
+import { BackLink, PageHeading } from "@/components/dashboard/ui";
 import { AgentTestChat } from "@/components/agents/test-chat";
 export const metadata = { title: "Provo Agjentin | Agjenti.app" };
 export default async function AgentTestPage({
@@ -22,9 +21,7 @@ export default async function AgentTestPage({
         title="Provo Agjentin"
         description={`Bisedo me agjentin e ${access.business.name} si një klient.`}
       >
-        <Link href={`/b/${slug}/agents`} className="btn btn-ghost">
-          ← Konfigurimi i agjentit
-        </Link>
+        <BackLink href={`/b/${slug}/agents`}>Konfigurimi i agjentit</BackLink>
       </PageHeading>
       {draft && <p role="status" className="mb-5">Po provon draftin e ruajtur. Kjo provë nuk ndryshon dhe nuk verifikon versionin live.</p>}
       <AgentTestChat
