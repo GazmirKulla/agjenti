@@ -1,11 +1,13 @@
 /**
- * Structured parts of an Assistant message: cards and tables the owner reads under the text.
+ * Structured presentation of an Assistant message: formatted prose, cards and tables.
  *
- * The server builds every block from data it read itself (a briefing, a catalog search); the model
+ * The server builds cards and tables from data it read itself (a briefing, a catalog search); the model
  * never writes a block's numbers, names or prices. Blocks are stored with the message, so they
  * survive a refresh, and are validated again before they are shown. A block that does not pass
  * is left out and the message text remains. Display only: a block never authorizes an action.
  */
+import { readRichText, richTextPlain, type RichTextBlock } from "./rich-text";
+
 export type MetricItem = { label: string; value: number | null; note?: string; href?: string };
 export type MetricsBlock = { type: "metrics"; version: 1; title: string; items: MetricItem[]; note?: string };
 
@@ -19,7 +21,8 @@ export type TableBlock = {
   partial: boolean;
   note?: string;
 };
-export type MessageBlock = MetricsBlock | TableBlock;
+export type DataBlock = MetricsBlock | TableBlock;
+export type MessageBlock = DataBlock | RichTextBlock;
 export type BlockType = MessageBlock["type"];
 
 export const MAX_BLOCKS = 4;
@@ -74,7 +77,7 @@ function table(raw: Raw): TableBlock | null {
     ...(raw.note !== undefined ? { note: raw.note as string } : {}) };
 }
 
-const readers: { [K in BlockType]: (raw: Raw) => Extract<MessageBlock, { type: K }> | null } = { metrics, table };
+const readers: { [K in BlockType]: (raw: Raw) => Extract<MessageBlock, { type: K }> | null } = { metrics, table, rich_text: readRichText };
 
 /** The valid blocks of a stored or received value, in order. Anything else is left out. */
 export function parseBlocks(raw: unknown): MessageBlock[] {
@@ -94,6 +97,7 @@ export function storableBlocks(raw: unknown): MessageBlock[] {
 
 /** The block as plain lines: what a client without the component shows, and what the model reads in history. */
 export function blockText(block: MessageBlock): string {
+  if (block.type === "rich_text") return richTextPlain(block.parts);
   if (block.type === "metrics")
     return [block.title, ...block.items.map(item => `${item.label}: ${item.value ?? item.note ?? "—"}`), block.note].filter(Boolean).join("\n");
   const shown = block.total === null ? "" : block.total === block.rows.length ? ` (${block.total})` : ` (${block.rows.length} nga ${block.total})`;
@@ -103,20 +107,20 @@ export function blockText(block: MessageBlock): string {
 }
 
 /** Keep a bounded text rendering for history, copying, and clients without block support. */
-function textAppendix(blocks: MessageBlock[]) {
+function textAppendix(blocks: DataBlock[]) {
   const text = blocks.map(blockText).join("\n\n");
   if (!text) return "";
   return "\n\n" + (text.length <= 8000 ? text : text.slice(0, 7999) + "…");
 }
 
 export function blockReply(summary: string, raw: unknown) {
-  const blocks = storableBlocks(raw);
+  const blocks = storableBlocks(raw).filter(block => block.type !== "rich_text");
   const appendix = textAppendix(blocks);
   return { message: summary.slice(0, 12000 - appendix.length) + appendix, blocks };
 }
 
 /** Hide only the exact text already displayed by the validated cards or table. */
 export function blockCaption(content: string, blocks: MessageBlock[]) {
-  const appendix = textAppendix(blocks);
+  const appendix = textAppendix(blocks.filter(block => block.type !== "rich_text"));
   return appendix && content.endsWith(appendix) ? content.slice(0, -appendix.length) : content;
 }

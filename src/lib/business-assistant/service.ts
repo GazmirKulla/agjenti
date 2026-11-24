@@ -39,7 +39,8 @@ import { parseUIContext, type AssistantUIContext } from "./context";
 import { describeProducts, loadProductSetup, productSchema, readVariantOptions, scanCatalog, unknownProductSetup, type ProductSetup } from "./product-fields";
 import { parseProductQuery, queryFields, runProductQuery } from "./product-query";
 import { searchBlocks } from "./search-blocks";
-import { blockReply, type MessageBlock } from "./blocks";
+import type { DataBlock, MessageBlock } from "./blocks";
+import { formatOwnerReply } from "./format-reply";
 import OpenAI from "@/lib/ai/openai";
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -451,7 +452,7 @@ export async function planRequest(
   // operation key) goes back to the model with the server's diagnostic, at most twice.
   let proposalRepairs = 0;
   let lastSearchKey: string | undefined;
-  let resultBlocks: MessageBlock[] = [];
+  let resultBlocks: DataBlock[] = [];
   const repairProposal = (diagnostic: string, rejected: unknown) => {
     if (proposalRepairs >= 2) throw new AssistantError(diagnostic.startsWith("invalid_proposal: ") ? diagnostic.slice("invalid_proposal: ".length)
       : diagnostic === "invalid_search" || diagnostic === "repeated_search" ? "Kërkimi nuk u formulua saktë. Provo ta shprehësh ndryshe." : "Veprimi i propozuar nuk mbështetet. Provo ta shprehësh ndryshe.");
@@ -541,7 +542,13 @@ export async function planRequest(
         "Kërkesa nuk u analizua. Provo përsëri ose jep më shumë hollësi.",
       );
     }
-    const finish = (result: PlanResult): PlanResult => ({ ...result, ...(proposal.planRelation === "new" ? { replacePlan: true } : {}) });
+    // Only the model-authored caption uses Markdown. Server outcomes and operation fields stay literal.
+    const finish = (result: PlanResult): PlanResult => ({
+      ...result,
+      ...(result.message === proposal.message && !result.saved
+        ? formatOwnerReply(result.message, proposal.action === "clarify" ? resultBlocks : []) : {}),
+      ...(proposal.planRelation === "new" ? { replacePlan: true } : {}),
+    });
     if (proposal.action === "configuration_resume") {
       const id = proposal.changes.find(c=>c.field === "plan_id")?.value;
       if (!id || proposal.id !== null) throw new AssistantError("Zgjidh konfigurimin që dëshiron të vazhdosh.");
@@ -714,9 +721,7 @@ export async function planRequest(
       }
     }
     const prepared = await prepareProposal(access, proposal, timezone, expected);
-    // A reply to the owner's catalog question shows the server's own rows beside the text.
-    return finish(proposal.action === "clarify" && resultBlocks.length
-      ? { ...prepared, ...blockReply(prepared.message, resultBlocks) } : prepared);
+    return finish(prepared);
   }
   return {
     message:

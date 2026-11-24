@@ -24,8 +24,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MessageBlocks } from "./message-blocks";
-import { blockCaption, parseBlocks, type MessageBlock } from "@/lib/business-assistant/blocks";
+import { AssistantMessageBody } from "./message-blocks";
+import { parseBlocks, type MessageBlock } from "@/lib/business-assistant/blocks";
 import { FileCard } from "./file-card";
 import { OnboardingQuickReplies } from "./onboarding-quick-replies";
 import { showModule } from "@/lib/dashboard/modules/actions";
@@ -677,13 +677,13 @@ export function BusinessAssistant({
             aria-label={`Biseda me ${agentName}`}
           >
             {history.map((message, i) => {
-              const blocks = message.role === "assistant" ? parseBlocks(message.blocks) : [];
               return <div
                 key={i}
                 className={`assistant-message assistant-message-${message.role}`}
               >
-                <p>{blockCaption(message.content, blocks)}</p>
-                {blocks.length > 0 && <MessageBlocks blocks={blocks} slug={slug} />}
+                {message.role === "assistant"
+                  ? <AssistantMessageBody content={message.content} blocks={message.blocks} slug={slug} />
+                  : <p>{message.content}</p>}
                 {message.kind === "backend_outcome" && <small>Njoftim historik i backend-it · jo miratim për veprim të ri</small>}
                 {message.kind === "interrupted" && <small>Rezultat i pakonfirmuar</small>}
                 {message.kind === "notice" && <Link className="btn btn-ghost assistant-notice-link" href={`/b/${slug}/billing`}>Shiko paketat</Link>}

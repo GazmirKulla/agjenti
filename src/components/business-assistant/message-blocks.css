@@ -26,3 +26,19 @@
   .assistant-block-rows dt { color: var(--ink-muted); }
   .assistant-block-rows dd { margin: 0; }
 }
+
+.assistant-message-assistant > p, .assistant-rich-text { font-size: .9375rem; line-height: 1.65; }
+.assistant-rich-text { min-inline-size: 0; max-inline-size: 68ch; overflow-wrap: anywhere; }
+.assistant-rich-text :is(ul, ol) { margin: 0; padding-inline-start: 1.65em; }
+.assistant-rich-text ul { list-style-type: disc; }
+.assistant-rich-text ol { list-style-type: decimal; }
+.assistant-rich-text ul ul { list-style-type: circle; }
+.assistant-rich-text li { padding-inline-start: .15em; }
+.assistant-rich-text li + li { margin-block-start: .28em; }
+.assistant-message .assistant-rich-text > * + * { margin-block-start: .8em; }
+.assistant-message .assistant-rich-text li > * + * { margin-block-start: .35em; }
+.assistant-rich-text li::marker { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.assistant-rich-text strong { font-weight: 650; }
+.assistant-rich-text a { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
+.assistant-rich-text a:hover { text-decoration-thickness: 2px; }
+.assistant-rich-text a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }

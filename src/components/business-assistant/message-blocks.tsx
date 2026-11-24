@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { Modal } from "@/components/modal/modal";
-import type { MessageBlock, MetricsBlock, TableBlock, TableRow } from "@/lib/business-assistant/blocks";
+import { blockCaption, parseBlocks, type MetricsBlock, type TableBlock, type TableRow } from "@/lib/business-assistant/blocks";
+import { richTextPlain, type Inline, type TextPart } from "@/lib/business-assistant/rich-text";
 import "./message-blocks.css";
 
 function Metrics({ block, slug }: { block: MetricsBlock; slug: string }) {
@@ -49,8 +50,35 @@ function Results({ block }: { block: TableBlock }) {
   </section>;
 }
 
-export function MessageBlocks({ blocks, slug }: { blocks: MessageBlock[]; slug: string }) {
-  return blocks.map((block, i) => block.type === "metrics"
-    ? <Metrics key={i} block={block} slug={slug} />
-    : <Results key={i} block={block} />);
+function inline(nodes: Inline[]): ReactNode {
+  return nodes.map((node, i) => {
+    if (typeof node === "string") return node;
+    if ("strong" in node) return <strong key={i}>{inline(node.strong)}</strong>;
+    return <a key={i} href={node.href} target="_blank" rel="noopener noreferrer">{inline(node.label)}</a>;
+  });
 }
+
+function paragraphs(parts: TextPart[]): ReactNode {
+  return parts.map((part, i) => {
+    if ("paragraph" in part) return <p key={i}>{inline(part.paragraph)}</p>;
+    const items = part.items.map((item, n) => <li key={n}>{paragraphs(item)}</li>);
+    return part.start === undefined ? <ul key={i}>{items}</ul> : <ol key={i} start={part.start}>{items}</ol>;
+  });
+}
+
+export const AssistantMessageBody = memo(function AssistantMessageBody({ content, blocks, slug }: {
+  content: string; blocks?: unknown; slug: string;
+}) {
+  const valid = parseBlocks(blocks);
+  const rich = valid.find(block => block.type === "rich_text");
+  const dataBlocks = valid.filter(block => block.type !== "rich_text");
+  const caption = blockCaption(content, valid);
+  return <>
+    {rich && richTextPlain(rich.parts) === caption
+      ? <div className="assistant-rich-text">{paragraphs(rich.parts)}</div>
+      : caption && <p>{caption}</p>}
+    {dataBlocks.map((block, i) => block.type === "metrics"
+      ? <Metrics key={i} block={block} slug={slug} />
+      : <Results key={i} block={block} />)}
+  </>;
+});

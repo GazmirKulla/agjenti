@@ -75,3 +75,14 @@ it("returns an operation with fields outside its contract to the model instead o
   expect(inputOf(1).data.proposalRepair.diagnostic).toMatch(/^invalid_proposal: /);
   expect(result.message).toBe("ok");
 });
+
+it("formats the owner's answer alongside verified search rows without changing the proposal choices", async () => {
+  m.model.mockResolvedValueOnce(reply(search)).mockResolvedValueOnce(reply({
+    action: "clarify", changes: [], message: "U gjet **1 produkt**.", choices: ["Shiko produktin", "Mbyll"],
+  }));
+  const result = await planRequest(access, "sa produkte kanë më shumë se 60 faqe?", [], context);
+  expect(result.blocks?.map(block => block.type)).toEqual(["rich_text", "table"]);
+  expect(blockCaption(result.message, result.blocks!)).toBe("U gjet 1 produkt.");
+  expect(result.choices).toEqual(["Shiko produktin", "Mbyll"]);
+  expect(m.prepare).not.toHaveBeenCalled();
+});

@@ -220,6 +220,7 @@ export const businessCapabilities: CapabilityModule[] = [
   {
     name: "Bisedat",
     items: [
+      ["po", "Formaton përgjigjet për pronarin me paragrafë, lista, theksim dhe lidhje"],
       ["po", "Lexon bisedat e fundit"],
       ["po", "Ndalo dhe rinis Agjentin në një bisedë"],
       ["po", "Njoftime për bisedat që presin"],
