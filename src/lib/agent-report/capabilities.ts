@@ -10,7 +10,7 @@
 export type CapabilityStatus = "po" | "pjes" | "jo";
 export type CapabilityModule = { name: string; items: [CapabilityStatus, string][] };
 
-export const capabilityReportUpdated = "2026-11-21";
+export const capabilityReportUpdated = "2026-11-24";
 
 export const customerCapabilities: CapabilityModule[] = [
   {
@@ -192,7 +192,7 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Konfigurim në grup"],
       ["po", "Ndrysho një fushë"],
       ["po", "Produkt vetëm për informim"],
-      ["po", "Numëro dhe krahaso me query në server"],
+      ["po", "Numëron dhe krahason produktet në server. Shfaq rezultatet në tabelë dhe ruan rreshtat në bisedë."],
       ["pjes", "Importi"],
       ["pjes", "Foto: vetëm me URL, pa ngarkim"],
       ["po", "Rregullat e stokut"],
@@ -202,7 +202,7 @@ export const businessCapabilities: CapabilityModule[] = [
   {
     name: "Raportet dhe Aktiviteti",
     items: [
-      ["po", "Përmbledhja e periudhës"],
+      ["po", "Shfaq aktivitetin e periudhës me karta dhe lidhje te seksionet e biznesit"],
       ["po", "Njoftimet për vëmendje"],
       ["po", "Bisedat e fundit"],
       ["jo", "Suksesi i Agjentit në procese"],

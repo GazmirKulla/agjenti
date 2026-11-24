@@ -1,5 +1,6 @@
 import { zonedParts } from "@/lib/calendar/model";
 import { translator, type DashboardLanguage } from "@/lib/dashboard/language/core";
+import { blockReply, type MetricItem, type MetricsBlock } from "./blocks";
 
 export const briefingPeriods = ["today", "yesterday", "week"] as const;
 export type BriefingPeriod = typeof briefingPeriods[number];
@@ -69,6 +70,39 @@ export function briefingSummary(data: Briefing, language: DashboardLanguage) {
     ? t("Nuk ka aktivitet të regjistruar në modulet e shfaqura për këtë periudhë.")
     : t("Ja aktiviteti i regjistruar në biznesin tënd.");
 }
+const attentionLabels = {
+  handoffs: "Biseda aktualisht të kaluara te stafi",
+  integrationFailures: "Dështime integrimi të regjistruara",
+  waitingLeads: "Leads që presin përgjigje",
+} as const;
+/** The counts as cards: activity of the period, then what needs attention. A module that is off is left out. */
+export function briefingBlocks(data: Briefing, language: DashboardLanguage): MetricsBlock[] {
+  const t = translator(language);
+  if (data.configurationError) return [];
+  const item = (label: string, m: Reading): MetricItem[] => m.status === "disabled" ? [] : [{
+    label: t(label), value: m.status === "available" ? m.count : null,
+    ...(m.status === "available" ? {} : { note: t("Nuk disponohet për momentin") }), href: m.href }];
+  const activity = (Object.keys(data.metrics) as MetricId[]).flatMap(id => item(metricLabels[id], data.metrics[id]));
+  const attention = (Object.keys(attentionLabels) as (keyof typeof attentionLabels)[])
+    .flatMap(key => data.attention[key] ? item(attentionLabels[key], data.attention[key]) : []);
+  const range = data.range ? ` · ${data.range.startDate === data.range.endDate ? data.range.startDate : `${data.range.startDate} – ${data.range.endDate}`}` : "";
+  return [
+    ...(activity.length ? [{ type: "metrics" as const, version: 1 as const, title: `${t(periodLabels[data.period])}${range} · ${data.timezone}`, items: activity,
+      note: t("Numërohen regjistrimet e ruajtura, jo të ardhurat apo personat unikë.") }] : []),
+    ...(attention.length ? [{ type: "metrics" as const, version: 1 as const, title: t("Kërkon vëmendje"), items: attention }] : []),
+  ];
+}
+/** The reply to a briefing question: the counts go in cards, the text says what they are.
+ * Without cards (invalid timezone, every module off) the text carries every statement. */
+export function briefingReply(data: Briefing, language: DashboardLanguage) {
+  const blocks = briefingBlocks(data, language);
+  if (!blocks.length) return { message: briefingAnswer(data, language), blocks };
+  const t = translator(language);
+  const disabled = (Object.keys(data.metrics) as MetricId[]).filter(id => data.metrics[id].status === "disabled")
+    .map(id => `${t(metricLabels[id])}: ${t("Moduli nuk është aktiv ose i autorizuar.")}`);
+  const reply = blockReply([briefingSummary(data, language), ...disabled, `${t("Kontrolluar në")}: ${data.generatedAt}`].join("\n"), blocks);
+  return reply.blocks.length === blocks.length ? reply : { message: briefingAnswer(data, language), blocks: [] };
+}
 /** Numeric statements are rendered from verified counts, never model-authored text. */
 export function briefingAnswer(data: Briefing, language: DashboardLanguage) {
   const t = translator(language);
@@ -78,9 +112,9 @@ export function briefingAnswer(data: Briefing, language: DashboardLanguage) {
     return `${t(metricLabels[id])}: ${m.status === "available" ? m.count : t(m.status === "disabled" ? "Moduli nuk është aktiv ose i autorizuar." : "Nuk disponohet për momentin")}`;
   });
   const attention = [
-    ["Biseda aktualisht të kaluara te stafi", data.attention.handoffs],
-    ["Dështime integrimi të regjistruara", data.attention.integrationFailures],
-    ...(data.attention.waitingLeads ? [["Leads që presin përgjigje", data.attention.waitingLeads] as const] : []),
+    [attentionLabels.handoffs, data.attention.handoffs],
+    [attentionLabels.integrationFailures, data.attention.integrationFailures],
+    ...(data.attention.waitingLeads ? [[attentionLabels.waitingLeads, data.attention.waitingLeads] as const] : []),
   ] as const;
   return [t(periodLabels[data.period]), range, briefingSummary(data, language), ...metrics,
     ...attention.filter(([, m]) => m.status !== "disabled").map(([label, m]) => `${t(label)}: ${m.status === "available" ? m.count : t("Nuk disponohet për momentin")}`),

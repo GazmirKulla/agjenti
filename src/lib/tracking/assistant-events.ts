@@ -16,6 +16,19 @@ export function proposalOperationKey(proposal: { action: string; changes?: { fie
 
 type Prepared = { clarifying?: boolean; token?: string };
 
+/** Retries that restore an existing reply never reach this write. */
+export async function trackBlockStorage<T>(businessId: string, ref: string, write: Promise<T>): Promise<T> {
+  const event = { businessId, ref, capability: "assistant.message_blocks", mode: "live" as const };
+  try {
+    const result = await write;
+    await recordCapabilityEvents([{ ...event, point: "prepared" }, { ...event, point: "stored" }]);
+    return result;
+  } catch (error) {
+    await recordCapabilityEvents([{ ...event, point: "prepared" }, { ...event, point: "store_failed", reason: failureCode(error) }]);
+    throw error;
+  }
+}
+
 /** One owner request the Assistant prepared: its entry and how it ended (a proposal, an answer, a question, a refusal).
  * `ref` is the owner's request in the Assistant conversation when there is one, so a failure leads back to it. */
 export async function trackAssistantPreparation<T extends Prepared>(businessId: string, capability: string, fallbackRef: string, work: () => Promise<T>): Promise<T> {

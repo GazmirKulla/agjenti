@@ -17,7 +17,7 @@ import { AssistantError } from "@/lib/business-assistant/model";
 import { readPersonalAssistantName } from "@/lib/business-assistant/identity";
 import { loadBriefing, BriefingError } from "@/lib/business-assistant/briefing";
 import { briefingQuestion } from "@/lib/business-assistant/briefing-intent";
-import { briefingAnswer } from "@/lib/business-assistant/briefing-model";
+import { briefingReply } from "@/lib/business-assistant/briefing-model";
 import { dashboardLanguage } from "@/lib/dashboard/language/core";
 import { revalidatePath } from "next/cache";
 import { meteredRoute } from "@/lib/ai/usage";
@@ -173,7 +173,7 @@ async function handlePOST(request: Request) {
     if (briefingPeriod && !body.attachments?.length && !body.links?.length) {
       const answer = async () => {
         const briefing = await loadBriefing(slug, briefingPeriod, undefined, request);
-        return { briefing, message: briefingAnswer(briefing, dashboardLanguage(body.language)) };
+        return { briefing, ...briefingReply(briefing, dashboardLanguage(body.language)) };
       };
       // Explicit user questions may join the existing history. Automatic Home reads use GET
       // and never touch persistence. Read-only questions do not reassess/execute old plans.

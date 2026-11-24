@@ -132,7 +132,10 @@ export const systemCapabilities: Record<string, CapabilitySpec> = {
 };
 
 export type CustomerCapability = keyof typeof customerCapabilities;
-export const capabilities: Record<string, CapabilitySpec> = { ...customerCapabilities, ...assistantCapabilities, ...systemCapabilities };
+export const capabilities: Record<string, CapabilitySpec> = { ...customerCapabilities, ...assistantCapabilities, ...systemCapabilities,
+  "assistant.message_blocks": { agent: "assistant", module: "assistant", label: "Ruajtja e kartave dhe tabelave në bisedë",
+    entry: "prepared", exits: { stored: "success", store_failed: "failure" }, emittedBy: ["src/lib/tracking/assistant-events.ts"] },
+};
 
 /** The outcome a point counts as, or null when the capability does not declare it. */
 export function outcomeOf(capability: string, point: string): Outcome | "entry" | null {

@@ -1,3 +1,5 @@
+import { storableBlocks } from "./blocks";
+import { trackBlockStorage } from "@/lib/tracking/assistant-events";
 import { readConfigurationProgress } from "@/lib/actions/operations/plans";
 import { withAssistantRequest } from "@/lib/tracking/assistant-request";
 import { bearerClient } from "@/lib/auth/request";
@@ -183,13 +185,15 @@ export async function persistedTurn(
         action: ticket.action, source: ticket.before, name: ticket.values.name, steps: ticket.values.steps, products: ticket.values.products, scope: ticket.values.scope,
       } as RecoverablePlan["orderDraft"] } : {}),
     });
-    const finished = await writeConversation(access, id, "finish", null, requestId, {
+    const blocks = data.saved || data.onboarding?.question ? [] : storableBlocks(data.blocks);
+    const write = writeConversation(access, id, "finish", null, requestId, {
       content: (data.message || "Kontrollo propozimin.").slice(0, 12000),
-      // An informational briefing appends messages, not a replacement plan/revision.
+      ...(blocks.length ? { blocks } : {}),
       ...(!informational ? { snapshot, preferences: retained ? view.plan?.preferences ?? {} : {} } : {}),
       ...(data.onboarding?.question ? { question: data.onboarding.question } : {}),
       ...(data.saved ? { outcome: data.outcome } : {}),
     });
+    const finished = blocks.length ? await trackBlockStorage(access.businessId, requestId, write) : await write;
     const persistence = await readConversation(access, id);
     if (persistence.conversation.revision !== finished.revision)
       return { message: "Biseda ndryshoi në një dritare tjetër. U rikthye gjendja më e re; rishqyrto çdo propozim.", recovered: true, persistence };

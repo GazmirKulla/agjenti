@@ -38,6 +38,8 @@ import type { PublicationApproval } from "@/lib/workflows/visual/publication-typ
 import { parseUIContext, type AssistantUIContext } from "./context";
 import { describeProducts, loadProductSetup, productSchema, readVariantOptions, scanCatalog, unknownProductSetup, type ProductSetup } from "./product-fields";
 import { parseProductQuery, queryFields, runProductQuery } from "./product-query";
+import { searchBlocks } from "./search-blocks";
+import { blockReply, type MessageBlock } from "./blocks";
 import OpenAI from "@/lib/ai/openai";
 import { randomUUID } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -84,7 +86,9 @@ const columns: Record<string, string> = {
   profile: "id,name,updated_at",
   booking: bookingColumns,
 };
-export type PlanResult = { saved?: boolean; outcome?: {status: string; action: string; reference: {table: string; id?: string; request_key?: string}}; configuration?: {planId: string; state: "blocked" | "completed"; completed: string[]; total: number}; replacePlan?: boolean; briefing?: import("./briefing-model").Briefing; actionPlan?: ActionPlan; automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[] };
+export type PlanResult = { saved?: boolean; outcome?: {status: string; action: string; reference: {table: string; id?: string; request_key?: string}}; configuration?: {planId: string; state: "blocked" | "completed"; completed: string[]; total: number}; replacePlan?: boolean; briefing?: import("./briefing-model").Briefing; actionPlan?: ActionPlan; automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[];
+  /** Cards and tables built by the server from data it read for this reply; display only. */
+  blocks?: MessageBlock[] };
 export type Access = {
   /** Request-scoped user JWT for RLS reads; never persisted or included in model input. */
   accessToken?: string;
@@ -447,6 +451,7 @@ export async function planRequest(
   // operation key) goes back to the model with the server's diagnostic, at most twice.
   let proposalRepairs = 0;
   let lastSearchKey: string | undefined;
+  let resultBlocks: MessageBlock[] = [];
   const repairProposal = (diagnostic: string, rejected: unknown) => {
     if (proposalRepairs >= 2) throw new AssistantError(diagnostic.startsWith("invalid_proposal: ") ? diagnostic.slice("invalid_proposal: ".length)
       : diagnostic === "invalid_search" || diagnostic === "repeated_search" ? "Kërkimi nuk u formulua saktë. Provo ta shprehësh ndryshe." : "Veprimi i propozuar nuk mbështetet. Provo ta shprehësh ndryshe.");
@@ -661,8 +666,13 @@ export async function planRequest(
         continue;
       }
       lastSearchKey = searchKey;
-      context.searchResult = { ...await searchContext(access, proposal, productSetup),
-        note: "Server result of the search you proposed for the current request. If it answers the request, reply now with action clarify and the answer in message; never repeat the same search." };
+      const searched = await searchContext(access, proposal, productSetup);
+      resultBlocks = searchBlocks(searched, productSetup ?? unknownProductSetup());
+      const shownAsTable = resultBlocks.length > 0;
+      context.searchResult = { ...searched,
+        ...(shownAsTable ? { display: "table" } : {}),
+        note: `Server result of the search you proposed for the current request. If it answers the request, reply now with action clarify and the answer in message; never repeat the same search.${shownAsTable
+          ? " display table: if you reply with clarify, the owner sees these rows (and groups) as a table under your message, so do not list them again; give the answer and the exact counts in one or two sentences, naming products only when the answer is about specific ones." : ""}` };
       continue;
     }
     if (proposal.action === "operation") {
@@ -703,7 +713,10 @@ export async function planRequest(
         }
       }
     }
-    return finish(await prepareProposal(access, proposal, timezone, expected));
+    const prepared = await prepareProposal(access, proposal, timezone, expected);
+    // A reply to the owner's catalog question shows the server's own rows beside the text.
+    return finish(proposal.action === "clarify" && resultBlocks.length
+      ? { ...prepared, ...blockReply(prepared.message, resultBlocks) } : prepared);
   }
   return {
     message:

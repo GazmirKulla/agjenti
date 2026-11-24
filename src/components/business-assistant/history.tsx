@@ -6,7 +6,7 @@ import { hasRecoverableWork, type ConversationView, type StoredConversation, typ
 import type { FileCardItem } from "./file-card";
 export { AssistantHistoryDrawer as AssistantHistory } from "./history-drawer";
 
-export type ChatMessage = HistoryMessage & { materials?: FileCardItem[]; kind?: StoredMessage["kind"]; meta?: StoredMessage["meta"] };
+export type ChatMessage = HistoryMessage & { blocks?: StoredMessage["blocks"]; materials?: FileCardItem[]; kind?: StoredMessage["kind"]; meta?: StoredMessage["meta"] };
 type View = ConversationView & { recovery?: { verified: boolean; message: string } };
 
 /** A conversation untouched for this long is history: the Assistant opens on a new one. */

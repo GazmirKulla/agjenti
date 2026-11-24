@@ -20,6 +20,7 @@ vi.mock("@/lib/supabase/service", () => {
   } }) };
 });
 import { planRequest } from "./service";
+import { blockCaption } from "./blocks";
 
 const access = { businessId: "business", userId: "owner", modules: ["products"], catalogSource: "internal" };
 const context = { page: "products", entryPoint: "contextual" as const, searchQuery: "", filters: { status: "all" } };
@@ -37,8 +38,9 @@ it("returns a contract-breaking proposal to the model, then answers from the ser
   const result = await planRequest(access, "sa produkte kanë më shumë se 60 faqe?", [], context);
   expect(m.prepare).not.toHaveBeenCalled();
   expect(inputOf(1).data.proposalRepair).toMatchObject({ diagnostic: "unregistered_operation" });
-  expect(inputOf(2).data.searchResult).toMatchObject({ mode: "filter", matchedCount: 1, rows: [expect.objectContaining({ name: "A" })] });
-  expect(result.message).toBe("1 produkt ka më shumë se 60 faqe.");
+  expect(inputOf(2).data.searchResult).toMatchObject({ mode: "filter", display: "table", matchedCount: 1, rows: [expect.objectContaining({ name: "A" })] });
+  expect(result.blocks).toMatchObject([{ type: "table", total: 1, rows: [{ cells: { name: "A", f_0: "120" } }] }]);
+  expect(blockCaption(result.message, result.blocks!)).toBe("1 produkt ka më shumë se 60 faqe.");
 });
 
 it("lets the model correct a malformed search", async () => {
@@ -63,7 +65,7 @@ it("does not run the same search twice and points the model at the result it alr
   const result = await planRequest(access, "cili produkt ka më shumë faqe?", [], context);
   expect(inputOf(1).data.searchResult).toMatchObject({ mode: "filter", note: expect.any(String) });
   expect(inputOf(2).data.proposalRepair).toMatchObject({ diagnostic: "repeated_search" });
-  expect(result.message).toBe("A");
+  expect(blockCaption(result.message, result.blocks!)).toBe("A");
 });
 
 it("returns an operation with fields outside its contract to the model instead of failing the request", async () => {

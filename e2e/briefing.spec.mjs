@@ -72,10 +72,10 @@ test('yesterday/week and an explicit question use real deterministic results wit
   await expect(card(page).locator('.briefing-range')).toContainText('Europe/Tirane');
   await page.locator('#business-assistant-input').fill('Sa porosi kemi dje?');
   await page.locator('#business-assistant-input').press('Enter');
-  await expect(page.locator('.assistant-message-assistant').last()).toContainText('Porosi të krijuara: 0');
+  await expect(page.locator('.assistant-message-assistant').getByRole('link', { name: 'Porosi të krijuara 0', exact: true })).toHaveAttribute('href', base + '/orders');
   expect(Number(count())).toBeGreaterThan(0);
   await page.reload();
-  await expect(page.locator('.assistant-message-assistant').last()).toContainText('Porosi të krijuara: 0');
+  await expect(page.locator('.assistant-message-assistant').getByRole('link', { name: 'Porosi të krijuara 0', exact: true })).toHaveAttribute('href', base + '/orders');
 });
 test('mobile: English localization, keyboard refresh, honest error and recovery', async ({ page, context }) => {
   await context.addCookies([{ name: 'agjenti_dashboard_language', value: 'en', url: 'http://localhost:3103' }]);

@@ -27,6 +27,7 @@ export type StoredConversation = {
 export type StoredMessage = {
   seq: number; request_id: string; role: "user" | "assistant";
   kind: "user" | "assistant" | "backend_outcome" | "interrupted" | "onboarding" | "notice";
+  blocks?: import("./blocks").MessageBlock[];
   content: string; context: AssistantUIContext; created_at: string;
   /** Structured choices of an onboarding question (kind "onboarding" only). */
   meta?: import("@/lib/onboarding/assistant-chat-model").OnboardingQuestionMeta | null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { briefingAnswer, briefingSummary, reportingRange, type Briefing } from "./briefing-model";
+import { briefingAnswer, briefingReply, briefingSummary, reportingRange, type Briefing } from "./briefing-model";
 
 describe("reporting calendar", () => {
   it("uses business dates across UTC boundaries, yesterday and Monday-based current week", () => {
@@ -36,6 +36,13 @@ it("formats exact verified numbers, distinguishes zero/unavailable/disabled and 
   expect(briefingAnswer(data, "en")).toContain("New CRM customers: Currently unavailable");
   expect(briefingAnswer(data, "en")).toContain("Bookings created: The module is not enabled or authorized.");
   expect(briefingSummary(data, "sq")).toContain("pjesshme");
+  const reply = briefingReply(data, "en");
+  expect(reply.blocks[0]).toMatchObject({ type: "metrics", title: expect.stringContaining("UTC"), items: [
+    { label: "Incoming messages", value: 17 }, { value: 0 }, { value: null, note: "Currently unavailable" },
+  ] });
+  expect(reply.message).toContain("Incoming messages: 17");
+  expect(reply.message).toContain("Bookings created: The module is not enabled or authorized.");
   data.configurationError = "timezone_invalid";
   expect(briefingSummary(data, "en")).toContain("timezone is invalid");
+  expect(briefingReply(data, "en").blocks).toEqual([]);
 });

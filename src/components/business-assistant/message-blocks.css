@@ -1,0 +1,28 @@
+.assistant-block { margin-top: 14px; color: var(--ink); min-width: 0; }
+.assistant-block h3 { font-size: 14px; line-height: 1.4; font-weight: 650; margin: 0; }
+.assistant-block > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.assistant-block small { color: var(--ink-muted); font-size: 12px; line-height: 1.45; }
+.assistant-block > small { display: block; margin-top: 6px; }
+.assistant-block-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(125px, 100%), 1fr)); gap: 8px; margin-top: 8px; }
+.assistant-block-metrics > * { position: relative; display: grid; align-content: space-between; gap: 7px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: inherit; text-decoration: none; }
+.assistant-block-metrics > * > span:first-child { padding-right: 13px; color: var(--ink-muted); font-size: 12px; }
+.assistant-block-metrics strong { font-size: 23px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.assistant-block-metrics .metric-arrow { position: absolute; right: 9px; top: 9px; color: var(--ink-muted); }
+.assistant-block-metrics a:hover { border-color: var(--line-strong); }
+.assistant-block > button { min-height: 44px; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.assistant-block :is(a,button):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.assistant-block-rows { margin-top: 8px; overflow-wrap: anywhere; }
+.assistant-block-rows table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.assistant-block-rows :is(th,td) { padding: 8px; text-align: start; border-bottom: 1px solid var(--line); vertical-align: top; }
+.assistant-block-rows th { background: var(--paper); font-size: 12px; }
+.assistant-block-rows [data-numeric=true] { text-align: end; font-variant-numeric: tabular-nums; }
+.assistant-block-rows ul { display: none; list-style: none; margin: 0; padding: 0; }
+@media (max-width: 760px) {
+  .assistant-block-rows table { display: none; }
+  .assistant-block-rows ul { display: grid; gap: 6px; }
+  .assistant-block-rows li { border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+  .assistant-block-rows dl { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 0 0; font-size: 12px; }
+  .assistant-block-rows dl div { display: flex; flex-wrap: wrap; gap: 4px; }
+  .assistant-block-rows dt { color: var(--ink-muted); }
+  .assistant-block-rows dd { margin: 0; }
+}

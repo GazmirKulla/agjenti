@@ -24,6 +24,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { MessageBlocks } from "./message-blocks";
+import { blockCaption, parseBlocks, type MessageBlock } from "@/lib/business-assistant/blocks";
 import { FileCard } from "./file-card";
 import { OnboardingQuickReplies } from "./onboarding-quick-replies";
 import { showModule } from "@/lib/dashboard/modules/actions";
@@ -79,6 +81,7 @@ type Result = {
   productImport?: ImportSource;
   clarifying?: boolean;
   choices?: string[];
+  blocks?: MessageBlock[];
   message?: string;
   preview?: Preview;
   workflow?: WorkflowCardData;
@@ -398,7 +401,7 @@ export function BusinessAssistant({
       if (!data.persistence) setHistory((prev) => [
         ...prev.slice(-78),
         { role: "user", content: input, materials: [...materials.map(({name, preview, url, size}) => ({name, preview, url, size})), ...pastedLinks.filter(url => !materials.some(item => item.url === url)).map(url => ({name: url, url}))] },
-        { role: "assistant", content: data.message || "Kontrollo propozimin." },
+        { role: "assistant", content: data.message || "Kontrollo propozimin.", blocks: parseBlocks(data.blocks) },
       ]);
       setResult(data.briefing ? result : data);
       if (data.saved) router.refresh();
@@ -673,12 +676,14 @@ export function BusinessAssistant({
             role="log"
             aria-label={`Biseda me ${agentName}`}
           >
-            {history.map((message, i) => (
-              <div
+            {history.map((message, i) => {
+              const blocks = message.role === "assistant" ? parseBlocks(message.blocks) : [];
+              return <div
                 key={i}
                 className={`assistant-message assistant-message-${message.role}`}
               >
-                <p>{message.content}</p>
+                <p>{blockCaption(message.content, blocks)}</p>
+                {blocks.length > 0 && <MessageBlocks blocks={blocks} slug={slug} />}
                 {message.kind === "backend_outcome" && <small>Njoftim historik i backend-it · jo miratim për veprim të ri</small>}
                 {message.kind === "interrupted" && <small>Rezultat i pakonfirmuar</small>}
                 {message.kind === "notice" && <Link className="btn btn-ghost assistant-notice-link" href={`/b/${slug}/billing`}>Shiko paketat</Link>}
@@ -689,8 +694,8 @@ export function BusinessAssistant({
                     <MessageCopy text={message.content} />
                   </div>
                 )}
-              </div>
-            ))}
+              </div>;
+            })}
             {outgoing && (
               <div className="assistant-message assistant-message-user">
                 <p>{outgoing}</p>
