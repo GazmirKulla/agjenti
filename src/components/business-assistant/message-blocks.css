@@ -42,3 +42,11 @@
 .assistant-rich-text a { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
 .assistant-rich-text a:hover { text-decoration-thickness: 2px; }
 .assistant-rich-text a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+/* Model-authored Markdown tables are presentation, separate from verified search result cards. */
+.assistant-rich-text:has(.assistant-prose-table) { max-inline-size: 100%; }
+.assistant-prose-table { max-width: 100%; overflow-x: auto; white-space: normal; }
+.assistant-prose-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.assistant-prose-table :is(th, td) { min-width: 100px; padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.assistant-prose-table th { background: var(--paper); font-weight: 650; }
+.assistant-prose-table:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

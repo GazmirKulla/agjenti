@@ -2,7 +2,8 @@
  * Structured presentation of an Assistant message: formatted prose, cards and tables.
  *
  * The server builds cards and tables from data it read itself (a briefing, a catalog search); the model
- * never writes a block's numbers, names or prices. Blocks are stored with the message, so they
+ * never writes a data block's numbers, names or prices. Rich text may format model-authored tables,
+ * without promoting them to verified data or action references. Blocks are stored with the message, so they
  * survive a refresh, and are validated again before they are shown. A block that does not pass
  * is left out and the message text remains. Display only: a block never authorizes an action.
  */

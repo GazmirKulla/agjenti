@@ -1,6 +1,6 @@
 /** An optional presentation of the stored plain-text caption. It carries no action or business data. */
 export type Inline = string | { strong: Inline[] } | { href: string; label: Inline[] };
-export type TextPart = { paragraph: Inline[] } | { items: TextPart[][]; start?: number };
+export type TextPart = { paragraph: Inline[] } | { items: TextPart[][]; start?: number } | { table: Inline[][][]; align: ("left" | "right" | "center" | null)[] };
 export type RichTextBlock = { type: "rich_text"; version: 1; parts: TextPart[] };
 
 export function richHref(value: unknown): value is string {
@@ -36,6 +36,15 @@ export function readRichText(raw: Raw): RichTextBlock | null {
   }
   function part(x: unknown, depth: number): x is TextPart {
     if (!record(x)) return false;
+    if ("table" in x) {
+      if (!Array.isArray(x.align) || !x.align.length || x.align.length > 12
+        || !x.align.every(a => a === null || a === "left" || a === "right" || a === "center")
+        || !Array.isArray(x.table) || !x.table.length || x.table.length > 61) return false;
+      const width = x.align.length;
+      return list(x.table, depth, (row, d): row is Inline[][] => Array.isArray(row) && row.length === width
+        && list(row, d, (cell, level): cell is Inline[] => Array.isArray(cell)
+          && (cell.length === 0 || list(cell, level, inline))));
+    }
     if ("paragraph" in x) return list(x.paragraph, depth, inline);
     return (x.start === undefined || typeof x.start === "number" && Number.isSafeInteger(x.start) && x.start >= 0 && x.start <= 999999999)
       && list(x.items, depth, parts);
@@ -55,6 +64,10 @@ function inlineText(nodes: Inline[]): string {
 export function richTextPlain(parts: TextPart[]): string {
   return parts.map(part => {
     if ("paragraph" in part) return inlineText(part.paragraph);
+    if ("table" in part) {
+      const row = (cells: Inline[][]) => "| " + cells.map(cell => inlineText(cell).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ")).join(" | ") + " |";
+      return [row(part.table[0]), "| " + part.align.map(a => a === "right" ? "---:" : a === "center" ? ":---:" : a === "left" ? ":---" : "---").join(" | ") + " |", ...part.table.slice(1).map(row)].join("\n");
+    }
     return part.items.map((item, i) => {
       const marker = part.start === undefined ? "• " : `${part.start + i}. `;
       return marker + richTextPlain(item).split("\n").map((line, n) => n && line ? " ".repeat(marker.length) + line : line).join("\n");

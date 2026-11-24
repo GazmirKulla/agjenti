@@ -1,9 +1,10 @@
 "use client";
 
-import { memo, useState, type ReactNode } from "react";
+import { memo, useMemo, useState, type ReactNode } from "react";
 import { Modal } from "@/components/modal/modal";
 import { blockCaption, parseBlocks, type MetricsBlock, type TableBlock, type TableRow } from "@/lib/business-assistant/blocks";
 import { richTextPlain, type Inline, type TextPart } from "@/lib/business-assistant/rich-text";
+import { formattedCaption } from "@/lib/business-assistant/parse-reply";
 import "./message-blocks.css";
 
 function Metrics({ block, slug }: { block: MetricsBlock; slug: string }) {
@@ -61,6 +62,12 @@ function inline(nodes: Inline[]): ReactNode {
 function paragraphs(parts: TextPart[]): ReactNode {
   return parts.map((part, i) => {
     if ("paragraph" in part) return <p key={i}>{inline(part.paragraph)}</p>;
+    if ("table" in part) return <div key={i} className="assistant-prose-table" role="region" aria-label="Tabela e përgjigjes" tabIndex={0}>
+      <table>
+        <thead><tr>{part.table[0].map((cell, c) => <th key={c} scope="col" style={{ textAlign: part.align[c] ?? "start" }}>{inline(cell)}</th>)}</tr></thead>
+        <tbody>{part.table.slice(1).map((row, r) => <tr key={r}>{row.map((cell, c) => <td key={c} style={{ textAlign: part.align[c] ?? "start" }}>{inline(cell)}</td>)}</tr>)}</tbody>
+      </table>
+    </div>;
     const items = part.items.map((item, n) => <li key={n}>{paragraphs(item)}</li>);
     return part.start === undefined ? <ul key={i}>{items}</ul> : <ol key={i} start={part.start}>{items}</ol>;
   });
@@ -69,13 +76,22 @@ function paragraphs(parts: TextPart[]): ReactNode {
 export const AssistantMessageBody = memo(function AssistantMessageBody({ content, blocks, slug }: {
   content: string; blocks?: unknown; slug: string;
 }) {
-  const valid = parseBlocks(blocks);
+  const valid = useMemo(() => parseBlocks(blocks), [blocks]);
   const rich = valid.find(block => block.type === "rich_text");
   const dataBlocks = valid.filter(block => block.type !== "rich_text");
   const caption = blockCaption(content, valid);
+  // Historical replies may contain Markdown tables in plain text or old paragraph blocks.
+  // Parse only for presentation; this never creates server data blocks or action references.
+  const matchingRich = rich && richTextPlain(rich.parts) === caption ? rich : null;
+  const historicalTable = useMemo(() => {
+    if (matchingRich?.parts.some(part => "table" in part)) return null;
+    const parsed = formattedCaption(caption);
+    return parsed?.parts.some(part => "table" in part) ? parsed : null;
+  }, [caption, matchingRich]);
+  const presentation = historicalTable ?? matchingRich;
   return <>
-    {rich && richTextPlain(rich.parts) === caption
-      ? <div className="assistant-rich-text">{paragraphs(rich.parts)}</div>
+    {presentation
+      ? <div className="assistant-rich-text">{paragraphs(presentation.parts)}</div>
       : caption && <p>{caption}</p>}
     {dataBlocks.map((block, i) => block.type === "metrics"
       ? <Metrics key={i} block={block} slug={slug} />

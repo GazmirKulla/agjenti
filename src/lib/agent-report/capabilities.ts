@@ -10,7 +10,7 @@
 export type CapabilityStatus = "po" | "pjes" | "jo";
 export type CapabilityModule = { name: string; items: [CapabilityStatus, string][] };
 
-export const capabilityReportUpdated = "2026-11-24";
+export const capabilityReportUpdated = "2026-11-25";
 
 export const customerCapabilities: CapabilityModule[] = [
   {
@@ -194,7 +194,7 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Konfigurim në grup"],
       ["po", "Ndrysho një fushë"],
       ["po", "Publiko ose kthe në draft"],
-      ["po", "Numëron dhe krahason produktet në server. Shfaq rezultatet në tabelë dhe ruan rreshtat në bisedë."],
+      ["pjes", "Numëron dhe krahason produktet në server. Kërkimet e reja shfaqin tabela të strukturuara. Tabelat Markdown shfaqen edhe në historik (deri në 60 rreshta, 12 kolona dhe buxhetin e tekstit); formati që zgjedh modeli nuk garantohet."],
       ["pjes", "Importi"],
       ["pjes", "Foto: vetëm me URL, pa ngarkim"],
       ["po", "Rregullat e stokut"],
@@ -331,6 +331,7 @@ export const currentState = [
 ];
 
 export const mainProblems: { title: string; detail: string }[] = [
+  { title: "Formati i përgjigjeve të Asistentit varet ende nga modeli.", detail: "Renderimi Markdown u korrigjua dhe shembulli i raportuar me 18 produkte kalon testet për mesazhe të reja dhe historike. Kërkimet e serverit ruajnë tabelat e tyre. Korrigjimi nuk detyron modelin të zgjedhë tabelë; tabelat jashtë kufijve mbeten tekst i lexueshëm. Ende pa verifikim në prodhim." },
   { title: "Realtime në pajisje dhe vazhdimi i punëve kërkojnë verifikim.", detail: "Migrimi realtime është aplikuar në databazën reale dhe kanali privat, izolimi dhe marrja e njoftimit janë verifikuar. Worker-i çdo minutë është aktiv. Publikimi i klientëve, rikuperimi pas humbjes së vazhdimit dhe sjellja në sfond në pajisje reale mbeten të paverifikuara." },
   { title: "Editori i workflow-ve nuk hiqet dot plotësisht.", detail: "Pa proces të publikuar, serveri e ndërton vetë procesin nga produktet dhe cilësimet, dhe të gjitha cilësimet e Agjentit janë te “Çfarë bën Agjenti”. Agjenti.app ka ende nevojë për editorin, sepse rrjedha “Regjistrim biznesi” krijon biznes dhe ftesë, gjë që procesi i zakonshëm nuk e bën." },
   { title: "Krijimi i rezervimit nga kanalet kërkon verifikim live.", detail: "Një provë e raportuar nga Instagram ose WhatsApp nuk arriti të verifikonte orarin dhe të krijonte rezervim. Korrigjimet në kod duhen verifikuar në kanalin e biznesit. Kujtesat dhe mesazhet për vendimet e stafit dërgohen vetëm brenda 24 orëve nga mesazhi i fundit i klientit (rregulli i Instagram/WhatsApp, pa shabllone)." },
