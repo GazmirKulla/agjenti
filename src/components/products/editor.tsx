@@ -11,7 +11,6 @@ import {
   createProduct,
   updateProduct,
 } from "@/lib/products/actions";
-import { ProductTips } from "./shared";
 import { ProductPhoto } from "./product-photo";
 import type { ProductRow, Option } from "@/lib/products/catalog";
 import { usePageAssistantContext } from "@/components/business-assistant/workspace";
@@ -178,20 +177,13 @@ export function ProductEditor({
       </form>
       {product && (
         <div className="products-workspace product-detail-extras">
-          <section className="panel section-pad product-danger-zone" aria-labelledby="product-danger-title">
-            <h2 id="product-danger-title">Arkivo ose fshi</h2>
-            <p className="muted-copy">
-              {product.archived_at ? "Produkti është i arkivuar: Agjenti nuk e ofron. Riktheje si draft për ta përdorur sërish."
-                : "Arkivimi e heq nga katalogu dhe nga Agjenti, por e ruan për porositë e kaluara. Fshirja e heq përgjithmonë."}
-            </p>
-            <div className="product-danger-actions">
-              <OperationButton slug={slug} operation={product.archived_at ? "product.restore" : "product.archive"} input={{ id: product.id }}>
-                {product.archived_at ? "Rikthe si draft" : "Arkivo produktin"}
-              </OperationButton>
-              <OperationButton slug={slug} operation="product.delete" input={{ id: product.id }} redirectTo={`/b/${slug}/products`} className="catalog-bulk-danger">Fshi produktin</OperationButton>
-            </div>
-          </section>
-          <ProductTips />
+          {/* Archive and delete: two quiet buttons; each confirmation explains what happens. */}
+          <div className="product-danger-actions">
+            <OperationButton slug={slug} operation={product.archived_at ? "product.restore" : "product.archive"} input={{ id: product.id }} className="product-danger-button">
+              {product.archived_at ? "Rikthe si jo publik" : "Arkivo produktin"}
+            </OperationButton>
+            <OperationButton slug={slug} operation="product.delete" input={{ id: product.id }} redirectTo={`/b/${slug}/products`} className="product-danger-button catalog-bulk-danger">Fshi produktin</OperationButton>
+          </div>
         </div>
       )}
     </>

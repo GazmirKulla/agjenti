@@ -42,7 +42,7 @@ type ProductFieldValues = {
 /** The product's one status: public (the agent offers and sells it) or not, a draft it does not see. */
 export function PublishSwitch({ defaultChecked }: { defaultChecked: boolean }) {
   return <label className="toggle-label product-publish-switch">
-    <span>Publik<small>Kur është i fikur, produkti është draft: Agjenti nuk e sheh.</small></span>
+    <span>Publik<small>Kur është i fikur, produkti nuk është publik: Agjenti nuk e sheh.</small></span>
     <input type="hidden" name="publish_switch" value="1" />
     <input className="switch-input" type="checkbox" name="is_active" defaultChecked={defaultChecked} />
   </label>;

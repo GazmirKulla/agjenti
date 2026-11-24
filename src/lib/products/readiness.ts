@@ -42,7 +42,7 @@ export function productReadiness(p: ReadinessInput): ReadinessItem[] {
       : { key: "workflow", label: "Procesi i porosisë", done: p.workflow, optional: false, anchor: "product-process",
         hint: "Pa proces gati, Agjenti informon por nuk merr porosi." },
     { key: "active", label: "Publik", done: p.active && !p.archived && p.availability !== "sold", optional: false, anchor: "product-save",
-      hint: "Draftet, produktet e arkivuara ose të shitura nuk u ofrohen klientëve." },
+      hint: "Produktet jo publike, të arkivuara ose të shitura nuk u ofrohen klientëve." },
   ];
   return items;
 }

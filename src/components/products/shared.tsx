@@ -125,22 +125,3 @@ export function ProductMethodTip() {
     </p>
   );
 }
-
-export function ProductTips() {
-  return (
-    <section className="panel section-pad product-tips">
-      <h2>Këshilla të shpejta</h2>
-      <p>
-        <strong>Produkti nuk përdoret nga Agjenti?</strong>
-        <br />
-        Shiko listën “Gati për Agjentin”: çdo pikë që mungon të çon te vendi ku plotësohet.
-      </p>
-      <p>
-        <strong>Shto përmes Agjentit</strong>
-        <br />
-        Hap Agjentin dhe përshkruaj produktin me tekst ose audio. Kontrollo
-        propozimin para ruajtjes.
-      </p>
-    </section>
-  );
-}

@@ -12,7 +12,6 @@ import {
   catalogFilter,
   catalogStatus,
   fromWebsite,
-  isMapped,
   type ProductRow,
   type CatalogField,
   type Option,
@@ -22,7 +21,6 @@ import { updateCatalogField } from "@/lib/products/inline-actions";
 import { productMoney as money } from "@/lib/products/catalog";
 import { entityWorkflowHref } from "@/components/workflows/entity-flow-link";
 
-import { ProductBusinessWorkflow } from "./business-workflow";
 import { useManualOperation } from "@/components/dashboard/operation-button";
 import { RowMenu, type RowMenuItem } from "@/components/dashboard/row-menu";
 import { Icon } from "@/components/dashboard/icon";
@@ -38,15 +36,15 @@ function pageNumbers(current: number, last: number): number[] {
 }
 const STATUS_LABEL: Record<string, string> = {
   archived: "I arkivuar",
-  active: "Aktiv",
-  draft: "Draft",
+  active: "Publik",
+  draft: "Jo publik",
   unlinked: "I palidhur",
 };
 const STATUS_FILTERS = [
   ["all", "Të gjitha"],
-  ["active", "Aktive"],
+  ["active", "Publike"],
   ["archived", "Të arkivuara"],
-  ["draft", "Draft"],
+  ["draft", "Jo publike"],
   ["unlinked", "Të palidhura"],
 ] as const;
 /** Where products come from: the business website's catalog or added here. */
@@ -142,10 +140,6 @@ export function ProductCatalog({
   const [savingRows, setSavingRows] = useState<
     Record<string, { field: CatalogField; value: string | boolean | null }>
   >({});
-  const [rowFeedback, setRowFeedback] = useState<
-    Record<string, { error?: string; success?: string }>
-  >({});
-  const [configId, setConfigId] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const inFlight = useRef(new Set<string>());
   const hasSavingRows = Object.keys(savingRows).length > 0;
@@ -179,8 +173,6 @@ export function ProductCatalog({
   const maxPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, maxPage);
   const shown = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const configProduct =
-    catalogProducts.find((p) => p.id === configId) ?? null;
   const removal = useManualOperation(slug, "product.delete");
   // Multiple delete goes through the same reviewed server operation as the assistant:
   // the server re-resolves each ID, archives products with history, and previews before confirming.
@@ -235,7 +227,10 @@ export function ProductCatalog({
   function rowActions(p: ProductRow): RowMenuItem[] {
     return [
       { label: "Hap produktin", href: `/b/${slug}/products/${p.id}` },
-      { label: "Konfiguro shabllonin dhe procesin", onSelect: () => setConfigId(p.id) },
+      // The product's one status, as the editor's Publik switch.
+      p.is_active
+        ? { label: "Bëje jo publik", disabled: pending || Boolean(savingRows[p.id]), onSelect: () => void editRow(p, "is_active", false) }
+        : { label: "Publikoje", disabled: pending || Boolean(savingRows[p.id]) || Boolean(p.archived_at), onSelect: () => void editRow(p, "is_active", true) },
       ...(p.visual_workflow
         ? [{ label: `Hap procesin: ${p.visual_workflow.name}`, href: entityWorkflowHref(slug, "product", p.id, p.visual_workflow.flowId) }]
         : []),
@@ -279,7 +274,6 @@ export function ProductCatalog({
       ...current,
       [product.id]: { field, value },
     }));
-    setRowFeedback((current) => ({ ...current, [product.id]: {} }));
     try {
       const result = await updateCatalogField(slug, {
         id: product.id,
@@ -287,11 +281,9 @@ export function ProductCatalog({
         value,
         updatedAt: product.updated_at ?? "",
       });
-      setRowFeedback((current) => ({
-        ...current,
-        [product.id]: { error: result.error, success: result.success },
-      }));
-      if (!result.error) {
+      // The outcome, success or refusal (e.g. no price to publish), shows in the list's notice.
+      if (result.error) setNotice(`${product.name}: ${result.error}`);
+      else {
         if (!result.product) setRowUpdates(current => { const next = { ...current }; delete next[product.id]; return next; });
         if (result.product) setRowUpdates((current) => ({
           ...current,
@@ -301,10 +293,7 @@ export function ProductCatalog({
         router.refresh();
       }
     } catch {
-      setRowFeedback((current) => ({
-        ...current,
-        [product.id]: { error: "Ndryshimi nuk u ruajt. Provo përsëri." },
-      }));
+      setNotice(`${product.name}: Ndryshimi nuk u ruajt. Provo përsëri.`);
     } finally {
       inFlight.current.delete(product.id);
       setSavingRows((current) => {
@@ -411,8 +400,8 @@ export function ProductCatalog({
             {filtered.length > selected.length && filtered.length <= 100 && (
               <button type="button" className="btn btn-ghost" onClick={() => setSelected(filtered.map((p) => p.id))}>Zgjidh të gjitha sipas filtrit ({filtered.length})</button>
             )}
-            <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("activate")}>{mapping ? "Lidh dhe aktivizo" : "Aktivizo"}</button>
-            <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("draft")}>Kalo në draft</button>
+            <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("activate")}>{mapping ? "Lidh dhe bëji publike" : "Bëji publike"}</button>
+            <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("draft")}>Bëji jo publike</button>
             <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setBulkOpen(true)}>Shablloni / procesi</button>
             <button type="button" className="btn btn-ghost catalog-bulk-danger" disabled={bulkRemoval.busy} onClick={() => removeMany(selected)}>Fshi</button>
             <button type="button" className="catalog-bulk-clear" onClick={() => setSelected([])}>Pastro</button>
@@ -584,158 +573,6 @@ export function ProductCatalog({
 
       <Modal
         size="md"
-        open={Boolean(configProduct)}
-        onClose={() => setConfigId(null)}
-        title="Konfiguro"
-        subtitle={configProduct?.name}
-        footer={configProduct && (
-          <>
-            <Link
-              className="btn btn-ghost"
-              href={`/b/${slug}/products/${configProduct.id}`}
-            >
-              Hap produktin
-            </Link>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setConfigId(null)}
-            >
-              Mbyll
-            </button>
-          </>
-        )}
-      >
-        {configProduct && (
-          <div className="catalog-dialog-fields">
-            <label className="form-label">
-              Shablloni i porosisë
-              <select
-                className="field"
-                value={
-                  savingRows[configProduct.id]?.field === "product_type_id"
-                    ? String(savingRows[configProduct.id].value ?? "")
-                    : (configProduct.product_type_id ?? "")
-                }
-                disabled={
-                  pending || Boolean(savingRows[configProduct.id])
-                }
-                onChange={(event) =>
-                  void editRow(
-                    configProduct,
-                    "product_type_id",
-                    event.target.value || null,
-                  )
-                }
-              >
-                <option value="">Pa shabllon</option>
-                {configProduct.product_type_id &&
-                  !types.some(
-                    (type) => type.id === configProduct.product_type_id,
-                  ) && (
-                    <option value={configProduct.product_type_id} disabled>
-                      Shablloni aktual (joaktiv)
-                    </option>
-                  )}
-                {types.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <ProductBusinessWorkflow slug={slug} workflow={configProduct.business_workflow} product={configProduct} />
-            <details open={Boolean(configProduct.workflow_id)}><summary>Proces i posaçëm (opsional)</summary><label className="form-label">
-              Procesi pas zgjedhjes së produktit
-              <select
-                className="field"
-                value={
-                  savingRows[configProduct.id]?.field === "workflow_id"
-                    ? String(savingRows[configProduct.id].value ?? "")
-                    : (configProduct.workflow_id ?? "")
-                }
-                disabled={
-                  pending || Boolean(savingRows[configProduct.id])
-                }
-                onChange={(event) =>
-                  void editRow(
-                    configProduct,
-                    "workflow_id",
-                    event.target.value || null,
-                  )
-                }
-              >
-                <option value="">{configProduct.visual_workflow || configProduct.visual_draft ? "Ruaj procesin vizual ekzistues" : "Procesi i zakonshëm i Agjentit"}</option>
-                {configProduct.workflow_id &&
-                  !workflows.some(
-                    (workflow) => workflow.id === configProduct.workflow_id,
-                  ) && (
-                    <option value={configProduct.workflow_id} disabled>
-                      Workflow aktual
-                    </option>
-                  )}
-                {workflows.filter(w => w.id).map((workflow) => (
-                  <option key={workflow.id} value={workflow.id}>
-                    {workflow.name}
-                  </option>
-                ))}
-              </select>
-            </label></details>
-            <label className="form-label">
-              Statusi
-              <select
-                className="field"
-                value={
-                  (
-                    savingRows[configProduct.id]?.field === "is_active"
-                      ? savingRows[configProduct.id].value
-                      : configProduct.is_active
-                  )
-                    ? "active"
-                    : "draft"
-                }
-                disabled={
-                  pending || Boolean(savingRows[configProduct.id])
-                }
-                onChange={(event) =>
-                  void editRow(
-                    configProduct,
-                    "is_active",
-                    event.target.value === "active",
-                  )
-                }
-              >
-                <option value="draft">Draft</option>
-                <option value="active">Publik</option>
-              </select>
-            </label>
-            {!isMapped(configProduct) && (
-              <p className="muted-copy">
-                Aktivizimi e bën produktin të kërkueshëm në katalog, jo të porositshëm automatikisht. Veprimet kërkojnë workflow dhe autorizim në server.
-              </p>
-            )}
-            <small
-              className={`catalog-inline-feedback${rowFeedback[configProduct.id]?.error ? " is-error" : ""}`}
-              role={
-                rowFeedback[configProduct.id]?.error ? "alert" : "status"
-              }
-            >
-              {savingRows[configProduct.id] ? (
-                <>
-                  <span className="catalog-saving-spinner" aria-hidden="true" />{" "}
-                  Po ruhet…
-                </>
-              ) : (
-                rowFeedback[configProduct.id]?.error ||
-                rowFeedback[configProduct.id]?.success
-              )}
-            </small>
-          </div>
-        )}
-      </Modal>
-
-      <Modal
-        size="md"
         open={bulkOpen}
         onClose={() => { setBulkOpen(false); setSelected([]); }}
         title="Veprime"
@@ -761,7 +598,7 @@ export function ProductCatalog({
               disabled={pending || hasSavingRows || !selected.length}
               onClick={() => apply("activate")}
             >
-              {mapping ? "Lidh dhe aktivizo" : "Aktivizo"}
+              {mapping ? "Lidh dhe bëji publike" : "Bëji publike"}
             </button>
             <button
               type="button"
@@ -769,7 +606,7 @@ export function ProductCatalog({
               disabled={pending || hasSavingRows || !selected.length}
               onClick={() => apply("draft")}
             >
-              Kalo në draft
+              Bëji jo publike
             </button>
             {!mapping && (
               <Link

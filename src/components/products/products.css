@@ -55,8 +55,7 @@
   gap: 1rem;
 }
 .product-side h2,
-.product-catalog h2,
-.product-tips h2 {
+.product-catalog h2 {
   font-size: 1.1rem;
   font-weight: 650;
   margin-bottom: 0.65rem;
@@ -145,15 +144,6 @@
 }
 .product-method-cards > a > span:last-child {
   display: none;
-}
-.product-tips p {
-  border-top: 1px solid var(--line);
-  padding-top: 1rem;
-  font-size: 0.85rem;
-  color: var(--ink-muted);
-}
-.product-tips strong {
-  color: var(--ink);
 }
 .product-catalog {
   overflow: hidden;
@@ -1622,9 +1612,8 @@
   color: var(--ink-muted); border: 1px dashed var(--line-strong, var(--line)); white-space: nowrap; }
 
 /* Archive and delete, apart from the rest of the form. */
-.panel.product-danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
-.product-danger-zone h2 { font-size: 15px; }
-.product-danger-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.product-danger-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.product-danger-actions .product-danger-button { min-height: 36px; padding: 6px 14px; font-size: 13px; border-radius: 9px; }
 
 /* AI fill: highlighted only when every field is still empty. */
 .product-ai-fill { display: grid; gap: 0.5rem; }

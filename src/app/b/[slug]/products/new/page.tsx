@@ -3,7 +3,6 @@ import {
   ProductHeading,
   ProductMethods,
   ProductMethodTip,
-  ProductTips,
 } from "@/components/products/shared";
 import { ProductEditor } from "@/components/products/editor";
 import { ProductIntake } from "@/components/dashboard/product-intake";
@@ -81,7 +80,6 @@ export default async function NewProductPage({
             initialMethod={method === "instagram" ? "instagram" : "csv"}
             hideTabs
           />
-          <ProductTips />
         </div>
       )}
     </>
