@@ -6,10 +6,10 @@ vi.mock("@/lib/dashboard/modules/entitlements", async () => {
   }, requireModuleAllowed: async () => {} };
 });
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), profile: vi.fn(), from: vi.fn(), refresh: vi.fn() }));
+const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), profile: vi.fn(), from: vi.fn(), refresh: vi.fn(), rpc: vi.fn() }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access }));
 vi.mock("@/lib/dashboard/profile/service", () => ({ loadDashboardProfile: m.profile }));
-vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from }) }));
+vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }) }));
 vi.mock("next/cache", () => ({ revalidatePath: m.refresh }));
 // Advisory workflow metadata only; the real mutation/validation and capability assessor run.
 vi.mock("@/lib/workflows/visual/business-workflow", () => ({ publishedBusinessWorkflow: async () => null }));
@@ -75,6 +75,27 @@ beforeEach(() => {
       then: (resolve: (value: ReturnType<typeof execute>) => unknown) => Promise.resolve(execute()).then(resolve),
     };
     return q;
+  });
+});
+// Knowledge writes go through apply_agent_configuration; this stands in for it with the same stamp check.
+beforeEach(() => {
+  const seen = new Map<string, unknown>();
+  m.rpc.mockImplementation(async (name: string, args: { p_business: string; p_request: string; p_changes: Row[] }) => {
+    if (name !== "apply_agent_configuration") return { data: null, error: { message: "unexpected rpc" } };
+    if (seen.has(args.p_request)) return { data: seen.get(args.p_request), error: null };
+    if (writeFailure) return { data: null, error: { message: "write_failed" } };
+    for (const change of args.p_changes) {
+      const row = (tables.knowledge_entries ?? []).find(item => item.id === change.id && item.business_id === args.p_business);
+      if (!row) return { data: null, error: { message: "configuration_target_missing" } };
+      if (race) { row.updated_at = "2026-10-18T10:00:00.000Z"; return { data: null, error: { message: "stale_configuration_target" } }; }
+      if (row.updated_at !== change.expected) return { data: null, error: { message: "stale_configuration_target" } };
+      queries.push({ table: "knowledge_entries", filters: { business_id: args.p_business, id: row.id, updated_at: change.expected }, patch: {} });
+      Object.assign(row, change.type === "knowledge.active" ? { is_active: change.is_active } : { title: String(change.title).trim(), body: String(change.body).trim(), is_active: change.is_active ?? row.is_active },
+        { updated_at: new Date(Date.parse(String(row.updated_at)) + 1).toISOString() });
+      writes++;
+    }
+    const data = { revision: writes + 1, created: true }; seen.set(args.p_request, data);
+    return { data, error: null };
   });
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });

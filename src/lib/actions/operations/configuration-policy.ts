@@ -3,7 +3,7 @@ import { OperationError } from "./error";
 
 /** Operations permitted by the configuration executor. This is not the runtime
  * customer-agent policy and never grants arbitrary administrative operations. */
-export const configurationOperations = ["business.verify", "workflow.configure", "business.orders", "knowledge.save", "product.create", "product.edit", "service.save", "agent.manage", "agent.communication", "business.autoreply", "calendar.settings"] as const;
+export const configurationOperations = ["business.verify", "workflow.configure", "business.orders", "knowledge.save", "product.create", "product.edit", "service.save", "agent.manage", "agent.communication", "agent.configure", "business.autoreply", "calendar.settings"] as const;
 export type ConfigurationStep = { key: string; input: OperationInput; after?: number[]; references?: Record<string, { step: number; output: "id" }> };
 export function parseConfigurationSteps(raw: unknown): ConfigurationStep[] {
   if (!Array.isArray(raw) || !raw.length || raw.length > 16 || JSON.stringify(raw).length > 90000) throw new OperationError("Konfigurimi duhet të ketë 1–16 hapa.");

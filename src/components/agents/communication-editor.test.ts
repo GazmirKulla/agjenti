@@ -8,8 +8,8 @@ import { defaultCommunicationPolicy } from "@/lib/agents/communication-policy";
 const agent: CommunicationEditorAgent = { id: "synthetic", name: "Agjenti.app", instructions: "Shpjego fillimisht shërbimin dhe kupto nevojën e klientit.",
   is_active: true, updated_at: "2026-11-04T00:00:00Z", communication: defaultCommunicationPolicy, configuration_revision: 2,
   configuration_draft: { instructions: "Përgjigju shkurt dhe natyrshëm. Propozo regjistrimin kur klienti shfaq interes.", communication: defaultCommunicationPolicy, baseRevision: 2 } };
-it("saves directly with one Ruaj, brings versions back directly, and offers a pending draft only Zbato / Hidh poshtë", () => {
-  const render = (a: CommunicationEditorAgent) => renderToStaticMarkup(createElement(CommunicationEditor, { agent: a, slug: "synthetic", versions: [2, 1], action: async () => {} }));
+it("saves directly with one Ruaj, keeps history outside, and offers a pending draft only Zbato / Hidh poshtë", () => {
+  const render = (a: CommunicationEditorAgent) => renderToStaticMarkup(createElement(CommunicationEditor, { agent: a, slug: "synthetic", action: async () => {} }));
   const html = render(agent);
   expect(html).toContain('name="mode" value="apply"');
   expect(html).not.toContain('value="draft"');
@@ -20,7 +20,9 @@ it("saves directly with one Ruaj, brings versions back directly, and offers a pe
   expect(html).toMatch(/>Zbato<\/button>/);
   expect(html).toContain("Hidh poshtë");
   expect(html.indexOf("Udhëzimet")).toBeLessThan(html.indexOf("Mënyra e komunikimit"));
-  expect(html).toContain('name="mode" value="revert"');
+  // Earlier versions are the whole configuration's, in Historiku; no instruction-only restore here.
+  expect(html).not.toContain('value="revert"');
+  expect(html).toContain('name="request_id"');
   expect(html).not.toContain("draft</button>");
   // An outdated draft cannot be applied as it is: only shown and dropped.
   const stale = render({ ...agent, configuration_revision: 3 });

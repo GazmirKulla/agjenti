@@ -1,5 +1,6 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "@/lib/tenant/access";
+import { ConfigurationError, saveConfiguration } from "@/lib/agent-configuration/service";
 
 /** What the customer agent does by itself, set by the business (businesses.agent_behavior). */
 export type Escalation = "handoff" | "notify" | "off";
@@ -29,6 +30,8 @@ export async function storeAgentBehavior(businessId: string, userId: string, pat
   if (patch.escalation !== undefined && !["handoff", "notify", "off"].includes(String(patch.escalation))) return { error: "Zgjedhja për klientin e pakënaqur nuk është e vlefshme." };
   const current = await loadAgentBehavior(businessId);
   const next: AgentBehavior = { ...current, ...(patch.voice !== undefined ? { voice: patch.voice as boolean } : {}), ...(patch.escalation !== undefined ? { escalation: patch.escalation as Escalation } : {}) };
-  const { error } = await db.from("businesses").update({ agent_behavior: next, updated_at: new Date().toISOString() }).eq("id", businessId);
-  return error ? { error: "Cilësimi nuk u ruajt. Provo përsëri." } : { behavior: next };
+  // Through the agent configuration change, so it is versioned with the rest.
+  try { await saveConfiguration(businessId, userId, [{ type: "behavior.set", ...(patch.voice !== undefined ? { voice: next.voice } : {}), ...(patch.escalation !== undefined ? { escalation: next.escalation } : {}) }], "owner"); }
+  catch (error) { return { error: error instanceof ConfigurationError ? error.message : "Cilësimi nuk u ruajt. Provo përsëri." }; }
+  return { behavior: next };
 }

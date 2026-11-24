@@ -39,5 +39,5 @@ it("reports which knowledge ids the reply could read, and null when the turn nev
   const p = collectTestConfiguration();
   expect(p.finish({ debug }).knowledge).toBeNull();
   p.onTrace({ stage: "context", label: "Knowledge in reply context", data: { knowledgeIds: ["k1", 7, "k2"], status: "partial" } });
-  expect(p.finish({ debug }).knowledge).toEqual({ ids: ["k1", "k2"], status: "partial" });
+  expect(p.finish({ debug }).knowledge).toEqual({ ids: ["k1", "k2"], status: "partial", reason: null });
 });

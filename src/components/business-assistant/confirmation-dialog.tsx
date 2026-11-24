@@ -18,8 +18,8 @@ export function ConfirmationDialog({ preview, busy, canConfirm, recovered, error
   return <Modal id="assistant-work-detail" size="md" className="assistant-confirmation" title={preview.title} subtitle={preview.subject || undefined}
     onClose={onClose} dismissible={!busy}
     footer={<>
-      <button type="button" className="assistant-secondary" disabled={busy} onClick={onClose}>Anulo</button>
-      {canConfirm && <button type="button" className="assistant-primary" disabled={busy} onClick={onConfirm}>{busy ? "Po ruhet…" : "Konfirmo"}</button>}
+      <button type="button" className="assistant-secondary" disabled={busy} onClick={onClose}>{preview.configuration ? "Refuzo" : "Anulo"}</button>
+      {canConfirm && <button type="button" className="assistant-primary" disabled={busy} onClick={onConfirm}>{busy ? "Po zbatohet…" : preview.configuration ? "Prano ndryshimin" : "Konfirmo"}</button>}
     </>}>
     <div aria-busy={busy}>
       {compact && !children ? fields : <><p>{preview.fields.length} ndryshime për shqyrtim.</p>

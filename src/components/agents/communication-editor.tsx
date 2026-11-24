@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { randomUUID } from "node:crypto";
 import { ActionForm, type ActionResult } from "@/components/dashboard/action-form";
 import type { CommunicationPolicy } from "@/lib/agents/communication-policy";
 
@@ -10,20 +11,19 @@ export type CommunicationEditorAgent = {
 
 /** The agent's instructions first, then how it talks. Ruaj applies them to new replies right away; every
  * save becomes a version that can be brought back. A draft saved before that waits for Zbato / Hidh poshtë. */
-export function CommunicationEditor({ agent, slug, versions, action }: {
-  agent: CommunicationEditorAgent; slug: string; versions: number[];
+export function CommunicationEditor({ agent, slug, action }: {
+  agent: CommunicationEditorAgent; slug: string;
   action: (data: FormData) => Promise<ActionResult | void>;
 }) {
   const draft = agent.configuration_draft;
   const policy = agent.communication;
-  const identity = <><input type="hidden" name="id" value={agent.id} /><input type="hidden" name="updated_at" value={agent.updated_at} /></>;
+  const identity = <><input type="hidden" name="id" value={agent.id} /><input type="hidden" name="updated_at" value={agent.updated_at} /><input type="hidden" name="request_id" value={randomUUID()} /></>;
   const stale = Boolean(draft && draft.baseRevision !== agent.configuration_revision);
-  const older = versions.filter(revision => revision !== agent.configuration_revision);
   return <section className="panel section-pad agent-editor" aria-label={`Udhëzimet e ${agent.name}`}>
     <header className="agent-editor-head">
       <div>
         <h2>{agent.name}</h2>
-        <p className="muted-copy">Versioni {agent.configuration_revision} {agent.is_active ? "në përdorim" : "· agjenti joaktiv, nuk u përgjigjet klientëve"}</p>
+        <p className="muted-copy">{agent.is_active ? "Në përdorim" : "Agjenti joaktiv, nuk u përgjigjet klientëve"}</p>
       </div>
     </header>
     {draft && <div className="agent-callout" role="status">
@@ -58,16 +58,8 @@ export function CommunicationEditor({ agent, slug, versions, action }: {
       </fieldset>
       <div className="agent-editor-footer">
         <button className="btn btn-primary" type="submit">Ruaj</button>
-        <p className="muted-copy">Ruaj i vë në përdorim në përgjigjet e reja. Çdo ruajtje mbahet si version që mund ta rikthesh. Mund t&apos;ia kërkosh edhe Asistentit.</p>
+        <p className="muted-copy">Ruaj i zbaton menjëherë në përgjigjet e reja dhe krijon një version; tri versionet e fundit i gjen te Historiku. Mund t&apos;ia kërkosh edhe Asistentit.</p>
       </div>
     </ActionForm>
-    {older.length > 0 && <details className="agent-versions">
-      <summary>Versionet e mëparshme ({older.length})</summary>
-      <p className="muted-copy">Rikthe e vë versionin e zgjedhur sërish në përdorim; versioni aktual ruhet.</p>
-      <ActionForm action={action} className="agent-versions-form">{identity}<input type="hidden" name="mode" value="revert" />
-        <label className="form-label">Versioni<select className="field" name="revision">{older.map(revision => <option key={revision} value={revision}>Versioni {revision}</option>)}</select></label>
-        <button className="btn btn-ghost" type="submit">Rikthe</button>
-      </ActionForm>
-    </details>}
   </section>;
 }

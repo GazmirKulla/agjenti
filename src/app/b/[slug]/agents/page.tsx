@@ -1,4 +1,5 @@
 import { InstructionFacts } from "@/components/agents/instruction-facts";
+import { ConfigurationHistory } from "@/components/agents/configuration-history";
 import { CommunicationEditor, type CommunicationEditorAgent } from "@/components/agents/communication-editor";
 import { prepareCommunicationConfiguration, saveCommunicationConfiguration, communicationConfigurationColumns } from "@/lib/agents/communication-configuration";
 import { prepareManagedAgent, saveManagedAgent } from "@/lib/agents/manage";
@@ -44,8 +45,6 @@ export default async function AgentsPage({
     loadAgentLimit(access.business.id),
   ]);
   if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
-  const history = await db.from("agent_configuration_versions").select("agent_id,revision").eq("business_id", access.business.id).order("revision", { ascending: false }).limit(100);
-  if (history.error) throw new Error("Versionet e konfigurimit nuk u ngarkuan.");
   async function configure(formData: FormData) {
     "use server";
     const session = await getSessionUser();
@@ -57,13 +56,13 @@ export default async function AgentsPage({
       const input = { id: String(formData.get("id") ?? ""), mode,
         ...(mode === "apply" ? { instructions: String(formData.get("instructions") ?? ""), communication: {
           version: 1, ...Object.fromEntries(["language", "tone", "length", "questions", "emoji", "productPhotos", "productDetails"].map(key => [key, String(formData.get(key) ?? "")])) } } : {}),
-        ...(mode === "revert" ? { revision: Number(formData.get("revision")) } : {}),
       };
       const proposal = await prepareCommunicationConfiguration(current.business.id, input);
       if (proposal.before.updated_at !== formData.get("updated_at")) return { error: "Konfigurimi ndryshoi. Rifresko përpara ruajtjes." };
-      const result = await saveCommunicationConfiguration(current.business.id, session.id, proposal);
+      const requestId = String(formData.get("request_id") ?? "");
+      const result = await saveCommunicationConfiguration(current.business.id, session.id, proposal, /^[0-9a-f-]{36}$/i.test(requestId) ? requestId : undefined);
       revalidatePath(`/b/${slug}`, "layout");
-      return { success: result.message };
+      return { success: result.message, next: { href: `/b/${slug}/agents/test`, label: "Provo Agjentin" } };
     } catch (error) { return { error: (error as Error).message }; }
   }
   const canCreate = (agents?.length ?? 0) < limit.maxAgents;
@@ -155,8 +154,9 @@ export default async function AgentsPage({
       <div className="agent-page">
         <div className="agent-page-main">
           {(agents ?? []).map((a) => (
-            <CommunicationEditor key={a.id} agent={a as CommunicationEditorAgent} slug={slug} versions={(history.data ?? []).filter(v => v.agent_id === a.id).map(v => v.revision)} action={configure} />
+            <CommunicationEditor key={a.id} agent={a as CommunicationEditorAgent} slug={slug} action={configure} />
           ))}
+          <ConfigurationHistory slug={slug} businessId={access.business.id} />
           {canCreate && (
             <details className="panel section-pad agent-create" open={!agents?.length}>
               <summary>+ Krijo një agjent të ri</summary>

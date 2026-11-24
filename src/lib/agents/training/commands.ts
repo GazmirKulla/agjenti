@@ -4,7 +4,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { isUuid, MEMORY_LIMIT, validateTrainingInput, type TrainingInput, type TrainingMemory, type TrainingTarget, type TrainingWorkflow } from "./model";
 import { loadVisualFlowChoices } from "@/lib/workflows/visual/choices";
 import { readTrainingReceipt } from "./receipt";
-import { prepareCommunicationConfiguration, saveCommunicationConfiguration } from "@/lib/agents/communication-configuration";
+import { saveConfiguration } from "@/lib/agent-configuration/service";
 
 export async function accessTraining(target: TrainingTarget) {
   const user = await getSessionUser();
@@ -68,25 +68,8 @@ export async function saveAgentTraining(actor: CommandActor, input: TrainingInpu
       const flow = choices.flows.find(f => f.id === input.visualFlowId);
       if (!flow || (input.visualNodeId && !flow.steps.some(n => n.key === input.visualNodeId))) throw new Error("Rrjedha ose hapi nuk gjendet në këtë biznes. Rifresko listën.");
     }
-    const values = {
-      kind: input.kind, instruction: input.instruction.trim(), customer_message: input.kind === "example" ? input.customerMessage?.trim() ?? "" : "", desired_response: input.kind === "example" ? input.desiredResponse?.trim() ?? "" : "",
-      workflow_id: input.workflowId ?? null, step_key: input.stepKey ?? null, visual_flow_id: input.visualFlowId ?? null, visual_node_id: input.visualNodeId ?? null, updated_by: userId,
-    };
-    const persist = (payload: Record<string, unknown>) => input.id
-      ? db.from("agent_training_memories").update(payload).eq("business_id", business.id).eq("id", input.id).eq("revision", input.revision!).select("id").maybeSingle()
-      : db.from("agent_training_memories").insert({ ...payload, business_id: business.id, created_by: userId, source: receipt ? "test_feedback" : "manual" }).select("id").single();
-    let result = await persist(values);
-    if (result.error && ["42703", "PGRST204"].includes(result.error.code) && !input.visualFlowId) {
-      const legacyValues: Record<string, unknown> = { ...values };
-      delete legacyValues.visual_flow_id; delete legacyValues.visual_node_id;
-      result = await persist(legacyValues);
-    }
-    if (result.error) {
-      if (result.error.message?.includes("training_memory_limit")) throw new Error(`Ky biznes ka arritur ${MEMORY_LIMIT} mësime. Hiq një mësim përpara se të shtosh tjetër.`);
-      databaseError(result.error.code);
-    }
-    if (!result.data) throw new Error("Ky mësim është ndryshuar nga dikush tjetër. Rifresko përpara ruajtjes.");
-
+    // Through the agent configuration change: one version, checked against the lesson's revision.
+    await saveConfiguration(business.id, userId, [{ type: "training.save", ...input }], "owner");
     return { success: true };
   } catch (error) { return { error: errorMessage(error) }; }
 }
@@ -95,13 +78,9 @@ export async function changeAgentTraining(actor: CommandActor, input: { id: stri
   try {
     const { business, userId } = actor;
     if (!input || !isUuid(input.id) || !Number.isInteger(input.revision) || input.revision < 1 || !["enable", "disable", "delete"].includes(input.action)) throw new Error("Veprimi nuk është i vlefshëm.");
-    const db = createServiceSupabase();
-    // All mutations use tenant filtering and optimistic revisions. Delete is explicit.
-    const query = input.action === "delete" ? db.from("agent_training_memories").delete() : db.from("agent_training_memories").update({ is_active: input.action === "enable", updated_by: userId });
-    const result = await query.eq("business_id", business.id).eq("id", input.id).eq("revision", input.revision).select("id").maybeSingle();
-    if (result.error) databaseError(result.error.code);
-    if (!result.data) throw new Error("Ky mësim është ndryshuar ose është hequr. Rifresko listën.");
-
+    void userId;
+    await saveConfiguration(business.id, actor.userId, [input.action === "delete" ? { type: "training.delete", id: input.id, revision: input.revision }
+      : { type: "training.active", id: input.id, is_active: input.action === "enable", revision: input.revision }], "owner");
     return { success: true };
   } catch (error) { return { error: errorMessage(error) }; }
 }
@@ -115,22 +94,23 @@ export async function moveStyleToInstructions(actor: CommandActor, input: { id: 
     const { business, userId } = actor;
     if (!input || !isUuid(input.id) || !Number.isInteger(input.revision) || input.revision < 1) throw new Error("Veprimi nuk është i vlefshëm.");
     const db = createServiceSupabase();
-    const lesson = await db.from("agent_training_memories").select("id,kind,instruction,revision").eq("business_id", business.id).eq("id", input.id).maybeSingle();
+    const lesson = await db.from("agent_training_memories").select("id,kind,instruction,revision,is_active").eq("business_id", business.id).eq("id", input.id).maybeSingle();
     if (lesson.error) databaseError(lesson.error.code);
     if (!lesson.data || lesson.data.revision !== input.revision) throw new Error("Ky mësim është ndryshuar ose është hequr. Rifresko listën.");
     if (lesson.data.kind !== "style") throw new Error("Vetëm preferencat e stilit kalojnë te udhëzimet.");
-    const agents = await db.from("ai_agents").select("id,instructions,is_active").eq("business_id", business.id).order("is_active", { ascending: false }).limit(2);
+    const agents = await db.from("ai_agents").select("id,instructions,is_active,updated_at").eq("business_id", business.id).order("is_active", { ascending: false }).limit(2);
     if (agents.error) throw new Error("Udhëzimet nuk u lexuan.");
     const agent = agents.data?.find(row => row.is_active) ?? (agents.data?.length === 1 ? agents.data[0] : null);
     if (!agent) throw new Error("Nuk u gjet agjenti aktiv. Aktivizoje te Sjellja dhe veprimet, pastaj provo përsëri.");
+    // A switched-off preference is not put into use by moving it.
+    if (!lesson.data.is_active) throw new Error("Ky mësim është i fikur. Aktivizoje nëse dëshiron ta kalosh te udhëzimet, ose hiqe.");
     const text = lesson.data.instruction.trim();
     const instructions = agent.instructions.includes(text) ? agent.instructions : `${agent.instructions.trim()}\n\n${text}`;
     if (instructions.length > 8000) throw new Error("Udhëzimet do kalonin 8000 shkronja. Shkurtoji përpara se ta kalosh këtë preferencë.");
-    const saved = instructions === agent.instructions ? null : await saveCommunicationConfiguration(business.id, userId,
-      await prepareCommunicationConfiguration(business.id, { id: agent.id, mode: "apply", instructions }));
-    const removed = await changeAgentTraining(actor, { id: input.id, revision: input.revision, action: "delete" });
-    // The instructions are already saved: say so plainly rather than reporting the whole move as failed or done.
-    if ("error" in removed) return { error: `Preferenca u shtua te udhëzimet, por mësimi nuk u hoq nga memoria (${removed.error}) Çaktivizoje ose hiqe vetë, që të mos mbahet në dy vende.` };
-    return { success: saved ? `Preferenca u kalua te udhëzimet. ${saved.message}` : "Preferenca ishte tashmë te udhëzimet; u hoq nga memoria." };
+    // Instructions and the lesson change together, each against what was read: a parallel edit stops both.
+    const receipt = await saveConfiguration(business.id, userId, [
+      ...(instructions === agent.instructions ? [] : [{ type: "agent.update" as const, id: agent.id, instructions, expected: agent.updated_at }]),
+      { type: "training.delete", id: input.id, revision: input.revision }], "memory");
+    return { success: `U zbatua: preferenca u kalua te udhëzimet dhe u hoq nga memoria (versioni ${receipt.revision}).` };
   } catch (error) { return { error: errorMessage(error) }; }
 }

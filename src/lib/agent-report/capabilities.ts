@@ -166,6 +166,7 @@ export const businessCapabilities: CapabilityModule[] = [
   {
     name: "Agjenti",
     items: [
+      ["pjes", "Një ndryshim i konfigurimit me disa pjesë (njohuri, udhëzime, komunikim, sjellje, mësime, leja e rezervimit për shërbim/kalendar) me një konfirmim, si tërësi; 3 versione të plota me Rikthe. Migrimi dhe prova e plotë me Asistentin në databazën reale ende nuk janë bërë"],
       ["po", "Udhëzimet dhe stili i komunikimit: zbatohen pas konfirmimit si version i ri, që mund të rikthehet"],
       ["po", "Menaxhimi i agjentit"],
       ["pjes", "Ruaj trajnimin: shembuj dhe mësime për procese; toni dhe stili për gjithë biznesin shkojnë te udhëzimet"],

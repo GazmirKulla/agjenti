@@ -14,6 +14,8 @@ import { saveKnowledgeEntry } from "@/lib/knowledge/actions";
 import { AssistantRecordContext } from "@/components/business-assistant/workspace";
 import { OperationButton } from "@/components/dashboard/operation-button";
 import Link from "next/link";
+import { randomUUID } from "node:crypto";
+import { ConfigurationHistory } from "@/components/agents/configuration-history";
 
 /** Where an entry came from, in words: never the internal key. */
 function knowledgeOrigin(intent: string | null, services: boolean) {
@@ -57,6 +59,7 @@ export async function KnowledgeWorkspace({
     const result = await createKnowledgeEntry({ userId: session.id, business: acc.business }, formData);
     if (result.error) return result;
     revalidatePath(`/b/${slug}`, "layout");
+    return { success: result.success, next: { href: `/b/${slug}/agents/test`, label: "Provo Agjentin" } };
   }
 
   return (
@@ -79,6 +82,7 @@ export async function KnowledgeWorkspace({
         createLabel={services ? "Shto shërbim" : "Shto njohuri"}
         createForm={
           <ActionForm action={add} className="grid gap-4">
+            <input type="hidden" name="request_id" value={randomUUID()} />
             <label className="form-label">
               Titulli
               <input name="title" className="field" required maxLength={500} placeholder="p.sh. Dërgesa" />
@@ -125,6 +129,7 @@ export async function KnowledgeWorkspace({
               <ActionForm action={saveKnowledgeEntry.bind(null, slug)} className="grid gap-4 detail-block">
                 <input type="hidden" name="id" value={e.id} />
                 <input type="hidden" name="updated_at" value={e.updated_at} />
+                <input type="hidden" name="request_id" value={randomUUID()} />
                 <label className="form-label">Titulli<input name="title" className="field" defaultValue={e.title} required maxLength={500} /></label>
                 <label className="form-label">Përmbajtja<textarea name="body" className="field" rows={10} defaultValue={e.body} required maxLength={8000} />
                   <small className="muted-copy">Listat me “- ”, hapat me “1. ”, tabelat me “| … |”. Agjenti i lexon siç i shkruan.</small></label>
@@ -141,6 +146,7 @@ export async function KnowledgeWorkspace({
           ),
         }))}
       />
+      {!services && <ConfigurationHistory slug={slug} businessId={access.business.id} />}
     </>
   );
 }

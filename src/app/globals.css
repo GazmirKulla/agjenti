@@ -5525,3 +5525,12 @@ button.order-photo-image:hover:not(:disabled) {
 /* Beside a title (in PageHeading's actions) or in a toolbar it is a quiet pill, not a margin above. */
 .page-heading > .back-link, .back-link.is-inline { margin: 0; }
 .page-heading > .back-link { flex: none; border: 1px solid var(--line); }
+/* Historiku i konfigurimit të Agjentit. */
+.configuration-history { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.configuration-history summary { cursor: pointer; font-weight: 600; }
+.configuration-history ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.configuration-history li { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding-top: 10px; border-top: 1px solid var(--line); }
+.configuration-history li > div { display: grid; gap: 2px; }
+.configuration-history li small { color: var(--ink-muted); }
+.configuration-history li p { margin: 2px 0 0; font-size: 13px; color: var(--ink-muted); }
+.configuration-history li > div > b + .status-badge { justify-self: start; margin: 2px 0; }

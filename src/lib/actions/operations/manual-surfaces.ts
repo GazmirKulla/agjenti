@@ -38,6 +38,7 @@ export const manualSurfaces = {
   "src/lib/team/actions.ts#changeTeamRole": {"exception": "Team membership and invitations are managed in Platform Admin → Bizneset → Ekipi (owner or platform administrator, enforced in SQL; a business keeps at least one owner); never through the Assistant or the customer agent."},
   "src/lib/team/actions.ts#acceptTeamInvitation": {"exception": "The invited person accepts their own invitation link; only the invited, confirmed email can, before it expires."},
   "src/lib/agents/instruction-facts-actions.ts#checkInstructionFacts": { exception: "Read-only review that proposes moving facts out of the instructions; nothing is written." },
+  "src/lib/agent-configuration/actions.ts#restoreConfiguration": {"operation": "agent.restore"},
   "src/lib/agents/training/actions.ts#moveStyleToInstructions": { exception: "Moves one business-wide style lesson the owner chose on screen into the agent's instructions through the same versioned save as agent.communication, then removes the lesson with its revision." },
   "src/lib/agents/instruction-facts-actions.ts#moveInstructionFacts": { exception: "Applies only a proposal the owner reviewed on screen, through the same versioned draft and publish path as agent.communication." },
   "src/app/b/[slug]/agents/page.tsx#save": {"operation": "agent.manage"},

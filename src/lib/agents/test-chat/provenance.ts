@@ -14,7 +14,8 @@ export function collectTestConfiguration(previewId?: string) {
     if (event.stage === "context" && event.label === "Knowledge in reply context") {
       const ids = event.data?.knowledgeIds;
       if (Array.isArray(ids)) knowledge = { ids: ids.filter((id): id is string => typeof id === "string"),
-        status: typeof event.data?.status === "string" ? event.data.status : "unverified" };
+        status: typeof event.data?.status === "string" ? event.data.status : "unverified",
+        reason: typeof event.data?.reason === "string" ? event.data.reason : null };
     }
     if (event.stage === "context" && event.label === "Customer agent configuration loaded") {
       const a = event.data?.agentConfiguration as AgentConfigurationRead | undefined;

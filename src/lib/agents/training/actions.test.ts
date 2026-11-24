@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), admin: vi.fn(), from: vi.fn(), revalidate: vi.fn(), visual: vi.fn() }));
+const m = vi.hoisted(() => ({ user: vi.fn(), access: vi.fn(), admin: vi.fn(), from: vi.fn(), revalidate: vi.fn(), visual: vi.fn(), save: vi.fn() }));
+// Writes go through the shared agent configuration change (its own tests and the SQL test cover the database).
+vi.mock("@/lib/agent-configuration/service", async (original) => ({ ...(await original<object>()), saveConfiguration: m.save }));
 vi.mock("@/lib/tenant/access", () => ({ getSessionUser: m.user, requireBusinessAccess: m.access, isPlatformAdmin: m.admin }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from }) }));
 vi.mock("@/lib/workflows/visual/choices", () => ({ loadVisualFlowChoices: m.visual }));
@@ -19,6 +21,7 @@ beforeEach(() => {
   m.access.mockResolvedValue({ business: { id: business, slug: "shop" } });
   m.visual.mockResolvedValue({ revision: 1, flows: [] });
   queries = []; resultData = { id }; resultError = null; foreignWorkflow = false;
+  m.save.mockResolvedValue({ revision: 2, created: true, replayed: false, message: "", lines: [] });
   m.from.mockImplementation((table: string) => {
     const query = { table, filters: [] as unknown[][], operation: "", values: undefined as unknown }; queries.push(query);
     const result = () => ({ data: table === "workflows" && foreignWorkflow ? null : resultData, error: resultError });
@@ -45,18 +48,19 @@ describe("explicit business training mutations", () => {
     m.admin.mockResolvedValue(true); resultData = { id: business, slug: "shop" };
     expect(await saveAgentTraining({ businessId: business }, { kind: "example", instruction: "Short", customerMessage: "Q", desiredResponse: "A" })).toEqual({ success: true });
     expect(queries[0].filters).toContainEqual(["id", business]);
+    expect(m.save).toHaveBeenCalledWith(business, "owner", expect.any(Array), "owner");
   });
   it("stores only an explicitly confirmed lesson for the authorized tenant", async () => {
     expect(await saveAgentTraining({ slug: "shop" }, { kind: "example", instruction: "  Pa shumë emoji  ", customerMessage: "Q", desiredResponse: "A" })).toEqual({ success: true });
-    expect(queries).toHaveLength(1);
-    expect(queries[0]).toMatchObject({ table: "agent_training_memories", operation: "insert", values: { business_id: business, instruction: "Pa shumë emoji", created_by: "owner", source: "manual" } });
+    expect(m.save).toHaveBeenCalledWith(business, "owner", [expect.objectContaining({ type: "training.save", kind: "example", instruction: "  Pa shumë emoji  " })], "owner");
     expect(m.revalidate).toHaveBeenCalledWith("/b/shop", "layout");
   });
   it("keeps business-wide style in the agent's instructions: no new style lesson, existing ones stay editable", async () => {
     const result = await saveAgentTraining({ slug: "shop" }, { kind: "style", instruction: "Pa emoji" });
     expect(JSON.stringify(result)).toContain("Udhëzimet");
-    expect(queries.every(q => !q.operation)).toBe(true);
+    expect(m.save).not.toHaveBeenCalled();
     expect(await saveAgentTraining({ slug: "shop" }, { id, revision: 3, kind: "style", instruction: "Pa emoji" })).toEqual({ success: true });
+    expect(m.save).toHaveBeenCalledWith(business, "owner", [expect.objectContaining({ type: "training.save", id, revision: 3, kind: "style" })], "owner");
   });
   it("rejects another business's workflow before writing", async () => {
     foreignWorkflow = true;
@@ -67,32 +71,31 @@ describe("explicit business training mutations", () => {
   it("validates a workflow step and scopes edits with optimistic revision", async () => {
     expect(await saveAgentTraining({ slug: "shop" }, { id, revision: 3, kind: "workflow", instruction: "Explain photo", workflowId: workflow, stepKey: "photo" })).toEqual({ success: true });
     expect(queries[1]).toMatchObject({ table: "workflow_steps", filters: [["workflow_id", workflow], ["key", "photo"]] });
-    expect(queries[2]).toMatchObject({ operation: "update", filters: [["business_id", business], ["id", id], ["revision", 3]] });
-    resultData = null;
+    expect(m.save).toHaveBeenCalledWith(business, "owner", [expect.objectContaining({ type: "training.save", id, revision: 3, workflowId: workflow, stepKey: "photo" })], "owner");
+    m.save.mockRejectedValue(new Error("Ky mësim është ndryshuar. Rifresko listën."));
     expect(await saveAgentTraining({ slug: "shop" }, { id, revision: 3, kind: "style", instruction: "Short" })).toHaveProperty("error");
   });
   it("validates sealed feedback provenance and rejects altered questions and cross-tenant receipts", async () => {
     const receipt = issueTrainingReceipt("owner", business, "Hi", "Old", null, null);
     const values = { kind: "example" as const, instruction: "Keep it short", customerMessage: "Hi", desiredResponse: "Hello", receipt };
     expect(await saveAgentTraining({ slug: "shop" }, values)).toEqual({ success: true });
-    expect(queries[0].values).toMatchObject({ source: "test_feedback", desired_response: "Hello" });
-    m.from.mockClear(); queries = [];
+    expect(m.save).toHaveBeenCalledWith(business, "owner", [expect.objectContaining({ type: "training.save", receipt, desiredResponse: "Hello" })], "owner");
+    m.from.mockClear(); m.save.mockClear(); queries = [];
     expect(await saveAgentTraining({ slug: "shop" }, { ...values, customerMessage: "Changed" })).toHaveProperty("error");
     expect(await saveAgentTraining({ slug: "shop" }, { ...values, receipt: issueTrainingReceipt("owner", "another", "Hi", "Old", null, null) })).toHaveProperty("error");
-    expect(m.from).not.toHaveBeenCalled();
+    expect(m.save).not.toHaveBeenCalled();
   });
-  it.each(["enable", "disable", "delete"] as const)("%s filters both business and revision", async action => {
+  it.each(["enable", "disable", "delete"] as const)("%s goes through the configuration change with the business and revision", async action => {
     expect(await changeAgentTraining({ slug: "shop" }, { id, revision: 2, action })).toEqual({ success: true });
-    expect(queries[0].filters).toEqual([["business_id", business], ["id", id], ["revision", 2]]);
-    resultData = null;
+    expect(m.save).toHaveBeenCalledWith(business, "owner", [action === "delete" ? { type: "training.delete", id, revision: 2 } : { type: "training.active", id, is_active: action === "enable", revision: 2 }], "owner");
+    m.save.mockRejectedValue(new Error("Ky mësim është ndryshuar ose është hequr. Rifresko listën."));
     expect(await changeAgentTraining({ slug: "shop" }, { id, revision: 2, action })).toHaveProperty("error");
   });
-  it("reports a missing migration without claiming a saved lesson", async () => {
-    resultError = { code: "PGRST205", message: "internal details" };
+  it("reports a failed change without claiming a saved lesson or leaking details", async () => {
+    m.save.mockRejectedValue(new Error("Ndryshimi nuk u zbatua. Asgjë nuk u ruajt pjesërisht; provo përsëri."));
     const result = await saveAgentTraining({ slug: "shop" }, { kind: "example", instruction: "Short", customerMessage: "Q", desiredResponse: "A" });
     expect(result).toHaveProperty("error");
-    expect(JSON.stringify(result)).toContain("migrimin");
-    expect(JSON.stringify(result)).not.toContain("internal details");
+    expect(JSON.stringify(result)).toContain("pjesërisht");
   });
 });
 
@@ -103,8 +106,8 @@ it("lists visual draft scopes and validates the node before saving a scoped less
   expect(listing).toMatchObject({ workflows: [expect.objectContaining({ id: "visual:info", visualFlowId: "info", status: "Draft" })] });
   resultData = { id }; queries = [];
   expect(await saveAgentTraining({ slug: "shop" }, { kind: "workflow", instruction: "Answer accurately", visualFlowId: "info", visualNodeId: "answer" })).toEqual({ success: true });
-  expect(queries[0].values).toMatchObject({ business_id: business, workflow_id: null, step_key: null, visual_flow_id: "info", visual_node_id: "answer" });
-  queries = [];
+  expect(m.save).toHaveBeenCalledWith(business, "owner", [expect.objectContaining({ type: "training.save", visualFlowId: "info", visualNodeId: "answer" })], "owner");
+  m.save.mockClear(); queries = [];
   expect(await saveAgentTraining({ slug: "shop" }, { kind: "workflow", instruction: "Answer", visualFlowId: "info", visualNodeId: "missing" })).toHaveProperty("error");
-  expect(queries).toEqual([]);
+  expect(m.save).not.toHaveBeenCalled();
 });

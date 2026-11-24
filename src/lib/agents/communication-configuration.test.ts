@@ -1,6 +1,8 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), filters: [] as unknown[][], row: {} as Record<string, unknown> }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: m.from, rpc: m.rpc }) }));
+const saved = vi.hoisted(() => ({ saveConfiguration: vi.fn() }));
+vi.mock("@/lib/agent-configuration/service", async (original) => ({ ...(await original<object>()), saveConfiguration: saved.saveConfiguration }));
 import { prepareCommunicationConfiguration, saveCommunicationConfiguration, loadCommunicationDraft } from "./communication-configuration";
 import { defaultCommunicationPolicy } from "./communication-policy";
 const id = "11111111-1111-4111-8111-111111111111";
@@ -20,18 +22,21 @@ it("merges a partial policy into the instructions in use and writes nothing befo
   expect(m.rpc).not.toHaveBeenCalled();
   expect(m.filters).toContainEqual(["business_id", "tenant"]);
 });
-it("binds the write to the server-read timestamp and authenticated actor, and says the new version is in use", async () => {
+it("saves through the shared configuration change, fenced by the agent as the owner saw it", async () => {
   const p = await prepareCommunicationConfiguration("tenant", { id, mode: "apply", instructions: "Updated" });
-  m.rpc.mockResolvedValue({ data: { published: true, revision: 3, active: true }, error: null });
-  const result = await saveCommunicationConfiguration("tenant", "owner", p);
-  expect(result).toMatchObject({ path: "agents" }); expect(result.message).toContain("versionin 3");
-  expect(m.rpc).toHaveBeenCalledWith("save_agent_communication", { p_business: "tenant", p_user: "owner", p_agent: id, p_expected: "stamp", p_mode: "apply", p_values: p.values });
+  saved.saveConfiguration.mockResolvedValue({ revision: 3, created: true, replayed: false, message: "", lines: [] });
+  const result = await saveCommunicationConfiguration("tenant", "owner", p, "11111111-1111-4111-8111-111111111112");
+  expect(result).toMatchObject({ path: "agents" }); expect(result.message).toContain("versioni 3");
+  expect(saved.saveConfiguration).toHaveBeenCalledWith("tenant", "owner", [{ type: "agent.update", id, instructions: "Updated", communication: p.values!.communication, expected: "stamp" }],
+    "owner", "11111111-1111-4111-8111-111111111112");
+  expect(m.rpc).not.toHaveBeenCalled();
 });
 it("says an inactive agent does not answer yet, and an unchanged save changed nothing", async () => {
+  m.row.is_active = false;
   const p = await prepareCommunicationConfiguration("tenant", { id, mode: "apply", instructions: "Updated" });
-  m.rpc.mockResolvedValue({ data: { published: true, revision: 3, active: false }, error: null });
+  saved.saveConfiguration.mockResolvedValue({ revision: 3, created: true, replayed: false, message: "", lines: [] });
   expect((await saveCommunicationConfiguration("tenant", "owner", p)).message).toContain("joaktiv");
-  m.rpc.mockResolvedValue({ data: { published: true, revision: 2, active: true }, error: null });
+  saved.saveConfiguration.mockResolvedValue({ revision: 2, created: false, replayed: false, message: "", lines: [] });
   expect((await saveCommunicationConfiguration("tenant", "owner", p)).message).toContain("Nuk kishte");
 });
 it("no longer prepares drafts; reverting needs an earlier version", async () => {
@@ -51,10 +56,14 @@ it("applies only the pending draft as it was saved, never inline edits", async (
   expect(p.preview).toEqual(m.row.configuration_draft); expect(p.values).toBeNull();
   await expect(prepareCommunicationConfiguration("tenant", { id, mode: "publish", instructions: "Unreviewed" })).rejects.toThrow("Ruaj");
 });
-it("does not report success for rejected writes or missing receipts", async () => {
-  const p = await prepareCommunicationConfiguration("tenant", { id, mode: "discard" });
-  for (const value of [{ data: null, error: null }, { data: null, error: { message: "stale_agent" } }]) {
-    m.rpc.mockResolvedValue(value);
-    await expect(saveCommunicationConfiguration("tenant", "owner", p)).rejects.toThrow("nuk u ruajt");
-  }
+it("does not report success for a rejected change, and applies or drops a pending draft as one change", async () => {
+  m.row.configuration_draft = { instructions: "Draft", communication: defaultCommunicationPolicy, baseRevision: 2 };
+  const p = await prepareCommunicationConfiguration("tenant", { id, mode: "publish" });
+  saved.saveConfiguration.mockRejectedValue(new Error("network"));
+  await expect(saveCommunicationConfiguration("tenant", "owner", p)).rejects.toThrow("nuk u ruajt");
+  saved.saveConfiguration.mockResolvedValue({ revision: 3, created: true, replayed: false, message: "", lines: [] });
+  await saveCommunicationConfiguration("tenant", "owner", p);
+  expect(saved.saveConfiguration).toHaveBeenLastCalledWith("tenant", "owner", [{ type: "agent.draft", id, action: "apply", expected: "stamp" }], "owner", undefined);
+  await saveCommunicationConfiguration("tenant", "owner", await prepareCommunicationConfiguration("tenant", { id, mode: "discard" }));
+  expect(saved.saveConfiguration).toHaveBeenLastCalledWith("tenant", "owner", [{ type: "agent.draft", id, action: "discard", expected: "stamp" }], "owner", undefined);
 });

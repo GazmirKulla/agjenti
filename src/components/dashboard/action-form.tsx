@@ -8,7 +8,8 @@ import {
   type ReactNode,
 } from "react";
 
-export type ActionResult = { error?: string; success?: string };
+/** next: after a success, where to go on (e.g. Provo Agjentin). */
+export type ActionResult = { error?: string; success?: string; next?: { href: string; label: string } };
 
 export function ActionForm({
   action,
@@ -78,6 +79,7 @@ export function ActionForm({
       ) : result?.success ? (
         <p role="status" className="form-feedback form-feedback-success">
           {t(result.success)}
+          {result.next && <> <a className="inline-link" href={result.next.href}>{t(result.next.label)} →</a></>}
         </p>
       ) : null}
     </form>

@@ -1,6 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { uuid } from "@/lib/calendar/model";
 import { parseCommunicationPolicy } from "./communication-policy";
+import { ConfigurationError, saveConfiguration, type ConfigurationRequest } from "@/lib/agent-configuration/service";
 
 export const communicationConfigurationColumns = "id,name,instructions,is_active,updated_at,communication,configuration_revision,configuration_draft";
 /**
@@ -34,17 +35,19 @@ export async function prepareCommunicationConfiguration(businessId: string, inpu
   return { before, mode: String(input.mode), values: null as Record<string, unknown> | null, preview: (input.mode === "publish" ? before.configuration_draft : null) as Record<string, unknown> | null };
 }
 
-export async function saveCommunicationConfiguration(businessId: string, userId: string, proposal: Awaited<ReturnType<typeof prepareCommunicationConfiguration>>) {
-  const { data, error } = await createServiceSupabase().rpc("save_agent_communication", {
-    p_business: businessId, p_user: userId, p_agent: proposal.before.id, p_expected: proposal.before.updated_at,
-    p_mode: proposal.mode, p_values: proposal.values,
-  });
-  if (error || !data || typeof data.published !== "boolean") throw Error("Konfigurimi ndryshoi ose nuk u ruajt. Rifresko dhe rishiko ndryshimet.");
-  const inactive = data.active ? "" : " Agjenti është joaktiv, prandaj nuk u përgjigjet ende klientëve.";
-  return { message: !data.published ? "Ndryshimet në pritje u hodhën poshtë. Udhëzimet në përdorim mbetën të pandryshuara."
-    : proposal.mode === "revert" ? `Versioni ${String(proposal.values?.revision)} u rikthye dhe është në përdorim si versioni ${data.revision}.${inactive}`
-    : data.revision === proposal.before.configuration_revision ? "Nuk kishte asgjë për të ndryshuar."
-    : `U ruajt. Përgjigjet e reja përdorin versionin ${data.revision}.${inactive} Provoje te Prova dhe kontrolli.`, path: "agents" };
+/** Saves through the agent configuration change, against the agent as the owner saw it (proposal.before). */
+export async function saveCommunicationConfiguration(businessId: string, userId: string, proposal: Awaited<ReturnType<typeof prepareCommunicationConfiguration>>, requestId?: string) {
+  const before = proposal.before as { id: string; updated_at: string; is_active: boolean };
+  if (proposal.mode === "revert") throw Error("Versionet e plota rikthehen nga Historiku.");
+  const request: ConfigurationRequest = proposal.mode === "apply"
+    ? { type: "agent.update", id: before.id, instructions: String(proposal.values?.instructions), communication: proposal.values?.communication as Record<string, unknown>, expected: before.updated_at }
+    : { type: "agent.draft", id: before.id, action: proposal.mode === "publish" ? "apply" : "discard", expected: before.updated_at };
+  try {
+    const receipt = await saveConfiguration(businessId, userId, [request], "owner", requestId);
+    const inactive = before.is_active ? "" : " Agjenti është joaktiv, prandaj nuk u përgjigjet ende klientëve.";
+    return { message: proposal.mode === "discard" ? "Ndryshimet në pritje u hodhën poshtë. Udhëzimet në përdorim mbetën të pandryshuara."
+      : receipt.created ? `U zbatua. Përgjigjet e reja përdorin konfigurimin e ri (versioni ${receipt.revision}).${inactive}` : "Nuk kishte asgjë për të ndryshuar.", path: "agents", revision: receipt.revision };
+  } catch (error) { throw Error(error instanceof ConfigurationError ? error.message : "Konfigurimi ndryshoi ose nuk u ruajt. Rifresko dhe rishiko ndryshimet."); }
 }
 
 export type AgentConfigurationPreview = { businessId: string; agentId: string; name: string; instructions: string;

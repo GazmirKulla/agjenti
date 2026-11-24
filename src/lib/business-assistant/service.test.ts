@@ -397,16 +397,19 @@ it("rejects records changed while the model was composing a proposal", async () 
 });
 
 it("normalizes old agent_update proposals into the same reviewed save used by the manual UI", async () => {
-  const before = { id, name: "Shitjet", instructions: "Udhëzimet e vjetra", updated_at: "v1", communication: defaultCommunicationPolicy, configuration_revision: 1, configuration_draft: null };
-  m.responses.push({ data: before });
+  const before = { id, name: "Shitjet", instructions: "Udhëzimet e vjetra", updated_at: "v1", communication: defaultCommunicationPolicy, configuration_revision: 1, configuration_draft: null, is_active: true };
+  // Read once to check the request, once more to fix the stamp in the configuration proposal.
+  m.responses.push({ data: before }, { data: before });
   const result = await prepareProposal({ ...access, modules: ["agents"] }, {
     action: "agent_update", id, message: "Kontrollo", changes: [{ field: "instructions", value: "Përgjigju shkurt." }],
   }, "Europe/Tirane");
   expect(result.preview?.subject).toBe("Shitjet");
   const prepared = openTicket(result.token!, { ...access, modules: ["agents"] });
   expect(prepared.action).toBe("operation");
-  expect(prepared.values.operation).toMatchObject({ key: "agent.communication", input: { id, mode: "apply" }, snapshot: { values: { instructions: "Përgjigju shkurt." } } });
-  expect(m.queries).toHaveLength(1);
+  expect(prepared.values.operation).toMatchObject({ key: "agent.communication", input: { id, mode: "apply" }, snapshot: { values: { instructions: "Përgjigju shkurt." },
+    configuration: { changes: [{ type: "agent.update", id, instructions: "Përgjigju shkurt.", expected: "v1" }] } } });
+  expect(result.preview?.configuration).toBe(true);
+  expect(m.queries).toHaveLength(2);
   expect(m.queries[0].calls).toContainEqual(["eq", ["business_id", "business"]]);
   expect(m.queries[0].calls.some(([name]) => name === "update")).toBe(false);
 });

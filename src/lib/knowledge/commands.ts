@@ -1,38 +1,39 @@
 import type { CommandActor } from "@/lib/actions/command-actor";
 import { knowledgeSource } from "./context";
-import { createServiceSupabase } from "@/lib/supabase/service";
+import { ConfigurationError, saveConfiguration } from "@/lib/agent-configuration/service";
 
-/** Existing KnowledgeWorkspace save action, also used by contextual activation. */
+/**
+ * The knowledge editor's Ruaj, also used by contextual activation. It goes through the agent configuration
+ * change: applied with the stamp the owner saw, recorded as a version (the previous ones stay restorable).
+ */
 export async function saveKnowledgeEntry(actor: CommandActor, formData: FormData) {
-  const acc = { business: actor.business };
   const title = String(formData.get("title") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
-  if (!title || !body || title.length > 8000 || body.length > 8000) return { error: "Plotëso titullin dhe përmbajtjen (deri në 8000 karaktere)." };
+  const id = String(formData.get("id") ?? "");
   const expected = String(formData.get("updated_at") ?? "");
   if (!Number.isFinite(Date.parse(expected))) return { error: "Njohuria ndryshoi ose u hoq. Rifresko faqen përpara ruajtjes." };
-  // A confirmed revision must be consumed, even for two writes in one millisecond.
-  const updatedAt = new Date(Math.max(Date.now(), Date.parse(expected) + 1)).toISOString();
-  const activationOnly = formData.get("activation_only") === "true";
-  let write = createServiceSupabase().from("knowledge_entries")
-    .update(activationOnly ? { is_active: true, updated_at: updatedAt } :
-      { title, body, format: "markdown", is_active: formData.get("is_active") === "on", updated_at: updatedAt, owner_edited_at: updatedAt })
-    .eq("business_id", acc.business.id).eq("id", String(formData.get("id") ?? ""))
-    .eq("updated_at", expected);
-  // The revision fences the reviewed content; activation never rewrites text.
-  // Keep content out of URL filters so valid long entries fit the gateway limit.
-  if (activationOnly) write = write.eq("is_active", false);
-  const result = await write.select("id").maybeSingle();
-  if (result.error) return { error: "Njohuria nuk u ruajt. Provo përsëri." };
-  if (!result.data) return { error: "Njohuria ndryshoi ose u hoq. Rifresko faqen përpara ruajtjes." };
-  return { success: "Njohuria u ruajt." };
+  try {
+    // Activation never rewrites the reviewed text.
+    const receipt = formData.get("activation_only") === "true"
+      ? await saveConfiguration(actor.business.id, actor.userId, [{ type: "knowledge.active", id, is_active: true, expected }], "owner", requestIdFrom(formData))
+      : await saveConfiguration(actor.business.id, actor.userId, [{ type: "knowledge.save", id, title, body, is_active: formData.get("is_active") === "on", expected }], "owner", requestIdFrom(formData));
+    return { success: receipt.created ? "U zbatua. Agjenti e përdor në përgjigjet e reja sipas gjendjes “Përdoret nga Agjenti”." : "Nuk kishte asgjë për të ndryshuar." };
+  } catch (error) { return { error: error instanceof ConfigurationError ? error.message : "Njohuria nuk u ruajt. Provo përsëri." }; }
 }
 
 export async function createKnowledgeEntry(actor: CommandActor, form: FormData, id?: string) {
   const title = String(form.get("title") ?? "").trim(), body = String(form.get("body") ?? "").trim();
   const intent = String(form.get("intent_key") ?? "").trim();
-  if (!title || !body || title.length > 8000 || body.length > 8000 || intent.length > 120) return { error: "Plotëso titullin dhe përmbajtjen (deri në 8000 karaktere)." };
-  const result = await createServiceSupabase().from("knowledge_entries").insert({ ...(id ? { id } : {}), business_id: actor.business.id, title, body, intent_key: intent || null, is_active: form.get("is_active") !== "false",
-    format: "markdown", source: knowledgeSource("owner") });
-  if (result.error) return { error: "Njohuria nuk u krijua. Kontrollo gjendjen para riprovimit." };
-  return { success: "Njohuria u krijua." };
+  if (intent.length > 120) return { error: "Plotëso titullin dhe përmbajtjen (deri në 8000 karaktere)." };
+  try {
+    await saveConfiguration(actor.business.id, actor.userId, [{ type: "knowledge.save", ...(id ? { newId: id } : {}), title, body, intent_key: intent || null,
+      is_active: form.get("is_active") !== "false", source: knowledgeSource("owner") }], "owner", requestIdFrom(form));
+    return { success: "U zbatua. Njohuria e re përdoret nga Agjenti." };
+  } catch (error) { return { error: error instanceof ConfigurationError ? error.message : "Njohuria nuk u krijua. Kontrollo gjendjen para riprovimit." }; }
+}
+
+/** The form's own request id (rendered with it), so a repeated submit after a timeout writes once. */
+function requestIdFrom(form: FormData) {
+  const value = String(form.get("request_id") ?? "");
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : undefined;
 }

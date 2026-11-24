@@ -54,6 +54,8 @@ export type Preview = {
   subject?: string;
   fields: { label: string; before: string; after: string }[];
   notice?: string;
+  /** A change to the agent's configuration: the owner accepts or refuses it as one whole. */
+  configuration?: true;
 };
 export class AssistantError extends Error {
   constructor(message: string, public publication?: import("@/lib/workflows/visual/publication-types").PublicationReadiness) { super(message); }

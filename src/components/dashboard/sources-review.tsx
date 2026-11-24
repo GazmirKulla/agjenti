@@ -36,12 +36,13 @@ export function SourcesReview({ slug, review, onDone, immediate = false, onChang
     } catch (e) { setError(e instanceof Error ? e.message : "Konfirmimi nuk u ruajt."); }
     finally { setBusy(false); }
   }
-  async function decide(id: string, decision: "accept" | "reject", edit?: Draft) {
+  async function decide(item: { id: string; updated_at?: string }, decision: "accept" | "reject", edit?: Draft) {
+    const id = item.id;
     setBusy(true); setError("");
     try {
       const response = await fetch(`/api/business-sources?slug=${encodeURIComponent(slug)}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "decide", id, decision, ...(edit ? { edit } : {}) }),
+        body: JSON.stringify({ action: "decide", id, decision, expected: item.updated_at, requestId: crypto.randomUUID(), ...(edit ? { edit } : {}) }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Vendimi nuk u ruajt.");
@@ -76,7 +77,7 @@ export function SourcesReview({ slug, review, onDone, immediate = false, onChang
                     <label>Titulli<input className="field" value={shown.title} maxLength={500} onChange={(e) => setEdits({ ...edits, [item.id]: { ...shown, title: e.target.value } })} /></label>
                     <label>Teksti<textarea className="field" rows={5} value={shown.body} maxLength={8000} onChange={(e) => setEdits({ ...edits, [item.id]: { ...shown, body: e.target.value } })} /></label>
                     <div className="sources-review-row-actions">
-                      <button type="button" className="btn btn-primary" disabled={busy || shown.title.trim().length < 2 || shown.body.trim().length < 2} onClick={() => void decide(item.id, "accept", shown)}>Ruaj dhe prano</button>
+                      <button type="button" className="btn btn-primary" disabled={busy || shown.title.trim().length < 2 || shown.body.trim().length < 2} onClick={() => void decide(item, "accept", shown)}>Ruaj dhe prano</button>
                       <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => { const next = { ...edits }; delete next[item.id]; setEdits(next); setEditing(null); }}>Anulo</button>
                     </div>
                   </div>
@@ -85,9 +86,9 @@ export function SourcesReview({ slug, review, onDone, immediate = false, onChang
                     <div className="sources-review-row-head"><span className="sources-review-title">{shown.title}</span></div>
                     <p>{shown.body}</p>
                     <div className="sources-review-row-actions">
-                      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void decide(item.id, "accept")}>Prano</button>
+                      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void decide(item, "accept")}>Prano</button>
                       <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setEditing(item.id)}>Ndrysho</button>
-                      <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void decide(item.id, "reject")}>Refuzo</button>
+                      <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void decide(item, "reject")}>Refuzo</button>
                     </div>
                   </>
                 )}

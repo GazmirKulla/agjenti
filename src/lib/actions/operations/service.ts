@@ -1,5 +1,5 @@
 import { loadSetupStatus } from "@/lib/setup/status";
-import { loadAgentBehavior, storeAgentBehavior } from "@/lib/agents/behavior";
+import { loadAgentBehavior } from "@/lib/agents/behavior";
 import { executeSettingsOperation, isSettingsOperation, prepareSettingsOperation } from "@/lib/settings/operations";
 import { after } from "next/server";
 import { businessSources, refreshBusinessSources } from "@/lib/knowledge/source-refresh";
@@ -14,11 +14,10 @@ import { loadAllowedModules } from "@/lib/dashboard/modules/entitlements";
 import { prepareWorkflow, executeWorkflow } from "@/lib/business-assistant/workflow-service";
 import { decryptSecret } from "@/lib/crypto/tokens";
 import type { Ticket } from "@/lib/business-assistant/service";
-import { prepareCommunicationConfiguration, saveCommunicationConfiguration } from "@/lib/agents/communication-configuration";
+import { prepareCommunicationConfiguration } from "@/lib/agents/communication-configuration";
 import { prepareProductRemoval, executeProductRemoval, type RemovalRow } from "@/lib/products/removal";
 import { OperationError } from "./error";
 import { saveBusinessService } from "@/lib/services/commands";
-import { saveKnowledgeEntry, createKnowledgeEntry } from "@/lib/knowledge/commands";
 import { serviceColumns, parseService } from "@/lib/services/model";
 import { parseProductForm } from "@/lib/products/parse";
 import { setBusinessAutoReply } from "@/lib/agents/auto-reply";
@@ -35,12 +34,43 @@ import { prepareManagedAgent, saveManagedAgent } from "@/lib/agents/manage";
 import { prepareCalendarConfiguration, saveCalendarConfiguration } from "@/lib/calendar/configuration";
 import { syncBooking } from "@/lib/calendar/google";
 import type { CommandActor } from "@/lib/actions/command-actor";
-import { saveAgentTraining, changeAgentTraining } from "@/lib/agents/training/commands";
 import { validateTrainingInput, type TrainingInput } from "@/lib/agents/training/model";
 import { submitConfirmedOrder, reconcileOrder } from "@/lib/orders/submission";
 import { resumeConversation, stopConversation } from "@/lib/conversations/control";
 import { uuid } from "@/lib/calendar/model";
 import type { Preview } from "@/lib/business-assistant/model";
+import { applyConfiguration, ConfigurationError, listConfigurationVersions, prepareConfiguration, revertConfiguration,
+  type ConfigurationRequest, type PreparedConfiguration } from "@/lib/agent-configuration/service";
+
+/** Operations that change the agent's configuration: prepared into one proposal and applied as one whole. */
+const configurationKeys = new Set(["agent.configure", "knowledge.save", "knowledge.delete", "agent.communication", "agent.behavior", "training.save", "training.change"]);
+const assistantParts = new Set(["knowledge.save", "knowledge.active", "knowledge.delete", "agent.update", "agent.draft", "behavior.set", "service.booking", "calendar.agent_booking", "training.save", "training.active", "training.delete"]);
+const configurationNotice = "Pas konfirmimit zbatohen të gjitha bashkë dhe ruhen si një version i ri; nëse një pjesë nuk zbatohet dot, nuk zbatohet asnjë. Rezervimet, porositë dhe bisedat ekzistuese nuk ndryshojnë. Mund ta rikthesh nga Historiku.";
+function configurationRequests(operation: string, input: OperationInput, snapshot: Record<string, unknown>, requestId: string): ConfigurationRequest[] {
+  if (operation === "agent.configure") {
+    if (!Array.isArray(input.changes) || !input.changes.length || input.changes.length > 60) throw new OperationError("Ndryshimi duhet të ketë 1–60 pjesë.", "invalid_input");
+    for (const part of input.changes) if (!part || typeof part !== "object" || !assistantParts.has(String((part as { type?: unknown }).type))) throw new OperationError("Pjesë e panjohur e ndryshimit.", "invalid_input");
+    return input.changes as ConfigurationRequest[];
+  }
+  if (operation === "knowledge.save") {
+    const values = { is_active: true, ...snapshot, ...input } as Record<string, unknown>;
+    return [{ type: "knowledge.save", ...(input.id ? { id: String(input.id), expected: String(snapshot.updated_at) } : { newId: requestId, intent_key: (input.intent_key as string | undefined) ?? null }),
+      title: String(values.title ?? ""), body: String(values.body ?? ""), is_active: values.is_active as boolean }];
+  }
+  if (operation === "knowledge.delete") return [{ type: "knowledge.delete", id: String(input.id), expected: String(snapshot.updated_at) }];
+  if (operation === "agent.communication") {
+    const proposal = snapshot as Awaited<ReturnType<typeof prepareCommunicationConfiguration>>;
+    const before = proposal.before as { id: string; updated_at: string };
+    if (proposal.mode === "apply") return [{ type: "agent.update", id: before.id, instructions: String(proposal.values?.instructions), communication: proposal.values?.communication as Record<string, unknown>, expected: before.updated_at }];
+    if (proposal.mode === "publish" || proposal.mode === "discard") return [{ type: "agent.draft", id: before.id, action: proposal.mode === "publish" ? "apply" : "discard", expected: before.updated_at }];
+    throw new OperationError("Versionet e plota rikthehen nga Historiku (agent.restore).", "invalid_input");
+  }
+  if (operation === "agent.behavior") return [{ type: "behavior.set", ...(input.voice !== undefined ? { voice: input.voice as boolean } : {}), ...(input.escalation !== undefined ? { escalation: input.escalation as "handoff" | "notify" | "off" } : {}) }];
+  if (operation === "training.save") return [{ type: "training.save", ...(input as TrainingInput), ...(input.id ? { revision: Number(snapshot.revision) } : {}) }];
+  if (operation === "training.change") return [input.action === "delete" ? { type: "training.delete", id: String(input.id), revision: Number(input.revision) }
+    : { type: "training.active", id: String(input.id), is_active: input.action === "enable", revision: Number(input.revision) }];
+  throw new OperationError("Veprim konfigurimi i panjohur.");
+}
 
 export type PreparedOperation = {
   version: 1; key: OperationKey; input: OperationInput; snapshot: Record<string, unknown>;
@@ -121,7 +151,13 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     if (rows.some(row => row.archived_at)) throw Error("Grupi përmban produkte të arkivuara. Riktheji përpara konfigurimit.");
     snapshot = { rows }; subject = rows.map(row => String(row.name)).join(", ");
   } else if (operation === "calendar.settings") snapshot = await prepareCalendarConfiguration(businessId, input);
-  else if (operation === "agent.communication") {
+  else if (operation === "agent.restore") {
+    const versions = await listConfigurationVersions(businessId);
+    const target = versions.find(version => version.revision === input.revision && !version.current);
+    if (!target) throw new OperationError("Zgjidh një nga dy versionet e mëparshme që ruhen.", "invalid_input");
+    snapshot = { revision: target.revision, base: versions[0]?.revision ?? 0, summary: target.summary };
+    subject = `Versioni ${target.revision}`;
+  } else if (operation === "agent.communication") {
     snapshot = await prepareCommunicationConfiguration(businessId, input);
     subject = String((snapshot.before as Record<string, unknown>).name);
   } else if (operation === "agent.manage") {
@@ -190,17 +226,29 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     if (operation === "modules.configure") preview.notice = "Fshehja e një seksioni e heq vetëm nga menuja: të dhënat dhe aftësitë e Agjentit nuk ndryshojnë.";
     if (operation === "integrations.check") preview.notice = "Vetëm provë: nuk ndryshon lidhjen dhe as produktet.";
   }
-  if (operation === "agent.communication") {
-    const current = snapshot.before as Record<string, unknown>;
-    const proposed = snapshot.preview as Record<string, unknown> | null;
-    preview.fields = proposed ? Object.entries(proposed).filter(([key]) => key !== "baseRevision").map(([key, value]) => ({ label: fieldLabel(key), before: previewValue(current[key]), after: previewValue(value) })) : preview.fields;
-    const inactive = current.is_active === false ? " Agjenti është joaktiv: nuk u përgjigjet klientëve derisa ta aktivizosh." : "";
-    preview.notice = input.mode === "discard" ? "Hedh poshtë ndryshimet në pritje. Udhëzimet në përdorim nuk ndryshojnë."
-      : input.mode === "revert" ? `Pas konfirmimit, përgjigjet e reja të Agjentit përdorin sërish versionin ${String(input.revision)} të udhëzimeve dhe komunikimit.${inactive} Versioni aktual ruhet dhe mund të rikthehet.`
-      : `Pas konfirmimit, përgjigjet e reja të Agjentit përdorin menjëherë këto udhëzime dhe këtë mënyrë komunikimi.${inactive} Bisedat dhe porositë ekzistuese nuk ndryshojnë; versioni aktual ruhet dhe mund të rikthehet. Nuk lejon veprime të reja.`;
+  const requestId = randomUUID();
+  if (configurationKeys.has(operation)) {
+    // The proposal the owner sees is the one applied: its parts, the version it was prepared on and every object's stamp.
+    try {
+      const configuration = await prepareConfiguration(businessId, configurationRequests(operation, input, snapshot, requestId),
+        { fence: operation === "agent.configure" || operation === "agent.behavior" });
+      snapshot = { ...snapshot, configuration };
+      if (configuration.lines.length) preview.fields = configuration.lines;
+      preview.configuration = true;
+      const inactive = operation === "agent.communication" && (snapshot.before as Record<string, unknown>).is_active === false ? " Agjenti është joaktiv: nuk u përgjigjet klientëve derisa ta aktivizosh." : "";
+      preview.notice = operation === "agent.communication" && input.mode === "discard" ? "Hedh poshtë ndryshimet në pritje. Udhëzimet në përdorim nuk ndryshojnë." : `${configurationNotice}${inactive}`;
+    } catch (error) {
+      if (error instanceof ConfigurationError) throw new OperationError(error.message, error.code === "stale" ? "stale" : "invalid_input");
+      throw error;
+    }
+  }
+  if (operation === "agent.restore") {
+    preview.configuration = true;
+    preview.fields = [{ label: "Konfigurimi i Agjentit", before: `Versioni ${String(snapshot.base)} (në përdorim)`, after: `Versioni ${String(snapshot.revision)}${snapshot.summary ? ` · ${String(snapshot.summary)}` : ""}` }];
+    preview.notice = "Pas konfirmimit, njohuritë, udhëzimet, komunikimi, sjellja, mësimet dhe lejet e rezervimit bëhen si në atë version, si një version i ri. Njohuritë e shtuara më pas fiken, nuk fshihen. Rezervimet, porositë dhe bisedat nuk ndryshojnë.";
   }
   if (!preview.fields.length) preview.fields.push({ label: "Veprimi", before: "—", after: preview.title });
-  return { version: 1, key: operation, input, snapshot, requestId: randomUUID(), preview };
+  return { version: 1, key: operation, input, snapshot, requestId, preview };
 }
 function productForm(values: Record<string, unknown>) {
   const form = new FormData();
@@ -253,27 +301,21 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
     if (result.error || !Number.isInteger(result.data)) throw new OperationError("Leja e porosive ndryshoi ose nuk u ruajt.", "stale");
     return {message: input.enabled ? "Regjistrimi lokal pas konfirmimit të klientit u autorizua." : "Regjistrimi automatik u çaktivizua.",path:"orders"};
   }
+  if (key === "agent.restore") {
+    try { return { ...(await revertConfiguration(businessId, userId, Number(before.revision), Number(before.base), prepared.requestId)), path: "agents" }; }
+    catch (error) { throw error instanceof ConfigurationError ? new OperationError(error.message, error.code === "stale" ? "stale" : "invalid_input") : error; }
+  }
+  if (configurationKeys.has(key)) {
+    const configuration = before.configuration as PreparedConfiguration | undefined;
+    if (!configuration) throw new OperationError("Ky propozim u përgatit para versioneve të plota. Përgatite përsëri.", "stale");
+    try {
+      const source = key === "agent.configure" ? "assistant" : "owner";
+      const receipt = await applyConfiguration(businessId, userId, configuration, prepared.requestId, source);
+      const path = key.startsWith("knowledge") ? "knowledge" : key.startsWith("training") ? "agents/memory" : key === "agent.behavior" ? "agents/process" : "agents";
+      return { message: receipt.message, path, ...(key === "knowledge.save" ? { id: input.id ? String(input.id) : prepared.requestId } : {}), revision: receipt.revision };
+    } catch (error) { throw error instanceof ConfigurationError ? new OperationError(error.message, error.code === "stale" ? "stale" : "invalid_input") : error; }
+  }
   if (key === "product.create") checked(await createProduct(actor, productForm(input)));
-  else if (key === "knowledge.delete") {
-    if (!uuid(input.id) || !Number.isFinite(Date.parse(String(before.updated_at)))) throw new OperationError("Konfirmimi i njohurisë nuk është i vlefshëm.");
-    const result = await db.from("knowledge_entries").delete()
-      .eq("business_id", businessId).eq("id", String(input.id))
-      .eq("updated_at", String(before.updated_at)).select("id").maybeSingle();
-    if (result.error) throw new OperationError(result.error.code === "23503"
-      ? "Kjo njohuri është e lidhur me një shërbim dhe nuk mund të fshihet. Menaxhoje te Shërbimet."
-      : "Njohuria nuk u fshi. Provo përsëri.");
-    if (!result.data) throw new OperationError("Njohuria ndryshoi ose u hoq. Rifresko faqen dhe rishqyrto fshirjen.", "stale");
-    return { message: "Njohuria u fshi.", path: "knowledge" };
-  }
-  else if (key === "knowledge.save") {
-    const values = { is_active: true, ...before, ...input };
-    const form = new FormData();
-    for (const field of ["title", "body", "intent_key"]) form.set(field, String(values[field as keyof typeof values] ?? ""));
-    form.set("is_active", values.is_active ? "on" : "false");
-    if (input.id) { form.set("id", String(input.id)); form.set("updated_at", String(before.updated_at)); checked(await saveKnowledgeEntry(actor, form)); }
-    else checked(await createKnowledgeEntry(actor, form, prepared.requestId));
-    return { message: "Njohuria u ruajt.", path: "knowledge", id: input.id ? String(input.id) : prepared.requestId };
-  }
   else if (key === "service.save") {
     const form = serviceForm({ is_active: false, booking_enabled: false, ...before, ...input });
     if (input.id) { form.set("id", String(input.id)); form.set("updatedAt", String(before.updated_at)); }
@@ -291,17 +333,10 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
       productTypeId: (input.productTypeId as string | null) ?? null, workflowId: (input.workflowId as string | null) ?? null,
       expected: Object.fromEntries(rows.map(row => [String(row.id), String(row.updated_at)])) }));
   } else if (key === "calendar.settings") return saveCalendarConfiguration(businessId, userId, before as Awaited<ReturnType<typeof prepareCalendarConfiguration>>);
-  else if (key === "agent.communication") return saveCommunicationConfiguration(businessId, userId, before as Awaited<ReturnType<typeof prepareCommunicationConfiguration>>);
   else if (key === "agent.manage") return saveManagedAgent(businessId, userId, before as Awaited<ReturnType<typeof prepareManagedAgent>>);
   else if (isSettingsOperation(key)) {
     try { return await executeSettingsOperation(businessId, userId, key, input as Record<string, unknown>, before as Record<string, unknown>); }
     catch (error) { throw new OperationError(error instanceof Error ? error.message : "Ndryshimi nuk u ruajt."); }
-  } else if (key === "agent.behavior") {
-    const current = await loadAgentBehavior(businessId);
-    if (JSON.stringify(current) !== JSON.stringify({ voice: before.voice, escalation: before.escalation })) throw new OperationError("Cilësimi ndryshoi. Kërkoje përsëri.", "stale");
-    const saved = await storeAgentBehavior(businessId, userId, input as { voice?: unknown; escalation?: unknown });
-    if ("error" in saved) throw new OperationError(saved.error ?? "Cilësimi nuk u ruajt. Provo përsëri.");
-    return { message: "U ruajt. Vlen për mesazhet e reja.", path: "agents/process" };
   } else if (key === "sources.refresh") {
     const queued = await refreshBusinessSources(businessId, userId, workerOrigin(null));
     if (!queued.website && !queued.instagram) throw new OperationError("Burimet nuk u rilexuan. Provo nga Njohuritë → Nga ku mëson Agjenti.");
@@ -314,9 +349,7 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
     const current = await record(businessId, "bookings", input.id, "id,revision");
     if (current.revision !== before.revision) throw Error("Rezervimi ndryshoi. Rishqyrto sinkronizimin.");
     await syncBooking(businessId, String(input.id));
-  } else if (key === "training.save") checked(await saveAgentTraining(actor, input as TrainingInput));
-  else if (key === "training.change") checked(await changeAgentTraining(actor, input as { id: string; revision: number; action: "enable" | "disable" | "delete" }));
-  else if (key === "attention.configure") {
+  } else if (key === "attention.configure") {
     if (typeof input.enabled !== "boolean") throw Error("Preferencë e pavlefshme.");
     const saved = await db.rpc("configure_attention", { p_business: businessId, p_user: userId, p_enabled: input.enabled, p_expected: before.enabled });
     if (saved.error) throw Error("Preferenca ndryshoi ose nuk u ruajt. Rishqyrtoje.");
@@ -334,8 +367,10 @@ async function executePreparedOperation(actor: CommandActor, prepared: PreparedO
   } else if (key === "order.reconcile") {
     const receipt = await reconcileOrder({ businessId, userId, conversationId: String(input.conversationId), body: input });
     return { message: `Verifikimi i porosisë u regjistrua: ${receipt.status}.`, path: "orders" };
+  } else if (configurationKeys.has(key)) {
+    throw Error("Veprimi i konfigurimit u trajtua më sipër.");
   } else {
-    const exhaustive: never = key; throw Error(`Veprim pa ekzekutues: ${exhaustive}`);
+    const exhaustive: never = key as never; throw Error(`Veprim pa ekzekutues: ${String(exhaustive)}`);
   }
   return { message: "Ndryshimi u konfirmua.", path: operationCatalog[key].module };
 }

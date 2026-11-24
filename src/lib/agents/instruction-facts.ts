@@ -3,7 +3,7 @@ import { knowledgeSource } from "@/lib/knowledge/context";
 import OpenAI from "@/lib/ai/openai";
 import { modelFor } from "@/lib/agents/generate";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { prepareCommunicationConfiguration, saveCommunicationConfiguration } from "./communication-configuration";
+import { ConfigurationError, saveConfiguration } from "@/lib/agent-configuration/service";
 
 /** Prompt text: prompts/udhezimet/faktet-te-njohurite.md */
 export const INSTRUCTION_FACTS_PROMPT = () => prompt("udhezimet/faktet-te-njohurite");
@@ -86,12 +86,13 @@ export async function applyInstructionSplit(businessId: string, userId: string, 
   const { data: existing } = await db.from("knowledge_entries").select("title,body").eq("business_id", businessId);
   const same = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
   const fresh = split.facts.filter((fact) => !(existing ?? []).some((row) => same(row.title, fact.title) && same(row.body, fact.body)));
-  if (fresh.length) {
-    const { error } = await db.from("knowledge_entries").insert(fresh.map((fact) => ({ business_id: businessId, title: fact.title, body: fact.body, is_active: true, format: "markdown", source: knowledgeSource("instructions") })));
-    if (error) throw Error("Njohuritë nuk u ruajtën. Udhëzimet mbetën të pandryshuara.");
-  }
-  // Same path as the editor: saved once and in use, as a new version (the old one can be brought back).
-  const result = await saveCommunicationConfiguration(businessId, userId,
-    await prepareCommunicationConfiguration(businessId, { id: agent.id, mode: "apply", instructions: split.instructions }));
+  // The new knowledge and the instructions without those facts change together, as one version, or not at all.
+  let result;
+  try {
+    const receipt = await saveConfiguration(businessId, userId, [
+      ...fresh.map((fact) => ({ type: "knowledge.save" as const, title: fact.title, body: fact.body, is_active: true, source: knowledgeSource("instructions") })),
+      { type: "agent.update", id: agent.id, instructions: split.instructions, expected: agent.updated_at }], "owner");
+    result = { message: receipt.message };
+  } catch (error) { throw Error(error instanceof ConfigurationError ? error.message : "Ndryshimi nuk u zbatua. Asgjë nuk u ruajt."); }
   return { knowledge: fresh.length, message: result.message };
 }

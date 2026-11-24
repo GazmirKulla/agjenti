@@ -1,4 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { ConfigurationError, saveConfiguration } from "@/lib/agent-configuration/service";
 import { fetchPublicInstagram, normalizeInstagramUsername, PublicInstagramError, PUBLIC_POST_LIMIT, publicScanAvailable } from "@/lib/instagram/public-profile";
 import { fetchPublicPage } from "@/lib/products/import-url";
 import { enqueuePublicInstagram, enqueueWebsiteReview } from "./queue";
@@ -178,7 +179,8 @@ export async function learnFromSources(businessId: string, userId: string, confi
   return { instagram: readInstagram, website: readWebsite };
 }
 
-export type ProposedKnowledge = { id: string; title: string; body: string };
+/** updated_at: the reviewed version; a decision on a changed entry is refused. */
+export type ProposedKnowledge = { id: string; title: string; body: string; updated_at?: string };
 export type SourcesState = {
   preview: { instagram: { username: string; name?: string; biography?: string; website?: string } | null; website: { url: string; title?: string; description?: string } | null };
   /** Each source's analysis: how far it is (0–100), what it is doing now and
@@ -233,8 +235,8 @@ export async function sourcesState(businessId: string): Promise<SourcesState> {
   const ids = [...new Set(pending.flatMap((job) => (job.checkpoint.review as ReviewCheckpoint).knowledgeIds ?? []))];
   let knowledge: ProposedKnowledge[] = [];
   if (ids.length) {
-    const { data } = await db.from("knowledge_entries").select("id,title,body").eq("business_id", businessId).eq("is_active", false).in("id", ids).order("created_at");
-    knowledge = (data ?? []).map((row) => ({ id: row.id, title: row.title, body: row.body }));
+    const { data } = await db.from("knowledge_entries").select("id,title,body,updated_at").eq("business_id", businessId).eq("is_active", false).in("id", ids).order("created_at");
+    knowledge = (data ?? []).map((row) => ({ id: row.id, title: row.title, body: row.body, updated_at: row.updated_at }));
   }
   const reviews = pending.map((job) => job.checkpoint.review as ReviewCheckpoint);
   return {
@@ -285,32 +287,31 @@ export async function reviewSources(businessId: string, userId: string, keep: un
 }
 
 /**
- * One proposed entry, decided on its own: accepting puts it in use right away (with the owner's edit, if any),
- * refusing removes it. Only an entry still waiting in this business's pending proposal is touched. When no entry
- * is left and the proposal changes nothing else, the proposal closes; otherwise its remaining changes wait for
- * their own Prano / Refuzo.
+ * One proposed entry, decided on its own through the agent configuration change: accepting puts it in use (with
+ * the owner's edit), refusing removes it, both against the content the owner reviewed (expected). The decision is
+ * kept on the proposal, so an entry accepted and later switched off never shows as a proposal again. When no
+ * entry is left and the proposal changes nothing else, the proposal closes.
  */
-export async function decideSourceEntry(businessId: string, userId: string, input: { id?: unknown; decision?: unknown; edit?: unknown }) {
+export async function decideSourceEntry(businessId: string, userId: string, input: { id?: unknown; decision?: unknown; edit?: unknown; expected?: unknown; requestId?: unknown }) {
   const id = typeof input.id === "string" && /^[0-9a-f-]{36}$/i.test(input.id) ? input.id : null;
   if (!id || (input.decision !== "accept" && input.decision !== "reject")) throw new SourcesError("Zgjedhja nuk është e vlefshme.");
+  if (typeof input.expected !== "string" || !Number.isFinite(Date.parse(input.expected))) throw new SourcesError("Rifresko faqen: propozimi nuk ka versionin e shqyrtuar.", 409);
   const [edit] = input.decision === "accept" && input.edit ? parseEdits([{ id, ...(input.edit as object) }]) : [];
+  try {
+    await saveConfiguration(businessId, userId, [{ type: "proposal.decide", id, decision: input.decision, expected: input.expected, ...(edit ? { title: edit.title, body: edit.body } : {}) }],
+      "sources", typeof input.requestId === "string" && /^[0-9a-f-]{36}$/i.test(input.requestId) ? input.requestId : undefined);
+  } catch (error) {
+    if (error instanceof ConfigurationError) throw new SourcesError(error.message, error.code === "unavailable" ? 503 : 409);
+    throw error;
+  }
   const db = createServiceSupabase();
-  const { data: jobs, error: jobsError } = await db.from("business_discovery_jobs").select("checkpoint").eq("business_id", businessId).eq("status", "completed")
+  const { data: jobs, error } = await db.from("business_discovery_jobs").select("checkpoint").eq("business_id", businessId).eq("status", "completed")
     .eq("checkpoint->review->>status", "pending");
-  if (jobsError) throw new SourcesError("Propozimi nuk u lexua. Provo përsëri.", 503);
   const reviews = (jobs ?? []).map((job) => job.checkpoint.review as ReviewCheckpoint);
-  if (!reviews.some((review) => review.knowledgeIds?.includes(id))) throw new SourcesError("Ky propozim nuk është më në pritje. Rifresko faqen.", 409);
-  const now = new Date().toISOString();
-  const write = input.decision === "accept"
-    ? db.from("knowledge_entries").update({ is_active: true, updated_at: now, ...(edit ? { title: edit.title, body: edit.body, owner_edited_at: now } : {}) })
-    : db.from("knowledge_entries").delete();
-  const { data, error } = await write.eq("business_id", businessId).eq("id", id).eq("is_active", false).select("id").maybeSingle();
-  if (error) throw new SourcesError("Vendimi nuk u ruajt. Provo përsëri.", 503);
-  if (!data) throw new SourcesError("Ky propozim ndryshoi ose u vendos ndërkohë. Rifresko faqen.", 409);
-  const ids = [...new Set(reviews.flatMap((review) => review.knowledgeIds ?? []))];
-  const { count, error: countError } = await db.from("knowledge_entries").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", false).in("id", ids);
+  const remaining = reviews.some((review) => (review.knowledgeIds ?? []).length);
   const others = reviews.some((r) => [r.agent, r.profile, r.process].some((value) => value && typeof value === "object"));
-  // Closing changes nothing else here: every entry is already decided and the proposal holds no other change.
-  if (!countError && count === 0 && !others) await reviewSources(businessId, userId, []);
-  return { decided: input.decision, closed: !countError && count === 0 && !others };
+  // Closing changes nothing else here: every entry is decided and the proposal holds no other change.
+  const closed = !error && !remaining && !others;
+  if (closed && reviews.length) await reviewSources(businessId, userId, []);
+  return { decided: input.decision, closed };
 }

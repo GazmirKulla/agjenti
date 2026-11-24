@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     }
     if (body.action === "confirm") return json(await reviewSources(access.business.id, access.user.id, Array.isArray(body.keep) ? body.keep : [], body.edits));
     if (body.action === "dismiss") return json(await reviewSources(access.business.id, access.user.id, null));
-    if (body.action === "decide") return json(await decideSourceEntry(access.business.id, access.user.id, { id: body.id, decision: body.decision, edit: body.edit }));
+    if (body.action === "decide") return json(await decideSourceEntry(access.business.id, access.user.id, { id: body.id, decision: body.decision, edit: body.edit, expected: body.expected, requestId: body.requestId }));
     return json({ error: "Veprim i panjohur." }, 400);
   } catch (error) {
     if (error instanceof SourcesError) return json({ error: error.message }, error.status);
