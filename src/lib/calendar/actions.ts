@@ -9,11 +9,11 @@ import {
   localInstant,
   defaultSettings,
   parseSettings,
-  uuid,
+  uuid, validDate,
   type CalendarSettings,
 } from "./model";
 import { googleConnection, syncBooking, writableCalendars } from "./google";
-import { persistBooking } from "./service";
+import { availableSlots, persistBooking } from "./service";
 async function access(slug: string) {
   const user = await getSessionUser();
   const result = user ? await requireBusinessAccess(user.id, slug) : null;
@@ -55,6 +55,12 @@ export async function saveCalendarSettings(slug: string, form: FormData) {
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Orari nuk u ruajt." };
   }
+}
+export async function readBookingSlots(slug: string, serviceId: string, date: string, excludeId?: string) {
+  const businessId = await access(slug);
+  if (!uuid(serviceId) || !validDate(date) || (excludeId !== undefined && !uuid(excludeId)))
+    throw new Error("Kontrollo shërbimin dhe datën.");
+  return (await availableSlots(businessId, serviceId, date, excludeId)).map(slot => slot.start);
 }
 export async function saveBooking(slug: string, form: FormData) {
   try {

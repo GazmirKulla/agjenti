@@ -62,6 +62,7 @@ export const manualSurfaces = {
   "src/lib/auth/actions.ts#signOut": {"exception": "Session control belongs to the signed-in person."},
   "src/lib/calendar/actions.ts#saveCalendarSettings": {"operation": "calendar.settings"},
   "src/lib/calendar/actions.ts#saveAgentBooking": {"operation": "calendar.settings"},
+  "src/lib/calendar/actions.ts#readBookingSlots": {"legacy": "availability"},
   "src/lib/calendar/actions.ts#saveBooking": {"legacy": "booking_update"},
   "src/lib/calendar/actions.ts#retryBookingSync": {"operation": "booking.sync"},
   "src/lib/calendar/actions.ts#selectGoogleCalendar": {"exception": "Provider OAuth and calendar selection require the connected account UI."},

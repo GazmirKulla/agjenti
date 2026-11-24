@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { BookingSlotConflict } from "@/lib/calendar/service";
 import { bookingAdapter } from "./booking";
 import type { Action } from "./contracts";
 import { bookingFields } from "./booking-definition";
@@ -6,7 +7,7 @@ import { runIsolated } from "@/lib/runtime/isolated-run";
 const m = vi.hoisted(() => ({ slots: vi.fn(), persist: vi.fn(), modules: vi.fn(), read: vi.fn(), version: vi.fn(), compile: vi.fn() }));
 vi.mock("@/lib/workflows/visual/store", () => ({ loadVisualVersion: m.version }));
 vi.mock("./visual-definition", () => ({ compileVisualProcesses: m.compile }));
-vi.mock("@/lib/calendar/service", () => ({ availableSlots: m.slots, persistBooking: m.persist }));
+vi.mock("@/lib/calendar/service", async original => ({ ...await original<object>(), availableSlots: m.slots, persistBooking: m.persist }));
 vi.mock("@/lib/capabilities/enforcement", () => ({ requireRuntimeModules: m.modules }));
 vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from: (table: string) => {
   const query = { select: () => query, eq: () => query, maybeSingle: () => m.read(table) }; return query;
@@ -62,4 +63,9 @@ it("rechecks the published workflow service binding before the write", async () 
   m.version.mockResolvedValue({ graph: { version: 2, nodes: [{ id: "book", kind: "booking" }], flows: [{ id: "flow", nodeIds: ["book"], serviceIds: ["other-service"] }] } });
   expect(await adapter().execute(action, context)).toMatchObject({ status: "failed", output: { code: "booking_definition_unavailable" } });
   expect(m.persist).not.toHaveBeenCalled();
+});
+
+it("reports a concurrent booking rejection without leaving the conversation in an uncertain write", async () => {
+  m.persist.mockRejectedValue(new BookingSlotConflict("slot taken"));
+  expect(await adapter().execute(action, context)).toEqual({ status: "failed", output: { code: "slot_unavailable" } });
 });

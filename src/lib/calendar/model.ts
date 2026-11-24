@@ -1,3 +1,4 @@
+export type BookingSelection = { serviceId: string; date: string; timezone: string; time: string; name: string; contact: string };
 export type Hours = { day: number; start: string; end: string };
 export type CalendarSettings = {
   timezone: string;

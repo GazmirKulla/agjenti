@@ -1,5 +1,6 @@
+import { uuid, validDate } from "@/lib/calendar/model";
 import { prompt } from "@/lib/ai/prompts/files";
-import { TransitionError, type ConditionObservation, type CustomerCommand, type Escalation, type FactInput, type Interest, type Observation, type Snapshot, type Value } from "./contracts";
+import { TransitionError, type AvailabilityQuery, type ConditionObservation, type CustomerCommand, type Escalation, type FactInput, type Interest, type Observation, type Snapshot, type Value } from "./contracts";
 import { definitionFor, type Environment } from "./transition";
 
 type ObjectValue = Record<string, unknown>;
@@ -35,7 +36,7 @@ function parseInterest(value: unknown): Interest | undefined {
 }
 /** Reject extra authority-bearing properties, malformed references and unbounded model output. */
 export function parseObservation(value: unknown): Observation {
-  if (!object(value) || !keys(value, ["revision", "commands", "needsClarification", ...(Object.hasOwn(value, "conditions") ? ["conditions"] : []), ...(Object.hasOwn(value, "escalation") ? ["escalation"] : []), ...(Object.hasOwn(value, "interest") ? ["interest"] : [])]) || !Number.isSafeInteger(value.revision)
+  if (!object(value) || !keys(value, ["revision", "commands", "needsClarification", ...(Object.hasOwn(value, "conditions") ? ["conditions"] : []), ...(Object.hasOwn(value, "escalation") ? ["escalation"] : []), ...(Object.hasOwn(value, "availabilityQuery") ? ["availabilityQuery"] : []), ...(Object.hasOwn(value, "interest") ? ["interest"] : [])]) || !Number.isSafeInteger(value.revision)
     || (value.revision as number) < 0 || typeof value.needsClarification !== "boolean" || !Array.isArray(value.commands) || value.commands.length > 32) reject();
   const commands: CustomerCommand[] = value.commands.map((command: unknown): CustomerCommand => {
     if (!object(command) || !text(command.kind)) reject();
@@ -74,10 +75,18 @@ export function parseObservation(value: unknown): Observation {
       || (c.outcome !== "yes" && c.outcome !== "no" && c.outcome !== "unclear")) reject();
     return { definitionId: c.definitionId, versionId: c.versionId, instanceId: c.instanceId, stepId: c.stepId, outcome: c.outcome, evidence: c.evidence };
   });
+  const query = value.availabilityQuery;
+  let availabilityQuery: AvailabilityQuery | undefined;
+  if (query != null) {
+    if (!object(query) || !keys(query, ["definitionId", "versionId", "serviceId", "date", "evidence"]) ||
+      !text(query.definitionId) || !text(query.versionId) || !uuid(query.serviceId) || !text(query.evidence) ||
+      !(query.date === null || typeof query.date === "string" && validDate(query.date))) reject();
+    availabilityQuery = { definitionId: query.definitionId, versionId: query.versionId, serviceId: query.serviceId, date: query.date, evidence: query.evidence };
+  }
   const escalation = parseEscalation(value.escalation);
   const interest = parseInterest(value.interest);
   return { revision: value.revision as number, commands, needsClarification: value.needsClarification, ...(parsedConditions.length ? { conditions: parsedConditions } : {}),
-    ...(escalation ? { escalation } : {}), ...(interest ? { interest } : {}) };
+    ...(escalation ? { escalation } : {}), ...(interest ? { interest } : {}), ...(availabilityQuery ? { availabilityQuery } : {}) };
 }
 
 const string = { type: "string" };
@@ -88,6 +97,7 @@ const facts = { type: "array", items: shape({ fieldId: string, value: { anyOf: [
 export const observationSchema = shape({
   revision: { type: "integer" },
   needsClarification: { type: "boolean" },
+  availabilityQuery: { anyOf: [{ type: "null" }, shape({ definitionId: string, versionId: string, serviceId: string, date: { type: ["string", "null"] }, ...evidence })] },
   conditions: { type: "array", items: shape({ definitionId: string, versionId: string, instanceId: { type: ["string", "null"] }, stepId: string,
     outcome: { type: "string", enum: ["yes", "no", "unclear"] }, ...evidence }) },
   commands: { type: "array", items: { anyOf: [

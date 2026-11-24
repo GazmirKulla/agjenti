@@ -1,0 +1,44 @@
+.booking-elicitation {
+  display: grid;
+  gap: 14px;
+}
+.booking-elicitation > div > span, .booking-lookup {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.booking-time-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 13rem;
+  overflow-y: auto;
+  padding: 3px;
+}
+.booking-time-options button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.booking-time-options button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--surface);
+}
+.booking-time-options button:focus-visible { outline: 2px solid var(--accent); }
+.assistant-booking-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.assistant-booking-card fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.assistant-booking-card legend { font-weight: 600; }
+.assistant-booking-card small { color: var(--ink-muted); }
+.assistant-booking-card .booking-elicitation { margin-top: 10px; }
+.booking-elicitation label { display: grid; gap: 6px; font-size: 14px; }
+.booking-elicitation > .btn { justify-self: start; }

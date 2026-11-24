@@ -44,12 +44,17 @@ export async function runProcessTurn(input: {
     result = { state, notices: state.pendingTurn.notices, actions: Object.values(state.instances).flatMap(i => i.action?.status === "prepared" ? [i.action] : []) };
   } else {
     const observation = await input.interpret();
-    try { result = transitionCustomer(state, input.event, observation, { ...input.env, now: Date.now() }); }
+    let availabilityQuery;
+    try {
+      result = transitionCustomer(state, input.event, observation, { ...input.env, now: Date.now() });
+      if (!observation.needsClarification && observation.availabilityQuery && input.event.message.includes(observation.availabilityQuery.evidence))
+        availabilityQuery = observation.availabilityQuery;
+    }
     catch (error) {
       if (!(error instanceof TransitionError)) throw error;
       result = { state: { ...state, revision: state.revision + 1 }, notices: [{ kind: "clarify", reason: error.code }], actions: [] };
     }
-    result.state.pendingTurn = { eventId: input.event.id, messageDigest, notices: result.notices };
+    result.state.pendingTurn = { eventId: input.event.id, messageDigest, ...(availabilityQuery ? { availabilityQuery } : {}), notices: result.notices };
     input.validate?.(result);
     if (live) {
       const receipt = await commitProcessCheckpoint({ event: input.event, expectedRevision: state.revision, transition: result, lease: input.lease! });
@@ -76,7 +81,7 @@ export async function runProcessTurn(input: {
           state = next; return { state, replayed: false };
         },
         async finish(next, expected, receipt) {
-          next.state.pendingTurn = { eventId: input.event.id, messageDigest, notices: [...notices, ...next.notices] };
+          next.state.pendingTurn = { eventId: input.event.id, messageDigest, ...(state.pendingTurn?.availabilityQuery ? { availabilityQuery: state.pendingTurn.availabilityQuery } : {}), notices: [...notices, ...next.notices] };
           if (durable) await durable.finish(next, expected, receipt);
           else if (state.revision !== expected) throw new TransitionError("stale_state");
           state = next.state;

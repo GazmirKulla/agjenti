@@ -18,7 +18,7 @@ export type ReplyContext = { instructions: string; communication?: unknown; trai
   prospect?: unknown;
   campaigns?: unknown;
   profileMemory?: Snapshot["profileMemory"];
-  availability?: { instanceId: string; serviceId: string; date: string; starts: string[]; status: string }[] };
+  availability?: { instanceId: string | null; serviceId: string; date: string; starts: string[]; status: string }[] };
 export async function composeProcessReply(input: {
   message: string; history: { role: "user" | "assistant"; content: string }[]; state: Snapshot; env: Environment;
   notices: RuntimeNotice[]; context: ReplyContext; deadline: number;

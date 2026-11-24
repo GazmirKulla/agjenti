@@ -45,6 +45,8 @@ export const customerCapabilities = {
   "customer.order_status": { agent: "customer", module: "orders", label: "Tregon statusin e porosisë", entry: "started",
     exits: { answered: "success", closed: "neutral", blocked: "failure", failed: "failure", handed_off: "handoff", ...abandoned },
     emittedBy: [processEvents] },
+  "customer.availability": { agent: "customer", module: "bookings", label: "Kontrollon oraret e lira", entry: "started",
+    exits: { available: "success", no_slots: "neutral", unverified: "failure", ...abandoned }, emittedBy: ["src/lib/orchestration/conversation.ts"] },
   "customer.booking": { agent: "customer", module: "bookings", label: "Rezervon", entry: "started",
     exits: { booked: "success", requested: "success", closed: "neutral", blocked: "failure", failed: "failure", handed_off: "handoff", ...abandoned },
     emittedBy: [processEvents] },

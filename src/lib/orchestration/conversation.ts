@@ -118,7 +118,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const [agentRead, grounding, calendarRead, journey, profileMemory] = await Promise.all([
     db.from("ai_agents").select(agentConfigurationColumns).eq("business_id", params.businessId).eq("is_active", true).maybeSingle(),
     readBusinessGrounding(db, params.businessId, modules, catalogPins),
-    hasBookingCalendar ? db.from("business_calendar_settings").select("timezone").eq("business_id", params.businessId).maybeSingle() : { data: null, error: null },
+    hasBookingCalendar ? db.from("business_calendar_settings").select("timezone,agent_booking_enabled").eq("business_id", params.businessId).maybeSingle() : { data: null, error: null },
     loadBusinessProcess(params.businessId),
     identity?.instagramParticipantId ? readProcessProfile(params.businessId, identity.instagramParticipantId, identity.channel ?? "instagram") : Promise.resolve(undefined),
   ]);
@@ -133,7 +133,17 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   // Chat Lab reads the account itself before the isolated turn and hands the result in.
   const prospectRead = mode === "live" && transport ? prospectTurnContext({ businessId: params.businessId, conversationId: transport.conversationId, message: params.message, deadline, sender: params.prospectSender })
     : Promise.resolve(mode === "test" ? params.prospectPreview : undefined);
+  const bookingLookups = !calendarRead.error && calendarRead.data?.agent_booking_enabled ? currentVersions.flatMap(version => {
+    if (version.graph.version !== 2) return [];
+    return version.graph.flows.flatMap(flow => {
+      const definition = definitions.find(d => d.versionId === version.id && d.id === flow.id);
+      const canBook = version.graph.nodes.some(n => n.kind === "booking" && flow.nodeIds.includes(n.id) &&
+        definition?.steps.some(s => s.id === bookingFields(n.id).key("create") && s.kind === "effect" && s.tool === "booking.create"));
+      return canBook ? [{ definitionId: flow.id, versionId: version.id, serviceIds: flow.serviceIds ?? [] }] : [];
+    });
+  }) : [];
   const context = {
+    bookingLookups,
     businessTimezone: !calendarRead.error ? calendarRead.data?.timezone ?? null : null,
     instructions: agent?.instructions ?? "", communication: agent?.communication,
     businessProcess: businessProcessContext(journey.process),
@@ -229,7 +239,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     },
   });
   state = result.state;
-  const notices = result.notices;
+  const notices = [...result.notices];
   const capabilityEvents = processCapabilityEvents(startState, state, notices, instance => { try { return definitionFor(state, instance, env); } catch { return undefined; } });
   // Counted only when its quote is in what the customer wrote (or said, transcribed); then the business's choice applies.
   const quoted = (quote: string) => params.message.toLocaleLowerCase().replace(/\s+/g, " ").includes(quote.toLocaleLowerCase().replace(/\s+/g, " ").trim());
@@ -247,15 +257,16 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   if (handoff && mode === "test") recordExternalAction({ kind: "staff.handoff", disposition: "SIMULATED", detail: "process_runtime_no_staff_notification" });
   // Free times the server verified, in the business's local time: for the day the customer chose, or the
   // first free times of the coming days while no date is known yet. Chat Lab reads them from the hours only.
-  const availability: { instanceId: string; serviceId: string; date: string; starts: string[]; status: string }[] = [];
-  const timezone = context.businessTimezone ?? "Europe/Tirane";
-  const localTimes = (slots: { start: string }[]) => slots.map(slot => { const p = zonedParts(slot.start, timezone); return `${p.date} ${p.time}`; });
-  const addAvailability = async (instanceId: string, serviceId: string, date: unknown, excludeBookingId?: string) => {
+  const availability: { instanceId: string | null; serviceId: string; date: string; starts: string[]; status: string }[] = [];
+  const timezone = context.businessTimezone;
+  const localTimes = (slots: { start: string }[], zone: string) => slots.map(slot => { const p = zonedParts(slot.start, zone); return `${p.date} ${p.time}`; });
+  const addAvailability = async (instanceId: string | null, serviceId: string, date: unknown, excludeBookingId?: string) => {
     try {
+      if (!timezone) throw new Error("calendar_timezone_unverified");
       if (typeof date === "string") {
         const slots = await availableSlots(params.businessId, serviceId, date, excludeBookingId);
-        availability.push({ instanceId, serviceId, date, starts: localTimes(slots.slice(0, 12)), status: slots.length > 12 ? "partial" : "complete" });
-      } else availability.push({ instanceId, serviceId, date: "next_days", starts: localTimes(await nextFreeSlots(params.businessId, serviceId, timezone, 7, 8, excludeBookingId)), status: "partial" });
+        availability.push({ instanceId, serviceId, date, starts: localTimes(slots, timezone), status: "complete" });
+      } else availability.push({ instanceId, serviceId, date: "next_days", starts: localTimes(await nextFreeSlots(params.businessId, serviceId, timezone, 7, 8, excludeBookingId), timezone), status: "partial" });
     } catch { availability.push({ instanceId, serviceId, date: typeof date === "string" ? date : "next_days", starts: [], status: "unverified" }); }
   };
   if (hasBookingCalendar && (mode === "live" || isIsolatedExecution())) {
@@ -264,7 +275,25 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       if (definitions.find(d => d.id === instance.definitionId && d.versionId === instance.versionId)?.collection) continue;
       for (const node of version?.graph.nodes.filter(n => n.kind === "booking") ?? []) {
         const { key } = bookingFields(node.id), serviceId = instance.facts[key("serviceId")]?.value;
-        if (typeof serviceId === "string") await addAvailability(instance.id, serviceId, instance.facts[key("date")]?.value);
+        if (typeof serviceId !== "string" || !definitions.find(d => d.id === instance.definitionId && d.versionId === instance.versionId)?.steps
+          .some(s => s.id === key("create") && s.kind === "effect" && s.tool === "booking.create")) continue;
+        const date = instance.facts[key("date")]?.value;
+        await addAvailability(instance.id, serviceId, date);
+        if (instance.stepId === key("review") && instance.wait?.kind === "approval") {
+          const availabilityRead = availability.at(-1)!;
+          const requested = `${date} ${instance.facts[key("time")]?.value}`;
+          const review = notices.findIndex(n => n.kind === "approval" && n.targetId === instance.wait!.id);
+          if (!availabilityRead.starts.includes(requested)) {
+            delete instance.wait.presentedAt;
+            if (review >= 0) notices[review] = { kind: "clarify", instanceId: instance.id, reason: availabilityRead.status === "unverified" ? "availability_unverified" : "slot_unavailable",
+              text: availabilityRead.status === "unverified" ? "Could not verify this appointment time. Keep the details for a retry." :
+                "This time is unavailable. Ask for another time using the verified alternatives; keep the other booking details." };
+          } else if (review < 0 && instance.wait.presentedAt === undefined && instance.wait.expiresAt > Date.now() && !notices.length) {
+            // A previous read may have failed before the customer could see the review.
+            const step = definitions.find(d => d.id === instance.definitionId && d.versionId === instance.versionId)?.steps.find(s => s.id === instance.stepId);
+            if (step?.kind === "confirm") notices.push({ kind: "approval", instanceId: instance.id, targetId: instance.wait.id, text: step.label });
+          }
+        }
       }
       for (const node of version?.graph.nodes.filter(n => n.kind === "booking_manage") ?? []) {
         const { key } = bookingManageFields(node.id), serviceId = instance.facts[key("serviceId")]?.value, bookingId = instance.facts[key("bookingId")]?.value;
@@ -273,6 +302,18 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
           await addAvailability(instance.id, serviceId, instance.facts[key("date")]?.value, bookingId);
       }
     }
+  }
+  const lookup = state.pendingTurn?.availabilityQuery;
+  if (lookup && bookingLookups.some(flow => flow.versionId === lookup.versionId && flow.definitionId === lookup.definitionId &&
+    (!flow.serviceIds.length || flow.serviceIds.includes(lookup.serviceId))) &&
+    context.services.records.some(row => row.id === lookup.serviceId && row.booking_enabled)) {
+    const alreadyRead = availability.some(a => a.serviceId === lookup.serviceId && a.date === (lookup.date ?? "next_days") &&
+      a.instanceId && state.instances[a.instanceId]?.definitionId === lookup.definitionId && state.instances[a.instanceId]?.versionId === lookup.versionId);
+    if (!alreadyRead) await addAvailability(null, lookup.serviceId, lookup.date);
+  }
+  for (const row of availability) {
+    const base = { capability: "customer.availability", conversationId: state.conversationId, ref: `${event.id}:${row.serviceId}:${row.date}` };
+    capabilityEvents.push({ ...base, point: "started" }, { ...base, point: row.status === "unverified" ? "unverified" : row.starts.length ? "available" : "no_slots" });
   }
   const [training, documents] = await Promise.all([
     processTrainingContext(state, versions, params.message, mode === "test" ? params.trainingPreview?.memories : undefined),

@@ -1,5 +1,5 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { availableSlots, persistBooking } from "@/lib/calendar/service";
+import { availableSlots, BookingSlotConflict, persistBooking } from "@/lib/calendar/service";
 import { defaultSettings, localInstant, validDate, validTime } from "@/lib/calendar/model";
 import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
@@ -62,7 +62,11 @@ export function bookingAdapter(scope?: { businessId: string; conversationId: str
       if (context.signal.aborted) return { status: "failed", output: { code: "dispatch_cancelled" } };
       const result = await persistBooking(scope.businessId, { serviceId, name, contact, start, notes: "",
         status: current.confirmationMode === "automatic" ? "confirmed" : "pending", requestKey: `ig:${scope.conversationId}:${action.id}` },
-        { ...scope.lease, conversationId: scope.conversationId, revision: context.revision });
+        { ...scope.lease, conversationId: scope.conversationId, revision: context.revision }).catch(error => {
+          if (error instanceof BookingSlotConflict) return null;
+          throw error;
+        });
+      if (!result) return { status: "failed", output: { code: "slot_unavailable" } };
       // The owner hears about every booking the agent makes; a failed notice never undoes the booking.
       await notifyOwnerOfBooking(scope.businessId, { bookingId: result.booking.id, conversationId: scope.conversationId,
         kind: result.booking.status === "confirmed" ? "booked" : "requested", ref: action.id }).catch(() => undefined);

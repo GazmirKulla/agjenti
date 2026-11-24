@@ -127,6 +127,14 @@ export function useAssistantHistory(userId: string, slug: string) {
       try { localStorage.removeItem(selectedKey); } catch {}
     },
     selectThread(thread: Pick<StoredConversation, "id">) { setPrevious(null); return load(thread.id); },
+    async refreshAfterBookingReview(id: string, requestId: string) {
+      const g = generation.current;
+      const data = await request(`&id=${encodeURIComponent(id)}&assess=1`) as View;
+      if (g !== generation.current || current.current?.conversation.id !== id) return;
+      const reply = data.messages.find(message => message.request_id === requestId && message.role === "assistant");
+      accept(data, Boolean(reply && reply.kind !== "interrupted"));
+      return reply?.kind;
+    },
     async refreshThreads() {
       const g = generation.current;
       setListLoading(true);

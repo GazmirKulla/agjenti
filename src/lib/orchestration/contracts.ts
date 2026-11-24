@@ -101,7 +101,7 @@ export type Snapshot = {
   profileMemory?: ProfileMemory;
   handoffRequested?: boolean;
   history?: { role: "user" | "assistant"; content: string }[];
-  pendingTurn?: { eventId: string; messageDigest: string; notices: RuntimeNotice[] };
+  pendingTurn?: { eventId: string; messageDigest: string; availabilityQuery?: AvailabilityQuery; notices: RuntimeNotice[] };
   schemaVersion: 4;
   mode: "live" | "test";
   businessId: string;
@@ -125,7 +125,8 @@ export type ConditionObservation = { definitionId: string; versionId: string; in
 export type Escalation = { reason: "dissatisfied" | "complaint" | "not_helped"; evidence: string };
 /** The interpretation's reading that the customer shows buying interest (price, availability, wanting to be contacted, wanting to buy or book), with a short summary and a quote from the message. */
 export type Interest = { kind: "price" | "availability" | "contact" | "purchase"; summary: string; evidence: string };
-export type Observation = { revision: number; commands: CustomerCommand[]; conditions?: ConditionObservation[]; needsClarification: boolean; escalation?: Escalation; interest?: Interest };
+export type AvailabilityQuery = { definitionId: string; versionId: string; serviceId: string; date: string | null; evidence: string };
+export type Observation = { availabilityQuery?: AvailabilityQuery; revision: number; commands: CustomerCommand[]; conditions?: ConditionObservation[]; needsClarification: boolean; escalation?: Escalation; interest?: Interest };
 export type FactInput = { fieldId: string; value: Value; evidence: string };
 export type CustomerEvent = { id: string; businessId: string; conversationId: string; message: string; actor: "customer" };
 export type RuntimeEvent = { id: string; businessId: string; conversationId: string; actor: "runtime";

@@ -11,7 +11,7 @@ import { loadDashboardProfile, loadNavigationProfile } from "@/lib/dashboard/pro
 import { hiddenModuleHint } from "@/lib/dashboard/modules/visibility";
 import { transcribeAudio } from "@/lib/business-intelligence/transcription";
 import { readAudioForm } from "@/lib/onboarding/audio-upload";
-import { executeTicket, openTicket, planRequest } from "@/lib/business-assistant/service";
+import { executeTicket, openTicket, prepareBookingSelection, planRequest } from "@/lib/business-assistant/service";
 import { persistedTurn, PersistenceError, reassessPlan } from "@/lib/business-assistant/persistence";
 import { AssistantError } from "@/lib/business-assistant/model";
 import { readPersonalAssistantName } from "@/lib/business-assistant/identity";
@@ -143,7 +143,7 @@ async function handlePOST(request: Request) {
     const context = parseUIContext(body.context);
     // A reply to an open onboarding question is stored as an answer; anything
     // else in that conversation continues to the normal assistant below.
-    if (body.conversationId && !body.attachments?.length && !body.links?.length && !linksInText(body.text).length && body.pendingToken === undefined) {
+    if (body.bookingSelection === undefined && body.conversationId && !body.attachments?.length && !body.links?.length && !linksInText(body.text).length && body.pendingToken === undefined) {
       let quickReply;
       try { quickReply = parseQuickReply(body.onboarding); } catch { throw new AssistantError("Përgjigje e pavlefshme."); }
       try {
@@ -169,6 +169,13 @@ async function handlePOST(request: Request) {
       await consumeAssistantMessage(access.businessId);
       return value;
     };
+    if (body.bookingSelection !== undefined) {
+      if (!body.conversationId || body.pendingToken || body.attachments?.length || body.links?.length)
+        throw new AssistantError("Rishiko rezervimin në bisedën përkatëse.");
+      return json(await counted(persistedTurn(access, body, {
+        content: body.text.trim(), context, mode: "plan", fingerprintData: body.bookingSelection,
+      }, async () => ({ ...await prepareBookingSelection(access, body.bookingSelection), replacePlan: true }))));
+    }
     const briefingPeriod = await briefingQuestion(body.text);
     if (briefingPeriod && !body.attachments?.length && !body.links?.length) {
       const answer = async () => {

@@ -23,6 +23,7 @@ import { encryptSecret } from "@/lib/crypto/tokens";
 import {
   searchContext,
   prepareProposal,
+  prepareBookingSelection,
   executeTicket,
   openTicket,
   type Access,
@@ -426,4 +427,15 @@ it('blocks selections from disabled modules before reading business data',async(
   const {loadSelectedContext}=await import('./service');
   await expect(loadSelectedContext({...access,modules:[]},{page:'products',entryPoint:'contextual',entityType:'product',entityId:id})).rejects.toThrow();
   expect(m.from).not.toHaveBeenCalled();
+});
+
+it("rechecks the structured form selection and requires a separate confirmation to save", async () => {
+  const selection = { serviceId: id, name: "Arta", contact: "0690000000", date: "2026-12-01", time: "15:00", timezone: "UTC" };
+  m.responses.push({ data: { timezone: "UTC" } }, { data: { id, name: "Konsultë", is_active: true, booking_enabled: true, duration_minutes: 30, updated_at: "v1" } });
+  m.slots.mockResolvedValue([{ start: "2026-12-01T15:00:00Z" }]);
+  const result = await prepareBookingSelection(access, selection);
+  expect(openTicket(result.token!, access).values).toMatchObject({ service_id: id, customer_name: "Arta", status: "pending" });
+  expect(m.persist).not.toHaveBeenCalled();
+  m.responses.push({ data: { timezone: "Europe/Tirane" } });
+  await expect(prepareBookingSelection(access, selection)).rejects.toThrow("Zona kohore ndryshoi");
 });

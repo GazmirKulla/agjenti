@@ -2,9 +2,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ElicitationForm, type ElicitationField } from "@/components/assistant-ui/elements/elicitation-form";
 import { ActionForm } from "@/components/dashboard/action-form";
 import {
   saveCalendarSettings,
+  readBookingSlots,
   saveBooking,
   retryBookingSync,
   selectGoogleCalendar,
@@ -12,8 +14,7 @@ import {
 } from "@/lib/calendar/actions";
 import {
   dayNames,
-  overlaps,
-  slotCandidates,
+  validDate,
   zonedParts,
   type Booking,
   type Hours,
@@ -32,11 +33,13 @@ const syncLabels = {
   error: "Google kërkon riprovim",
 };
 function BookingFields({
+  slug,
   data,
   date,
   booking,
   initialService,
 }: {
+  slug: string;
   data: CalendarData;
   date: string;
   booking?: Booking;
@@ -57,23 +60,35 @@ function BookingFields({
   useEffect(() => {
     setRequestKey(crypto.randomUUID());
   }, []);
-  const service = data.services.find((s) => s.id === serviceId);
-  const options = service
-    ? slotCandidates(selectedDate, service, data.settings).filter(
-        (slot) =>
-          !data.bookings
-            .filter((b) => b.id !== booking?.id && b.status !== "cancelled")
-            .some((b) =>
-              overlaps(
-                slot.start,
-                slot.blockedUntil,
-                b.starts_at,
-                b.blocked_until,
-              ),
-            ),
-      )
-    : [];
-  // Google availability is checked again server-side, including on edits.
+  const [name, setName] = useState(booking?.customer_name ?? "");
+  const [contact, setContact] = useState(booking?.customer_contact ?? "");
+  const [time, setTime] = useState(initial.time);
+  const [manual, setManual] = useState(Boolean(booking));
+  const [status, setStatus] = useState<Booking["status"]>(booking?.status ?? "confirmed");
+  const [attempt, retry] = useState(0);
+  const selection = JSON.stringify([slug, serviceId, selectedDate, booking?.id, attempt]);
+  const [lookup, setLookup] = useState<{ selection: string; times?: string[] } | null>(null);
+  const bookingId = booking?.id;
+  const timezone = data.settings.timezone;
+  useEffect(() => {
+    if (!serviceId || !validDate(selectedDate) || status === "cancelled") return;
+    let active = true;
+    readBookingSlots(slug, serviceId, selectedDate, bookingId).then(starts => {
+      if (active) setLookup({ selection, times: starts.map(start => zonedParts(start, timezone).time) });
+    }).catch(() => { if (active) setLookup({ selection }); });
+    return () => { active = false; };
+  }, [slug, serviceId, selectedDate, bookingId, timezone, selection, status]);
+  const current = lookup?.selection === selection ? lookup : null;
+  const times = current?.times ?? [];
+  const selectedTime = manual || status === "cancelled" || times.includes(time) ? time : "";
+  const contactFields: ElicitationField[] = [
+    { kind: "text", name: "name", label: "Emri i klientit", value: name, required: true, minLength: 2, maxLength: 120, autoComplete: "name" },
+    { kind: "text", name: "contact", label: "Telefon ose kontakt (opsional)", value: contact, maxLength: 200 },
+  ];
+  const fields: ElicitationField[] = [
+    ...(!manual && times.length ? [{ kind: "choice" as const, name: "time", label: "Oraret e lira", value: selectedTime, options: times }] : []),
+    ...(selectedTime || booking ? contactFields : []),
+  ];
   return (
     <div className="calendar-form-grid">
       {booking ? (
@@ -91,7 +106,7 @@ function BookingFields({
           name="service"
           required
           value={serviceId}
-          onChange={(e) => setService(e.target.value)}
+          onChange={(e) => { setService(e.target.value); setTime(""); }}
         >
           {data.services
             .filter(
@@ -107,26 +122,6 @@ function BookingFields({
         </select>
       </label>
       <label>
-        Klienti
-        <input
-          className="field"
-          name="name"
-          required
-          minLength={2}
-          maxLength={120}
-          defaultValue={booking?.customer_name}
-        />
-      </label>
-      <label>
-        Telefon ose kontakt
-        <input
-          className="field"
-          name="contact"
-          maxLength={200}
-          defaultValue={booking?.customer_contact}
-        />
-      </label>
-      <label>
         Data
         <input
           className="field"
@@ -134,34 +129,38 @@ function BookingFields({
           name="date"
           required
           value={selectedDate}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(e) => { setDate(e.target.value); setTime(""); }}
         />
       </label>
-      <label>
-        Ora
-        <input
-          className="field"
-          type="time"
-          name="time"
-          required
-          defaultValue={initial.time}
-          list={booking ? `times-${booking.id}` : "booking-times"}
-        />
-        <datalist id={booking ? `times-${booking.id}` : "booking-times"}>
-          {options.map((slot) => (
-            <option
-              key={slot.start}
-              value={zonedParts(slot.start, data.settings.timezone).time}
-            />
-          ))}
-        </datalist>
-      </label>
+      <div className="calendar-wide">
+        {status !== "cancelled" && validDate(selectedDate) && <div role="status" className="booking-lookup">
+          {!current ? "Po kontrollohen oraret…" : !current.times ? "Oraret nuk u verifikuan." :
+            !times.length ? "Nuk ka orare të lira për këtë ditë." : null}
+          {current && !current.times && <button type="button" className="btn btn-ghost" onClick={() => retry(n => n + 1)}>Riprovo</button>}
+        </div>}
+        {manual && <label>Ora <input className="field" type="time" name="time" required
+          value={time} onChange={e => setTime(e.target.value)} /></label>}
+        {status !== "cancelled" && <button type="button" className="btn btn-ghost booking-time-mode"
+          onClick={() => { setManual(!manual); setTime(""); }}>
+          {manual ? "Zgjidh nga oraret e lira" : "Vendos orën manualisht"}
+        </button>}
+        <ElicitationForm fields={fields} onFieldChange={(field, value) => {
+          if (field === "time") setTime(value);
+          if (field === "name") setName(value);
+          if (field === "contact") setContact(value);
+        }} />
+      </div>
       <label>
         Statusi
         <select
           className="field"
           name="status"
-          defaultValue={booking?.status ?? "confirmed"}
+          value={status}
+          onChange={e => {
+            const next = e.target.value as Booking["status"];
+            setStatus(next);
+            if (next === "cancelled" && booking) { setManual(true); setDate(initial.date); setTime(initial.time); setService(booking.service_id); }
+          }}
         >
           {Object.entries(statusLabels)
             .filter(([key]) => booking || key !== "cancelled")
@@ -186,7 +185,7 @@ function BookingFields({
         {data.settings.timezone} · Orari kontrollohet para ruajtjes. Pushimi pas
         takimit zë gjithashtu kalendarin.
       </p>
-      <button className="btn btn-primary" type="submit">
+      <button className="btn btn-primary" type="submit" disabled={!selectedTime || !name.trim() || (!booking && !requestKey)}>
         {booking ? "Ruaj ndryshimet" : "Shto rezervimin"}
       </button>
     </div>
@@ -281,6 +280,7 @@ export function CalendarWorkspace({
   initialService?: string;
 }) {
   const router = useRouter();
+  const [openEditors, setOpenEditors] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState(Boolean(initialService));
   const changeDate = (value: string) => {
     if (value)
@@ -384,6 +384,7 @@ export function CalendarWorkspace({
                 }}
               >
                 <BookingFields
+                  slug={slug}
                   data={data}
                   date={date}
                   initialService={initialService}
@@ -488,18 +489,22 @@ export function CalendarWorkspace({
                     </div>
                   </div>
                   {booking.status !== "cancelled" && (
-                    <details>
+                    <details onToggle={event => {
+                      const open = event.currentTarget.open;
+                      setOpenEditors(previous => previous[booking.id] === open ? previous : { ...previous, [booking.id]: open });
+                    }}>
                       <summary>Ndrysho / Anulo</summary>
-                      <ActionForm
+                      {openEditors[booking.id] && <ActionForm
                         action={saveBooking.bind(null, slug)}
                         onSuccess={refresh}
                       >
                         <BookingFields
+                          slug={slug}
                           data={data}
                           date={date}
                           booking={booking}
                         />
-                      </ActionForm>
+                      </ActionForm>}
                     </details>
                   )}
                   {["error", "pending"].includes(booking.sync_status) && (

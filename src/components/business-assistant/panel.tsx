@@ -1,4 +1,6 @@
 "use client";
+import { BookingElicitation } from "./booking-elicitation";
+import type { BookingSelection } from "@/lib/calendar/model";
 import "./workspace-layout.css";
 import "./mobile.css";
 import "./assistant-workspace.css";
@@ -90,6 +92,7 @@ type Result = {
   linear?: LinearCard;
   token?: string;
   slots?: string[];
+  bookingOffer?: Pick<BookingSelection, "serviceId" | "date" | "timezone"> & { serviceName: string };
   transcript?: string;
   error?: string;
   saved?: boolean;
@@ -337,7 +340,7 @@ export function BusinessAssistant({
     setBusy(null);
     setError("U ndal pritja këtu. Nëse kërkesa përfundon, përgjigjja shfaqet te historiku.");
   }
-  async function analyze(event?: React.FormEvent, requestText?: string, onboarding?: OnboardingQuickReply) {
+  async function analyze(event?: React.FormEvent, requestText?: string, onboarding?: OnboardingQuickReply, bookingSelection?: BookingSelection) {
     event?.preventDefault();
     if (locked.current || (!(requestText ?? text).trim() && !materials.length)) return;
     locked.current = true;
@@ -347,7 +350,7 @@ export function BusinessAssistant({
     const requestId = ++activeRequest.current;
     setSending(true);
     setError("");
-    setResult(null);
+    if (!bookingSelection) setResult(null);
     const input = (requestText ?? text).trim();
     setText("");
     setOutgoing(input || null);
@@ -361,7 +364,7 @@ export function BusinessAssistant({
     if (effectiveContext.page === "workflows" && effectiveContext.workflowSelection) workflowRequest.current = pin ?? { scope: contextKey, context: effectiveContext, history: [] };
     try {
       const conversation = await archive.ensureConversation();
-      const attemptKey = JSON.stringify([conversation.id, input, effectiveContext, materials.map(m => m.name)]);
+      const attemptKey = JSON.stringify([conversation.id, input, bookingSelection ?? null, effectiveContext, materials.map(m => m.name)]);
       if (sendAttempt.current?.key !== attemptKey) sendAttempt.current = { key: attemptKey, id: crypto.randomUUID() };
       const tokens: string[] = [];
       for (const item of materials) {
@@ -382,14 +385,15 @@ export function BusinessAssistant({
       const data = await request({
         conversationId: conversation.id, revision: conversation.revision, requestId: sendAttempt.current.id,
         mode: "plan",
-        attachments: materialTokens,
-        links: materialLinks,
+        attachments: bookingSelection ? [] : materialTokens,
+        links: bookingSelection ? [] : materialLinks,
         text: input,
         history: pin ? workflowRequestHistory(pin.history) : lastContext.current === contextKey ? history.slice(-6) : [],
         context: effectiveContext,
         assistantName: agentName,
         ...(onboarding ? { onboarding } : {}),
-        ...(lastContext.current === contextKey && (result?.workflow?.proposed || result?.editableFlow || result?.linear) && result.token ? { pendingToken: result.token } : {}),
+        ...(bookingSelection ? { bookingSelection } : {}),
+        ...(!bookingSelection && lastContext.current === contextKey && (result?.workflow?.proposed || result?.editableFlow || result?.linear) && result.token ? { pendingToken: result.token } : {}),
       });
       if (generation !== requestGeneration.current) return;
       if (!data.briefing) previousMaterials.current = { context: materialContext, tokens: materialTokens, links: materialLinks };
@@ -414,6 +418,15 @@ export function BusinessAssistant({
       setMaterialError("");
     } catch (e) {
       if (generation !== requestGeneration.current) return;
+      if (bookingSelection) {
+        setError(e instanceof Error ? e.message : "Rezervimi nuk u përgatit.");
+        const attempt = sendAttempt.current;
+        if (archive.view && attempt) {
+          const reply = await archive.refreshAfterBookingReview(archive.view.conversation.id, attempt.id).catch(() => undefined);
+          if (reply === "interrupted" && sendAttempt.current === attempt) sendAttempt.current = null;
+        }
+        return;
+      }
       setResult(null);
       setError(e instanceof Error ? e.message : "Kërkesa nuk përfundoi.");
       setText((current) => (current.trim() ? current : input));
@@ -722,23 +735,10 @@ export function BusinessAssistant({
             <OnboardingQuickReplies question={pendingOnboarding} disabled={Boolean(busy) || archive.loading}
               onReply={(label, reply) => void analyze(undefined, label, reply)} />
           )}
-          {result?.slots && (
-            <div className="assistant-slots" aria-label="Oraret e lira">
-              {result.slots.map((time) => (
-                <button
-                  type="button"
-                  key={time}
-                  disabled={Boolean(busy)}
-                  onClick={() => {
-                    setText(`Dua takim në orën ${time}. `);
-                    setMode("text");
-                  }}
-                >
-                  {time}
-                </button>
-              ))}
-            </div>
-          )}
+          {result?.bookingOffer && Boolean(result.slots?.length) && <BookingElicitation
+            key={JSON.stringify([archive.view?.conversation.id, result.bookingOffer, result.slots])}
+            offer={result.bookingOffer} times={result.slots!} busy={Boolean(busy) || Boolean(materials.length)}
+            onReview={(selection, description) => void analyze(undefined, description, undefined, selection)} />}
           {result?.orderflows && <OrderFlowCard data={result.orderflows} slug={slug} onRequest={value => {setMode("text");setText(value);}} />}
           {result?.choices?.length ? <div className="assistant-quick-actions">{result.choices.map(choice=><button type="button" key={choice} disabled={Boolean(busy)} onClick={()=>{setMode("text");setText(choice);}}>{choice}</button>)}</div> : null}
           {result?.productImport && <ProductCsvImport key={result.productImport.token} slug={slug} initialSource={result.productImport} />}

@@ -208,6 +208,7 @@ const errorMessages: Record<string, string> = {
   booking_cancelled: "Rezervimi është anuluar.",
   booking_not_found: "Rezervimi nuk u gjet.",
 };
+export class BookingSlotConflict extends Error {}
 export type BookingInput = {
   id?: string;
   revision?: number;
@@ -290,7 +291,7 @@ export async function persistBooking(businessId: string, input: BookingInput, gu
       existing?.google_event_id,
     );
     if (busy.some((b) => overlaps(input.start, blocked, b.start, b.end)))
-      throw new Error("Ky orar është i zënë në Google Calendar.");
+      throw new BookingSlotConflict("Ky orar është i zënë në Google Calendar.");
   }
   const result = await db.rpc(guard ? "save_workflow_booking" : "save_calendar_booking", {
     ...(guard ? { p_job: guard.jobId, p_token: guard.leaseToken, p_conversation: guard.conversationId, p_revision: guard.revision } : {
@@ -308,7 +309,7 @@ export async function persistBooking(businessId: string, input: BookingInput, gu
     if (guard && ["ownership_lost", "lease_lost", "stale_state", "invalid_conversation"].includes(result.error.message))
       throw new Error(result.error.message);
     if (result.error.code === "23P01")
-      throw new Error("Ky orar sapo u rezervua. Zgjidh një tjetër.");
+      throw new BookingSlotConflict("Ky orar sapo u rezervua. Zgjidh një tjetër.");
     throw new Error(
       errorMessages[result.error.message] ??
         "Rezervimi nuk u ruajt. Provo përsëri.",

@@ -87,7 +87,7 @@ const columns: Record<string, string> = {
   profile: "id,name,updated_at",
   booking: bookingColumns,
 };
-export type PlanResult = { saved?: boolean; outcome?: {status: string; action: string; reference: {table: string; id?: string; request_key?: string}}; configuration?: {planId: string; state: "blocked" | "completed"; completed: string[]; total: number}; replacePlan?: boolean; briefing?: import("./briefing-model").Briefing; actionPlan?: ActionPlan; automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[];
+export type PlanResult = { saved?: boolean; outcome?: {status: string; action: string; reference: {table: string; id?: string; request_key?: string}}; configuration?: {planId: string; state: "blocked" | "completed"; completed: string[]; total: number}; replacePlan?: boolean; briefing?: import("./briefing-model").Briefing; actionPlan?: ActionPlan; automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[]; bookingOffer?: { serviceId: string; serviceName: string; date: string; timezone: string };
   /** Cards and tables built by the server from data it read for this reply; display only. */
   blocks?: MessageBlock[] };
 export type Access = {
@@ -728,6 +728,20 @@ export async function planRequest(
       "Nuk arrita ta përcaktoj veprimin. Më trego emrin e rrjedhës ose elementit dhe ndryshimin që dëshiron.",
   };
 }
+/** A structured form submission can prepare a review; the existing ticket is required to save it. */
+export async function prepareBookingSelection(access: Access, selection: unknown) {
+  if (!selection || typeof selection !== "object") throw new AssistantError("Të dhënat e takimit janë të pavlefshme.");
+  const fields = selection as Record<string, unknown>;
+  const timezone = await timezoneFor(access.businessId);
+  if (fields.timezone !== timezone) throw new AssistantError("Zona kohore ndryshoi. Kërko përsëri oraret e lira.");
+  const mapping = { serviceId: "service_id", date: "date", time: "time", name: "customer_name", contact: "customer_contact" };
+  const changes = Object.entries(mapping).map(([key, field]) => {
+    const value = fields[key];
+    if (typeof value !== "string") throw new AssistantError("Plotëso të dhënat e takimit.");
+    return { field, value };
+  });
+  return prepareProposal(access, { action: "booking_create", id: null, changes, message: "Rishiko takimin para se ta ruash." }, timezone);
+}
 /** Every request the Assistant prepares is recorded as a capability entry and exit. */
 export async function prepareProposal(access: Access, p: Proposal, timezone: string, expected?: Row): Promise<PlanResult> {
   return trackAssistantPreparation(access.businessId, assistantCapability(p.action, proposalOperationKey(p)), randomUUID(),
@@ -834,6 +848,7 @@ async function prepareProposalOnce(
         message: slots.length
           ? `Oraret e lira për ${serviceName}, më ${values.date} (${timezone}). Më thuaj orën, emrin dhe kontaktin për të përgatitur takimin.`
           : `Nuk ka orare të lira për ${serviceName} më ${values.date}.`,
+        bookingOffer: { serviceId: String(values.service_id), serviceName, date: String(values.date), timezone },
         slots: slots.map((s) => zonedParts(s.start, timezone).time),
       };
     }
