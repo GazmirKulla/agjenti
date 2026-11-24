@@ -12,16 +12,18 @@ export default async function ActivityPage({ params }: { params: Promise<{ slug:
   const actor = await manualCommandActor(slug);
   const { data, error } = await createServiceSupabase().from("integration_logs")
     .select("id,target,status,error,created_at").eq("business_id", access.business.id)
-    .order("created_at", { ascending: false }).limit(8);
+    .order("created_at", { ascending: false }).limit(20);
   if (error) throw new Error("Nuk u ngarkua aktiviteti i integrimit.");
   return <>
     <PageHeading title="Aktiviteti" description="Punët me asistentin, njoftimet e ndjekjes dhe regjistrimet e lidhjeve me kanalet." />
+    <div className="grid gap-5 mt-5">
     <OperationActivity actor={actor} />
     <section className="panel section-pad">
       <h2>Aktiviteti i integrimit të biznesit</h2>
-      <p className="muted-copy">Deri në 8 regjistrimet më të fundit, të njëjtat që shfaqen edhe te Bisedat.</p>
+      <p className="muted-copy">Dërgimet e fundit drejt faqes së biznesit. Rezultatet e njëjta njëra pas tjetrës bashkohen në një rresht.</p>
       <div className="space-y-3 mt-4">{data?.length ? <IntegrationActivity logs={data} /> : <p>Ende nuk ka regjistrime integrimi. Porositë dhe rezervimet kontrollohen në hapësirat e tyre.</p>}</div>
     </section>
+    </div>
     <nav className="flex flex-wrap gap-3 mt-5" aria-label="Historiku në hapësirat ekzistuese">
       <Link className="btn btn-ghost" href={`/b/${slug}/inbox`}>Bisedat →</Link>
       {profile.enabledModules.includes("agents") && <Link className="btn btn-ghost" href={`/b/${slug}/agents/memory`}>Memoria e agjentit →</Link>}

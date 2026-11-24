@@ -17,6 +17,14 @@ it("shows both prepared and dependent configuration steps without a top-level pr
   ] });
 });
 
+it("names a dependent step by its planned title until it is prepared", () => {
+  const result = readActivitySteps([
+    { version: 2, requestId: "next", definition: { key: "knowledge.save", input: { title: " Orari i dyqanit " } } },
+    { version: 2, requestId: "other", definition: { key: "knowledge.save", input: { title: "" } } },
+  ]);
+  expect(result?.steps.map(step => step.subject)).toEqual(["Orari i dyqanit", undefined]);
+});
+
 it("reports unreadable and mixed formats without crashing or enabling legacy resume", () => {
   for (const value of [null, {}, [], [null], [{ version: 1, requestId: "a" }],
     [{ version: 2, requestId: "a", definition: { key: "unknown" } }],

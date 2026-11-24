@@ -1,0 +1,49 @@
+/* Aktiviteti: plans with the assistant, follow-up notices and integration log. */
+.activity-plan { border-top: 1px solid var(--line); padding: 16px 0; }
+.activity-plan:first-of-type { margin-top: 12px; }
+.activity-plan h3 { margin: 0; }
+.activity-plan .muted-copy { margin: 6px 0 0; font-size: 13px; }
+.activity-plan-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+
+/* Shared status vocabulary: success, warning, danger, neutral. */
+.activity-pill { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; font-weight: 600; line-height: 1; padding: 5px 10px; border-radius: 999px; background: var(--hover); color: var(--ink-muted); }
+.activity-pill.is-success { background: var(--success-soft); color: var(--success); }
+.activity-pill.is-warning { background: var(--warning-soft); color: var(--warning); }
+.activity-pill.is-danger { background: var(--danger-soft); color: var(--danger); }
+.activity-icon { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 13px; font-weight: 700; line-height: 1; background: var(--hover); color: var(--ink-muted); border: 1px solid var(--line); }
+.activity-icon.is-success { background: var(--success-soft); color: var(--success); border-color: transparent; }
+/* Solid, so they still stand out on the tinted rows they mark. */
+.activity-icon.is-warning { background: var(--warning); color: var(--surface); border-color: transparent; }
+.activity-icon.is-danger { background: var(--danger); color: var(--surface); border-color: transparent; }
+
+.activity-progress { height: 6px; margin-top: 12px; border-radius: 999px; background: var(--hover); overflow: hidden; }
+.activity-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.activity-progress-fill.is-completed { background: var(--success); }
+.activity-progress-fill.is-blocked { background: var(--warning); }
+
+.activity-callout { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; padding: 12px 14px; border-radius: 12px; border: 1px solid transparent; }
+.activity-callout p { margin: 2px 0 0; }
+.activity-callout.is-warning { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 30%, transparent); }
+
+.activity-steps { margin: 12px 0; }
+.activity-steps summary { cursor: pointer; color: var(--ink-muted); font-size: 14px; }
+.activity-steps ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.activity-steps li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); }
+.activity-steps li.is-warning { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 30%, transparent); }
+.activity-steps li.is-danger { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.activity-step-label { flex: 1; min-width: 0; }
+
+.activity-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.activity-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.activity-log li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); }
+.activity-log li.is-danger { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.activity-log-body { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.activity-log-label { font-weight: 600; }
+.activity-log li.is-danger .activity-log-label { color: var(--danger); }
+.activity-count { margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+.activity-log-time { color: var(--ink-muted); font-size: 13px; }
+.activity-log-error { color: var(--ink-muted); font-size: 12px; }
+.activity-log-error code { font-size: 12px; }
+@media (max-width: 520px) {
+  .activity-log li > .activity-pill { display: none; }
+}
