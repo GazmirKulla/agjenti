@@ -109,11 +109,12 @@ export function parseProductForm(
 
   const productTypeId = form.has("product_type_id") ? String(form.get("product_type_id") ?? "").trim() || null : undefined;
   const workflowId = form.has("workflow_id") ? String(form.get("workflow_id") ?? "").trim() || null : undefined;
-  // A product is either public or a draft, chosen by the editor's buttons ("Publiko" / "Ruaj si draft").
+  // A product is either public or not (a draft): the editor's one "Publik" switch, or save_mode from the Assistant.
   // A public product is one the agent sells: publishing also ends any older "information only" state.
   const saveMode = form.get("save_mode");
   const isActive = saveMode === "publish" ? true : saveMode === "draft" ? false : form.get("is_active") === "on";
-  const agentOrders = saveMode === "publish" ? true : form.has("agent_orders_shown") ? form.get("agent_orders") === "on" : null;
+  const agentOrders = isActive && (saveMode === "publish" || form.has("publish_switch")) ? true
+    : form.has("agent_orders_shown") ? form.get("agent_orders") === "on" : null;
   const itemKind = form.has("item_kind") ? kindOf(String(form.get("item_kind"))).id : null;
   const parsedAttributes = itemKind ? parseAttributes(itemKind, form, attributeFields(opts?.fields ?? [])) : { attributes: {} };
   if ("error" in parsedAttributes && parsedAttributes.error) return { error: parsedAttributes.error };

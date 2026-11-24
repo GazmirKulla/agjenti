@@ -93,3 +93,13 @@ describe("Publiko / Ruaj si draft", () => {
     expect(parseProductForm(form({ save_mode: "draft" }))).toMatchObject({ isActive: false, agentOrders: null });
   });
 });
+
+describe("the Publik switch", () => {
+  const form = (extra: Record<string, string>) => { const f = new FormData(); Object.entries({ name: "Puzzle", price: "10", currency: "ALL", publish_switch: "1", ...extra }).forEach(([k, v]) => f.set(k, v)); return f; };
+  it("on: public and sold by the agent", () => {
+    expect(parseProductForm(form({ is_active: "on" }))).toMatchObject({ isActive: true, agentOrders: true });
+  });
+  it("off: a draft, keeping the stored ordering setting", () => {
+    expect(parseProductForm(form({}))).toMatchObject({ isActive: false, agentOrders: null });
+  });
+});

@@ -2,7 +2,7 @@
 import { OperationButton } from "@/components/dashboard/operation-button";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ProductFields } from "@/components/dashboard/product-fields";
+import { ProductFields, PublishSwitch } from "@/components/dashboard/product-fields";
 import { ReadinessList } from "./readiness-list";
 import { filledFields, productReadiness } from "@/lib/products/readiness";
 import { fieldsOf } from "@/lib/items/kinds";
@@ -71,7 +71,7 @@ export function ProductEditor({
           const form = e.currentTarget;
           const d = new FormData(form);
           const price = String(d.get("price") ?? ""), max = String(d.get("price_max") ?? "");
-          setPreview(current => ({
+          setPreview(() => ({
             name: String(d.get("name") ?? ""),
             description: String(d.get("description") ?? ""),
             image: String(d.get("image_url") ?? ""),
@@ -81,7 +81,7 @@ export function ProductEditor({
             unit: String(d.get("price_unit") ?? ""),
             currency: String(d.get("currency") ?? "ALL"),
             workflow: String(d.get("workflow_id") ?? ""),
-            active: current.active,
+            active: d.get("is_active") === "on",
             details: filledFields(detailKeys, Object.fromEntries(detailKeys.map(key => [key, d.get(`attr_${key}`) ?? undefined]))),
           }));
         }}
@@ -163,27 +163,9 @@ export function ProductEditor({
             <ReadinessList items={readiness} hrefFor={anchor => `#${anchor}`} />
           </section>
           <div className="product-save-actions" id="product-save">
-            <p className={`product-publish-state ${preview.active ? "is-public" : "is-draft"}`}>
-              <strong>{preview.active ? "Publik" : "Draft"}</strong>
-              {preview.active ? "Agjenti e ofron dhe merr porosi për të." : "Agjenti nuk e sheh derisa ta publikosh."}
-            </p>
-            <button
-              className="btn btn-primary"
-              disabled={pending}
-              type="submit"
-              name="save_mode"
-              value="publish"
-            >
-              {pending ? "Duke ruajtur…" : preview.active ? "Ruaj ndryshimet" : "Publiko"}
-            </button>
-            <button
-              className="btn btn-ghost"
-              disabled={pending}
-              type="submit"
-              name="save_mode"
-              value="draft"
-            >
-              {preview.active ? "Kthe në draft" : "Ruaj si draft"}
+            <PublishSwitch defaultChecked={initial?.is_active ?? false} />
+            <button className="btn btn-primary" disabled={pending} type="submit">
+              {pending ? "Duke ruajtur…" : product ? "Ruaj ndryshimet" : "Ruaj produktin"}
             </button>
             {error && (
               <p role="alert" className="form-feedback-error">
@@ -191,9 +173,6 @@ export function ProductEditor({
               </p>
             )}
             {success && <p role="status">{success}</p>}
-            <p className="muted-copy">
-              Porosinë Agjenti e regjistron vetëm pasi klienti konfirmon përmbledhjen. Draftet nuk u shfaqen klientëve.
-            </p>
           </div>
         </aside>
       </form>

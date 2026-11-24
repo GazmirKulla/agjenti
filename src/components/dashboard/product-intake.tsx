@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { Icon } from "@/components/dashboard/icon";
-import { ProductFields } from "@/components/dashboard/product-fields";
+import { ProductFields, PublishSwitch } from "@/components/dashboard/product-fields";
 import {
   InstagramScanner,
   type ScanFrame,
@@ -204,10 +204,8 @@ export function ProductIntake({
         </p>
         <ActionForm action={createAction} className="grid gap-5">
           <ProductFields slug={slug} workflows={workflows} />
-          <div className="flex flex-wrap gap-2">
-            <button className="btn btn-primary" type="submit" name="save_mode" value="publish">Publiko</button>
-            <button className="btn btn-ghost" type="submit" name="save_mode" value="draft">Ruaj si draft</button>
-          </div>
+          <PublishSwitch defaultChecked={false} />
+          <button className="btn btn-primary" type="submit">Ruaj produktin</button>
         </ActionForm>
       </div>
 
