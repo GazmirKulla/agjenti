@@ -1,3 +1,5 @@
+import { semanticConversationTitle } from "./semantic-title";
+import { recordSystem } from "@/lib/tracking/system-events";
 import { withAiUsage } from "@/lib/ai/usage";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { recordCapabilityEvents } from "@/lib/tracking/events";
@@ -198,20 +200,36 @@ export async function runWorkflowQueue(maxJobs = 10, testScope?: { businessId: s
             if (job.operation_kind === "test") {
                 if (!testScope || job.business_id !== testScope.businessId || job.operator_user_id !== testScope.userId || job.test_stream_id !== testScope.streamId) throw new Error("Test transport isolation violation");
                 const { executeAgentTestTurn } = await import("@/lib/agents/test-chat/execute-turn");
-                const { data: prior, error: priorError } = await db.from("workflow_inbound_queue").select("result_ciphertext,status")
+                const { data: prior, error: priorError } = await db.from("workflow_inbound_queue").select("result_ciphertext,status,payload")
                   .eq("business_id", job.business_id).eq("operator_user_id", job.operator_user_id!).eq("test_stream_id", job.test_stream_id!)
                   .is("batch_parent_id", null).lt("id", job.id).order("id", { ascending: false }).limit(1).maybeSingle();
                 if (priorError || prior && (prior.status !== "sent" || !prior.result_ciphertext)) throw new Error("Previous turn unavailable");
                 const batch = testInputBatch({ ...job.payload } as unknown as TestChatInput, job);
                 const input = batch.input;
+                let previousTitle: string | undefined;
+                let previousReply = "";
                 if (prior) {
                     const previous = JSON.parse(decryptSecret(prior.result_ciphertext)) as TestChatResult;
                     if ("error" in previous) throw new Error("Previous turn failed");
                     input.session = previous.session;
+                    previousTitle = previous.conversationTitle;
+                    previousReply = previous.reply;
                 }
                 const result = await executeAgentTestTurn(input, job.operator_user_id!, batch.count);
+                let generatedTitle: string | null = null;
+                if (!("error" in result)) {
+                  if (!previousTitle && result.turns <= 6) generatedTitle = await semanticConversationTitle(job.business_id, [
+                    ...(prior?.payload?.message ? [{ role: "user", content: String(prior.payload.message) }, { role: "assistant", content: previousReply }] : []),
+                    { role: "user", content: input.message }, { role: "assistant", content: result.reply },
+                  ]);
+                  if (previousTitle || generatedTitle) result.conversationTitle = previousTitle ?? generatedTitle!;
+                }
                 const { error } = await db.rpc("finish_test_transport", { p_id: job.id, p_token: job.lease_token, p_result: "error" in result && !result.labObservation ? null : encryptSecret(JSON.stringify(result)), p_error: "error" in result ? result.error : null });
-                if (error) throw new Error("Test result commit failed");
+                if (error) {
+                  if (generatedTitle) await recordSystem("assistant.conversation_title", "failed", { businessId: job.business_id, reason: "storage:failed", ref: job.test_stream_id! });
+                  throw new Error("Test result commit failed");
+                }
+                if (generatedTitle) await recordSystem("assistant.conversation_title", "stored", { businessId: job.business_id, ref: job.test_stream_id! });
                 processed++;
                 return;
             }

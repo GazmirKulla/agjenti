@@ -4,7 +4,7 @@ export type ChatTurn = Exclude<TestChatResult, { error: string }>;
 export type ChatEntry = { id: string; batchId?: string; text: string; photo: boolean; attachments: (TestAttachment & { preview?: string })[]; result: ChatTurn };
 export type PendingTestTurn = { failure?: ChatTurn["labObservation"]; id: string; batchId?: string; sequence: number; text: string; photo: boolean; attachments: ChatEntry["attachments"]; session: string | null; accepted?: boolean; status: "queued" | "processing" | "failed" | "uncertain"; error?: string };
 export type TestConversation = {
-  mode?: "test" | "real"; id: string; title: string; entries: ChatEntry[]; updatedAt: number; outbox?: PendingTestTurn[] };
+  titleGenerated?: boolean; titleEdited?: boolean; mode?: "test" | "real"; id: string; title: string; entries: ChatEntry[]; updatedAt: number; outbox?: PendingTestTurn[] };
 export type TestTransportJob = { failure?: ChatTurn["labObservation"]; requestId: string; batchId?: string; sequence: number; status: string; error?: string; result?: ChatTurn | null };
 /** Reconcile by operation identity and contiguous sequence, never response arrival order. */
 export function reconcileTestConversation(chat: TestConversation, jobs: TestTransportJob[]): TestConversation {
@@ -17,10 +17,12 @@ export function reconcileTestConversation(chat: TestConversation, jobs: TestTran
       entries.push({ id: pending.id, batchId: job.batchId, text: pending.text, photo: pending.photo, attachments: pending.attachments, result: job.result });
     } else outbox.push(job ? { ...pending, batchId: job.batchId, accepted: true, status: job.status === "failed" || job.status === "sent" && !job.result ? "failed" : job.status === "processing" ? "processing" : "queued", error: job.error, failure: job.failure } : pending);
   }
-  return { ...chat, entries, outbox };
+  const generated = !chat.titleEdited && (!chat.entries.length || chat.titleGenerated === false)
+    ? entries.find(entry => entry.result.conversationTitle)?.result.conversationTitle : undefined;
+  return { ...chat, title: generated ?? chat.title, titleGenerated: generated ? true : chat.titleGenerated, entries, outbox };
 }
 export function newConversation(): TestConversation {
-  return { id: crypto.randomUUID(), title: "Bisedë e re", entries: [], updatedAt: Date.now() };
+  return { id: crypto.randomUUID(), title: "Bisedë e re", titleGenerated: false, entries: [], updatedAt: Date.now() };
 }
 /** Replay from BEFORE the edited/regenerated message, never from its result. */
 export function batchStartIndex(entries: ChatEntry[], index: number) {

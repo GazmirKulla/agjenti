@@ -134,7 +134,9 @@ export const systemCapabilities: Record<string, CapabilitySpec> = {
 };
 
 export type CustomerCapability = keyof typeof customerCapabilities;
-export const capabilities: Record<string, CapabilitySpec> = { ...customerCapabilities, ...assistantCapabilities, ...systemCapabilities,
+export const capabilities: Record<string, CapabilitySpec> = {
+  "assistant.conversation_title": { agent: "assistant", module: "assistant", label: "Titulli nga konteksti i bisedës", entry: null,
+    exits: { stored: "success", deferred: "neutral", failed: "failure" }, emittedBy: ["src/lib/conversations/semantic-title.ts", "src/lib/business-assistant/persistence.ts", "src/lib/conversations/workflow-queue.ts", "src/lib/agents/panel-chat/execute.ts"] }, ...customerCapabilities, ...assistantCapabilities, ...systemCapabilities,
   "assistant.report_chart": { agent: "assistant", module: "assistant", label: "Grafiku i porosive sipas ditëve", entry: "requested",
     exits: { stored: "success", store_failed: "failure", read_failed: "failure" }, emittedBy: ["src/lib/tracking/assistant-events.ts", "src/lib/business-assistant/report-chart.ts"] },
   "assistant.message_blocks": { agent: "assistant", module: "assistant", label: "Ruajtja e tekstit të formatuar, kartave, tabelave dhe grafikëve në bisedë",

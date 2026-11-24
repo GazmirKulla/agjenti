@@ -98,11 +98,12 @@ export async function prepareConfigurationPlan(businessId: string, userId: strin
   if (saved.error) throw new OperationError("Konfigurimi nuk u ruajt për ekzekutim.");
   return {id, fingerprint, steps};
 }
-export async function executeConfigurationPlan(businessId: string, userId: string, planId: string, accessToken?: string) {
+export async function executeConfigurationPlan(businessId: string, userId: string, planId: string, accessToken?: string, approvedFingerprint?: string) {
   await configurationActor(businessId, userId, accessToken);
   const db = createServiceSupabase();
   const loaded = await db.from("business_operation_plans").select("steps,fingerprint,state").eq("id", planId).eq("business_id", businessId).eq("user_id", userId).maybeSingle();
   if (loaded.error || !loaded.data || !Array.isArray(loaded.data.steps) || !loaded.data.steps.length || loaded.data.steps.some((s: {version: number}) => s.version !== 2)) throw new OperationError("Konfigurimi nuk u gjet.");
+  if (approvedFingerprint !== undefined && loaded.data.fingerprint !== approvedFingerprint) throw new OperationError("Përmbajtja e miratuar ka ndryshuar. Rishqyrtoje.");
   let steps = loaded.data.steps as ConfigurationPlan["steps"];
   parseConfigurationSteps(steps.map(s => s.definition));
   if (configurationFingerprint(steps) !== loaded.data.fingerprint) throw new OperationError("Konfigurimi ka ndryshuar.");

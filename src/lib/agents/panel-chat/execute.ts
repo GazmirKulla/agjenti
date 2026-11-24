@@ -1,7 +1,9 @@
+import { semanticConversationTitle } from "@/lib/conversations/semantic-title";
+import { recordSystem } from "@/lib/tracking/system-events";
 import { observeLabTurn } from "@/lib/chat-lab/observation";
 import { isPlatformAdmin } from "@/lib/tenant/access";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { encryptSecret } from "@/lib/crypto/tokens";
+import { decryptSecret, encryptSecret } from "@/lib/crypto/tokens";
 import { readStoredConversationState } from "@/lib/orchestration/stored-state";
 import { digest } from "@/lib/orchestration/definition";
 import { processConversationMessage } from "@/lib/conversations/process-conversation-message";
@@ -22,7 +24,7 @@ export async function runPanelChat(scope: PanelScope) {
       const [conversation, saved, outbound] = await Promise.all([
         db.from("conversations").select("id,status,auto_reply,openai_previous_response_id,participant_username").eq("id", job.conversation_id).eq("business_id", scope.businessId).eq("panel_user_id", scope.userId).eq("panel_stream_id", scope.streamId).eq("channel", "panel").single(),
         db.from("conversation_states").select("collected,revision,workflow_id").eq("conversation_id", job.conversation_id).eq("business_id", scope.businessId).single(),
-        db.from("workflow_inbound_queue").select("reply").eq("conversation_id", job.conversation_id).eq("business_id", scope.businessId).eq("operation_kind", "panel").eq("status", "sent").order("client_sequence", { ascending: false }).limit(1).maybeSingle(),
+        db.from("workflow_inbound_queue").select("reply,payload,result_ciphertext").eq("conversation_id", job.conversation_id).eq("business_id", scope.businessId).eq("operation_kind", "panel").eq("status", "sent").order("client_sequence", { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (conversation.error || saved.error || outbound.error || conversation.data.status !== "active" || !conversation.data.auto_reply) throw new Error("Panel conversation unavailable");
       const canAct = async () => {
@@ -48,6 +50,15 @@ export async function runPanelChat(scope: PanelScope) {
         processTransport: { jobId: job.id, leaseToken: job.lease_token, conversationId: job.conversation_id, revision: saved.data.revision },
       });
       const result: TestChatResult = { ...turn, labObservation: observation.finish(), session: "", turns: job.client_sequence + 1, autoReplyEnabled: true };
+      let previousTitle: string | undefined;
+      try { previousTitle = outbound.data?.result_ciphertext ? JSON.parse(decryptSecret(outbound.data.result_ciphertext)).conversationTitle : undefined; }
+      catch { /* Title metadata cannot interrupt a customer turn. */ }
+      const generatedTitle = !previousTitle && job.client_sequence < 6
+        ? await semanticConversationTitle(scope.businessId, [
+          ...(outbound.data?.payload?.message ? [{ role: "user", content: String(outbound.data.payload.message) }, { role: "assistant", content: outbound.data.reply ?? "" }] : []),
+          { role: "user", content: job.payload.message }, { role: "assistant", content: turn.reply },
+        ]) : null;
+      if (previousTitle || generatedTitle) result.conversationTitle = previousTitle ?? generatedTitle!;
       if (turn.nextState.runtime) {
         const checkpoint = turn.processCheckpoint;
         const snapshot = turn.nextState.runtime;
@@ -58,7 +69,11 @@ export async function runPanelChat(scope: PanelScope) {
           p_revision: checkpoint.expectedRevision, p_state: snapshot, p_event: checkpoint.event.id, p_event_hash: digest(checkpoint.event),
           p_reply: turn.reply, p_targets: checkpoint.targetIds, p_result: encryptSecret(JSON.stringify(result)),
           p_handoff: Boolean(turn.handoff && !turn.advisoryHandoff) });
-        if (committed.error) throw new Error("Panel process result commit failed");
+        if (committed.error) {
+          if (generatedTitle) await recordSystem("assistant.conversation_title", "failed", { businessId: scope.businessId, reason: "storage:failed", ref: scope.streamId });
+          throw new Error("Panel process result commit failed");
+        }
+        if (generatedTitle) await recordSystem("assistant.conversation_title", "stored", { businessId: scope.businessId, ref: scope.streamId });
         processed++;
         continue;
       }

@@ -216,6 +216,7 @@ export const businessCapabilities: CapabilityModule[] = [
     name: "Njohuritë",
     items: [
       ["po", "Shto dhe ndrysho"],
+      ["pjes", "Përgatit njohuri, udhëzime dhe memorie nga konteksti i pronarit, me kontroll të pavarur dhe miratim të versionit përfundimtar; ende pa provë live me AI"],
       ["po", "Fshi"],
       ["jo", "Import FAQ nga burime të jashtme"],
     ],
@@ -223,6 +224,7 @@ export const businessCapabilities: CapabilityModule[] = [
   {
     name: "Bisedat",
     items: [
+      ["pjes", "Tituj semantikë për biseda të reja të Asistentit dhe provës; kërkon migrimin e titujve dhe modelin, ende pa provë live"],
       ["po", "Formaton përgjigjet për pronarin me paragrafë, lista, theksim dhe lidhje"],
       ["po", "Lexon bisedat e fundit"],
       ["po", "Ndalo dhe rinis Agjentin në një bisedë"],

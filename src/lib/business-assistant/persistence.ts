@@ -1,3 +1,5 @@
+import { semanticConversationTitle } from "@/lib/conversations/semantic-title";
+import { recordSystem } from "@/lib/tracking/system-events";
 import { storableBlocks } from "./blocks";
 import { trackBlockStorage } from "@/lib/tracking/assistant-events";
 import { readConfigurationProgress } from "@/lib/actions/operations/plans";
@@ -186,14 +188,22 @@ export async function persistedTurn(
       } as RecoverablePlan["orderDraft"] } : {}),
     });
     const blocks = data.saved || data.onboarding?.question ? [] : storableBlocks(data.blocks);
+    const title = view.conversation.title_generated === false
+      ? await semanticConversationTitle(access.businessId, [...history, { role: "user", content: input.content }, { role: "assistant", content: data.message ?? "" }]) : null;
     const write = writeConversation(access, id, "finish", null, requestId, {
+      ...(title ? { title } : {}),
       content: (data.message || "Kontrollo propozimin.").slice(0, 12000),
       ...(blocks.length ? { blocks } : {}),
       ...(!informational ? { snapshot, preferences: retained ? view.plan?.preferences ?? {} : {} } : {}),
       ...(data.onboarding?.question ? { question: data.onboarding.question } : {}),
       ...(data.saved ? { outcome: data.outcome } : {}),
     });
-    const finished = blocks.length ? await trackBlockStorage(access.businessId, requestId, write, blocks.some(b => b.type === "chart")) : await write;
+    const trackedWrite = write.catch(async error => {
+      if (title) await recordSystem("assistant.conversation_title", "failed", { businessId: access.businessId, reason: "storage:failed", ref: id });
+      throw error;
+    });
+    const finished = blocks.length ? await trackBlockStorage(access.businessId, requestId, trackedWrite, blocks.some(b => b.type === "chart")) : await trackedWrite;
+    if (title) await recordSystem("assistant.conversation_title", finished.title === title ? "stored" : "deferred", { businessId: access.businessId, ref: id, ...(finished.title !== title ? { reason: "storage:existing_title_preserved" } : {}) });
     const persistence = await readConversation(access, id);
     if (persistence.conversation.revision !== finished.revision)
       return { message: "Biseda ndryshoi në një dritare tjetër. U rikthye gjendja më e re; rishqyrto çdo propozim.", recovered: true, persistence };

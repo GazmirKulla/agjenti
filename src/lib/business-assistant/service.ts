@@ -1,3 +1,4 @@
+import { containsAuthoredContent } from "./context-content";
 import { prompt } from "@/lib/ai/prompts/files";
 import { settingsContext } from "@/lib/settings/store";
 import { OperationError } from "@/lib/actions/operations/error";
@@ -5,10 +6,10 @@ import { applyRequestedWorkflow } from "./workflow-apply";
 import { configurationInstructions, orderFlowInstructions, linearInstructions, workflowPlanningContract, automationInstructions, actionPlanInstructions, workflowEditorInstructions as baseWorkflowInstructions } from "./prompts";
 import { reviewConfigurationRequest } from "./configuration-review";
 import { parseConfigurationSteps } from "@/lib/actions/operations/configuration-policy";
-import { prepareConfigurationPlan, executeConfigurationPlan, loadConfigurationPlan, renewConfigurationPlan } from "@/lib/actions/operations/plans";
+import { prepareConfigurationPlan, executeConfigurationPlan, loadConfigurationPlan, renewConfigurationPlan, type ConfigurationPlan } from "@/lib/actions/operations/plans";
 import { prepareOperationPlan, resumeOperationPlan, executeOperationPlan, type PreparedPlan } from "@/lib/actions/operations/plans";
 import { isOperationalSearch, searchOperations } from "@/lib/actions/operations/search";
-import { assistantOperationCatalog } from "@/lib/actions/operations/catalog";
+import { operationCatalog, type OperationKey, assistantOperationCatalog } from "@/lib/actions/operations/catalog";
 import { prepareOperation, executeOperation, type PreparedOperation } from "@/lib/actions/operations/service";
 import { requireActionAccess } from "@/lib/actions/access";
 import { observeAgentEffect, requireAgentConfigurationAccess } from "@/lib/agents/configuration";
@@ -114,7 +115,7 @@ export type Ticket = {
 };
 export function assertEnabled(access: Access, action: Action) {
   if (action === "automation_plan") throw new AssistantError("Plani është vetëm për shqyrtim; nuk është konfirmim për ekzekutim.");
-  if (action === "clarify" || action.startsWith("operation")) return;
+  if (action === "clarify" || action === "configuration_apply" || action.startsWith("operation")) return; // Configuration validates each step's module server-side.
   if (!access.modules.includes(moduleFor(action)))
     throw new AssistantError(
       "Ky funksion nuk është aktiv në hapësirën e biznesit.",
@@ -555,6 +556,7 @@ export async function planRequest(
       const plan = await loadConfigurationPlan(access.businessId,access.userId,id,access.accessToken);
       const review = await reviewConfigurationRequest(text,history,plan.steps.map(s=>s.definition),{...context,configuration:plan.steps.map(s=>s.definition),originalRequest:plan.steps[0].authority.request});
       await renewConfigurationPlan(access.businessId,access.userId,plan,review,access.accessToken);
+      if (plan.steps.some(s => containsAuthoredContent(s.definition))) return configurationContentPreview(access, await loadConfigurationPlan(access.businessId, access.userId, id, access.accessToken));
       const result=await executeConfigurationPlan(access.businessId,access.userId,id,access.accessToken);
       return finish({message:result.message,configuration:result,saved:true,replacePlan:true,
         outcome:{status:result.state,action:"configuration_apply",reference:{table:"business_operation_plans",id}}});
@@ -572,6 +574,7 @@ export async function planRequest(
       for (const step of steps) if (step.key === "workflow.configure") step.input.request = text;
       const review = await reviewConfigurationRequest(text, history, steps, context);
       const plan = await prepareConfigurationPlan(access.businessId, access.userId, steps, review, access.accessToken);
+      if (steps.some(containsAuthoredContent)) return configurationContentPreview(access, plan);
       const result = await executeConfigurationPlan(access.businessId, access.userId, plan.id, access.accessToken);
       return finish({ message: [result.message,review.remainingQuestion].filter(Boolean).join("\n\n"), configuration: result, saved: true, replacePlan: true,
         outcome: {status: result.state, action: "configuration_apply", reference: {table: "business_operation_plans", id: plan.id}} });
@@ -720,6 +723,15 @@ export async function planRequest(
         }
       }
     }
+    // Review grounding before issuing the ticket; execution saves that exact ticket.
+    if (proposal.action === "operation" || proposal.action === "operation_plan") {
+      const values = Object.fromEntries(proposal.changes.map(c => [c.field, c.value]));
+      const steps = proposal.action === "operation"
+        ? [{ key: values.key, input: JSON.parse(values.input) }]
+        : JSON.parse(values.steps);
+      if (Array.isArray(steps) && steps.some(containsAuthoredContent))
+        await reviewConfigurationRequest(text, history, steps, context);
+    }
     const prepared = await prepareProposal(access, proposal, timezone, expected);
     return finish(prepared);
   }
@@ -727,6 +739,20 @@ export async function planRequest(
     message:
       "Nuk arrita ta përcaktoj veprimin. Më trego emrin e rrjedhës ose elementit dhe ndryshimin që dëshiron.",
   };
+}
+/** The same immutable configuration plan, now requiring review of authored content. */
+function configurationContentPreview(access: Access, plan: ConfigurationPlan): Promise<PlanResult> {
+  return trackAssistantPreparation(access.businessId, "assistant.configuration_apply", plan.id, async () => {
+    const ticket: Ticket = { purpose: "business-assistant-v1", businessId: access.businessId, userId: access.userId,
+      action: "configuration_apply", id: plan.id, expires: Math.min(...plan.steps.map(s => s.authority.expires)),
+      before: null, values: { fingerprint: plan.fingerprint } };
+    return { message: "Shqyrto përmbajtjen e përgatitur nga biseda. Ruhet vetëm versioni që miraton.",
+      preview: { title: "Mirato përmbajtjen dhe ndryshimet", fields: plan.steps.map((step, i) => ({
+        label: `${i + 1}. ${operationCatalog[step.definition.key as OperationKey].title}`, before: "—",
+        after: step.prepared ? step.prepared.preview.fields.map(f => `${f.label}: ${f.after}`).join("\n")
+          : JSON.stringify(step.definition.input, null, 2),
+      })) }, token: encryptSecret(JSON.stringify(ticket)) };
+  });
 }
 /** A structured form submission can prepare a review; the existing ticket is required to save it. */
 export async function prepareBookingSelection(access: Access, selection: unknown) {
@@ -906,6 +932,13 @@ export async function executeTicket(access: Access, token: string) {
 }
 async function executeTicketOnce(access: Access, token: string) {
   const t = openTicket(token, access);
+  if (t.action === "configuration_apply") {
+    const plan = await loadConfigurationPlan(access.businessId, access.userId, t.id, access.accessToken);
+    if (plan.fingerprint !== t.values.fingerprint) throw new AssistantError("Përmbajtja ndryshoi. Rishqyrtoje përpara ruajtjes.");
+    const result = await executeConfigurationPlan(access.businessId, access.userId, t.id, access.accessToken, String(t.values.fingerprint));
+    if (result.state !== "completed") throw new AssistantError(result.message);
+    return { message: result.message, path: "agents" };
+  }
   if (t.action === "operation_plan" || t.action === "operation_resume") return executeOperationPlan(access.businessId, access.userId, t.values.plan as PreparedPlan, access.accessToken);
   if (t.action === "operation") return executeOperation(access.businessId, access.userId, t.values.operation as PreparedOperation, access.accessToken);
   if(t.action === "product_create" || t.action === "service_create") await requireActionAccess(access.businessId,access.userId,t.action === "product_create" ? "product.create" : "service.create");

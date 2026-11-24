@@ -442,3 +442,10 @@ it("rechecks the structured form selection and requires a separate confirmation 
   m.responses.push({ data: { timezone: "Europe/Tirane" } });
   await expect(prepareBookingSelection(access, selection)).rejects.toThrow("Zona kohore ndryshoi");
 });
+it("accepts a tenant-bound configuration review ticket and rejects expired or foreign approvals", () => {
+  const ticket: Ticket = { purpose: "business-assistant-v1", businessId: access.businessId, userId: access.userId,
+    action: "configuration_apply", id, expires: Date.now() + 60000, before: null, values: { fingerprint: "reviewed-version" } };
+  expect(openTicket(encryptSecret(JSON.stringify(ticket)), access).values.fingerprint).toBe("reviewed-version");
+  expect(() => openTicket(encryptSecret(JSON.stringify({ ...ticket, expires: 1 })), access)).toThrow();
+  expect(() => openTicket(encryptSecret(JSON.stringify({ ...ticket, businessId: "other" })), access)).toThrow();
+});

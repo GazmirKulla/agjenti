@@ -21,7 +21,7 @@ export type RecoverablePlan = {
   orderDraft?: { action: string; source: OrderFlow | null; name: string; steps: OrderFlow["steps"]; products: OrderFlowProduct[]; scope: string };
 };
 export type StoredConversation = {
-  id: string; title: string; revision: number; plan_revision: number; updated_at: string;
+  id: string; title: string; title_generated?: boolean; revision: number; plan_revision: number; updated_at: string;
   pending_request: string | null; pending_since: string | null;
 };
 export type StoredMessage = {

@@ -109,7 +109,7 @@ async function handlePOST(request: Request) {
         const tables: Record<string, string> = { operation: "business_operation_receipts", product: "products", service: "booking_services", knowledge: "knowledge_entries", agent: "ai_agents", profile: "businesses", booking: "bookings", workflow: "assistant_visual_requests", orderflow: "assistant_workflow_changes", linear: "products" };
         return { ...result, saved: true, outcome: { status: "backend_acknowledged", action: ticket.action,
           ...("configurationEffect" in result && result.configurationEffect ? { configurationEffect: result.configurationEffect } : {}),
-          reference: { table: ticket.action === "operation_plan" || ticket.action === "operation_resume" ? "business_operation_plans" : tables[ticket.action.split("_")[0]],
+          reference: { table: ticket.action === "operation_plan" || ticket.action === "operation_resume" || ticket.action === "configuration_apply" ? "business_operation_plans" : tables[ticket.action.split("_")[0]],
             ...(ticket.action === "booking_create" ? { request_key: `assistant:${ticket.id}` } : { id: ticket.id }) } } };
       };
       // Keep legacy callers compatible; the owner assistant UI uses durable requests.

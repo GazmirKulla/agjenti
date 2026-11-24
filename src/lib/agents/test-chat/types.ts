@@ -20,4 +20,5 @@ export type TestChatResult =
       turns: number;
       autoReplyEnabled: boolean;
       trainingReceipt?: string;
+      conversationTitle?: string;
     });

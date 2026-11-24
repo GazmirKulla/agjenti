@@ -41,3 +41,7 @@ it("rejects a prepared action whose immutable target differs from the authorized
  expect(await executeConfigurationPlan("tenant","owner","plan")).toMatchObject({state:"blocked",completed:[]});
  expect(m.execute).not.toHaveBeenCalled();
 });
+it("rejects a changed plan against the exact fingerprint the owner reviewed", async () => {
+  await expect(executeConfigurationPlan("tenant", "owner", "plan", undefined, "obsolete-approved-version")).rejects.toThrow("miratuar");
+  expect(m.execute).not.toHaveBeenCalled();
+});

@@ -25,6 +25,6 @@ export function readHistory(raw: string | null): AssistantThread[] {
 
 export function saveThread(threads: AssistantThread[], id: string, messages: HistoryMessage[], now: string): AssistantThread[] {
   if (!messages.length) return threads;
-  const title = messages.find(m => m.role === "user")?.content.trim().slice(0, 80) || "Bisedë me materiale";
+  const title = threads.find(t => t.id === id)?.title ?? "Bisedë e re";
   return [{ id, title, updatedAt: now, messages: messages.slice(-80).map(({ role, content }) => ({ role, content: content.slice(0, 12000) })) }, ...threads.filter(t => t.id !== id)].slice(0, 30);
 }

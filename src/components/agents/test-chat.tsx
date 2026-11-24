@@ -228,7 +228,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
     window.speechSynthesis?.cancel(); setSpeaking(null);
   }
   function saveTitle() {
-    if (renaming?.title.trim()) setChats(current=>current.map(c=>c.id===renaming.id ? {...c,title:renaming.title.trim().slice(0,80)} : c));
+    if (renaming?.title.trim()) setChats(current=>current.map(c=>c.id===renaming.id ? {...c,title:renaming.title.trim().slice(0,80),titleEdited:true} : c));
     setRenaming(null);
   }
   function addFiles(files: File[]) {
@@ -296,7 +296,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
       const base = index < currentEntries.length ? { ...currentChat, id: targetId, title: `${chat.title.slice(0,55)} · version`, entries: currentEntries.slice(0,index), outbox: [] } : { ...currentChat, id: targetId };
       const operation: PendingTestTurn = { id: crypto.randomUUID(), sequence: index, text, photo: simulated, attachments,
         session: replaySession(currentEntries, Math.min(index, currentEntries.length)), status: "queued" };
-      const nextChat = { ...base, outbox: [...(base.outbox ?? []), operation], title: index ? base.title : (text || attachments[0]?.name || "Provë me foto").slice(0,65), updatedAt: Date.now() };
+      const nextChat = { ...base, outbox: [...(base.outbox ?? []), operation], title: index || base.titleEdited ? base.title : "Bisedë e re", updatedAt: Date.now() };
       const allChats = [nextChat, ...chatsRef.current.filter(c => c.id !== targetId && (chat.id !== "initial" || c.id !== "initial"))];
       if (allChats.slice(8).some(hasInFlightTurns)) throw new Error("Nuk mund të hiqet një bisedë në proces. Fshi një bisedë të përfunduar.");
       const nextChats = allChats.slice(0,8);

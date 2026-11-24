@@ -46,3 +46,11 @@ describe("durable test UI reconciliation", () => {
     expect(result.outbox?.[0]).toMatchObject({id:"op-0",status:"failed",error:"synthetic timeout"});
   });
 });
+it("applies the server title once, preserving a manual rename during generation", () => {
+  const job = { requestId: "op-0", sequence: 0, status: "sent", result: { ...turn("reply"), conversationTitle: "Rregullat e transportit" } };
+  expect(reconcileTestConversation(chat, [job]).title).toBe("Rregullat e transportit");
+  const renamed = { ...chat, title: "Titulli im", titleEdited: true };
+  expect(reconcileTestConversation(renamed, [job]).title).toBe("Titulli im");
+  const finished = reconcileTestConversation(chat, [job]);
+  expect(reconcileTestConversation({ ...finished, title: "Updated" }, [job]).title).toBe("Updated");
+});
