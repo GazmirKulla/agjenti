@@ -43,7 +43,6 @@ export const manualSurfaces = {
   "src/app/b/[slug]/settings/business/page.tsx#saveBusiness": {"operation": "business.autoreply"},
   "src/app/b/[slug]/workflows/page.tsx#addSimple": {"legacy": "linear_draft"},
   "src/app/join/actions.ts#acceptInvitation": {"exception": "Requires the invited person to establish their own identity."},
-  "src/components/dashboard/knowledge-workspace.tsx#importExternalFaq": {"exception": "Bulk external knowledge ingestion requires source preview; not an ordinary knowledge edit."},
   "src/components/dashboard/knowledge-workspace.tsx#add": {"operation": "knowledge.save"},
   "src/components/dashboard/website-integration.tsx#saveExternalCatalog": {"exception": "Credential entry stays in the authenticated integration UI."},
   "src/components/dashboard/website-integration.tsx#disconnectExternalCatalog": {"exception": "Integration credentials and disconnection remain explicitly managed."},

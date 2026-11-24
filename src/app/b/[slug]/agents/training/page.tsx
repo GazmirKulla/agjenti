@@ -12,7 +12,7 @@ export default async function ConversationTrainingPage({ params }: { params: Pro
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   return <>
-    <PageHeading eyebrow={access.business.name} title="Trajno nga bisedat" description="Agjenti mëson nga bisedat e tua të vërteta me klientët: si shkruan ti, çfarë pyesin klientët dhe çfarë u përgjigjesh.">
+    <PageHeading title="Trajno nga bisedat" description="Agjenti mëson nga bisedat e tua të vërteta me klientët: si shkruan ti, çfarë pyesin klientët dhe çfarë u përgjigjesh.">
       <Link className="soft-link" href={`/b/${slug}/agents`}>← Agjenti</Link>
     </PageHeading>
     <ConversationTraining slug={slug} />

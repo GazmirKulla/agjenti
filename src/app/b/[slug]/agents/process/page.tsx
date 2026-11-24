@@ -81,7 +81,7 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
   </>;
 
   return <>
-    <PageHeading eyebrow={access.business.name} title="Çfarë bën Agjenti"
+    <PageHeading title="Çfarë bën Agjenti"
       description="Çdo gjë që bën Agjenti me klientët, në një vend: çfarë është gati dhe si e ndryshon. Nuk ke nevojë të vizatosh procese." />
     {ownProcess ? (
       <section className="panel section-pad grid gap-2 capability-own">

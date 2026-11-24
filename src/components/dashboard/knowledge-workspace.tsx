@@ -1,5 +1,5 @@
 import { createKnowledgeEntry } from "@/lib/knowledge/commands";
-import { knowledgeSource, knowledgeSourceLabel } from "@/lib/knowledge/context";
+import { knowledgeSourceLabel } from "@/lib/knowledge/context";
 import { KnowledgeText, knowledgePreview } from "@/components/knowledge/knowledge-text";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { RecordBrowser } from "@/components/dashboard/record-browser";
@@ -8,12 +8,6 @@ import { KnowledgeSources } from "@/components/dashboard/knowledge-sources";
 import { TrainingEntry } from "@/components/training/training-entry";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import {
-  isExternalCatalogLinked,
-  knowledgeUrlFromCatalog,
-  loadBusinessApiSecret,
-  loadBusinessCatalogUrl,
-} from "@/lib/integrations/zana";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { saveKnowledgeEntry } from "@/lib/knowledge/actions";
@@ -49,60 +43,6 @@ export async function KnowledgeWorkspace({
     ? (entries ?? []).filter((e) => e.intent_key === "service")
     : (entries ?? []).filter((e) => e.intent_key !== "service");
   if (loadError) throw new Error("Nuk u ngarkuan të dhënat.");
-  const linked = await isExternalCatalogLinked(access.business.id);
-
-  async function importExternalFaq() {
-    "use server";
-    const session = await getSessionUser();
-    if (!session) return { error: "Sesioni ka skaduar. Hyr përsëri." };
-    const acc = await requireBusinessAccess(session.id, slug);
-    if (!acc) return { error: "Nuk ke qasje në këtë biznes." };
-    if (!(await isExternalCatalogLinked(acc.business.id)))
-      return {
-        error:
-          "Lidh më parë një katalog të jashtëm te Cilësimet për të importuar FAQ.",
-      };
-    const catalogUrl = await loadBusinessCatalogUrl(acc.business.id);
-    const secret = await loadBusinessApiSecret(acc.business.id);
-    const knowledgeUrl = catalogUrl
-      ? knowledgeUrlFromCatalog(catalogUrl)
-      : null;
-    if (!knowledgeUrl || !secret)
-      return {
-        error:
-          "Lidhja nuk është konfiguruar. Vendos URL-në e katalogut (.../catalog) dhe API key te Cilësimet.",
-      };
-    const res = await fetch(knowledgeUrl, {
-      headers: { Authorization: `Bearer ${secret}` },
-    });
-    if (!res.ok)
-      return { error: "Njohuritë nuk u morën nga API. Provo përsëri." };
-    const json = (await res.json()) as {
-      entries: Array<{
-        question: string;
-        answer: string;
-        intent_key: string | null;
-        sort_order: number;
-      }>;
-    };
-    const db = createServiceSupabase();
-    // A repeated import updates the same questions instead of adding copies.
-    const { data: current } = await db.from("knowledge_entries").select("id,title")
-      .eq("business_id", acc.business.id).or("intent_key.is.null,intent_key.neq.service");
-    const byTitle = new Map((current ?? []).map((row) => [row.title.trim().toLocaleLowerCase(), row.id]));
-    for (const entry of json.entries ?? []) {
-      if (typeof entry.question !== "string" || typeof entry.answer !== "string" || !entry.question.trim()) continue;
-      const values = { title: entry.question.trim(), body: entry.answer, intent_key: entry.intent_key === "service" ? null : entry.intent_key, sort_order: entry.sort_order ?? 0 };
-      const existing = byTitle.get(values.title.toLocaleLowerCase());
-      if (existing) await db.from("knowledge_entries").update({ ...values, format: "markdown", updated_at: new Date().toISOString(), owner_edited_at: new Date().toISOString() }).eq("id", existing).eq("business_id", acc.business.id).throwOnError();
-      else {
-        const { data: created } = await db.from("knowledge_entries").insert({ business_id: acc.business.id, ...values, format: "markdown", source: knowledgeSource("owner") }).select("id").single().throwOnError();
-        if (created) byTitle.set(values.title.toLocaleLowerCase(), created.id);
-      }
-    }
-    revalidatePath(`/b/${slug}`, "layout");
-  }
-
   async function add(formData: FormData) {
     "use server";
     const session = await getSessionUser();
@@ -118,22 +58,13 @@ export async function KnowledgeWorkspace({
   return (
     <>
       <PageHeading
-        eyebrow={access.business.name}
         title={services ? "Shërbimet" : "Njohuritë"}
         description={
           services
             ? "Përshkruaj shërbimet, kërkesat dhe çmimet e verifikuara që Agjenti përdor për t’iu përgjigjur klientëve."
             : "Njohuritë e biznesit që Agjenti AI përdor për t’iu përgjigjur klientëve."
         }
-      >
-        {linked && !services && (
-          <ActionForm action={importExternalFaq}>
-            <button className="btn btn-ghost" type="submit">
-              Importo FAQ nga API
-            </button>
-          </ActionForm>
-        )}
-      </PageHeading>
+      />
       {!services && <KnowledgeSources slug={slug} />}
       {!services && <TrainingEntry slug={slug} />}
       <RecordBrowser

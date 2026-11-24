@@ -44,17 +44,6 @@ function resolveBearerSecret(params: {
   return undefined;
 }
 
-/** Derive knowledge endpoint from a full catalog URL when possible. */
-export function knowledgeUrlFromCatalog(catalogUrl: string): string | null {
-  const url = parseAbsoluteUrl(catalogUrl);
-  if (!url) return null;
-  if (url.pathname.endsWith("/catalog")) {
-    url.pathname = `${url.pathname.slice(0, -"/catalog".length)}/knowledge`;
-    return url.toString();
-  }
-  return null;
-}
-
 async function loadIntegrationRow(businessId: string) {
   const supabase = createServiceSupabase();
   const { data, error } = await supabase
@@ -385,13 +374,6 @@ export async function loadBusinessApiSecret(
   );
 }
 
-export async function loadBusinessCatalogUrl(
-  businessId: string,
-): Promise<string | null> {
-  const integration = await loadIntegrationRow(businessId);
-  const url = integration?.catalog_url?.trim() || null;
-  return url && parseAbsoluteUrl(url) ? url : null;
-}
 
 
 /** A file of an item on the business website: the customer's (input) or the store's (output, e.g. processed design). */

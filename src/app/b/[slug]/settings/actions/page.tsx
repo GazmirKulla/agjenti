@@ -65,7 +65,6 @@ export default async function BusinessActionsPage({
   return (
     <>
       <PageHeading
-        eyebrow={access.business.name}
         title="Krijimi i bizneseve për klientë"
         description="Përgatit një biznes për një klient dhe dërgoja ftesën e pronësisë me email. Seksionet e panelit menaxhohen te Modulet."
       />

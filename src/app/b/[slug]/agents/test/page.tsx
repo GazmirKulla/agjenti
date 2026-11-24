@@ -21,12 +21,11 @@ export default async function AgentTestPage({
       <PageHeading
         title="Provo Agjentin"
         description={`Bisedo me agjentin e ${access.business.name} si një klient.`}
-      />
-      <div className="mb-5">
-        <Link href={`/b/${slug}/agents`} className="soft-link">
+      >
+        <Link href={`/b/${slug}/agents`} className="btn btn-ghost">
           ← Konfigurimi i agjentit
         </Link>
-      </div>
+      </PageHeading>
       {draft && <p role="status" className="mb-5">Po provon draftin e ruajtur. Kjo provë nuk ndryshon dhe nuk verifikon versionin live.</p>}
       <AgentTestChat
         key={`${access.business.id}:${user.id}:${draft ?? "published"}`}

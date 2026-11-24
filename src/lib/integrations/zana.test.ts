@@ -18,7 +18,6 @@ vi.mock("@/lib/crypto/tokens", () => ({
 }));
 import {
   fetchLinkedCatalog,
-  knowledgeUrlFromCatalog,
   probeLinkedCatalog,
   submitExternalOrder,
 } from "./zana";
@@ -141,16 +140,6 @@ describe("catalog probe", () => {
         headers: { Authorization: "Bearer form-secret" },
       }),
     );
-  });
-});
-
-describe("knowledgeUrlFromCatalog", () => {
-  it("maps catalog paths to knowledge", () => {
-    expect(
-      knowledgeUrlFromCatalog(
-        "https://zana-store.com/api/integrations/agjenti/catalog",
-      ),
-    ).toBe("https://zana-store.com/api/integrations/agjenti/knowledge");
   });
 });
 
