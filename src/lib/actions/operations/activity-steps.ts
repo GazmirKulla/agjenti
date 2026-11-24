@@ -20,8 +20,12 @@ export function readActivitySteps(value: unknown): { version: 1 | 2; steps: Acti
     const title = typeof preview?.title === "string" ? preview.title
       : version === 2 && isOperationKey(key) ? operationCatalog[key].title : null;
     if (!title) return null;
-    steps.push({ requestId: step.requestId, title,
-      subject: typeof preview?.subject === "string" ? preview.subject : undefined });
+    // A dependent step is prepared only when it runs; until then its own
+    // definition still names what it is about (e.g. the knowledge title).
+    const planned = version === 2 ? record(record(step.definition)?.input)?.title : undefined;
+    const subject = typeof preview?.subject === "string" ? preview.subject
+      : typeof planned === "string" && planned.trim() ? planned.trim() : undefined;
+    steps.push({ requestId: step.requestId, title, subject });
   }
   return { version, steps };
 }

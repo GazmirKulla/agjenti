@@ -1,0 +1,27 @@
+/* Aktiviteti: plans with the assistant, follow-up notices and integration log. */
+.activity-plan { border-top: 1px solid var(--line); padding: 16px 0; }
+.activity-plan:first-of-type { margin-top: 12px; }
+.activity-plan h3 { margin: 0; }
+.activity-plan .muted-copy { margin: 4px 0 0; font-size: 13px; }
+.activity-plan-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.activity-state { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--line); }
+.activity-state.is-completed { color: var(--success); }
+.activity-state.is-blocked { color: var(--warning, var(--danger)); }
+.activity-plan-stop { margin: 10px 0; }
+.activity-steps { margin: 10px 0; }
+.activity-steps summary { cursor: pointer; color: var(--ink-muted); font-size: 14px; }
+.activity-steps ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.activity-steps li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 8px; }
+.activity-steps li::before { content: "•"; color: var(--ink-muted); }
+.activity-steps li.is-done::before { content: "✓"; color: var(--success); }
+.activity-steps li.is-uncertain::before { content: "?"; color: var(--danger); }
+.activity-steps li > span:first-of-type { flex: 1; min-width: 0; }
+.activity-steps li.is-waiting, .activity-steps li.is-uncertain { background: var(--line); }
+.activity-step-state { color: var(--ink-muted); font-size: 13px; white-space: nowrap; }
+
+.activity-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.activity-log li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.activity-log li:first-child { border-top: 0; }
+.activity-log li.is-failed .activity-log-label { color: var(--danger); }
+.activity-log-time { color: var(--ink-muted); font-size: 13px; white-space: nowrap; }
+.activity-log-error { flex-basis: 100%; color: var(--ink-muted); font-size: 12px; font-family: var(--font-mono, monospace); }
