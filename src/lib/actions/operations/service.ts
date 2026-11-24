@@ -44,7 +44,7 @@ import { applyConfiguration, ConfigurationError, listConfigurationVersions, prep
 
 /** Operations that change the agent's configuration: prepared into one proposal and applied as one whole. */
 const configurationKeys = new Set(["agent.configure", "knowledge.save", "knowledge.delete", "agent.communication", "agent.behavior", "training.save", "training.change"]);
-const assistantParts = new Set(["knowledge.save", "knowledge.active", "knowledge.delete", "agent.update", "agent.draft", "behavior.set", "service.booking", "calendar.agent_booking", "training.save", "training.active", "training.delete"]);
+const assistantParts = new Set(["profile.set", "knowledge.save", "knowledge.active", "knowledge.delete", "agent.update", "agent.draft", "behavior.set", "service.booking", "calendar.agent_booking", "training.save", "training.active", "training.delete"]);
 const configurationNotice = "Pas konfirmimit zbatohen të gjitha bashkë dhe ruhen si një version i ri; nëse një pjesë nuk zbatohet dot, nuk zbatohet asnjë. Rezervimet, porositë dhe bisedat ekzistuese nuk ndryshojnë. Mund ta rikthesh nga Historiku.";
 function configurationRequests(operation: string, input: OperationInput, snapshot: Record<string, unknown>, requestId: string): ConfigurationRequest[] {
   if (operation === "agent.configure") {

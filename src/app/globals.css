@@ -5534,3 +5534,25 @@ button.order-photo-image:hover:not(:disabled) {
 .configuration-history li small { color: var(--ink-muted); }
 .configuration-history li p { margin: 2px 0 0; font-size: 13px; color: var(--ink-muted); }
 .configuration-history li > div > b + .status-badge { justify-self: start; margin: 2px 0; }
+
+/* Agjenti → Biznesi: profili publik. */
+.profile-editor { display: grid; gap: 16px; }
+.profile-group { display: grid; gap: 12px; scroll-margin-top: 90px; }
+.profile-group h2 { margin: 0; font-size: 17px; }
+.profile-add { justify-self: start; border: 1px dashed var(--line); border-radius: 10px; background: none; padding: 8px 12px; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; }
+.profile-add:hover { border-color: var(--ink-muted); }
+.profile-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.profile-row .field { flex: 1 1 160px; }
+.profile-hours { display: grid; gap: 8px; }
+.profile-day { display: grid; grid-template-columns: 110px 140px 1fr; gap: 8px; align-items: center; }
+.profile-intervals { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.profile-interval { display: inline-flex; gap: 6px; align-items: center; }
+.profile-interval .field { width: 140px; }
+.profile-save { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; padding: 12px 0; background: var(--canvas, var(--surface)); }
+.profile-save p { margin: 0; }
+.profile-suggestions { display: grid; gap: 8px; }
+.profile-suggestions p { margin: 0; }
+.profile-suggestion { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.profile-missing { margin: 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #f5a524 12%, var(--surface)); font-size: 13px; }
+.agent-space-note { margin: 0 0 8px; font-size: 12px; }
+@media (max-width: 640px) { .profile-day { grid-template-columns: 1fr 1fr; } .profile-intervals { grid-column: 1 / -1; } }

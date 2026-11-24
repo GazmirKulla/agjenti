@@ -13,7 +13,9 @@ import { reviewLines, type ReviewLine } from "./review-summary";
 /** Prompt text: prompts/agjenti-i-klienteve/pergjigja-ndaj-klientit.md */
 export const CUSTOMER_REPLY_PROMPT = () => prompt("agjenti-i-klienteve/pergjigja-ndaj-klientit");
 
-export type ReplyContext = { instructions: string; communication?: unknown; training?: TrainingContext; businessProcess?: string; knowledge: unknown; products?: unknown; services?: unknown; documents?: unknown; attachments?: string;
+export type ReplyContext = { instructions: string; communication?: unknown; training?: TrainingContext; businessProcess?: string;
+  /** The business's public profile (contacts, address, opening hours) as the owner stated it; absent fields are unknown. */
+  profile?: unknown; knowledge: unknown; products?: unknown; services?: unknown; documents?: unknown; attachments?: string;
   /** Server-read public Instagram profile the prospect named (Agjenti.app only). */
   prospect?: unknown;
   campaigns?: unknown;

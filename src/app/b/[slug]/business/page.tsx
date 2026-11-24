@@ -43,7 +43,7 @@ export default async function BusinessHub({ params }: { params: Promise<{ slug: 
     </section>
     <nav className={s.utilities} aria-label="Konfigurime të tjera">
       {modules.includes("customers") && <Link href={`${base}/customers`}>Klientët →</Link>}
-      <Link href={`${base}/settings/business`}>Profili i biznesit →</Link>
+      <Link href={`${base}/agents/business`}>Profili i biznesit →</Link>
       <Link href={`${base}/settings/modules`}>Përshtat menunë →</Link>
       <Link href={`${base}/setup`}>Onboarding →</Link>
       {modules.includes("workflows") && <Link href={`${base}/workflows`}>Procesi i personalizuar (i avancuar) →</Link>}

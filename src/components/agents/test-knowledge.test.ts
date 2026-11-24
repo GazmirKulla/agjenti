@@ -40,3 +40,13 @@ it("says a failed read failed, never that the entry was not selected", () => {
     expect(out).not.toContain("nuk u përzgjodh");
   }
 });
+
+it("names the profile sections given to a reply with Ndrysho këtu to each field, and tells a failed read from an empty profile", async () => {
+  const { TestProfileUsed } = await import("./test-knowledge");
+  const render = (profile: TestConfigurationProvenance["profile"], profileHref?: string) => renderToStaticMarkup(createElement(TestProfileUsed, { slug: "shop", profileHref, configuration: { ...read([]), profile } }));
+  const out = render({ sections: ["hours", "location"], status: "complete" }, "");
+  expect(out).toContain('href="#profile-hours"'); expect(out).toContain("Ndrysho këtu");
+  expect(render({ sections: ["hours"], status: "complete" })).toContain('href="/b/shop/agents/business#profile-hours"');
+  expect(render({ sections: [], status: "unavailable" })).toContain("dështoi");
+  expect(render({ sections: [], status: "complete" })).toContain("nuk thotë ende");
+});

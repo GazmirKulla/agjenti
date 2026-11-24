@@ -81,8 +81,8 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
   </>;
 
   return <>
-    <PageHeading title="Çfarë bën Agjenti"
-      description="Çdo gjë që bën Agjenti me klientët, në një vend: çfarë është gati dhe si e ndryshon. Nuk ke nevojë të vizatosh procese." />
+    <PageHeading title={enabled.has("orders") && (enabled.has("bookings") || enabled.has("services")) ? "Porositë dhe rezervimet" : enabled.has("orders") ? "Porositë" : enabled.has("bookings") || enabled.has("services") ? "Rezervimet" : "Çfarë bën Agjenti"}
+      description="Çfarë bën Agjenti me klientët: çfarë është gati, çfarë mungon dhe si e ndryshon, edhe kur ia kalon bisedën stafit. Nuk ke nevojë të vizatosh procese." />
     {ownProcess ? (
       <section className="panel section-pad grid gap-2 capability-own">
         <h2>Agjenti ndjek procesin tënd të personalizuar</h2>

@@ -101,7 +101,7 @@ export async function moveStyleToInstructions(actor: CommandActor, input: { id: 
     const agents = await db.from("ai_agents").select("id,instructions,is_active,updated_at").eq("business_id", business.id).order("is_active", { ascending: false }).limit(2);
     if (agents.error) throw new Error("Udhëzimet nuk u lexuan.");
     const agent = agents.data?.find(row => row.is_active) ?? (agents.data?.length === 1 ? agents.data[0] : null);
-    if (!agent) throw new Error("Nuk u gjet agjenti aktiv. Aktivizoje te Sjellja dhe veprimet, pastaj provo përsëri.");
+    if (!agent) throw new Error("Nuk u gjet agjenti aktiv. Aktivizoje te Agjenti → Komunikimi, pastaj provo përsëri.");
     // A switched-off preference is not put into use by moving it.
     if (!lesson.data.is_active) throw new Error("Ky mësim është i fikur. Aktivizoje nëse dëshiron ta kalosh te udhëzimet, ose hiqe.");
     const text = lesson.data.instruction.trim();

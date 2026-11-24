@@ -3,6 +3,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { defaultCommunicationPolicy, parseCommunicationPolicy } from "@/lib/agents/communication-policy";
 import { validateTrainingInput, type TrainingInput } from "@/lib/agents/training/model";
 import { knowledgeSource } from "@/lib/knowledge/context";
+import { parseProfile, ProfileError, readProfile, profileChanges } from "@/lib/business-profile/model";
 
 /**
  * One way to change the agent's configuration: knowledge, instructions and communication, behavior, training,
@@ -26,7 +27,9 @@ export type ConfigurationRequest =
   | ({ type: "training.save" } & TrainingInput)
   | { type: "training.active"; id: string; is_active: boolean; revision?: number }
   | { type: "training.delete"; id: string; revision?: number }
-  | { type: "proposal.decide"; id: string; decision: "accept" | "reject"; expected: string; title?: string; body?: string };
+  | { type: "proposal.decide"; id: string; decision: "accept" | "reject"; expected: string; title?: string; body?: string }
+  /** The public profile: the whole profile from the editor, or a patch of whole sections from the Assistant. */
+  | { type: "profile.set"; profile?: unknown; patch?: Partial<Record<"identity" | "contacts" | "location" | "hours", unknown>>; expected?: string };
 
 export type ConfigurationSource = "owner" | "assistant" | "sources" | "conversations" | "memory";
 export type PreviewLine = { label: string; before: string; after: string };
@@ -219,10 +222,27 @@ export async function prepareConfiguration(businessId: string, requests: Configu
         lines.push({ label: `Propozim nga burimet: “${short(request.title ?? before.title, 60)}”`, before: "Në pritje", after: request.decision === "accept" ? "Pranohet dhe përdoret nga Agjenti" : "Refuzohet dhe hiqet" });
         break;
       }
+      case "profile.set": {
+        const { data, error } = await createServiceSupabase().from("businesses").select("public_profile,public_profile_updated_at").eq("id", businessId).maybeSingle();
+        if (error || !data) throw new ConfigurationError("Profili nuk u lexua.", "unavailable");
+        if (request.expected && !sameStamp(request.expected, data.public_profile_updated_at)) throw new ConfigurationError("Profili ndryshoi ndërkohë. Rifresko dhe rishqyrtoje.", "stale");
+        const before = readProfile(data.public_profile);
+        const patch = request.patch && typeof request.patch === "object" ? request.patch : null;
+        if (!patch && request.profile === undefined) throw new ConfigurationError("Profili mungon.");
+        let profile;
+        try { profile = parseProfile(patch ? { ...before, ...Object.fromEntries(Object.entries(patch).filter(([key]) => ["identity", "contacts", "location", "hours"].includes(key))) } : request.profile); }
+        catch (error) { throw new ConfigurationError(error instanceof ProfileError ? error.message : "Profili nuk është i vlefshëm."); }
+        changes.push({ type: "profile.set", profile, expected: request.expected ?? data.public_profile_updated_at });
+        lines.push(...profileChanges(before, profile));
+        break;
+      }
       default: throw new ConfigurationError("Pjesë e panjohur e ndryshimit.");
     }
   }
-  return { baseRevision, changes, lines, summary: lines.map(line => line.label).slice(0, 6).join(" · ").slice(0, 600) };
+  // "Profili: Adresa, Orari · Njohuria …": the profile's fields under one name.
+  const profile = lines.filter(line => line.label.startsWith("Profili · ")).map(line => line.label.slice("Profili · ".length));
+  const labels = [...(profile.length ? [`Profili: ${profile.join(", ")}`] : []), ...lines.filter(line => !line.label.startsWith("Profili · ")).map(line => line.label)];
+  return { baseRevision, changes, lines, summary: labels.slice(0, 6).join(" · ").slice(0, 600) };
 }
 
 const errorMessages: Record<string, [string, ConfigurationError["code"]]> = {

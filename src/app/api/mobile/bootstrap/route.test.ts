@@ -60,12 +60,12 @@ it("returns only allowed businesses and modules without exposing credentials", a
   );
   expect(data.businessCategories.map((item: { id: string }) => item.id)).not.toContain("fashion");
 });
-it("sends the agent as its own group: knowledge, behavior, test and advanced processes, with sources inside knowledge", async () => {
+it("sends the agent as its own group by topic: business, offer, communication, test and advanced processes, with sources inside the offer", async () => {
   mocks.profile.mockResolvedValueOnce({ enabledModules: [], navigationItems: ["workflows", "sources", "agents", "knowledge", "products"] });
   const data = await (await GET(new Request("https://app.test/api/mobile/bootstrap"))).json();
   const navigation = data.businesses[0].navigation as { id: string; group?: string; path: string; label: string }[];
   expect(navigation.filter((item) => item.group === "agent").map((item) => [item.id, item.label])).toEqual([
-    ["knowledge", "Njohuritë"], ["agents", "Sjellja dhe veprimet"], ["agent-test", "Prova dhe kontrolli"], ["workflows", "Proceset e avancuara"]]);
+    ["agent-business", "Biznesi"], ["knowledge", "Oferta"], ["agents", "Komunikimi"], ["agent-test", "Prova dhe kontrolli"], ["workflows", "Proceset e avancuara"]]);
   expect(navigation.find((item) => item.id === "agent-test")?.path).toMatch(/\/agents\/test$/);
   expect(navigation.some((item) => item.id === "sources")).toBe(false);
   expect(navigation.find((item) => item.id === "products")?.group).toBeUndefined();

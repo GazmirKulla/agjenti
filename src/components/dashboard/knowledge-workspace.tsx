@@ -65,11 +65,11 @@ export async function KnowledgeWorkspace({
   return (
     <>
       <PageHeading
-        title={services ? "Shërbimet" : "Njohuritë"}
+        title={services ? "Shërbimet" : "Oferta"}
         description={
           services
             ? "Përshkruaj shërbimet, kërkesat dhe çmimet e verifikuara që Agjenti përdor për t’iu përgjigjur klientëve."
-            : "Informacioni i biznesit që Agjenti lexon kur u përgjigjet klientëve. Ndryshimet zbatohen sapo i ruan."
+            : "Çfarë ofron biznesi dhe njohuritë që Agjenti lexon kur u përgjigjet klientëve. Kontaktet, adresa dhe orari janë te Biznesi. Ndryshimet zbatohen sapo i ruan."
         }
       />
       {!services && <KnowledgeSources slug={slug} />}

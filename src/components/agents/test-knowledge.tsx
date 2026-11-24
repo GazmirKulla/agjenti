@@ -46,6 +46,20 @@ export function TestKnowledgeUsed({ slug, configuration, knowledge, focus }: {
     {entries.length
       ? <p><span>Informacioni i përzgjedhur:</span> {entries.map((entry, index) => <Fragment key={entry.id}>{index ? " · " : ""}<Link href={knowledgeHref(slug, entry.id)}>{entry.title}</Link></Fragment>)}</p>
       : !focused && !failed && <p>Asnjë njohuri nuk u përzgjodh për këtë përgjigje.</p>}
-    <p className="test-knowledge-fix">Diçka nuk shkon? <Link href={`/b/${slug}/knowledge`}>Korrigjo te Njohuritë</Link> ose <Link href={`/b/${slug}/agents`}>te Sjellja dhe veprimet</Link>.</p>
+    <p className="test-knowledge-fix">Diçka nuk shkon? <Link href={`/b/${slug}/knowledge`}>Korrigjo te Oferta</Link>, te <Link href={`/b/${slug}/agents/business`}>Biznesi</Link> ose te <Link href={`/b/${slug}/agents`}>Komunikimi</Link>.</p>
   </div>;
+}
+
+const profileSectionLabels: Record<string, string> = { identity: "Identiteti", contacts: "Kontaktet", location: "Vendndodhja", hours: "Orari" };
+/**
+ * Under each reply: which parts of the business profile the reply was given, each with Ndrysho këtu to its field.
+ * A failed read is said as such; an empty profile is said as missing information, not as a fault.
+ */
+export function TestProfileUsed({ slug, configuration, profileHref }: { slug: string; configuration?: TestConfigurationProvenance; profileHref?: string }) {
+  const read = configuration?.profile;
+  if (!read) return null;
+  const href = (section: string) => `${profileHref ?? `/b/${slug}/agents/business`}#profile-${section}`;
+  if (read.status !== "complete") return <p className="chat-knowledge-used test-knowledge-miss">Leximi i profilit të biznesit dështoi për këtë përgjigje; Agjenti nuk i pati kontaktet, adresën dhe orarin.</p>;
+  if (!read.sections.length) return <p className="chat-knowledge-used">Profili i biznesit nuk thotë ende kontaktet, adresën apo orarin. <Link href={href("contacts")}>Plotëso profilin</Link></p>;
+  return <p className="chat-knowledge-used"><span>Profili i biznesit i dhënë:</span> {read.sections.map((section, index) => <Fragment key={section}>{index ? " · " : ""}{profileSectionLabels[section] ?? section} (<Link href={href(section)}>Ndrysho këtu</Link>)</Fragment>)}</p>;
 }

@@ -1,0 +1,23 @@
+.agent-space { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) 240px; align-items: start; }
+.agent-space.with-test { grid-template-columns: minmax(0, 1fr) minmax(360px, 440px); }
+.agent-space-switch { display: none; }
+.agent-space-main { min-width: 0; display: grid; gap: 16px; }
+.agent-space-test { position: sticky; top: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); overflow: hidden; }
+.agent-space-test-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.agent-space-toggle { border: 0; background: none; color: var(--ink-muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; }
+.agent-space-test-body { max-height: calc(100vh - 120px); overflow: auto; padding: 10px; }
+.agent-space-test-body .agent-test-chat, .agent-space-test-body .chat-shell { min-height: 0; }
+@media (max-width: 1100px) {
+  .agent-space, .agent-space.with-test { grid-template-columns: minmax(0, 1fr); }
+  .agent-space-switch { display: flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); position: sticky; top: 72px; z-index: 5; }
+  .agent-space-switch button { flex: 1; border: 0; border-radius: 999px; padding: 8px 10px; background: none; font: inherit; font-weight: 600; color: var(--ink-muted); }
+  .agent-space-switch button[aria-selected="true"] { background: var(--ink); color: var(--surface); }
+  .agent-space.is-test .agent-space-main, .agent-space.is-settings .agent-space-test { display: none; }
+  .agent-space-test { position: static; }
+  .agent-space-toggle { display: none; }
+  .agent-space.is-test .agent-space-test-body { display: block !important; max-height: none; }
+}
+/* The test beside a topic is narrower than the full test page. */
+.agent-space-test-body .agent-test-empty h3 { font-size: 20px; line-height: 1.25; }
+.agent-space-test-body .agent-test-empty p { font-size: 13px; }
+.agent-space-test-body .chat-suggestions { gap: 6px; }

@@ -41,3 +41,11 @@ it("reports which knowledge ids the reply could read, and null when the turn nev
   p.onTrace({ stage: "context", label: "Knowledge in reply context", data: { knowledgeIds: ["k1", 7, "k2"], status: "partial" } });
   expect(p.finish({ debug }).knowledge).toEqual({ ids: ["k1", "k2"], status: "partial", reason: null });
 });
+it("reports the profile sections a reply was given, or that the profile read failed", () => {
+  const p = collectTestConfiguration();
+  expect(p.finish({ debug }).profile).toBeNull();
+  p.onTrace({ stage: "context", label: "Business profile in reply context", data: { status: "complete", sections: ["hours", 3, "location"] } });
+  expect(p.finish({ debug }).profile).toEqual({ sections: ["hours", "location"], status: "complete" });
+  p.onTrace({ stage: "context", label: "Business profile in reply context", data: { status: "unavailable", sections: [] } });
+  expect(p.finish({ debug }).profile).toEqual({ sections: [], status: "unavailable" });
+});

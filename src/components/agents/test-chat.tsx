@@ -3,7 +3,7 @@ import { subscribeChanges } from "@/lib/realtime/browser";
 import { invalidationTask } from "@/lib/realtime/invalidation";
 import { blockedByFailedTurn, hasInFlightTurns, hasRecoverableTurns } from "./test-chat-state";
 import { TestConfiguration } from "./test-configuration";
-import { TestKnowledgeFocus, TestKnowledgeUsed, type TestKnowledge } from "./test-knowledge";
+import { TestKnowledgeFocus, TestKnowledgeUsed, TestProfileUsed, type TestKnowledge } from "./test-knowledge";
 import { AssistantComposer } from "@/components/business-assistant/composer";
 import { MessageRoutingView } from "@/components/workflows/message-routing";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -25,12 +25,14 @@ const reasons: Record<string, string> = {
 };
 const initialChat: TestConversation = { id: "initial", title: "Bisedë e re", entries: [], updatedAt: 0 };
 type Upload = { id: string; file: File; preview?: string };
-export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false, renderInspector, knowledge, knowledgeFocus }: {
+export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false, renderInspector, knowledge, knowledgeFocus, profileHref }: {
   slug: string; businessName: string; userId: string; configurationDraft?: string; advanced?: boolean;
   /** The business's knowledge by id, to show what each reply read and link back to it. */
   knowledge?: TestKnowledge;
   /** Opened from one knowledge entry: say whether each reply read it. */
   knowledgeFocus?: string;
+  /** Where Ndrysho këtu opens the business profile ("" on the profile page itself: a link to the field). */
+  profileHref?: string;
   renderInspector?: (entry: ChatEntry | undefined, chat: TestConversation) => ReactNode;
 }) {
   const [chats, setChats] = useState<TestConversation[]>([initialChat]);
@@ -394,6 +396,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
               {entry.result.productPhotos.map(photo => <a key={photo.productId} className="chat-attachment" href={photo.url} target="_blank" rel="noopener noreferrer"><Image src={photo.url} width={180} height={180} unoptimized alt="Foto e produktit" className="rounded-lg object-contain" referrerPolicy="no-referrer"/></a>)}
               <small className="chat-receipt">Simulim: në Instagram dhe WhatsApp këto foto dërgohen pas përgjigjes.</small>
             </div>}
+            {knowledge && <TestProfileUsed slug={slug} configuration={entry.result.configuration} profileHref={profileHref} />}
             {knowledge ? <TestKnowledgeUsed slug={slug} configuration={entry.result.configuration} knowledge={knowledge} focus={knowledgeFocus} />
               : !!entry.result.debug?.knowledgeTitles?.length && <p className="chat-knowledge-used"><span>Njohuritë e konsultuara:</span> {entry.result.debug.knowledgeTitles.join(" · ")}</p>}
             <div className="chat-message-actions">{renderInspector && <button type="button" className="chat-toolbar-button" aria-pressed={inspected?.id === entry.id} onClick={() => { setInspectedId(entry.id); if (window.matchMedia("(max-width: 1000px)").matches) document.getElementById("lab-conversation-inspector")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Inspekto mesazhin {index + 1}</button>}<CopyMessage text={entry.result.reply}/>{advanced && <button className="chat-icon" type="button" title="Rigjenero përgjigjen" aria-label="Rigjenero përgjigjen" disabled={real || busy || voice} onClick={()=>void send(index,entry)}><Icon name="refresh" size={16}/></button>}{canSpeak && <button className="chat-icon" type="button" title={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} aria-label={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} onClick={()=>speak(entry)}><Icon name={speaking===entry.id ? "stop" : "volume"} size={16}/></button>}{advanced && entry.result.trainingReceipt && <button type="button" className="chat-train" disabled={busy || voice} onClick={()=>{

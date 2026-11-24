@@ -29,6 +29,8 @@ export type TestConfigurationProvenance = {
   workflow: { id: string | null; versionId: string | null; mode: "draft" | "published" | "pinned" | "unavailable" };
   /** Knowledge entries placed in the reply's context (ids only). Null when the turn did not reach that read. */
   knowledge: { ids: string[]; status: string; reason?: string | null } | null;
+  /** Profile sections the reply was given (identity, contacts, location, hours), or that the read failed. */
+  profile?: { sections: string[]; status: string } | null;
   responseSource: "ai" | "fallback" | "unavailable";
   responseFallbackReason: string | null;
   behaviorVerified: false;

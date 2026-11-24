@@ -1,5 +1,11 @@
 export const english: Record<string, string> = {
   "Sjellja dhe veprimet": "Behavior and actions",
+  "Oferta": "Offer",
+  "Komunikimi": "Communication",
+  "Porositë dhe rezervimet": "Orders and bookings",
+  "Kontaktet, adresa dhe orari që u jep Agjenti klientëve": "Contacts, address and hours the Agent gives customers",
+  "Çfarë ofron biznesi dhe informacioni që përdor Agjenti": "What the business offers and the information the Agent uses",
+  "Si flet Agjenti me klientët": "How the Agent talks to customers",
   "Prova dhe kontrolli": "Test and check",
   "Mëso nga bisedat": "Learn from conversations",
   "Preferencat dhe shembujt": "Preferences and examples",

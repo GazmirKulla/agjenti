@@ -12,8 +12,8 @@ import { publicBusinessCategories } from "@/lib/onboarding/starter";
 import { loadReadiness, readinessSummary } from "@/lib/setup/readiness";
 /** The Agent's spaces, as on the web: knowledge (sources live inside it), behavior and actions, test and check, then advanced processes. */
 const agentSpaces: Record<string, { label: string; description: string }> = {
-  knowledge: { label: "Njohuritë", description: "Informacioni i biznesit, burimet dhe propozimet për përditësim" },
-  agents: { label: "Sjellja dhe veprimet", description: "Si komunikon dhe çfarë bën Agjenti" },
+  knowledge: { label: "Oferta", description: "Çfarë ofron biznesi dhe informacioni që përdor Agjenti" },
+  agents: { label: "Komunikimi", description: "Si flet Agjenti me klientët" },
   workflows: { label: "Proceset e avancuara", description: "Workflow-t e publikuara të biznesit" },
 };
 function mobileNavigation(slug: string, enabled: string[], t: (text: string) => string) {
@@ -22,10 +22,11 @@ function mobileNavigation(slug: string, enabled: string[], t: (text: string) => 
     const space = agentSpaces[id];
     const item = { id, label: t(space?.label ?? moduleRegistry[id].label), description: t(space?.description ?? moduleRegistry[id].description),
       path: `${base}${moduleRegistry[id].path ? `/${moduleRegistry[id].path}` : ""}`, ...(space ? { group: "agent" as const } : {}) };
-    return id === "agents" ? [item, { id: "agent-test", label: t("Prova dhe kontrolli"), description: t("Provo një përgjigje dhe shiko çfarë informacioni u lexua"), path: `${base}/agents/test`, group: "agent" as const }] : [item];
+    return id === "agents" ? [{ id: "agent-business", label: t("Biznesi"), description: t("Kontaktet, adresa dhe orari që u jep Agjenti klientëve"), path: `${base}/agents/business`, group: "agent" as const },
+      item, { id: "agent-test", label: t("Prova dhe kontrolli"), description: t("Provo një përgjigje dhe shiko çfarë informacioni u lexua"), path: `${base}/agents/test`, group: "agent" as const }] : [item];
   });
   // The agent spaces keep their own order, whatever the module order is.
-  const order = ["knowledge", "agents", "agent-test", "workflows"];
+  const order = ["agent-business", "knowledge", "agents", "agent-test", "workflows"];
   const agent = items.filter((item) => "group" in item).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   return [{ id: "campaigns", label: t("Fushatat"), description: t("Oferta për kontaktet që kanë pranuar marketingun"), path: `${base}/campaigns` },
     ...items.filter((item) => !("group" in item)), ...agent];

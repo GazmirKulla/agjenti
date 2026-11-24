@@ -10,7 +10,13 @@ export function collectTestConfiguration(previewId?: string) {
     id: null, versionId: previewId ?? null, mode: previewId ? "draft" : "unavailable",
   };
   let knowledge: TestConfigurationProvenance["knowledge"] = null;
+  let profile: TestConfigurationProvenance["profile"] = null;
   const onTrace: TraceObserver = event => {
+    if (event.stage === "context" && event.label === "Business profile in reply context") {
+      const sections = event.data?.sections;
+      profile = { sections: Array.isArray(sections) ? sections.filter((item): item is string => typeof item === "string") : [],
+        status: typeof event.data?.status === "string" ? event.data.status : "unverified" };
+    }
     if (event.stage === "context" && event.label === "Knowledge in reply context") {
       const ids = event.data?.knowledgeIds;
       if (Array.isArray(ids)) knowledge = { ids: ids.filter((id): id is string => typeof id === "string"),
@@ -37,7 +43,7 @@ export function collectTestConfiguration(previewId?: string) {
     }
   };
   return { onTrace, finish: (turn: Pick<AgentTurnResult, "debug">): TestConfigurationProvenance => ({
-    agents, workflow, knowledge, responseSource: turn.debug?.source ?? "unavailable",
+    agents, workflow, knowledge, profile, responseSource: turn.debug?.source ?? "unavailable",
     responseFallbackReason: turn.debug?.fallbackReason ?? null, behaviorVerified: false,
   }) };
 }

@@ -44,6 +44,7 @@ import { processGroundingContext } from "./grounding-context";
 import { catalogPresentationFromReply, visibleCatalogPresentation } from "./catalog-presentation";
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
+import { agentProfileContext, readProfile, statedSections } from "@/lib/business-profile/model";
 import { readProcessProfile } from "@/lib/conversations/profile";
 import { prospectTurnContext } from "@/lib/prospects/turn-context";
 import { replyProductPhotos } from "@/lib/conversations/reply-photos";
@@ -115,12 +116,14 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     ...(preview ? [{ kind: "product" as const, id: preview.productId }] : []),
     ...(params.referencedProductIds ?? []).map(id => ({ kind: "product" as const, id })),
   ];
-  const [agentRead, grounding, calendarRead, journey, profileMemory] = await Promise.all([
+  const [agentRead, grounding, calendarRead, journey, profileMemory, businessRead] = await Promise.all([
     db.from("ai_agents").select(agentConfigurationColumns).eq("business_id", params.businessId).eq("is_active", true).maybeSingle(),
     readBusinessGrounding(db, params.businessId, modules, catalogPins),
     hasBookingCalendar ? db.from("business_calendar_settings").select("timezone,agent_booking_enabled").eq("business_id", params.businessId).maybeSingle() : { data: null, error: null },
     loadBusinessProcess(params.businessId),
     identity?.instagramParticipantId ? readProcessProfile(params.businessId, identity.instagramParticipantId, identity.channel ?? "instagram") : Promise.resolve(undefined),
+    // The public profile (contacts, address, opening hours) is read from its one source, every turn.
+    db.from("businesses").select("name,timezone,public_profile").eq("id", params.businessId).maybeSingle(),
   ]);
   if (profileMemory) state.profileMemory = profileMemory;
   // A training test reads the proposed knowledge, services and prices on top of the stored ones.
@@ -147,6 +150,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     businessTimezone: !calendarRead.error ? calendarRead.data?.timezone ?? null : null,
     instructions: agent?.instructions ?? "", communication: agent?.communication,
     businessProcess: businessProcessContext(journey.process),
+    profile: businessRead.error || !businessRead.data ? undefined : agentProfileContext(readProfile(businessRead.data.public_profile), businessRead.data.name, businessRead.data.timezone ?? null),
     ...await processGroundingContext(grounding, [params.message, params.groundingHint].filter(Boolean).join("\n"), Math.min(deadline - 18000, Date.now() + 10000), {
       productIds: catalogPins.filter(pin => pin.kind === "product").map(pin => pin.id),
       serviceIds: catalogPins.filter(pin => pin.kind === "service").map(pin => pin.id),
@@ -155,6 +159,9 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     campaigns: mode === "live" && transport ? await campaignContext(params.businessId, transport.conversationId) : undefined,
     prospect: await prospectRead,
   };
+  // Which profile sections the reply was given (names only), or that the read failed: for the owner's test.
+  trace?.({ stage: "context", label: "Business profile in reply context", data: { status: businessRead.error ? "unavailable" : "complete",
+    sections: businessRead.error || !businessRead.data ? [] : statedSections(readProfile(businessRead.data.public_profile)) } });
   // Which knowledge entries this reply could read (ids only), for the owner's test; reading is not proof of use.
   trace?.({ stage: "context", label: "Knowledge in reply context", data: { knowledgeIds: context.knowledge.records.map(record => record.id), status: context.knowledge.status, reason: context.knowledge.reason ?? null } });
   trace?.({ stage: "tools", label: "Process business sources loaded", data: { knowledge: grounding.knowledge.status, products: grounding.products.status, services: grounding.services.status, readOnly: true } });

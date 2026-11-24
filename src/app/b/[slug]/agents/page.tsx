@@ -142,7 +142,7 @@ export default async function AgentsPage({
   return (
     <>
       <PageHeading
-        title="Sjellja dhe veprimet"
+        title="Komunikimi"
         description={`Si flet dhe çfarë bën Agjenti me klientët e ${access.business.name} në Instagram dhe WhatsApp. Faktet (çmimet, oferta, dërgesa) i lexon nga Njohuritë.`}
       >
         <div className="agent-heading-actions">

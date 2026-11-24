@@ -64,8 +64,9 @@ export default async function SettingsPage({
       />
       <div className="grid gap-6">
             <p className="muted-copy">
-              Përshkrimi i biznesit, oferta dhe pyetjet e shpeshta ruhen te{" "}
-              <Link className="soft-link" href={`/b/${slug}/knowledge`}>Njohuritë</Link>, ku i lexon Agjenti.
+              Profili publik (përshkrimi, kontaktet, adresa dhe orari) ndryshohet te{" "}
+              <Link className="soft-link" href={`/b/${slug}/agents/business`}>Agjenti → Biznesi</Link>; oferta dhe pyetjet e shpeshta te{" "}
+              <Link className="soft-link" href={`/b/${slug}/knowledge`}>Oferta</Link>. Agjenti i lexon nga aty.
             </p>
             <BusinessLogoSettings slug={slug} name={access.business.name} logoUrl={logo?.url ?? null} source={logo?.source ?? null}
               instagramConnected={Boolean(instagram)} available={Boolean(logo)} />
