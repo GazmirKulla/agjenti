@@ -1,3 +1,4 @@
+import { reportChartQuestion, orderChartReply } from "@/lib/business-assistant/report-chart";
 import { OperationError } from "@/lib/actions/operations/error";
 import { isIndependentRequest } from "@/lib/business-assistant/request-relation";
 import { after } from "next/server";
@@ -199,6 +200,10 @@ async function handlePOST(request: Request) {
       content: body.text.trim(), context, mode: "plan",
       fingerprintData: [body.attachments ?? [], links],
     }, async (history, prior, preferences) => {
+      if (!materials.length && !body.pendingToken) {
+        const chart = await reportChartQuestion(body.text.trim(), history);
+        if (chart) return { ...await orderChartReply(slug, chart, request), recoveryContext: prior?.context ?? context };
+      }
       // Stored context is historical data. Selection/revision conflicts are never silently retargeted.
       let effectiveContext = context;
       // A complete current command starts its own review; an unrelated stale draft
@@ -225,6 +230,10 @@ async function handlePOST(request: Request) {
       }
       return { ...result, recoveryContext: effectiveContext };
     }))));
+    if (!materials.length && !body.pendingToken) {
+      const chart = await reportChartQuestion(body.text.trim(), history);
+      if (chart) return json(await counted(orderChartReply(slug, chart, request)));
+    }
     if (assistantName !== undefined) return json(await counted(planRequest(access, body.text.trim(), history, context, body.pendingToken, materials, assistantName)));
     if (materials.length) return json(await counted(planRequest(access, body.text.trim(), history, context, body.pendingToken, materials)));
     if (body.pendingToken !== undefined) return json(await counted(planRequest(access, body.text.trim(), history, context, body.pendingToken)));

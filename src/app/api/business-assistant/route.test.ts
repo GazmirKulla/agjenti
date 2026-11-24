@@ -1,3 +1,5 @@
+const reportCharts = vi.hoisted(() => ({ question: vi.fn(async (): Promise<{range:7;kind:"line"}|null> => null), reply: vi.fn() }));
+vi.mock("@/lib/business-assistant/report-chart", () => ({ reportChartQuestion: reportCharts.question, orderChartReply: reportCharts.reply }));
 const requestRelation = vi.hoisted(() => vi.fn(async () => false));
 vi.mock("@/lib/business-assistant/request-relation", () => ({ isIndependentRequest: requestRelation }));
 const briefingIntent = vi.hoisted(() => vi.fn(async (): Promise<"today" | null> => null));
@@ -269,4 +271,14 @@ it("a semantically independent request replaces the old objective before stale-p
   expect(response.status).toBe(200);
   expect(m.reassess).not.toHaveBeenCalled();
   expect(m.plan).toHaveBeenCalledWith(expect.any(Object), "Fshi të gjitha produktet e listuara", [], { page: "products", entryPoint: "contextual" }, undefined, [], undefined, undefined, {});
+});
+
+it("answers a chart question without reassessing or replacing the pending plan", async () => {
+  m.prior = { request: "Change product", context: { page: "products" } };
+  reportCharts.question.mockResolvedValueOnce({ range: 7, kind: "line" });
+  reportCharts.reply.mockResolvedValueOnce({ message: "Chart", reportChart: true, blocks: [] });
+  const response = await POST(req({ mode: "plan", text: "Show orders for the last 7 days", conversationId: "chat" }));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ reportChart: true, recoveryContext: { page: "products" } });
+  expect(m.reassess).not.toHaveBeenCalled(); expect(m.plan).not.toHaveBeenCalled(); expect(m.execute).not.toHaveBeenCalled();
 });

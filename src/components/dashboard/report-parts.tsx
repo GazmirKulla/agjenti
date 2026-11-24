@@ -1,4 +1,5 @@
-import { groupDigits, shortDate, type MetricSummary, type ReportMetric } from "@/lib/reports/model";
+import { DataChart } from "@/components/charts/data-chart";
+import { metricChart, type MetricSummary, type ReportMetric } from "@/lib/reports/model";
 import type { ModuleId } from "@/lib/dashboard/modules/types";
 import "@/app/b/[slug]/reports/reports.css";
 
@@ -18,22 +19,6 @@ export function ReportChange({ summary, range }: { summary: MetricSummary; range
   return <span className={`report-change report-change-${tone}`}>{Math.abs(summary.change)}% {tone === "flat" ? "njësoj si" : "kundrejt"} {range} ditëve të mëparshme</span>;
 }
 
-export function ReportBars({ summary, label }: { summary: MetricSummary; label: string }) {
-  const max = Math.max(1, ...summary.days.map((d) => d.value));
-  const first = summary.days[0]?.day;
-  const last = summary.days.at(-1)?.day;
-  return (
-    <figure className="report-chart">
-      <div className={`report-bars${summary.days.length > 31 ? " report-bars-dense" : ""}`} role="img"
-        aria-label={`${label}: ${groupDigits(summary.total)} gjithsej, sipas ditëve`}>
-        {summary.days.map((d) => (
-          <span key={d.day} className="report-col" title={`${shortDate(d.day)}: ${groupDigits(d.value)}`}>
-            <span className="report-bar" style={{ height: d.value ? `${Math.max(4, (d.value / max) * 100)}%` : 0 }} />
-          </span>
-        ))}
-      </div>
-      {first && last && <figcaption className="report-axis"><span>{shortDate(first)}</span><span>{summary.total ? `maks. ${groupDigits(max)} në ditë` : "Asnjë në këtë periudhë"}</span><span>{shortDate(last)}</span></figcaption>}
-    </figure>
-  );
+export function ReportBars({ summary, label, timezone }: { summary: MetricSummary; label: string; timezone?: string }) {
+  return <DataChart data={metricChart(summary, label, timezone)} />;
 }
-

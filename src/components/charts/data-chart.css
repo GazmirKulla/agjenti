@@ -1,0 +1,21 @@
+.data-chart { min-width: 0; width: 100%; color: var(--ink); display: grid; gap: 10px; white-space: normal; }
+.data-chart header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.data-chart header strong { font-size: 14px; }
+.data-chart button, .data-chart summary, .data-chart select { min-height: 44px; cursor: pointer; }
+.data-chart button { font-size: 13px; text-decoration: underline; }
+.data-chart :is(button, select, summary, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.data-chart small, .data-chart-detail { color: var(--ink-muted); font-size: 12px; }
+.data-chart svg { width: 100%; height: auto; display: block; }
+.data-chart svg text { fill: var(--ink-muted); font-size: 11px; }
+.data-chart-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; }
+.data-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.data-chart-legend i { width: 10px; height: 10px; border-radius: 2px; }
+.data-chart-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.data-chart select { color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px; max-width: 100%; }
+.data-chart-detail { min-height: 20px; }
+.data-chart summary { padding: 10px 0; font-size: 13px; }
+.data-chart-table { overflow-x: auto; max-width: 100%; }
+.data-chart table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.data-chart :is(th,td) { padding: 8px; border-bottom: 1px solid var(--line); text-align: start; }
+.data-chart caption { text-align: start; padding: 8px 0; }
+.data-chart-compact { gap: 6px; }

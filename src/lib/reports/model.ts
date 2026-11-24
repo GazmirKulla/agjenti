@@ -1,3 +1,4 @@
+import type { ChartData } from "@/lib/charts/model";
 /** Daily numbers of one business, as returned by the business_report function. */
 export type ReportDay = { day: string; inbound: number; aiReplies: number; orders: number; bookings: number; customers: number };
 export type ReportMetric = Exclude<keyof ReportDay, "day">;
@@ -34,4 +35,13 @@ export function shortDate(day: string) {
 
 export function groupDigits(value: number) {
   return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+/** One adapter for report pages and Assistant replies; no independently computed chart totals. */
+export function metricChart(summary: MetricSummary, label: string, timezone?: string, kind: "line" | "bar" = "bar"): ChartData {
+  return { title: label, kind, timezone,
+    categories: summary.days.map(d => ({ key: d.day, label: shortDate(d.day) })),
+    series: [{ key: summary.metric, label, values: summary.days.map(d => d.value) }],
+    note: summary.days.length ? `${summary.days[0].day} – ${summary.days.at(-1)!.day} · ${groupDigits(summary.total)} gjithsej. Numërohen regjistrimet e krijuara, jo pagesat.` : "Asnjë e dhënë në këtë periudhë.",
+  };
 }

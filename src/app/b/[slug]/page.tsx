@@ -1,3 +1,4 @@
+import { DataChart } from "@/components/charts/data-chart";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
@@ -9,7 +10,6 @@ import { groupDigits, shortDate } from "@/lib/reports/model";
 import "./home.css";
 
 function MessagesCard({ messages, href, period }: { messages: HomeMessages; href: string; period: string }) {
-  const max = Math.max(1, ...messages.days.map((day) => day.value));
   const parts = [`${groupDigits(messages.agentReplies)} përgjigje nga Agjenti`, messages.handoffs ? `${groupDigits(messages.handoffs)} te stafi tani` : ""].filter(Boolean);
   return (
     <Link href={href} className="panel home-messages">
@@ -19,13 +19,10 @@ function MessagesCard({ messages, href, period }: { messages: HomeMessages; href
         <span className="home-card-detail">{parts.join(" · ")}</span>
       </div>
       {messages.days.length > 0 && (
-        <div className="home-bars" role="img" aria-label={`Mesazhe hyrëse sipas ditëve, deri në ${groupDigits(max)} në ditë`}>
-          {messages.days.map((day) => (
-            <span key={day.day} title={`${shortDate(day.day)}: ${groupDigits(day.value)}`}>
-              <span style={{ height: day.value ? `${Math.max(6, (day.value / max) * 100)}%` : 0 }} />
-            </span>
-          ))}
-        </div>
+        <DataChart compact data={{ title: "Mesazhe hyrëse sipas ditëve", kind: "bar",
+          categories: messages.days.map(d => ({ key: d.day, label: shortDate(d.day) })),
+          series: [{ key: "inbound", label: "Mesazhe hyrëse", values: messages.days.map(d => d.value) }],
+        }} />
       )}
     </Link>
   );

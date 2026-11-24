@@ -87,7 +87,7 @@ const columns: Record<string, string> = {
   profile: "id,name,updated_at",
   booking: bookingColumns,
 };
-export type PlanResult = { saved?: boolean; outcome?: {status: string; action: string; reference: {table: string; id?: string; request_key?: string}}; configuration?: {planId: string; state: "blocked" | "completed"; completed: string[]; total: number}; replacePlan?: boolean; briefing?: import("./briefing-model").Briefing; actionPlan?: ActionPlan; automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[]; bookingOffer?: { serviceId: string; serviceName: string; date: string; timezone: string };
+export type PlanResult = { reportChart?: boolean; saved?: boolean; outcome?: {status: string; action: string; reference: {table: string; id?: string; request_key?: string}}; configuration?: {planId: string; state: "blocked" | "completed"; completed: string[]; total: number}; replacePlan?: boolean; briefing?: import("./briefing-model").Briefing; actionPlan?: ActionPlan; automation?: AutomationProposal; productImport?: ImportSource; clarifying?: boolean; linear?: LinearCard; choices?: string[]; message: string; token?: string; preview?: Preview; workflow?: WorkflowCard; orderflows?: OrderFlowContext; editableFlow?: boolean; slots?: string[]; bookingOffer?: { serviceId: string; serviceName: string; date: string; timezone: string };
   /** Cards and tables built by the server from data it read for this reply; display only. */
   blocks?: MessageBlock[] };
 export type Access = {

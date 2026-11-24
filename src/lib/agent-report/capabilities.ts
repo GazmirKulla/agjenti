@@ -194,6 +194,7 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Konfigurim në grup"],
       ["po", "Ndrysho një fushë"],
       ["po", "Publiko ose kthe në draft"],
+      ["pjes", "Grafikë të porosive të krijuara për 7, 30 ose 90 ditët e fundit, me tabelë dhe ruajtje në historik; i njëjti komponent si Raportet. Kërkon migrimin shared_report_chart_data; ende pa provë live me AI."],
       ["pjes", "Numëron dhe krahason produktet në server. Kërkimet e reja shfaqin tabela të strukturuara. Tabelat Markdown shfaqen edhe në historik (deri në 60 rreshta, 12 kolona dhe buxhetin e tekstit); formati që zgjedh modeli nuk garantohet."],
       ["pjes", "Importi"],
       ["pjes", "Foto: vetëm me URL, pa ngarkim"],

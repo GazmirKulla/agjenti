@@ -38,7 +38,7 @@ export default async function ReportsPage({ params, searchParams }: {
           </header>
           <strong className="report-total">{groupDigits(summary.total)}</strong>
           <Change summary={summary} range={range} />
-          <Bars summary={summary} label={label} />
+          <Bars summary={summary} label={label} timezone={report.timezone} />
         </article>
       ))}
       <article className="panel report-card report-card-usage">

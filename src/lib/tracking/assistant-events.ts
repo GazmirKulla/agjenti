@@ -17,14 +17,16 @@ export function proposalOperationKey(proposal: { action: string; changes?: { fie
 type Prepared = { clarifying?: boolean; token?: string };
 
 /** Retries that restore an existing reply never reach this write. */
-export async function trackBlockStorage<T>(businessId: string, ref: string, write: Promise<T>): Promise<T> {
+export async function trackBlockStorage<T>(businessId: string, ref: string, write: Promise<T>, hasChart = false): Promise<T> {
   const event = { businessId, ref, capability: "assistant.message_blocks", mode: "live" as const };
   try {
     const result = await write;
-    await recordCapabilityEvents([{ ...event, point: "prepared" }, { ...event, point: "stored" }]);
+    await recordCapabilityEvents([{ ...event, point: "prepared" }, { ...event, point: "stored" },
+      ...(hasChart ? [{ ...event, capability: "assistant.report_chart", point: "requested" }, { ...event, capability: "assistant.report_chart", point: "stored" }] : [])]);
     return result;
   } catch (error) {
-    await recordCapabilityEvents([{ ...event, point: "prepared" }, { ...event, point: "store_failed", reason: failureCode(error) }]);
+    await recordCapabilityEvents([{ ...event, point: "prepared" }, { ...event, point: "store_failed", reason: failureCode(error) },
+      ...(hasChart ? [{ ...event, capability: "assistant.report_chart", point: "requested" }, { ...event, capability: "assistant.report_chart", point: "store_failed", reason: failureCode(error) }] : [])]);
     throw error;
   }
 }

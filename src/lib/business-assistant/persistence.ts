@@ -166,8 +166,8 @@ export async function persistedTurn(
     const ticket = data.token ? openTicket(data.token, access) : undefined;
     const targetKind = ticket?.action.split("_")[0];
     const retained = retainedPlanForReply(view.plan?.snapshot, data);
-    // Briefings and onboarding answers are informational: no plan revision.
-    const informational = Boolean(data.briefing || data.onboarding);
+    // Briefings, chart replies and onboarding answers are informational: no plan revision.
+    const informational = Boolean(data.briefing || data.onboarding || data.reportChart);
     const snapshot = informational ? undefined : safePlanSnapshot({
       ...retained, version: 1, request: retained?.request ?? input.content, context: data.recoveryContext ?? context, message: data.message,
       ...(data.actionPlan ? { actionPlan: data.actionPlan } : {}),
@@ -193,7 +193,7 @@ export async function persistedTurn(
       ...(data.onboarding?.question ? { question: data.onboarding.question } : {}),
       ...(data.saved ? { outcome: data.outcome } : {}),
     });
-    const finished = blocks.length ? await trackBlockStorage(access.businessId, requestId, write) : await write;
+    const finished = blocks.length ? await trackBlockStorage(access.businessId, requestId, write, blocks.some(b => b.type === "chart")) : await write;
     const persistence = await readConversation(access, id);
     if (persistence.conversation.revision !== finished.revision)
       return { message: "Biseda ndryshoi në një dritare tjetër. U rikthye gjendja më e re; rishqyrto çdo propozim.", recovered: true, persistence };

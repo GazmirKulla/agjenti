@@ -1,3 +1,4 @@
+import { DataChart } from "@/components/charts/data-chart";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeading } from "@/components/dashboard/ui";
@@ -41,30 +42,11 @@ function OutcomeBar({ item }: { item: Pick<CapabilityHealth, "success" | "failur
 
 /** Stacked daily columns for one agent: good, bad and to staff; hover a day for its figures. */
 function DailyChart({ days, value }: { days: string[]; value: (day: string, outcome: string) => number }) {
-  const W = 720, H = 180, top = 14, bottom = 26, left = 8;
-  const totals = days.map(d => value(d, "success") + value(d, "failure") + value(d, "handoff"));
-  const max = Math.max(1, ...totals);
-  const step = (W - left * 2) / Math.max(days.length, 1), width = Math.min(36, step * 0.6);
-  const y = (n: number) => (H - bottom - top) * n / max;
-  return <svg className={s.chart} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Rezultatet ditë pas dite">
-    <line className="gridline" x1={0} x2={W} y1={top} y2={top} />
-    <text x={W - 4} y={top - 3} textAnchor="end">{num(max)}</text>
-    <line className="axis" x1={0} x2={W} y1={H - bottom} y2={H - bottom} />
-    {days.map((d, i) => {
-      const x = left + i * step + (step - width) / 2;
-      let base = H - bottom;
-      const segments = (["success", "failure", "handoff"] as const).map(outcome => {
-        const height = y(value(d, outcome)); base -= height;
-        return height > 0 ? <rect key={outcome} className={outcome[0]} x={x} y={base + 1} width={width} height={Math.max(height - 2, 1)} rx={3} /> : null;
-      });
-      return <g key={d}>
-        <title>{`${dayShort(d)} · Mirë ${num(value(d, "success"))} · Keq ${num(value(d, "failure"))} · Te stafi ${num(value(d, "handoff"))}`}</title>
-        <rect className="hit" x={left + i * step} y={top} width={step} height={H - bottom - top} />
-        {segments}
-        {(days.length <= 10 || i % Math.ceil(days.length / 10) === 0) && <text x={x + width / 2} y={H - 8} textAnchor="middle">{dayShort(d)}</text>}
-      </g>;
-    })}
-  </svg>;
+  return <DataChart data={{ title: "Rezultatet ditë pas dite", kind: "stacked",
+    categories: days.map(day => ({ key: day, label: dayShort(day) })),
+    series: ([{ key: "success", label: "Mirë", tone: "success" }, { key: "failure", label: "Keq", tone: "danger" }, { key: "handoff", label: "Te stafi", tone: "warning" }] as const)
+      .map(series => ({ ...series, values: days.map(day => value(day, series.key)) })),
+  }} />;
 }
 
 /**

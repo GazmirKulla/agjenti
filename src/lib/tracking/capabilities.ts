@@ -135,7 +135,9 @@ export const systemCapabilities: Record<string, CapabilitySpec> = {
 
 export type CustomerCapability = keyof typeof customerCapabilities;
 export const capabilities: Record<string, CapabilitySpec> = { ...customerCapabilities, ...assistantCapabilities, ...systemCapabilities,
-  "assistant.message_blocks": { agent: "assistant", module: "assistant", label: "Ruajtja e tekstit të formatuar, kartave dhe tabelave në bisedë",
+  "assistant.report_chart": { agent: "assistant", module: "assistant", label: "Grafiku i porosive sipas ditëve", entry: "requested",
+    exits: { stored: "success", store_failed: "failure", read_failed: "failure" }, emittedBy: ["src/lib/tracking/assistant-events.ts", "src/lib/business-assistant/report-chart.ts"] },
+  "assistant.message_blocks": { agent: "assistant", module: "assistant", label: "Ruajtja e tekstit të formatuar, kartave, tabelave dhe grafikëve në bisedë",
     entry: "prepared", exits: { stored: "success", store_failed: "failure" }, emittedBy: ["src/lib/tracking/assistant-events.ts"] },
 };
 

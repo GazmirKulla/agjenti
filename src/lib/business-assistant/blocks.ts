@@ -1,3 +1,4 @@
+import { readChart, chartText, type ChartData } from "@/lib/charts/model";
 /**
  * Structured presentation of an Assistant message: formatted prose, cards and tables.
  *
@@ -22,7 +23,8 @@ export type TableBlock = {
   partial: boolean;
   note?: string;
 };
-export type DataBlock = MetricsBlock | TableBlock;
+export type ChartBlock = { type: "chart"; version: 1; chart: ChartData };
+export type DataBlock = MetricsBlock | TableBlock | ChartBlock;
 export type MessageBlock = DataBlock | RichTextBlock;
 export type BlockType = MessageBlock["type"];
 
@@ -78,7 +80,11 @@ function table(raw: Raw): TableBlock | null {
     ...(raw.note !== undefined ? { note: raw.note as string } : {}) };
 }
 
-const readers: { [K in BlockType]: (raw: Raw) => Extract<MessageBlock, { type: K }> | null } = { metrics, table, rich_text: readRichText };
+function chart(raw: Raw): ChartBlock | null {
+  const value = raw.version === 1 ? readChart(raw.chart) : null;
+  return value ? { type: "chart", version: 1, chart: value } : null;
+}
+const readers: { [K in BlockType]: (raw: Raw) => Extract<MessageBlock, { type: K }> | null } = { metrics, table, chart, rich_text: readRichText };
 
 /** The valid blocks of a stored or received value, in order. Anything else is left out. */
 export function parseBlocks(raw: unknown): MessageBlock[] {
@@ -98,6 +104,7 @@ export function storableBlocks(raw: unknown): MessageBlock[] {
 
 /** The block as plain lines: what a client without the component shows, and what the model reads in history. */
 export function blockText(block: MessageBlock): string {
+  if (block.type === "chart") return chartText(block.chart);
   if (block.type === "rich_text") return richTextPlain(block.parts);
   if (block.type === "metrics")
     return [block.title, ...block.items.map(item => `${item.label}: ${item.value ?? item.note ?? "—"}`), block.note].filter(Boolean).join("\n");

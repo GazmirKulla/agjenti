@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useMemo, useState, type ReactNode } from "react";
+import { DataChart } from "@/components/charts/data-chart";
 import { Modal } from "@/components/modal/modal";
 import { blockCaption, parseBlocks, type MetricsBlock, type TableBlock, type TableRow } from "@/lib/business-assistant/blocks";
 import { richTextPlain, type Inline, type TextPart } from "@/lib/business-assistant/rich-text";
@@ -95,6 +96,7 @@ export const AssistantMessageBody = memo(function AssistantMessageBody({ content
       : caption && <p>{caption}</p>}
     {dataBlocks.map((block, i) => block.type === "metrics"
       ? <Metrics key={i} block={block} slug={slug} />
+      : block.type === "chart" ? <div className="assistant-block" key={i}><DataChart data={block.chart} /></div>
       : <Results key={i} block={block} />)}
   </>;
 });
