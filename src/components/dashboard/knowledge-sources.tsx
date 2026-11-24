@@ -2,6 +2,7 @@
 import { subscribeChanges } from "@/lib/realtime/browser";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "./icon";
 import { SourcesReview } from "./sources-review";
 import type { SourcesState } from "@/lib/discovery/sources-step";
@@ -34,6 +35,7 @@ export function KnowledgeSources({ slug }: { slug: string }) {
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
 
   const [review, setReview] = useState<SourcesState["review"]>(null);
+  const router = useRouter();
   const resuming = useRef(false);
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: "no-store" });
@@ -87,7 +89,11 @@ export function KnowledgeSources({ slug }: { slug: string }) {
         <button type="button" className="btn btn-ghost" disabled={busy}
           onClick={() => void post({ action: "refresh_sources" }, "Rifreskimi nisi. Çfarë është e re ose ndryshe do të shfaqet si propozim për ta shqyrtuar.")}>Rifresko burimet</button>
       </header>
-      {review && <SourcesReview slug={slug} review={review} onDone={(published) => {
+      {review && <SourcesReview slug={slug} review={review} immediate onChanged={(text) => {
+        setMessage({ text });
+        // The accepted entry appears in the list below; the remaining proposals reload.
+        router.refresh(); void load();
+      }} onDone={(published) => {
         setReview(null);
         setMessage({ text: published ? `${published} njohuri u publikuan.` : "Propozimi u mbyll." });
         // The confirmed entries appear in the list below.

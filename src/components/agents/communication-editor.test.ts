@@ -8,16 +8,24 @@ import { defaultCommunicationPolicy } from "@/lib/agents/communication-policy";
 const agent: CommunicationEditorAgent = { id: "synthetic", name: "Agjenti.app", instructions: "Shpjego fillimisht shërbimin dhe kupto nevojën e klientit.",
   is_active: true, updated_at: "2026-11-04T00:00:00Z", communication: defaultCommunicationPolicy, configuration_revision: 2,
   configuration_draft: { instructions: "Përgjigju shkurt dhe natyrshëm. Propozo regjistrimin kur klienti shfaq interes.", communication: defaultCommunicationPolicy, baseRevision: 2 } };
-it("separates unsaved editing from publishing the persisted draft and blocks stale publication", () => {
+it("saves directly with one Ruaj, brings versions back directly, and offers a pending draft only Zbato / Hidh poshtë", () => {
   const render = (a: CommunicationEditorAgent) => renderToStaticMarkup(createElement(CommunicationEditor, { agent: a, slug: "synthetic", versions: [2, 1], action: async () => {} }));
   const html = render(agent);
-  expect(html).toContain('name="mode" value="draft"');
+  expect(html).toContain('name="mode" value="apply"');
+  expect(html).not.toContain('value="draft"');
+  expect(html).toMatch(/>Ruaj<\/button>/);
+  // The form edits what is in use, never the pending draft.
+  expect(html).toContain(">Shpjego fillimisht shërbimin");
   expect(html).toContain('name="mode" value="publish"');
-  expect(html).toContain("Publiko draftin");
+  expect(html).toMatch(/>Zbato<\/button>/);
+  expect(html).toContain("Hidh poshtë");
   expect(html.indexOf("Udhëzimet")).toBeLessThan(html.indexOf("Mënyra e komunikimit"));
-  expect(html).toContain("Rikthe si draft");
+  expect(html).toContain('name="mode" value="revert"');
+  expect(html).not.toContain("draft</button>");
+  // An outdated draft cannot be applied as it is: only shown and dropped.
   const stale = render({ ...agent, configuration_revision: 3 });
-  expect(stale).toMatch(/disabled="">Publiko draftin/);
+  expect(stale).not.toContain('value="publish"');
+  expect(stale).toContain("Hidh poshtë");
   expect(render({ ...agent, configuration_draft: null })).not.toContain('name="mode" value="publish"');
   if (process.env.COMMUNICATION_PREVIEW_OUTPUT) {
     let css = "";

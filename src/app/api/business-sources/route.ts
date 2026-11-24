@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { getRequestUser, permittedWrite } from "@/lib/auth/request";
 import { requireBusinessAccess } from "@/lib/tenant/access";
 import { continueDiscovery, workerOrigin } from "@/lib/discovery/continue";
-import { learnFromSources, previewSources, reviewSources, sourcesState, SourcesError } from "@/lib/discovery/sources-step";
+import { decideSourceEntry, learnFromSources, previewSources, reviewSources, sourcesState, SourcesError } from "@/lib/discovery/sources-step";
 import { requestOrigin } from "@/lib/http/request-origin";
 
 /** Onboarding step 2 for the web and the mobile app: preview the public
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     }
     if (body.action === "confirm") return json(await reviewSources(access.business.id, access.user.id, Array.isArray(body.keep) ? body.keep : [], body.edits));
     if (body.action === "dismiss") return json(await reviewSources(access.business.id, access.user.id, null));
+    if (body.action === "decide") return json(await decideSourceEntry(access.business.id, access.user.id, { id: body.id, decision: body.decision, edit: body.edit }));
     return json({ error: "Veprim i panjohur." }, 400);
   } catch (error) {
     if (error instanceof SourcesError) return json({ error: error.message }, error.status);

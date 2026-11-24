@@ -111,10 +111,9 @@ async function service(businessId: string, userId: string, row: ApplyRow) {
 }
 
 async function style(businessId: string, userId: string, row: ApplyRow) {
-  const { data: agent } = await createServiceSupabase().from("ai_agents").select("id,instructions,communication,configuration_draft")
+  const { data: agent } = await createServiceSupabase().from("ai_agents").select("id,instructions,communication")
     .eq("business_id", businessId).order("is_active", { ascending: false }).order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (!agent) throw new Error("Krijo fillimisht Agjentin, pastaj apliko stilin.");
-  if (agent.configuration_draft) throw new Error("Ke një draft të papublikuar te udhëzimet e Agjentit. Publikoje ose hidhe përpara stilit.");
   const block = text(row, "instructions", "instructions");
   const policy = row.proposed.policy as Record<string, string> | undefined;
   let communication: ReturnType<typeof parseCommunicationPolicy>;
@@ -122,9 +121,8 @@ async function style(businessId: string, userId: string, row: ApplyRow) {
   const next = { ...communication, ...(policy ? { tone: policy.tone, length: policy.length, emoji: policy.emoji, questions: policy.questions } : {}) };
   const instructions = withStyleBlock(agent.instructions ?? "", block);
   if (instructions.length > 8000) throw new Error("Udhëzimet do kalonin 8000 shkronja. Shkurtoji përpara stilit.");
-  // The same versioned path as the editor: a draft, then its publication (the old version can be restored).
-  await run(businessId, userId, row.id, "draft", "agent.communication", { id: agent.id, mode: "draft", instructions, communication: next });
-  const published = await run(businessId, userId, row.id, "publish", "agent.communication", { id: agent.id, mode: "publish" });
+  // The same versioned path as the editor: saved once and in use (the old version can be brought back).
+  const published = await run(businessId, userId, row.id, "style", "agent.communication", { id: agent.id, mode: "apply", instructions, communication: next });
   return { table: "ai_agents", id: agent.id, message: `Stili u shtua te udhëzimet e Agjentit. ${published.message}` };
 }
 

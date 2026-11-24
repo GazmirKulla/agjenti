@@ -68,6 +68,13 @@ export async function readAttentionEvidence(db: SupabaseClient, scope: { busines
         ? [{ id: "workflow:draft", kind: "workflow", title: "Proces me ndryshime të papublikuara",
           detail: "Drafti nuk është ende sjellja aktive. Rishiko ndryshimet dhe provo procesin.", href: `${base}/workflows`, action: "Rishiko procesin" }] : [];
     } },
+    // Drafts saved before changes applied directly: they wait for the owner, never activate on their own.
+    { name: "Udhëzimet e Agjentit", read: async () => {
+      const result = await db.from("ai_agents").select("id,name").eq("business_id", businessId).not("configuration_draft", "is", null).limit(2);
+      if (result.error) throw result.error;
+      return (result.data ?? []).map(agent => ({ id: `agent-draft:${agent.id}`, kind: "agent_draft" as const, title: `Ndryshime të pazbatuara te udhëzimet e ${agent.name}`,
+        detail: "Agjenti nuk i përdor ende. Zbatoji ose hidhi poshtë te Sjellja dhe veprimet.", href: `${base}/agents`, action: "Shqyrto ndryshimet" }));
+    } },
     { name: "Bisedat e stafit", read: async () => {
       const result = await db.from("conversation_states").select("conversation_id,conversations!inner(id)", { count: "exact", head: true })
         .eq("business_id", businessId).eq("conversations.business_id", businessId).eq("conversations.status", "paused")

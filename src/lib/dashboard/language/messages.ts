@@ -1,4 +1,13 @@
 export const english: Record<string, string> = {
+  "Sjellja dhe veprimet": "Behavior and actions",
+  "Prova dhe kontrolli": "Test and check",
+  "Mëso nga bisedat": "Learn from conversations",
+  "Preferencat dhe shembujt": "Preferences and examples",
+  "Proceset e avancuara": "Advanced processes",
+  "Informacioni i biznesit, burimet dhe propozimet për përditësim": "Business information, sources and suggested updates",
+  "Si komunikon dhe çfarë bën Agjenti": "How the Agent talks and what it does",
+  "Provo një përgjigje dhe shiko çfarë informacioni u lexua": "Try a reply and see which information was read",
+  "Workflow-t e publikuara të biznesit": "The business's published workflows",
   "Menaxhimi": "Management",
   "Shërbimet": "Services",
   "Rezervimet": "Bookings",

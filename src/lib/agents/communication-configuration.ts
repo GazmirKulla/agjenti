@@ -3,31 +3,35 @@ import { uuid } from "@/lib/calendar/model";
 import { parseCommunicationPolicy } from "./communication-policy";
 
 export const communicationConfigurationColumns = "id,name,instructions,is_active,updated_at,communication,configuration_revision,configuration_draft";
+/**
+ * apply: the instructions and/or communication, merged into the ones in use, are saved and used right away.
+ * revert: an earlier version is in use again. Both become a new numbered version, so either can be undone.
+ * publish / discard: only for a draft saved before changes applied directly; nothing activates it on its own.
+ */
 export async function prepareCommunicationConfiguration(businessId: string, input: Record<string, unknown>) {
-  if (!uuid(input.id) || !["draft", "publish", "discard", "restore"].includes(String(input.mode))) throw Error("Zgjidh agjentin dhe veprimin e konfigurimit.");
+  if (!uuid(input.id) || !["apply", "revert", "publish", "discard"].includes(String(input.mode))) throw Error("Zgjidh agjentin dhe veprimin e konfigurimit.");
   const { data: before, error } = await createServiceSupabase().from("ai_agents").select(communicationConfigurationColumns)
     .eq("business_id", businessId).eq("id", input.id).maybeSingle();
   if (error || !before) throw Error("Konfigurimi i agjentit nuk u lexua.");
-  let values: Record<string, unknown> | null = null;
-  if (input.mode === "draft") {
-    const base = before.configuration_draft ?? before;
-    const instructions = input.instructions ?? base.instructions;
+  if (input.mode === "apply") {
+    const instructions = input.instructions ?? before.instructions;
     if (typeof instructions !== "string" || !instructions.trim() || instructions.length > 8000) throw Error("Plotëso udhëzimet e agjentit.");
     if (input.communication !== undefined && (!input.communication || typeof input.communication !== "object" || Array.isArray(input.communication))) throw Error("Konfigurimi i komunikimit nuk është i vlefshëm.");
-    values = { instructions: instructions.trim(), communication: parseCommunicationPolicy({ ...base.communication, ...(input.communication as object ?? {}) }) };
-  } else {
-    if (input.instructions !== undefined || input.communication !== undefined) throw Error("Ruaj ndryshimet si draft përpara publikimit.");
-    if (input.mode === "publish" && (!before.configuration_draft || before.configuration_draft.baseRevision !== before.configuration_revision)) throw Error("Drafti mungon ose konfigurimi aktiv ka ndryshuar. Rishiko draftin.");
-    if (input.mode === "restore") {
-      if (!Number.isSafeInteger(input.revision) || Number(input.revision) < 1) throw Error("Zgjidh versionin që dëshiron të rikthesh si draft.");
-      const saved = await createServiceSupabase().from("agent_configuration_versions").select("instructions,communication")
-        .eq("business_id", businessId).eq("agent_id", input.id).eq("revision", input.revision).maybeSingle();
-      if (saved.error || !saved.data) throw Error("Versioni nuk u gjet.");
-      values = { revision: input.revision };
-      return { before, mode: String(input.mode), values, preview: saved.data };
-    }
+    const values = { instructions: instructions.trim(), communication: parseCommunicationPolicy({ ...before.communication, ...(input.communication as object ?? {}) }) };
+    return { before, mode: "apply", values: values as Record<string, unknown>, preview: values as Record<string, unknown> | null };
   }
-  return { before, mode: String(input.mode), values, preview: input.mode === "publish" ? before.configuration_draft : values };
+  if (input.instructions !== undefined || input.communication !== undefined) throw Error("Ky veprim nuk merr ndryshime të reja: përdor Ruaj.");
+  if (input.mode === "revert") {
+    if (!Number.isSafeInteger(input.revision) || Number(input.revision) < 1) throw Error("Zgjidh versionin që dëshiron të rikthesh.");
+    if (input.revision === before.configuration_revision) throw Error("Ky version është tashmë në përdorim.");
+    const saved = await createServiceSupabase().from("agent_configuration_versions").select("instructions,communication")
+      .eq("business_id", businessId).eq("agent_id", input.id).eq("revision", input.revision).maybeSingle();
+    if (saved.error || !saved.data) throw Error("Versioni nuk u gjet.");
+    return { before, mode: "revert", values: { revision: input.revision } as Record<string, unknown>, preview: saved.data as Record<string, unknown> | null };
+  }
+  if (input.mode === "publish" && (!before.configuration_draft || before.configuration_draft.baseRevision !== before.configuration_revision))
+    throw Error("Ndryshimet në pritje mungojnë ose udhëzimet janë ndryshuar pas tyre. Rishikoji.");
+  return { before, mode: String(input.mode), values: null as Record<string, unknown> | null, preview: (input.mode === "publish" ? before.configuration_draft : null) as Record<string, unknown> | null };
 }
 
 export async function saveCommunicationConfiguration(businessId: string, userId: string, proposal: Awaited<ReturnType<typeof prepareCommunicationConfiguration>>) {
@@ -36,9 +40,11 @@ export async function saveCommunicationConfiguration(businessId: string, userId:
     p_mode: proposal.mode, p_values: proposal.values,
   });
   if (error || !data || typeof data.published !== "boolean") throw Error("Konfigurimi ndryshoi ose nuk u ruajt. Rifresko dhe rishiko ndryshimet.");
-  return { message: data.published
-    ? `Versioni ${data.revision} u publikua.${data.active ? "" : " Agjenti është joaktiv."} Sjellja duhet provuar.`
-    : proposal.mode === "discard" ? "Drafti u hoq. Konfigurimi aktiv mbeti i pandryshuar." : "Drafti u ruajt. Përgjigjet live përdorin ende versionin e publikuar.", path: "agents" };
+  const inactive = data.active ? "" : " Agjenti është joaktiv, prandaj nuk u përgjigjet ende klientëve.";
+  return { message: !data.published ? "Ndryshimet në pritje u hodhën poshtë. Udhëzimet në përdorim mbetën të pandryshuara."
+    : proposal.mode === "revert" ? `Versioni ${String(proposal.values?.revision)} u rikthye dhe është në përdorim si versioni ${data.revision}.${inactive}`
+    : data.revision === proposal.before.configuration_revision ? "Nuk kishte asgjë për të ndryshuar."
+    : `U ruajt. Përgjigjet e reja përdorin versionin ${data.revision}.${inactive} Provoje te Prova dhe kontrolli.`, path: "agents" };
 }
 
 export type AgentConfigurationPreview = { businessId: string; agentId: string; name: string; instructions: string;

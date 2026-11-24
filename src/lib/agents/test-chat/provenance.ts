@@ -9,7 +9,13 @@ export function collectTestConfiguration(previewId?: string) {
   let workflow: TestConfigurationProvenance["workflow"] = {
     id: null, versionId: previewId ?? null, mode: previewId ? "draft" : "unavailable",
   };
+  let knowledge: TestConfigurationProvenance["knowledge"] = null;
   const onTrace: TraceObserver = event => {
+    if (event.stage === "context" && event.label === "Knowledge in reply context") {
+      const ids = event.data?.knowledgeIds;
+      if (Array.isArray(ids)) knowledge = { ids: ids.filter((id): id is string => typeof id === "string"),
+        status: typeof event.data?.status === "string" ? event.data.status : "unverified" };
+    }
     if (event.stage === "context" && event.label === "Customer agent configuration loaded") {
       const a = event.data?.agentConfiguration as AgentConfigurationRead | undefined;
       if (!a) return;
@@ -30,7 +36,7 @@ export function collectTestConfiguration(previewId?: string) {
     }
   };
   return { onTrace, finish: (turn: Pick<AgentTurnResult, "debug">): TestConfigurationProvenance => ({
-    agents, workflow, responseSource: turn.debug?.source ?? "unavailable",
+    agents, workflow, knowledge, responseSource: turn.debug?.source ?? "unavailable",
     responseFallbackReason: turn.debug?.fallbackReason ?? null, behaviorVerified: false,
   }) };
 }

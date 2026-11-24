@@ -9,7 +9,7 @@ import { configurationEffectMessage, type AgentConfigurationEffect, type TestCon
 
 const configuration: TestConfigurationProvenance = {
   agents: [{ agentId: null, agentName: null, active: null, instructionHash: null, instructionSource: "base", readAt: "2026-10-23T10:00:00Z", fallbackReason: "no_active_agent", generationRequested: true, fallbackInstructionsUsed: true }],
-  workflow: { id: null, versionId: "published-A", mode: "pinned" }, responseSource: "ai", responseFallbackReason: null, behaviorVerified: false,
+  workflow: { id: null, versionId: "published-A", mode: "pinned" }, knowledge: null, responseSource: "ai", responseFallbackReason: null, behaviorVerified: false,
 };
 const preview = previewFor("agent_update", { id: "synthetic-agent", name: "Synthetic agent", is_active: false, instructions: "Old" }, { instructions: "New" }, "UTC");
 const effect: AgentConfigurationEffect = { saved: true, status: "inactive", effective: false, targetAgentId: "synthetic-agent", targetActive: false, activeAgentId: null, instructionHash: "a".repeat(64), checkedAt: "2026-10-23T10:00:00Z", behaviorVerified: false };

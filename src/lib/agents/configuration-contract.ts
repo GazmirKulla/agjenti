@@ -27,6 +27,8 @@ export type TestConfigurationProvenance = {
   /** One entry per actual context read; composed replies may read more than once. */
   agents: (AgentConfigurationRead & { generationRequested: boolean; fallbackInstructionsUsed: boolean | null })[];
   workflow: { id: string | null; versionId: string | null; mode: "draft" | "published" | "pinned" | "unavailable" };
+  /** Knowledge entries placed in the reply's context (ids only). Null when the turn did not reach that read. */
+  knowledge: { ids: string[]; status: string } | null;
   responseSource: "ai" | "fallback" | "unavailable";
   responseFallbackReason: string | null;
   behaviorVerified: false;

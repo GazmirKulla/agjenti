@@ -395,7 +395,7 @@ it("rejects records changed while the model was composing a proposal", async () 
   ).rejects.toThrow("gjatë analizës");
 });
 
-it("normalizes old agent_update proposals into the same reviewed draft operation used by the manual UI", async () => {
+it("normalizes old agent_update proposals into the same reviewed save used by the manual UI", async () => {
   const before = { id, name: "Shitjet", instructions: "Udhëzimet e vjetra", updated_at: "v1", communication: defaultCommunicationPolicy, configuration_revision: 1, configuration_draft: null };
   m.responses.push({ data: before });
   const result = await prepareProposal({ ...access, modules: ["agents"] }, {
@@ -404,7 +404,7 @@ it("normalizes old agent_update proposals into the same reviewed draft operation
   expect(result.preview?.subject).toBe("Shitjet");
   const prepared = openTicket(result.token!, { ...access, modules: ["agents"] });
   expect(prepared.action).toBe("operation");
-  expect(prepared.values.operation).toMatchObject({ key: "agent.communication", input: { id, mode: "draft" }, snapshot: { values: { instructions: "Përgjigju shkurt." } } });
+  expect(prepared.values.operation).toMatchObject({ key: "agent.communication", input: { id, mode: "apply" }, snapshot: { values: { instructions: "Përgjigju shkurt." } } });
   expect(m.queries).toHaveLength(1);
   expect(m.queries[0].calls).toContainEqual(["eq", ["business_id", "business"]]);
   expect(m.queries[0].calls.some(([name]) => name === "update")).toBe(false);

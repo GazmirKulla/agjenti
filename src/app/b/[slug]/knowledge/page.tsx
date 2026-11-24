@@ -1,9 +1,11 @@
 import { KnowledgeWorkspace } from "@/components/dashboard/knowledge-workspace";
 export default async function Page({
-  params,
+  params, searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ entry?: string }>;
 }) {
   const { slug } = await params;
-  return <KnowledgeWorkspace slug={slug} />;
+  const { entry } = await searchParams;
+  return <KnowledgeWorkspace slug={slug} openEntry={entry} />;
 }

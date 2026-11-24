@@ -746,9 +746,9 @@ async function prepareProposalOnce(
   if (p.action === "agent_update") {
     if (p.changes.length !== 1 || p.changes[0].field !== "instructions")
       throw new AssistantError("Ndryshimi i komunikimit kërkon udhëzimet e agjentit.");
-    p = { action: "operation", id: null, message: "Shqyrto draftin e komunikimit. Publikimi bëhet veçmas.", changes: [
+    p = { action: "operation", id: null, message: "Shqyrto udhëzimet e reja. Pas konfirmimit, Agjenti i përdor në përgjigjet e reja.", changes: [
       { field: "key", value: "agent.communication" },
-      { field: "input", value: JSON.stringify({ id: p.id, mode: "draft", instructions: p.changes[0].value }) },
+      { field: "input", value: JSON.stringify({ id: p.id, mode: "apply", instructions: p.changes[0].value }) },
     ] };
   }
   if (p.action === "clarify") return { clarifying: true, message: p.message, ...(p.choices?.length?{choices:p.choices}:{}) };

@@ -4,7 +4,7 @@ import { PageHeading } from "@/components/dashboard/ui";
 import { ConversationTraining } from "@/components/training/conversation-training";
 import { BackLink } from "@/components/dashboard/ui";
 
-export const metadata = { title: "Trajno nga bisedat | Agjenti.app" };
+export const metadata = { title: "Mëso nga bisedat | Agjenti.app" };
 export default async function ConversationTrainingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const user = await getSessionUser();
@@ -12,8 +12,8 @@ export default async function ConversationTrainingPage({ params }: { params: Pro
   const access = await requireBusinessAccess(user.id, slug);
   if (!access) redirect("/auth/continue");
   return <>
-    <PageHeading title="Trajno nga bisedat" description="Agjenti mëson nga bisedat e tua të vërteta me klientët: si shkruan ti, çfarë pyesin klientët dhe çfarë u përgjigjesh.">
-      <BackLink href={`/b/${slug}/agents`}>Agjenti</BackLink>
+    <PageHeading title="Mëso nga bisedat" description="Agjenti mëson nga bisedat e tua të vërteta me klientët: si shkruan ti, çfarë pyesin klientët dhe çfarë u përgjigjesh.">
+      <BackLink href={`/b/${slug}/knowledge`}>Njohuritë</BackLink>
     </PageHeading>
     <ConversationTraining slug={slug} />
   </>;

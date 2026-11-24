@@ -3,6 +3,7 @@ import { subscribeChanges } from "@/lib/realtime/browser";
 import { invalidationTask } from "@/lib/realtime/invalidation";
 import { blockedByFailedTurn, hasInFlightTurns, hasRecoverableTurns } from "./test-chat-state";
 import { TestConfiguration } from "./test-configuration";
+import { TestKnowledgeFocus, TestKnowledgeUsed, type TestKnowledge } from "./test-knowledge";
 import { AssistantComposer } from "@/components/business-assistant/composer";
 import { MessageRoutingView } from "@/components/workflows/message-routing";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -24,8 +25,12 @@ const reasons: Record<string, string> = {
 };
 const initialChat: TestConversation = { id: "initial", title: "Bisedë e re", entries: [], updatedAt: 0 };
 type Upload = { id: string; file: File; preview?: string };
-export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false, renderInspector }: {
+export function AgentTestChat({ slug, businessName, userId, configurationDraft, advanced = false, renderInspector, knowledge, knowledgeFocus }: {
   slug: string; businessName: string; userId: string; configurationDraft?: string; advanced?: boolean;
+  /** The business's knowledge by id, to show what each reply read and link back to it. */
+  knowledge?: TestKnowledge;
+  /** Opened from one knowledge entry: say whether each reply read it. */
+  knowledgeFocus?: string;
   renderInspector?: (entry: ChatEntry | undefined, chat: TestConversation) => ReactNode;
 }) {
   const [chats, setChats] = useState<TestConversation[]>([initialChat]);
@@ -375,6 +380,7 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
         {waiting && waitStopped && <p role="status">U ndal vetëm pritja këtu. Agjenti mund të vazhdojë; përgjigjja do të shfaqet kur të jetë gati.</p>}
         {!advanced && last && !last.debug.agentConfigured && <p className="chat-status" role="status">Agjenti nuk është gati. <Link href={`/b/${slug}/agents`}>Kontrollo konfigurimin →</Link></p>}
         {!advanced && last && (last.debug.fallbackReason === "provider_error" || last.debug.fallbackReason === "missing_api_key" || last.debug.fallbackReason === "empty_reply") && <p className="chat-status" role="status">Agjenti nuk mundi të përgjigjej normalisht. Provo përsëri më vonë ose kontrollo konfigurimin.</p>}
+        {knowledge && knowledgeFocus && <TestKnowledgeFocus slug={slug} id={knowledgeFocus} knowledge={knowledge} />}
         {advanced && last && <TestConfiguration configuration={last.configuration} slug={slug} agentConfigured={last.debug.agentConfigured} />}
         <div className="agent-test-log" ref={chatLog} role="log" aria-label="Biseda e provës" aria-live="polite" onScroll={e=>{ const el=e.currentTarget; const distance=el.scrollHeight-el.scrollTop-el.clientHeight; followLatest.current = distance<24; setShowJump(distance>120); }}>
           {!messages.length && !pending && !chat.outbox?.length && <div className="agent-test-empty"><div className="chat-welcome-icon"><Icon name="spark" size={30}/></div><span>PROVO AGJENTIN TËND</span><h3>Si do ta nisë klienti bisedën?</h3><p>Pyet, dërgo një foto ose fol. Shiko si përgjigjet agjenti yt.</p><div className="chat-suggestions">{["Çfarë produktesh keni?","Dua të bëj një porosi","Si mund të flas me stafin?"].map(text=><button type="button" key={text} onClick={()=>{setDraft(text);focusComposer();}}>{text}<Icon name="arrow" size={15}/></button>)}</div></div>}
@@ -388,7 +394,8 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
               {entry.result.productPhotos.map(photo => <a key={photo.productId} className="chat-attachment" href={photo.url} target="_blank" rel="noopener noreferrer"><Image src={photo.url} width={180} height={180} unoptimized alt="Foto e produktit" className="rounded-lg object-contain" referrerPolicy="no-referrer"/></a>)}
               <small className="chat-receipt">Simulim: në Instagram dhe WhatsApp këto foto dërgohen pas përgjigjes.</small>
             </div>}
-            {!!entry.result.debug?.knowledgeTitles?.length && <p className="chat-knowledge-used"><span>Njohuritë e konsultuara:</span> {entry.result.debug.knowledgeTitles.join(" · ")}</p>}
+            {knowledge ? <TestKnowledgeUsed slug={slug} configuration={entry.result.configuration} knowledge={knowledge} focus={knowledgeFocus} />
+              : !!entry.result.debug?.knowledgeTitles?.length && <p className="chat-knowledge-used"><span>Njohuritë e konsultuara:</span> {entry.result.debug.knowledgeTitles.join(" · ")}</p>}
             <div className="chat-message-actions">{renderInspector && <button type="button" className="chat-toolbar-button" aria-pressed={inspected?.id === entry.id} onClick={() => { setInspectedId(entry.id); if (window.matchMedia("(max-width: 1000px)").matches) document.getElementById("lab-conversation-inspector")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Inspekto mesazhin {index + 1}</button>}<CopyMessage text={entry.result.reply}/>{advanced && <button className="chat-icon" type="button" title="Rigjenero përgjigjen" aria-label="Rigjenero përgjigjen" disabled={real || busy || voice} onClick={()=>void send(index,entry)}><Icon name="refresh" size={16}/></button>}{canSpeak && <button className="chat-icon" type="button" title={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} aria-label={speaking===entry.id ? "Ndalo leximin" : "Lexo me zë"} onClick={()=>speak(entry)}><Icon name={speaking===entry.id ? "stop" : "volume"} size={16}/></button>}{advanced && entry.result.trainingReceipt && <button type="button" className="chat-train" disabled={busy || voice} onClick={()=>{
               const feedback={receipt:entry.result.trainingReceipt!,question:batchEntry(messages,index).text || "[Skedar]",response:entry.result.reply,workflowId:entry.result.workflowId,stepKey:entry.result.nextState.step_key??null}; setTrainingFeedback(feedback);setTrainingRequest(previous=>({key:(previous?.key??0)+1,feedback}));
             }}><Icon name="spark" size={14}/> Përmirëso</button>}</div>

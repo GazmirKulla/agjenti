@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { parseConfigurationSteps, resolveConfigurationInput } from "./configuration-policy";
 const create = {key:"agent.manage",input:{name:"Support",instructions:"Use verified information",is_active:true}};
 it("resolves only confirmed outputs from a preceding dependency of the same entity kind", () => {
-  const steps = parseConfigurationSteps([create,{key:"agent.communication",input:{mode:"draft",instructions:"New instructions"},after:[0],references:{id:{step:0,output:"id"}}}]);
+  const steps = parseConfigurationSteps([create,{key:"agent.communication",input:{mode:"apply",instructions:"New instructions"},after:[0],references:{id:{step:0,output:"id"}}}]);
   expect(resolveConfigurationInput(steps[1],[{id:"11111111-1111-4111-8111-111111111111"}])).toMatchObject({id:"11111111-1111-4111-8111-111111111111"});
   expect(() => resolveConfigurationInput(steps[1],[])).toThrow();
 });

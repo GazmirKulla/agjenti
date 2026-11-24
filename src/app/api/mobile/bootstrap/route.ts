@@ -10,6 +10,26 @@ import { aiUsageSummary, loadAiUsage } from "@/lib/ai/usage-report";
 import { loadBillingUsage, plans } from "@/lib/billing/service";
 import { publicBusinessCategories } from "@/lib/onboarding/starter";
 import { loadReadiness, readinessSummary } from "@/lib/setup/readiness";
+/** The Agent's spaces, as on the web: knowledge (sources live inside it), behavior and actions, test and check, then advanced processes. */
+const agentSpaces: Record<string, { label: string; description: string }> = {
+  knowledge: { label: "Njohuritë", description: "Informacioni i biznesit, burimet dhe propozimet për përditësim" },
+  agents: { label: "Sjellja dhe veprimet", description: "Si komunikon dhe çfarë bën Agjenti" },
+  workflows: { label: "Proceset e avancuara", description: "Workflow-t e publikuara të biznesit" },
+};
+function mobileNavigation(slug: string, enabled: string[], t: (text: string) => string) {
+  const base = `/b/${encodeURIComponent(slug)}`;
+  const items = navigationOrder.filter((id) => enabled.includes(id) && id !== "sources").flatMap((id) => {
+    const space = agentSpaces[id];
+    const item = { id, label: t(space?.label ?? moduleRegistry[id].label), description: t(space?.description ?? moduleRegistry[id].description),
+      path: `${base}${moduleRegistry[id].path ? `/${moduleRegistry[id].path}` : ""}`, ...(space ? { group: "agent" as const } : {}) };
+    return id === "agents" ? [item, { id: "agent-test", label: t("Prova dhe kontrolli"), description: t("Provo një përgjigje dhe shiko çfarë informacioni u lexua"), path: `${base}/agents/test`, group: "agent" as const }] : [item];
+  });
+  // The agent spaces keep their own order, whatever the module order is.
+  const order = ["knowledge", "agents", "agent-test", "workflows"];
+  const agent = items.filter((item) => "group" in item).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  return [{ id: "campaigns", label: t("Fushatat"), description: t("Oferta për kontaktet që kanë pranuar marketingun"), path: `${base}/campaigns` },
+    ...items.filter((item) => !("group" in item)), ...agent];
+}
 export async function GET(request: Request) {
   const headers = { "Cache-Control": "private, no-store", Vary: "X-Agjenti-Language" };
   const t = translator(dashboardLanguage(request.headers.get("x-agjenti-language")));
@@ -41,14 +61,7 @@ export async function GET(request: Request) {
           // "Gati për klientët": what is left before the agent answers customers.
           readiness: readinessSummary(readiness),
           modules: profile.enabledModules,
-          navigation: [{ id: "campaigns", label: t("Fushatat"), description: t("Oferta për kontaktet që kanë pranuar marketingun"), path: `/b/${encodeURIComponent(business.slug)}/campaigns` }, ...navigationOrder
-            .filter((id) => profile.navigationItems.includes(id))
-            .map((id) => ({
-              id,
-              label: t(moduleRegistry[id].label),
-              description: t(moduleRegistry[id].description),
-              path: `/b/${encodeURIComponent(business.slug)}${moduleRegistry[id].path ? `/${moduleRegistry[id].path}` : ""}`,
-            }))],
+          navigation: mobileNavigation(business.slug, profile.navigationItems, t),
         };
       }),
     );

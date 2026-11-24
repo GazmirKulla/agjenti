@@ -15,7 +15,7 @@ export default async function AdvancedPage({ params }: { params: Promise<{ slug:
   if (!access) redirect("/auth/continue");
   const profile = await loadDashboardProfile(access.business.id);
   const navigation = organizeWorkspace(buildNavigationItems(profile, "desktop"));
-  const links = navigation.agent.filter(item => ["workflows", "agent-memory", "agent-test"].includes(item.id));
+  const links = navigation.agent.filter(item => ["workflows", "agent-test"].includes(item.id));
   return <>
     <section className={s.section}><h2>Mjete të avancuara</h2><p>Editorët dhe provat ekzistuese. Hapja e tyre nuk ndryshon dhe nuk publikon asnjë rrjedhë.</p>
       <nav className={s.links} aria-label="Mjete të avancuara">

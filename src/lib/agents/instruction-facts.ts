@@ -75,12 +75,11 @@ export async function loadReviewedAgent(businessId: string) {
 }
 
 /** Owner confirmed: the chosen facts become Knowledge and the instructions
- * without them are published as a new version (the old one can be restored). */
+ * without them are saved as a new version in use (the old one can be brought back). */
 export async function applyInstructionSplit(businessId: string, userId: string, input: { agentId: unknown; updatedAt: unknown; instructions: unknown; facts: unknown }) {
   const agent = await loadReviewedAgent(businessId);
   if (!agent || agent.id !== input.agentId) throw Error("Agjenti nuk u gjet. Rifresko faqen.");
   if (agent.updated_at !== input.updatedAt) throw Error("Udhëzimet ndryshuan ndërkohë. Kontrolloji përsëri.");
-  if (agent.configuration_draft) throw Error("Ke një draft të papublikuar te udhëzimet. Publikoje ose hidhe përpara këtij ndryshimi.");
   const split = cleanSplit({ instructions: input.instructions, facts: input.facts }, agent.instructions);
   if (!split.facts.length) throw Error("Zgjidh të paktën një fakt për ta kaluar te Njohuritë.");
   const db = createServiceSupabase();
@@ -91,10 +90,8 @@ export async function applyInstructionSplit(businessId: string, userId: string, 
     const { error } = await db.from("knowledge_entries").insert(fresh.map((fact) => ({ business_id: businessId, title: fact.title, body: fact.body, is_active: true, format: "markdown", source: knowledgeSource("instructions") })));
     if (error) throw Error("Njohuritë nuk u ruajtën. Udhëzimet mbetën të pandryshuara.");
   }
-  // Same path as the editor: a draft, then its publication, so history keeps the old version.
-  const draft = await prepareCommunicationConfiguration(businessId, { id: agent.id, mode: "draft", instructions: split.instructions });
-  await saveCommunicationConfiguration(businessId, userId, draft);
-  const publish = await prepareCommunicationConfiguration(businessId, { id: agent.id, mode: "publish" });
-  const result = await saveCommunicationConfiguration(businessId, userId, publish);
+  // Same path as the editor: saved once and in use, as a new version (the old one can be brought back).
+  const result = await saveCommunicationConfiguration(businessId, userId,
+    await prepareCommunicationConfiguration(businessId, { id: agent.id, mode: "apply", instructions: split.instructions }));
   return { knowledge: fresh.length, message: result.message };
 }

@@ -209,10 +209,12 @@ export async function approveSafe(businessId: string, userId: string, sessionId:
 const ORDER: Record<string, number> = { profile: 0, knowledge: 1, gap: 2, workflow: 3, product: 4, service: 5, example: 6, style: 7 };
 /** Applies the session's approved suggestions, each once: a suggestion is claimed before it is
  * written, and each write is an operation with an id derived from the suggestion. */
-export async function applyApproved(businessId: string, userId: string, sessionId: unknown, accessToken?: string, limit = 40) {
+export async function applyApproved(businessId: string, userId: string, sessionId: unknown, accessToken?: string, limit = 40, onlyId?: string) {
   const owner = await session(businessId, sessionId);
   const db = createServiceSupabase();
-  const { data } = await db.from("conversation_training_suggestions").select(ROW_COLUMNS).eq("business_id", businessId).eq("session_id", owner.id).eq("status", "approved").is("applied_ref", null);
+  let query = db.from("conversation_training_suggestions").select(ROW_COLUMNS).eq("business_id", businessId).eq("session_id", owner.id).eq("status", "approved").is("applied_ref", null);
+  if (onlyId) query = query.eq("id", onlyId);
+  const { data } = await query;
   const rows = ((data ?? []) as (ApplyRow & ReviewRow)[]).sort((a, b) => (ORDER[a.destination] ?? 9) - (ORDER[b.destination] ?? 9));
   const results: { id: string; title: string; destination: string; ok: boolean; message: string }[] = [];
   for (const row of rows.slice(0, limit)) {
@@ -232,4 +234,22 @@ export async function applyApproved(businessId: string, userId: string, sessionI
     }
   }
   return { results, remaining: Math.max(0, rows.length - limit) };
+}
+
+/** Prano: the owner's acceptance of one suggestion applies it at once, through the same writers as before. */
+export async function acceptSuggestion(businessId: string, userId: string, input: { id?: unknown; edited?: unknown }, accessToken?: string) {
+  const row = await suggestion(businessId, input.id);
+  await decideSuggestion(businessId, userId, { id: row.id, decision: "approve", edited: input.edited });
+  const { results } = await applyApproved(businessId, userId, row.session_id, accessToken, 1, row.id);
+  const result = results[0];
+  if (!result) throw new PersistenceError("Propozimi po zbatohet ose u zbatua ndërkohë. Rifresko.", 409);
+  // A failed write is reported as failed, never as accepted.
+  if (!result.ok) throw new PersistenceError(`Propozimi u pranua, por nuk u zbatua: ${result.message}`, 409);
+  return { result };
+}
+
+/** Prano të sigurtat: the safe suggestions are accepted together and applied at once. */
+export async function acceptSafe(businessId: string, userId: string, sessionId: unknown, accessToken?: string) {
+  await approveSafe(businessId, userId, sessionId);
+  return applyApproved(businessId, userId, sessionId, accessToken);
 }

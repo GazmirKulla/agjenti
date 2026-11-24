@@ -22,7 +22,7 @@ const TABS: { key: string; label: string; match: (s: Suggestion) => boolean }[] 
   { key: "example", label: "Shembuj realë", match: (s) => s.destination === "example" },
 ];
 const OPERATION: Record<string, string> = { create: "E re", update: "Plotëson të tanishmen", duplicate: "E ke tashmë", conflict: "Ndryshon nga e tanishmja" };
-const STATUS: Record<string, string> = { approved: "E miratuar", rejected: "E refuzuar", applied: "U aplikua", failed: "Nuk u aplikua", superseded: "E zëvendësuar" };
+const STATUS: Record<string, string> = { approved: "E pranuar, e pazbatuar", rejected: "E refuzuar", applied: "U zbatua", failed: "Nuk u zbatua", superseded: "E zëvendësuar" };
 const CONFIDENCE: Record<string, string> = { high: "Thënë qartë në biseda", medium: "Thënë një herë ose nga Agjenti", low: "E nxjerrë, jo e thënë drejt" };
 const DESTINATION: Record<string, string> = { knowledge: "Njohuri", profile: "Profili i biznesit", gap: "Pyetje pa përgjigje", product: "Produkt", service: "Shërbim", workflow: "Proces", example: "Shembull", style: "Stili" };
 const date = (value?: string) => (value ? new Date(value).toLocaleDateString("sq-AL", { day: "numeric", month: "short", year: "numeric" }) : "");
@@ -111,6 +111,14 @@ export function TrainingReview({ endpoint, sessionId, onApplied }: { endpoint: s
   }
   const decide = (s: Suggestion, decision: "approve" | "reject", edited?: Record<string, unknown>) =>
     act(s.id, async () => { await post({ action: "decide", id: s.id, decision, ...(edited ? { edited } : {}) }); setEditing(null); });
+  // Prano applies the suggestion right away; the result shows on the card.
+  const accept = (s: Suggestion, edited?: Record<string, unknown>) =>
+    act(s.id, async () => { setEditing(null); try { await post({ action: "accept", id: s.id, ...(edited ? { edited } : {}) }); onApplied?.(); } finally { setEditing(null); } });
+  const acceptSafe = () => act("safe", async () => {
+    const data = await post({ action: "accept_safe", id: sessionId });
+    setResults(data.results ?? []);
+    onApplied?.();
+  });
 
   async function apply() {
     setBusy("apply"); setError(""); setResults(null);
@@ -173,7 +181,7 @@ export function TrainingReview({ endpoint, sessionId, onApplied }: { endpoint: s
               )}
               <p className="training-meta">
                 {CONFIDENCE[s.confidence]}
-                {s.requires_confirmation && s.status === "pending" ? " · Duhet ta konfirmosh ti" : ""}
+                {s.requires_confirmation && s.status === "pending" ? ` · Prano e ndryshon menjëherë: ${DESTINATION[s.destination] ?? "këtë pjesë"}` : ""}
                 {s.operation === "duplicate" ? " · Nuk ka nevojë të shtohet" : ""}
               </p>
               {s.applied_ref?.message && <p className="training-done">{s.applied_ref.message}</p>}
@@ -187,14 +195,15 @@ export function TrainingReview({ endpoint, sessionId, onApplied }: { endpoint: s
                 <div className="training-actions">
                   {isEditing ? (
                     <>
-                      <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void decide(s, "approve", editPayload(s, editing.draft))}>Ruaj dhe mirato</button>
+                      <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void accept(s, editPayload(s, editing.draft))}>Ruaj dhe prano</button>
                       <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => setEditing(null)}>Anulo</button>
                     </>
                   ) : (
                     <>
                       {s.status !== "approved" && (s.destination === "gap"
                         ? <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => setEditing({ id: s.id, draft: initialDraft(s) })}>Shkruaj përgjigjen</button>
-                        : <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void decide(s, "approve")}>{s.risk === "important" ? "Konfirmo" : "Mirato"}</button>)}
+                        : <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void accept(s)}>Prano</button>)}
+                      {s.status === "approved" && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void accept(s)}>Zbato</button>}
                       {s.destination !== "gap" && <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => setEditing({ id: s.id, draft: initialDraft(s) })}>Ndrysho</button>}
                       <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => void decide(s, "reject")}>Refuzo</button>
                     </>
@@ -217,9 +226,9 @@ export function TrainingReview({ endpoint, sessionId, onApplied }: { endpoint: s
         </div>
       )}
       <div className="training-footer">
-        <span>{counts.pending} për t&apos;u vendosur · {counts.approved} të miratuara</span>
-        {counts.safe > 0 && <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => void act("safe", () => post({ action: "approve_safe", id: sessionId }))}>Mirato të sigurtat ({counts.safe})</button>}
-        <button type="button" className="btn btn-primary" disabled={!!busy || !counts.approved} onClick={() => void apply()}>{busy === "apply" ? "Po ruaj…" : `Apliko të miratuarat (${counts.approved})`}</button>
+        <span>{counts.pending} për t&apos;u vendosur · Prano zbaton menjëherë; çdo ndryshim mund ta rikthesh aty ku ruhet.</span>
+        {counts.safe > 0 && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void acceptSafe()}>{busy === "safe" ? "Po zbatoj…" : `Prano të sigurtat (${counts.safe})`}</button>}
+        {counts.approved > 0 && <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => void apply()}>{busy === "apply" ? "Po zbatoj…" : `Zbato të miratuarat më parë (${counts.approved})`}</button>}
       </div>
     </div>
   );

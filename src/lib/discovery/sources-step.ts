@@ -29,7 +29,7 @@ type StoredInstagram = { username: string; fetchedAt: string; profile: Record<st
 type StoredWebsite = { url: string; title?: string; description?: string; logo?: string; confirmed?: boolean };
 
 export class SourcesError extends Error {
-  constructor(message: string, readonly status: 400 | 409 | 429 = 400) { super(message); }
+  constructor(message: string, readonly status: 400 | 409 | 429 | 503 = 400) { super(message); }
 }
 
 function decode(text: string) {
@@ -282,4 +282,35 @@ export async function reviewSources(businessId: string, userId: string, keep: un
   const { data, error } = await db.rpc("review_discovery", { p_business: businessId, p_user: userId, p_keep: keep });
   if (error) throw new SourcesError(error.message === "unauthorized" ? "Nuk ke qasje në këtë biznes." : "Konfirmimi nuk u ruajt. Provo përsëri.");
   return data as { kept: number; removed: number };
+}
+
+/**
+ * One proposed entry, decided on its own: accepting puts it in use right away (with the owner's edit, if any),
+ * refusing removes it. Only an entry still waiting in this business's pending proposal is touched. When no entry
+ * is left and the proposal changes nothing else, the proposal closes; otherwise its remaining changes wait for
+ * their own Prano / Refuzo.
+ */
+export async function decideSourceEntry(businessId: string, userId: string, input: { id?: unknown; decision?: unknown; edit?: unknown }) {
+  const id = typeof input.id === "string" && /^[0-9a-f-]{36}$/i.test(input.id) ? input.id : null;
+  if (!id || (input.decision !== "accept" && input.decision !== "reject")) throw new SourcesError("Zgjedhja nuk është e vlefshme.");
+  const [edit] = input.decision === "accept" && input.edit ? parseEdits([{ id, ...(input.edit as object) }]) : [];
+  const db = createServiceSupabase();
+  const { data: jobs, error: jobsError } = await db.from("business_discovery_jobs").select("checkpoint").eq("business_id", businessId).eq("status", "completed")
+    .eq("checkpoint->review->>status", "pending");
+  if (jobsError) throw new SourcesError("Propozimi nuk u lexua. Provo përsëri.", 503);
+  const reviews = (jobs ?? []).map((job) => job.checkpoint.review as ReviewCheckpoint);
+  if (!reviews.some((review) => review.knowledgeIds?.includes(id))) throw new SourcesError("Ky propozim nuk është më në pritje. Rifresko faqen.", 409);
+  const now = new Date().toISOString();
+  const write = input.decision === "accept"
+    ? db.from("knowledge_entries").update({ is_active: true, updated_at: now, ...(edit ? { title: edit.title, body: edit.body, owner_edited_at: now } : {}) })
+    : db.from("knowledge_entries").delete();
+  const { data, error } = await write.eq("business_id", businessId).eq("id", id).eq("is_active", false).select("id").maybeSingle();
+  if (error) throw new SourcesError("Vendimi nuk u ruajt. Provo përsëri.", 503);
+  if (!data) throw new SourcesError("Ky propozim ndryshoi ose u vendos ndërkohë. Rifresko faqen.", 409);
+  const ids = [...new Set(reviews.flatMap((review) => review.knowledgeIds ?? []))];
+  const { count, error: countError } = await db.from("knowledge_entries").select("id", { count: "exact", head: true }).eq("business_id", businessId).eq("is_active", false).in("id", ids);
+  const others = reviews.some((r) => [r.agent, r.profile, r.process].some((value) => value && typeof value === "object"));
+  // Closing changes nothing else here: every entry is already decided and the proposal holds no other change.
+  if (!countError && count === 0 && !others) await reviewSources(businessId, userId, []);
+  return { decided: input.decision, closed: !countError && count === 0 && !others };
 }

@@ -1,10 +1,11 @@
 import type { NavItem } from "./builder";
 
-export type WorkspaceLink = { id: string; path: string; label: string; icon: string };
+/** `also`: pages reached from inside this space that keep it highlighted (e.g. sources inside Knowledge). */
+export type WorkspaceLink = { id: string; path: string; label: string; icon: string; also?: string[] };
 const workspaceLabels: Record<string, string> = {
   products: "Produktet", services: "Shërbimet", catalogs: "Katalogët",
   orders: "Porositë", bookings: "Rezervimet", leads: "Leads",
-  agents: "Udhëzimet", knowledge: "Njohuritë", sources: "Burimet", workflows: "Workflow Designer",
+  agents: "Sjellja dhe veprimet", knowledge: "Njohuritë", sources: "Burimet", workflows: "Workflow Designer",
 };
 export function workspaceLabel(item: WorkspaceLink & { custom?: true }) { return item.custom ? item.label : workspaceLabels[item.id] ?? item.label; }
 export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "reports" | "settings" | "integrations" | "business" | "products" | "services" | "orders" | "leads" | "customers";
@@ -21,15 +22,16 @@ const ownEntryIds = new Set(["activity", "reports"]);
 export function organizeWorkspace(allItems: NavItem[]) {
   // Sources live inside Knowledge ("Nga ku mëson Agjenti"); the page stays reachable from there.
   const items = allItems.filter(item => item.id !== "sources");
-  const agent: WorkspaceLink[] = items.filter(item => agentIds.has(item.id)).map(item => ({ ...item, label: item.id === "agents" ? "Identiteti dhe udhëzimet" : item.label }));
-  // What the agent does and where each part is set; the workflow editor stays under "Avancuar".
-  if (items.some(item => item.id === "agents")) agent.splice(agent.findIndex(item => item.id === "agents") + 1, 0,
-    { id: "agent-process", path: "agents/process", label: "Çfarë bën Agjenti", icon: "workflows" });
-  if (items.some(item => item.id === "agents")) agent.push(
-    { id: "agent-training", path: "agents/training", label: "Trajno nga bisedat", icon: "chat" },
-    { id: "agent-memory", path: "agents/memory", label: "Memoria", icon: "history" },
-    { id: "agent-test", path: "agents/test", label: "Provo agjentin", icon: "spark" },
-  );
+  const hasAgent = items.some(item => item.id === "agents");
+  // Three spaces: what the agent knows, how it behaves and acts, and trying it out. The pages
+  // reached from inside a space (sources, learning from conversations, memory, process) keep it highlighted.
+  const agent: WorkspaceLink[] = [
+    ...items.filter(item => item.id === "knowledge").map(item => ({ ...item, label: "Njohuritë", also: ["sources", ...(hasAgent ? ["agents/training"] : [])] })),
+    ...items.filter(item => item.id === "agents").map(item => ({ ...item, label: "Sjellja dhe veprimet", also: ["agents/process", "agents/memory"] })),
+    ...(hasAgent ? [{ id: "agent-test", path: "agents/test", label: "Prova dhe kontrolli", icon: "spark" }] : []),
+    // The workflow editor stays under "Avancuar".
+    ...items.filter(item => item.id === "workflows"),
+  ];
   const settings: WorkspaceLink[] = items.filter(item => settingsIds.has(item.id)).sort((a, b) => Number(b.id === "settings") - Number(a.id === "settings")).map(item => ({ ...item, label: item.id === "settings" ? "Biznesi dhe modulet" : item.label }));
   settings.push(
     { id: "setup", path: "setup", label: "Onboarding", icon: "spark" },
@@ -56,7 +58,13 @@ export function organizeWorkspace(allItems: NavItem[]) {
     ...(integrations.length ? [{ id: "integrations", section: "integrations" as const, path: "integrations", label: "Kanalet", icon: "integrations" }] : []),
     { id: "settings", section: "settings", path: "settings", label: "Cilësimet", icon: "settings" },
   ];
-  const search: WorkspaceLink[] = [...primary, ...items, ...agent, ...settings, ...integrations].filter((item, index, all) => all.findIndex(other => other.path === item.path && other.label === item.label) === index);
+  // Pages inside the agent spaces stay findable by name.
+  const inner: WorkspaceLink[] = hasAgent ? [
+    { id: "agent-training", path: "agents/training", label: "Mëso nga bisedat", icon: "chat" },
+    { id: "agent-process", path: "agents/process", label: "Çfarë bën Agjenti", icon: "workflows" },
+    { id: "agent-memory", path: "agents/memory", label: "Preferencat dhe shembujt", icon: "history" },
+  ] : [];
+  const search: WorkspaceLink[] = [...primary, ...items, ...agent, ...inner, ...settings, ...integrations].filter((item, index, all) => all.findIndex(other => other.path === item.path && other.label === item.label) === index);
   const main = ["home", "conversations", "activity", "reports", "customers"].flatMap(id => {
     const item = primary.find(item => item.id === id);
     // Home is the business summary; the assistant opens from the header.
@@ -71,9 +79,9 @@ export function organizeWorkspace(allItems: NavItem[]) {
 export function businessWorkspaceGroups(navigation: ReturnType<typeof organizeWorkspace>) {
   const definitions = [
     { id: "offer", label: "Produkte dhe shërbime", description: "Oferta që u prezanton klientëve.", paths: ["products", "services", "catalogs"] },
-    { id: "knowledge", label: "Njohuritë dhe burimet", description: "Informacioni që përdor agjenti për t'u përgjigjur.", paths: ["knowledge", "sources"] },
+    { id: "knowledge", label: "Njohuritë", description: "Informacioni i biznesit, burimet dhe propozimet që përdor Agjenti.", paths: ["knowledge", "sources"] },
     { id: "channels", label: "Kanalet", description: "Lidhjet me Instagram dhe WhatsApp.", paths: ["integrations"] },
-    { id: "behavior", label: "Konfigurimi i agjentit", description: "Udhëzimet, memoria dhe provat e agjentit të klientëve.", paths: ["agents", "agents/training", "agents/memory", "agents/test"] },
+    { id: "behavior", label: "Sjellja dhe prova", description: "Si komunikon dhe vepron Agjenti, dhe ku e provon.", paths: ["agents", "agents/test"] },
     { id: "operations", label: "Porosi dhe rezervime", description: "Puna e përditshme dhe kërkesat e klientëve.", paths: ["orders", "bookings", "calendar", "leads"] },
   ];
   const links = [...navigation.agent, ...navigation.search];
@@ -84,10 +92,13 @@ export function businessWorkspaceGroups(navigation: ReturnType<typeof organizeWo
 }
 
 export function activeWorkspaceLink(pathname: string, base: string, links: WorkspaceLink[]) {
-  return links.filter(item => {
-    const href = `${base}${item.path ? `/${item.path}` : ""}`;
-    return pathname === href || !!item.path && pathname.startsWith(`${href}/`);
-  }).sort((a, b) => b.path.length - a.path.length)[0]?.path;
+  const under = (path: string) => {
+    const href = `${base}${path ? `/${path}` : ""}`;
+    return pathname === href || !!path && pathname.startsWith(`${href}/`);
+  };
+  // The most specific matching path wins, so agents/training belongs to Knowledge, not to agents.
+  return links.flatMap(item => [item.path, ...item.also ?? []].filter(under).map(path => ({ item, length: path.length })))
+    .sort((a, b) => b.length - a.length)[0]?.item.path;
 }
 
 export function workspaceSection(pathname: string, base: string, navigation: ReturnType<typeof organizeWorkspace>): WorkspaceSection | undefined {

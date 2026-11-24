@@ -21,8 +21,18 @@ it("groups workflow and its deep links under the agent while keeping the origina
   expect(navigation.agent.find(item => item.id === "workflows")?.path).toBe("workflows");
   expect(workspaceSection("/b/shop/workflows", "/b/shop", navigation)).toBe("agent");
   expect(workspaceSection("/b/shop/agents/memory", "/b/shop", navigation)).toBe("agent");
-  expect(activeWorkspaceLink("/b/shop/agents/memory", "/b/shop", navigation.agent)).toBe("agents/memory");
+  expect(activeWorkspaceLink("/b/shop/agents/memory", "/b/shop", navigation.agent)).toBe("agents");
   expect(activeWorkspaceLink("/b/shop/agents/test", "/b/shop", navigation.agent)).toBe("agents/test");
+});
+
+it("organizes the agent into knowledge, behavior and testing, with inner pages kept in their space", () => {
+  expect(navigation.agent.map(item => [item.path, item.label])).toEqual([
+    ["knowledge", "Njohuritë"], ["agents", "Sjellja dhe veprimet"], ["agents/test", "Prova dhe kontrolli"], ["workflows", moduleRegistry.workflows.label]]);
+  expect(activeWorkspaceLink("/b/shop/agents/training", "/b/shop", navigation.agent)).toBe("knowledge");
+  expect(activeWorkspaceLink("/b/shop/sources", "/b/shop", navigation.agent)).toBe("knowledge");
+  expect(workspaceSection("/b/shop/sources", "/b/shop", navigation)).toBe("agent");
+  expect(activeWorkspaceLink("/b/shop/agents/process", "/b/shop", navigation.agent)).toBe("agents");
+  for (const path of ["agents/training", "agents/memory", "agents/process"]) expect(navigation.search.some(item => item.path === path), path).toBe(true);
 });
 
 it("keeps operational details, channel settings, onboarding and accounts reachable", () => {
@@ -42,7 +52,7 @@ it("does not expose optional modules omitted by the business profile", () => {
   expect(limited.primary.map(item => item.id)).toContain("services");
   expect(limited.business.map(item => item.id)).toEqual([]);
   expect(limited.search.some(item => item.path === "products" || item.path === "workflows")).toBe(false);
-  expect(limited.agent.map(item => item.path)).toEqual(["agents", "agents/training", "agents/memory", "agents/test"]);
+  expect(limited.agent.map(item => item.path)).toEqual(["agents", "agents/test"]);
 });
 
 it("leaves administrator navigation independent of the business grouping", () => {

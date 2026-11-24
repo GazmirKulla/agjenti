@@ -145,6 +145,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     campaigns: mode === "live" && transport ? await campaignContext(params.businessId, transport.conversationId) : undefined,
     prospect: await prospectRead,
   };
+  // Which knowledge entries this reply could read (ids only), for the owner's test; reading is not proof of use.
+  trace?.({ stage: "context", label: "Knowledge in reply context", data: { knowledgeIds: context.knowledge.records.map(record => record.id), status: context.knowledge.status } });
   trace?.({ stage: "tools", label: "Process business sources loaded", data: { knowledge: grounding.knowledge.status, products: grounding.products.status, services: grounding.services.status, readOnly: true } });
   const tools: ToolPolicy[] = [];
   if (definitions.some(d => d.steps.some(s => s.kind === "effect" && s.tool === "orders.status"))) tools.push({ key: "orders.status", version: 1, effect: "read", approval: "none", allowed: !modules || modules.includes("orders"), inputs: [] });

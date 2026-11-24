@@ -27,10 +27,11 @@ describe("business training context", () => {
     expect(trainingPrompt({ rules: [] })).toBe("");
   });
   it("requires explicit complete examples and valid scope and revisions", () => {
-    expect(() => validateTrainingInput({ kind: "style", instruction: "Pa emoji" })).not.toThrow();
+    expect(() => validateTrainingInput({ kind: "style", instruction: "Pa emoji" })).toThrow("Udhëzimet");
+    expect(() => validateTrainingInput({ kind: "style", instruction: "Pa emoji", id: workflow, revision: 2 })).not.toThrow();
     expect(() => validateTrainingInput({ kind: "example", instruction: "Shkurt" })).toThrow();
     expect(() => validateTrainingInput({ kind: "workflow", instruction: "Shpjego hapin" })).toThrow();
-    expect(() => validateTrainingInput({ kind: "style", instruction: "Pa emoji", workflowId: workflow })).toThrow();
+    expect(() => validateTrainingInput({ kind: "style", instruction: "Pa emoji", workflowId: workflow, id: workflow, revision: 2 })).toThrow();
     expect(() => validateTrainingInput({ kind: "example", instruction: "Shkurt", customerMessage: "Hi", desiredResponse: "Hi", stepKey: "step" })).toThrow();
     expect(() => validateTrainingInput({ kind: "style", instruction: "x".repeat(1501) })).toThrow();
     expect(() => validateTrainingInput({ kind: "style", instruction: "Hi", id: workflow, revision: 0 })).toThrow();

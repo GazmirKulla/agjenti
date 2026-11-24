@@ -32,7 +32,7 @@ afterEach(() => vi.unstubAllEnvs());
 describe("explicit business training mutations", () => {
   it("requires sign-in and tenant authorization before any read or write", async () => {
     m.user.mockResolvedValue(null);
-    expect(await saveAgentTraining({ slug: "shop" }, { kind: "style", instruction: "Hi" })).toHaveProperty("error");
+    expect(await saveAgentTraining({ slug: "shop" }, { kind: "example", instruction: "Hi", customerMessage: "Q", desiredResponse: "A" })).toHaveProperty("error");
     expect(m.from).not.toHaveBeenCalled();
     m.user.mockResolvedValue({ id: "owner" }); m.access.mockResolvedValue(null);
     expect(await listAgentTraining({ slug: "other" })).toHaveProperty("error");
@@ -40,17 +40,23 @@ describe("explicit business training mutations", () => {
     expect(m.from).not.toHaveBeenCalled();
   });
   it("does not allow a business member to use the admin target bypass", async () => {
-    expect(await saveAgentTraining({ businessId: business }, { kind: "style", instruction: "Short" })).toHaveProperty("error");
+    expect(await saveAgentTraining({ businessId: business }, { kind: "example", instruction: "Short", customerMessage: "Q", desiredResponse: "A" })).toHaveProperty("error");
     expect(m.from).not.toHaveBeenCalled();
     m.admin.mockResolvedValue(true); resultData = { id: business, slug: "shop" };
-    expect(await saveAgentTraining({ businessId: business }, { kind: "style", instruction: "Short" })).toEqual({ success: true });
+    expect(await saveAgentTraining({ businessId: business }, { kind: "example", instruction: "Short", customerMessage: "Q", desiredResponse: "A" })).toEqual({ success: true });
     expect(queries[0].filters).toContainEqual(["id", business]);
   });
   it("stores only an explicitly confirmed lesson for the authorized tenant", async () => {
-    expect(await saveAgentTraining({ slug: "shop" }, { kind: "style", instruction: "  Pa shumë emoji  " })).toEqual({ success: true });
+    expect(await saveAgentTraining({ slug: "shop" }, { kind: "example", instruction: "  Pa shumë emoji  ", customerMessage: "Q", desiredResponse: "A" })).toEqual({ success: true });
     expect(queries).toHaveLength(1);
     expect(queries[0]).toMatchObject({ table: "agent_training_memories", operation: "insert", values: { business_id: business, instruction: "Pa shumë emoji", created_by: "owner", source: "manual" } });
     expect(m.revalidate).toHaveBeenCalledWith("/b/shop", "layout");
+  });
+  it("keeps business-wide style in the agent's instructions: no new style lesson, existing ones stay editable", async () => {
+    const result = await saveAgentTraining({ slug: "shop" }, { kind: "style", instruction: "Pa emoji" });
+    expect(JSON.stringify(result)).toContain("Udhëzimet");
+    expect(queries.every(q => !q.operation)).toBe(true);
+    expect(await saveAgentTraining({ slug: "shop" }, { id, revision: 3, kind: "style", instruction: "Pa emoji" })).toEqual({ success: true });
   });
   it("rejects another business's workflow before writing", async () => {
     foreignWorkflow = true;
@@ -83,7 +89,7 @@ describe("explicit business training mutations", () => {
   });
   it("reports a missing migration without claiming a saved lesson", async () => {
     resultError = { code: "PGRST205", message: "internal details" };
-    const result = await saveAgentTraining({ slug: "shop" }, { kind: "style", instruction: "Short" });
+    const result = await saveAgentTraining({ slug: "shop" }, { kind: "example", instruction: "Short", customerMessage: "Q", desiredResponse: "A" });
     expect(result).toHaveProperty("error");
     expect(JSON.stringify(result)).toContain("migrimin");
     expect(JSON.stringify(result)).not.toContain("internal details");

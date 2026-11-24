@@ -24,3 +24,12 @@ export async function changeAgentTraining(target: TrainingTarget, input: Paramet
   }
   catch (error) { return { error: (error as Error).message }; }
 }
+export async function moveStyleToInstructions(target: TrainingTarget, input: { id: string; revision: number }) {
+  try {
+    const context = await actor(target);
+    const result = await commands.moveStyleToInstructions(context, input);
+    revalidatePath(`/b/${context.business.slug}`, "layout");
+    return result;
+  }
+  catch (error) { return { error: (error as Error).message }; }
+}

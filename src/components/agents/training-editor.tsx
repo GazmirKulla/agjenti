@@ -8,7 +8,7 @@ import type { TrainingFeedback } from "./training-session";
 import "./training-session.css";
 
 export const trainingLabels: Record<TrainingKind, string> = { style: "Stili", example: "Përgjigje", workflow: "Procesi" };
-export const emptyTraining = (): TrainingInput => ({ kind: "style", instruction: "", customerMessage: "", desiredResponse: "", workflowId: null, stepKey: null });
+export const emptyTraining = (): TrainingInput => ({ kind: "example", instruction: "", customerMessage: "", desiredResponse: "", workflowId: null, stepKey: null });
 
 export function TrainingSpark({ working = false, complete = false }: { working?: boolean; complete?: boolean }) {
   return <span className={`training-spark ${working ? "is-working" : ""} ${complete ? "is-complete" : ""}`} aria-hidden="true"><span className="training-spark-orbit" /><svg viewBox="0 0 32 32" fill="none">{complete ? <path className="training-check" d="m8 16 5 5 11-11" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" /> : <><path d="m16 5 2.8 8.2L27 16l-8.2 2.8L16 27l-2.8-8.2L5 16l8.2-2.8L16 5Z" fill="currentColor" /><circle cx="26" cy="6" r="2" fill="currentColor" /></>}</svg></span>;
@@ -69,7 +69,11 @@ export function TrainingEditor({ target, initial, feedback, memoryHref, onClose,
       {phase === "editing" ? <>
         <header className="training-editor-heading"><TrainingSpark /><span className="training-eyebrow">NJË AGJENT QË TË KUPTON</span><h2 id={`${id}-title`}>{initial.id ? "Përsos këtë mësim." : feedback ? "Përgjigjja, në mënyrën tënde." : "Mësoji diçka të re."}</h2><p>Ti njeh biznesin tënd. Tregoji Agjentit si dëshiron të komunikojë.</p></header>
         <form className="training-editor" onSubmit={event => { event.preventDefault(); void save(); }}>
-          <div className="training-segments" role="group" aria-label="Lloji i mësimit">{Object.entries(trainingLabels).map(([kind, label]) => <button key={kind} type="button" aria-pressed={input.kind === kind} onClick={() => change({ kind: kind as TrainingKind, ...(kind === "style" ? { workflowId: null, stepKey: null, visualFlowId: null, visualNodeId: null } : {}) })}>{label}</button>)}</div>
+          {/* Business-wide style is kept in the instructions; only a style lesson saved before can still be edited here. */}
+          <div className="training-segments" role="group" aria-label="Lloji i mësimit">{Object.entries(trainingLabels).filter(([kind]) => kind !== "style" || initial.kind === "style").map(([kind, label]) => <button key={kind} type="button" aria-pressed={input.kind === kind} onClick={() => change({ kind: kind as TrainingKind, ...(kind === "style" ? { workflowId: null, stepKey: null, visualFlowId: null, visualNodeId: null } : {}) })}>{label}</button>)}</div>
+          {input.kind === "style"
+            ? <p className="training-note">Toni dhe stili për gjithë biznesin tani mbahen te Udhëzimet. Kaloje këtë preferencë atje nga lista e memories, që të mos mbahet në dy vende.</p>
+            : <p className="training-note">Për tonin dhe stilin e përgjithshëm përdor {"slug" in target ? <Link href={`/b/${target.slug}/agents`}>Udhëzimet</Link> : "Udhëzimet"}. Këtu ruhen shembuj përgjigjesh dhe mësime për një proces.</p>}
           {feedback && input.kind === "example" && <div className="training-source"><span>PËRGJIGJJA E PROVËS</span><blockquote>{feedback.response}</blockquote><button type="button" className="training-text-action" onClick={() => change({ instruction: "Përdor këtë shembull si model për formulimin e përgjigjeve ndaj pyetjeve të ngjashme.", desiredResponse: feedback.response.slice(0, 3000) })}>✓ Kjo përgjigje është e mirë</button></div>}
           {input.kind === "example" && <>
             {feedback ? <details className="training-question"><summary>Pyetja e klientit</summary><p>{input.customerMessage}</p></details> : <div className="training-field"><label htmlFor={`${id}-question`}>Pyetja e klientit</label><textarea id={`${id}-question`} required rows={2} maxLength={2000} readOnly={Boolean(input.receipt)} value={input.customerMessage} onChange={event => change({ customerMessage: event.target.value })} /></div>}

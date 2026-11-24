@@ -8,7 +8,7 @@ vi.mock("@/lib/actions/operations/service", () => ({
   prepareOperation: vi.fn(async (_b: string, _u: string, key: string, input: Record<string, unknown>) => ({ version: 1, key, input, snapshot: {}, requestId: "random", preview: {} })),
   executeOperation: vi.fn(async (_b: string, _u: string, prepared: { key: string; input: Record<string, unknown>; requestId: string }) => {
     ops.push({ key: prepared.key, input: prepared.input, requestId: prepared.requestId });
-    return { message: prepared.key === "agent.communication" && prepared.input.mode === "publish" ? "Versioni 3 u publikua." : "ok", path: "x", id: prepared.key === "knowledge.save" && !prepared.input.id ? prepared.requestId : undefined };
+    return { message: prepared.key === "agent.communication" && prepared.input.mode === "apply" ? "U ruajt. Përgjigjet e reja përdorin versionin 3." : "ok", path: "x", id: prepared.key === "knowledge.save" && !prepared.input.id ? prepared.requestId : undefined };
   }),
 }));
 vi.mock("@/lib/actions/operations/access", () => ({ operationActor: vi.fn(async () => ({ business: { catalog_source: "internal" } })) }));
@@ -47,19 +47,19 @@ describe("the learned style", () => {
     expect(second).not.toContain("Përgjigju shkurt");
   });
 
-  it("is saved as a draft and published through agent.communication, keeping the language and product photo settings", async () => {
+  it("is saved once and in use through agent.communication, keeping the language and product photo settings", async () => {
     tables.ai_agents = { id: "a1", instructions: "Je asistenti i Watchmaster.", communication: { version: 1, language: "sq", tone: "warm", length: "balanced", questions: "when_needed", emoji: "light" }, configuration_draft: null };
     const result = await applySuggestion(B, U, row({ destination: "style", proposed: { instructions: "- Përgjigju shkurt.", policy: { tone: "neutral", length: "concise", emoji: "none", questions: "when_needed" } } }));
-    expect(ops.map((o) => [o.key, o.input.mode])).toEqual([["agent.communication", "draft"], ["agent.communication", "publish"]]);
+    expect(ops.map((o) => [o.key, o.input.mode])).toEqual([["agent.communication", "apply"]]);
     expect(ops[0].input.communication).toEqual({ version: 1, language: "sq", tone: "neutral", length: "concise", questions: "when_needed", emoji: "none", productPhotos: "send", productDetails: "helpful" });
     expect(String(ops[0].input.instructions)).toMatch(/^Je asistenti i Watchmaster\.\n\n## Stili/);
-    expect(result.message).toContain("Versioni 3 u publikua.");
+    expect(result.message).toContain("versionin 3");
   });
 
-  it("is refused while the owner has an unpublished draft", async () => {
+  it("builds on the instructions in use, not on a pending draft from before", async () => {
     tables.ai_agents = { id: "a1", instructions: "x", communication: null, configuration_draft: { instructions: "y" } };
-    await expect(applySuggestion(B, U, row({ destination: "style", proposed: { instructions: "- a" } }))).rejects.toThrow(/draft/);
-    expect(ops).toHaveLength(0);
+    await applySuggestion(B, U, row({ destination: "style", proposed: { instructions: "- a" } }));
+    expect(String(ops[0].input.instructions)).toMatch(/^x\n/);
   });
 });
 

@@ -166,9 +166,9 @@ export const businessCapabilities: CapabilityModule[] = [
   {
     name: "Agjenti",
     items: [
-      ["po", "Udhëzimet dhe stili i komunikimit"],
+      ["po", "Udhëzimet dhe stili i komunikimit: zbatohen pas konfirmimit si version i ri, që mund të rikthehet"],
       ["po", "Menaxhimi i agjentit"],
-      ["po", "Ruaj trajnimin"],
+      ["pjes", "Ruaj trajnimin: shembuj dhe mësime për procese; toni dhe stili për gjithë biznesin shkojnë te udhëzimet"],
       ["po", "Ndrysho trajnimin"],
       ["jo", "Provë në Chat Lab"],
     ],

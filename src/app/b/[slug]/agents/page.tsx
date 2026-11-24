@@ -55,9 +55,9 @@ export default async function AgentsPage({
     try {
       const mode = String(formData.get("mode") ?? "");
       const input = { id: String(formData.get("id") ?? ""), mode,
-        ...(mode === "draft" ? { instructions: String(formData.get("instructions") ?? ""), communication: {
+        ...(mode === "apply" ? { instructions: String(formData.get("instructions") ?? ""), communication: {
           version: 1, ...Object.fromEntries(["language", "tone", "length", "questions", "emoji", "productPhotos", "productDetails"].map(key => [key, String(formData.get(key) ?? "")])) } } : {}),
-        ...(mode === "restore" ? { revision: Number(formData.get("revision")) } : {}),
+        ...(mode === "revert" ? { revision: Number(formData.get("revision")) } : {}),
       };
       const proposal = await prepareCommunicationConfiguration(current.business.id, input);
       if (proposal.before.updated_at !== formData.get("updated_at")) return { error: "Konfigurimi ndryshoi. Rifresko përpara ruajtjes." };
@@ -143,13 +143,13 @@ export default async function AgentsPage({
   return (
     <>
       <PageHeading
-        title="Udhëzimet"
-        description={`Si flet Agjenti me klientët e ${access.business.name} në Instagram dhe WhatsApp. Faktet (çmimet, oferta, dërgesa) i lexon nga Njohuritë.`}
+        title="Sjellja dhe veprimet"
+        description={`Si flet dhe çfarë bën Agjenti me klientët e ${access.business.name} në Instagram dhe WhatsApp. Faktet (çmimet, oferta, dërgesa) i lexon nga Njohuritë.`}
       >
         <div className="agent-heading-actions">
-          <Link href={`/b/${slug}/agents/training`} className="btn btn-ghost">Trajno nga bisedat</Link>
-          <Link href={`/b/${slug}/agents/memory`} className="btn btn-ghost">Memoria</Link>
-          <Link href={`/b/${slug}/agents/test`} className="btn btn-primary">Provo Agjentin →</Link>
+          <Link href={`/b/${slug}/agents/process`} className="btn btn-ghost">Çfarë bën Agjenti</Link>
+          <Link href={`/b/${slug}/agents/memory`} className="btn btn-ghost">Preferencat dhe shembujt</Link>
+          <Link href={`/b/${slug}/agents/test`} className="btn btn-primary">Provo →</Link>
         </div>
       </PageHeading>
       <div className="agent-page">

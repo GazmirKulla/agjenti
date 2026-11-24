@@ -4,6 +4,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { isUuid, MEMORY_LIMIT, validateTrainingInput, type TrainingInput, type TrainingMemory, type TrainingTarget, type TrainingWorkflow } from "./model";
 import { loadVisualFlowChoices } from "@/lib/workflows/visual/choices";
 import { readTrainingReceipt } from "./receipt";
+import { prepareCommunicationConfiguration, saveCommunicationConfiguration } from "@/lib/agents/communication-configuration";
 
 export async function accessTraining(target: TrainingTarget) {
   const user = await getSessionUser();
@@ -102,5 +103,34 @@ export async function changeAgentTraining(actor: CommandActor, input: { id: stri
     if (!result.data) throw new Error("Ky mësim është ndryshuar ose është hequr. Rifresko listën.");
 
     return { success: true };
+  } catch (error) { return { error: errorMessage(error) }; }
+}
+
+/**
+ * A business-wide style lesson saved before style moved to the agent's instructions: its text is added to the
+ * instructions in use (a new version, restorable), then the lesson is removed so the setting lives in one place.
+ */
+export async function moveStyleToInstructions(actor: CommandActor, input: { id: string; revision: number }): Promise<{ success: string } | { error: string }> {
+  try {
+    const { business, userId } = actor;
+    if (!input || !isUuid(input.id) || !Number.isInteger(input.revision) || input.revision < 1) throw new Error("Veprimi nuk është i vlefshëm.");
+    const db = createServiceSupabase();
+    const lesson = await db.from("agent_training_memories").select("id,kind,instruction,revision").eq("business_id", business.id).eq("id", input.id).maybeSingle();
+    if (lesson.error) databaseError(lesson.error.code);
+    if (!lesson.data || lesson.data.revision !== input.revision) throw new Error("Ky mësim është ndryshuar ose është hequr. Rifresko listën.");
+    if (lesson.data.kind !== "style") throw new Error("Vetëm preferencat e stilit kalojnë te udhëzimet.");
+    const agents = await db.from("ai_agents").select("id,instructions,is_active").eq("business_id", business.id).order("is_active", { ascending: false }).limit(2);
+    if (agents.error) throw new Error("Udhëzimet nuk u lexuan.");
+    const agent = agents.data?.find(row => row.is_active) ?? (agents.data?.length === 1 ? agents.data[0] : null);
+    if (!agent) throw new Error("Nuk u gjet agjenti aktiv. Aktivizoje te Sjellja dhe veprimet, pastaj provo përsëri.");
+    const text = lesson.data.instruction.trim();
+    const instructions = agent.instructions.includes(text) ? agent.instructions : `${agent.instructions.trim()}\n\n${text}`;
+    if (instructions.length > 8000) throw new Error("Udhëzimet do kalonin 8000 shkronja. Shkurtoji përpara se ta kalosh këtë preferencë.");
+    const saved = instructions === agent.instructions ? null : await saveCommunicationConfiguration(business.id, userId,
+      await prepareCommunicationConfiguration(business.id, { id: agent.id, mode: "apply", instructions }));
+    const removed = await changeAgentTraining(actor, { id: input.id, revision: input.revision, action: "delete" });
+    // The instructions are already saved: say so plainly rather than reporting the whole move as failed or done.
+    if ("error" in removed) return { error: `Preferenca u shtua te udhëzimet, por mësimi nuk u hoq nga memoria (${removed.error}) Çaktivizoje ose hiqe vetë, që të mos mbahet në dy vende.` };
+    return { success: saved ? `Preferenca u kalua te udhëzimet. ${saved.message}` : "Preferenca ishte tashmë te udhëzimet; u hoq nga memoria." };
   } catch (error) { return { error: errorMessage(error) }; }
 }

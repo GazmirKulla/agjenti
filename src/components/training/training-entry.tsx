@@ -23,8 +23,8 @@ export function TrainingEntry({ slug }: { slug: string }) {
     <Link href={`/b/${encodeURIComponent(slug)}/agents/training`} className="training-entry">
       <span className="knowledge-source-icon"><Icon name="chat" size={20} /></span>
       <span>
-        <b>Trajno Agjentin nga bisedat</b>
-        <small>{running ? "Një import është në punë…" : found ? `${found} gjetje presin shqyrtimin tënd.` : "Mëson si shkruan ti, çfarë shet, çmimet dhe faktet, nga Inbox-i ose nga eksporti i Instagram-it. Asgjë nuk ndryshon pa miratimin tënd."}</small>
+        <b>Mëso nga bisedat</b>
+        <small>{running ? "Një import është në punë…" : found ? `${found} gjetje presin shqyrtimin tënd.` : "Mëson si shkruan ti, çfarë shet, çmimet dhe faktet, nga Inbox-i ose nga eksporti i Instagram-it. Çdo propozim e pranon ose e refuzon ti."}</small>
       </span>
       <span aria-hidden="true">→</span>
     </Link>

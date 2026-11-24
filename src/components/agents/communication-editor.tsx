@@ -8,14 +8,14 @@ export type CommunicationEditorAgent = {
   configuration_draft: { instructions: string; communication: CommunicationPolicy; baseRevision: number } | null;
 };
 
-/** The agent's instructions first, then how it talks; saved as a draft that is
- * tested and published on purpose, with earlier versions one step away. */
+/** The agent's instructions first, then how it talks. Ruaj applies them to new replies right away; every
+ * save becomes a version that can be brought back. A draft saved before that waits for Zbato / Hidh poshtë. */
 export function CommunicationEditor({ agent, slug, versions, action }: {
   agent: CommunicationEditorAgent; slug: string; versions: number[];
   action: (data: FormData) => Promise<ActionResult | void>;
 }) {
   const draft = agent.configuration_draft;
-  const policy = draft?.communication ?? agent.communication;
+  const policy = agent.communication;
   const identity = <><input type="hidden" name="id" value={agent.id} /><input type="hidden" name="updated_at" value={agent.updated_at} /></>;
   const stale = Boolean(draft && draft.baseRevision !== agent.configuration_revision);
   const older = versions.filter(revision => revision !== agent.configuration_revision);
@@ -23,24 +23,25 @@ export function CommunicationEditor({ agent, slug, versions, action }: {
     <header className="agent-editor-head">
       <div>
         <h2>{agent.name}</h2>
-        <p className="muted-copy">Versioni {agent.configuration_revision} {agent.is_active ? "në përdorim" : "· agjenti joaktiv"}{draft ? " · ke një draft të papublikuar" : ""}</p>
+        <p className="muted-copy">Versioni {agent.configuration_revision} {agent.is_active ? "në përdorim" : "· agjenti joaktiv, nuk u përgjigjet klientëve"}</p>
       </div>
     </header>
     {draft && <div className="agent-callout" role="status">
-      <p><strong>Draft i papublikuar.</strong> Bisedat live përdorin ende versionin {agent.configuration_revision}. Provoje dhe publikoje kur të jetë gati.</p>
-      {stale && <p role="alert">Versioni i publikuar ka ndryshuar që nga ky draft. Rishikoje dhe ruaje sërish përpara publikimit.</p>}
+      <p><strong>Ndryshime të ruajtura më parë, të pazbatuara.</strong> Agjenti nuk i përdor derisa t&apos;i zbatosh. Zbato i vë në përdorim për përgjigjet e reja si version i ri; Hidh poshtë i fshin pa prekur udhëzimet në përdorim.</p>
+      {stale && <p role="alert">Udhëzimet u ndryshuan pasi u ruajtën këto ndryshime, prandaj nuk zbatohen dot siç janë. Shikoji më poshtë, kopjo çfarë të duhet te formulari dhe pastaj hidhi poshtë.</p>}
+      <details className="agent-draft-preview"><summary>Shiko ndryshimet në pritje</summary><pre>{draft.instructions}</pre></details>
       <div className="agent-callout-actions">
-        {!stale && <Link className="btn btn-ghost" href={`/b/${slug}/agents/test?draft=${agent.id}`}>Provo draftin</Link>}
-        <ActionForm action={action}>{identity}<input type="hidden" name="mode" value="publish" /><button className="btn btn-primary" type="submit" disabled={stale}>Publiko draftin</button></ActionForm>
-        <ActionForm action={action}>{identity}<input type="hidden" name="mode" value="discard" /><button className="btn btn-ghost" type="submit">Hiq draftin</button></ActionForm>
+        {!stale && <Link className="btn btn-ghost" href={`/b/${slug}/agents/test?draft=${agent.id}`}>Provo</Link>}
+        {!stale && <ActionForm action={action}>{identity}<input type="hidden" name="mode" value="publish" /><button className="btn btn-primary" type="submit">Zbato</button></ActionForm>}
+        <ActionForm action={action}>{identity}<input type="hidden" name="mode" value="discard" /><button className="btn btn-ghost" type="submit">Hidh poshtë</button></ActionForm>
       </div>
     </div>}
     <ActionForm action={action} className="agent-editor-form" key={`${agent.id}:${agent.updated_at}`}>
-      {identity}<input type="hidden" name="mode" value="draft" />
+      {identity}<input type="hidden" name="mode" value="apply" />
       <label className="form-label agent-instructions">
         <span className="agent-editor-label">Udhëzimet</span>
         <small>Si të sillet Agjenti: çfarë të thotë, çfarë të pyesë, kur t&apos;ia kalojë stafit. Faktet e biznesit mbahen te Njohuritë.</small>
-        <textarea className="field" name="instructions" rows={14} maxLength={8000} required defaultValue={draft?.instructions ?? agent.instructions} />
+        <textarea className="field" name="instructions" rows={14} maxLength={8000} required defaultValue={agent.instructions} />
       </label>
       <fieldset className="agent-style">
         <legend>Mënyra e komunikimit</legend>
@@ -56,15 +57,16 @@ export function CommunicationEditor({ agent, slug, versions, action }: {
         <p className="muted-copy">Kur ia kalon bisedën stafit: {policy.handoffMessage ? `“${policy.handoffMessage}”` : "mesazhi i zakonshëm"}. <Link className="inline-link" href={`/b/${slug}/agents/process`}>Ndrysho te Çfarë bën Agjenti →</Link></p>
       </fieldset>
       <div className="agent-editor-footer">
-        <button className="btn btn-primary" type="submit">Ruaj si draft</button>
-        <p className="muted-copy">Ndryshimet ruhen si draft dhe nuk prekin bisedat live derisa t&apos;i publikosh. Mund t&apos;ia kërkosh edhe Asistentit.</p>
+        <button className="btn btn-primary" type="submit">Ruaj</button>
+        <p className="muted-copy">Ruaj i vë në përdorim në përgjigjet e reja. Çdo ruajtje mbahet si version që mund ta rikthesh. Mund t&apos;ia kërkosh edhe Asistentit.</p>
       </div>
     </ActionForm>
     {older.length > 0 && <details className="agent-versions">
       <summary>Versionet e mëparshme ({older.length})</summary>
-      <ActionForm action={action} className="agent-versions-form">{identity}<input type="hidden" name="mode" value="restore" />
+      <p className="muted-copy">Rikthe e vë versionin e zgjedhur sërish në përdorim; versioni aktual ruhet.</p>
+      <ActionForm action={action} className="agent-versions-form">{identity}<input type="hidden" name="mode" value="revert" />
         <label className="form-label">Versioni<select className="field" name="revision">{older.map(revision => <option key={revision} value={revision}>Versioni {revision}</option>)}</select></label>
-        <button className="btn btn-ghost" type="submit">Rikthe si draft</button>
+        <button className="btn btn-ghost" type="submit">Rikthe</button>
       </ActionForm>
     </details>}
   </section>;

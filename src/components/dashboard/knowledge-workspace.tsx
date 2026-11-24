@@ -13,6 +13,7 @@ import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
 import { saveKnowledgeEntry } from "@/lib/knowledge/actions";
 import { AssistantRecordContext } from "@/components/business-assistant/workspace";
 import { OperationButton } from "@/components/dashboard/operation-button";
+import Link from "next/link";
 
 /** Where an entry came from, in words: never the internal key. */
 function knowledgeOrigin(intent: string | null, services: boolean) {
@@ -25,9 +26,12 @@ function knowledgeOrigin(intent: string | null, services: boolean) {
 export async function KnowledgeWorkspace({
   slug,
   services = false,
+  openEntry,
 }: {
   slug: string;
   services?: boolean;
+  /** Opened from a test or another page (?entry=…), to correct it right away. */
+  openEntry?: string;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -62,14 +66,15 @@ export async function KnowledgeWorkspace({
         description={
           services
             ? "Përshkruaj shërbimet, kërkesat dhe çmimet e verifikuara që Agjenti përdor për t’iu përgjigjur klientëve."
-            : "Njohuritë e biznesit që Agjenti AI përdor për t’iu përgjigjur klientëve."
+            : "Informacioni i biznesit që Agjenti lexon kur u përgjigjet klientëve. Ndryshimet zbatohen sapo i ruan."
         }
       />
       {!services && <KnowledgeSources slug={slug} />}
       {!services && <TrainingEntry slug={slug} />}
       <RecordBrowser
         listTitle={services ? "Shërbimet" : "Njohuritë"}
-        facets={[{ key: "status", label: "Statusi", options: [{ value: "active", label: "Aktive" }, { value: "inactive", label: "Joaktive" }] }]}
+        facets={[{ key: "status", label: "Përdoret nga Agjenti", options: [{ value: "active", label: "Ndezur" }, { value: "inactive", label: "Fikur" }] }]}
+        initialOpenId={openEntry}
         placeholder="Kërko në njohuri…"
         createLabel={services ? "Shto shërbim" : "Shto njohuri"}
         createForm={
@@ -82,6 +87,7 @@ export async function KnowledgeWorkspace({
               Përmbajtja
               <textarea name="body" className="field" rows={8} required maxLength={8000} placeholder="Si e merr klienti porosinë, sa kushton dërgesa, sa zgjat…" />
             </label>
+            {!services && <p className="muted-copy">Agjenti e përdor sapo e shton. Mund ta fikësh më vonë te “Përdoret nga Agjenti”.</p>}
             <button className="btn btn-primary" type="submit">
               {services ? "Shto shërbimin" : "Shto njohurinë"}
             </button>
@@ -93,7 +99,7 @@ export async function KnowledgeWorkspace({
           subtitle: knowledgePreview(e.body),
           badge: (
             <span key={e.id} className={`status-badge ${e.is_active ? "status-connected" : "status-paused"}`}>
-              {e.is_active ? "Aktive" : "Joaktive"}
+              {services ? e.is_active ? "Aktive" : "Joaktive" : e.is_active ? "Përdoret" : "E fikur"}
             </span>
           ),
           facets: { status: e.is_active ? "active" : "inactive" },
@@ -105,9 +111,12 @@ export async function KnowledgeWorkspace({
                   <h2>{e.title}</h2>
                   <p>{services || !e.source ? knowledgeOrigin(e.intent_key, services) : knowledgeSourceLabel(e.source, e.owner_edited_at)}</p>
                 </div>
-                {!services && <OperationButton slug={slug} operation="knowledge.delete" input={{ id: e.id }}>Fshi njohurinë</OperationButton>}
+                {!services && <div className="knowledge-detail-actions">
+                  <Link className="btn btn-ghost" href={`/b/${slug}/agents/test?knowledge=${e.id}`}>Provo me Agjentin</Link>
+                  <OperationButton slug={slug} operation="knowledge.delete" input={{ id: e.id }}>Fshi njohurinë</OperationButton>
+                </div>}
               </div>
-              {!e.is_active && <p className="knowledge-inactive-note">Kjo njohuri nuk përdoret nga Agjenti. Kontrolloje dhe aktivizoje kur është e saktë.</p>}
+              {!e.is_active && <p className="knowledge-inactive-note">E fikur: Agjenti nuk e lexon këtë njohuri. Kontrolloje dhe ndize “Përdoret nga Agjenti” kur është e saktë.</p>}
               <div className="detail-block grid gap-2">
                 <small className="muted-copy">Si e lexon Agjenti</small>
                 <KnowledgeText text={e.body} format={e.format} />
@@ -121,12 +130,12 @@ export async function KnowledgeWorkspace({
                   <small className="muted-copy">Listat me “- ”, hapat me “1. ”, tabelat me “| … |”. Agjenti i lexon siç i shkruan.</small></label>
                 <label className="toggle-label knowledge-active-toggle">
                   <span>
-                    Përdore në përgjigjet e Agjentit
-                    <small>Kur është fikur, njohuria ruhet këtu por Agjenti nuk e lexon.</small>
+                    Përdoret nga Agjenti
+                    <small>Ndezur: Agjenti e lexon kur lidhet me pyetjen e klientit, jo në çdo mesazh. Fikur: ruhet këtu, por Agjenti nuk e lexon.</small>
                   </span>
                   <input name="is_active" type="checkbox" className="switch-input" defaultChecked={e.is_active} />
                 </label>
-                <button className="btn btn-primary justify-self-start" type="submit">Ruaj ndryshimet</button>
+                <button className="btn btn-primary justify-self-start" type="submit">Ruaj</button>
               </ActionForm>
             </>
           ),

@@ -4,7 +4,7 @@ import { requireBusinessAccess } from "@/lib/tenant/access";
 import { PersistenceError } from "@/lib/business-assistant/persistence";
 import { continueTraining, workerOrigin } from "@/lib/conversation-training/continue";
 import { compareReplies, listTestMessages, recordTestFeedback } from "@/lib/conversation-training/compare";
-import { applyApproved, approveSafe, confirmUpload, decideSuggestion, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, retryInboxHistory, stalled, startInbox } from "@/lib/conversation-training/sessions";
+import { acceptSafe, acceptSuggestion, applyApproved, approveSafe, confirmUpload, decideSuggestion, deleteAllTraining, deleteSession, listSessions, listSuggestions, prepareUpload, retryInboxHistory, stalled, startInbox } from "@/lib/conversation-training/sessions";
 import { requestOrigin } from "@/lib/http/request-origin";
 
 export const runtime = "nodejs";
@@ -62,6 +62,8 @@ export async function POST(request: Request) {
       case "delete_all": return json(await deleteAllTraining(businessId));
       case "decide": return json(await decideSuggestion(businessId, user.id, body));
       case "approve_safe": return json(await approveSafe(businessId, user.id, body.id));
+      case "accept": return json(await acceptSuggestion(businessId, user.id, body, request.headers.has("authorization") ? bearerToken(request) : undefined));
+      case "accept_safe": return json(await acceptSafe(businessId, user.id, body.id, request.headers.has("authorization") ? bearerToken(request) : undefined));
       case "compare": return json(await compareReplies(businessId, user.id, body.id, body.message));
       case "test_feedback": return json(await recordTestFeedback(businessId, user.id, body));
       case "apply": return json(await applyApproved(businessId, user.id, body.id, request.headers.has("authorization") ? bearerToken(request) : undefined));

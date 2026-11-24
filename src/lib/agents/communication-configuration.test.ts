@@ -12,30 +12,44 @@ beforeEach(() => {
     return q;
   });
 });
-it("merges a partial policy into the saved draft without writing or changing live instructions", async () => {
-  m.row.configuration_draft = { instructions: "Draft", communication: { ...defaultCommunicationPolicy, emoji: "none" }, baseRevision: 2 };
-  const p = await prepareCommunicationConfiguration("tenant", { id, mode: "draft", communication: { tone: "neutral" } });
-  expect(p.values).toEqual({ instructions: "Draft", communication: { ...defaultCommunicationPolicy, emoji: "none", tone: "neutral" } });
-  expect(m.row.instructions).toBe("Published"); expect(m.rpc).not.toHaveBeenCalled();
+it("merges a partial policy into the instructions in use and writes nothing before confirmation", async () => {
+  m.row.configuration_draft = { instructions: "Old draft", communication: { ...defaultCommunicationPolicy, emoji: "none" }, baseRevision: 2 };
+  const p = await prepareCommunicationConfiguration("tenant", { id, mode: "apply", communication: { tone: "neutral" } });
+  // A pending draft is never the base of a direct change.
+  expect(p.values).toEqual({ instructions: "Published", communication: { ...defaultCommunicationPolicy, tone: "neutral" } });
+  expect(m.rpc).not.toHaveBeenCalled();
   expect(m.filters).toContainEqual(["business_id", "tenant"]);
 });
-it("binds the write to the server-read timestamp and authenticated actor", async () => {
-  const p = await prepareCommunicationConfiguration("tenant", { id, mode: "draft", instructions: "Updated" });
-  m.rpc.mockResolvedValue({ data: { published: false, revision: 2, active: true }, error: null });
-  expect(await saveCommunicationConfiguration("tenant", "owner", p)).toHaveProperty("path", "agents");
-  expect(m.rpc).toHaveBeenCalledWith("save_agent_communication", { p_business: "tenant", p_user: "owner", p_agent: id, p_expected: "stamp", p_mode: "draft", p_values: p.values });
+it("binds the write to the server-read timestamp and authenticated actor, and says the new version is in use", async () => {
+  const p = await prepareCommunicationConfiguration("tenant", { id, mode: "apply", instructions: "Updated" });
+  m.rpc.mockResolvedValue({ data: { published: true, revision: 3, active: true }, error: null });
+  const result = await saveCommunicationConfiguration("tenant", "owner", p);
+  expect(result).toMatchObject({ path: "agents" }); expect(result.message).toContain("versionin 3");
+  expect(m.rpc).toHaveBeenCalledWith("save_agent_communication", { p_business: "tenant", p_user: "owner", p_agent: id, p_expected: "stamp", p_mode: "apply", p_values: p.values });
 });
-it.each([null, { instructions: "Draft", communication: defaultCommunicationPolicy, baseRevision: 1 }])("rejects missing or stale publication %j", async draft => {
+it("says an inactive agent does not answer yet, and an unchanged save changed nothing", async () => {
+  const p = await prepareCommunicationConfiguration("tenant", { id, mode: "apply", instructions: "Updated" });
+  m.rpc.mockResolvedValue({ data: { published: true, revision: 3, active: false }, error: null });
+  expect((await saveCommunicationConfiguration("tenant", "owner", p)).message).toContain("joaktiv");
+  m.rpc.mockResolvedValue({ data: { published: true, revision: 2, active: true }, error: null });
+  expect((await saveCommunicationConfiguration("tenant", "owner", p)).message).toContain("Nuk kishte");
+});
+it("no longer prepares drafts; reverting needs an earlier version", async () => {
+  for (const mode of ["draft", "restore"]) await expect(prepareCommunicationConfiguration("tenant", { id, mode, instructions: "X" })).rejects.toThrow("Zgjidh");
+  await expect(prepareCommunicationConfiguration("tenant", { id, mode: "revert", revision: 2 })).rejects.toThrow("në përdorim");
+  await expect(prepareCommunicationConfiguration("tenant", { id, mode: "revert", revision: 1, instructions: "X" })).rejects.toThrow("Ruaj");
+});
+it.each([null, { instructions: "Draft", communication: defaultCommunicationPolicy, baseRevision: 1 }])("rejects applying a missing or outdated pending draft %j", async draft => {
   m.row.configuration_draft = draft;
-  await expect(prepareCommunicationConfiguration("tenant", { id, mode: "publish" })).rejects.toThrow("Drafti");
+  await expect(prepareCommunicationConfiguration("tenant", { id, mode: "publish" })).rejects.toThrow("pritje");
   await expect(loadCommunicationDraft("tenant", id)).rejects.toThrow("Drafti");
   expect(m.rpc).not.toHaveBeenCalled();
 });
-it("publishes only the saved reviewed draft, never inline edits", async () => {
+it("applies only the pending draft as it was saved, never inline edits", async () => {
   m.row.configuration_draft = { instructions: "Draft", communication: defaultCommunicationPolicy, baseRevision: 2 };
   const p = await prepareCommunicationConfiguration("tenant", { id, mode: "publish" });
   expect(p.preview).toEqual(m.row.configuration_draft); expect(p.values).toBeNull();
-  await expect(prepareCommunicationConfiguration("tenant", { id, mode: "publish", instructions: "Unreviewed" })).rejects.toThrow("draft");
+  await expect(prepareCommunicationConfiguration("tenant", { id, mode: "publish", instructions: "Unreviewed" })).rejects.toThrow("Ruaj");
 });
 it("does not report success for rejected writes or missing receipts", async () => {
   const p = await prepareCommunicationConfiguration("tenant", { id, mode: "discard" });

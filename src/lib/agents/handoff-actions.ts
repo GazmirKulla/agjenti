@@ -16,16 +16,12 @@ export async function saveHandoffMessage(slug: string, message: string, seenUpda
     if (!user || !access) return { error: "Nuk ke qasje në këtë biznes." };
     if (typeof message !== "string") return { error: "Mesazhi nuk është i vlefshëm." };
     const businessId = access.business.id;
-    const { data: agent, error } = await createServiceSupabase().from("ai_agents").select("id,updated_at,configuration_revision,configuration_draft")
+    const { data: agent, error } = await createServiceSupabase().from("ai_agents").select("id,updated_at")
       .eq("business_id", businessId).eq("is_active", true).maybeSingle();
     if (error || !agent) return { error: "Agjenti aktiv nuk u gjet. Krijoje ose aktivizoje te Udhëzimet." };
     if (agent.updated_at !== seenUpdatedAt) return { error: "Konfigurimi i Agjentit ndryshoi. Rifresko faqen përpara ruajtjes." };
-    if (agent.configuration_draft && agent.configuration_draft.baseRevision === agent.configuration_revision)
-      return { error: "Te Komunikimi ke ndryshime të papublikuara. Publikoji ose hiqi atje, pastaj ndrysho mesazhin këtu." };
-    const draft = await prepareCommunicationConfiguration(businessId, { id: agent.id, mode: "draft", communication: { handoffMessage: message } });
-    await saveCommunicationConfiguration(businessId, user.id, draft);
-    const publish = await prepareCommunicationConfiguration(businessId, { id: agent.id, mode: "publish" });
-    const result = await saveCommunicationConfiguration(businessId, user.id, publish);
+    const result = await saveCommunicationConfiguration(businessId, user.id,
+      await prepareCommunicationConfiguration(businessId, { id: agent.id, mode: "apply", communication: { handoffMessage: message } }));
     revalidatePath(`/b/${slug}/agents`);
     revalidatePath(`/b/${slug}/agents/process`);
     return { success: message.trim() ? `Mesazhi u ruajt. ${result.message}` : `U kthye mesazhi i zakonshëm. ${result.message}` };

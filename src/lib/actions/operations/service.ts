@@ -194,8 +194,10 @@ export async function prepareOperation(businessId: string, userId: string, key: 
     const current = snapshot.before as Record<string, unknown>;
     const proposed = snapshot.preview as Record<string, unknown> | null;
     preview.fields = proposed ? Object.entries(proposed).filter(([key]) => key !== "baseRevision").map(([key, value]) => ({ label: fieldLabel(key), before: previewValue(current[key]), after: previewValue(value) })) : preview.fields;
-    preview.notice = input.mode === "publish" ? "Publikon draftin e shfaqur për përgjigjet e reja. Nuk aktivizon një agjent joaktiv dhe nuk lejon veprime të reja."
-      : "Ky veprim nuk ndryshon përgjigjet live. Publikimi kërkohet veçmas.";
+    const inactive = current.is_active === false ? " Agjenti është joaktiv: nuk u përgjigjet klientëve derisa ta aktivizosh." : "";
+    preview.notice = input.mode === "discard" ? "Hedh poshtë ndryshimet në pritje. Udhëzimet në përdorim nuk ndryshojnë."
+      : input.mode === "revert" ? `Pas konfirmimit, përgjigjet e reja të Agjentit përdorin sërish versionin ${String(input.revision)} të udhëzimeve dhe komunikimit.${inactive} Versioni aktual ruhet dhe mund të rikthehet.`
+      : `Pas konfirmimit, përgjigjet e reja të Agjentit përdorin menjëherë këto udhëzime dhe këtë mënyrë komunikimi.${inactive} Bisedat dhe porositë ekzistuese nuk ndryshojnë; versioni aktual ruhet dhe mund të rikthehet. Nuk lejon veprime të reja.`;
   }
   if (!preview.fields.length) preview.fields.push({ label: "Veprimi", before: "—", after: preview.title });
   return { version: 1, key: operation, input, snapshot, requestId: randomUUID(), preview };

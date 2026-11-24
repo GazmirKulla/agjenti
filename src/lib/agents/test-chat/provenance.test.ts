@@ -35,3 +35,9 @@ it("keeps unavailable metadata explicit and isolates composed/concurrent reads",
   expect(a.finish({ debug }).agents.map(a => a.agentId)).toEqual(["first", "second"]);
   expect(b.finish({ debug })).toMatchObject({ agents: [], workflow: { mode: "unavailable", versionId: null }, behaviorVerified: false });
 });
+it("reports which knowledge ids the reply could read, and null when the turn never reached that read", () => {
+  const p = collectTestConfiguration();
+  expect(p.finish({ debug }).knowledge).toBeNull();
+  p.onTrace({ stage: "context", label: "Knowledge in reply context", data: { knowledgeIds: ["k1", 7, "k2"], status: "partial" } });
+  expect(p.finish({ debug }).knowledge).toEqual({ ids: ["k1", "k2"], status: "partial" });
+});
