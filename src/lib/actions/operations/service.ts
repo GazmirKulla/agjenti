@@ -204,11 +204,10 @@ function productForm(values: Record<string, unknown>) {
   const form = new FormData();
   for (const field of ["name", "description", "sku", "image_url", "currency", "product_type_id", "workflow_id"]) form.set(field, String(values[field] ?? (field === "currency" ? "ALL" : "")));
   form.set("price", String(values.price_amount ?? ""));
-  if (values.is_active === true) form.set("is_active", "on");
-  else if (values.is_active !== undefined && typeof values.is_active !== "boolean") throw Error("Gjendja e produktit nuk është e vlefshme.");
-  // Changed only when the edit names it; otherwise the stored setting stays.
-  if (typeof values.agent_orders === "boolean") { form.set("agent_orders_shown", "1"); if (values.agent_orders) form.set("agent_orders", "on"); }
-  else if (values.agent_orders !== undefined) throw Error("Cilësimi i porosive të Agjentit nuk është i vlefshëm.");
+  if (values.is_active !== undefined && typeof values.is_active !== "boolean") throw Error("Gjendja e produktit nuk është e vlefshme.");
+  // A product is public or a draft, as in the editor: publishing means the agent offers it and takes orders.
+  if (values.is_active === true) form.set("save_mode", "publish");
+  if (values.agent_orders !== undefined) throw Error("Një produkt është publik ose draft: nuk ka më “vetëm për informim”.");
   return form;
 }
 export function serviceForm(values: Record<string, unknown>) {

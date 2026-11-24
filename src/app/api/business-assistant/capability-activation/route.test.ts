@@ -86,8 +86,9 @@ it("inspects missing configuration without writes, then uses the real catalog ac
   expect(response.status).toBe(200);
   expect(await response.json()).toMatchObject({ status: "activated", changed: true, assessment: { capabilityKey: "product.search", status: "ready" } });
   expect(writes).toBe(1);
-  expect(product()).toEqual({ ...original, is_active: true, updated_at: expect.any(String) });
-  expect(queries.filter(q => q.patch)).toEqual([expect.objectContaining({ table: "products", filters: { business_id: "tenant-a", id, updated_at: stamp, is_active: false }, patch: { is_active: true, updated_at: expect.any(String) } })]);
+  // Publishing also means the agent takes orders for the product.
+  expect(product()).toEqual({ ...original, is_active: true, agent_orders: true, updated_at: expect.any(String) });
+  expect(queries.filter(q => q.patch)).toEqual([expect.objectContaining({ table: "products", filters: { business_id: "tenant-a", id, updated_at: stamp, is_active: false }, patch: { is_active: true, agent_orders: true, updated_at: expect.any(String) } })]);
   expect(m.access).toHaveBeenCalledWith("owner-a", "canonical-a"); // existing action reauthenticates canonical slug
   expect(queries.every(q => !q.patch || q.table === "products")).toBe(true);
 });
