@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { describeIntegrationLog, groupIntegrationLogs } from "./activity-log";
+import { describeIntegrationLog, formatActivityRange, groupIntegrationLogs } from "./activity-log";
 
 const row = (id: string, target: string, status: string, created_at: string, error: string | null = null) => ({ id, target, status, error, created_at });
 
@@ -21,4 +21,10 @@ it("groups only consecutive identical outcomes", () => {
     ["3", 1, false, "2026-11-24T10:00:00Z", "2026-11-24T10:00:00Z"],
     ["4", 1, true, "2026-11-24T09:00:00Z", "2026-11-24T09:00:00Z"],
   ]);
+});
+
+it("writes the day once when a range stays within one Tirana day", () => {
+  expect(formatActivityRange("2026-11-24T08:12:00Z", "2026-11-24T13:32:00Z")).toMatch(/^24 .+09:12 – 14:32$/);
+  expect(formatActivityRange("2026-11-23T08:12:00Z", "2026-11-24T13:32:00Z")).toMatch(/^23 .+ – 24 .+14:32$/);
+  expect(formatActivityRange("2026-11-24T08:12:00Z", "2026-11-24T08:12:00Z")).not.toContain("–");
 });

@@ -22,7 +22,7 @@ export async function OperationActivity({ actor }: { actor: CommandActor }) {
   const receipts = ids.length ? await db.from("business_operation_receipts").select("id,state").eq("business_id", actor.business.id).eq("user_id", actor.userId).in("id", ids) : { data: [], error: null };
   const progress = new Map((receipts.data ?? []).map(row => [row.id, row.state]));
   return <>
-    <section className="panel section-pad mt-5"><h2>Punët e tua me asistentin</h2>
+    <section className="panel section-pad"><h2>Punët e tua me asistentin</h2>
       {plans.error || receipts.error ? <p role="alert">Progresi nuk u ngarkua. Rifresko faqen përpara një veprimi tjetër.</p> : activityPlans.length ? activityPlans.map(plan => {
         const steps = plan.activity?.steps ?? [];
         const done = steps.filter(step => progress.get(step.requestId) === "completed").length;
@@ -33,19 +33,26 @@ export async function OperationActivity({ actor }: { actor: CommandActor }) {
         return <article key={plan.id} className="activity-plan">
           <header className="activity-plan-head">
             <h3>{plan.title}</h3>
-            <span className={`activity-state is-${plan.state}`}>{planState[plan.state] ?? "Në pritje të konfirmimit"}</span>
+            <span className={`activity-pill is-${plan.state === "completed" ? "success" : plan.state === "blocked" ? "warning" : "neutral"}`}>{planState[plan.state] ?? "Në pritje të konfirmimit"}</span>
           </header>
+          {steps.length > 0 && <div className="activity-progress" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={done} aria-label="Hapat e kryer">
+            <span className={`activity-progress-fill is-${plan.state}`} style={{ width: `${Math.round(done / steps.length * 100)}%` }} />
+          </div>}
           <p className="muted-copy">{steps.length ? `${done}/${steps.length} hapa të kryer` : ""}{plan.updated_at ? ` · përditësuar ${formatActivityTime(plan.updated_at)}` : ""}</p>
-          {stoppedStep && <p className="activity-plan-stop">Konfigurimi u ndal te hapi {stopped + 1}: <strong>{stoppedStep.subject ?? stoppedStep.title}</strong>. Hapat e kryer janë ruajtur dhe nuk përsëriten.</p>}
+          {stoppedStep && <div className="activity-callout is-warning" role="status">
+            <span className="activity-icon is-warning" aria-hidden="true">!</span>
+            <p>Konfigurimi u ndal te hapi {stopped + 1}: <strong>{stoppedStep.subject ?? stoppedStep.title}</strong>. Hapat e kryer janë ruajtur dhe nuk përsëriten.</p>
+          </div>}
           {!plan.activity && <p role="alert">Hapat e planit nuk u ngarkuan. Progresi i ruajtur nuk ka ndryshuar.</p>}
           {steps.length > 0 && <details className="activity-steps" open={plan.state !== "completed" && steps.length <= 6}>
             <summary>{sameKind ? `${steps[0].title} · ${steps.length} hapa` : `Shiko ${steps.length} hapat`}</summary>
             <ol>{steps.map(step => {
               const state = progress.get(step.requestId);
-              const mark = state === "completed" ? "is-done" : state ? "is-uncertain" : "is-waiting";
-              return <li key={step.requestId} className={mark}>
-                <span>{sameKind ? step.subject ?? step.title : step.subject ? `${step.title} · ${step.subject}` : step.title}</span>
-                <span className="activity-step-state">{state === "completed" ? "Përfunduar" : state ? "Rezultat për t’u verifikuar" : "Në pritje"}</span>
+              const tone = state === "completed" ? "success" : state ? "warning" : step === stoppedStep ? "danger" : "neutral";
+              return <li key={step.requestId} className={`is-${tone}`}>
+                <span className={`activity-icon is-${tone}`} aria-hidden="true">{tone === "success" ? "✓" : tone === "neutral" ? "" : "!"}</span>
+                <span className="activity-step-label">{sameKind ? step.subject ?? step.title : step.subject ? `${step.title} · ${step.subject}` : step.title}</span>
+                <span className={`activity-pill is-${tone}`}>{state === "completed" ? "Përfunduar" : state ? "Për t’u verifikuar" : step === stoppedStep ? "Nuk u krye" : "Në pritje"}</span>
               </li>;
             })}</ol>
           </details>}
@@ -55,7 +62,7 @@ export async function OperationActivity({ actor }: { actor: CommandActor }) {
         </article>;
       }) : <p>Ende nuk ke plane me disa hapa.</p>}
     </section>
-    <section className="panel section-pad mt-5"><h2>Njoftimet e ndjekjes</h2>
+    <section className="panel section-pad"><h2>Njoftimet e ndjekjes</h2>
       {events.error ? <p role="alert">Njoftimet nuk u ngarkuan.</p> : events.data?.length ? events.data.map(event => <article key={event.id} className="activity-plan"><h3>{event.title}</h3><p>{event.detail}</p><p className="muted-copy">{formatActivityTime(event.created_at)} · Gjendja në çastin e kontrollit</p><Link className="inline-link" href={event.href}>Kontrollo gjendjen →</Link></article>) : <p>Ende nuk ka njoftime. Ndjekjen ditore e aktivizon te <Link className="inline-link" href={`/b/${slug}/settings/preferences`}>Preferencat</Link>.</p>}
     </section>
   </>;

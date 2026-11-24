@@ -27,6 +27,16 @@ export function groupIntegrationLogs(logs: IntegrationLogRow[]): IntegrationLogE
   return entries;
 }
 
+/** "24 nën, 09:12 – 14:32" within one day; both dates otherwise. */
+export function formatActivityRange(from: string, to: string, locale = "sq-AL") {
+  if (from === to) return formatActivityTime(to, locale);
+  const day = (value: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Tirane" }).format(new Date(value));
+  const end = day(from) === day(to)
+    ? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Tirane" }).format(new Date(to))
+    : formatActivityTime(to, locale);
+  return `${formatActivityTime(from, locale)} – ${end}`;
+}
+
 export function formatActivityTime(value: string, locale = "sq-AL") {
-  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Tirane" }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Tirane" }).format(new Date(value));
 }
