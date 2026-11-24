@@ -37,14 +37,14 @@ function pageNumbers(current: number, last: number): number[] {
 const STATUS_LABEL: Record<string, string> = {
   archived: "I arkivuar",
   active: "Publik",
-  draft: "Jo publik",
+  draft: "Draft",
   unlinked: "I palidhur",
 };
 const STATUS_FILTERS = [
   ["all", "Të gjitha"],
   ["active", "Publike"],
   ["archived", "Të arkivuara"],
-  ["draft", "Jo publike"],
+  ["draft", "Draft"],
   ["unlinked", "Të palidhura"],
 ] as const;
 /** Where products come from: the business website's catalog or added here. */
@@ -229,8 +229,8 @@ export function ProductCatalog({
       { label: "Hap produktin", href: `/b/${slug}/products/${p.id}` },
       // The product's one status, as the editor's Publik switch.
       p.is_active
-        ? { label: "Bëje jo publik", disabled: pending || Boolean(savingRows[p.id]), onSelect: () => void editRow(p, "is_active", false) }
-        : { label: "Publikoje", disabled: pending || Boolean(savingRows[p.id]) || Boolean(p.archived_at), onSelect: () => void editRow(p, "is_active", true) },
+        ? { label: "Kthe në draft", disabled: pending || Boolean(savingRows[p.id]), onSelect: () => void editRow(p, "is_active", false) }
+        : { label: "Publiko", disabled: pending || Boolean(savingRows[p.id]) || Boolean(p.archived_at), onSelect: () => void editRow(p, "is_active", true) },
       ...(p.visual_workflow
         ? [{ label: `Hap procesin: ${p.visual_workflow.name}`, href: entityWorkflowHref(slug, "product", p.id, p.visual_workflow.flowId) }]
         : []),
@@ -400,8 +400,8 @@ export function ProductCatalog({
             {filtered.length > selected.length && filtered.length <= 100 && (
               <button type="button" className="btn btn-ghost" onClick={() => setSelected(filtered.map((p) => p.id))}>Zgjidh të gjitha sipas filtrit ({filtered.length})</button>
             )}
-            <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("activate")}>{mapping ? "Lidh dhe bëji publike" : "Bëji publike"}</button>
-            <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("draft")}>Bëji jo publike</button>
+            <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("activate")}>{mapping ? "Lidh dhe publiko" : "Publiko"}</button>
+            <button type="button" className="btn btn-ghost" disabled={pending || hasSavingRows} onClick={() => apply("draft")}>Kthe në draft</button>
             <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setBulkOpen(true)}>Shablloni / procesi</button>
             <button type="button" className="btn btn-ghost catalog-bulk-danger" disabled={bulkRemoval.busy} onClick={() => removeMany(selected)}>Fshi</button>
             <button type="button" className="catalog-bulk-clear" onClick={() => setSelected([])}>Pastro</button>
@@ -598,7 +598,7 @@ export function ProductCatalog({
               disabled={pending || hasSavingRows || !selected.length}
               onClick={() => apply("activate")}
             >
-              {mapping ? "Lidh dhe bëji publike" : "Bëji publike"}
+              {mapping ? "Lidh dhe publiko" : "Publiko"}
             </button>
             <button
               type="button"
@@ -606,7 +606,7 @@ export function ProductCatalog({
               disabled={pending || hasSavingRows || !selected.length}
               onClick={() => apply("draft")}
             >
-              Bëji jo publike
+              Kthe në draft
             </button>
             {!mapping && (
               <Link

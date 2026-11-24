@@ -180,7 +180,7 @@ export function ProductEditor({
           {/* Archive and delete: two quiet buttons; each confirmation explains what happens. */}
           <div className="product-danger-actions">
             <OperationButton slug={slug} operation={product.archived_at ? "product.restore" : "product.archive"} input={{ id: product.id }} className="product-danger-button">
-              {product.archived_at ? "Rikthe si jo publik" : "Arkivo produktin"}
+              {product.archived_at ? "Rikthe si draft" : "Arkivo produktin"}
             </OperationButton>
             <OperationButton slug={slug} operation="product.delete" input={{ id: product.id }} redirectTo={`/b/${slug}/products`} className="product-danger-button catalog-bulk-danger">Fshi produktin</OperationButton>
           </div>

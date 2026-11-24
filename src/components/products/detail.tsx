@@ -15,7 +15,7 @@ import { filledFields, productReadiness } from "@/lib/products/readiness";
 import { countsStock, effectiveQuantity, stockCustomerSentence, stockDeductLabels, stockModeLabels, stockReasonLabels, type StockMovement, type StockSettings } from "@/lib/products/stock";
 import { BackLink } from "@/components/dashboard/ui";
 
-const STATUS_LABEL: Record<string, string> = { archived: "I arkivuar", active: "Publik", draft: "Jo publik", unlinked: "I palidhur" };
+const STATUS_LABEL: Record<string, string> = { archived: "I arkivuar", active: "Publik", draft: "Draft", unlinked: "I palidhur" };
 type Tab = "overview" | "variants" | "stock" | "media" | "workflow";
 
 const MONTHS = ["jan", "shk", "mar", "pri", "maj", "qer", "korr", "gush", "sht", "tet", "nën", "dhj"];
@@ -80,7 +80,7 @@ export function ProductDetail({ slug, product, types, workflows, kind, fields = 
   const removal = useManualOperation(slug, "product.delete", `/b/${slug}/products`);
   const menu: RowMenuItem[] = [
     { label: "Përditëso produktin", href: edit() },
-    { label: product.archived_at ? "Rikthe si jo publik" : "Arkivo produktin", disabled: archive.busy, onSelect: () => void archive.prepare({ id: product.id }) },
+    { label: product.archived_at ? "Rikthe si draft" : "Arkivo produktin", disabled: archive.busy, onSelect: () => void archive.prepare({ id: product.id }) },
     { label: "Fshi produktin", danger: true, disabled: removal.busy, onSelect: () => void removal.prepare({ id: product.id }) },
   ];
   const tabs: [Tab, string][] = [

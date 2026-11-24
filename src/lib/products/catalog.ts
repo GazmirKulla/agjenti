@@ -54,7 +54,7 @@ export const statusNames = {
   archived: "I arkivuar",
   unlinked: "I palidhur",
   active: "Publik",
-  draft: "Jo publik",
+  draft: "Draft",
 };
 export function catalogFilter(
   products: ProductRow[],
