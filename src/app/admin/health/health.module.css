@@ -90,3 +90,8 @@
 @media (max-width: 640px) { .failures li { grid-template-columns: 1fr auto; } .failures li .kind { grid-column: 1 / -1; justify-self: start; } }
 .kind_external { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .reasonNeutral { opacity: .8; border-style: dashed; }
+
+.outcomeFilter { flex-wrap: wrap; border-radius: 16px; max-width: 100%; }
+.outcomeFilter a { display: inline-flex; align-items: center; min-height: 44px; }
+.outcomeFilter a:hover { background: var(--accent-soft); color: var(--ink); }
+.outcomeFilter a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

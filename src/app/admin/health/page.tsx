@@ -72,17 +72,18 @@ function DailyChart({ days, value }: { days: string[]; value: (day: string, outc
  * per module the capabilities with their outcomes, reasons and example conversations; then the capabilities
  * that recorded nothing and the ones not tracked at all.
  */
-export default async function AgentHealthPage({ searchParams }: { searchParams: Promise<{ days?: string; business?: string }> }) {
+export default async function AgentHealthPage({ searchParams }: { searchParams: Promise<{ days?: string; business?: string; outcome?: string }> }) {
   const user = await getSessionUser();
   if (!user || !(await isPlatformAdmin(user.id))) redirect("/auth/continue");
   const query = await searchParams;
+  const failuresOnly = query.outcome === "failure";
   const days = periods.find(p => String(p) === query.days) ?? 7;
   const { data: businesses } = await createServiceSupabase().from("businesses").select("id,name,slug").order("name").limit(500);
   const business = businesses?.find(b => b.id === query.business) ?? null;
   const [report, failures, attention] = await Promise.all([loadCapabilityHealth(days, business?.id ?? null), loadRecentFailures(days, business?.id ?? null), loadAttention(business?.id ?? null)]);
   const nameOf = new Map((businesses ?? []).map(b => [b.id, b.name]));
   const slugOf = new Map((businesses ?? []).map(b => [b.id, b.slug]));
-  const link = (params: Record<string, string | undefined>) => `/admin/health?${new URLSearchParams(Object.entries({ days: String(days), business: business?.id, ...params }).filter((e): e is [string, string] => Boolean(e[1])))}`;
+  const link = (params: Record<string, string | undefined>) => `/admin/health?${new URLSearchParams(Object.entries({ days: String(days), business: business?.id, outcome: failuresOnly ? "failure" : undefined, ...params }).filter((e): e is [string, string] => Boolean(e[1])))}`;
 
   const heading = <PageHeading eyebrow="PLATFORMA" title="Shëndeti i Agjentit"
     description="Çfarë bënë agjentët, si përfundoi dhe pse. Vetëm bisedat reale, pa Chat Lab. Kërkesat që nisin dhe nuk vazhdojnë shënohen “të lëna në mes” pas 24 orësh." />;
@@ -99,8 +100,13 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
       <nav className={s.segments} aria-label="Periudha">
         {periods.map(p => <Link key={p} href={link({ days: String(p) })} aria-current={p === days ? "page" : undefined}>{p === 1 ? "24 orë" : `${p} ditë`}</Link>)}
       </nav>
+      <nav className={`${s.segments} ${s.outcomeFilter}`} aria-label="Rezultati">
+        <Link href={link({ outcome: undefined })} aria-current={!failuresOnly ? "page" : undefined}>Të gjitha</Link>
+        <Link href={link({ outcome: "failure" })} aria-current={failuresOnly ? "page" : undefined}>Vetëm ato që shkuan keq</Link>
+      </nav>
       <form action="/admin/health" className={s.filters}>
         <input type="hidden" name="days" value={days} />
+        {failuresOnly && <input type="hidden" name="outcome" value="failure" />}
         <select className="field" name="business" defaultValue={business?.id ?? ""} aria-label="Biznesi">
           <option value="">Të gjitha bizneset</option>
           {(businesses ?? []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -109,7 +115,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
       </form>
     </section>
 
-    <div className={s.agents}>
+    {!failuresOnly && <><div className={s.agents}>
       {(["customer", "assistant", "system"] as const).map(agent => {
         const items = report.health.filter(h => h.agent === agent);
         const success = sum(items, "success"), failure = sum(items, "failure");
@@ -128,14 +134,15 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
         </section>;
       })}
     </div>
-    <Legend />
+    <Legend /></>}
+    {failuresOnly && <p className="muted-copy">Shfaqen vetëm aftësitë me dështime dhe shkaqet e dështimeve. Shifrat e çdo aftësie ruajnë kontekstin e plotë të periudhës.</p>}
 
     {(["customer", "assistant", "system"] as const).map(agent => {
-      const items = report.health.filter(h => h.agent === agent);
+      const items = report.health.filter(h => h.agent === agent && (!failuresOnly || h.failure > 0));
       const groups = [...new Set(items.map(h => groupOf(h.capability, h.module)))].sort((a, b) => (moduleLabels[a] ?? a).localeCompare(moduleLabels[b] ?? b));
       return <section key={agent} className="panel section-pad grid gap-3">
         <h2>{agents[agent].title}: aftësitë</h2>
-        {!items.length && <p className="muted-copy">Asnjë ngjarje në këtë periudhë.</p>}
+        {!items.length && <p className="muted-copy">{failuresOnly ? "Asnjë dështim në këtë periudhë." : "Asnjë ngjarje në këtë periudhë."}</p>}
         {groups.map(group => {
           const rows = items.filter(h => groupOf(h.capability, h.module) === group).sort((a, b) => (b.success + b.failure + b.handoff + b.neutral) - (a.success + a.failure + a.handoff + a.neutral));
           return <div key={group} className={s.group}>
@@ -146,7 +153,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
               <OutcomeBar item={item} />
               <div className={s.rate}><strong>{percent(item.rate)}</strong>
                 <small>{item.previousRate === null ? "pa krahasim" : item.rate === null ? `më parë ${percent(item.previousRate)}` : `${item.rate >= item.previousRate ? "▲" : "▼"} ${Math.abs(Math.round((item.rate - item.previousRate) * 100))} pikë`}</small></div>
-              {item.reasons.length > 0 && <div className={s.reasons}>{item.reasons.slice(0, 8).map(r => <span key={`${r.point}:${r.reason}`} className={`${s.reason} ${r.outcome === "neutral" ? s.reasonNeutral : ""}`}>
+              {item.reasons.length > 0 && <div className={s.reasons}>{item.reasons.filter(r => !failuresOnly || r.outcome === "failure").slice(0, 8).map(r => <span key={`${r.point}:${r.reason}`} className={`${s.reason} ${r.outcome === "neutral" ? s.reasonNeutral : ""}`}>
                 {r.outcome === "neutral" && "Pa gjykim · "}
                 {exitLabel(r.point, r.reason)} <strong>× {num(r.events)}</strong>
                 {r.examples.map((e, i) => slugOf.get(e.businessId) ? <Link key={e.conversationId} href={`/b/${slugOf.get(e.businessId)}/inbox/${e.conversationId}`}>biseda {i + 1}</Link> : null)}
@@ -182,7 +189,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
       </ul>}
     </section>
 
-    <section className="panel section-pad grid gap-3">
+    {!failuresOnly && <><section className="panel section-pad grid gap-3">
       <h2>Pa të dhëna në këtë periudhë · {report.silent.length}</h2>
       <p className="muted-copy">Aftësi që ndiqen, por nuk regjistruan asnjë ngjarje. Mund të mos jenë përdorur, ose diçka i pengon. Hap një grup për t’i parë.</p>
       {(["customer", "assistant", "system"] as const).map(agent => {
@@ -204,6 +211,6 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
       <h2>Pa ndjekje · {report.untracked.length}</h2>
       <p className="muted-copy">Aftësi që kodi i njeh, por që nuk regjistrojnë hyrje dhe dalje. Testi i mbulimit dështon kur shtohet një aftësi e re pa ndjekje, ndaj kjo listë duhet të mbetet bosh.</p>
       {report.untracked.length ? <div className={s.chips}>{report.untracked.map(u => <span key={u.capability} className={s.chip}>{capabilityName(u.capability, u.label)}</span>)}</div> : <p>✓ Të gjitha aftësitë ndiqen.</p>}
-    </section>
+    </section></>}
   </div>;
 }
