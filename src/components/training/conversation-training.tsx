@@ -116,11 +116,15 @@ export function ConversationTraining({ slug }: { slug: string }) {
     finally { setBusy(""); }
   }
   const disabled = !!busy || !!active;
+  // One step is current; the ones before it are done. Prano applies a suggestion at once, so reviewing and
+  // applying are one step, and the test compares the agent now with the suggestions still open.
+  const step = reviewing ? 2 : active || state?.sessions.length ? 1 : 0;
   return (
     <div className="training">
       <ol className="training-steps" aria-label="Hapat">
-        {["Burimi", "Importi", "Çfarë mësoi", "Miratimi", "Prova", "Aplikimi"].map((label, i) => (
-          <li key={label} className={(reviewing ? [2, 3, 5].includes(i) : i === 0 || (i === 1 && (active || state?.sessions.length))) ? "is-current" : ""}><span>{i + 1}</span>{label}</li>
+        {["Burimi", "Importi", "Shqyrto dhe prano", "Prova"].map((label, i) => (
+          <li key={label} className={i === step ? "is-current" : i < step ? "is-done" : ""} aria-current={i === step ? "step" : undefined}>
+            <span aria-hidden="true">{i < step ? "✓" : i + 1}</span>{label}</li>
         ))}
       </ol>
 

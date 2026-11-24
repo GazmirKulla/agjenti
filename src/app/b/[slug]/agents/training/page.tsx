@@ -13,7 +13,7 @@ export default async function ConversationTrainingPage({ params }: { params: Pro
   if (!access) redirect("/auth/continue");
   return <>
     <PageHeading title="Mëso nga bisedat" description="Agjenti mëson nga bisedat e tua të vërteta me klientët: si shkruan ti, çfarë pyesin klientët dhe çfarë u përgjigjesh.">
-      <BackLink href={`/b/${slug}/knowledge`}>Njohuritë</BackLink>
+      <BackLink href={`/b/${slug}/knowledge`}>Oferta</BackLink>
     </PageHeading>
     <ConversationTraining slug={slug} />
   </>;

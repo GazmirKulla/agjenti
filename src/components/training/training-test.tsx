@@ -45,7 +45,7 @@ export function TrainingTest({ endpoint, sessionId, onFeedback }: { endpoint: st
   const list = [...messages, ...Object.keys(results).filter((m) => !messages.includes(m))];
   return (
     <section className="training-test" aria-labelledby="training-test-title">
-      <h3 id="training-test-title">5. Provo Agjentin para se ta ndryshosh</h3>
+      <h3 id="training-test-title">4. Provo para se t&apos;i pranosh</h3>
       <p className="training-note">Mesazhe të vërteta nga klientët e tu. Agjenti përgjigjet dy herë: si është tani dhe si do të jetë me këtë trajnim. Asgjë nuk i dërgohet askujt dhe asgjë nuk ruhet.</p>
       <form className="training-test-custom" onSubmit={(e) => { e.preventDefault(); if (custom.trim()) { void run(custom.trim()); setCustom(""); } }}>
         <input className="field" value={custom} maxLength={2000} placeholder="Ose shkruaj një mesazh klienti…" onChange={(e) => setCustom(e.target.value)} />

@@ -9,6 +9,8 @@
 .training-steps li span { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 8%, transparent); font-size: 11px; font-weight: 650; }
 .training-steps li.is-current { border-color: var(--accent); color: var(--ink); }
 .training-steps li.is-current span { background: var(--accent); color: #fff; }
+.training-steps li.is-done { color: var(--ink); }
+.training-steps li.is-done span { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
 .training-card { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
 .training-card h2 { margin: 0; font-size: 16px; font-weight: 650; color: var(--ink); }
 .training-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
