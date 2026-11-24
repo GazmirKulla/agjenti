@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import {
+  Children,
   cloneElement,
   isValidElement,
   useEffect,
@@ -395,7 +396,8 @@ export function RecordBrowser({
             {createForm}
           </>
         ) : active ? (
-          active.detail
+          // A detail from a server component arrives as a list of unkeyed children; give each a key.
+          Children.toArray(active.detail)
         ) : createForm && !createAsModal ? (
           <>
             <h2 className="detail-title">{createLabel}</h2>
