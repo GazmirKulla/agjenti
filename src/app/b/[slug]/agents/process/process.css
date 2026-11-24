@@ -1,0 +1,24 @@
+/* Çfarë bën Agjenti: one card per capability, with an icon, its state and divided settings. */
+.capability-own { margin-top: 20px; }
+.capability-list { display: grid; gap: 20px; margin-top: 20px; }
+.capability-card { display: grid; gap: 0; }
+.capability-head { display: flex; align-items: flex-start; gap: 14px; }
+.capability-icon { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+.capability-heading { flex: 1; min-width: 0; display: grid; gap: 4px; padding-top: 2px; }
+.capability-heading h2 { margin: 0; font-size: 18px; }
+.capability-heading .muted-copy { margin: 0; font-size: 14px; }
+.capability-state { flex: none; white-space: nowrap; font-size: 12px; font-weight: 600; line-height: 1; padding: 6px 10px; border-radius: 999px; }
+.capability-state.is-ready { background: var(--success-soft); color: var(--success); }
+.capability-state.is-missing { background: var(--warning-soft); color: var(--warning); }
+.capability-part { display: grid; gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.capability-part-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 600; }
+.capability-part-title svg { color: var(--ink-muted); }
+/* A legend sits outside its fieldset's grid gap. */
+legend.capability-part-title { margin-bottom: 10px; }
+.capability-links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.capability-links a { display: inline-flex; align-items: center; gap: 6px; }
+.capability-list + .vf-product-details { margin-top: 28px; }
+@media (max-width: 560px) {
+  .capability-head { flex-wrap: wrap; }
+  .capability-state { order: 3; margin-left: 56px; }
+}

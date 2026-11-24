@@ -8,6 +8,7 @@ import { saveHandoffMessage } from "@/lib/agents/handoff-actions";
 import { saveAgentBehavior } from "@/lib/agents/behavior-actions";
 import { handoffMessageLimit } from "@/lib/agents/communication-policy";
 import type { BusinessField } from "@/lib/items/fields";
+import { Icon } from "@/components/dashboard/icon";
 
 type Result = { error?: string; success?: string };
 const Feedback = ({ result }: { result: Result }) => result.error ? <p className="form-feedback form-feedback-error" role="alert">{result.error}</p>
@@ -85,7 +86,7 @@ export function ServiceBookingSwitches({ slug, services }: { slug: string; servi
     setResult({});
     const response = await saveServiceBooking(slug, service.id, next, service.updated_at);
     setResult(response);
-    if (!response.error) router.refresh();
+    if (!("error" in response)) router.refresh();
   });
   if (!services.length) return <p className="muted-copy">Nuk ka ende shërbime aktive. Shtoji te Shërbimet; Agjenti rezervon vetëm për shërbimet që pranojnë rezervime.</p>;
   return <div className="grid gap-2">
@@ -142,7 +143,7 @@ export function AgentBehaviorSetting({ slug, kind, value }: { slug: string; kind
     ["notify", "Vetëm të njofton", "Agjenti vazhdon të përgjigjet dhe ti merr njoftim te paneli."],
     ["off", "Asgjë", "Agjenti vazhdon si zakonisht."]] as const;
   return <fieldset className="grid gap-2" style={{ border: 0, padding: 0, margin: 0 }}>
-    <legend className="font-semibold">Kur klienti duket i pakënaqur, ankohet ose Agjenti nuk po e ndihmon</legend>
+    <legend className="capability-part-title"><Icon name="chat" size={16} />Kur klienti duket i pakënaqur, ankohet ose Agjenti nuk po e ndihmon</legend>
     {options.map(([option, title, hint]) => <label key={option} className="form-label" style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
       <input type="radio" name="escalation" checked={value === option} disabled={pending} onChange={() => save({ escalation: option })} />
       <span><strong>{title}</strong><br /><small className="muted-copy">{hint}</small></span>

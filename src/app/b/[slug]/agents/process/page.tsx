@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser, requireBusinessAccess } from "@/lib/tenant/access";
-import { PageHeading, StatusBadge } from "@/components/dashboard/ui";
+import { PageHeading } from "@/components/dashboard/ui";
+import { Icon } from "@/components/dashboard/icon";
+import "./process.css";
 import { BusinessProcessView } from "@/components/workflows/business-process";
 import { OrderIntakeSetting } from "@/components/dashboard/order-intake-setting";
 import { AgentBehaviorSetting, AgentBookingSwitch, CustomerQuestionsEditor, HandoffMessageForm, ServiceBookingSwitches } from "@/components/agents/capability-settings";
@@ -15,6 +17,9 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 
 export const metadata = { title: "Çfarë bën Agjenti | Agjenti.app" };
 
+const icons: Record<AutomaticCapability | "voice", string> = {
+  orders: "cart", orderStatus: "search", bookings: "booking", bookingChanges: "calendar", handoff: "customers", voice: "microphone",
+};
 const titles: Record<AutomaticCapability, string> = {
   orders: "Merr porosi", orderStatus: "Tregon statusin e porosisë", bookings: "Rezervon", bookingChanges: "Tregon, anulon ose zhvendos rezervimin e klientit", handoff: "Ia kalon bisedën stafit",
 };
@@ -54,39 +59,45 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
   const questions = business.error ? null : askFields(readBusinessFields(business.data?.product_fields));
   const localOrders = policy.error ? null : policy.data?.local_orders === true;
 
-  // One card per capability: its state, then what shapes it.
-  const card = (capability: AutomaticCapability, body: React.ReactNode) => {
-    const state = readiness.get(capability);
-    return <section key={capability} className="panel section-pad grid gap-3" aria-labelledby={`capability-${capability}`}>
-      <div className="section-title">
-        <h2 id={`capability-${capability}`}>{titles[capability]}</h2>
-        {state && <StatusBadge status={state.ready ? "connected" : "draft"} label={state.ready ? "Gati" : "Jo ende"} />}
-      </div>
-      {state && <p className="muted-copy">{state.reason}</p>}
-      {body}
+  // One card per capability: its state, then what shapes it, one divided part per setting.
+  const card = (capability: AutomaticCapability | "voice", title: string, parts: React.ReactNode[] = []) => {
+    const state = capability === "voice" ? undefined : readiness.get(capability);
+    return <section key={capability} className="panel section-pad capability-card" aria-labelledby={`capability-${capability}`}>
+      <header className="capability-head">
+        <span className="capability-icon" aria-hidden="true"><Icon name={icons[capability]} size={20} /></span>
+        <div className="capability-heading">
+          <h2 id={`capability-${capability}`}>{title}</h2>
+          {state && <p className="muted-copy">{state.reason}</p>}
+        </div>
+        {state && <span className={`capability-state ${state.ready ? "is-ready" : "is-missing"}`}>{state.ready ? "✓ Gati" : "Jo ende"}</span>}
+      </header>
+      {parts.filter(Boolean).map((part, index) => <div key={index} className="capability-part">{part}</div>)}
     </section>;
   };
+  const part = (icon: string, title: string, body: React.ReactNode, hint?: React.ReactNode) => <>
+    <h3 className="capability-part-title"><Icon name={icon} size={16} />{title}</h3>
+    {hint && <small className="muted-copy">{hint}</small>}
+    {body}
+  </>;
 
   return <>
     <PageHeading eyebrow={access.business.name} title="Çfarë bën Agjenti"
       description="Çdo gjë që bën Agjenti me klientët, në një vend: çfarë është gati dhe si e ndryshon. Nuk ke nevojë të vizatosh procese." />
     {ownProcess ? (
-      <section className="panel section-pad grid gap-2">
+      <section className="panel section-pad grid gap-2 capability-own">
         <h2>Agjenti ndjek procesin tënd të personalizuar</h2>
         <p className="muted-copy">{ownProcess.enabled ? "Procesi që ke publikuar vendos hapat e Agjentit për gjithë biznesin. Cilësimet më poshtë vlejnë edhe për të." : "Ke publikuar një proces të personalizuar, por është i fikur: Agjenti vetëm informon derisa ta ndezësh ose ta heqësh."}</p>
         {enabled.has("workflows") && <Link className="inline-link" href={`${base}/workflows`}>Hap procesin e personalizuar →</Link>}
       </section>
     ) : !automatic && <section className="panel section-pad"><p className="muted-copy">Nuk u verifikua çfarë mund të bëjë Agjenti tani. Rifresko faqen pas pak.</p></section>}
 
-    {enabled.has("orders") && card("orders", <>
-      <OrderIntakeSetting slug={slug} enabled={localOrders} embedded />
-      <div className="grid gap-2">
-        <h3 className="font-semibold">Çfarë e pyet klientin kur porosit</h3>
-        <small className="muted-copy">Agjenti i bën pasi klienti zgjedh produktin, para përmbledhjes, dhe përgjigja shkon me porosinë. Te çdo produkt, te “Si e porosit klienti”, zgjedh cilat bën.</small>
-        {questions === null ? <p className="muted-copy">Pyetjet nuk u lexuan. Rifresko faqen.</p> : <CustomerQuestionsEditor slug={slug} questions={questions} />}
-      </div>
-      <div className="grid gap-2">
-        <h3 className="font-semibold">Produkte vetëm për informim</h3>
+    <div className="capability-list">
+    {enabled.has("orders") && card("orders", titles.orders, [
+      <OrderIntakeSetting key="intake" slug={slug} enabled={localOrders} embedded />,
+      part("chat", "Çfarë e pyet klientin kur porosit",
+        questions === null ? <p className="muted-copy">Pyetjet nuk u lexuan. Rifresko faqen.</p> : <CustomerQuestionsEditor slug={slug} questions={questions} />,
+        "Agjenti i bën pasi klienti zgjedh produktin, para përmbledhjes, dhe përgjigja shkon me porosinë. Te çdo produkt, te “Si e porosit klienti”, zgjedh cilat bën."),
+      part("products", "Produkte vetëm për informim", <>
         {informationOnly.error ? <p className="muted-copy">Nuk u lexuan. Rifresko faqen.</p>
           : informationOnly.data?.length ? <>
             <p className="muted-copy">Agjenti i prezanton, por nuk merr porosi për {informationOnly.count === 1 ? "këtë produkt" : `këto ${informationOnly.count} produkte`}:</p>
@@ -94,32 +105,40 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
             {(informationOnly.count ?? 0) > informationOnly.data.length && <small className="muted-copy">Dhe {(informationOnly.count ?? 0) - informationOnly.data.length} të tjera.</small>}
           </>
           : <p className="muted-copy">Asnjë: Agjenti merr porosi për çdo produkt aktiv me çmim. E ndryshon te forma e produktit, te “Si e porosit klienti”.</p>}
-      </div>
-    </>)}
+      </>),
+    ])}
 
-    {enabled.has("orders") && card("orderStatus", null)}
+    {enabled.has("orders") && card("orderStatus", titles.orderStatus)}
 
-    {(enabled.has("bookings") || enabled.has("services")) && card("bookings",
-      <>
+    {(enabled.has("bookings") || enabled.has("services")) && card("bookings", titles.bookings, [
+      part("calendar", "Rezervimet nga Agjenti", <>
         {calendar.error ? <p className="muted-copy">Kalendari nuk u lexua. Rifresko faqen.</p>
           : <AgentBookingSwitch slug={slug} enabled={calendar.data?.agent_booking_enabled === true} />}
         {!calendar.error && !calendar.data && <small className="muted-copy">Pa orar të ruajtur, Agjenti përdor orarin bazë: e hënë–e premte, 09:00–17:00. E ndryshon te Kalendari.</small>}
-        {bookableServices.error ? <p className="muted-copy">Shërbimet nuk u lexuan. Rifresko faqen.</p> : <ServiceBookingSwitches slug={slug} services={bookableServices.data ?? []} />}
-        <small className="muted-copy">Orari: <Link className="inline-link" href={`${base}/calendar`}>Kalendari →</Link> · Kohëzgjatja dhe orari i secilit shërbim: <Link className="inline-link" href={`${base}/services`}>Shërbimet →</Link></small>
-      </>)}
+      </>),
+      part("knowledge", "Shërbimet",
+        bookableServices.error ? <p className="muted-copy">Shërbimet nuk u lexuan. Rifresko faqen.</p> : <ServiceBookingSwitches slug={slug} services={bookableServices.data ?? []} />),
+      <nav key="links" className="capability-links" aria-label="Cilësimet e rezervimeve">
+        <Link className="inline-link" href={`${base}/calendar`}><Icon name="calendar" size={15} />Orari te Kalendari →</Link>
+        <Link className="inline-link" href={`${base}/services`}><Icon name="knowledge" size={15} />Kohëzgjatja te Shërbimet →</Link>
+      </nav>,
+    ])}
 
-    {enabled.has("bookings") && card("bookingChanges", <small className="muted-copy">Vetëm rezervimet e bëra në bisedat me të njëjtin klient. Ti merr njoftim te Kreu për çdo anulim ose zhvendosje; kur konfirmon, anulon ose zhvendos vetë një rezervim, klientit i shkon mesazh brenda 24 orëve nga mesazhi i tij i fundit.</small>)}
+    {enabled.has("bookings") && card("bookingChanges", titles.bookingChanges, [
+      <small key="note" className="muted-copy">Vetëm rezervimet e bëra në bisedat me të njëjtin klient. Ti merr njoftim te Kreu për çdo anulim ose zhvendosje; kur konfirmon, anulon ose zhvendos vetë një rezervim, klientit i shkon mesazh brenda 24 orëve nga mesazhi i tij i fundit.</small>,
+    ])}
 
-    {card("handoff", <>
-      {agent.error || !agent.data ? <p className="muted-copy">Agjenti aktiv nuk u gjet. Krijoje ose aktivizoje te <Link className="inline-link" href={`${base}/agents`}>Udhëzimet</Link>.</p>
-        : <HandoffMessageForm slug={slug} message={handoffMessage} updatedAt={agent.data.updated_at} fallback={defaultHandoffMessage} />}
-      <AgentBehaviorSetting slug={slug} kind="escalation" value={behavior.escalation} />
-    </>)}
+    {card("handoff", titles.handoff, [
+      part("reply", "Mesazhi kur ia kalon stafit",
+        agent.error || !agent.data ? <p className="muted-copy">Agjenti aktiv nuk u gjet. Krijoje ose aktivizoje te <Link className="inline-link" href={`${base}/agents`}>Udhëzimet</Link>.</p>
+          : <HandoffMessageForm slug={slug} message={handoffMessage} updatedAt={agent.data.updated_at} fallback={defaultHandoffMessage} />),
+      <AgentBehaviorSetting key="escalation" slug={slug} kind="escalation" value={behavior.escalation} />,
+    ])}
 
-    <section className="panel section-pad grid gap-3" aria-labelledby="capability-voice">
-      <div className="section-title"><h2 id="capability-voice">Lexon mesazhet zanore dhe videot</h2></div>
-      <AgentBehaviorSetting slug={slug} kind="voice" value={behavior.voice} />
-    </section>
+    {card("voice", "Lexon mesazhet zanore dhe videot", [
+      <AgentBehaviorSetting key="voice" slug={slug} kind="voice" value={behavior.voice} />,
+    ])}
+    </div>
 
     <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
       <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />
