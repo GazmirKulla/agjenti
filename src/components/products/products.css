@@ -1630,3 +1630,11 @@
 .product-ai-fill { display: grid; gap: 0.5rem; }
 .product-ai-fill.is-empty { padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); }
 .product-ai-fill.is-empty p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+
+/* Publik or Draft: the product's one status, above the buttons that set it. */
+.product-publish-state { display: grid; gap: 2px; margin: 0 0 4px; padding: 10px 12px; border-radius: 12px; font-size: 13px; color: var(--ink-muted); }
+.product-publish-state strong { font-size: 14px; }
+.product-publish-state.is-public { background: var(--success-soft); }
+.product-publish-state.is-public strong { color: var(--success); }
+.product-publish-state.is-draft { background: var(--hover); }
+.product-publish-state.is-draft strong { color: var(--ink); }

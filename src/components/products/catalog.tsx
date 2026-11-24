@@ -706,7 +706,7 @@ export function ProductCatalog({
                 }
               >
                 <option value="draft">Draft</option>
-                <option value="active">Aktiv</option>
+                <option value="active">Publik</option>
               </select>
             </label>
             {!isMapped(configProduct) && (

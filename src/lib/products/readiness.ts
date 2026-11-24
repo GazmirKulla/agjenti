@@ -41,8 +41,8 @@ export function productReadiness(p: ReadinessInput): ReadinessItem[] {
         hint: "Agjenti e prezanton produktin, por nuk merr porosi për të." }
       : { key: "workflow", label: "Procesi i porosisë", done: p.workflow, optional: false, anchor: "product-process",
         hint: "Pa proces gati, Agjenti informon por nuk merr porosi." },
-    { key: "active", label: "Aktiv në katalog", done: p.active && !p.archived && p.availability !== "sold", optional: false, anchor: "product-active",
-      hint: "Produktet joaktive, të arkivuara ose të shitura nuk u ofrohen klientëve." },
+    { key: "active", label: "Publik", done: p.active && !p.archived && p.availability !== "sold", optional: false, anchor: "product-save",
+      hint: "Draftet, produktet e arkivuara ose të shitura nuk u ofrohen klientëve." },
   ];
   return items;
 }

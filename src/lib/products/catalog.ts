@@ -53,7 +53,7 @@ export function catalogStatus(p: ProductRow) {
 export const statusNames = {
   archived: "I arkivuar",
   unlinked: "I palidhur",
-  active: "Aktiv në katalog",
+  active: "Publik",
   draft: "Draft",
 };
 export function catalogFilter(

@@ -102,11 +102,12 @@ describe("inline product configuration", () => {
     product.is_active = true; product.price_amount = 500;
     expect((await updateCatalogField("test", { id, field: "product_type_id", value: null, updatedAt: stamp })).product?.is_active).toBe(true);
   });
-  it("activates a valid free product and updates only its status with tenant and revision guards", async () => {
+  it("publishes a valid free product: its status, and that the agent sells it, with tenant and revision guards", async () => {
     product.price_amount = 0;
     const result = await activate();
     expect(result.product).toMatchObject({ is_active: true, price_amount: 0, workflow_id: workflow });
-    expect(m.update.mock.calls[0][0]).toEqual({ is_active: true, updated_at: expect.any(String) });
+    // Public means the agent takes orders: an older "information only" product is sold again.
+    expect(m.update.mock.calls[0][0]).toEqual({ is_active: true, agent_orders: true, updated_at: expect.any(String) });
     expect(queries.at(-1)).toMatchObject({ table: "products", eq: { business_id: "business", id, updated_at: stamp } });
   });
   it("can return an incomplete product to draft without requiring its broken references", async () => {

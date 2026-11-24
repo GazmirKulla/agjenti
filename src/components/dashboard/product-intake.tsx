@@ -204,9 +204,10 @@ export function ProductIntake({
         </p>
         <ActionForm action={createAction} className="grid gap-5">
           <ProductFields slug={slug} workflows={workflows} />
-          <button className="btn btn-primary" type="submit">
-            Ruaj produktin
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn btn-primary" type="submit" name="save_mode" value="publish">Publiko</button>
+            <button className="btn btn-ghost" type="submit" name="save_mode" value="draft">Ruaj si draft</button>
+          </div>
         </ActionForm>
       </div>
 

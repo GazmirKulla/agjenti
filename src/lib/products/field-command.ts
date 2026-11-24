@@ -33,7 +33,9 @@ export async function updateCatalogField(actor: CommandActor, change: Change): P
   }
   // A status toggle must advance the revision even within one clock millisecond.
   const updatedAt = change.field === "is_active" ? new Date(Math.max(Date.now(), Date.parse(change.updatedAt) + 1)).toISOString() : new Date().toISOString();
-  const changes: Record<string, unknown> = { [change.field]: change.value, updated_at: updatedAt };
+  const changes: Record<string, unknown> = { [change.field]: change.value, updated_at: updatedAt,
+    // Public means the agent sells it, as in the editor.
+    ...(change.field === "is_active" && change.value === true ? { agent_orders: true } : {}) };
   const next = { ...row, ...changes } as ProductRow;
   let visual: ProductRow["visual_workflow"];
   let businessWorkflow: BusinessWorkflow | null = null;

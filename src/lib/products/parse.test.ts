@@ -83,3 +83,13 @@ describe("shortenDescription", () => {
     expect("error" in parsed ? null : parsed.attributes).toEqual({ teksti: true });
   });
 });
+
+describe("Publiko / Ruaj si draft", () => {
+  const form = (extra: Record<string, string>) => { const f = new FormData(); Object.entries({ name: "Puzzle", price: "10", currency: "ALL", ...extra }).forEach(([k, v]) => f.set(k, v)); return f; };
+  it("publishing makes the product public and sold by the agent", () => {
+    expect(parseProductForm(form({ save_mode: "publish" }))).toMatchObject({ isActive: true, agentOrders: true });
+  });
+  it("a draft is hidden and keeps the stored ordering setting", () => {
+    expect(parseProductForm(form({ save_mode: "draft" }))).toMatchObject({ isActive: false, agentOrders: null });
+  });
+});

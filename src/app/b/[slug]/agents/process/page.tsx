@@ -97,15 +97,14 @@ export default async function AgentProcessPage({ params }: { params: Promise<{ s
       part("chat", "Çfarë e pyet klientin kur porosit",
         questions === null ? <p className="muted-copy">Pyetjet nuk u lexuan. Rifresko faqen.</p> : <CustomerQuestionsEditor slug={slug} questions={questions} />,
         "Agjenti i bën pasi klienti zgjedh produktin, para përmbledhjes, dhe përgjigja shkon me porosinë. Te çdo produkt, te “Si e porosit klienti”, zgjedh cilat bën."),
-      part("products", "Produkte vetëm për informim", <>
-        {informationOnly.error ? <p className="muted-copy">Nuk u lexuan. Rifresko faqen.</p>
-          : informationOnly.data?.length ? <>
-            <p className="muted-copy">Agjenti i prezanton, por nuk merr porosi për {informationOnly.count === 1 ? "këtë produkt" : `këto ${informationOnly.count} produkte`}:</p>
-            <ul className="grid gap-1">{informationOnly.data.map(p => <li key={p.id}><Link className="inline-link" href={`${base}/products/${p.id}?edit=1#product-process`}>{p.name}</Link></li>)}</ul>
-            {(informationOnly.count ?? 0) > informationOnly.data.length && <small className="muted-copy">Dhe {(informationOnly.count ?? 0) - informationOnly.data.length} të tjera.</small>}
-          </>
-          : <p className="muted-copy">Asnjë: Agjenti merr porosi për çdo produkt aktiv me çmim. E ndryshon te forma e produktit, te “Si e porosit klienti”.</p>}
-      </>),
+      // Older products set to "information only" before a product became simply public or a draft.
+      (informationOnly.error || informationOnly.data?.length) ? part("products", "Produkte vetëm për informim", <>
+        {informationOnly.error ? <p className="muted-copy">Nuk u lexuan. Rifresko faqen.</p> : <>
+          <p className="muted-copy">Agjenti i prezanton, por nuk merr porosi për {informationOnly.count === 1 ? "këtë produkt" : `këto ${informationOnly.count} produkte`}. Hape produktin dhe shtyp “Ruaj ndryshimet” që Agjenti të marrë porosi.</p>
+          <ul className="grid gap-1">{(informationOnly.data ?? []).map(p => <li key={p.id}><Link className="inline-link" href={`${base}/products/${p.id}?edit=1#product-save`}>{p.name}</Link></li>)}</ul>
+          {(informationOnly.count ?? 0) > (informationOnly.data?.length ?? 0) && <small className="muted-copy">Dhe {(informationOnly.count ?? 0) - (informationOnly.data?.length ?? 0)} të tjera.</small>}
+        </>}
+      </>) : null,
     ])}
 
     {enabled.has("orders") && card("orderStatus", titles.orderStatus)}

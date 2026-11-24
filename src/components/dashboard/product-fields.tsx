@@ -335,14 +335,6 @@ export function ProductFields({
       <fieldset id="product-process" className="grid gap-3">
         <legend className="font-semibold">Si e porosit klienti</legend>
         <ProductBusinessWorkflow slug={slug} workflow={workflows.find(w => w.businessWorkflow)?.businessWorkflow} product={product?.id ? { ...product, id: product.id } : undefined} />
-        <label className="toggle-label">
-          <span>
-            Agjenti merr porosi për këtë produkt
-            <small>Fike kur produkti është vetëm për informim: Agjenti e prezanton dhe përgjigjet për të, por nuk merr porosi. Porosinë mund ta regjistrosh vetë.</small>
-          </span>
-          <input type="hidden" name="agent_orders_shown" value="1" />
-          <input className="switch-input" type="checkbox" name="agent_orders" defaultChecked={product?.agent_orders ?? true} />
-        </label>
         {itemDefinition && askFields(fields).length > 0 && <div className="grid gap-2">
           <span>Çfarë e pyet Agjenti klientin për këtë produkt <span className="muted-copy">(pas zgjedhjes, para përmbledhjes së porosisë)</span></span>
           {askFields(fields).map(field => (
@@ -365,18 +357,6 @@ export function ProductFields({
         </div>}
       </fieldset>
 
-      <label className="toggle-label" id="product-active">
-        <span>
-          Aktiv në katalog
-          <small>Produktet joaktive nuk i sheh Agjenti AI.</small>
-        </span>
-        <input
-          className="switch-input"
-          type="checkbox"
-          name="is_active"
-          defaultChecked={product?.is_active ?? false}
-        />
-      </label>
     </>
   );
 }

@@ -71,7 +71,7 @@ export function ProductEditor({
           const form = e.currentTarget;
           const d = new FormData(form);
           const price = String(d.get("price") ?? ""), max = String(d.get("price_max") ?? "");
-          setPreview({
+          setPreview(current => ({
             name: String(d.get("name") ?? ""),
             description: String(d.get("description") ?? ""),
             image: String(d.get("image_url") ?? ""),
@@ -81,9 +81,9 @@ export function ProductEditor({
             unit: String(d.get("price_unit") ?? ""),
             currency: String(d.get("currency") ?? "ALL"),
             workflow: String(d.get("workflow_id") ?? ""),
-            active: d.get("is_active") === "on",
+            active: current.active,
             details: filledFields(detailKeys, Object.fromEntries(detailKeys.map(key => [key, d.get(`attr_${key}`) ?? undefined]))),
-          });
+          }));
         }}
         onSubmit={(e) => {
           e.preventDefault();
@@ -162,19 +162,19 @@ export function ProductEditor({
             <h2>Gati për Agjentin</h2>
             <ReadinessList items={readiness} hrefFor={anchor => `#${anchor}`} />
           </section>
-          <div className="product-save-actions">
+          <div className="product-save-actions" id="product-save">
+            <p className={`product-publish-state ${preview.active ? "is-public" : "is-draft"}`}>
+              <strong>{preview.active ? "Publik" : "Draft"}</strong>
+              {preview.active ? "Agjenti e ofron dhe merr porosi për të." : "Agjenti nuk e sheh derisa ta publikosh."}
+            </p>
             <button
               className="btn btn-primary"
               disabled={pending}
               type="submit"
               name="save_mode"
-              value="save"
+              value="publish"
             >
-              {pending
-                ? "Duke ruajtur…"
-                : product
-                  ? "Ruaj ndryshimet"
-                  : "Ruaj produktin"}
+              {pending ? "Duke ruajtur…" : preview.active ? "Ruaj ndryshimet" : "Publiko"}
             </button>
             <button
               className="btn btn-ghost"
@@ -183,7 +183,7 @@ export function ProductEditor({
               name="save_mode"
               value="draft"
             >
-              Ruaj si draft
+              {preview.active ? "Kthe në draft" : "Ruaj si draft"}
             </button>
             {error && (
               <p role="alert" className="form-feedback-error">
@@ -192,7 +192,7 @@ export function ProductEditor({
             )}
             {success && <p role="status">{success}</p>}
             <p className="muted-copy">
-              Aktiv në katalog do të thotë që Agjenti e gjen dhe e rekomandon. Porosinë Agjenti e merr vetëm pasi klienti konfirmon përmbledhjen. Draftet nuk u shfaqen klientëve.
+              Porosinë Agjenti e regjistron vetëm pasi klienti konfirmon përmbledhjen. Draftet nuk u shfaqen klientëve.
             </p>
           </div>
         </aside>

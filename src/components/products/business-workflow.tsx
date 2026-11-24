@@ -13,7 +13,7 @@ export function ProductBusinessWorkflow({ slug, workflow, product }: {
   product?: { id: string; agent_orders?: boolean; visual_workflow?: { flowId: string; name: string } | null; visual_draft?: { id: string; name: string; status: string } | null };
 }) {
   return <div className="grid gap-3">
-    {product?.agent_orders === false && <p className="muted-copy"><strong>Vetëm për informim.</strong> Agjenti e prezanton këtë produkt, por nuk merr porosi për të.</p>}
+    {product?.agent_orders === false && <p className="muted-copy"><strong>Vetëm për informim.</strong> Agjenti e prezanton këtë produkt, por nuk merr porosi për të. Kur e publikon, Agjenti merr porosi.</p>}
     {workflow?.automatic ? (
       // Built by the server from the modules: the owner sees what the agent does, not a workflow to publish.
       <div className="rounded-xl border border-[var(--line)] p-4 grid gap-2">
