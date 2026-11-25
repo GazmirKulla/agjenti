@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ParticipantAvatar } from "@/components/dashboard/participant-avatar";
+import { participantAvatarUrl } from "@/lib/conversations/participant-avatar";
 import { refusalText } from "@/lib/orders/dispatch-detail";
 import { orderDelivery } from "@/lib/customers/contact";
 import { OrderEditor } from "@/components/dashboard/order-editor";
@@ -70,11 +72,11 @@ export default async function OrdersPage({
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
   let { data: orders, error } = await db.from("orders")
-    .select("id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,order_submissions(rejection),delivery:payload->customer,note:payload->note,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))")
+    .select("id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,order_submissions(rejection),delivery:payload->customer,note:payload->note,customers(display_name,username,phone),conversations(id,business_id,participant_avatar_path,participant_avatar_checked_at),order_items(id,quantity,unit_amount,options,position,products(name))")
     .eq("business_id", access.business.id).order("created_at", { ascending: false }).limit(1000);
   // Before migration 20261120140000 the refusal is not there yet; the orders still load without it.
   if (error) ({ data: orders, error } = await db.from("orders")
-    .select("id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,delivery:payload->customer,note:payload->note,customers(display_name,username,phone),order_items(id,quantity,unit_amount,options,position,products(name))")
+    .select("id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,delivery:payload->customer,note:payload->note,customers(display_name,username,phone),conversations(id,business_id,participant_avatar_path,participant_avatar_checked_at),order_items(id,quantity,unit_amount,options,position,products(name))")
     .eq("business_id", access.business.id).order("created_at", { ascending: false }).limit(1000) as unknown as { data: typeof orders; error: typeof error });
   if (error) throw new Error("Nuk u ngarkuan porositë.");
   // What each order took from or gave back to counted stock, shown with the order.
@@ -123,6 +125,15 @@ export default async function OrdersPage({
             username: string | null;
             phone: string | null;
           } | null;
+          const conversation = o.conversations as unknown as {
+            id: string;
+            business_id: string;
+            participant_avatar_path: string | null;
+            participant_avatar_checked_at: string | null;
+          } | null;
+          const avatarUrl = conversation?.business_id === access.business.id
+            ? participantAvatarUrl(access.business.id, conversation.id, conversation.participant_avatar_path, conversation.participant_avatar_checked_at)
+            : null;
           const items = orderLines(o.order_items as unknown as OrderItemRow[] | null, productFields);
           // What this order was saved and sent with; the customer card may have changed since.
           const delivery = orderDelivery({ customer: o.delivery });
@@ -216,7 +227,7 @@ export default async function OrdersPage({
                     <section className="order-card">
                       <h3 className="order-card-title"><span className="order-card-icon"><Icon name="customers" size={16} /></span>Klienti</h3>
                       <div className="order-person">
-                        <span className="order-avatar">{(c?.display_name || c?.username || "K").trim().slice(0, 1).toUpperCase()}</span>
+                        <ParticipantAvatar name={(c?.display_name || c?.username || "K").trim()} src={avatarUrl} size={42} className="order-avatar" />
                         <div>
                           <strong>{c?.display_name || "Klient pa emër"}</strong>
                           {c?.username && <p><Icon name="instagram" size={13} /> @{c.username.replace(/^@/, "")}</p>}
