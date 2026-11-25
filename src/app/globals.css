@@ -5556,3 +5556,21 @@ button.order-photo-image:hover:not(:disabled) {
 .profile-missing { margin: 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #f5a524 12%, var(--surface)); font-size: 13px; }
 .agent-space-note { margin: 0 0 8px; font-size: 12px; }
 @media (max-width: 640px) { .profile-day { grid-template-columns: 1fr 1fr; } .profile-intervals { grid-column: 1 / -1; } }
+
+/* Back to the Agjenti topic an editor was opened from. */
+.topic-return { margin: 0 0 12px; font-size: 13px; }
+.topic-return a { color: var(--accent); font-weight: 600; text-decoration: none; }
+
+/* Porositë / Rezervimet: what the agent tells customers, with Ndrysho to each editor. */
+.offer-summary { display: grid; gap: 10px; }
+.offer-summary h2 { margin: 0; font-size: 17px; }
+.offer-summary-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.offer-summary-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.offer-summary-list li > div { display: grid; gap: 2px; min-width: 0; }
+.offer-summary-list small { color: var(--ink-muted); font-size: 12px; }
+.offer-summary-list .offer-summary-missing { color: var(--warning, #b7791f); }
+
+.profile-overlaps { display: grid; gap: 10px; justify-items: start; }
+.profile-overlaps h2 { margin: 0; font-size: 17px; }
+.profile-overlaps .offer-summary-list { width: 100%; }
+.profile-overlap-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }

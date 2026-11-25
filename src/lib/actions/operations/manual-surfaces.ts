@@ -40,6 +40,8 @@ export const manualSurfaces = {
   "src/lib/agents/instruction-facts-actions.ts#checkInstructionFacts": { exception: "Read-only review that proposes moving facts out of the instructions; nothing is written." },
   "src/lib/agent-configuration/actions.ts#restoreConfiguration": {"operation": "agent.restore"},
   "src/lib/business-profile/actions.ts#saveBusinessProfile": {"operation": "agent.configure"},
+  "src/lib/business-profile/actions.ts#checkProfileOverlaps": {"exception": "Read-only: finds active knowledge that may repeat the business profile by meaning, on the owner's request; changes nothing."},
+  "src/lib/business-profile/actions.ts#switchOffRepeatingKnowledge": {"operation": "knowledge.save"},
   "src/lib/agents/training/actions.ts#moveStyleToInstructions": { exception: "Moves one business-wide style lesson the owner chose on screen into the agent's instructions through the same versioned save as agent.communication, then removes the lesson with its revision." },
   "src/lib/agents/instruction-facts-actions.ts#moveInstructionFacts": { exception: "Applies only a proposal the owner reviewed on screen, through the same versioned draft and publish path as agent.communication." },
   "src/app/b/[slug]/agents/page.tsx#save": {"operation": "agent.manage"},

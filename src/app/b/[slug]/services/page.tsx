@@ -5,11 +5,13 @@ import { serviceColumns, type BusinessService } from "@/lib/services/model";
 import { PageHeading } from "@/components/dashboard/ui";
 import { loadVisualBindings } from "@/lib/workflows/visual/bindings";
 export default async function Page({
-  params,
+  params, searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }) {
   const { slug } = await params;
+  const { edit } = await searchParams;
   const { access } = await requireEnabledModule(slug, "services");
   const [bindings, result] = await Promise.all([loadVisualBindings(access.business.id), createServiceSupabase()
     .from("booking_services")
@@ -40,6 +42,7 @@ export default async function Page({
       services={(result.data ?? []) as BusinessService[]}
       flowBindings={bindings.services.map(item => ({ id: item.id, flowId: item.flowId, name: item.flowLabel }))}
       workflowsEnabled={bindings.enabled}
+      initialEditId={edit}
     />
   );
 }

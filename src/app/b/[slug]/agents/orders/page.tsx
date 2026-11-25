@@ -4,6 +4,7 @@ import { PageHeading } from "@/components/dashboard/ui";
 import { AgentSpace } from "@/components/agents/agent-space";
 import { TopicTest } from "@/components/agents/topic-test";
 import { AgentCapabilities } from "@/components/agents/capabilities";
+import { ProductsSummary } from "@/components/agents/offer-summary";
 import { ConfigurationHistory } from "@/components/agents/configuration-history";
 
 export const metadata = { title: "Porositë | Agjenti.app" };
@@ -18,6 +19,7 @@ export default async function AgentOrdersPage({ params }: { params: Promise<{ sl
   return <>
     <PageHeading title="Porositë" description="Çfarë bën Agjenti kur një klient do të porosisë: si e merr porosinë, çfarë e pyet, statusi i porosisë dhe kur ia kalon stafit. Produktet ndryshohen te editori i tyre." />
     <AgentSpace test={<TopicTest slug={access.business.slug} businessId={access.business.id} businessName={access.business.name} userId={user.id} />}>
+      <ProductsSummary slug={access.business.slug} businessId={access.business.id} />
       <AgentCapabilities slug={access.business.slug} businessId={access.business.id} sections={["orders", "orderStatus", "handoff"]} />
       <ConfigurationHistory slug={access.business.slug} businessId={access.business.id} />
     </AgentSpace>

@@ -283,18 +283,21 @@ export function ServicesWorkspace({
   services,
   flowBindings = [],
   workflowsEnabled = false,
+  initialEditId,
 }: {
   slug: string;
   businessName: string;
   services: BusinessService[];
   flowBindings?: { id: string; flowId: string; name: string }[];
   workflowsEnabled?: boolean;
+  /** Opened from a topic (?edit=…): that service's editor opens right away. */
+  initialEditId?: string;
 }) {
   const [query, setQuery] = useState(""),
     [status, setStatus] = useState("all"),
     [booking, setBooking] = useState("all"),
     [sort, setSort] = useState("saved"),
-    [editor, setEditor] = useState<BusinessService | "new" | null>(null);
+    [editor, setEditor] = useState<BusinessService | "new" | null>(() => services.find(s => s.id === initialEditId) ?? null);
   usePageAssistantContext(editor && editor !== "new" ? { entityType: "service", entityId: editor.id, selectionLabel: editor.name } : {});
   const filtered = services.filter(
     (s) =>

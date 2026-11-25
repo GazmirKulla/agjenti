@@ -6,6 +6,7 @@ import { AgentSpace } from "@/components/agents/agent-space";
 import { TopicTest } from "@/components/agents/topic-test";
 import { ProfileEditor } from "@/components/agents/profile-editor";
 import { ConfigurationHistory } from "@/components/agents/configuration-history";
+import { ProfileOverlaps } from "@/components/agents/profile-overlaps";
 import { loadBusinessProfile } from "@/lib/business-profile/service";
 import { missingFields } from "@/lib/business-profile/model";
 import { saveBusinessProfile } from "@/lib/business-profile/actions";
@@ -28,6 +29,7 @@ export default async function AgentBusinessPage({ params }: { params: Promise<{ 
       {missing.length > 0 && <p className="profile-missing" role="status">Profili nuk thotë ende: {missing.map(field => field.label.toLowerCase()).join(", ")}. Agjenti këto i thotë si të panjohura dhe nuk shpik vlera.</p>}
       <ProfileEditor initial={loaded.profile} updatedAt={loaded.updatedAt} requestId={randomUUID()} timezone={loaded.timezone} suggestions={loaded.suggestions}
         settingsHref={`${base}/settings/business`} action={saveBusinessProfile.bind(null, access.business.slug)} />
+      <ProfileOverlaps slug={access.business.slug} />
       <ConfigurationHistory slug={access.business.slug} businessId={businessId} />
     </AgentSpace>
   </>;

@@ -9,6 +9,8 @@ import {
   requireBusinessAccess,
 } from "@/lib/tenant/access";
 import { AppShell } from "@/components/dashboard/shell";
+import { Suspense } from "react";
+import { TopicReturn } from "@/components/agents/topic-return";
 import { getAppSettings } from "@/lib/platform/settings";
 import { buildNavigationItems } from "@/lib/dashboard/navigation/builder";
 import { ownProcessPublished } from "@/lib/orchestration/automatic-process";
@@ -87,6 +89,7 @@ export default async function BusinessLayout({
       )}
       <BillingUsageNotice slug={business.slug} usage={billingUsage}
         canUpgrade={billingUsage.scope !== "account" || billingUsage.billingUserId === user.id} />
+      <Suspense fallback={null}><TopicReturn base={`/b/${business.slug}`} /></Suspense>
       {children}
         </AppShell>
     </AssistantWorkspaceProvider>

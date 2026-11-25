@@ -4,6 +4,7 @@ import { PageHeading } from "@/components/dashboard/ui";
 import { AgentSpace } from "@/components/agents/agent-space";
 import { TopicTest } from "@/components/agents/topic-test";
 import { AgentCapabilities } from "@/components/agents/capabilities";
+import { ServicesSummary } from "@/components/agents/offer-summary";
 import { ConfigurationHistory } from "@/components/agents/configuration-history";
 
 export const metadata = { title: "Rezervimet | Agjenti.app" };
@@ -18,6 +19,7 @@ export default async function AgentBookingsPage({ params }: { params: Promise<{ 
   return <>
     <PageHeading title="Rezervimet" description="Çfarë bën Agjenti kur një klient do të rezervojë: nëse rezervon vetë, për cilat shërbime, si i ndryshon rezervimet dhe kur ia kalon stafit. Orari i rezervimeve është te Kalendari, kohëzgjatja te Shërbimet." />
     <AgentSpace test={<TopicTest slug={access.business.slug} businessId={access.business.id} businessName={access.business.name} userId={user.id} />}>
+      <ServicesSummary slug={access.business.slug} businessId={access.business.id} />
       <AgentCapabilities slug={access.business.slug} businessId={access.business.id} sections={["bookings", "bookingChanges", "handoff"]} />
       <ConfigurationHistory slug={access.business.slug} businessId={access.business.id} />
     </AgentSpace>
