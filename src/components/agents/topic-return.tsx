@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 
 /** The Agjenti topics an editor can be opened from; anything else in ?nga= is ignored. */
 const topics: Record<string, string> = {
-  "agents/business": "Biznesi", knowledge: "Oferta", "agents/orders": "Porositë", "agents/bookings": "Rezervimet", agents: "Komunikimi",
+  "agents/business": "Biznesi", knowledge: "Oferta", "agents/orders": "Porositë", "agents/bookings": "Rezervimet", agents: "Komunikimi", "agents/test": "Prova dhe kontrolli",
 };
 /**
  * Opened from a topic (?nga=agents/bookings), an editor shows the way back to it. The editor stays the one

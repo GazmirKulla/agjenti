@@ -50,3 +50,23 @@ it("names the profile sections given to a reply with Ndrysho këtu to each field
   expect(render({ sections: [], status: "unavailable" })).toContain("dështoi");
   expect(render({ sections: [], status: "complete" })).toContain("nuk thotë ende");
 });
+
+it("links each presented product and service to its own editor and back to the topic", async () => {
+  const { TestCatalogUsed } = await import("./test-knowledge");
+  const out = renderToStaticMarkup(createElement(TestCatalogUsed, { slug: "shop", returnTo: "agents/orders",
+    products: [{ id: "p1", name: "Puzzle" }], services: [{ id: "s1", name: "Konsulta" }] }));
+  expect(out).toContain('href="/b/shop/products/p1?edit=1&amp;nga=agents%2Forders"');
+  expect(out).toContain('href="/b/shop/services?edit=s1&amp;nga=agents%2Forders"');
+  expect(renderToStaticMarkup(createElement(TestCatalogUsed, { slug: "shop" }))).toBe("");
+});
+
+it("says what was only simulated, unverified or blocked, and leaves internal plumbing out", async () => {
+  const { TestActionsUsed } = await import("./test-knowledge");
+  const out = renderToStaticMarkup(createElement(TestActionsUsed, { actions: [
+    { kind: "booking.create", disposition: "SIMULATED" }, { kind: "order.create", disposition: "BLOCKED" }, { kind: "provider.http", disposition: "SIMULATED" }] }));
+  expect(out).toContain("Krijimi i rezervimit: u simulua");
+  expect(out).toContain("Regjistrimi i porosisë: u bllokua");
+  expect(out).not.toContain("provider");
+  expect(out).toContain("nuk krijon porosi, rezervime ose mesazhe reale");
+  expect(renderToStaticMarkup(createElement(TestActionsUsed, { actions: [{ kind: "webhook", disposition: "SIMULATED" }] }))).toBe("");
+});

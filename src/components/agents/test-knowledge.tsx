@@ -63,3 +63,37 @@ export function TestProfileUsed({ slug, configuration, profileHref }: { slug: st
   if (!read.sections.length) return <p className="chat-knowledge-used">Profili i biznesit nuk thotë ende kontaktet, adresën apo orarin. <Link href={href("contacts")}>Plotëso profilin</Link></p>;
   return <p className="chat-knowledge-used"><span>Profili i biznesit i dhënë:</span> {read.sections.map((section, index) => <Fragment key={section}>{index ? " · " : ""}{profileSectionLabels[section] ?? section} (<Link href={href(section)}>Ndrysho këtu</Link>)</Fragment>)}</p>;
 }
+
+type Presented = { id: string; name: string };
+/** Under each reply: the products and services it presented, each with Ndrysho këtu to its own editor (and back). */
+export function TestCatalogUsed({ slug, products, services, returnTo }: { slug: string; products?: Presented[]; services?: Presented[]; returnTo?: string }) {
+  if (!products?.length && !services?.length) return null;
+  const back = returnTo ? `&nga=${encodeURIComponent(returnTo)}` : "";
+  return <p className="chat-knowledge-used"><span>Paraqiti:</span>{" "}
+    {(products ?? []).map((product, index) => <Fragment key={`p${product.id}`}>{index ? " · " : ""}{product.name} (<Link href={`/b/${slug}/products/${product.id}?edit=1${back}`}>Ndrysho këtu</Link>)</Fragment>)}
+    {(services ?? []).map((service, index) => <Fragment key={`s${service.id}`}>{index || products?.length ? " · " : ""}{service.name} (<Link href={`/b/${slug}/services?edit=${service.id}${back}`}>Ndrysho këtu</Link>)</Fragment>)}
+  </p>;
+}
+
+const actionLabels: Partial<Record<string, string>> = {
+  "booking.create": "Krijimi i rezervimit", "booking.change": "Ndryshimi i rezervimit", "booking.availability": "Kontrolli i orareve të lira",
+  "booking.status": "Leximi i rezervimit", "order.create": "Regjistrimi i porosisë", "orders.status": "Leximi i statusit të porosisë",
+  "staff.handoff": "Kalimi te stafi", "customer.message": "Mesazhi te klienti", "payment.process": "Pagesa",
+};
+const dispositions: Record<string, string> = {
+  SIMULATED: "u simulua; në një bisedë reale do të kryhej",
+  UNVERIFIED: "nuk u verifikua; mos e merr si të kryer",
+  BLOCKED: "u bllokua; nuk do të kryhej as në bisedë reale",
+  UNSUPPORTED: "nuk mbështetet në provë",
+};
+/**
+ * Under each reply: what the agent would have done for real, and that in the test nothing was done. Only the
+ * actions an owner recognises are named; internal plumbing (HTTP, jobs, database) is left out.
+ */
+export function TestActionsUsed({ actions }: { actions?: { kind: string; disposition: string }[] }) {
+  const shown = (actions ?? []).filter(action => actionLabels[action.kind]);
+  if (!shown.length) return null;
+  return <p className="chat-knowledge-used"><span>Veprimet:</span>{" "}
+    {shown.map((action, index) => <Fragment key={`${action.kind}${index}`}>{index ? " · " : ""}{actionLabels[action.kind]}: {dispositions[action.disposition] ?? "gjendje e panjohur"}</Fragment>)}
+    {" "}Prova nuk krijon porosi, rezervime ose mesazhe reale.</p>;
+}

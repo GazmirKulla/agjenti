@@ -3,7 +3,8 @@ import { subscribeChanges } from "@/lib/realtime/browser";
 import { invalidationTask } from "@/lib/realtime/invalidation";
 import { blockedByFailedTurn, hasInFlightTurns, hasRecoverableTurns } from "./test-chat-state";
 import { TestConfiguration } from "./test-configuration";
-import { TestKnowledgeFocus, TestKnowledgeUsed, TestProfileUsed, type TestKnowledge } from "./test-knowledge";
+import { TestActionsUsed, TestCatalogUsed, TestKnowledgeFocus, TestKnowledgeUsed, TestProfileUsed, type TestKnowledge } from "./test-knowledge";
+import { usePathname } from "next/navigation";
 import { AssistantComposer } from "@/components/business-assistant/composer";
 import { MessageRoutingView } from "@/components/workflows/message-routing";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -35,6 +36,9 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
   profileHref?: string;
   renderInspector?: (entry: ChatEntry | undefined, chat: TestConversation) => ReactNode;
 }) {
+  // The topic this test sits beside: an editor opened from a reply leads back to it.
+  const pathname = usePathname();
+  const returnTo = pathname?.split(`/b/${slug}/`)[1];
   const [chats, setChats] = useState<TestConversation[]>([initialChat]);
   // Chat Lab inputs: details of the simulated customer (e.g. their Instagram account).
   const [inputs, setInputs] = useState<TestInputs>({});
@@ -396,6 +400,8 @@ export function AgentTestChat({ slug, businessName, userId, configurationDraft, 
               {entry.result.productPhotos.map(photo => <a key={photo.productId} className="chat-attachment" href={photo.url} target="_blank" rel="noopener noreferrer"><Image src={photo.url} width={180} height={180} unoptimized alt="Foto e produktit" className="rounded-lg object-contain" referrerPolicy="no-referrer"/></a>)}
               <small className="chat-receipt">Simulim: në Instagram dhe WhatsApp këto foto dërgohen pas përgjigjes.</small>
             </div>}
+            {knowledge && <TestActionsUsed actions={entry.result.externalActions} />}
+            {knowledge && <TestCatalogUsed slug={slug} products={entry.result.presentedProducts} services={entry.result.presentedServices} returnTo={returnTo} />}
             {knowledge && <TestProfileUsed slug={slug} configuration={entry.result.configuration} profileHref={profileHref} />}
             {knowledge ? <TestKnowledgeUsed slug={slug} configuration={entry.result.configuration} knowledge={knowledge} focus={knowledgeFocus} />
               : !!entry.result.debug?.knowledgeTitles?.length && <p className="chat-knowledge-used"><span>Njohuritë e konsultuara:</span> {entry.result.debug.knowledgeTitles.join(" · ")}</p>}
