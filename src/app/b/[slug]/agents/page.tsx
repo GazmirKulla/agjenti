@@ -1,5 +1,8 @@
 import { InstructionFacts } from "@/components/agents/instruction-facts";
 import { ConfigurationHistory } from "@/components/agents/configuration-history";
+import { AgentSpace } from "@/components/agents/agent-space";
+import { TopicTest } from "@/components/agents/topic-test";
+import { AgentCapabilities } from "@/components/agents/capabilities";
 import { CommunicationEditor, type CommunicationEditorAgent } from "@/components/agents/communication-editor";
 import { prepareCommunicationConfiguration, saveCommunicationConfiguration, communicationConfigurationColumns } from "@/lib/agents/communication-configuration";
 import { prepareManagedAgent, saveManagedAgent } from "@/lib/agents/manage";
@@ -143,14 +146,13 @@ export default async function AgentsPage({
     <>
       <PageHeading
         title="Komunikimi"
-        description={`Si flet dhe çfarë bën Agjenti me klientët e ${access.business.name} në Instagram dhe WhatsApp. Faktet (çmimet, oferta, dërgesa) i lexon nga Njohuritë.`}
+        description={`Si flet dhe çfarë bën Agjenti me klientët e ${access.business.name} në Instagram dhe WhatsApp. Kontaktet dhe orari janë te Biznesi, oferta dhe faktet te Oferta.`}
       >
         <div className="agent-heading-actions">
-          <Link href={`/b/${slug}/agents/process`} className="btn btn-ghost">Çfarë bën Agjenti</Link>
           <Link href={`/b/${slug}/agents/memory`} className="btn btn-ghost">Preferencat dhe shembujt</Link>
-          <Link href={`/b/${slug}/agents/test`} className="btn btn-primary">Provo →</Link>
         </div>
       </PageHeading>
+      <AgentSpace test={<TopicTest slug={slug} businessId={access.business.id} businessName={access.business.name} userId={user.id} />}>
       <div className="agent-page">
         <div className="agent-page-main">
           {(agents ?? []).map((a) => (
@@ -184,6 +186,9 @@ export default async function AgentsPage({
           {!!agents?.length && <InstructionFacts slug={slug} />}
         </aside>
       </div>
+      {/* When the agent hands a conversation to staff and whether it reads voice messages: how it communicates. */}
+      <AgentCapabilities slug={slug} businessId={access.business.id} sections={["handoff", "voice", "notes"]} />
+      </AgentSpace>
     </>
   );
 }

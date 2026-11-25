@@ -20,5 +20,7 @@ legend.capability-part-title { margin-bottom: 10px; }
 .capability-list + .vf-product-details { margin-top: 28px; }
 @media (max-width: 560px) {
   .capability-head { flex-wrap: wrap; }
+  /* The heading takes the row beside the icon; the state goes under it instead of squeezing the reason. */
+  .capability-heading { flex-basis: calc(100% - 56px); }
   .capability-state { order: 3; margin-left: 56px; }
 }

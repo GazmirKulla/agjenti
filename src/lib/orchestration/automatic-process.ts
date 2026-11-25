@@ -48,12 +48,12 @@ export function automaticReadiness(facts: Facts): AutomaticReadiness[] {
         : { ready: true, reason: "Agjenti i tregon klientit statusin e porosive të tij." }) },
     { capability: "bookings",
       ...(!engine || !allowed(modules, "bookings", "services") ? { ready: false, reason: blocked("Ndiz Shërbimet dhe Rezervimet.") }
-        : !facts.bookingCalendar ? { ready: false, reason: "Ndiz “Agjenti rezervon vetë” te Çfarë bën Agjenti, pasi të kesh orarin te Kalendari." }
+        : !facts.bookingCalendar ? { ready: false, reason: "Ndiz “Agjenti rezervon vetë” te Agjenti → Rezervimet, pasi të kesh orarin te Kalendari." }
         : !facts.bookableServices ? { ready: false, reason: "Shto të paktën një shërbim aktiv që pranon rezervime." }
         : { ready: true, reason: "Agjenti rezervon sipas orarit të kalendarit." }) },
     { capability: "bookingChanges",
       ...(!engine || !allowed(modules, "bookings", "services") ? { ready: false, reason: blocked("Ndiz Shërbimet dhe Rezervimet.") }
-        : !facts.bookingCalendar ? { ready: false, reason: "Ndiz “Agjenti rezervon vetë” te Çfarë bën Agjenti." }
+        : !facts.bookingCalendar ? { ready: false, reason: "Ndiz “Agjenti rezervon vetë” te Agjenti → Rezervimet." }
         : { ready: true, reason: "Klienti pyet për rezervimin e tij, e anulon ose e zhvendos në një orë të lirë, pas konfirmimit." }) },
     { capability: "handoff",
       ...(!engine || !allowed(modules, "inbox") ? { ready: false, reason: blocked("Ndiz Bisedat.") }

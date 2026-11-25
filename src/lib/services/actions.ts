@@ -2,9 +2,8 @@
 import { revalidatePath } from "next/cache";
 import { manualCommandActor } from "@/lib/actions/command-actor";
 import { saveBusinessService as saveService } from "./commands";
-import { createServiceSupabase } from "@/lib/supabase/service";
 import { uuid } from "@/lib/calendar/model";
-import { serviceColumns } from "./model";
+import { saveConfiguration } from "@/lib/agent-configuration/service";
 export async function saveBusinessService(slug: string, form: FormData) {
   try {
     const actor = await manualCommandActor(slug);
@@ -15,21 +14,16 @@ export async function saveBusinessService(slug: string, form: FormData) {
   catch (error) { return { error: (error as Error).message }; }
 }
 
-/** Çfarë bën Agjenti: whether one service accepts bookings. The same writer as the service form; the rest stays as stored. */
+/** Rezervimet: whether the agent books one service itself; false means it gives information and staff take the booking. */
 export async function saveServiceBooking(slug: string, serviceId: string, enabled: boolean, updatedAt: string) {
   try {
     if (!uuid(serviceId) || typeof enabled !== "boolean" || typeof updatedAt !== "string" || !updatedAt) throw new Error("Zgjedhja nuk është e vlefshme.");
     const actor = await manualCommandActor(slug);
-    const { data, error } = await createServiceSupabase().from("booking_services").select(serviceColumns).eq("business_id", actor.business.id).eq("id", serviceId).maybeSingle();
-    if (error || !data) throw new Error("Shërbimi nuk u gjet.");
-    const before = data as unknown as Record<string, unknown>;
-    if (before.updated_at !== updatedAt) throw new Error("Shërbimi ndryshoi. Rifresko faqen.");
-    const { serviceForm } = await import("@/lib/actions/operations/service");
-    const form = serviceForm({ ...before, booking_enabled: enabled });
-    form.set("id", serviceId); form.set("updatedAt", updatedAt);
-    const result = await saveService(actor, form);
-    if (!("error" in result)) { revalidatePath(`/b/${actor.business.slug}`, "layout"); return { success: enabled ? "Shërbimi pranon rezervime." : "Shërbimi nuk pranon më rezervime." }; }
-    return result;
+    // Whether the agent books this service is an agent permission: through the shared configuration change,
+    // against the service as the owner saw it.
+    await saveConfiguration(actor.business.id, actor.userId, [{ type: "service.booking", id: serviceId, booking_enabled: enabled, expected: updatedAt }], "owner");
+    revalidatePath(`/b/${actor.business.slug}`, "layout");
+    return { success: enabled ? "U zbatua: Agjenti rezervon këtë shërbim." : "U zbatua: Agjenti jep vetëm informacion për këtë shërbim; rezervimin e merr stafi." };
   }
   catch (error) { return { error: (error as Error).message }; }
 }

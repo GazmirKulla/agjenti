@@ -3,6 +3,8 @@ export const english: Record<string, string> = {
   "Oferta": "Offer",
   "Komunikimi": "Communication",
   "Porositë dhe rezervimet": "Orders and bookings",
+  "Si merr Agjenti porosi dhe kur ia kalon stafit": "How the Agent takes orders and when it hands over to staff",
+  "Nëse Agjenti rezervon vetë dhe për cilat shërbime": "Whether the Agent books itself and for which services",
   "Kontaktet, adresa dhe orari që u jep Agjenti klientëve": "Contacts, address and hours the Agent gives customers",
   "Çfarë ofron biznesi dhe informacioni që përdor Agjenti": "What the business offers and the information the Agent uses",
   "Si flet Agjenti me klientët": "How the Agent talks to customers",

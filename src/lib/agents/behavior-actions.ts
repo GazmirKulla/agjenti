@@ -10,6 +10,6 @@ export async function saveAgentBehavior(slug: string, patch: { voice?: boolean; 
   if (!user || !access) return { error: "Nuk ke qasje në këtë biznes." };
   const saved = await storeAgentBehavior(access.business.id, user.id, patch);
   if ("error" in saved) return { error: saved.error };
-  revalidatePath(`/b/${access.business.slug}/agents/process`);
+  revalidatePath(`/b/${access.business.slug}`, "layout");
   return { success: "U ruajt. Vlen për mesazhet e reja." };
 }

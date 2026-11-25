@@ -1,0 +1,138 @@
+import Link from "next/link";
+import { Icon } from "@/components/dashboard/icon";
+import "./capabilities.css";
+import { BusinessProcessView } from "@/components/workflows/business-process";
+import { OrderIntakeSetting } from "@/components/dashboard/order-intake-setting";
+import { AgentBehaviorSetting, AgentBookingSwitch, CustomerQuestionsEditor, HandoffMessageForm, ServiceBookingSwitches } from "@/components/agents/capability-settings";
+import { loadAgentBehavior } from "@/lib/agents/behavior";
+import { parseCommunicationPolicy } from "@/lib/agents/communication-policy";
+import { automaticStatus, defaultHandoffMessage, type AutomaticCapability, type AutomaticReadiness } from "@/lib/orchestration/automatic-process";
+import { loadBusinessProcess } from "@/lib/discovery/load-process";
+import { loadDashboardProfile } from "@/lib/dashboard/profile/service";
+import { askFields, readBusinessFields } from "@/lib/items/fields";
+import { createServiceSupabase } from "@/lib/supabase/service";
+
+
+const icons: Record<AutomaticCapability | "voice", string> = {
+  orders: "cart", orderStatus: "search", bookings: "booking", bookingChanges: "calendar", handoff: "customers", voice: "microphone",
+};
+const titles: Record<AutomaticCapability, string> = {
+  orders: "Merr porosi", orderStatus: "Tregon statusin e porosisë", bookings: "Rezervon", bookingChanges: "Tregon, anulon ose zhvendos rezervimin e klientit", handoff: "Ia kalon bisedën stafit",
+};
+
+export type CapabilitySection = "orders" | "orderStatus" | "bookings" | "bookingChanges" | "handoff" | "voice" | "notes";
+/**
+ * What the customer agent does, one card per capability: whether it is ready (or why not) and the business settings
+ * that shape it, changed here. A topic shows only its own cards (Porositë, Rezervimet, Komunikimi); the settings
+ * stay in their own editors and sources, so every topic that shows one changes the same data.
+ */
+export async function AgentCapabilities({ slug, businessId, sections }: { slug: string; businessId: string; sections: CapabilitySection[] }) {
+  const base = `/b/${encodeURIComponent(slug)}`;
+  const show = new Set(sections);
+  const db = createServiceSupabase();
+  const [own, automatic, operating, profile, policy, business, informationOnly, calendar, bookableServices, agent] = await Promise.all([
+    db.from("visual_workflows").select("published_version_id,enabled").eq("business_id", businessId).maybeSingle(),
+    automaticStatus(businessId),
+    loadBusinessProcess(businessId),
+    loadDashboardProfile(businessId),
+    db.from("business_automation_policies").select("local_orders").eq("business_id", businessId).maybeSingle(),
+    db.from("businesses").select("product_fields").eq("id", businessId).maybeSingle(),
+    db.from("products").select("id,name", { count: "exact" }).eq("business_id", businessId).eq("is_active", true).is("archived_at", null)
+      .eq("agent_orders", false).order("name").limit(8),
+    db.from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", businessId).maybeSingle(),
+    db.from("booking_services").select("id,name,booking_enabled,updated_at").eq("business_id", businessId).eq("is_active", true).order("name").limit(50),
+    db.from("ai_agents").select("communication,updated_at").eq("business_id", businessId).eq("is_active", true).maybeSingle(),
+  ]);
+  const behavior = await loadAgentBehavior(businessId);
+  let handoffMessage = "";
+  try { handoffMessage = agent.data?.communication ? parseCommunicationPolicy(agent.data.communication).handoffMessage ?? "" : ""; } catch { handoffMessage = ""; }
+  const ownProcess = !own.error && own.data?.published_version_id ? { enabled: own.data.enabled === true } : null;
+  const enabled = new Set(profile.enabledModules);
+  const readiness = new Map<AutomaticCapability, AutomaticReadiness>((automatic?.readiness ?? []).map(r => [r.capability, r]));
+  const questions = business.error ? null : askFields(readBusinessFields(business.data?.product_fields));
+  const localOrders = policy.error ? null : policy.data?.local_orders === true;
+
+  // One card per capability: its state, then what shapes it, one divided part per setting.
+  const card = (capability: AutomaticCapability | "voice", title: string, parts: React.ReactNode[] = []) => {
+    const state = capability === "voice" ? undefined : readiness.get(capability);
+    return <section key={capability} className="panel section-pad capability-card" aria-labelledby={`capability-${capability}`}>
+      <header className="capability-head">
+        <span className="capability-icon" aria-hidden="true"><Icon name={icons[capability]} size={20} /></span>
+        <div className="capability-heading">
+          <h2 id={`capability-${capability}`}>{title}</h2>
+          {state && <p className="muted-copy">{state.reason}</p>}
+        </div>
+        {state && <span className={`capability-state ${state.ready ? "is-ready" : "is-missing"}`}>{state.ready ? "✓ Gati" : "Jo ende"}</span>}
+      </header>
+      {parts.filter(Boolean).map((part, index) => <div key={index} className="capability-part">{part}</div>)}
+    </section>;
+  };
+  const part = (icon: string, title: string, body: React.ReactNode, hint?: React.ReactNode) => <>
+    <h3 className="capability-part-title"><Icon name={icon} size={16} />{title}</h3>
+    {hint && <small className="muted-copy">{hint}</small>}
+    {body}
+  </>;
+
+  return <>
+    {ownProcess ? (
+      <section className="panel section-pad grid gap-2 capability-own">
+        <h2>Agjenti ndjek procesin tënd të personalizuar</h2>
+        <p className="muted-copy">{ownProcess.enabled ? "Procesi që ke publikuar vendos hapat e Agjentit për gjithë biznesin. Cilësimet më poshtë vlejnë edhe për të." : "Ke publikuar një proces të personalizuar, por është i fikur: Agjenti vetëm informon derisa ta ndezësh ose ta heqësh."}</p>
+        {enabled.has("workflows") && <Link className="inline-link" href={`${base}/workflows`}>Hap procesin e personalizuar →</Link>}
+      </section>
+    ) : !automatic && <section className="panel section-pad"><p className="muted-copy">Nuk u verifikua çfarë mund të bëjë Agjenti tani. Rifresko faqen pas pak.</p></section>}
+
+    <div className="capability-list">
+    {show.has("orders") && enabled.has("orders") && card("orders", titles.orders, [
+      <OrderIntakeSetting key="intake" slug={slug} enabled={localOrders} embedded />,
+      part("chat", "Çfarë e pyet klientin kur porosit",
+        questions === null ? <p className="muted-copy">Pyetjet nuk u lexuan. Rifresko faqen.</p> : <CustomerQuestionsEditor slug={slug} questions={questions} />,
+        "Agjenti i bën pasi klienti zgjedh produktin, para përmbledhjes, dhe përgjigja shkon me porosinë. Te çdo produkt, te “Si e porosit klienti”, zgjedh cilat bën."),
+      // Older products set to "information only" before a product became simply public or a draft.
+      (informationOnly.error || informationOnly.data?.length) ? part("products", "Produkte vetëm për informim", <>
+        {informationOnly.error ? <p className="muted-copy">Nuk u lexuan. Rifresko faqen.</p> : <>
+          <p className="muted-copy">Agjenti i prezanton, por nuk merr porosi për {informationOnly.count === 1 ? "këtë produkt" : `këto ${informationOnly.count} produkte`}. Hape produktin dhe shtyp “Ruaj ndryshimet” që Agjenti të marrë porosi.</p>
+          <ul className="grid gap-1">{(informationOnly.data ?? []).map(p => <li key={p.id}><Link className="inline-link" href={`${base}/products/${p.id}?edit=1#product-save`}>{p.name}</Link></li>)}</ul>
+          {(informationOnly.count ?? 0) > (informationOnly.data?.length ?? 0) && <small className="muted-copy">Dhe {(informationOnly.count ?? 0) - (informationOnly.data?.length ?? 0)} të tjera.</small>}
+        </>}
+      </>) : null,
+    ])}
+
+    {show.has("orderStatus") && enabled.has("orders") && card("orderStatus", titles.orderStatus)}
+
+    {show.has("bookings") && (enabled.has("bookings") || enabled.has("services")) && card("bookings", titles.bookings, [
+      part("calendar", "Rezervimet nga Agjenti", <>
+        {calendar.error ? <p className="muted-copy">Kalendari nuk u lexua. Rifresko faqen.</p>
+          : <AgentBookingSwitch slug={slug} enabled={calendar.data?.agent_booking_enabled === true} />}
+        {!calendar.error && !calendar.data && <small className="muted-copy">Pa orar të ruajtur, Agjenti përdor orarin bazë: e hënë–e premte, 09:00–17:00. E ndryshon te Kalendari.</small>}
+      </>),
+      part("knowledge", "Shërbimet",
+        bookableServices.error ? <p className="muted-copy">Shërbimet nuk u lexuan. Rifresko faqen.</p> : <ServiceBookingSwitches slug={slug} services={bookableServices.data ?? []} />),
+      <nav key="links" className="capability-links" aria-label="Cilësimet e rezervimeve">
+        <Link className="inline-link" href={`${base}/calendar`}><Icon name="calendar" size={15} />Orari te Kalendari →</Link>
+        <Link className="inline-link" href={`${base}/services`}><Icon name="knowledge" size={15} />Kohëzgjatja te Shërbimet →</Link>
+      </nav>,
+    ])}
+
+    {show.has("bookingChanges") && enabled.has("bookings") && card("bookingChanges", titles.bookingChanges, [
+      <small key="note" className="muted-copy">Vetëm rezervimet e bëra në bisedat me të njëjtin klient. Ti merr njoftim te Kreu për çdo anulim ose zhvendosje; kur konfirmon, anulon ose zhvendos vetë një rezervim, klientit i shkon mesazh brenda 24 orëve nga mesazhi i tij i fundit.</small>,
+    ])}
+
+    {show.has("handoff") && card("handoff", titles.handoff, [
+      part("reply", "Mesazhi kur ia kalon stafit",
+        agent.error || !agent.data ? <p className="muted-copy">Agjenti aktiv nuk u gjet. Krijoje ose aktivizoje te <Link className="inline-link" href={`${base}/agents`}>Udhëzimet</Link>.</p>
+          : <HandoffMessageForm slug={slug} message={handoffMessage} updatedAt={agent.data.updated_at} fallback={defaultHandoffMessage} />),
+      <AgentBehaviorSetting key="escalation" slug={slug} kind="escalation" value={behavior.escalation} />,
+    ])}
+
+    {show.has("voice") && card("voice", "Lexon mesazhet zanore dhe videot", [
+      <AgentBehaviorSetting key="voice" slug={slug} kind="voice" value={behavior.voice} />,
+    ])}
+    </div>
+
+    {show.has("notes") && <details className="vf-product-details"><summary>Udhëzimet nga onboarding-u</summary>
+      <BusinessProcessView slug={slug} initialProcess={operating.process} initialRevision={operating.revision} />
+    </details>}
+    {show.has("notes") && enabled.has("workflows") && !ownProcess && <p className="muted-copy">Për raste të veçanta (kushte, veprime të jashtme) ekziston edhe <Link className="inline-link" href={`${base}/workflows`}>procesi i personalizuar (i avancuar)</Link>.</p>}
+  </>;
+}

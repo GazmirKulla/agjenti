@@ -27,7 +27,7 @@ it("groups workflow and its deep links under the agent while keeping the origina
 
 it("organizes the agent by the owner's topics, with inner pages kept in their topic", () => {
   expect(navigation.agent.map(item => [item.path, item.label])).toEqual([
-    ["agents/business", "Biznesi"], ["knowledge", "Oferta"], ["agents/process", "Porositë dhe rezervimet"], ["agents", "Komunikimi"],
+    ["agents/business", "Biznesi"], ["knowledge", "Oferta"], ["agents/orders", "Porositë"], ["agents/bookings", "Rezervimet"], ["agents", "Komunikimi"],
     ["agents/test", "Prova dhe kontrolli"], ["workflows", moduleRegistry.workflows.label]]);
   // Only the topics the business uses.
   const servicesOnly = organizeWorkspace(allItems.filter(item => ["agents", "knowledge", "services"].includes(item.id)));
@@ -35,10 +35,11 @@ it("organizes the agent by the owner's topics, with inner pages kept in their to
   const neither = organizeWorkspace(allItems.filter(item => ["agents", "knowledge"].includes(item.id)));
   expect(neither.agent.map(item => item.label)).toEqual(["Biznesi", "Oferta", "Komunikimi", "Prova dhe kontrolli"]);
   expect(activeWorkspaceLink("/b/shop/agents/process", "/b/shop", neither.agent)).toBe("agents");
+  expect(activeWorkspaceLink("/b/shop/agents/bookings", "/b/shop", navigation.agent)).toBe("agents/bookings");
   expect(activeWorkspaceLink("/b/shop/agents/training", "/b/shop", navigation.agent)).toBe("knowledge");
   expect(activeWorkspaceLink("/b/shop/sources", "/b/shop", navigation.agent)).toBe("knowledge");
   expect(workspaceSection("/b/shop/sources", "/b/shop", navigation)).toBe("agent");
-  expect(activeWorkspaceLink("/b/shop/agents/process", "/b/shop", navigation.agent)).toBe("agents/process");
+  expect(activeWorkspaceLink("/b/shop/agents/process", "/b/shop", navigation.agent)).toBe("agents");
   expect(activeWorkspaceLink("/b/shop/agents/business", "/b/shop", navigation.agent)).toBe("agents/business");
   for (const path of ["agents/training", "agents/memory", "agents/process"]) expect(navigation.search.some(item => item.path === path), path).toBe(true);
 });
@@ -60,7 +61,7 @@ it("does not expose optional modules omitted by the business profile", () => {
   expect(limited.primary.map(item => item.id)).toContain("services");
   expect(limited.business.map(item => item.id)).toEqual([]);
   expect(limited.search.some(item => item.path === "products" || item.path === "workflows")).toBe(false);
-  expect(limited.agent.map(item => item.path)).toEqual(["agents/business", "agents/process", "agents", "agents/test"]);
+  expect(limited.agent.map(item => item.path)).toEqual(["agents/business", "agents/bookings", "agents", "agents/test"]);
 });
 
 it("leaves administrator navigation independent of the business grouping", () => {

@@ -18,15 +18,18 @@ const agentSpaces: Record<string, { label: string; description: string }> = {
 };
 function mobileNavigation(slug: string, enabled: string[], t: (text: string) => string) {
   const base = `/b/${encodeURIComponent(slug)}`;
+  const topic = (id: string, label: string, description: string, path: string) => ({ id, label: t(label), description: t(description), path: `${base}/${path}`, group: "agent" as const });
   const items = navigationOrder.filter((id) => enabled.includes(id) && id !== "sources").flatMap((id) => {
     const space = agentSpaces[id];
     const item = { id, label: t(space?.label ?? moduleRegistry[id].label), description: t(space?.description ?? moduleRegistry[id].description),
       path: `${base}${moduleRegistry[id].path ? `/${moduleRegistry[id].path}` : ""}`, ...(space ? { group: "agent" as const } : {}) };
-    return id === "agents" ? [{ id: "agent-business", label: t("Biznesi"), description: t("Kontaktet, adresa dhe orari që u jep Agjenti klientëve"), path: `${base}/agents/business`, group: "agent" as const },
-      item, { id: "agent-test", label: t("Prova dhe kontrolli"), description: t("Provo një përgjigje dhe shiko çfarë informacioni u lexua"), path: `${base}/agents/test`, group: "agent" as const }] : [item];
+    return id === "agents" ? [topic("agent-business", "Biznesi", "Kontaktet, adresa dhe orari që u jep Agjenti klientëve", "agents/business"),
+      ...(enabled.includes("orders") ? [topic("agent-orders", "Porositë", "Si merr Agjenti porosi dhe kur ia kalon stafit", "agents/orders")] : []),
+      ...(enabled.includes("bookings") || enabled.includes("services") ? [topic("agent-bookings", "Rezervimet", "Nëse Agjenti rezervon vetë dhe për cilat shërbime", "agents/bookings")] : []),
+      item, topic("agent-test", "Prova dhe kontrolli", "Provo një përgjigje dhe shiko çfarë informacioni u lexua", "agents/test")] : [item];
   });
   // The agent spaces keep their own order, whatever the module order is.
-  const order = ["agent-business", "knowledge", "agents", "agent-test", "workflows"];
+  const order = ["agent-business", "knowledge", "agent-orders", "agent-bookings", "agents", "agent-test", "workflows"];
   const agent = items.filter((item) => "group" in item).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   return [{ id: "campaigns", label: t("Fushatat"), description: t("Oferta për kontaktet që kanë pranuar marketingun"), path: `${base}/campaigns` },
     ...items.filter((item) => !("group" in item)), ...agent];

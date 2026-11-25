@@ -1,5 +1,6 @@
 "use server";
 import { prepareCalendarConfiguration, saveCalendarConfiguration } from "./configuration";
+import { saveConfiguration } from "@/lib/agent-configuration/service";
 import { isDeepStrictEqual } from "node:util";
 import { revalidatePath } from "next/cache";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -183,9 +184,12 @@ export async function saveAgentBooking(slug: string, enabled: boolean, seen: boo
     if (!user) throw Error("Sesioni ka skaduar.");
     const proposal = await prepareCalendarConfiguration(id, { agent_booking_enabled: enabled });
     if ((proposal.before?.agent_booking_enabled === true) !== seen) throw Error("Cilësimi ndryshoi. Rifresko faqen përpara ruajtjes.");
-    await saveCalendarConfiguration(id, user.id, proposal);
+    // An agent permission: through the shared configuration change (versioned, restorable). A business without a
+    // saved calendar yet gets one with the default hours through the calendar's own writer.
+    if (proposal.before) await saveConfiguration(id, user.id, [{ type: "calendar.agent_booking", enabled }], "owner");
+    else await saveCalendarConfiguration(id, user.id, proposal);
     refresh(slug);
-    revalidatePath(`/b/${slug}/agents/process`);
+    revalidatePath(`/b/${slug}`, "layout");
     return { success: enabled ? "Agjenti rezervon vetë sipas orarit." : "Agjenti nuk rezervon më vetë." };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Cilësimi nuk u ruajt." };

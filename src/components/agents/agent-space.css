@@ -18,6 +18,11 @@
   .agent-space.is-test .agent-space-test-body { display: block !important; max-height: none; }
 }
 /* The test beside a topic is narrower than the full test page. */
-.agent-space-test-body .agent-test-empty h3 { font-size: 20px; line-height: 1.25; }
+.agent-space-test-body .chat-workspace .agent-test-empty h3, .agent-space-test-body .agent-test-empty h3 { font-size: 20px; line-height: 1.25; letter-spacing: -.3px; }
 .agent-space-test-body .agent-test-empty p { font-size: 13px; }
 .agent-space-test-body .chat-suggestions { gap: 6px; }
+
+/* A topic's own two-column layouts stack inside the Agjenti space, beside the test. */
+.agent-space .agent-page { grid-template-columns: minmax(0, 1fr); }
+.agent-space .agent-page-side { position: static; }
+.agent-space .capability-list { margin-top: 0; }

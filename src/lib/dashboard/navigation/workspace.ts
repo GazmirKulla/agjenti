@@ -27,12 +27,13 @@ export function organizeWorkspace(allItems: NavItem[]) {
   // bookings, how the agent talks; then the test. Knowledge, sources, memory and history live inside these topics.
   const has = (id: string) => items.some(item => item.id === id);
   const sells = has("orders"), books = has("bookings") || has("services");
-  const operations = !hasAgent || !(sells || books) ? null : sells && books ? "Porositë dhe rezervimet" : sells ? "Porositë" : "Rezervimet";
   const agent: WorkspaceLink[] = [
     ...(hasAgent ? [{ id: "agent-business", path: "agents/business", label: "Biznesi", icon: "briefcase" }] : []),
     ...items.filter(item => item.id === "knowledge").map(item => ({ ...item, label: "Oferta", also: ["sources", ...(hasAgent ? ["agents/training"] : [])] })),
-    ...(operations ? [{ id: "agent-process", path: "agents/process", label: operations, icon: "workflows" }] : []),
-    ...items.filter(item => item.id === "agents").map(item => ({ ...item, label: "Komunikimi", also: ["agents/memory", ...(operations ? [] : ["agents/process"])] })),
+    ...(hasAgent && sells ? [{ id: "agent-orders", path: "agents/orders", label: "Porositë", icon: "orders" }] : []),
+    ...(hasAgent && books ? [{ id: "agent-bookings", path: "agents/bookings", label: "Rezervimet", icon: "calendar" }] : []),
+    // "Çfarë bën Agjenti" (every capability on one page) stays for older links, inside Komunikimi.
+    ...items.filter(item => item.id === "agents").map(item => ({ ...item, label: "Komunikimi", also: ["agents/memory", "agents/process"] })),
     ...(hasAgent ? [{ id: "agent-test", path: "agents/test", label: "Prova dhe kontrolli", icon: "spark" }] : []),
     // The workflow editor stays under "Avancuar".
     ...items.filter(item => item.id === "workflows"),
@@ -87,7 +88,7 @@ export function businessWorkspaceGroups(navigation: ReturnType<typeof organizeWo
     { id: "offer", label: "Produkte dhe shërbime", description: "Oferta që u prezanton klientëve.", paths: ["products", "services", "catalogs"] },
     { id: "knowledge", label: "Biznesi dhe oferta", description: "Profili publik i biznesit, oferta dhe informacioni që përdor Agjenti.", paths: ["agents/business", "knowledge", "sources"] },
     { id: "channels", label: "Kanalet", description: "Lidhjet me Instagram dhe WhatsApp.", paths: ["integrations"] },
-    { id: "behavior", label: "Komunikimi dhe prova", description: "Si komunikon dhe vepron Agjenti, dhe ku e provon.", paths: ["agents", "agents/process", "agents/test"] },
+    { id: "behavior", label: "Agjenti me klientët", description: "Porositë, rezervimet, si komunikon Agjenti dhe ku e provon.", paths: ["agents/orders", "agents/bookings", "agents", "agents/test"] },
     { id: "operations", label: "Porosi dhe rezervime", description: "Puna e përditshme dhe kërkesat e klientëve.", paths: ["orders", "bookings", "calendar", "leads"] },
   ];
   const links = [...navigation.agent, ...navigation.search];

@@ -22,7 +22,7 @@ export type ConfigurationRequest =
   | { type: "agent.update"; id?: string; instructions?: string; communication?: Record<string, unknown>; expected?: string }
   | { type: "agent.draft"; id: string; action: "apply" | "discard"; expected?: string }
   | { type: "behavior.set"; voice?: boolean; escalation?: "handoff" | "notify" | "off" }
-  | { type: "service.booking"; id: string; booking_enabled: boolean }
+  | { type: "service.booking"; id: string; booking_enabled: boolean; expected?: string }
   | { type: "calendar.agent_booking"; enabled: boolean }
   | ({ type: "training.save" } & TrainingInput)
   | { type: "training.active"; id: string; is_active: boolean; revision?: number }
@@ -171,7 +171,8 @@ export async function prepareConfiguration(businessId: string, requests: Configu
       case "service.booking": {
         if (typeof request.booking_enabled !== "boolean") throw new ConfigurationError("Zgjidh nëse Agjenti merr rezervime për këtë shërbim.");
         const before = await row<{ id: string; name: string; booking_enabled: boolean; updated_at: string }>("booking_services", businessId, request.id, "id,name,booking_enabled,updated_at");
-        changes.push({ type: "service.booking", id: before.id, booking_enabled: request.booking_enabled, expected: before.updated_at });
+        if (request.expected && !sameStamp(request.expected, before.updated_at)) throw new ConfigurationError("Shërbimi ndryshoi. Rifresko faqen.", "stale");
+        changes.push({ type: "service.booking", id: before.id, booking_enabled: request.booking_enabled, expected: request.expected ?? before.updated_at });
         lines.push({ label: `Shërbimi “${short(before.name, 60)}” · Agjenti merr rezervime`, before: onOff(before.booking_enabled),
           after: request.booking_enabled ? "Po" : "Jo · jep vetëm informacion; rezervimin e merr stafi" });
         break;

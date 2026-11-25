@@ -16,6 +16,13 @@ import { OperationButton } from "@/components/dashboard/operation-button";
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
 import { ConfigurationHistory } from "@/components/agents/configuration-history";
+import { AgentSpace } from "@/components/agents/agent-space";
+import { TopicTest } from "@/components/agents/topic-test";
+
+/** The Oferta topic keeps the test beside it; the services page reuses this list without it. */
+function TopicSpace({ show, test, children }: { show: boolean; test: React.ReactNode; children: React.ReactNode }) {
+  return show ? <AgentSpace test={test}>{children}</AgentSpace> : <>{children}</>;
+}
 
 /** Where an entry came from, in words: never the internal key. */
 function knowledgeOrigin(intent: string | null, services: boolean) {
@@ -72,6 +79,7 @@ export async function KnowledgeWorkspace({
             : "Çfarë ofron biznesi dhe njohuritë që Agjenti lexon kur u përgjigjet klientëve. Kontaktet, adresa dhe orari janë te Biznesi. Ndryshimet zbatohen sapo i ruan."
         }
       />
+      <TopicSpace show={!services} test={<TopicTest slug={slug} businessId={access.business.id} businessName={access.business.name} userId={user.id} />}>
       {!services && <KnowledgeSources slug={slug} />}
       {!services && <TrainingEntry slug={slug} />}
       <RecordBrowser
@@ -147,6 +155,7 @@ export async function KnowledgeWorkspace({
         }))}
       />
       {!services && <ConfigurationHistory slug={slug} businessId={access.business.id} />}
+      </TopicSpace>
     </>
   );
 }

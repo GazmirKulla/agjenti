@@ -23,7 +23,7 @@ export async function saveHandoffMessage(slug: string, message: string, seenUpda
     const result = await saveCommunicationConfiguration(businessId, user.id,
       await prepareCommunicationConfiguration(businessId, { id: agent.id, mode: "apply", communication: { handoffMessage: message } }));
     revalidatePath(`/b/${slug}/agents`);
-    revalidatePath(`/b/${slug}/agents/process`);
+    revalidatePath(`/b/${slug}`, "layout");
     return { success: message.trim() ? `Mesazhi u ruajt. ${result.message}` : `U kthye mesazhi i zakonshëm. ${result.message}` };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Mesazhi nuk u ruajt." };

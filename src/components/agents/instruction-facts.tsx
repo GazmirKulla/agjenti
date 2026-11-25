@@ -35,10 +35,10 @@ export function InstructionFacts({ slug }: { slug: string }) {
     <section className="panel section-pad instruction-facts" aria-labelledby="instruction-facts-title">
       <div className="instruction-facts-head">
         <div>
-          <h2 id="instruction-facts-title">Faktet mbahen te Njohuritë</h2>
+          <h2 id="instruction-facts-title">Faktet mbahen te Oferta</h2>
           <p className="muted-copy">
             Udhëzimet tregojnë si sillet Agjenti. Çmimet, oferta, dërgesa dhe pagesa ruhen te{" "}
-            <Link className="instruction-facts-link" href={`/b/${slug}/knowledge`}>Njohuritë</Link>, ku i përditëson në një vend.
+            <Link className="instruction-facts-link" href={`/b/${slug}/knowledge`}>Oferta</Link>, ku i përditëson në një vend.
           </p>
         </div>
         {!proposal && (
@@ -51,7 +51,7 @@ export function InstructionFacts({ slug }: { slug: string }) {
       {notes.length > 0 && <ul className="instruction-facts-notes">{notes.map((note, index) => <li key={index}>{note}</li>)}</ul>}
       {proposal && (
         <div className="instruction-facts-proposal">
-          <p><strong>Gjetëm {proposal.facts.length} {proposal.facts.length === 1 ? "fakt" : "fakte"} brenda udhëzimeve.</strong> Kalimi i tyre te Njohuritë shmang përgjigjet me çmime të vjetra.</p>
+          <p><strong>Gjetëm {proposal.facts.length} {proposal.facts.length === 1 ? "fakt" : "fakte"} brenda udhëzimeve.</strong> Kalimi i tyre te Oferta shmang përgjigjet me çmime të vjetra.</p>
           <ul>
             {proposal.facts.map((fact, index) => (
               <li key={index}><strong>{fact.title}</strong><span>{fact.body}</span></li>
@@ -64,7 +64,7 @@ export function InstructionFacts({ slug }: { slug: string }) {
           <p className="muted-copy">Udhëzimet e reja publikohen si version i ri; versioni i mëparshëm mund të rikthehet nga historiku.</p>
           <div className="instruction-facts-actions">
             <button type="button" className="btn btn-primary" disabled={state === "moving"} onClick={() => void move()}>
-              {state === "moving" ? "Duke kaluar…" : "Kaloji te Njohuritë"}
+              {state === "moving" ? "Duke kaluar…" : "Kaloji te Oferta"}
             </button>
             <button type="button" className="btn btn-ghost" disabled={state === "moving"} onClick={() => setProposal(null)}>Jo tani</button>
           </div>

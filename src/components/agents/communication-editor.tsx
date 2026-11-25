@@ -40,7 +40,7 @@ export function CommunicationEditor({ agent, slug, action }: {
       {identity}<input type="hidden" name="mode" value="apply" />
       <label className="form-label agent-instructions">
         <span className="agent-editor-label">Udhëzimet</span>
-        <small>Si të sillet Agjenti: çfarë të thotë, çfarë të pyesë, kur t&apos;ia kalojë stafit. Faktet e biznesit mbahen te Njohuritë.</small>
+        <small>Si të sillet Agjenti: çfarë të thotë, çfarë të pyesë, kur t&apos;ia kalojë stafit. Kontaktet dhe orari mbahen te Biznesi, faktet e ofertës te Oferta.</small>
         <textarea className="field" name="instructions" rows={14} maxLength={8000} required defaultValue={agent.instructions} />
       </label>
       <fieldset className="agent-style">
