@@ -1501,6 +1501,15 @@ html[data-resolved="light"] .dashboard-shell select { color-scheme: light; }
   cursor: pointer;
   width: 100%;
 }
+.row-select-with-leading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.row-select-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .row-select strong {
   font-size: 12px;
 }

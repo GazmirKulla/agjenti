@@ -148,6 +148,7 @@ export default async function OrdersPage({
             id: o.id,
             title: `#${o.external_order_id || o.id.slice(0, 8)}`,
             subtitle: c?.display_name || c?.username || "Klient",
+            leading: <ParticipantAvatar name={(c?.display_name || c?.username || "K").trim()} src={avatarUrl} size={40} />,
             facets: { status: o.status },
             cells: [
               money(o.total_amount, o.currency),

@@ -19,6 +19,7 @@ export type BrowserRecord = {
   id: string;
   title: string;
   subtitle?: string;
+  leading?: ReactNode;
   badge?: ReactNode;
   detail: ReactNode;
   cells?: ReactNode[];
@@ -220,6 +221,7 @@ export function RecordBrowser({
               {rows.map((r) => (
                 <li key={r.id}>
                   <button type="button" className="record-card" onClick={() => open(r.id)}>
+                    {r.leading}
                     <span className="record-card-copy">
                       <strong>{r.title}</strong>
                       {r.subtitle && <small>{r.subtitle}</small>}
@@ -257,11 +259,14 @@ export function RecordBrowser({
                       <td>
                         <button
                           type="button"
-                          className="row-select"
+                          className={`row-select${r.leading ? " row-select-with-leading" : ""}`}
                           onClick={() => open(r.id)}
                         >
-                          <strong>{r.title}</strong>
-                          <small>{r.subtitle}</small>
+                          {r.leading}
+                          <span className="row-select-copy">
+                            <strong>{r.title}</strong>
+                            <small>{r.subtitle}</small>
+                          </span>
                         </button>
                       </td>
                       {r.cells?.map((cell, i) => (
