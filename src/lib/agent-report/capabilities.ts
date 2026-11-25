@@ -23,7 +23,7 @@ export const customerCapabilities: CapabilityModule[] = [
       ["po", "Mesazhet zanore të klientit: i kthen në tekst dhe i përgjigjet"],
       ["pjes", "Videot e klientit: kupton vetëm çfarë thuhet, jo figurën"],
       ["po", "Përgjigjet në gjuhën e klientit"],
-      ["pjes", "Jep kontaktet, adresën dhe orarin e hapjes nga profili i biznesit (Agjenti → Biznesi); ditët dhe fushat që mungojnë i thotë si të panjohura. Ende pa provë live me AI"],
+      ["po", "Jep kontaktet, adresën dhe orarin e hapjes nga profili i biznesit (Agjenti → Biznesi); ditët dhe fushat që mungojnë i thotë si të panjohura (provuar live më 25 nëntor)"],
       ["po", "Ndalet kur ndërhyn stafi"],
       ["po", "Reagime me emoji"],
       ["po", "Kalimi te stafi: automatik kur klienti kërkon një person; mesazhin për klientin e cakton pronari te Komunikimi"],

@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { manualCommandActor } from "@/lib/actions/command-actor";
 import { ConfigurationError, saveConfiguration } from "@/lib/agent-configuration/service";
-import { findProfileOverlaps, SelectionUnavailable } from "./overlap";
+import { findProfileOverlaps, OverlapUnavailable } from "./overlap";
 
 /** Agjenti → Biznesi → Ruaj: the whole profile, against the version the owner opened, as one configuration change. */
 export async function saveBusinessProfile(slug: string, formData: FormData) {
@@ -26,7 +26,7 @@ export async function checkProfileOverlaps(slug: string) {
   try { actor = await manualCommandActor(slug); } catch (error) { return { error: (error as Error).message }; }
   try { return { overlaps: await findProfileOverlaps(actor.business.id) }; }
   catch (error) {
-    return { error: error instanceof SelectionUnavailable ? "Kontrolli nuk u krye (AI nuk u përgjigj). Asgjë nuk ndryshoi; provo përsëri." : (error as Error).message };
+    return { error: error instanceof OverlapUnavailable ? "Kontrolli nuk u krye (AI nuk u përgjigj). Asgjë nuk ndryshoi; provo përsëri." : (error as Error).message };
   }
 }
 
