@@ -205,12 +205,12 @@ export function ThreadClient(props: {
         >
           ‹
         </Link>
+        <ParticipantAvatar name={props.customerName} src={props.customerAvatarUrl} />
         <Link
           href={`/b/${props.slug}/inbox/${props.conversationId}/customer`}
           className="chat-contact-link"
           aria-label={t("Hap detajet e klientit")}
         >
-          <ParticipantAvatar name={props.customerName} src={props.customerAvatarUrl} />
           <div>
             <h2>{props.customerName}</h2>
             <LocalizedStatusBadge status={props.status} />

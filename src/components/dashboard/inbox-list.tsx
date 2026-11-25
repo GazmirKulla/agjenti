@@ -152,28 +152,29 @@ export function InboxList({
       </div>
       <div className="inbox-rows">
         {filtered.map((r) => (
-          <Link
-            key={r.id}
-            prefetch={false}
-            href={`/b/${slug}/inbox/${r.id}`}
-            aria-current={selected === r.id ? "page" : undefined}
-            className={`inbox-row ${selected === r.id ? "selected" : ""}`}
-          >
+          <div key={r.id} className={`inbox-row ${selected === r.id ? "selected" : ""}`}>
             <ParticipantAvatar name={r.name} src={r.avatarUrl} size={35} />
-            <span className="inbox-row-copy">
-              <strong>{r.name}</strong>
-              <small className="inbox-row-channel"><Icon name={r.channel === "whatsapp" ? "whatsapp" : "instagram"} size={14} />{r.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</small>
-              <small>{r.preview || t("Pa mesazh")}</small>
-              {r.signals && <RowSignals signals={r.signals} />}
-            </span>
-            {r.awaitingReply === true ? (
-              <span className="awaiting-badge" title={t("Klienti pret përgjigje")} aria-label={t("Klienti pret përgjigje")}>
-                <Icon name="reply" size={12} />
+            <Link
+              prefetch={false}
+              href={`/b/${slug}/inbox/${r.id}`}
+              aria-current={selected === r.id ? "page" : undefined}
+              className="inbox-row-link"
+            >
+              <span className="inbox-row-copy">
+                <strong>{r.name}</strong>
+                <small className="inbox-row-channel"><Icon name={r.channel === "whatsapp" ? "whatsapp" : "instagram"} size={14} />{r.channel === "whatsapp" ? "WhatsApp" : "Instagram"}</small>
+                <small>{r.preview || t("Pa mesazh")}</small>
+                {r.signals && <RowSignals signals={r.signals} />}
               </span>
-            ) : r.awaitingReply == null && r.unread > 0 ? (
-              <span className="unread-badge">{r.unread}</span>
-            ) : null}
-          </Link>
+              {r.awaitingReply === true ? (
+                <span className="awaiting-badge" title={t("Klienti pret përgjigje")} aria-label={t("Klienti pret përgjigje")}>
+                  <Icon name="reply" size={12} />
+                </span>
+              ) : r.awaitingReply == null && r.unread > 0 ? (
+                <span className="unread-badge">{r.unread}</span>
+              ) : null}
+            </Link>
+          </div>
         ))}
         {!filtered.length && (
           <p className="muted-copy p-5">{t("Nuk ka biseda për këtë filtër.")}</p>

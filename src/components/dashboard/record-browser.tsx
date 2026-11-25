@@ -219,9 +219,9 @@ export function RecordBrowser({
             <>
             <ul className="record-cards">
               {rows.map((r) => (
-                <li key={r.id}>
+                <li key={r.id} className="record-card-shell">
+                  {r.leading}
                   <button type="button" className="record-card" onClick={() => open(r.id)}>
-                    {r.leading}
                     <span className="record-card-copy">
                       <strong>{r.title}</strong>
                       {r.subtitle && <small>{r.subtitle}</small>}
@@ -257,17 +257,19 @@ export function RecordBrowser({
                       }
                     >
                       <td>
+                        <div className={r.leading ? "row-select-with-leading" : undefined}>
+                          {r.leading}
                         <button
                           type="button"
-                          className={`row-select${r.leading ? " row-select-with-leading" : ""}`}
+                          className="row-select"
                           onClick={() => open(r.id)}
                         >
-                          {r.leading}
                           <span className="row-select-copy">
                             <strong>{r.title}</strong>
                             <small>{r.subtitle}</small>
                           </span>
                         </button>
+                        </div>
                       </td>
                       {r.cells?.map((cell, i) => (
                         <td key={i}>{cell}</td>

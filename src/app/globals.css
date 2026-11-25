@@ -5583,3 +5583,13 @@ button.order-photo-image:hover:not(:disabled) {
 .profile-overlaps h2 { margin: 0; font-size: 17px; }
 .profile-overlaps .offer-summary-list { width: 100%; }
 .profile-overlap-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+
+/* Profile photos open independently from the surrounding record. */
+.participant-avatar-trigger { cursor: zoom-in; padding: 0; border: 0; }
+.participant-avatar-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.participant-avatar-preview { display: grid; place-items: center; }
+.participant-avatar-preview img { width: 100%; height: auto; max-height: 70dvh; object-fit: contain; border-radius: 12px; }
+.record-card-shell { display: flex; align-items: center; }
+.record-card-shell > .participant-avatar { margin-left: 1rem; }
+.record-card-shell > .record-card { min-width: 0; flex: 1; }
+.inbox-row-link { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; color: inherit; }
