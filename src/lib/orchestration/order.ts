@@ -1,3 +1,4 @@
+import { readOrderNumber } from "@/lib/orders/number";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { isIsolatedExecution, recordExternalAction } from "@/lib/runtime/execution-context";
 import { loadProcessVersion, compileProcessVersion, readOptionalCustomerFields, withCustomerPolicy } from "./version-store";
@@ -47,7 +48,9 @@ export function orderAdapter(scope?: { businessId: string; conversationId: strin
       if (result.error) throw new Error(result.error.message); // An uncertain response cannot authorize another dispatch.
       const receipt = result.data;
       if (!receipt || receipt.dispatch !== false || typeof receipt.status !== "string") throw new Error("invalid_order_receipt");
+      const orderNumber = typeof receipt.orderId === "string" ? await readOrderNumber(scope.businessId, receipt.orderId) : null;
       return { status: "succeeded", output: { submissionStatus: receipt.status, ...(typeof receipt.orderId === "string" ? { orderId: receipt.orderId } : {}),
+        ...(orderNumber !== null ? { orderNumber } : {}),
         localOrderCreated: receipt.status === "local_only", externalOrderSent: false } };
     },
     async reconcile(action, context): Promise<EffectResult | null> {
@@ -63,7 +66,8 @@ export function orderAdapter(scope?: { businessId: string; conversationId: strin
         return { status: "succeeded", output: { submissionStatus: "awaiting_staff", localOrderCreated: false, externalOrderSent: false } };
       }
       if (data.confirmation?.inputDigest !== action.inputDigest) return null;
-      return { status: "succeeded", output: { orderId: data.order_id, submissionStatus: data.status, localOrderCreated: true, externalOrderSent: data.status === "accepted" } };
+      const orderNumber = await readOrderNumber(scope.businessId, data.order_id);
+      return { status: "succeeded", output: { orderId: data.order_id, ...(orderNumber !== null ? { orderNumber } : {}), submissionStatus: data.status, localOrderCreated: true, externalOrderSent: data.status === "accepted" } };
     },
     async simulate() { recordExternalAction({ kind: "order.create", disposition: "SIMULATED", detail: "no_order_created_or_sent" }); return { status: "simulated", localOrderCreated: false, externalOrderSent: false }; },
   };

@@ -81,7 +81,7 @@ export async function POST(request: Request, context: Context) {
     // The order is saved; sending it to the business website is recorded on its own and never repeated.
     const submission = await dispatchManualOrder({ businessId, userId: access.userId, orderId: result.orderId })
       .catch(() => ({ status: "pending_reconciliation" as const, reason: "dispatch_unverified" }));
-    return NextResponse.json({ ok: true, orderId: result.orderId, submission });
+    return NextResponse.json({ ok: true, orderId: result.orderId, orderNumber: result.orderNumber, submission });
   } catch (error) {
     if (error instanceof CapabilityEnforcementError) return NextResponse.json({ error: error.message }, { status: 409 });
     return NextResponse.json({ error: "Porosia nuk u ruajt. Provo përsëri." }, { status: 500 });

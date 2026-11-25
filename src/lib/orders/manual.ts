@@ -1,3 +1,4 @@
+import { readOrderNumber } from "./number";
 import { requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { assertBusinessEffectAllowed, isIsolatedExecution, refuseIsolatedEffect } from "@/lib/runtime/execution-context";
 import { createServiceSupabase } from "@/lib/supabase/service";
@@ -60,7 +61,7 @@ export function manualOrderError(code: string | undefined, lineCount = 2): { err
 }
 
 /** A LOCAL order the owner records from a conversation, with 1–10 items; the RPC rechecks membership and takes prices from the catalog. */
-export async function createManualOrderLines(input: ManualOrderLinesInput): Promise<{ orderId: string } | { error: string; status: number }> {
+export async function createManualOrderLines(input: ManualOrderLinesInput): Promise<{ orderId: string; orderNumber?: number | null } | { error: string; status: number }> {
   assertBusinessEffectAllowed("order.create");
   if (isIsolatedExecution()) refuseIsolatedEffect("order.create");
   await requireRuntimeModules(input.businessId, ["orders", "products"]);
@@ -79,11 +80,11 @@ export async function createManualOrderLines(input: ManualOrderLinesInput): Prom
     p_request_key: input.requestKey,
   });
   if (error || typeof data !== "string") return manualOrderError(error?.message, input.lines.length);
-  return { orderId: data };
+  return { orderId: data, orderNumber: await readOrderNumber(input.businessId, data) };
 }
 
 /** One product, as before multi-item orders. */
-export async function createManualOrder(input: ManualOrderInput): Promise<{ orderId: string } | { error: string; status: number }> {
+export async function createManualOrder(input: ManualOrderInput): Promise<{ orderId: string; orderNumber?: number | null } | { error: string; status: number }> {
   const { productId, variantId, quantity, selection, ...header } = input;
   return createManualOrderLines({ ...header, lines: [{ productId, variantId, quantity, selection }] });
 }

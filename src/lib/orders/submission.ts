@@ -1,3 +1,4 @@
+import { readOrderNumber } from "./number";
 import { CapabilityEnforcementError, requireRuntimeModules } from "@/lib/capabilities/enforcement";
 import { submitExternalOrder } from "@/lib/integrations/zana";
 import { localFieldDetail, refusedField, signFiles, websiteTotals, type WebsiteTotals } from "./dispatch";
@@ -8,6 +9,7 @@ import type { Snapshot } from "@/lib/orchestration/contracts";
 
 export type SubmissionReceipt = {
   orderId: string;
+  orderNumber?: number | null;
   attemptId: string;
   status: "pending_reconciliation" | "accepted" | "rejected" | "local_only";
   externalOrderId?: string | null;
@@ -71,7 +73,8 @@ export function readChosenFiles(raw: unknown): ChosenFiles | null | false {
 }
 
 export async function submitConfirmedOrder(input: { businessId: string; conversationId: string; userId: string; expectedRevision?: number; actionId?: string; files?: ChosenFiles | null }): Promise<SubmissionReceipt> {
-  return submitOrder(input);
+  const receipt = await submitOrder(input);
+  return { ...receipt, orderNumber: await readOrderNumber(input.businessId, receipt.orderId) };
 }
 async function submitOrder(input: {businessId: string; conversationId: string; userId: string; expectedRevision?: number; actionId?: string; files?: ChosenFiles | null}): Promise<SubmissionReceipt> {
   assertBusinessEffectAllowed("order.create");
@@ -150,7 +153,7 @@ export async function reconcileOrder(input: { businessId: string; conversationId
     p_status: body.status, p_external: (body.externalOrderId as string | undefined)?.trim() ?? null, p_evidence: body.evidence.trim(),
   });
   if (error || !isReceipt(data) || data.dispatch || data.orderId !== body.orderId) fail(error?.message ?? "write_failed");
-  return data;
+  return { ...data, orderNumber: await readOrderNumber(input.businessId, data.orderId) };
 }
 export function submissionError(error: unknown) {
   if (error instanceof OrderSubmissionError) return { status: error.status, body: { error: error.message, code: error.code } };
@@ -173,7 +176,7 @@ export function localOrderNotice(receipt: SubmissionReceipt): string | undefined
 }
 export function submissionResponse(receipt: SubmissionReceipt) {
   const status = receipt.status === "pending_reconciliation" ? 202 : receipt.status === "rejected" ? 502 : 200;
-  return { status, body: { ok: status === 200, orderId: receipt.orderId, externalOrderId: receipt.externalOrderId,
+  return { status, body: { ok: status === 200, orderId: receipt.orderId, orderNumber: receipt.orderNumber, externalOrderId: receipt.externalOrderId,
     submissionStatus: receipt.status, submissionId: receipt.attemptId, localOrderCreated: true,
     ...(receipt.reason ? { reason: receipt.reason } : {}), ...(receipt.field ? { field: receipt.field } : {}),
     ...(receipt.fieldLabel ? { fieldLabel: receipt.fieldLabel } : {}), ...(receipt.line ? { line: receipt.line } : {}),

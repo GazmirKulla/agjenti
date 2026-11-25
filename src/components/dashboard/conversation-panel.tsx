@@ -99,8 +99,8 @@ export async function ConversationPanel({ context, businessId, slug }: { context
         )}
         {context.orders.length ? (
           context.orders.map((order) => (
-            <Link className="customer-order" key={order.id} href={`/b/${slug}/orders`}>
-              <div><strong>#{order.id.slice(0, 8)}</strong><span className="muted-copy">{t(order.statusLabel)}</span></div>
+            <Link className="customer-order" key={order.id} href={`/b/${slug}/orders?order=${order.id}`}>
+              <div><strong>#{order.orderNumber}</strong><span className="muted-copy">{t(order.statusLabel)}</span></div>
               <p>{formatDate(order.createdAt, locale)}<strong>{money(order.total, order.currency ?? undefined)}</strong></p>
               {order.items.length > 0 && <p className="muted-copy">{orderItemsText(order.items)}</p>}
             </Link>

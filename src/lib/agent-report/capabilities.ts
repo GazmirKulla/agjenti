@@ -116,7 +116,7 @@ export const customerCapabilities: CapabilityModule[] = [
       ["po", "Produkt publik ose draft: Agjenti e ofron dhe merr porosi vetëm për produktet publike; produktet e vjetra “vetëm për informim” i prezanton pa marrë porosi"],
       ["po", "Vetëm mblidh kërkesën: Agjenti mbledh të dhënat dhe konfirmimin, stafi e regjistron porosinë nga biseda (zgjedhje te Porositë)"],
       ["po", "Krijimi i porosisë: automatik për produktet aktive me çmim të caktuar ose variant me çmim"],
-      ["po", "Statusi i porosisë: automatik kur Porositë janë të ndezura"],
+      ["po", "Statusi i porosisë: automatik kur Porositë janë të ndezura; numër i përhershëm për biznesin në vend të UUID-së (kërkon migrimin readable_order_numbers)"],
       ["po", "Porosia shkon te faqja e biznesit kur ajo është e lidhur"],
       ["jo", "Rikthehet te klienti që e la porosinë në mes"],
       ["jo", "Shporta: disa produkte të ndryshme në një porosi"],

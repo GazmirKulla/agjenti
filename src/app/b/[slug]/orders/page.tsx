@@ -72,11 +72,11 @@ export default async function OrdersPage({
   if (!access) redirect("/auth/continue");
   const db = createServiceSupabase();
   let { data: orders, error } = await db.from("orders")
-    .select("id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,order_submissions(rejection),delivery:payload->customer,note:payload->note,customers(display_name,username,phone),conversations(id,business_id,participant_avatar_path,participant_avatar_checked_at),order_items(id,quantity,unit_amount,options,position,products(name))")
+    .select("id,order_number,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,order_submissions(rejection),delivery:payload->customer,note:payload->note,customers(display_name,username,phone),conversations(id,business_id,participant_avatar_path,participant_avatar_checked_at),order_items(id,quantity,unit_amount,options,position,products(name))")
     .eq("business_id", access.business.id).order("created_at", { ascending: false }).limit(1000);
   // Before migration 20261120140000 the refusal is not there yet; the orders still load without it.
   if (error) ({ data: orders, error } = await db.from("orders")
-    .select("id,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,delivery:payload->customer,note:payload->note,customers(display_name,username,phone),conversations(id,business_id,participant_avatar_path,participant_avatar_checked_at),order_items(id,quantity,unit_amount,options,position,products(name))")
+    .select("id,order_number,status,total_amount,currency,external_order_id,external_system,external_status,external_status_label,created_at,delivery:payload->customer,note:payload->note,customers(display_name,username,phone),conversations(id,business_id,participant_avatar_path,participant_avatar_checked_at),order_items(id,quantity,unit_amount,options,position,products(name))")
     .eq("business_id", access.business.id).order("created_at", { ascending: false }).limit(1000) as unknown as { data: typeof orders; error: typeof error });
   if (error) throw new Error("Nuk u ngarkuan porositë.");
   // What each order took from or gave back to counted stock, shown with the order.
@@ -146,7 +146,7 @@ export default async function OrdersPage({
           const refusal = o.status === "failed" ? refusalText((Array.isArray(submission) ? submission[0] : submission)?.rejection) : null;
           return {
             id: o.id,
-            title: `#${o.external_order_id || o.id.slice(0, 8)}`,
+            title: `#${o.order_number}`,
             subtitle: c?.display_name || c?.username || "Klient",
             leading: <ParticipantAvatar name={(c?.display_name || c?.username || "K").trim()} src={avatarUrl} size={40} />,
             facets: { status: o.status },
@@ -162,7 +162,7 @@ export default async function OrdersPage({
                   <span className="order-detail-icon"><Icon name="orders" size={22} /></span>
                   <div className="order-detail-title">
                     <p className="order-detail-eyebrow">Porosia</p>
-                    <h2>#{o.external_order_id || o.id.slice(0, 8)}</h2>
+                    <h2>#{o.order_number}</h2>
                     <p className="order-detail-meta">
                       <Icon name="calendar" size={14} /> {formatDate(o.created_at)}
                       {c?.display_name || c?.username ? <> · <Icon name="customers" size={14} /> {c?.display_name || c?.username}</> : null}

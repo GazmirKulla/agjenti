@@ -289,6 +289,7 @@ export async function loadThreadMessages(db: SupabaseClient, businessId: string,
 
 export type CustomerOrder = {
   id: string;
+  order_number: number;
   status: string;
   total_amount: number | null;
   currency: string | null;
@@ -301,7 +302,7 @@ export async function loadCustomerOrders(db: SupabaseClient, businessId: string,
   if (!customerId) return [];
   const { data, error } = await db
     .from("orders")
-    .select(`id,status,total_amount,currency,created_at,${ORDER_ITEMS_SELECT}`)
+    .select(`id,order_number,status,total_amount,currency,created_at,${ORDER_ITEMS_SELECT}`)
     .eq("business_id", businessId)
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false })

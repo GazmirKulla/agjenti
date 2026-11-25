@@ -27,8 +27,9 @@ it("cannot recover another approval or cross a tenant boundary", async () => {
   expect(reads).not.toHaveBeenCalled();
 });
 it("prefers the actual submitted order over its earlier staff-review receipt", async () => {
-  reads.mockResolvedValue({ data: { order_id: "order", status: "accepted", confirmation: { inputDigest: action.inputDigest } }, error: null });
-  expect(await adapter().reconcile!(action, context)).toMatchObject({ status: "succeeded", output: { orderId: "order", localOrderCreated: true, externalOrderSent: true } });
-  expect(reads).toHaveBeenCalledOnce();
+  reads.mockImplementation(async table => ({ data: table === "orders" ? { order_number: 1024 } : { order_id: "order", status: "accepted", confirmation: { inputDigest: action.inputDigest } }, error: null }));
+  expect(await adapter().reconcile!(action, context)).toMatchObject({ status: "succeeded", output: { orderId: "order", orderNumber: 1024, localOrderCreated: true, externalOrderSent: true } });
+  expect(reads.mock.calls.map(([table]) => table)).toEqual(["order_submissions", "orders"]);
+  expect(reads).toHaveBeenCalledWith("orders", { business_id: "business", id: "order" });
   expect(rpc).not.toHaveBeenCalled();
 });

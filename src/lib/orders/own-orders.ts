@@ -7,7 +7,7 @@ export type OrderCustomerIdentity = {
   instagramParticipantId: string;
   instagramConnectionId: string;
 };
-type OrderSummary = { id: string; status: string; created_at: string; items: OrderItemSummary[] };
+type OrderSummary = { id: string; order_number: number; status: string; created_at: string; items: OrderItemSummary[] };
 
 /** Read only: the query never accepts a customer ID or order ID as an authorization boundary. */
 export async function ownOrders(businessId: string, identity: OrderCustomerIdentity): Promise<OrderSummary[] | null> {
@@ -26,7 +26,7 @@ export async function ownOrders(businessId: string, identity: OrderCustomerIdent
   ]);
   if (conversationsError || customerError) throw new Error("order_status_unavailable");
   const ids = [...new Set([conversation.id, ...(conversations ?? []).map(item => item.id)])];
-  const columns = `id,status,created_at,${ORDER_ITEMS_SELECT}`;
+  const columns = `id,order_number,status,created_at,${ORDER_ITEMS_SELECT}`;
   const scoped = db.from("orders").select(columns).eq("business_id", businessId);
   const results = await Promise.all([
     scoped.in("conversation_id", ids).order("created_at", { ascending: false }).limit(6),
