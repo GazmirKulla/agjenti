@@ -42,6 +42,7 @@ export function RecordBrowser({
   createLabel = "Shto të re",
   createAsModal = false,
   detailAsModal = false,
+  detailClassName,
   initialOpenId,
   facets = [],
   sortable = false,
@@ -71,6 +72,7 @@ export function RecordBrowser({
   createAsModal?: boolean;
   /** Kur true, detajet hapen në një modal mbi listën (në desktop); në telefon mbeten në ekran të plotë. */
   detailAsModal?: boolean;
+  detailClassName?: string;
   /** Një regjistrim që hapet menjëherë (p.sh. nga një lidhje ?order=…); injorohet kur nuk është në listë. */
   initialOpenId?: string;
 }) {
@@ -381,7 +383,7 @@ export function RecordBrowser({
         <div className="record-detail-backdrop" aria-hidden onClick={() => { setOpened(false); setCreating(false); }} />
       ) : null}
       <section
-        className="panel record-detail"
+        className={["panel record-detail", detailClassName].filter(Boolean).join(" ")}
         {...(detailAsModal && detailOpen ? { role: "dialog", "aria-modal": true } : {})}
         key={
           creating && !createAsModal ? "create" : (active?.id ?? "empty")

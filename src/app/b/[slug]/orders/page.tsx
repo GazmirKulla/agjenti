@@ -116,6 +116,7 @@ export default async function OrdersPage({
         facets={[{ key: "status", label: "Statusi", options: ORDER_STATUSES.map(([value, label]) => ({ value, label })) }]}
         sortable
         detailAsModal
+        detailClassName="order-record-modal"
         initialOpenId={openOrder}
         emptyTitle="Ende nuk ka porosi"
         emptyDescription="Konfirmo një porosi nga biseda me klientin për ta parë këtu."
@@ -240,11 +241,11 @@ export default async function OrdersPage({
                     <section className="order-card">
                       <h3 className="order-card-title"><span className="order-card-icon"><Icon name="car" size={16} /></span>Dërgesa</h3>
                       {delivery ? (
-                        <dl className="order-facts">
+                        <dl className="order-facts order-delivery-facts">
                           <div><dt><Icon name="customers" size={14} /> Marrësi</dt><dd>{delivery.name || "—"}</dd></div>
                           <div><dt><Icon name="phone" size={14} /> Telefoni</dt><dd>{delivery.phone || "—"}</dd></div>
                           <div><dt><Icon name="store" size={14} /> Qyteti</dt><dd>{delivery.city || "—"}</dd></div>
-                          <div><dt><Icon name="home" size={14} /> Adresa</dt><dd>{delivery.address || "—"}</dd></div>
+                          <div className="order-delivery-address"><dt><Icon name="home" size={14} /> Adresa</dt><dd>{delivery.address || "—"}</dd></div>
                         </dl>
                       ) : (
                         <p className="muted-copy">Kjo porosi nuk ka të dhëna dërgese të ruajtura.</p>

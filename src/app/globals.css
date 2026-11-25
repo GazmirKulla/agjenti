@@ -5593,3 +5593,31 @@ button.order-photo-image:hover:not(:disabled) {
 .record-card-shell > .participant-avatar { margin-left: 1rem; }
 .record-card-shell > .record-card { min-width: 0; flex: 1; }
 .inbox-row-link { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; color: inherit; }
+
+/* Orders use the available viewport instead of inheriting the mobile inset. */
+@media (min-width: 761px) {
+  .record-browser.detail-modal.is-detail-open .record-detail.order-record-modal {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: min(1320px, calc(100vw - 48px));
+    max-height: calc(100dvh - 48px);
+    padding: 20px 24px;
+  }
+  .order-record-modal .order-detail-head { padding: 14px 18px; }
+  .order-record-modal .order-detail { gap: 16px; }
+}
+.order-record-modal .order-card { min-width: 0; }
+.order-record-modal .order-person > div { min-width: 0; overflow-wrap: anywhere; }
+.order-record-modal .order-delivery-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.order-record-modal .order-delivery-address { grid-column: 1 / -1; }
+@container (min-width: 1000px) {
+  .order-record-modal .order-detail-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .order-record-modal .order-detail-side { display: contents; }
+}
+@media (max-width: 760px) {
+  .order-record-modal .order-delivery-facts { grid-template-columns: minmax(0, 1fr); }
+}
