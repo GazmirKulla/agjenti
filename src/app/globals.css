@@ -5621,3 +5621,15 @@ button.order-photo-image:hover:not(:disabled) {
 @media (max-width: 760px) {
   .order-record-modal .order-delivery-facts { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Cilësimet → Biznesi: where the agent's customer-facing information is edited. */
+.settings-agent-links { display: grid; gap: 8px; }
+.settings-agent-links h2 { margin: 0; font-size: 16px; }
+.settings-agent-links > p { margin: 0 0 4px; }
+.settings-agent-link { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); text-decoration: none; }
+.settings-agent-link:hover { border-color: var(--accent); }
+.settings-agent-link > svg { flex: none; color: var(--accent); }
+.settings-agent-link > span:nth-of-type(1) { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.settings-agent-link small { color: var(--ink-muted); font-size: 13px; }
+.settings-agent-link > span:last-child { color: var(--ink-muted); }
+.settings-agent-link b { font-size: 14px; font-weight: 600; }

@@ -4,6 +4,7 @@ import { setBusinessAutoReply } from "@/lib/agents/auto-reply";
 import { ActionForm } from "@/components/dashboard/action-form";
 import { loadItemSetup } from "@/lib/items/business";
 import Link from "next/link";
+import { Icon } from "@/components/dashboard/icon";
 import { PageHeading } from "@/components/dashboard/ui";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -63,11 +64,21 @@ export default async function SettingsPage({
         description="Të dhënat e biznesit dhe përgjigjet automatike për klientët."
       />
       <div className="grid gap-6">
-            <p className="muted-copy">
-              Profili publik (përshkrimi, kontaktet, adresa dhe orari) ndryshohet te{" "}
-              <Link className="soft-link" href={`/b/${slug}/agents/business`}>Agjenti → Biznesi</Link>; oferta dhe pyetjet e shpeshta te{" "}
-              <Link className="soft-link" href={`/b/${slug}/knowledge`}>Oferta</Link>. Agjenti i lexon nga aty.
-            </p>
+            {/* What the agent tells customers is edited in the Agjenti topics, in one place each. */}
+            <section className="panel section-pad settings-agent-links" aria-labelledby="settings-agent-links-title">
+              <h2 id="settings-agent-links-title">Çfarë u thotë Agjenti klientëve</h2>
+              <p className="muted-copy">Këto ndryshohen te Agjenti; Agjenti i lexon direkt nga aty.</p>
+              <Link className="settings-agent-link" href={`/b/${slug}/agents/business`}>
+                <Icon name="briefcase" size={18} />
+                <span><b>Profili publik</b><small>Përshkrimi, kontaktet, adresa dhe orari</small></span>
+                <span aria-hidden="true">→</span>
+              </Link>
+              <Link className="settings-agent-link" href={`/b/${slug}/knowledge`}>
+                <Icon name="knowledge" size={18} />
+                <span><b>Oferta</b><small>Produktet, shërbimet dhe pyetjet e shpeshta</small></span>
+                <span aria-hidden="true">→</span>
+              </Link>
+            </section>
             <BusinessLogoSettings slug={slug} name={access.business.name} logoUrl={logo?.url ?? null} source={logo?.source ?? null}
               instagramConnected={Boolean(instagram)} available={Boolean(logo)} />
             <ActionForm
