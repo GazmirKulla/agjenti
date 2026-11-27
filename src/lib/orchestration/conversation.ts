@@ -256,7 +256,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const quoted = (quote: string) => params.message.toLocaleLowerCase().replace(/\s+/g, " ").includes(quote.toLocaleLowerCase().replace(/\s+/g, " ").trim());
   const behavior = await behaviorRead;
   const unhappy = escalation && quoted(escalation.evidence) && behavior.escalation !== "off" && (!modules || modules.includes("inbox"))
-    && !notices.some(n => n.kind === "handoff") ? { reason: escalation.reason, action: behavior.escalation } : undefined;
+    && !notices.some(n => n.kind === "handoff") ? { reason: escalation.reason, action: behavior.escalation, evidence: escalation.evidence } : undefined;
   if (unhappy?.action === "handoff") {
     let wording: string | undefined;
     try { wording = agent?.communication ? parseCommunicationPolicy(agent.communication).handoffMessage : undefined; } catch { wording = undefined; }

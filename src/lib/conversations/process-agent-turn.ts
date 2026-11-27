@@ -8,7 +8,8 @@ export type AgentTurnResult = {
   /** Capability entries and exits of this turn; recorded only once the turn is committed. */
   capabilityEvents?: Omit<import("@/lib/tracking/events").CapabilityEvent, "businessId" | "mode">[];
   /** The customer needs a person (unhappy, complaint, not helped) and what the business chose: hand off or notify. */
-  escalation?: { reason: string; action: "handoff" | "notify" };
+  /** evidence: the customer's own words that showed it, verified to be in their message (never stored as text). */
+  escalation?: { reason: string; action: "handoff" | "notify"; evidence?: string };
   /** The customer showed buying interest (quoted in the message): the conversation becomes, or stays, a lead. */
   interest?: { kind: "price" | "availability" | "contact" | "purchase"; summary: string };
   preparedRequest?: import("./prepared-request").PreparedRequest;

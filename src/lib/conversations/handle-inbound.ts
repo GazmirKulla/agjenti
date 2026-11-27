@@ -1,3 +1,4 @@
+import { escalationMessage } from "./escalation-message";
 import { reviewMarketingPreference } from "@/lib/campaigns/preference";
 import { notifyStaffOfUnhappyCustomer } from "./escalation";
 import { readCustomerInterest } from "./interest-reading";
@@ -297,6 +298,8 @@ export async function handleInboundMessage(
 
   const correlationId = job ? `workflow-job:${job.id}` : randomUUID();
   let reactionMessageId: string | null = null;
+  // Every stored customer message of this turn, in order: an escalation points at the one the customer's words came from.
+  const storedInbound: { id: string; text: string }[] = [];
   let onlyMarketingWithdrawal = batch.originals.length > 0;
   let persistenceStage: InboundPersistenceError["stage"] = "message_insert";
   // Stored customer messages with a voice message or video, transcribed before the agent reads the turn.
@@ -337,6 +340,7 @@ export async function handleInboundMessage(
         if (!insertedMessage?.id) throw new Error("Inbound insert not confirmed");
         reactionMessageId = insertedMessage.id;
       }
+      if (reactionMessageId) storedInbound.push({ id: reactionMessageId, text: original.text ?? "" });
       if (reactionMessageId && original.attachments.some(a => a.kind === "audio" || a.kind === "video")) voiceMessageIds.push(reactionMessageId);
       const preference = reactionMessageId ? await reviewMarketingPreference(businessId, reactionMessageId) : undefined;
       onlyMarketingWithdrawal = onlyMarketingWithdrawal && preference?.onlyWithdrawal === true;
@@ -478,8 +482,9 @@ export async function handleInboundMessage(
     await prepareWorkflowReply(job,conversationId,stateRow?.revision??0,turn);
     // Committed: the customer needs a person. Staff are told in both cases; with a handoff the conversation pauses after this reply.
     if (turn.escalation) {
+      const messageId = escalationMessage(storedInbound, turn.escalation.evidence);
       await recordCapabilityEvents([{ businessId, capability: "customer.escalation", mode: "live", conversationId,
-        point: turn.escalation.action === "handoff" ? "handed_off" : "notified", reason: turn.escalation.reason }]);
+        point: turn.escalation.action === "handoff" ? "handed_off" : "notified", reason: turn.escalation.reason, ...(messageId ? { ref: `message:${messageId}` } : {}) }]);
       await notifyStaffOfUnhappyCustomer(businessId, conversationId, turn.escalation).catch(() => undefined);
     }
     // Committed: the customer showed buying interest, so the conversation is (again) a lead with what they asked about.

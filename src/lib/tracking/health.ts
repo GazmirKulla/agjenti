@@ -7,7 +7,7 @@ export type CapabilityHealth = {
   entries: number; success: number; failure: number; handoff: number; neutral: number; abandoned: number;
   /** success / (success + failure), null without either. */
   rate: number | null; previousRate: number | null;
-  reasons: { point: string; outcome: Outcome; reason: string | null; events: number; examples: { businessId: string; conversationId: string }[] }[];
+  reasons: { point: string; outcome: Outcome; reason: string | null; events: number; examples: { businessId: string; conversationId: string; messageId?: string }[] }[];
   lastAt: string | null;
 };
 
@@ -29,7 +29,8 @@ export function summarizeHealth(current: HealthRow[], previous: HealthRow[], las
     if (row.point === "abandoned") item.abandoned += row.events;
     // Neutral exits with a reason say why nothing happened (e.g. no reply: auto replies off).
     if (row.outcome === "failure" || row.outcome === "handoff" || row.outcome === "neutral" && row.reason) item.reasons.push({ point: row.point, outcome: row.outcome, reason: row.reason, events: row.events,
-      examples: row.examples.flatMap(example => { const [businessId, conversationId] = example.split(":"); return businessId && conversationId ? [{ businessId, conversationId }] : []; }) });
+      examples: row.examples.flatMap(example => { const [businessId, conversationId] = example.split(":"); const messageId = exampleMessages.get(row)?.get(example);
+        return businessId && conversationId ? [{ businessId, conversationId, ...(messageId ? { messageId } : {}) }] : []; }) });
   }
   const before = new Map<string, { success: number; failure: number }>();
   for (const row of previous) if (row.outcome === "success" || row.outcome === "failure") {
@@ -62,6 +63,24 @@ export function untrackedCapabilities() {
 const rows = (data: unknown): HealthRow[] => (Array.isArray(data) ? data : []).map(row => ({ ...row, events: Number(row.events), businesses: Number(row.businesses), examples: row.examples ?? [] }));
 
 /** Platform Admin: the period's health, the previous period's for comparison, days, and silent capabilities. */
+/** The message an example came from, when its event names one (ref "message:<id>"): the link then opens on that message. */
+const exampleMessages = new WeakMap<HealthRow, Map<string, string>>();
+async function attachExampleMessages(current: HealthRow[], from: string, to: string, businessId: string | null) {
+  let query = createServiceSupabase().from("capability_events").select("capability,point,reason,business_id,conversation_id,ref")
+    .eq("mode", "live").gte("created_at", from).lt("created_at", to).like("ref", "message:%").order("created_at", { ascending: false }).limit(500);
+  if (businessId) query = query.eq("business_id", businessId);
+  const { data, error } = await query;
+  if (error) return;
+  for (const row of current) {
+    const found = new Map<string, string>();
+    for (const event of data ?? []) {
+      if (event.capability !== row.capability || event.point !== row.point || (event.reason ?? null) !== row.reason || !event.conversation_id) continue;
+      const key = `${event.business_id}:${event.conversation_id}`, id = String(event.ref).slice("message:".length);
+      if (!found.has(key) && /^[0-9a-f-]{36}$/i.test(id)) found.set(key, id);
+    }
+    if (found.size) exampleMessages.set(row, found);
+  }
+}
 export async function loadCapabilityHealth(days: number, businessId: string | null, now = new Date()) {
   const db = createServiceSupabase();
   const to = now.toISOString(), from = new Date(now.getTime() - days * 86400000).toISOString(), before = new Date(now.getTime() - 2 * days * 86400000).toISOString();
@@ -72,8 +91,10 @@ export async function loadCapabilityHealth(days: number, businessId: string | nu
     db.rpc("capability_last_seen", { p_business: businessId }),
   ]);
   if (current.error || previous.error || daily.error || last.error) return { available: false as const };
+  const currentRows = rows(current.data);
+  await attachExampleMessages(currentRows, from, to, businessId).catch(() => undefined);
   const lastSeen: Record<string, string> = Object.fromEntries((last.data ?? []).map((row: { capability: string; last_at: string }) => [row.capability, row.last_at]));
-  const health = summarizeHealth(rows(current.data), rows(previous.data), lastSeen);
+  const health = summarizeHealth(currentRows, rows(previous.data), lastSeen);
   return { available: true as const, health, silent: silentCapabilities(health, lastSeen), untracked: untrackedCapabilities(),
     daily: (daily.data ?? []).map((row: { day: string; agent: AgentKind; outcome: Outcome | "entry"; events: number }) => ({ ...row, events: Number(row.events) })) as { day: string; agent: AgentKind; outcome: Outcome | "entry"; events: number }[] };
 }

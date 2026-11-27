@@ -138,7 +138,7 @@ export default async function AgentHealthPage({ searchParams }: { searchParams: 
               {item.reasons.length > 0 && <div className={s.reasons}>{item.reasons.filter(r => !failuresOnly || r.outcome === "failure").slice(0, 8).map(r => <span key={`${r.point}:${r.reason}`} className={`${s.reason} ${r.outcome === "neutral" ? s.reasonNeutral : ""}`}>
                 {r.outcome === "neutral" && "Pa gjykim · "}
                 {exitLabel(r.point, r.reason)} <strong>× {num(r.events)}</strong>
-                {r.examples.map((e, i) => slugOf.get(e.businessId) ? <Link key={e.conversationId} href={`/b/${slugOf.get(e.businessId)}/inbox/${e.conversationId}`}>biseda {i + 1}</Link> : null)}
+                {r.examples.map((e, i) => slugOf.get(e.businessId) ? <Link key={e.conversationId} href={`/b/${slugOf.get(e.businessId)}/inbox/${e.conversationId}${e.messageId ? `?message=${e.messageId}` : ""}`}>{e.messageId ? `mesazhi ${i + 1}` : `biseda ${i + 1}`}</Link> : null)}
               </span>)}</div>}
             </div>)}
           </div>;

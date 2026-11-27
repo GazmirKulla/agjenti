@@ -48,6 +48,7 @@ type Message = {
   external_message_id?: string | null;
   message_transport_parts?: { id: string; part_index: number; part_count: number; body: string; status: string }[];
 };
+const escalationReasons: Record<string, string> = { not_helped: "nuk po ndihmohej", dissatisfied: "i pakënaqur", complaint: "ankesë" };
 export function ThreadClient(props: {
   businessId: string;
   userId: string;
@@ -69,6 +70,8 @@ export function ThreadClient(props: {
   canOrder?: boolean;
   canBook?: boolean;
   logs: IntegrationActivityLog[];
+  /** Customer messages where the agent understood that the customer needs a person. */
+  escalations?: { messageId: string; reason: string; handedOff: boolean }[];
 }) {
   const t = useDashboardTranslator();
   const replyWindow = props.channel === "instagram" ? instagramReplyWindow(props.lastInboundAt) : "standard";
@@ -80,6 +83,19 @@ export function ThreadClient(props: {
   const [olderError, setOlderError] = useState(false);
   const keepScroll = useRef<number | null>(null);
   const latestIds = new Set(props.messages.map((m) => m.id));
+  const escalationOf = new Map((props.escalations ?? []).map((e) => [e.messageId, e]));
+  // A link from Shëndeti (?message=…) opens the conversation on that message.
+  const [focusId, setFocusId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("message");
+    if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return;
+    // After the list has scrolled to its latest message.
+    const timer = setTimeout(() => {
+      setFocusId(id);
+      document.getElementById(`message-${id}`)?.scrollIntoView({ block: "center" });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, []);
   // Cleared messages leave nothing older to show either.
   const messages = props.messages.length ? [...(earlier?.messages ?? []).filter((m) => !latestIds.has(m.id)), ...props.messages] : [];
   const older = !props.messages.length ? null : earlier ? earlier.older : props.older ?? null;
@@ -265,8 +281,14 @@ export function ThreadClient(props: {
 
             <div
               id={`message-${m.id}`}
-              className={`chat-message ${m.direction === "outbound" ? "outbound" : "inbound"}`}
+              className={`chat-message ${m.direction === "outbound" ? "outbound" : "inbound"}${escalationOf.has(m.id) ? " is-escalation" : ""}${focusId === m.id ? " is-focused" : ""}`}
             >
+              {(() => { const escalation = escalationOf.get(m.id); return escalation && (
+                <p className="chat-escalation" role="note">
+                  {t("Këtu Agjenti kuptoi që klientit i duhet një person")}{escalationReasons[escalation.reason] ? ` · ${t(escalationReasons[escalation.reason])}` : ""}
+                  {" · "}{t(escalation.handedOff ? "ia kaloi stafit" : "njoftoi stafin")}
+                </p>
+              ); })()}
               {m.reply_quote && (
                 <a className="chat-reply-quote" href={m.reply_quote.messageId ? `#message-${m.reply_quote.messageId}` : undefined}>
                   <small>{t(m.reply_quote.direction === "outbound" ? "Përgjigje për mesazhin tuaj" : "Përgjigje për mesazhin")}</small>

@@ -35,7 +35,7 @@ export async function InboxWorkspace({
   const settle = <T,>(promise: Promise<T>) =>
     promise.then((data) => ({ data, error: null }), (error: unknown) => ({ data: null, error }));
   // Everything this page reads, in parallel: opening a conversation waits for the slowest read, not their sum.
-  const [instagram, whatsapp, rowsResult, conversationResult, messageResult, contextResult, logResult, versionResult] = await Promise.all([
+  const [instagram, whatsapp, rowsResult, conversationResult, messageResult, contextResult, logResult, versionResult, escalationResult] = await Promise.all([
     db.from("instagram_connections").select("status,expires_at").eq("business_id", businessId).neq("status", "disconnected").maybeSingle(),
     db.from("whatsapp_connections").select("status").eq("business_id", businessId).maybeSingle(),
     settle(loadInboxPage(db, businessId, { lead })),
@@ -48,7 +48,16 @@ export async function InboxWorkspace({
       : Promise.resolve({ data: null, error: null }),
     // Fingerprint of what this render shows: the client refreshes only when it changes.
     settle(loadInboxVersion(db, businessId, selected ?? null)),
+    // Where the agent understood that this customer needs a person: the message it came from, this conversation only.
+    selected
+      ? db.from("capability_events").select("point,reason,ref,created_at").eq("business_id", businessId).eq("conversation_id", selected)
+          .eq("capability", "customer.escalation").eq("mode", "live").like("ref", "message:%").order("created_at", { ascending: false }).limit(20)
+      : Promise.resolve({ data: null, error: null }),
   ]);
+  const escalations = (escalationResult.error ? [] : escalationResult.data ?? []).flatMap((row) => {
+    const messageId = String(row.ref).slice("message:".length);
+    return /^[0-9a-f-]{36}$/i.test(messageId) ? [{ messageId, reason: String(row.reason ?? ""), handedOff: row.point === "handed_off" }] : [];
+  });
   const version = versionResult.data;
   const channels = (["instagram", "whatsapp"] as const).map(channel => {
     const result = channel === "instagram" ? instagram : whatsapp;
@@ -139,6 +148,7 @@ export async function InboxWorkspace({
           canOrder={Boolean(contextResult.data?.forms.order.enabled)}
           canBook={Boolean(contextResult.data?.forms.booking.enabled && contextResult.data.forms.booking.services.length)}
           logs={logResult.data ?? []}
+          escalations={escalations}
         />
         <aside className="inbox-customer">
           <div className="inbox-customer-mobile-header">

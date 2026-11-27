@@ -5714,3 +5714,10 @@ button.order-photo-image:hover:not(:disabled) {
 .record-chip:hover { border-color: var(--line-strong); }
 .record-chip.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .record-chip.is-active span { background: var(--surface); color: var(--accent); }
+
+/* Inbox: the customer message where the agent understood that the customer needs a person. */
+.chat-message.is-escalation { border: 1px solid color-mix(in srgb, var(--warning) 55%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 14%, transparent); }
+.chat-escalation { margin: 0 0 6px; padding: 4px 8px; border-radius: 8px; background: var(--warning-soft); color: var(--warning); font-size: 12px; font-weight: 600; line-height: 1.35; }
+.chat-message.is-focused { animation: chat-focus 2.4s ease-out 1; }
+@keyframes chat-focus { 0%, 40% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 14%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .chat-message.is-focused { animation: none; } }
