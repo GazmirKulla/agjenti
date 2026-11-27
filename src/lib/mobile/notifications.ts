@@ -9,6 +9,17 @@ type Delivery = {
   receipt_id: string | null;
 };
 type ExpoReply = { status: string; id?: string; details?: { error?: string } };
+/** A push the Expo service refused, named by Expo's own code so the failure can be found ("expo_invalid_credentials"). */
+class PushError extends Error {
+  constructor(readonly failure: string) { super(failure); }
+}
+const expoCode = (value: unknown) => typeof value === "string" && value
+  ? `expo_${value.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase().replace(/[^a-z_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 34)}`
+  : null;
+const httpCode = (status: number) => ({ 400: "expo_bad_request", 401: "expo_unauthorized", 403: "expo_forbidden", 404: "expo_not_found",
+  413: "expo_too_large", 429: "expo_rate_limited" } as Record<number, string>)[status] ?? (status >= 500 ? "expo_server_error" : "expo_http_error");
+/** A notification older than this is no longer news: it is dropped, never sent late. */
+export const MAX_NOTIFICATION_AGE_MS = 6 * 3600_000;
 async function expo(path: string, body: unknown) {
   const response = await fetch(`https://exp.host/--/api/v2/push/${path}`, {
     method: "POST",
@@ -21,8 +32,12 @@ async function expo(path: string, body: unknown) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(15000),
   });
-  if (!response.ok) throw Error("Push service unavailable");
-  return response.json();
+  const json = await response.json().catch(() => null) as { errors?: { code?: string }[] } | null;
+  // Request-level refusals (credentials, project, size) come as `errors`, with or without an HTTP error status.
+  if (!response.ok) throw new PushError(expoCode(json?.errors?.[0]?.code) ?? httpCode(response.status));
+  if (Array.isArray(json?.errors) && json.errors.length) throw new PushError(expoCode(json.errors[0]?.code) ?? "expo_request_error");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo's reply shape differs per endpoint; read defensively below.
+  return json as { data?: any };
 }
 /** At-least-once delivery; notification IDs allow client deduplication. Never carries approval credentials. */
 export async function deliverMobileNotifications() {
@@ -64,6 +79,12 @@ export async function deliverMobileNotifications() {
               .is("deleted_at", null)
               .maybeSingle()
           : { data: null };
+        // Old notifications (a queue that could not send for days) are dropped instead of arriving all at once.
+        if (event && Date.now() - Date.parse(event.created_at) > MAX_NOTIFICATION_AGE_MS) {
+          await db.from("mobile_notification_deliveries").update({ status: "failed" }).eq("id", delivery.id);
+          await recordSystem("system.mobile_push", "expired", { businessId, ref: delivery.id });
+          return;
+        }
         if (!access || !conversation) {
           await db
             .from("mobile_notification_deliveries")
@@ -115,9 +136,8 @@ export async function deliverMobileNotifications() {
           await db.from("mobile_devices").delete().eq("token", delivery.token);
           return;
         }
-        if (reply?.status !== "ok") throw Error("Push not accepted");
-        if (!delivery.receipt_id && !reply.id)
-          throw Error("Missing push receipt");
+        if (reply?.status !== "ok") throw new PushError(expoCode(reply?.details?.error) ?? (reply ? "expo_ticket_error" : "expo_no_ticket"));
+        if (!delivery.receipt_id && !reply.id) throw new PushError("expo_no_ticket_id");
         await db
           .from("mobile_notification_deliveries")
           .update({

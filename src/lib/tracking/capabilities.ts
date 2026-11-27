@@ -129,7 +129,7 @@ export const systemCapabilities: Record<string, CapabilitySpec> = {
   "system.booking_message": { agent: "system", module: "integrations", label: "Mesazhi për klientin për rezervimin (kujtesë ose vendim i stafit)", entry: null,
     exits: { sent: "success", skipped_window: "neutral", failed: "failure" }, emittedBy: ["src/lib/calendar/notices.ts"] },
   "system.mobile_push": { agent: "system", module: "integrations", label: "Njoftimi në celular", entry: null,
-    exits: { delivered: "success", step_failed: "failure" }, emittedBy: ["src/lib/mobile/notifications.ts"] },
+    exits: { delivered: "success", expired: "neutral", step_failed: "failure" }, emittedBy: ["src/lib/mobile/notifications.ts"] },
   ...scheduledCapabilities,
 };
 

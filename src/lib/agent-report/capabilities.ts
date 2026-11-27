@@ -336,7 +336,7 @@ export const mainProblems: { title: string; detail: string }[] = [
   { title: "Agjenti nuk rikthehet te klienti.", detail: "Kur klienti e lë porosinë ose rezervimin në mes, askush nuk e kujton. Njoftimet i shkojnë vetëm pronarit, për lead-et pa përgjigje." },
   { title: "Burimet rilexohen, por pa krahasim të plotë.", detail: "Rifreskimi (me dorë, nga Asistenti ose çdo javë) sjell propozime për çfarë është e re ose ndryshe dhe shënon njohuritë që faqja nuk i thotë më, por Instagram-i lexohet vetëm nga postimet e fundit dhe një profil publik lexohet vetëm një herë." },
   { title: "Varësia nga OpenAI pa sinjal.", detail: "Kur mbarojnë kreditë, ndalet gjithçka dhe pronari nuk paralajmërohet." },
-  { title: "Njoftimet në celular nuk dërgohen.", detail: "Nga 1 deri më 27 nëntor, 292 përpjekje dërgimi te Expo dështuan të gjitha (send:unexpected) dhe asnjë njoftim nuk doli: 121 presin, 58 u hoqën. Pajisja ka token të vlefshëm Expo. Shkaku nuk dihet, sepse kodi nuk ruan gabimin e Expo-s (statusin HTTP ose details.error)." },
+  { title: "Njoftimet në celular nuk dërgohen.", detail: "Nga 1 deri më 27 nëntor, 292 përpjekje dërgimi te Expo dështuan të gjitha (send:unexpected) dhe asnjë njoftim nuk doli: 121 presin, 58 u hoqën. Pajisja ka token të vlefshëm Expo. Kodi tani ruan kodin e Expo-s për çdo refuzim (p.sh. expo_unauthorized, expo_invalid_credentials) dhe nuk dërgon njoftime më të vjetra se 6 orë; shkaku pret dërgimin e parë pas publikimit." },
   { title: "Lidhja e Instagram-it dështon shpesh te webhook-u.", detail: "Nga 6 lidhje (18–23 nëntor), 4 dështuan me meta_100 kur aktivizohej webhook-u (subscribed_apps); llogaria duket e lidhur, por Agjenti nuk merr DM derisa pronari ta rilidhë si llogari profesionale me të gjitha lejet." },
 ];
 

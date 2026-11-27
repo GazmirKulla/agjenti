@@ -41,7 +41,7 @@ const pointLabels: Record<string, string> = {
   failed: "Dështoi", blocked: "U ndal nga serveri", abandoned: "U la në mes", refused: "U refuzua", execution_failed: "Ekzekutimi dështoi",
   attempt_failed: "Përpjekje e dështuar", handed_off: "Kaloi te stafi", ignored: "Pa përgjigje", left_unpaid: "U la pa paguar", rejected: "Webi e refuzoi", unverified: "Dërgimi nuk u verifikua",
   step_failed: "Një hap dështoi", webhook_failed: "Mesazhet nuk u aktivizuan", profile_incomplete: "Meta nuk ktheu llogarinë profesionale",
-  refresh_failed: "Rifreskimi dështoi", token_rejected: "Meta e refuzoi token-in, duhet rilidhur", checkout_failed: "Faqja e pagesës nuk u hap", payment_failed: "Pagesa dështoi",
+  expired: "Skadoi pa u dërguar", refresh_failed: "Rifreskimi dështoi", token_rejected: "Meta e refuzoi token-in, duhet rilidhur", checkout_failed: "Faqja e pagesës nuk u hap", payment_failed: "Pagesa dështoi",
 };
 const reasonLabels: Record<string, string> = {
   out_of_stock: "produkti ka mbaruar", price_on_request: "pa çmim të caktuar", product_information_only: "produkt vetëm për informim",

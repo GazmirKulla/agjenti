@@ -4,8 +4,10 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   access: vi.fn(),
   fetch: vi.fn(),
+  record: vi.fn(),
   updates: [] as unknown[],
 }));
+vi.mock("@/lib/tracking/system-events", async original => ({ ...await original<typeof import("@/lib/tracking/system-events")>(), recordSystem: mocks.record }));
 vi.mock("@/lib/supabase/service", () => ({
   createServiceSupabase: () => ({ rpc: mocks.rpc, from: mocks.from }),
 }));
@@ -109,4 +111,31 @@ it("does not resend an accepted notification while checking its receipt", async 
   expect(mocks.updates).toContainEqual(
     expect.objectContaining({ status: "sent" }),
   );
+});
+
+it("drops a notification older than six hours instead of sending it late", async () => {
+  const from = mocks.from.getMockImplementation()!;
+  mocks.from.mockImplementation((table: string) => {
+    const chain = from(table);
+    if (table !== "mobile_notification_events") return chain;
+    return { ...chain, select: () => ({ eq: () => ({ single: async () => ({ data: { id: "event", user_id: "owner", business_id: "business", conversation_id: "conversation", kind: "assistant",
+      created_at: new Date(Date.now() - 7 * 3600_000).toISOString() } }) }) }) };
+  });
+  await deliverMobileNotifications();
+  expect(mocks.fetch).not.toHaveBeenCalled();
+  expect(mocks.updates).toContainEqual({ status: "failed" });
+  expect(mocks.record).toHaveBeenCalledWith("system.mobile_push", "expired", expect.objectContaining({ businessId: "business" }));
+});
+it.each([
+  [{ ok: false, status: 401, json: async () => ({ errors: [{ code: "UNAUTHORIZED", message: "secret" }] }) }, "send:expo_unauthorized"],
+  [{ ok: false, status: 503, json: async () => null }, "send:expo_server_error"],
+  [{ ok: true, json: async () => ({ errors: [{ code: "PUSH_TOO_MANY_EXPERIENCE_IDS" }] }) }, "send:expo_push_too_many_experience_ids"],
+  [{ ok: true, json: async () => ({ data: [{ status: "error", details: { error: "InvalidCredentials" } }] }) }, "send:expo_invalid_credentials"],
+  [{ ok: true, json: async () => ({ data: [{ status: "ok" }] }) }, "send:expo_no_ticket_id"],
+])("records Expo's own code when a push is refused, never its message or the token", async (reply, reason) => {
+  mocks.fetch.mockResolvedValue(reply);
+  await deliverMobileNotifications();
+  expect(mocks.record).toHaveBeenCalledWith("system.mobile_push", "step_failed", expect.objectContaining({ reason }));
+  expect(JSON.stringify(mocks.record.mock.calls)).not.toMatch(/secret|ExpoPushToken/);
+  expect(mocks.updates).toContainEqual(expect.objectContaining({ status: "pending" }));
 });
