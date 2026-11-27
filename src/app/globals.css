@@ -5160,7 +5160,7 @@ button.order-photo-image:hover:not(:disabled) {
 }
 .order-detail-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   padding: 16px 18px;
@@ -5205,6 +5205,13 @@ button.order-photo-image:hover:not(:disabled) {
   gap: 4px;
   text-align: right;
 }
+.order-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.order-detail-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
 .order-detail-total > span {
   font-size: 11px;
   font-weight: 700;
@@ -5225,16 +5232,19 @@ button.order-photo-image:hover:not(:disabled) {
 }
 .order-detail-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
-.order-detail-side {
+.order-detail-main {
   display: grid;
   gap: 14px;
+  align-content: start;
+  min-width: 0;
 }
 .order-card {
   display: grid;
+  align-content: start;
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--line);
@@ -5445,25 +5455,58 @@ button.order-photo-image:hover:not(:disabled) {
   margin-top: 0;
   border-radius: 16px;
 }
+/* In the order: the customer's photos and each prepared photo side by side when there is room. */
+.order-detail .order-photos-item {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  align-items: start;
+}
+.order-detail .order-photos-item-title { grid-column: 1 / -1; }
+.order-detail .order-photos-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 120px)); }
 @container (max-width: 620px) {
   .order-detail-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* One column: the customer (and their phone) right after what they ordered, the photos after. */
+  .order-detail-main { display: contents; }
+  .order-items-card { order: 1; }
+  .order-customer-card { order: 2; }
+  .order-detail-grid .order-photos { order: 3; }
   .order-detail-head {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .order-detail-total {
-    grid-column: 1 / -1;
-    grid-template-columns: auto auto 1fr;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "label label" "amount status";
     align-items: center;
     justify-items: start;
     text-align: left;
-    gap: 8px;
+    gap: 2px 10px;
   }
-  .order-detail-badges {
-    justify-content: flex-end;
-  }
+  .order-detail-total > span { grid-area: label; }
+  .order-detail-total strong { grid-area: amount; }
+  .order-detail-total .status-badge, .order-detail-total > :last-child { grid-area: status; justify-self: start; }
 }
+/* The business website's status of a sent order: one compact row under the head. */
+.order-web {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  font-size: 13px;
+}
+.order-web-label { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink-muted); }
+.order-web > div { display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px; }
+.order-web .field { min-height: 34px; padding-block: 4px; }
+.order-web .btn { min-height: 34px; padding: 6px 12px; font-size: 13px; }
+/* Technical references, folded away. */
+.order-tech { padding: 10px 14px; border: 1px dashed var(--line); border-radius: 12px; font-size: 12.5px; color: var(--ink-muted); }
+.order-tech summary { cursor: pointer; font-weight: 600; }
+.order-tech[open] { display: grid; gap: 8px; }
+.order-tech .order-detail-foot { margin: 0; }
 
 /* Orders: what an order took from or gave back to counted stock. */
 .order-stock { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
@@ -5610,7 +5653,7 @@ button.order-photo-image:hover:not(:disabled) {
     inset: auto;
     top: 50%;
     left: 50%;
-    width: min(1320px, calc(100vw - 48px));
+    width: min(1040px, calc(100vw - 48px));
     max-height: calc(100dvh - 48px);
     padding: 20px 24px;
   }
@@ -5620,14 +5663,7 @@ button.order-photo-image:hover:not(:disabled) {
 .order-record-modal .order-card { min-width: 0; }
 .order-record-modal .order-person > div { min-width: 0; overflow-wrap: anywhere; }
 .order-record-modal .order-delivery-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.order-record-modal .order-delivery-address { grid-column: 1 / -1; }
-@container (min-width: 1000px) {
-  .order-record-modal .order-detail-grid {
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 1fr);
-    align-items: start;
-  }
-  .order-record-modal .order-detail-side { display: contents; }
-}
+.order-record-modal .order-delivery-wide { grid-column: 1 / -1; }
 @media (max-width: 760px) {
   .order-record-modal .order-delivery-facts { grid-template-columns: minmax(0, 1fr); }
 }
@@ -5668,3 +5704,13 @@ button.order-photo-image:hover:not(:disabled) {
 .settings-heading .profile-group-icon { width: 34px; height: 34px; border-radius: 10px; }
 .settings-facts > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .settings-facts dd { text-align: left; overflow-wrap: anywhere; }
+
+/* Quick filter chips above a list: each option with its count. */
+.record-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
+.record-chips::-webkit-scrollbar { display: none; }
+.record-chip { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.record-chip span { min-width: 20px; padding: 1px 7px; border-radius: 999px; background: var(--paper); color: var(--ink-muted); font-size: 11.5px; text-align: center; }
+.record-chip:hover { border-color: var(--line-strong); }
+.record-chip.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.record-chip.is-active span { background: var(--surface); color: var(--accent); }

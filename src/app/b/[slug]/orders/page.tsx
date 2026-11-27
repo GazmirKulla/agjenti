@@ -11,7 +11,6 @@ import { Icon } from "@/components/dashboard/icon";
 import { readBusinessFields, type BusinessField } from "@/lib/items/fields";
 import {
   PageHeading,
-  StatCard,
   StatusBadge,
   formatDate,
   money,
@@ -94,26 +93,16 @@ export default async function OrdersPage({
         title={`Porositë e ${access.business.name}`}
         description="Ndiq porositë e krijuara nga bisedat me klientët."
       />
-      {localOrders !== null && <p className="muted-copy">
+      {localOrders !== null && <p className="muted-copy mb-3">
         {localOrders ? "Agjenti e regjistron porosinë sapo klienti konfirmon përmbledhjen." : "Agjenti vetëm mbledh kërkesën: stafi e shqyrton te biseda dhe e regjistron."}{" "}
         <Link className="inline-link" href={`/b/${slug}/agents/process`}>Ndrysho te Çfarë bën Agjenti →</Link>
       </p>}
-      <div className="stats-grid stats-compact">
-        {ORDER_STATUSES.map(([status, label]) => (
-          <StatCard
-            key={status}
-            label={label}
-            value={(orders ?? []).filter((o) => o.status === status).length}
-            hint="Në listën e ngarkuar"
-            icon="orders"
-          />
-        ))}
-      </div>
       <RecordBrowser
         listTitle="Të gjitha porositë"
         placeholder="Kërko numër porosie ose klient…"
         columns={["Porosia / Klienti", "Shuma", "Statusi", "Data"]}
         facets={[{ key: "status", label: "Statusi", options: ORDER_STATUSES.map(([value, label]) => ({ value, label })) }]}
+        facetChips="status"
         sortable
         detailAsModal
         detailClassName="order-record-modal"
@@ -145,6 +134,14 @@ export default async function OrdersPage({
           // Why a failed order failed: the website's refusal, kept with the order.
           const submission = o.order_submissions as unknown as { rejection: { code?: string; field?: string; item?: number } | null } | { rejection: { code?: string; field?: string; item?: number } | null }[] | null;
           const refusal = o.status === "failed" ? refusalText((Array.isArray(submission) ? submission[0] : submission)?.rejection) : null;
+          // One person, said once: the delivery repeats a name or phone only when it differs from the customer's.
+          const customerName = c?.display_name || c?.username || delivery?.name || "";
+          const same = (a?: string | null, b?: string | null) => (a ?? "").trim().toLocaleLowerCase() === (b ?? "").trim().toLocaleLowerCase();
+          const digits = (v?: string | null) => (v ?? "").replace(/\D/g, "");
+          const phone = c?.phone || delivery?.phone || null;
+          const recipient = delivery?.name && !same(delivery.name, customerName) ? delivery.name : null;
+          const otherPhone = delivery?.phone && c?.phone && digits(delivery.phone) !== digits(c.phone) ? delivery.phone : null;
+          const chat = conversation?.business_id === access.business.id ? conversation.id : null;
           return {
             id: o.id,
             title: `#${o.order_number}`,
@@ -160,30 +157,35 @@ export default async function OrdersPage({
             detail: (
               <div className="order-detail">
                 <header className="order-detail-head">
-                  <span className="order-detail-icon"><Icon name="orders" size={22} /></span>
                   <div className="order-detail-title">
                     <p className="order-detail-eyebrow">Porosia</p>
                     <h2>#{o.order_number}</h2>
-                    <p className="order-detail-meta">
-                      <Icon name="calendar" size={14} /> {formatDate(o.created_at)}
-                      {c?.display_name || c?.username ? <> · <Icon name="customers" size={14} /> {c?.display_name || c?.username}</> : null}
-                    </p>
+                    <p className="order-detail-meta"><Icon name="calendar" size={14} /> {formatDate(o.created_at)}</p>
+                    {chat && (
+                      <div className="order-detail-actions">
+                        <Link className="btn btn-ghost btn-small" href={`/b/${slug}/inbox/${chat}`}><Icon name="inbox" size={15} /> Hap bisedën</Link>
+                      </div>
+                    )}
                   </div>
                   <div className="order-detail-total">
-                    <span>Totali</span>
+                    <span>{o.external_system ? "Totali, pa transportin" : "Totali"}</span>
                     <strong>{money(o.total_amount, o.currency)}</strong>
-                    <div className="order-detail-badges">
-                      <StatusBadge status={o.status} />
-                      {websiteStatus && <StatusBadge status={`website-${websiteStatus.key}`} label={`Webi: ${websiteStatus.label}`} />}
-                    </div>
+                    <StatusBadge status={o.status} />
                   </div>
                 </header>
                 {o.status === "failed" && <p className="order-failure" role="note"><strong>Pse dështoi:</strong> {refusal ?? "Shkaku nuk u ruajt (porosi e vjetër). Kontrollo porosinë te webi i biznesit."}</p>}
+                {o.status === "pending_reconciliation" && <p className="order-failure" role="note"><strong>Për verifikim:</strong> kontrollo në sistemin e jashtëm nëse porosia është pranuar. Mos e ridërgo: një timeout nuk provon dështim.</p>}
+                {sent && (
+                  <section className="order-web" aria-label="Statusi në webin e biznesit">
+                    <span className="order-web-label"><Icon name="link" size={15} /> Webi i biznesit</span>
+                    <WebsiteStatusControl businessId={access.business.id} orderId={o.id} initial={websiteStatus} />
+                  </section>
+                )}
 
                 <div className="order-detail-grid">
-                  <section className="order-card">
-                    <h3 className="order-card-title"><span className="order-card-icon"><Icon name="products" size={16} /></span>
-                      {items.length > 1 ? `Artikujt (${items.length})` : "Artikulli"}</h3>
+                  <div className="order-detail-main">
+                  <section className="order-card order-items-card">
+                    <h3 className="order-card-title">{items.length > 1 ? `Artikujt (${items.length})` : "Artikulli"}</h3>
                     {items.length ? (
                       <ul className="order-items">
                         {items.map((item) => (
@@ -205,11 +207,15 @@ export default async function OrdersPage({
                         ))}
                       </ul>
                     ) : <p className="muted-copy">Kjo porosi nuk ka artikuj të ruajtur.</p>}
-                    <div className="order-items-sum">
-                      <span>Totali i artikujve</span>
-                      <strong>{money(o.total_amount, o.currency)}</strong>
-                    </div>
-                    {o.external_system && <p className="order-card-note">Pa transportin: webi i biznesit e shton te totali i vet.</p>}
+                    {typeof o.note === "string" && o.note ? (
+                      <div className="order-note"><Icon name="file" size={14} /><p>{o.note}</p></div>
+                    ) : null}
+                    {items.length > 1 && (
+                      <div className="order-items-sum">
+                        <span>Totali i artikujve</span>
+                        <strong>{money(o.total_amount, o.currency)}</strong>
+                      </div>
+                    )}
                     {(movements.get(o.id) ?? []).length > 0 && (
                       <div className="order-stock">
                         <h4>Stoku</h4>
@@ -224,62 +230,45 @@ export default async function OrdersPage({
                       </div>
                     )}
                   </section>
-
-                  <div className="order-detail-side">
-                    <section className="order-card">
-                      <h3 className="order-card-title"><span className="order-card-icon"><Icon name="customers" size={16} /></span>Klienti</h3>
-                      <div className="order-person">
-                        <ParticipantAvatar name={(c?.display_name || c?.username || "K").trim()} src={avatarUrl} size={42} className="order-avatar" />
-                        <div>
-                          <strong>{c?.display_name || "Klient pa emër"}</strong>
-                          {c?.username && <p><Icon name="instagram" size={13} /> @{c.username.replace(/^@/, "")}</p>}
-                        </div>
-                      </div>
-                      {c?.phone && <a className="order-contact" href={`tel:${c.phone.replace(/\s+/g, "")}`}><Icon name="phone" size={15} /> {c.phone}</a>}
-                    </section>
-
-                    <section className="order-card">
-                      <h3 className="order-card-title"><span className="order-card-icon"><Icon name="car" size={16} /></span>Dërgesa</h3>
-                      {delivery ? (
-                        <dl className="order-facts order-delivery-facts">
-                          <div><dt><Icon name="customers" size={14} /> Marrësi</dt><dd>{delivery.name || "—"}</dd></div>
-                          <div><dt><Icon name="phone" size={14} /> Telefoni</dt><dd>{delivery.phone || "—"}</dd></div>
-                          <div><dt><Icon name="store" size={14} /> Qyteti</dt><dd>{delivery.city || "—"}</dd></div>
-                          <div className="order-delivery-address"><dt><Icon name="home" size={14} /> Adresa</dt><dd>{delivery.address || "—"}</dd></div>
-                        </dl>
-                      ) : (
-                        <p className="muted-copy">Kjo porosi nuk ka të dhëna dërgese të ruajtura.</p>
-                      )}
-                      {typeof o.note === "string" && o.note ? (
-                        <div className="order-note"><Icon name="file" size={14} /><p>{o.note}</p></div>
-                      ) : null}
-                      {o.status !== "pending_reconciliation" && <OrderEditor businessId={access.business.id} orderId={o.id} />}
-                    </section>
+                  {/* The photos belong to the items: they sit under them, not across the page. */}
+                  {o.external_system === "external" && o.external_order_id && <OrderOutputPhotos businessId={access.business.id} orderId={o.id} />}
                   </div>
+
+                  <section className="order-card order-customer-card">
+                    <h3 className="order-card-title">Klienti dhe dërgesa</h3>
+                    <div className="order-person">
+                      <ParticipantAvatar name={customerName.trim() || "K"} src={avatarUrl} size={42} className="order-avatar" />
+                      <div>
+                        <strong>{customerName || "Klient pa emër"}</strong>
+                        {c?.username && <p><Icon name="instagram" size={13} /> @{c.username.replace(/^@/, "")}</p>}
+                      </div>
+                    </div>
+                    {phone && <a className="order-contact" href={`tel:${phone.replace(/\s+/g, "")}`}><Icon name="phone" size={15} /> {phone}</a>}
+                    {delivery ? (
+                      <dl className="order-facts order-delivery-facts">
+                        {recipient && <div className="order-delivery-wide"><dt>Marrësi</dt><dd>{recipient}</dd></div>}
+                        {otherPhone && <div><dt>Telefoni i dërgesës</dt><dd>{otherPhone}</dd></div>}
+                        <div><dt>Qyteti</dt><dd>{delivery.city || "—"}</dd></div>
+                        <div className="order-delivery-wide"><dt>Adresa</dt><dd>{delivery.address || "—"}</dd></div>
+                      </dl>
+                    ) : (
+                      <p className="muted-copy">Kjo porosi nuk ka të dhëna dërgese të ruajtura.</p>
+                    )}
+                    {o.status !== "pending_reconciliation" && <OrderEditor businessId={access.business.id} orderId={o.id} />}
+                  </section>
                 </div>
 
-                {o.external_system === "external" && o.external_order_id && <OrderOutputPhotos businessId={access.business.id} orderId={o.id} />}
-                {sent && (
-                  <section className="order-card">
-                    <h3 className="order-card-title"><span className="order-card-icon"><Icon name="link" size={16} /></span>Statusi në webin e biznesit</h3>
-                    <WebsiteStatusControl businessId={access.business.id} orderId={o.id} initial={websiteStatus} />
-                  </section>
-                )}
-
-                <section className="order-card order-card-quiet">
-                  <h3 className="order-card-title"><span className="order-card-icon"><Icon name="history" size={16} /></span>Informacioni i porosisë</h3>
+                <details className="order-tech">
+                  <summary>Detaje teknike</summary>
                   <dl className="order-facts order-facts-inline">
                     <div><dt>Sistemi i jashtëm</dt><dd>{o.external_system || "—"}</dd></div>
                     <div><dt>Referenca e jashtme</dt><dd>{o.external_order_id || "—"}</dd></div>
                     <div><dt>ID në Agjenti</dt><dd>{o.id.slice(0, 8)}</dd></div>
                   </dl>
-                </section>
-                <p className="order-detail-foot">
-                  Statusi pasqyron krijimin dhe përcjelljen e porosisë. Totali
-                  është shuma e artikujve; pagesat dhe transporti menaxhohen
-                  jashtë këtij paneli.
-                  {o.status === "pending_reconciliation" && " Kontrollo në sistemin e jashtëm nëse porosia është pranuar. Mos e ridërgo: një timeout nuk provon dështim."}
-                </p>
+                  <p className="order-detail-foot">
+                    Statusi pasqyron krijimin dhe përcjelljen e porosisë. Totali është shuma e artikujve; pagesat dhe transporti menaxhohen jashtë këtij paneli.
+                  </p>
+                </details>
               </div>
             ),
           };

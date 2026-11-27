@@ -45,8 +45,11 @@ export function RecordBrowser({
   detailClassName,
   initialOpenId,
   facets = [],
+  facetChips,
   sortable = false,
 }: {
+  /** One facet shown as chips above the list, each with how many records it holds; options without any are left out. */
+  facetChips?: string;
   /** Client-side filters; ignored for server-paged lists. */
   facets?: BrowserFacet[];
   /** Offers title ordering alongside the original order in client-side lists. */
@@ -96,11 +99,22 @@ export function RecordBrowser({
   const matches = byTitle && !serverPage
     ? [...filtered].sort((a, b) => a.title.localeCompare(b.title))
     : filtered;
-  const activeFilters = Object.keys(chosen).length;
+  const activeFilters = Object.keys(chosen).filter((key) => key !== facetChips).length;
+  const chipFacet = serverPage ? undefined : facets.find((f) => f.key === facetChips);
+  const choose = (key: string, value: string) => {
+    setChosen((current) => {
+      const next = { ...current };
+      if (value) next[key] = value;
+      else delete next[key];
+      return next;
+    });
+    setPage(0);
+  };
   const filterItems: RowMenuItem[] = serverPage
     ? []
     : [
-        ...facets.flatMap((facet) =>
+        // A facet shown as chips is chosen there, not again in the menu.
+        ...facets.filter((facet) => facet.key !== facetChips).flatMap((facet) =>
           [{ value: "", label: "Të gjitha" }, ...facet.options].map((option) => ({
             group: facet.label,
             label: option.label,
@@ -116,8 +130,8 @@ export function RecordBrowser({
             },
           })),
         ),
-        ...(activeFilters
-          ? [{ label: "Pastro filtrat", onSelect: () => { setChosen({}); setPage(0); } }]
+        ...(Object.keys(chosen).some((key) => key !== facetChips)
+          ? [{ label: "Pastro filtrat", onSelect: () => { setChosen((current) => (facetChips && current[facetChips] ? { [facetChips]: current[facetChips] } : {})); setPage(0); } }]
           : []),
       ];
   const optionItems: RowMenuItem[] =
@@ -180,6 +194,21 @@ export function RecordBrowser({
             </button>
           )}
         </div>
+        {chipFacet && (
+          <div className="record-chips" role="group" aria-label={chipFacet.label}>
+            {[{ value: "", label: "Të gjitha" }, ...chipFacet.options].map((option) => {
+              const count = option.value ? records.filter((r) => r.facets?.[chipFacet.key] === option.value).length : records.length;
+              if (option.value && !count) return null;
+              const on = (chosen[chipFacet.key] ?? "") === option.value;
+              return (
+                <button key={option.value || "all"} type="button" className={`record-chip${on ? " is-active" : ""}`} aria-pressed={on}
+                  onClick={() => choose(chipFacet.key, option.value)}>
+                  {option.label}{option.value ? <span>{count}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {hideSearch && !filterItems.length && !optionItems.length ? null : (
         <ListToolbar subject="listën" filters={filterItems} activeFilters={activeFilters} options={optionItems}>
         {hideSearch ? null : serverPage ? (
