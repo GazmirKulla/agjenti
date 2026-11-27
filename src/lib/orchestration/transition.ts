@@ -83,8 +83,13 @@ function writeFacts(state: Snapshot, instance: Instance, values: FactInput[], ev
     keys.add(item.fieldId);
     if (digest(instance.facts[field.id]?.value ?? null) !== digest(item.value)) {
       if (Object.hasOwn(instance.facts, field.id)) {
-        // Re-evaluate conditional paths after a correction. Never replay a past effect.
-        if (instance.action) fail("correction_requires_new_instance");
+        // Re-evaluate conditional paths after a correction. Never replay a past effect: only a completed read
+        // (it changed nothing, e.g. the customer's own bookings) may run again from the entry.
+        if (instance.action) {
+          const policy = env.tools.find(t => t.key === instance.action!.tool && t.version === instance.action!.toolVersion);
+          if (policy?.effect !== "read" || instance.action.status !== "succeeded") fail("correction_requires_new_instance");
+          delete instance.action;
+        }
         instance.stepId = definition.entry;
         instance.status = "running";
         delete instance.wait;

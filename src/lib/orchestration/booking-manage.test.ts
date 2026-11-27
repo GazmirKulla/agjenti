@@ -104,6 +104,40 @@ describe("the customer's own booking: status, cancellation and a move", () => {
     expect(asked.notices).toContainEqual(expect.objectContaining({ kind: "question", field: expect.objectContaining({ id: key("bookingId") }) }));
   });
 
+  it("takes a corrected time and the date after the bookings were read, even once the question has expired", () => {
+    const { env } = setup([mine]);
+    const asked = "ma shty për 11.30";
+    let state = turn(initialSnapshot(business, "c1", "live"), env, asked, [start(asked, "reschedule", [{ fieldId: key("time"), value: "11:30" }])]).state;
+    state = effect(state, env, { bookings: "[]", count: 1 }).state;
+    const waiting = Object.values(state.instances)[0];
+    expect(waiting).toMatchObject({ status: "waiting_input", stepId: key("collect_date") });
+    state = recordPresentation(state, [waiting.wait!.id], env.now);
+    // The customer comes back after the question expired and changes the time while giving the date.
+    const later = { ...env, now: env.now + 17 * 60000 };
+    const message = "Ora 12.00, data 4 dhjetor";
+    const corrected = turn(state, later, message, [{ kind: "facts", instanceId: waiting.id, values: [
+      { fieldId: key("date"), value: "2026-12-04", evidence: message }, { fieldId: key("time"), value: "12:00", evidence: message }] }]);
+    // The read of the customer's own bookings runs again (it changed nothing), then the move is reviewed.
+    expect(Object.values(corrected.state.instances)[0].action).toMatchObject({ tool: "booking.mine", status: "prepared" });
+    const reviewed = Object.values(effect(corrected.state, later, { bookings: "[]", count: 1 }).state.instances)[0];
+    expect(reviewed.status).toBe("waiting_approval");
+    expect(reviewed.facts[key("date")].value).toBe("2026-12-04");
+    expect(reviewed.facts[key("time")].value).toBe("12:00");
+  });
+
+  it("still refuses to change the facts of a booking change that was already carried out", () => {
+    const { env } = setup([mine]);
+    const message = "dua ta anuloj";
+    let state = turn(initialSnapshot(business, "c1", "live"), env, message, [start(message, "cancel")]).state;
+    state = effect(state, env, { bookings: "[]", count: 1 }).state;
+    const waiting = Object.values(state.instances)[0];
+    state = recordPresentation(state, [waiting.wait!.id], env.now);
+    state = turn(state, env, "po", [{ kind: "approve", instanceId: waiting.id, waitId: waiting.wait!.id, evidence: "po" }]).state;
+    expect(Object.values(state.instances)[0].action).toMatchObject({ tool: "booking.change" });
+    expect(() => turn(state, env, "jo, zhvendose", [{ kind: "facts", instanceId: waiting.id, values: [{ fieldId: key("action"), value: "reschedule", evidence: "jo, zhvendose" }] }]))
+      .toThrow(TransitionError);
+  });
+
   it("never accepts a booking that is not this customer's", () => {
     const other: OwnBooking = { ...mine, id: "44444444-4444-4444-8444-444444444444", date: "2026-12-06" };
     const { env } = setup([mine, other]);
