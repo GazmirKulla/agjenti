@@ -10,7 +10,7 @@
 export type CapabilityStatus = "po" | "pjes" | "jo";
 export type CapabilityModule = { name: string; items: [CapabilityStatus, string][] };
 
-export const capabilityReportUpdated = "2026-11-25";
+export const capabilityReportUpdated = "2026-11-27";
 
 export const customerCapabilities: CapabilityModule[] = [
   {
@@ -131,11 +131,11 @@ export const customerCapabilities: CapabilityModule[] = [
     name: "Rezervimet",
     items: [
       ["po", "Konfirmimi para rezervimit"],
-      ["pjes", "Krijimi nga oraret e lira, pasi pronari ndez “Agjenti rezervon vetë” dhe shërbimet, të dyja te Çfarë bën Agjenti"],
+      ["pjes", "Krijimi nga oraret e lira, pasi pronari ndez “Agjenti rezervon vetë” dhe shërbimet, të dyja te Çfarë bën Agjenti (provuar live nga Instagram më 27 nëntor: kontrolloi orarin dhe rezervoi)"],
       ["pjes", "Oraret e ditës ose ditëve në vijim. Në Chat Lab prova përdor vetëm orarin e konfiguruar"],
       ["po", "Statusi i rezervimit të vet (rezervimet e bëra në bisedë)"],
-      ["po", "Anulimi nga klienti, pas konfirmimit të tij"],
-      ["po", "Zhvendosja në një orë tjetër të lirë, pas konfirmimit të tij"],
+      ["pjes", "Anulimi nga klienti, pas konfirmimit të tij: live më 27 nëntor u anulua, por pas tre konfirmimeve dhe me ID-të e brendshme në përmbledhje; korrigjimi (një konfirmim, pa fusha teknike) pret provën live"],
+      ["pjes", "Zhvendosja në një orë tjetër të lirë, pas konfirmimit të tij: live më 27 nëntor ngeci (tha që një orë e lirë ishte e zënë dhe pyeti për muajin); korrigjimi pret provën live"],
       ["pjes", "Kujtesa në mëngjes të ditës së rezervimit: vetëm kur klienti ka shkruar në 24 orët e fundit"],
       ["pjes", "Klienti mëson kur stafi e konfirmon, anulon ose zhvendos rezervimin: vetëm brenda 24 orëve"],
     ],
@@ -325,7 +325,7 @@ export const securityOnlyModules = ["Fushatat", "Kanalet", "Integrimet", "Pagesa
 /** Ku gjendja reale sot ndryshon nga ajo që thonë aftësitë. */
 export const currentState = [
   "Llogaria OpenAI është e pronarit dhe ka kredi; Agjenti përgjigjet sërish (verifikuar live më 18 nëntor).",
-  "Procesi automatik është live (migrimi u aplikua). Te Filiz Store, pa workflow të vizatuar, Agjenti e çoi porosinë deri te konfirmimi. Rezervimet janë të fikura te çdo biznes: askush nuk ka ndezur ende “Agjenti rezervon vetë” dhe asnjë shërbim nuk pranon rezervime, ndaj platforma ka 0 rezervime.",
+  "Procesi automatik është live (migrimi u aplikua). Te Filiz Store, pa workflow të vizatuar, Agjenti e çoi porosinë deri te konfirmimi. Rezervimet nga kanalet janë ndezur vetëm te Filiz Store (për provë): më 27 nëntor Agjenti krijoi dhe anuloi rezervime nga Instagram; te bizneset e tjera “Agjenti rezervon vetë” është i fikur.",
   "Të gjitha cilësimet e Agjentit janë në një vend, te “Çfarë bën Agjenti”: porositë (regjistrim ose vetëm kërkesë), pyetjet për klientin, rezervimet, kalimi te stafi, mesazhet zanore dhe klienti i pakënaqur.",
   "Çdo hyrje dhe dalje e aftësive regjistrohet, edhe punët në sfond dhe integrimet (Instagram, WhatsApp, Google, POK); skeda Shëndeti tregon çfarë shkoi keq me kodin e shkakut, lidhjet që duken aktive por nuk punojnë dhe punët e ngecura. Të dhënat reale janë ende pak.",
   "Te Lende Drusore Destani, Instagram-i është i lidhur por Meta nuk aktivizoi mesazhet (subscribed_apps): Agjenti nuk merr DM derisa llogaria të rilidhet si profesionale me të gjitha lejet.",
@@ -337,7 +337,7 @@ export const mainProblems: { title: string; detail: string }[] = [
   { title: "Formati i përgjigjeve të Asistentit varet ende nga modeli.", detail: "Renderimi Markdown u korrigjua dhe shembulli i raportuar me 18 produkte kalon testet për mesazhe të reja dhe historike. Kërkimet e serverit ruajnë tabelat e tyre. Korrigjimi nuk detyron modelin të zgjedhë tabelë; tabelat jashtë kufijve mbeten tekst i lexueshëm. Ende pa verifikim në prodhim." },
   { title: "Realtime në pajisje dhe vazhdimi i punëve kërkojnë verifikim.", detail: "Migrimi realtime është aplikuar në databazën reale dhe kanali privat, izolimi dhe marrja e njoftimit janë verifikuar. Worker-i çdo minutë është aktiv. Publikimi i klientëve, rikuperimi pas humbjes së vazhdimit dhe sjellja në sfond në pajisje reale mbeten të paverifikuara." },
   { title: "Editori i workflow-ve nuk hiqet dot plotësisht.", detail: "Pa proces të publikuar, serveri e ndërton vetë procesin nga produktet dhe cilësimet, dhe të gjitha cilësimet e Agjentit janë te “Çfarë bën Agjenti”. Agjenti.app ka ende nevojë për editorin, sepse rrjedha “Regjistrim biznesi” krijon biznes dhe ftesë, gjë që procesi i zakonshëm nuk e bën." },
-  { title: "Krijimi i rezervimit nga kanalet kërkon verifikim live.", detail: "Një provë e raportuar nga Instagram ose WhatsApp nuk arriti të verifikonte orarin dhe të krijonte rezervim. Korrigjimet në kod duhen verifikuar në kanalin e biznesit. Kujtesat dhe mesazhet për vendimet e stafit dërgohen vetëm brenda 24 orëve nga mesazhi i fundit i klientit (rregulli i Instagram/WhatsApp, pa shabllone)." },
+  { title: "Bisedat e rezervimit kërkojnë verifikim live pas korrigjimeve.", detail: "Prova nga Instagram më 27 nëntor krijoi rezervimin, por ID-ja e shërbimit doli te klienti, udhëzime të brendshme (në anglisht) u përsëritën, anulimi kërkoi tre konfirmime dhe një fjali të saktë, emri u kërkua sërish dhe zhvendosja ngeci. Korrigjimet në kod (shenjat e shërbimit, përmbledhja pa fusha teknike, një rezervim zgjidhet vetë, data dhe ora lokale e biznesit, oraret e plota të ditës së rezervimit, emri dhe kontakti nga e njëjta bisedë) presin provën live. Mesazhet bosh (reagime) marrin ende përgjigje. Kujtesat dhe mesazhet për vendimet e stafit dërgohen vetëm brenda 24 orëve nga mesazhi i fundit i klientit (rregulli i Instagram/WhatsApp, pa shabllone)." },
   { title: "Porositë pas krijimit bëhen me dorë.", detail: "Klienti nuk e ndryshon dot porosinë, dhe Asistenti nuk ndryshon dot statusin apo dërgesën." },
   { title: "Asistenti nuk lidh integrimet.", detail: "Asistenti ndryshon stokun, fushat, pyetjet, llojin dhe seksionet, provon lidhjen me webin dhe rifreskon produktet, por lidhjen e re, kredencialet dhe shkëputjen i bën vetëm pronari te Integrimet." },
   { title: "Pronari nuk e sheh suksesin e Agjentit.", detail: "Platforma e mat tani çdo hyrje dhe dalje të aftësive (skeda Shëndeti), por pronari te paneli i vet dhe Asistenti nuk e dinë sa porosi u lanë në mes ose sa mesazhe mbetën pa përgjigje." },

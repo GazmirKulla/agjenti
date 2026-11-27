@@ -10,12 +10,15 @@ import { orderQuantityField } from "./order-context";
  */
 export type ReviewLine = { id: string; field: string; value: string };
 
-// Built-in order and booking fields are scoped as `${subject}_${name}` (orderFields, bookingFields).
-const builtIn = (field: Field, domain: "order" | "booking") =>
+// Built-in order and booking fields are scoped as `${subject}_${name}` (orderFields, bookingFields,
+// bookingManageFields for a change to an existing booking).
+const builtIn = (field: Field, domain: "order" | "booking" | "bookingm") =>
   field.subject.startsWith(`${domain}_`) && field.id.startsWith(`${field.subject}_`) ? field.id.slice(field.subject.length + 1) : null;
 const hidden = {
   order: new Set(["productId", "productTypeId", "currency", "options", "quantity"]),
   booking: new Set(["serviceId", "bufferMinutes", "timezone", "confirmationMode"]),
+  // The change itself is said by the review's own wording; the customer reviews the booking and the new time.
+  bookingm: new Set(["action", "bookingId", "bookingRevision", "serviceId", "status", "changeable"]),
 };
 
 const amount = (n: number) => String(Math.round(n * 100) / 100);
@@ -26,7 +29,7 @@ export function reviewLines(fieldIds: string[], fields: Field[], facts: Record<s
   const sibling = (field: Field, name: string) => facts[`${field.subject}_${name}`]?.value;
   // What is ordered or booked first, then its quantity and price, then the customer's own details.
   const rank = (line: ReviewLine) => {
-    const field = byId.get(line.id)!, name = builtIn(field, "order"), service = builtIn(field, "booking");
+    const field = byId.get(line.id)!, name = builtIn(field, "order"), service = builtIn(field, "booking") ?? builtIn(field, "bookingm");
     return service === "serviceName" || service === "durationMinutes" ? -1 : field.subject === "customer" ? 3 : name === "unitAmount" ? 2 : name === "quantity" ? 1 : 0;
   };
   return lines().map((line, i) => ({ line, i })).sort((a, b) => rank(a.line) - rank(b.line) || a.i - b.i).map(({ line }) => line);
@@ -35,8 +38,8 @@ export function reviewLines(fieldIds: string[], fields: Field[], facts: Record<s
     if (!field || !fact || fact.value === "" || (Array.isArray(fact.value) && !fact.value.length)) return [];
     // The ordered amount is reviewed once, as the order quantity below.
     if (id === orderQuantityField) return [];
-    const order = builtIn(field, "order"), booking = builtIn(field, "booking");
-    if (order && hidden.order.has(order) || booking && hidden.booking.has(booking)) {
+    const order = builtIn(field, "order"), booking = builtIn(field, "booking"), change = builtIn(field, "bookingm");
+    if (order && hidden.order.has(order) || booking && hidden.booking.has(booking) || change && hidden.bookingm.has(change)) {
       // Quantity is shown only when it is not the single item every order has.
       const quantity = order === "quantity" && typeof fact.value === "number" && fact.value !== 1;
       return quantity ? [{ id, field: field.label, value: amount(fact.value as number) }] : [];

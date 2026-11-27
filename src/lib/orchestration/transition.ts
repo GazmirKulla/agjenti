@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   TransitionError, type Action, type CustomerEvent, type Instance, type Observation,
-  type ProcessDefinition, type RuntimeNotice, type Snapshot, type ToolPolicy, type Transition, type Wait, type FactInput,
+  type ProcessDefinition, type RuntimeNotice, type Snapshot, type ToolPolicy, type Transition, type Wait, type FactInput, type Field,
 } from "./contracts";
 import { digest, validFieldValue, validateDefinition } from "./definition";
 import { orderFields } from "./order-definition";
@@ -109,16 +109,46 @@ function applyFacts(state: Snapshot, instance: Instance, values: FactInput[], ev
   if (rest.length) writeFacts(state, instance, rest, event, env);
   env.bindDependencies?.(instance, event.id);
 }
+// Which stored contact a field asks for: an order's customer fields, or a booking's name and one way to reach them.
+type ContactKey = "name" | "phone" | "email" | "contact";
+function contactKey(field: Field): ContactKey | undefined {
+  if (field.id.startsWith("customer_")) {
+    const name = field.id.slice(9);
+    return name === "name" || name === "phone" || name === "email" ? name : undefined;
+  }
+  if (!field.subject.startsWith("booking_") || !field.id.startsWith(`${field.subject}_`)) return undefined;
+  const name = field.id.slice(field.subject.length + 1);
+  return name === "name" ? "name" : name === "contact" ? "contact" : undefined;
+}
+/** The name and contact this customer already gave in this conversation, in another order or booking (latest wins). */
+function conversationContact(state: Snapshot, current: Instance, env: Environment) {
+  const known: Partial<Record<ContactKey, { value: string; revision: number }>> = {};
+  for (const instance of Object.values(state.instances)) {
+    if (instance.id === current.id) continue;
+    let definition: ProcessDefinition;
+    try { definition = definitionFor(state, instance, env); } catch { continue; }
+    for (const field of definition.fields) {
+      const fact = instance.facts[field.id], key = field.source === "server" ? undefined : contactKey(field);
+      if (!key || !fact || typeof fact.value !== "string" || !fact.value.trim() || fact.evidence.startsWith("server:")) continue;
+      if (!known[key] || known[key]!.revision < fact.revision) known[key] = { value: fact.value, revision: fact.revision };
+    }
+  }
+  return known;
+}
 function applyProfileMemory(state: Snapshot, instance: Instance, env: Environment) {
-  const memory = state.profileMemory;
-  if (!memory) return;
+  const memory = state.profileMemory ?? {};
+  const said = conversationContact(state, instance, env);
   const definition = definitionFor(state, instance, env);
   for (const field of definition.fields) {
-    if (field.source === "server" || Object.hasOwn(instance.facts, field.id) || !field.id.startsWith("customer_")) continue;
-    const item = memory[field.id.slice(9) as keyof NonNullable<Snapshot["profileMemory"]>];
-    if (!item || !validFieldValue(field, item.value)) continue;
-    instance.facts[field.id] = { fieldId: field.id, subject: field.subject, value: item.value,
-      revision: state.revision + 1, eventId: `profile:${field.id}`, evidence: "profile_memory" };
+    const key = field.source === "server" || Object.hasOwn(instance.facts, field.id) ? undefined : contactKey(field);
+    if (!key) continue;
+    // What the customer said in this conversation first, then the stored profile.
+    const fromConversation = key === "contact" ? said.contact ?? said.phone ?? said.email : said[key] ?? (key === "phone" || key === "email" ? said.contact : undefined);
+    const fromProfile = key === "contact" ? memory.phone ?? memory.email : memory[key];
+    const value = [fromConversation?.value, fromProfile?.value].find(v => v !== undefined && validFieldValue(field, v));
+    if (value === undefined) continue;
+    instance.facts[field.id] = { fieldId: field.id, subject: field.subject, value,
+      revision: state.revision + 1, eventId: `profile:${field.id}`, evidence: fromConversation?.value === value ? "conversation_memory" : "profile_memory" };
   }
 }
 function refreshServerFacts(state: Snapshot, instance: Instance, definition: ProcessDefinition, env: Environment, fieldIds: string[]) {

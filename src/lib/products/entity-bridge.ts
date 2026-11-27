@@ -32,11 +32,13 @@ export const MAX_PRESENTED_ENTITIES = 10;
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 
 /** Only explicit catalog slots count as presentation evidence. Plain model text
- * is never parsed into selected IDs. Unknown/duplicate slots cannot add entities. */
+ * is never parsed into selected IDs. Unknown/duplicate slots cannot add entities.
+ * The slot is a server format: a malformed one (single or unbalanced brackets) is still
+ * replaced, so an identifier never reaches the customer. */
 export function renderProductReferences(text: string, catalog: readonly ReferenceProduct[], kind: PresentedEntity["kind"] = "product") {
   const products: ReferenceProduct[] = [];
   let repeated = false;
-  const slots = new RegExp(`\\[\\[${kind}:([^\\]\\r\\n]+)\\]\\]`, "g");
+  const slots = new RegExp(`\\[\\[?\\s*${kind}\\s*:\\s*([^\\]\\[\\s,;.!?()]+)\\s*\\]?\\]?`, "g");
   const prose = foldText(text.replace(slots, ""));
   const untrackedName = catalog.some(p => p.name.length >= 2 && new RegExp(`(?:^|[^a-z0-9])${foldText(p.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`).test(prose));
   const reply = text.replace(slots, (_slot, id: string) => {

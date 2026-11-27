@@ -15,6 +15,7 @@ import { modelFor } from "@/lib/agents/model";
 import { initialSnapshot, TransitionError, type Snapshot, type ToolPolicy } from "./contracts";
 import { visualNodeForStep } from "./visual-definition";
 import { interpretCustomer } from "./interpret";
+import { businessTime } from "./observation";
 import { recordPresentation, definitionFor, type Environment } from "./transition";
 import { processCapabilityEvents } from "@/lib/tracking/process-events";
 import { runProcessTurn } from "./run-turn";
@@ -145,6 +146,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       return canBook ? [{ definitionId: flow.id, versionId: version.id, serviceIds: flow.serviceIds ?? [] }] : [];
     });
   }) : [];
+  // Relative and partial dates ("të martën", "data 27") are read in the business's own calendar.
+  const businessZone = (!calendarRead.error ? calendarRead.data?.timezone : null) ?? (!businessRead.error ? businessRead.data?.timezone : null) ?? null;
   const context = {
     bookingLookups,
     businessTimezone: !calendarRead.error ? calendarRead.data?.timezone ?? null : null,
@@ -233,6 +236,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
           products: context.products.records.map(row => ({ id: row.id, name: row.name })),
           services: context.services.records.map(row => ({ id: row.id, name: row.name })),
           ...(hasManage ? { customerBookings: manage.observation } : {}),
+          ...(businessZone ? { businessTime: businessTime(env.now, businessZone) } : {}),
         } });
       if (hasBookings) await booking.prepare(state, definitions, interpretation.observation);
       if (hasOrders) await orders.prepare(state, definitions, interpretation.observation);
@@ -242,7 +246,7 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       interest = interpretation.observation.interest;
       trace?.({ stage: "ai", label: "Process observation validated", data: { ...interpretation.observation, model: interpretation.model,
         responseId: interpretation.responseId, usage: { input_tokens: interpretation.inputTokens, output_tokens: interpretation.outputTokens } } });
-      return interpretation.observation;
+      return manage.withoutServerChoice(interpretation.observation);
     },
   });
   state = result.state;
@@ -305,8 +309,17 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
       for (const node of version?.graph.nodes.filter(n => n.kind === "booking_manage") ?? []) {
         const { key } = bookingManageFields(node.id), serviceId = instance.facts[key("serviceId")]?.value, bookingId = instance.facts[key("bookingId")]?.value;
         // Moving a booking: its own time does not count as taken. Chat Lab never reads a live booking.
-        if (instance.facts[key("action")]?.value === "reschedule" && typeof serviceId === "string" && typeof bookingId === "string" && !isIsolatedExecution())
-          await addAvailability(instance.id, serviceId, instance.facts[key("date")]?.value, bookingId);
+        // Without a new date yet, the whole day of the current booking is read (a move often changes only the
+        // time); the next free days follow as a partial list.
+        if (instance.facts[key("action")]?.value === "reschedule" && typeof serviceId === "string" && typeof bookingId === "string" && !isIsolatedExecution()) {
+          const date = instance.facts[key("date")]?.value, current = instance.facts[key("startsAt")]?.value;
+          const currentDate = typeof current === "string" ? current.slice(0, 10) : undefined;
+          if (typeof date === "string") await addAvailability(instance.id, serviceId, date, bookingId);
+          else {
+            if (currentDate) await addAvailability(instance.id, serviceId, currentDate, bookingId);
+            await addAvailability(instance.id, serviceId, undefined, bookingId);
+          }
+        }
       }
     }
   }

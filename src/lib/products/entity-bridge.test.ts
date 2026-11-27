@@ -145,3 +145,14 @@ it("renders a catalog slot with the range and the unit of its price", () => {
   const list: ReferenceProduct[] = [{ id: "tile", name: "Pllakë", price_amount: 12, price_max: 15, currency: "EUR", price_mode: "range", price_unit: "m²" }];
   expect(renderProductReferences("Kemi [[product:tile]].", list).reply).toBe("Kemi Pllakë — nga 12 deri 15 EUR për m².");
 });
+
+it("replaces a malformed service slot too, so its identifier never reaches the customer", () => {
+  const id = "6bd06514-729c-4f15-bfe7-46795b360fd3";
+  const services: ReferenceProduct[] = [{ id, name: "Konsulencë për fëmijë", price_amount: 20, currency: "EUR" }];
+  for (const slot of [`[service:${id}]`, `[[service:${id}]`, `[service:${id}]]`, `[[ service: ${id} ]]`]) {
+    const rendered = renderProductReferences(`Më 27 nëntor në 10:00 është e lirë ${slot}.`, services, "service");
+    expect(rendered.reply).toBe("Më 27 nëntor në 10:00 është e lirë Konsulencë për fëmijë — 20 EUR.");
+    expect(rendered.reply).not.toContain(id);
+  }
+  expect(renderProductReferences("Rezervimi për [service:unknown-id] u ruajt.", services, "service").reply).toBe("Rezervimi për [shërbim i paverifikuar] u ruajt.");
+});

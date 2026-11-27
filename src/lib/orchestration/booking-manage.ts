@@ -6,7 +6,7 @@ import { localInstant, validDate, validTime } from "@/lib/calendar/model";
 import { ownBookings, type OwnBooking } from "@/lib/calendar/own-bookings";
 import type { OrderCustomerIdentity } from "@/lib/orders/own-orders";
 import type { VisualVersion } from "@/lib/workflows/visual/types";
-import type { Instance, ProcessDefinition, Value } from "./contracts";
+import type { CustomerCommand, FactInput, Instance, Observation, ProcessDefinition, Value } from "./contracts";
 import type { EffectResult, ToolAdapter } from "./execute";
 import type { ProcessLease } from "./persistence";
 import { bookingManageFields, noOwnBooking } from "./booking-manage-definition";
@@ -24,7 +24,15 @@ export function bookingManageContext(versions: VisualVersion[], bookings: OwnBoo
       if (!nodeIds.length) return definitions;
       const ids = new Set(nodeIds.map(id => bookingManageFields(id).key("bookingId")));
       const options = changeable.length ? changeable.map(b => b.id) : [noOwnBooking];
-      return definitions.map(d => d.fields.some(f => ids.has(f.id)) ? { ...d, fields: d.fields.map(f => ids.has(f.id) ? { ...f, options } : f) } : d);
+      // With one changeable booking there is nothing to choose: the server sets it, the customer is not asked
+      // which one, and the review still shows it before anything changes. The step keeps its id, so an
+      // instance waiting there moves on.
+      const single = changeable.length === 1;
+      const collectSteps = new Set(nodeIds.map(id => bookingManageFields(id).key("collect_booking")));
+      return definitions.map(d => d.fields.some(f => ids.has(f.id)) ? { ...d,
+        fields: d.fields.map(f => ids.has(f.id) ? { ...f, options, ...(single ? { source: "server" as const } : {}) } : f),
+        steps: single ? d.steps.map(step => step.kind === "collect" && collectSteps.has(step.id) ? { id: step.id, kind: "resolve" as const, fieldIds: [step.fieldId], next: step.next } : step) : d.steps,
+      } : d);
     },
     serverFacts(definition: ProcessDefinition, instance: Instance): Record<string, Value> {
       const result: Record<string, Value> = {};
@@ -32,11 +40,26 @@ export function bookingManageContext(versions: VisualVersion[], bookings: OwnBoo
         const { key } = bookingManageFields(nodeId);
         if (!definition.fields.some(f => f.id === key("action"))) continue;
         result[key("changeable")] = changeable.length > 0;
+        if (changeable.length === 1) result[key("bookingId")] = changeable[0].id;
         const booking = changeable.find(b => b.id === instance.facts[key("bookingId")]?.value);
         if (booking && booking.status !== "cancelled") Object.assign(result, { [key("serviceId")]: booking.serviceId, [key("serviceName")]: booking.serviceName,
           [key("startsAt")]: `${booking.date} ${booking.time}`, [key("status")]: booking.status, [key("bookingRevision")]: booking.revision });
       }
       return result;
+    },
+    /**
+     * With one changeable booking the server sets which booking it is; a reading that names it too is
+     * dropped here (the server's value stands), so it is not refused as a write to a server field.
+     */
+    withoutServerChoice(observation: Observation): Observation {
+      if (changeable.length !== 1) return observation;
+      const ids = new Set(nodeIds.map(id => bookingManageFields(id).key("bookingId")));
+      const keep = (facts: FactInput[]) => facts.filter(fact => !ids.has(fact.fieldId));
+      return { ...observation, commands: observation.commands.flatMap((command): CustomerCommand[] => {
+        if (command.kind === "facts") { const values = keep(command.values); return values.length ? [{ ...command, values }] : []; }
+        if (command.kind === "start" || command.kind === "accept_offer") return [{ ...command, initialFacts: keep(command.initialFacts) }];
+        return [command];
+      }) };
     },
     /** What the interpretation sees: the customer's own bookings, never anyone else's. */
     observation: bookings.map(b => ({ id: b.id, service: b.serviceName, date: b.date, time: b.time, status: b.status, changeable: b.changeable })),

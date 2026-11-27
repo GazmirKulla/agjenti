@@ -17,15 +17,17 @@ const version = { id: "v1", businessId: business, graph, createdAt: "" };
 const { key } = bookingManageFields("auto_booking_manage");
 let ids = 0;
 
+let manage: ReturnType<typeof bookingManageContext>;
 function setup(bookings: OwnBooking[]) {
-  const manage = bookingManageContext([version], bookings);
+  manage = bookingManageContext([version], bookings);
   const env: Environment = { mode: "live", now: Date.parse("2026-11-21T10:00:00Z"), definitions: manage.definitions(compileVisualProcesses(version)), startableVersionIds: new Set(["v1"]),
     tools: [bookingMineToolPolicy(true), bookingChangeToolPolicy(true)], promptTtlMs: 900000, id: () => `id${++ids}`, serverFacts: manage.serverFacts };
   return { env, manage };
 }
 const event = (message: string) => ({ id: `e${++ids}`, businessId: business, conversationId: "c1", message, actor: "customer" as const });
 function turn(state: Snapshot, env: Environment, message: string, commands: Observation["commands"]) {
-  const result = transitionCustomer(state, event(message), { revision: state.revision, commands, needsClarification: false }, env);
+  // As in the live turn: the interpretation's reading passes through the customer's own bookings first.
+  const result = transitionCustomer(state, event(message), manage.withoutServerChoice({ revision: state.revision, commands, needsClarification: false }), env);
   return { ...result, state: { ...result.state, revision: result.state.revision + 1 } };
 }
 /** The executor's part: claim the prepared action and record the adapter's receipt. */
@@ -80,8 +82,31 @@ describe("the customer's own booking: status, cancellation and a move", () => {
     expect(Object.values(approved.state.instances)[0].action).toMatchObject({ tool: "booking.change", input: { action: "reschedule", date: "2026-12-05", time: "11:00" } });
   });
 
-  it("never accepts a booking that is not this customer's", () => {
+  it("does not ask which booking when the customer has only one, and still has them review it", () => {
     const { env } = setup([mine]);
+    const message = "dua ta anuloj, nuk vij dot";
+    let state = turn(initialSnapshot(business, "c1", "live"), env, message, [start(message, "cancel")]).state;
+    state = effect(state, env, { bookings: "[]", count: 1 }).state;
+    const waiting = Object.values(state.instances)[0];
+    expect(waiting.status).toBe("waiting_approval");
+    expect(waiting.facts[key("bookingId")]).toMatchObject({ value: mine.id, evidence: `server:${key("bookingId")}` });
+    expect(waiting.facts[key("serviceName")].value).toBe("Prerje flokësh");
+  });
+
+  it("asks which booking when the customer has more than one", () => {
+    const other: OwnBooking = { ...mine, id: "44444444-4444-4444-8444-444444444444", date: "2026-12-06" };
+    const { env } = setup([mine, other]);
+    const message = "dua ta anuloj";
+    let state = turn(initialSnapshot(business, "c1", "live"), env, message, [start(message, "cancel")]).state;
+    const asked = effect(state, env, { bookings: "[]", count: 2 });
+    state = asked.state;
+    expect(Object.values(state.instances)[0]).toMatchObject({ status: "waiting_input", stepId: key("collect_booking") });
+    expect(asked.notices).toContainEqual(expect.objectContaining({ kind: "question", field: expect.objectContaining({ id: key("bookingId") }) }));
+  });
+
+  it("never accepts a booking that is not this customer's", () => {
+    const other: OwnBooking = { ...mine, id: "44444444-4444-4444-8444-444444444444", date: "2026-12-06" };
+    const { env } = setup([mine, other]);
     const message = "anuloje";
     expect(() => turn(initialSnapshot(business, "c1", "live"), env, message, [start(message, "cancel", [{ fieldId: key("bookingId"), value: foreign }])]))
       .toThrow(TransitionError);

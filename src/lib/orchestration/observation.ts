@@ -1,4 +1,4 @@
-import { uuid, validDate } from "@/lib/calendar/model";
+import { uuid, validDate, zonedParts } from "@/lib/calendar/model";
 import { prompt } from "@/lib/ai/prompts/files";
 import { TransitionError, type AvailabilityQuery, type ConditionObservation, type CustomerCommand, type Escalation, type FactInput, type Interest, type Observation, type Snapshot, type Value } from "./contracts";
 import { definitionFor, type Environment } from "./transition";
@@ -113,6 +113,13 @@ export const observationSchema = shape({
   interest: shape({ shown: { type: "boolean" }, kind: { type: "string", enum: ["price", "availability", "contact", "purchase", "none"] }, summary: string, ...evidence }),
 });
 
+const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+/** The business's local date, time and weekday at this moment, in its IANA time zone. */
+export function businessTime(now: number, timezone: string) {
+  const { date, time } = zonedParts(new Date(now), timezone);
+  return { timezone, date, time, weekday: weekdays[new Date(`${date}T12:00:00Z`).getUTCDay()] };
+}
+
 /** Every declared field is included, including unanswered custom fields. No profile aliasing. */
 export function observationContext(state: Snapshot, env: Environment, extras?: {
   catalog?: { kind: "product" | "service"; entities: { id: string; displayOrder: number; available: boolean; name?: string }[] };
@@ -120,10 +127,13 @@ export function observationContext(state: Snapshot, env: Environment, extras?: {
   services?: { id: string; name: string }[];
   /** The verified upcoming bookings of this customer only (booking_manage processes). */
   customerBookings?: { id: string; service: string; date: string; time: string; status: string; changeable: boolean }[];
+  /** Today in the business's time zone, for relative and partial dates. */
+  businessTime?: ReturnType<typeof businessTime>;
 }) {
   return {
     photoReceived: env.photoReceived === true,
     currentTime: new Date(env.now).toISOString(),
+    ...(extras?.businessTime ? { businessTime: extras.businessTime } : {}),
     revision: state.revision,
     focusId: state.focusId,
     profileMemory: state.profileMemory ?? {},
