@@ -124,6 +124,24 @@
     "@eslint/core" "^0.17.0"
     levn "^0.4.1"
 
+"@full-ui/headless-calendar@7.1.4":
+  version "7.1.4"
+  resolved "https://registry.yarnpkg.com/@full-ui/headless-calendar/-/headless-calendar-7.1.4.tgz#32c31729207ea922c06a1b9934db8f905ce98331"
+  integrity sha512-b0o9zsbJKpeM+e5eh27paqfDseQgMQkOy4jjp+nCLABmUQWn2kJ+vV3QdSNXL/9R7S+SwN6Ky21p1hDYvDdgUg==
+
+"@fullcalendar/core@7.1.4":
+  version "7.1.4"
+  resolved "https://registry.yarnpkg.com/@fullcalendar/core/-/core-7.1.4.tgz#836342ed0644b456fa0b96cc995472deea4908e5"
+  integrity sha512-Pkjagkqa4U9n2PemmdjrejmgrbiN6UyeP0pd0qKSjnvPDZzMJGPJvQ00sgm67KL0FAyQSnKMy0odSz9yv6s2XA==
+
+"@fullcalendar/react@7.1.4":
+  version "7.1.4"
+  resolved "https://registry.yarnpkg.com/@fullcalendar/react/-/react-7.1.4.tgz#2787f8dd689cf770030f9dfe3649a630a5f29a3e"
+  integrity sha512-2gaRBEnO5sIpH/Abqk9cMp46Ax7e8XeKBL+MPb/NLUvjF3an50rnOB3f71BnW2htcEWPPzk6S0SVrmnH5m5xzg==
+  dependencies:
+    "@full-ui/headless-calendar" "7.1.4"
+    "@fullcalendar/core" "7.1.4"
+
 "@humanfs/core@^0.19.2":
   version "0.19.2"
   resolved "https://registry.yarnpkg.com/@humanfs/core/-/core-0.19.2.tgz#a8272ca03b2acf492670222b2320b6c421bfde60"
@@ -3809,6 +3827,24 @@ tapable@^2.3.3:
   version "2.3.3"
   resolved "https://registry.yarnpkg.com/tapable/-/tapable-2.3.3.tgz#5da7c9992c46038221267985ab28421a8879f160"
   integrity sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==
+
+temporal-polyfill@1.0.7:
+  version "1.0.7"
+  resolved "https://registry.yarnpkg.com/temporal-polyfill/-/temporal-polyfill-1.0.7.tgz#9c287990f5c0155058f67d1823424590bceba906"
+  integrity sha512-/qHG5yJUCFRAYrlo/4zgFsV7p+cSnGJjtpd3c3sKB3ayuIln3U0nthfKa9MoMl0nY7NAjrru5/w0BMjcAxg9MA==
+  dependencies:
+    temporal-spec "1.0.1"
+    temporal-utils "1.0.4"
+
+temporal-spec@1.0.1:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/temporal-spec/-/temporal-spec-1.0.1.tgz#5679ce2dd0089865afe80e0a8bd22a9033c16717"
+  integrity sha512-wxVoanmDeavXie1vu2JaQ3WIc3JZnWAOYFBsJyATaVsXsycKYUflGsyBmrRSnoCpZJpwPyr38VpgSUlQ8CbFxg==
+
+temporal-utils@1.0.4:
+  version "1.0.4"
+  resolved "https://registry.yarnpkg.com/temporal-utils/-/temporal-utils-1.0.4.tgz#ad95eddf1f8a260f33766f09af99f11c90a06b0a"
+  integrity sha512-4mAcgbWlaxe+gn23gk8g0iHxCVGVOhKzSCfF5HM3lfvH8BdT+/pBmH/R/E4CrIse+koUgs8ThkPzCLnui6Fi8w==
 
 tinybench@^2.9.0:
   version "2.9.0"

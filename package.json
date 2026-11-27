@@ -18,6 +18,7 @@
     "e2e:down": "node e2e/local.mjs down"
   },
   "dependencies": {
+    "@fullcalendar/react": "7.1.4",
     "@nebula-ltd/pok-payments-js": "2.1.2",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
@@ -28,7 +29,8 @@
     "next": "^15.5.9",
     "openai": "^7.26.0",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "temporal-polyfill": "1.0.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

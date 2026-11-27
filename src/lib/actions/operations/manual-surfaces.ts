@@ -68,6 +68,8 @@ export const manualSurfaces = {
   "src/lib/calendar/actions.ts#saveAgentBooking": {"operation": "calendar.settings"},
   "src/lib/calendar/actions.ts#readBookingSlots": {"legacy": "availability"},
   "src/lib/calendar/actions.ts#saveBooking": {"legacy": "booking_update"},
+  "src/lib/calendar/actions.ts#changeBooking": {"legacy": "booking_update"},
+  "src/lib/calendar/actions.ts#readCalendarEvents": {"legacy": "search"},
   "src/lib/calendar/actions.ts#retryBookingSync": {"operation": "booking.sync"},
   "src/lib/calendar/actions.ts#selectGoogleCalendar": {"exception": "Provider OAuth and calendar selection require the connected account UI."},
   "src/lib/calendar/actions.ts#disconnectGoogleCalendar": {"exception": "OAuth revocation remains in the connected account UI."},

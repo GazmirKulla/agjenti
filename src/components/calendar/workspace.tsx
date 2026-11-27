@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ElicitationForm, type ElicitationField } from "@/components/assistant-ui/elements/elicitation-form";
 import { ActionForm } from "@/components/dashboard/action-form";
@@ -9,6 +10,7 @@ import {
   readBookingSlots,
   saveBooking,
   retryBookingSync,
+  changeBooking,
   selectGoogleCalendar,
   disconnectGoogleCalendar,
 } from "@/lib/calendar/actions";
@@ -20,12 +22,17 @@ import {
   type Hours,
 } from "@/lib/calendar/model";
 import type { CalendarData } from "@/lib/calendar/service";
+import { Modal } from "@/components/modal/modal";
+import type { CalendarBooking, BookingSource } from "@/lib/calendar/service";
+import { bookingStatusLabels, type CalendarMode } from "./booking-calendar-modes";
 import "./calendar.css";
-const statusLabels = {
-  pending: "Në pritje",
-  confirmed: "Konfirmuar",
-  cancelled: "Anuluar",
-};
+
+// FullCalendar measures the browser; it renders on the client only.
+const BookingCalendar = dynamic(() => import("./booking-calendar").then(m => m.BookingCalendar), {
+  ssr: false,
+  loading: () => <section className="booking-calendar panel booking-calendar-placeholder" role="status">Po hapet kalendari…</section>,
+});
+const statusLabels = bookingStatusLabels;
 const syncLabels = {
   local: "Në panel",
   pending: "Në pritje të Google",
@@ -38,16 +45,19 @@ function BookingFields({
   date,
   booking,
   initialService,
+  initialTime,
 }: {
   slug: string;
   data: CalendarData;
   date: string;
   booking?: Booking;
   initialService?: string;
+  /** The time clicked in the calendar; kept when it is one of the free times. */
+  initialTime?: string;
 }) {
   const initial = booking
     ? zonedParts(booking.starts_at, data.settings.timezone)
-    : { date, time: "" };
+    : { date, time: initialTime ?? "" };
   const [selectedDate, setDate] = useState(initial.date),
     [serviceId, setService] = useState(
       booking?.service_id ??
@@ -260,41 +270,150 @@ function HoursEditor({ initial }: { initial: Hours[] }) {
     </div>
   );
 }
+const sourceLabels: Record<BookingSource, string> = { conversation: "Nga biseda", assistant: "Nga Asistenti", panel: "Nga paneli" };
+function when(booking: Booking, timezone: string) {
+  const start = zonedParts(booking.starts_at, timezone), end = zonedParts(booking.ends_at, timezone);
+  const day = new Date(`${start.date}T12:00:00Z`);
+  return { day: `${dayNames[day.getUTCDay()]}, ${start.date.slice(8)}.${start.date.slice(5, 7)}.${start.date.slice(0, 4)}`, time: `${start.time} – ${end.time}` };
+}
+
+/** Konfirmo / Refuzo for a pending booking. Refusing asks once more: the customer may be told. */
+function DecisionButtons({ slug, booking, onDone }: { slug: string; booking: CalendarBooking; onDone: (message: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [confirmRefusal, setConfirmRefusal] = useState(false);
+  const [error, setError] = useState("");
+  async function decide(status: "confirmed" | "cancelled") {
+    setBusy(true);
+    setError("");
+    const result = await changeBooking(slug, { id: booking.id, revision: booking.revision, status });
+    setBusy(false);
+    if (result.error) setError(result.error);
+    else onDone(result.success ?? "U ruajt.");
+  }
+  return (
+    <div className="booking-decision">
+      {confirmRefusal ? (
+        <>
+          <span className="muted-copy">Ta refuzojmë? Klienti njoftohet nëse i ka shkruar biznesit në 24 orët e fundit.</span>
+          <button type="button" className="btn btn-small booking-refuse" disabled={busy} onClick={() => decide("cancelled")}>Po, refuzo</button>
+          <button type="button" className="btn btn-ghost btn-small" disabled={busy} onClick={() => setConfirmRefusal(false)}>Jo</button>
+        </>
+      ) : (
+        <>
+          <button type="button" className="btn btn-primary btn-small" disabled={busy} onClick={() => decide("confirmed")}>Konfirmo</button>
+          <button type="button" className="btn btn-ghost btn-small" disabled={busy} onClick={() => setConfirmRefusal(true)}>Refuzo</button>
+        </>
+      )}
+      {error && <p className="booking-decision-error" role="alert">{error}</p>}
+    </div>
+  );
+}
+
+function PendingQueue({ slug, pending, timezone, onOpen, onDone }: {
+  slug: string; pending: CalendarBooking[]; timezone: string; onOpen: (b: CalendarBooking) => void; onDone: (message: string) => void;
+}) {
+  return (
+    <section className="panel section-pad booking-queue" aria-labelledby="booking-queue-title">
+      <div className="booking-queue-heading">
+        <h2 id="booking-queue-title">Kërkon veprim</h2>
+        <span className="booking-count">{pending.length}</span>
+      </div>
+      <p className="muted-copy">Rezervime që presin vendimin tënd. Orari mbahet i zënë derisa t’i konfirmosh ose refuzosh.</p>
+      <ul>
+        {pending.map(b => {
+          const at = when(b, timezone);
+          return (
+            <li key={`${b.id}-${b.revision}`} className="booking-queue-item">
+              <button type="button" className="booking-queue-open" onClick={() => onOpen(b)}>
+                <span className="booking-queue-time"><strong>{at.time}</strong><small>{at.day}</small></span>
+                <span className="booking-queue-who"><strong>{b.customer_name}</strong><small>{b.service_name} · {sourceLabels[b.source]}</small></span>
+              </button>
+              <DecisionButtons slug={slug} booking={b} onDone={onDone} />
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function BookingDetails({ slug, data, booking, onSaved }: {
+  slug: string; data: CalendarData; booking: CalendarBooking; onSaved: (message: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const at = when(booking, data.settings.timezone);
+  return (
+    <div className="booking-details">
+      <dl>
+        <div><dt>Data</dt><dd>{at.day}</dd></div>
+        <div><dt>Ora</dt><dd>{at.time}</dd></div>
+        <div><dt>Shërbimi</dt><dd>{booking.service_name}</dd></div>
+        <div><dt>Klienti</dt><dd>{booking.customer_name}{booking.customer_contact ? ` · ${booking.customer_contact}` : ""}</dd></div>
+        <div><dt>Statusi</dt><dd><span className={`calendar-badge is-${booking.status}`}>{statusLabels[booking.status]}</span></dd></div>
+        <div><dt>Burimi</dt><dd>{sourceLabels[booking.source]}{booking.conversation_id && <> · <Link className="inline-link" href={`/b/${slug}/inbox/${booking.conversation_id}`}>Hap bisedën →</Link></>}</dd></div>
+        <div><dt>Google</dt><dd>{syncLabels[booking.sync_status]}</dd></div>
+        {booking.notes && <div><dt>Shënime</dt><dd>{booking.notes}</dd></div>}
+      </dl>
+      {booking.status === "pending" && <DecisionButtons slug={slug} booking={booking} onDone={onSaved} />}
+      {["error", "pending"].includes(booking.sync_status) && booking.status !== "cancelled" && (
+        <ActionForm action={retryBookingSync.bind(null, slug)} onSuccess={() => onSaved("Sinkronizimi përfundoi.")}>
+          <input type="hidden" name="id" value={booking.id} />
+          <button className="btn btn-ghost btn-small">Riprovo Google</button>
+        </ActionForm>
+      )}
+      {booking.status !== "cancelled" && (
+        editing ? (
+          <section className="booking-edit">
+            <h3>Ndrysho ose anulo</h3>
+            <ActionForm action={saveBooking.bind(null, slug)} onSuccess={() => onSaved("Rezervimi u ruajt.")}>
+              <BookingFields slug={slug} data={data} date={zonedParts(booking.starts_at, data.settings.timezone).date} booking={booking} />
+            </ActionForm>
+          </section>
+        ) : (
+          <button type="button" className="btn btn-ghost" onClick={() => setEditing(true)}>Ndrysho / Anulo</button>
+        )
+      )}
+    </div>
+  );
+}
+
+type Dialog = { kind: "new"; date: string; time?: string } | { kind: "booking"; booking: CalendarBooking } | null;
 export function CalendarWorkspace({
   data,
+  pending,
   slug,
   date,
-  days,
+  mode,
   view,
   googleConfigured,
   googleNotice,
   initialService,
 }: {
   data: CalendarData;
+  /** Null when the pending list could not be loaded. */
+  pending: CalendarBooking[] | null;
   slug: string;
   date: string;
-  days: string[];
+  mode?: CalendarMode;
   view: "calendar" | "bookings";
   googleConfigured: boolean;
   googleNotice?: string;
   initialService?: string;
 }) {
   const router = useRouter();
-  const [openEditors, setOpenEditors] = useState<Record<string, boolean>>({});
-  const [adding, setAdding] = useState(Boolean(initialService));
-  const changeDate = (value: string) => {
-    if (value)
-      router.push(`/b/${slug}/${view}?date=${encodeURIComponent(value)}`);
+  const [dialog, setDialog] = useState<Dialog>(initialService ? { kind: "new", date } : null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [message, setMessage] = useState("");
+  const bookable = data.services.some((s) => s.is_active && s.booking_enabled !== false);
+  const refresh = () => {
+    setRefreshKey(k => k + 1);
+    router.refresh();
   };
-  const moveWeek = (delta: number) => {
-    const at = new Date(`${date}T12:00Z`);
-    at.setUTCDate(at.getUTCDate() + delta);
-    changeDate(at.toISOString().slice(0, 10));
+  const done = (text: string) => {
+    setDialog(null);
+    setMessage(text);
+    refresh();
   };
-  const refresh = () => router.refresh();
-  const selected = data.bookings.filter(
-    (b) => zonedParts(b.starts_at, data.settings.timezone).date === date,
-  );
   return (
     <div className="calendar-workspace">
       <div className="page-heading">
@@ -302,19 +421,11 @@ export function CalendarWorkspace({
           <p className="page-eyebrow">TAKIMET E BIZNESIT</p>
           <h1>{view === "calendar" ? "Kalendari" : "Rezervimet"}</h1>
           <p className="page-description">
-            Shërbimet, oraret dhe takimet në një vend.
+            {view === "calendar" ? "Kliko një orë të lirë për rezervim të ri; tërhiq një takim për ta zhvendosur." : "Rezervimet që presin vendim dhe të gjitha takimet sipas datës."}
           </p>
         </div>
-        <button
-          className="btn btn-primary"
-          disabled={
-            !data.services.some(
-              (s) => s.is_active && s.booking_enabled !== false,
-            )
-          }
-          onClick={() => setAdding(!adding)}
-        >
-          {adding ? "Mbyll formularin" : "+ Shto rezervim"}
+        <button className="btn btn-primary" disabled={!bookable} onClick={() => setDialog({ kind: "new", date })}>
+          + Shto rezervim
         </button>
       </div>
       {!data.available ? (
@@ -324,202 +435,48 @@ export function CalendarWorkspace({
         </section>
       ) : (
         <>
-          {googleNotice && (
-            <p className="calendar-notice" role="status">
-              {googleNotice}
+          {googleNotice && <p className="calendar-notice" role="status">{googleNotice}</p>}
+          {data.googleError && <p className="calendar-notice" role="alert">{data.googleError}</p>}
+          {message && (
+            <p className="calendar-notice is-success" role="status">
+              {message}
+              <button type="button" className="btn btn-ghost btn-small" onClick={() => setMessage("")}>Mbyll</button>
             </p>
           )}
-          {data.googleError && (
-            <p className="calendar-notice" role="alert">
-              {data.googleError}
-            </p>
-          )}
-          {!data.services.some(
-            (s) => s.is_active && s.booking_enabled !== false,
-          ) && (
+          {!bookable && (
             <p className="calendar-notice">
               Për të filluar, aktivizo rezervimin me orar te{" "}
               <Link href={`/b/${slug}/services`}>Shërbimet</Link>.
             </p>
           )}
-          <div className="calendar-toolbar">
-            <div>
-              <button
-                className="btn btn-ghost"
-                aria-label="Java e kaluar"
-                onClick={() => moveWeek(-7)}
-              >
-                ←
-              </button>
-              <button
-                className="btn btn-ghost"
-                aria-label="Java e ardhshme"
-                onClick={() => moveWeek(7)}
-              >
-                →
-              </button>
-            </div>
-            <label>
-              Data{" "}
-              <input
-                className="field"
-                type="date"
-                value={date}
-                onChange={(e) => changeDate(e.target.value)}
-              />
-            </label>
-            <span className="muted-copy">{data.settings.timezone}</span>
-            <button className="btn btn-ghost" onClick={refresh}>
-              Rifresko
-            </button>
-          </div>
-          {adding && (
-            <section className="panel section-pad">
-              <h2>Rezervim i ri</h2>
-              <ActionForm
-                action={saveBooking.bind(null, slug)}
-                onSuccess={() => {
-                  setAdding(false);
-                  refresh();
-                }}
-              >
-                <BookingFields
-                  slug={slug}
-                  data={data}
-                  date={date}
-                  initialService={initialService}
-                />
+          {pending === null ? (
+            <p className="calendar-notice" role="alert">Rezervimet në pritje nuk u ngarkuan. Rifresko faqen.</p>
+          ) : !!pending.length && (
+            <PendingQueue slug={slug} pending={pending} timezone={data.settings.timezone}
+              onOpen={b => setDialog({ kind: "booking", booking: b })} onDone={done} />
+          )}
+          <BookingCalendar
+            slug={slug}
+            settings={data.settings}
+            date={date}
+            mode={mode ?? (view === "bookings" ? "list" : "week")}
+            refreshKey={refreshKey}
+            onOpen={booking => setDialog({ kind: "booking", booking })}
+            onCreate={at => bookable && setDialog({ kind: "new", ...at })}
+            onChanged={() => router.refresh()}
+          />
+          {dialog?.kind === "new" && (
+            <Modal title="Rezervim i ri" subtitle={data.settings.timezone} onClose={() => setDialog(null)}>
+              <ActionForm action={saveBooking.bind(null, slug)} onSuccess={() => done("Rezervimi u shtua.")}>
+                <BookingFields slug={slug} data={data} date={dialog.date} initialTime={dialog.time} initialService={initialService} />
               </ActionForm>
-            </section>
+            </Modal>
           )}
-          {view === "calendar" && (
-            <section className="calendar-week" aria-label="Takimet e javës">
-              {days.map((day) => {
-                const appointments = data.bookings.filter(
-                  (b) =>
-                    b.status !== "cancelled" &&
-                    zonedParts(b.starts_at, data.settings.timezone).date ===
-                      day,
-                );
-                const busy = data.busy.filter((b) => {
-                  const start = zonedParts(
-                      b.start,
-                      data.settings.timezone,
-                    ).date,
-                    end = zonedParts(b.end, data.settings.timezone).date;
-                  return start <= day && end >= day;
-                });
-                return (
-                  <div
-                    className={`calendar-day ${day === date ? "is-selected" : ""}`}
-                    key={day}
-                  >
-                    <button
-                      className="calendar-day-heading"
-                      aria-pressed={day === date}
-                      onClick={() => changeDate(day)}
-                    >
-                      <span>
-                        {dayNames[new Date(`${day}T12:00Z`).getUTCDay()]}
-                      </span>
-                      <strong>
-                        {day.slice(8)}.{day.slice(5, 7)}
-                      </strong>
-                    </button>
-                    {appointments.map((b) => (
-                      <button
-                        className={`calendar-event is-${b.status}`}
-                        key={b.id}
-                        onClick={() => changeDate(day)}
-                      >
-                        <strong>
-                          {zonedParts(b.starts_at, data.settings.timezone).time}{" "}
-                          – {zonedParts(b.ends_at, data.settings.timezone).time}
-                        </strong>
-                        <span>{b.service_name}</span>
-                        <small>
-                          {b.customer_name} · {statusLabels[b.status]}
-                        </small>
-                      </button>
-                    ))}
-                    {!!busy.length && (
-                      <p className="calendar-busy">
-                        Google: {busy.length} intervale të zëna
-                      </p>
-                    )}
-                    {!appointments.length && !busy.length && (
-                      <p className="calendar-empty">Pa takime</p>
-                    )}
-                  </div>
-                );
-              })}
-            </section>
+          {dialog?.kind === "booking" && (
+            <Modal title={dialog.booking.customer_name} subtitle={dialog.booking.service_name} onClose={() => setDialog(null)}>
+              <BookingDetails key={`${dialog.booking.id}-${dialog.booking.revision}`} slug={slug} data={data} booking={dialog.booking} onSaved={done} />
+            </Modal>
           )}
-          <section className="panel section-pad">
-            <h2>Takimet · {date}</h2>
-            {!selected.length ? (
-              <p className="muted-copy">Nuk ka rezervime për këtë ditë.</p>
-            ) : (
-              selected.map((booking) => (
-                <article
-                  className="calendar-booking"
-                  key={`${booking.id}-${booking.revision}`}
-                >
-                  <div className="calendar-booking-summary">
-                    <div>
-                      <strong>
-                        {
-                          zonedParts(booking.starts_at, data.settings.timezone)
-                            .time
-                        }{" "}
-                        · {booking.service_name}
-                      </strong>
-                      <p>
-                        {booking.customer_name}
-                        {booking.customer_contact
-                          ? ` · ${booking.customer_contact}`
-                          : ""}
-                      </p>
-                    </div>
-                    <div>
-                      <span className={`calendar-badge is-${booking.status}`}>
-                        {statusLabels[booking.status]}
-                      </span>
-                      <small>{syncLabels[booking.sync_status]}</small>
-                    </div>
-                  </div>
-                  {booking.status !== "cancelled" && (
-                    <details onToggle={event => {
-                      const open = event.currentTarget.open;
-                      setOpenEditors(previous => previous[booking.id] === open ? previous : { ...previous, [booking.id]: open });
-                    }}>
-                      <summary>Ndrysho / Anulo</summary>
-                      {openEditors[booking.id] && <ActionForm
-                        action={saveBooking.bind(null, slug)}
-                        onSuccess={refresh}
-                      >
-                        <BookingFields
-                          slug={slug}
-                          data={data}
-                          date={date}
-                          booking={booking}
-                        />
-                      </ActionForm>}
-                    </details>
-                  )}
-                  {["error", "pending"].includes(booking.sync_status) && (
-                    <ActionForm
-                      action={retryBookingSync.bind(null, slug)}
-                      onSuccess={refresh}
-                    >
-                      <input type="hidden" name="id" value={booking.id} />
-                      <button className="btn btn-ghost">Riprovo Google</button>
-                    </ActionForm>
-                  )}
-                </article>
-              ))
-            )}
-          </section>
           <details className="panel section-pad calendar-settings">
             <summary>Konfigurimi i kalendarit</summary>
             <section>

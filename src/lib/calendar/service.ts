@@ -32,8 +32,6 @@ export type CalendarData = {
   available: boolean;
   settings: CalendarSettings;
   services: BookingService[];
-  bookings: Booking[];
-  busy: BusyPeriod[];
   google: {
     connected: boolean;
     calendar_id: string | null;
@@ -42,11 +40,40 @@ export type CalendarData = {
   calendars: GoogleCalendar[];
   googleError: string | null;
 };
-export async function loadCalendar(
-  businessId: string,
-  start: string,
-  end: string,
-): Promise<CalendarData> {
+/** Where a booking came from, for the owner's view only; never read back as input. */
+export type BookingSource = "conversation" | "assistant" | "panel";
+export type CalendarBooking = Booking & { conversation_id: string | null; source: BookingSource };
+const calendarBookingColumns = `${bookingColumns},conversation_id,request_key`;
+function toCalendarBooking(row: Booking & { conversation_id: string | null; request_key: string | null }): CalendarBooking {
+  const { request_key, ...booking } = row;
+  return { ...booking, source: row.conversation_id ? "conversation" : request_key?.startsWith("assistant:") ? "assistant" : "panel" };
+}
+/** The bookings and Google busy times that overlap one calendar range (at most 50 days). */
+export async function loadCalendarEvents(businessId: string, start: string, end: string) {
+  if (!Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end)) || Date.parse(end) <= Date.parse(start)
+    || Date.parse(end) - Date.parse(start) > 50 * 86400000) throw new Error("Periudha e kalendarit është e pavlefshme.");
+  const db = createServiceSupabase();
+  const rows = await db.from("bookings").select(calendarBookingColumns).eq("business_id", businessId)
+    .lt("starts_at", end).gt("blocked_until", start).order("starts_at");
+  if (rows.error) throw new Error("Rezervimet nuk u ngarkuan. Provo përsëri.");
+  const connection = await googleConnection(businessId);
+  let busy: BusyPeriod[] = [], googleError: string | null = null;
+  if (connection?.connected && connection.calendar_id) {
+    try { busy = await googleBusy(businessId, start, end); }
+    catch { googleError = "Oraret e zëna në Google nuk u ngarkuan; rezervimet kontrollohen përsëri para ruajtjes."; }
+  }
+  return { bookings: (rows.data ?? []).map(row => toCalendarBooking(row as never)), busy, googleError };
+}
+/** Bookings still waiting for the business's decision, soonest first. */
+export async function loadPendingBookings(businessId: string, limit = 50): Promise<CalendarBooking[]> {
+  const { data, error } = await createServiceSupabase().from("bookings").select(calendarBookingColumns)
+    .eq("business_id", businessId).eq("status", "pending").gt("starts_at", new Date().toISOString())
+    .order("starts_at").limit(limit);
+  if (error) throw new Error("Rezervimet në pritje nuk u ngarkuan.");
+  return (data ?? []).map(row => toCalendarBooking(row as never));
+}
+/** The calendar's setup: hours, services and the Google connection. Bookings load per range (loadCalendarEvents). */
+export async function loadCalendar(businessId: string): Promise<CalendarData> {
   const db = createServiceSupabase();
   const results = await Promise.all([
     db
@@ -63,13 +90,7 @@ export async function loadCalendar(
       )
       .eq("business_id", businessId)
       .order("name"),
-    db
-      .from("bookings")
-      .select(bookingColumns)
-      .eq("business_id", businessId)
-      .lt("starts_at", end)
-      .gt("blocked_until", start)
-      .order("starts_at"),
+    db.from("bookings").select("id", { count: "exact", head: true }).eq("business_id", businessId),
   ]);
   const missing = results.some(
     (r) =>
@@ -80,8 +101,6 @@ export async function loadCalendar(
     available: !missing,
     settings: defaultSettings,
     services: [],
-    bookings: [],
-    busy: [],
     google: { connected: false, calendar_id: null, calendar_name: null },
     calendars: [],
     googleError: null,
@@ -91,13 +110,10 @@ export async function loadCalendar(
     throw new Error("Kalendari nuk u ngarkua. Provo përsëri.");
   const connection = await googleConnection(businessId);
   let calendars: GoogleCalendar[] = [],
-    busy: BusyPeriod[] = [],
     googleError: string | null = null;
-  if (connection?.connected) {
+  if (connection?.connected && !connection.calendar_id) {
     try {
-      if (connection.calendar_id)
-        busy = await googleBusy(businessId, start, end);
-      else calendars = await writableCalendars(connection);
+      calendars = await writableCalendars(connection);
     } catch {
       googleError =
         "Google Calendar nuk u ngarkua. Lidhe përsëri ose provo më vonë; rezervimet kontrollohen përsëri para ruajtjes.";
@@ -107,8 +123,6 @@ export async function loadCalendar(
     ...empty,
     settings: results[0].data ?? defaultSettings,
     services: results[1].data ?? [],
-    bookings: results[2].data ?? [],
-    busy,
     calendars,
     googleError,
     google: {

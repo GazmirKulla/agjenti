@@ -11,10 +11,11 @@ import {
   defaultSettings,
   parseSettings,
   uuid, validDate,
+  type Booking,
   type CalendarSettings,
 } from "./model";
 import { googleConnection, syncBooking, writableCalendars } from "./google";
-import { availableSlots, persistBooking } from "./service";
+import { availableSlots, bookingColumns, loadCalendarEvents, persistBooking } from "./service";
 async function access(slug: string) {
   const user = await getSessionUser();
   const result = user ? await requireBusinessAccess(user.id, slug) : null;
@@ -103,6 +104,43 @@ export async function saveBooking(slug: string, form: FormData) {
     return {
       error: err instanceof Error ? err.message : "Rezervimi nuk u ruajt.",
     };
+  }
+}
+/** The bookings and Google busy times for the range the calendar shows. */
+export async function readCalendarEvents(slug: string, start: string, end: string) {
+  const businessId = await access(slug);
+  return loadCalendarEvents(businessId, start, end);
+}
+/**
+ * A decision or a move from the calendar (Konfirmo, Refuzo, drag): the stored booking with only its status
+ * or its start changed, saved through the same checks as the booking form (revision, hours, overlaps, Google).
+ */
+export async function changeBooking(slug: string, change: { id: string; revision: number; status?: "confirmed" | "cancelled"; date?: string; time?: string }) {
+  try {
+    const businessId = await access(slug);
+    if (!uuid(change?.id) || !Number.isInteger(change.revision) || change.revision < 1
+      || (change.status !== undefined && !["confirmed", "cancelled"].includes(change.status))
+      || (change.status === undefined) === (change.date === undefined)
+      || (change.date !== undefined && typeof change.time !== "string"))
+      throw new Error("Ndryshimi i rezervimit është i pavlefshëm.");
+    const db = createServiceSupabase();
+    const [row, cfg] = await Promise.all([
+      db.from("bookings").select(bookingColumns).eq("business_id", businessId).eq("id", change.id).maybeSingle(),
+      db.from("business_calendar_settings").select("timezone").eq("business_id", businessId).maybeSingle(),
+    ]);
+    if (row.error || cfg.error) throw new Error("Rezervimi nuk u ngarkua. Provo përsëri.");
+    const booking = row.data as Booking | null;
+    if (!booking) throw new Error("Rezervimi nuk u gjet.");
+    if (booking.revision !== change.revision) throw new Error("Rezervimi ndryshoi. Rifresko faqen dhe provo përsëri.");
+    if (booking.status === "cancelled") throw new Error("Rezervimi është anuluar.");
+    const start = change.date !== undefined ? localInstant(change.date, change.time!, cfg.data?.timezone ?? defaultSettings.timezone) : booking.starts_at;
+    const result = await persistBooking(businessId, { id: booking.id, revision: booking.revision, serviceId: booking.service_id,
+      name: booking.customer_name, contact: booking.customer_contact, notes: booking.notes, start, status: change.status ?? booking.status });
+    refresh(slug);
+    const done = change.status === "confirmed" ? "Rezervimi u konfirmua." : change.status === "cancelled" ? "Rezervimi u refuzua." : "Rezervimi u zhvendos.";
+    return { success: result.syncError ?? done };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Rezervimi nuk u ndryshua." };
   }
 }
 export async function retryBookingSync(slug: string, form: FormData) {
