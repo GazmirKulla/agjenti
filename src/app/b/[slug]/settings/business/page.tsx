@@ -66,7 +66,7 @@ export default async function SettingsPage({
       <div className="grid gap-6">
             {/* What the agent tells customers is edited in the Agjenti topics, in one place each. */}
             <section className="panel section-pad settings-agent-links" aria-labelledby="settings-agent-links-title">
-              <h2 id="settings-agent-links-title">Çfarë u thotë Agjenti klientëve</h2>
+              <h2 id="settings-agent-links-title" className="settings-heading"><span className="profile-group-icon" aria-hidden="true"><Icon name="agents" size={20} /></span>Çfarë u thotë Agjenti klientëve</h2>
               <p className="muted-copy">Këto ndryshohen te Agjenti; Agjenti i lexon direkt nga aty.</p>
               <Link className="settings-agent-link" href={`/b/${slug}/agents/business`}>
                 <Icon name="briefcase" size={18} />
@@ -86,13 +86,13 @@ export default async function SettingsPage({
               className="panel section-pad grid gap-5"
             >
               <div className="section-title">
-                <h2>Të dhënat e biznesit</h2>
+                <h2 className="settings-heading"><span className="profile-group-icon" aria-hidden="true"><Icon name="store" size={20} /></span>Të dhënat e biznesit</h2>
                 <button className="btn btn-primary" type="submit">
                   Ruaj
                 </button>
               </div>
               <div className="detail-block settings-detail-block">
-                <dl className="detail-fields">
+                <dl className="detail-fields settings-facts">
                   <div>
                     <dt>Emri i biznesit</dt>
                     <dd>{access.business.name}</dd>
@@ -134,12 +134,14 @@ export default async function SettingsPage({
                 </p>
               )}
             </ActionForm>
-            <section className="panel section-pad grid gap-3" aria-labelledby="product-structure-link-title">
-              <h2 id="product-structure-link-title">Struktura</h2>
-              <p className="muted-copy">
-                Çfarë shet biznesi, fushat e çdo artikulli, stoku dhe si i sheh Agjenti menaxhohen në një vend te {items.names.plural}.{" "}
-                <Link className="soft-link" href={`/b/${slug}/products/structure`}>Hap strukturën →</Link>
-              </p>
+            <section className="panel section-pad settings-agent-links" aria-labelledby="product-structure-link-title">
+              <h2 id="product-structure-link-title" className="settings-heading"><span className="profile-group-icon" aria-hidden="true"><Icon name="products" size={20} /></span>Struktura</h2>
+              <p className="muted-copy">Çfarë shet biznesi, fushat e çdo artikulli, stoku dhe si i sheh Agjenti, në një vend te {items.names.plural}.</p>
+              <Link className="settings-agent-link" href={`/b/${slug}/products/structure`}>
+                <Icon name="products" size={18} />
+                <span><b>Hap strukturën</b><small>Fushat, zgjedhjet e klientit dhe stoku</small></span>
+                <span aria-hidden="true">→</span>
+              </Link>
             </section>
       </div>
     </>

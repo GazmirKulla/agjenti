@@ -8,7 +8,6 @@ import { ProfileEditor } from "@/components/agents/profile-editor";
 import { ConfigurationHistory } from "@/components/agents/configuration-history";
 import { ProfileOverlaps } from "@/components/agents/profile-overlaps";
 import { loadBusinessProfile } from "@/lib/business-profile/service";
-import { missingFields } from "@/lib/business-profile/model";
 import { saveBusinessProfile } from "@/lib/business-profile/actions";
 
 export const metadata = { title: "Biznesi | Agjenti.app" };
@@ -22,11 +21,9 @@ export default async function AgentBusinessPage({ params }: { params: Promise<{ 
   if (!access) redirect("/auth/continue");
   const businessId = access.business.id, base = `/b/${access.business.slug}`;
   const loaded = await loadBusinessProfile(businessId);
-  const missing = missingFields(loaded.profile);
   return <>
     <PageHeading title="Biznesi" description={`Profili publik i ${access.business.name}: kush jeni, si ju kontaktojnë, ku ndodheni dhe kur jeni hapur. Agjenti u përgjigjet klientëve nga këto të dhëna.`} />
     <AgentSpace test={<TopicTest slug={access.business.slug} businessId={businessId} businessName={access.business.name} userId={user.id} profileHref="" />}>
-      {missing.length > 0 && <p className="profile-missing" role="status">Profili nuk thotë ende: {missing.map(field => field.label.toLowerCase()).join(", ")}. Agjenti këto i thotë si të panjohura dhe nuk shpik vlera.</p>}
       <ProfileEditor initial={loaded.profile} updatedAt={loaded.updatedAt} requestId={randomUUID()} timezone={loaded.timezone} suggestions={loaded.suggestions}
         settingsHref={`${base}/settings/business`} action={saveBusinessProfile.bind(null, access.business.slug)} />
       <ProfileOverlaps slug={access.business.slug} />

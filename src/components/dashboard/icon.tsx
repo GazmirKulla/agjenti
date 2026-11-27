@@ -74,6 +74,9 @@ const paths: Record<string, string> = {
   phone: "M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z M11 18h2",
   mail: "M3 5h18v14H3z M3 6l9 7 9-7",
   reply: "M9 14 4 9l5-5 M4 9h10a6 6 0 0 1 6 6v5",
+  pin: "M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2",
+  info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 11v5 M12 8h.01",
 };
 export function Icon({
   name,
