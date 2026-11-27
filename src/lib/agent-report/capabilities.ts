@@ -314,7 +314,7 @@ export const businessCapabilities: CapabilityModule[] = [
   {
     name: "Kanalet",
     items: [
-      ["jo", "Lidh ose shkëput Instagram/WhatsApp (OAuth)"],
+      ["pjes", "Tregon gjendjen e Instagram/WhatsApp (lidhja, skadimi i token-it, dërgimet që dështojnë) dhe jep lidhjen te Integrimet; hyrjen te Meta (OAuth) dhe shkëputjen i bën vetëm pronari atje"],
     ],
   },
 ];

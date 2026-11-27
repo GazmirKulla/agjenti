@@ -1,6 +1,7 @@
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { operationActor } from "./access";
 import { uuid } from "@/lib/calendar/model";
+import { readChannelHealth } from "./channel-health";
 const sources = {
   plan: { table: "business_operation_plans", columns: "id,title,state,created_at,updated_at", name: "title", module: "settings" },
   order: { table: "orders", columns: "id,conversation_id,customer_id,status,total_amount,currency,created_at", name: "status", module: "orders" },
@@ -9,11 +10,16 @@ const sources = {
   training: { table: "agent_training_memories", columns: "id,kind,instruction,is_active,revision,updated_at", name: "instruction", module: "agents" },
   product_type: { table: "product_types", columns: "id,name,is_active", name: "name", module: "products" },
 } as const;
-export function isOperationalSearch(kind: string): kind is keyof typeof sources { return Object.hasOwn(sources, kind); }
+export function isOperationalSearch(kind: string): kind is keyof typeof sources | "channel" { return kind === "channel" || Object.hasOwn(sources, kind); }
 export async function searchOperations(businessId: string, userId: string, input: { kind: string; query: string; offset?: string; customer_id?: string; status?: string }, accessToken?: string) {
   await operationActor(businessId, userId, accessToken);
-  if (!isOperationalSearch(input.kind)) throw Error("Kërkim i pambështetur.");
-  const source = sources[input.kind]; const offset = Number(input.offset ?? 0);
+  // The business's own Instagram and WhatsApp: connection, token expiry and recent sends, never a credential.
+  if (input.kind === "channel") {
+    const rows = await readChannelHealth(businessId);
+    return { kind: input.kind, query: input.query, rows, partial: false, nextOffset: null };
+  }
+  if (!Object.hasOwn(sources, input.kind)) throw Error("Kërkim i pambështetur.");
+  const source = sources[input.kind as keyof typeof sources]; const offset = Number(input.offset ?? 0);
   if (!Number.isInteger(offset) || offset < 0 || offset > 10000 || typeof input.query !== "string" || input.query.length > 120) throw Error("Filtra të pavlefshëm.");
   let query = createServiceSupabase().from(source.table).select(source.columns);
   if (input.kind !== "product_type") query = query.eq("business_id", businessId);
