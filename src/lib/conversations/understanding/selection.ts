@@ -17,6 +17,12 @@ const schema = { type: "object", additionalProperties: false, required: ["matche
   } } },
 } };
 
+/** Evidence must be verbatim server-known text: from the message, or from the candidate it selects (models quote
+ * either). Text found in neither, or only in another candidate, is invented and fails the whole read. */
+function quoted(evidence: string, message: string, candidate: SemanticCandidate) {
+  return message.includes(evidence) || candidate.title.includes(evidence) || (candidate.body ?? "").includes(evidence);
+}
+
 /** Candidate positions refer only to this server-provided read. Selection never
  * creates an ID, proves completeness or authorizes an effect. All batches must
  * succeed: an unread batch may contain another equally plausible identity. */
@@ -42,7 +48,7 @@ async function executeSelection(kind: "identity" | "relevance", entries: readonl
       for (const match of raw.matches) {
         if (!match || Object.keys(match).length !== 3 || !Number.isInteger(match.index) || match.index < 0 || match.index >= batch.length || seen.has(match.index)
           || typeof match.score !== "number" || !Number.isFinite(match.score) || match.score < 0 || match.score > 1
-          || typeof match.evidence !== "string" || !match.evidence.trim() || !message.includes(match.evidence)) throw new SelectionUnavailable();
+          || typeof match.evidence !== "string" || !match.evidence.trim() || !quoted(match.evidence, message, batch[match.index])) throw new SelectionUnavailable();
         seen.add(match.index);
         matches.push({ index: start + match.index, score: match.score, evidence: match.evidence });
       }

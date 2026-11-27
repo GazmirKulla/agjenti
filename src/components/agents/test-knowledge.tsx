@@ -95,5 +95,5 @@ export function TestActionsUsed({ actions }: { actions?: { kind: string; disposi
   if (!shown.length) return null;
   return <p className="chat-knowledge-used"><span>Veprimet:</span>{" "}
     {shown.map((action, index) => <Fragment key={`${action.kind}${index}`}>{index ? " · " : ""}{actionLabels[action.kind]}: {dispositions[action.disposition] ?? "gjendje e panjohur"}</Fragment>)}
-    {" "}Prova nuk krijon porosi, rezervime ose mesazhe reale.</p>;
+    . Prova nuk krijon porosi, rezervime ose mesazhe reale.</p>;
 }

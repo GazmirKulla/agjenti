@@ -25,6 +25,13 @@ it.each([
   provider.create.mockResolvedValue(response(matches));
   await expect(selectSemanticCandidates("identity", candidates, "book")).rejects.toBeInstanceOf(SelectionUnavailable);
 });
+it("accepts evidence quoted verbatim from the selected candidate, never from another one", async () => {
+  const entries = [{ title: "Dërgesa", body: "Dërgesa brenda 24 orësh në Tiranë." }, { title: "Pagesat", body: "Paguani me kartë." }];
+  provider.create.mockResolvedValue(response([{ index: 0, score: 0.9, evidence: "brenda 24 orësh" }]));
+  expect(await selectSemanticCandidates("relevance", entries, "Kur vjen porosia?")).toEqual([{ index: 0, score: 0.9, evidence: "brenda 24 orësh" }]);
+  provider.create.mockResolvedValue(response([{ index: 0, score: 0.9, evidence: "Paguani me kartë." }]));
+  await expect(selectSemanticCandidates("relevance", entries, "Kur vjen porosia?")).rejects.toBeInstanceOf(SelectionUnavailable);
+});
 it("never matches a familiar name when the provider fails or the key is absent", async () => {
   provider.create.mockRejectedValue(new Error("offline"));
   await expect(matchingCatalogNames([{ name: "Book" }], "Book")).rejects.toBeInstanceOf(SelectionUnavailable);
