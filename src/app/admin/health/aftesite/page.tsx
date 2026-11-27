@@ -3,7 +3,7 @@ import { PageHeading } from "@/components/dashboard/ui";
 import { getSessionUser, isPlatformAdmin } from "@/lib/tenant/access";
 import {
   averagePercent, businessCapabilities, capabilityReportUpdated, currentState, customerCapabilities, mainProblems,
-  modulePercent, securityOnlyModules, statusCounts, type CapabilityModule, type CapabilityStatus,
+  manualByDesign, modulePercent, statusCounts, type CapabilityModule, type CapabilityStatus,
 } from "@/lib/agent-report/capabilities";
 import { HealthTabs } from "../tabs";
 import s from "../health.module.css";
@@ -46,7 +46,6 @@ export default async function CapabilitiesPage() {
   const tiles = [
     { value: averagePercent(customerCapabilities), label: "Agjenti i klientit", hint: `Mesatarja e ${customerCapabilities.length} moduleve që i përkasin klientit.` },
     { value: averagePercent(businessCapabilities), label: "Agjenti i biznesit", hint: `Mesatarja e ${businessCapabilities.length} moduleve që i shërbejnë pronarit.` },
-    { value: averagePercent(businessCapabilities.filter(m => !securityOnlyModules.includes(m.name))), label: "Agjenti i biznesit, pa vendimet e sigurisë", hint: `Pa ${securityOnlyModules.join(", ")}, që mbeten me qëllim vetëm me dorë.` },
   ];
 
   return <div className={s.page}>
@@ -81,8 +80,14 @@ export default async function CapabilitiesPage() {
 
     <section className="panel section-pad" aria-labelledby="biznesi">
       <h2 id="biznesi">Agjenti i biznesit (Asistenti)</h2>
-      <p className="muted-copy">Burimi: regjistri <code>src/lib/actions/operations/manual-surfaces.ts</code>, që përcakton për çdo veprim të panelit nëse Asistenti e kryen ose pse jo. Një pjesë e mungesave janë vendime sigurie të qëllimshme: dërgimi i mesazheve klientëve, fushatat, pagesat, lidhjet OAuth, anëtarët dhe fshirja e të dhënave.</p>
+      <p className="muted-copy">Burimi: regjistri <code>src/lib/actions/operations/manual-surfaces.ts</code>, që përcakton për çdo veprim të panelit nëse Asistenti e kryen ose pse jo. Veprimet që mbeten me qëllim vetëm me dorë nuk llogariten këtu; janë më poshtë.</p>
       <Modules modules={businessCapabilities} />
+    </section>
+
+    <section className="panel section-pad" aria-labelledby="me-dore">
+      <h2 id="me-dore">Me qëllim vetëm me dorë</h2>
+      <p className="muted-copy">Vendime të produktit, jo mangësi: nuk llogariten në përqindje dhe nuk i shtohen Asistentit.</p>
+      <ul className={c.list}>{manualByDesign.map(item => <li key={item}>{item}</li>)}</ul>
     </section>
 
     <section className="panel section-pad" aria-labelledby="problemet">

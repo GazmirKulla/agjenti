@@ -6,6 +6,8 @@
  * "po" (funksionon), "pjes" (vetëm me konfigurim ose pjesërisht), "jo" (nuk ekziston). Përditëso edhe
  * `capabilityReportUpdated`, dhe `currentState` / `mainProblems` nëse ndryshuan. Raporti mban gjendjen reale,
  * jo atë të synuar: kur një provë live, review ose test tregon se diçka punon më keq, ule vlerësimin.
+ * Një veprim që me qëllim mbetet vetëm me dorë (pagesat, ekipi, kredencialet, lidhjet me Meta/Google, fshirjet
+ * e pakthyeshme) nuk është mangësi: shkon te `manualByDesign`, jo si "jo" në një modul.
  */
 export type CapabilityStatus = "po" | "pjes" | "jo";
 export type CapabilityModule = { name: string; items: [CapabilityStatus, string][] };
@@ -147,8 +149,7 @@ export const businessCapabilities: CapabilityModule[] = [
     name: "Shërbimet",
     items: [
       ["po", "Krijo dhe ndrysho shërbimin"],
-      ["po", "Oraret dhe cilësimet e kalendarit"],
-      ["pjes", "Fshirja: vetëm çaktivizim"],
+      ["po", "Çaktivizo shërbimin (fshirja nuk lejohet, sepse rezervimet e vjetra i referohen)"],
     ],
   },
   {
@@ -161,13 +162,13 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Kërko rezervime"],
       ["po", "Konfirmo ose anulo kërkesat në pritje; klientit i shkon mesazh brenda 24 orëve"],
       ["po", "Njoftim te Kreu për çdo rezervim, anulim ose zhvendosje nga Agjenti"],
-      ["jo", "Lidhja me Google Calendar: e bën vetëm pronari te Rezervimet → Orari, me qëllim"],
+      ["po", "Orari i rezervimeve, ditët e mbyllura dhe mënyra e konfirmimit (në panel te Rezervimet → Orari)"],
     ],
   },
   {
     name: "Agjenti",
     items: [
-      ["pjes", "Një ndryshim i konfigurimit me disa pjesë (njohuri, udhëzime, komunikim, sjellje, mësime, leja e rezervimit për shërbim/kalendar) me një konfirmim, si tërësi; 3 versione të plota me Rikthe. Migrimi dhe prova e plotë me Asistentin në databazën reale ende nuk janë bërë"],
+      ["pjes", "Një ndryshim i konfigurimit me disa pjesë (njohuri, udhëzime, komunikim, sjellje, mësime, leja e rezervimit për shërbim/kalendar) me një konfirmim, si tërësi; 3 versione të plota me Rikthe. Migrimi është aplikuar dhe ndryshimet nga paneli ruhen si versione (33 deri më 27 nëntor), por asnjë ndryshim me disa pjesë nuk është bërë ende nga Asistenti live"],
       ["po", "Udhëzimet dhe stili i komunikimit: zbatohen pas konfirmimit si version i ri, që mund të rikthehet"],
       ["po", "Menaxhimi i agjentit"],
       ["pjes", "Ruaj trajnimin: shembuj dhe mësime për procese; toni dhe stili për gjithë biznesin shkojnë te udhëzimet"],
@@ -182,7 +183,6 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Drejton te cilësimi përkatës në vend që të krijojë proces"],
       ["pjes", "Ndrysho, publiko, ndiz, rikthe: vetëm për biznes që ka publikuar procesin e vet"],
       ["po", "Fik procesin e personalizuar"],
-      ["jo", "Simulimi"],
     ],
   },
   {
@@ -218,7 +218,6 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Shto dhe ndrysho"],
       ["pjes", "Përgatit njohuri, udhëzime dhe memorie nga konteksti i pronarit, me kontroll të pavarur dhe miratim të versionit përfundimtar; ende pa provë live me AI"],
       ["po", "Fshi"],
-      ["jo", "Import FAQ nga burime të jashtme"],
     ],
   },
   {
@@ -229,8 +228,7 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Lexon bisedat e fundit"],
       ["po", "Ndalo dhe rinis Agjentin në një bisedë"],
       ["po", "Njoftime për bisedat që presin"],
-      ["jo", "Dërgo mesazh klientit"],
-      ["jo", "Reagime"],
+      ["jo", "Dërgo mesazh klientit, me konfirmim, brenda 24 orëve të Instagram/WhatsApp"],
     ],
   },
   {
@@ -243,13 +241,6 @@ export const businessCapabilities: CapabilityModule[] = [
       ["jo", "Ndrysho dërgesën ose shënimin"],
       ["jo", "Ndrysho statusin"],
       ["jo", "Ndrysho artikujt"],
-    ],
-  },
-  {
-    name: "Kalendari",
-    items: [
-      ["po", "Cilësimet e kalendarit (orari, ditët e mbyllura, konfirmimi), që në panel janë te Rezervimet → Orari"],
-      ["jo", "Lidhja me Google: vetëm pronari te Rezervimet → Orari, me qëllim; sinkronizimi dhe oraret e zëna punojnë pasi lidhet"],
     ],
   },
   {
@@ -266,15 +257,14 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Verifikimi i biznesit"],
       ["po", "Modulet: shfaq ose fshih seksione"],
       ["po", "Lloji, fushat, pyetjet për klientin dhe stoku"],
-      ["pjes", "Integrimet: gjendja, prova e lidhjes dhe rifreskimi nga webi; lidhja dhe kredencialet vetëm me dorë"],
+      ["po", "Integrimet: gjendja, prova e lidhjes dhe rifreskimi i produkteve nga webi"],
     ],
   },
   {
     name: "Klientët",
     items: [
       ["po", "Kërko klientë"],
-      ["jo", "Ndrysho klientin"],
-      ["jo", "Fshi klientin"],
+      ["jo", "Ndrysho emrin ose kontaktin e klientit"],
     ],
   },
   {
@@ -287,7 +277,7 @@ export const businessCapabilities: CapabilityModule[] = [
   {
     name: "Fushatat",
     items: [
-      ["jo", "Krijo dhe dërgo fushatë (vetëm pronari, me konfirmim)"],
+      ["jo", "Përgatit draftin e fushatës (tekstin dhe audiencën) për ta parë dhe dërguar pronari te Fushatat"],
     ],
   },
   {
@@ -299,28 +289,26 @@ export const businessCapabilities: CapabilityModule[] = [
     ],
   },
   {
-    name: "Integrimet",
-    items: [
-      ["jo", "Lidh faqen ose katalogun e jashtëm (kredenciale)"],
-    ],
-  },
-  {
-    name: "Pagesat dhe Ekipi",
-    items: [
-      ["jo", "Abonimi dhe pagesat"],
-      ["jo", "Anëtarët dhe ftesat"],
-    ],
-  },
-  {
     name: "Kanalet",
     items: [
-      ["pjes", "Tregon gjendjen e Instagram/WhatsApp (lidhja, skadimi i token-it, dërgimet që dështojnë) dhe jep lidhjen te Integrimet; hyrjen te Meta (OAuth) dhe shkëputjen i bën vetëm pronari atje"],
+      ["po", "Tregon gjendjen e Instagram/WhatsApp (lidhja, skadimi i token-it, dërgimet që dështojnë) dhe jep lidhjen te Integrimet"],
     ],
   },
 ];
 
-/** Modulet e Asistentit që mbeten me qëllim vetëm me dorë (vendime sigurie), jashtë mesatares së tretë. */
-export const securityOnlyModules = ["Fushatat", "Kanalet", "Integrimet", "Pagesat dhe Ekipi"];
+/**
+ * Veprime që mbeten me qëllim vetëm me dorë: nuk janë mangësi dhe nuk llogariten. Mbahen këtu që të mos
+ * rishfaqen si "jo" në module.
+ */
+export const manualByDesign: string[] = [
+  "Abonimi, paketa dhe pagesat: vetëm pronari te Paketa dhe pagesat.",
+  "Anëtarët e ekipit dhe ftesat: vetëm pronari te Cilësimet.",
+  "Lidhja dhe shkëputja e Instagram/WhatsApp: hyrja te Meta dhe miratimi i lejeve i bën pronari te Integrimet (Asistenti tregon gjendjen dhe jep lidhjen).",
+  "Lidhja me Google Calendar: hyrja te Google e bën pronari te Rezervimet → Orari.",
+  "Lidhja e faqes ose katalogut të jashtëm dhe kredencialet (çelësat API): vetëm pronari te Integrimet.",
+  "Dërgimi i një fushate te klientët: e konfirmon vetëm pronari te Fushatat.",
+  "Fshirja e klientit dhe e të dhënave të tij: vetëm me dorë, sepse është e pakthyeshme.",
+];
 
 /** Ku gjendja reale sot ndryshon nga ajo që thonë aftësitë. */
 export const currentState = [
@@ -331,6 +319,7 @@ export const currentState = [
   "Te Lende Drusore Destani, Instagram-i është i lidhur por Meta nuk aktivizoi mesazhet (subscribed_apps): Agjenti nuk merr DM derisa llogaria të rilidhet si profesionale me të gjitha lejet.",
   "Pagesat e paketës funksionojnë me faqen e POK (mjedis prove): një pagesë prove Enterprise u regjistrua dhe paketa u aktivizua deri më 20 dhjetor. Rinovimi është me dorë; rinovimi automatik pret dokumentimin e Subscriptions të POK.",
   "Mesazhet zanore, videot dhe kalimi te stafi kur klienti është i pakënaqur janë live, por ende pa u provuar me klientë të vërtetë.",
+  "Përgjigjet e Agjentit (1–27 nëntor, live): 85 të dërguara; 495 mesazhe pa përgjigje sepse pronari i kishte fikur përgjigjet automatike; 4 dështime (3 radhë të dështuara më 23 nëntor, 1 token i refuzuar më 22 nëntor).",
 ];
 
 export const mainProblems: { title: string; detail: string }[] = [
@@ -339,7 +328,6 @@ export const mainProblems: { title: string; detail: string }[] = [
   { title: "Editori i workflow-ve nuk hiqet dot plotësisht.", detail: "Pa proces të publikuar, serveri e ndërton vetë procesin nga produktet dhe cilësimet, dhe të gjitha cilësimet e Agjentit janë te “Çfarë bën Agjenti”. Agjenti.app ka ende nevojë për editorin, sepse rrjedha “Regjistrim biznesi” krijon biznes dhe ftesë, gjë që procesi i zakonshëm nuk e bën." },
   { title: "Bisedat e rezervimit kërkojnë verifikim live pas korrigjimeve.", detail: "Prova nga Instagram më 27 nëntor krijoi rezervimin, por ID-ja e shërbimit doli te klienti, udhëzime të brendshme (në anglisht) u përsëritën, anulimi kërkoi tre konfirmime dhe një fjali të saktë, emri u kërkua sërish dhe zhvendosja ngeci (edhe pas korrigjimeve të para: çdo korrigjim i orës pas leximit të rezervimeve refuzohej, ndaj gjendja nuk ndryshonte dhe Agjenti pyeste për muajin). Korrigjimet në kod (korrigjimi i lejuar pas një leximi, shenjat e shërbimit, përmbledhja pa fusha teknike, një rezervim zgjidhet vetë, data dhe ora lokale e biznesit, oraret e plota të ditës së rezervimit, emri dhe kontakti nga e njëjta bisedë) presin provën live. Mesazhet bosh (reagime) marrin ende përgjigje. Kujtesat dhe mesazhet për vendimet e stafit dërgohen vetëm brenda 24 orëve nga mesazhi i fundit i klientit (rregulli i Instagram/WhatsApp, pa shabllone)." },
   { title: "Porositë pas krijimit bëhen me dorë.", detail: "Klienti nuk e ndryshon dot porosinë, dhe Asistenti nuk ndryshon dot statusin apo dërgesën." },
-  { title: "Asistenti nuk lidh integrimet.", detail: "Asistenti ndryshon stokun, fushat, pyetjet, llojin dhe seksionet, provon lidhjen me webin dhe rifreskon produktet, por lidhjen e re, kredencialet dhe shkëputjen i bën vetëm pronari te Integrimet." },
   { title: "Pronari nuk e sheh suksesin e Agjentit.", detail: "Platforma e mat tani çdo hyrje dhe dalje të aftësive (skeda Shëndeti), por pronari te paneli i vet dhe Asistenti nuk e dinë sa porosi u lanë në mes ose sa mesazhe mbetën pa përgjigje." },
   { title: "Porosia kërkon të dhëna që nuk i duhen.", detail: "Për një PDF që shkarkohet, Agjenti kërkon qytetin dhe adresën, një nga një. Të dhënat e kërkuara varen nga cilësimi i biznesit, jo nga mënyra si merret produkti." },
   { title: "Komentet në Instagram injorohen.", detail: "Webhook-u merr vetëm mesazhet në DM; komentet si “Sa kushton?” nën postime nuk i arrijnë Agjentit, ndonëse aty nis shumica e shitjeve." },
@@ -348,6 +336,8 @@ export const mainProblems: { title: string; detail: string }[] = [
   { title: "Agjenti nuk rikthehet te klienti.", detail: "Kur klienti e lë porosinë ose rezervimin në mes, askush nuk e kujton. Njoftimet i shkojnë vetëm pronarit, për lead-et pa përgjigje." },
   { title: "Burimet rilexohen, por pa krahasim të plotë.", detail: "Rifreskimi (me dorë, nga Asistenti ose çdo javë) sjell propozime për çfarë është e re ose ndryshe dhe shënon njohuritë që faqja nuk i thotë më, por Instagram-i lexohet vetëm nga postimet e fundit dhe një profil publik lexohet vetëm një herë." },
   { title: "Varësia nga OpenAI pa sinjal.", detail: "Kur mbarojnë kreditë, ndalet gjithçka dhe pronari nuk paralajmërohet." },
+  { title: "Njoftimet në celular nuk dërgohen.", detail: "Nga 1 deri më 27 nëntor, 292 përpjekje dërgimi te Expo dështuan të gjitha (send:unexpected) dhe asnjë njoftim nuk doli: 121 presin, 58 u hoqën. Pajisja ka token të vlefshëm Expo. Shkaku nuk dihet, sepse kodi nuk ruan gabimin e Expo-s (statusin HTTP ose details.error)." },
+  { title: "Lidhja e Instagram-it dështon shpesh te webhook-u.", detail: "Nga 6 lidhje (18–23 nëntor), 4 dështuan me meta_100 kur aktivizohej webhook-u (subscribed_apps); llogaria duket e lidhur, por Agjenti nuk merr DM derisa pronari ta rilidhë si llogari profesionale me të gjitha lejet." },
 ];
 
 const statusScore: Record<CapabilityStatus, number> = { po: 1, pjes: 0.5, jo: 0 };
