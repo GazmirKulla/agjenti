@@ -224,7 +224,7 @@ export const businessCapabilities: CapabilityModule[] = [
   {
     name: "Bisedat",
     items: [
-      ["pjes", "Tituj semantikë për biseda të reja të Asistentit dhe provës; kërkon migrimin e titujve dhe modelin, ende pa provë live"],
+      ["po", "Tituj semantikë për biseda të reja të Asistentit dhe provës (provuar live nga pronari më 27 nëntor)"],
       ["po", "Formaton përgjigjet për pronarin me paragrafë, lista, theksim dhe lidhje"],
       ["po", "Lexon bisedat e fundit"],
       ["po", "Ndalo dhe rinis Agjentin në një bisedë"],
