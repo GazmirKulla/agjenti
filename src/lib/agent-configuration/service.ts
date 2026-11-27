@@ -181,7 +181,7 @@ export async function prepareConfiguration(businessId: string, requests: Configu
         if (typeof request.enabled !== "boolean") throw new ConfigurationError("Zgjidh nëse Agjenti merr rezervime.");
         const { data, error } = await createServiceSupabase().from("business_calendar_settings").select("agent_booking_enabled").eq("business_id", businessId).maybeSingle();
         if (error) throw new ConfigurationError("Kalendari nuk u lexua.", "unavailable");
-        if (!data) throw new ConfigurationError("Cakto fillimisht orarin te Kalendari.", "missing");
+        if (!data) throw new ConfigurationError("Cakto fillimisht orarin te Rezervimet → Orari.", "missing");
         changes.push({ type: "calendar.agent_booking", enabled: request.enabled });
         lines.push({ label: "Agjenti merr rezervime në kalendar", before: onOff(data.agent_booking_enabled), after: onOff(request.enabled) });
         break;
@@ -253,7 +253,7 @@ const errorMessages: Record<string, [string, ConfigurationError["code"]]> = {
   configuration_target_missing: ["Një element i propozimit nuk ekziston më në këtë biznes. Asgjë nuk u zbatua.", "missing"],
   configuration_version_missing: ["Ky version nuk ruhet më (mbahen vetëm tre). Asgjë nuk u ndryshua.", "missing"],
   configuration_version_current: ["Ky version është tashmë në përdorim.", "invalid"],
-  calendar_missing: ["Cakto fillimisht orarin te Kalendari. Asgjë nuk u zbatua.", "missing"],
+  calendar_missing: ["Cakto fillimisht orarin te Rezervimet → Orari. Asgjë nuk u zbatua.", "missing"],
   proposal_not_pending: ["Ky propozim nuk është më në pritje. Rifresko faqen.", "stale"],
   configuration_request_conflict: ["Kjo kërkesë u përdor për një ndryshim tjetër. Përgatite përsëri.", "invalid"],
   unauthorized: ["Nuk ke qasje për të ndryshuar këtë biznes.", "invalid"],

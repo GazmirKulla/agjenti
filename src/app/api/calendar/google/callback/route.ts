@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       return finish(`/b/${encodeURIComponent(slug)}`);
     const code = request.nextUrl.searchParams.get("code");
     if (request.nextUrl.searchParams.get("error") || !code)
-      return finish(`/b/${encodeURIComponent(slug)}/calendar?google=cancelled`);
+      return finish(`/b/${encodeURIComponent(slug)}/bookings?google=cancelled`);
     const tokens = await exchangeGoogleCode(code);
     const old = await googleConnection(access.business.id);
     const values = {
@@ -71,12 +71,12 @@ export async function GET(request: NextRequest) {
       .upsert(values, { onConflict: "business_id" })
       .throwOnError();
     await recordSystem("system.google_connect", "connected", { businessId });
-    return finish(`/b/${encodeURIComponent(slug)}/calendar?google=connected`);
+    return finish(`/b/${encodeURIComponent(slug)}/bookings?google=connected`);
   } catch (error) {
     if (businessId) await recordSystem("system.google_connect", "failed", { businessId, reason: stepFailure("system.google_connect", "connect", error) });
     return finish(
       slug
-        ? `/b/${encodeURIComponent(slug)}/calendar?google=error`
+        ? `/b/${encodeURIComponent(slug)}/bookings?google=error`
         : "/account",
     );
   }

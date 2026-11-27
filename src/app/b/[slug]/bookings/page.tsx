@@ -5,8 +5,8 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ date?: string; mode?: string }>;
+  searchParams: Promise<{ date?: string; mode?: string; tab?: string; google?: string; service?: string }>;
 }) {
-  const [{ slug }, { date, mode }] = await Promise.all([params, searchParams]);
-  return <CalendarPageContent slug={slug} date={date} mode={mode} view="bookings" />;
+  const [{ slug }, { date, mode, tab, google, service }] = await Promise.all([params, searchParams]);
+  return <CalendarPageContent slug={slug} date={date} mode={mode} tab={tab} google={google} service={service} />;
 }

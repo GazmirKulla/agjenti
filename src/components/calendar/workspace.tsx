@@ -377,6 +377,8 @@ function BookingDetails({ slug, data, booking, onSaved }: {
   );
 }
 
+export type BookingsTab = "bookings" | "settings";
+const bookingsTabs: [BookingsTab, string][] = [["bookings", "Takimet"], ["settings", "Orari dhe Google Calendar"]];
 type Dialog = { kind: "new"; date: string; time?: string } | { kind: "booking"; booking: CalendarBooking } | null;
 export function CalendarWorkspace({
   data,
@@ -384,7 +386,7 @@ export function CalendarWorkspace({
   slug,
   date,
   mode,
-  view,
+  tab: initialTab,
   googleConfigured,
   googleNotice,
   initialService,
@@ -395,7 +397,8 @@ export function CalendarWorkspace({
   slug: string;
   date: string;
   mode?: CalendarMode;
-  view: "calendar" | "bookings";
+  /** Which part of the page opens: the bookings, or the hours and Google Calendar. */
+  tab: BookingsTab;
   googleConfigured: boolean;
   googleNotice?: string;
   initialService?: string;
@@ -404,6 +407,14 @@ export function CalendarWorkspace({
   const [dialog, setDialog] = useState<Dialog>(initialService ? { kind: "new", date } : null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [message, setMessage] = useState("");
+  const [tab, setTab] = useState<BookingsTab>(initialTab);
+  const openTab = (next: BookingsTab) => {
+    setTab(next);
+    // The URL keeps the open tab, so a refresh or a shared link opens the same place.
+    const url = new URL(window.location.href);
+    if (next === "settings") url.searchParams.set("tab", "settings"); else url.searchParams.delete("tab");
+    window.history.replaceState(null, "", url);
+  };
   const bookable = data.services.some((s) => s.is_active && s.booking_enabled !== false);
   const refresh = () => {
     setRefreshKey(k => k + 1);
@@ -419,9 +430,9 @@ export function CalendarWorkspace({
       <div className="page-heading">
         <div>
           <p className="page-eyebrow">TAKIMET E BIZNESIT</p>
-          <h1>{view === "calendar" ? "Kalendari" : "Rezervimet"}</h1>
+          <h1>Rezervimet</h1>
           <p className="page-description">
-            {view === "calendar" ? "Kliko një orë të lirë për rezervim të ri; tërhiq një takim për ta zhvendosur." : "Rezervimet që presin vendim dhe të gjitha takimet sipas datës."}
+            Kërkesat që presin vendim dhe të gjitha takimet. Në kalendar kliko një orë të lirë për rezervim të ri ose tërhiq një takim për ta zhvendosur.
           </p>
         </div>
         <button className="btn btn-primary" disabled={!bookable} onClick={() => setDialog({ kind: "new", date })}>
@@ -449,6 +460,13 @@ export function CalendarWorkspace({
               <Link href={`/b/${slug}/services`}>Shërbimet</Link>.
             </p>
           )}
+          <div className="bookings-tabs" role="tablist" aria-label="Seksionet e rezervimeve">
+            {bookingsTabs.map(([id, text]) => (
+              <button key={id} type="button" role="tab" id={`bookings-tab-${id}`} aria-selected={tab === id} aria-controls={`bookings-panel-${id}`}
+                className={tab === id ? "is-active" : ""} onClick={() => openTab(id)}>{text}</button>
+            ))}
+          </div>
+          {tab === "bookings" && <div className="bookings-panel" role="tabpanel" id="bookings-panel-bookings" aria-labelledby="bookings-tab-bookings">
           {pending === null ? (
             <p className="calendar-notice" role="alert">Rezervimet në pritje nuk u ngarkuan. Rifresko faqen.</p>
           ) : !!pending.length && (
@@ -459,12 +477,13 @@ export function CalendarWorkspace({
             slug={slug}
             settings={data.settings}
             date={date}
-            mode={mode ?? (view === "bookings" ? "list" : "week")}
+            mode={mode ?? "list"}
             refreshKey={refreshKey}
             onOpen={booking => setDialog({ kind: "booking", booking })}
             onCreate={at => bookable && setDialog({ kind: "new", ...at })}
             onChanged={() => router.refresh()}
           />
+          </div>}
           {dialog?.kind === "new" && (
             <Modal title="Rezervim i ri" subtitle={data.settings.timezone} onClose={() => setDialog(null)}>
               <ActionForm action={saveBooking.bind(null, slug)} onSuccess={() => done("Rezervimi u shtua.")}>
@@ -477,8 +496,7 @@ export function CalendarWorkspace({
               <BookingDetails key={`${dialog.booking.id}-${dialog.booking.revision}`} slug={slug} data={data} booking={dialog.booking} onSaved={done} />
             </Modal>
           )}
-          <details className="panel section-pad calendar-settings">
-            <summary>Konfigurimi i kalendarit</summary>
+          {tab === "settings" && <div className="panel section-pad calendar-settings" role="tabpanel" id="bookings-panel-settings" aria-labelledby="bookings-tab-settings">
             <section>
               <h2>Shërbimet që rezervohen</h2>
               <p className="muted-copy">
@@ -602,7 +620,7 @@ export function CalendarWorkspace({
                 </p>
               )}
             </section>
-          </details>
+          </div>}
         </>
       )}
     </div>

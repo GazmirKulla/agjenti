@@ -73,8 +73,9 @@ it("keeps manual offers, knowledge, channels, behavior and operations in task gr
   expect(groups.map(group => group.id)).toEqual(["offer", "knowledge", "channels", "behavior", "operations"]);
   const paths = groups.flatMap(group => group.items.map(item => item.path));
   expect(new Set(paths).size).toBe(paths.length);
-  for (const path of ["products", "services", "catalogs", "knowledge", "integrations", "agents", "agents/test", "orders", "bookings", "calendar", "leads"])
+  for (const path of ["products", "services", "catalogs", "knowledge", "integrations", "agents", "agents/test", "orders", "bookings", "leads"])
     expect(paths).toContain(path);
+  expect(paths).not.toContain("calendar"); // A tab of Rezervimet; /calendar redirects there.
   expect(paths).not.toContain("workflows"); // Still reachable in Advanced, never removed.
   const limited = organizeWorkspace(allItems.filter(item => ["dashboard", "inbox", "services"].includes(item.id)));
   expect(businessWorkspaceGroups(limited).flatMap(group => group.items.map(item => item.path))).toEqual(["services"]);
@@ -101,7 +102,7 @@ it("keeps standalone business modules out of nested navigation and selects their
 });
 
 it("provides direct management links without mixing agent configuration into operations", () => {
-  for (const path of ["products", "services", "catalogs", "orders", "bookings", "calendar", "leads"])
+  for (const path of ["products", "services", "catalogs", "orders", "bookings", "leads"])
     expect(navigation.management.some(item => item.path === path)).toBe(true);
   for (const path of ["agents", "knowledge", "workflows", "sources", "instagram", "whatsapp"])
     expect(navigation.management.some(item => item.path === path)).toBe(false);

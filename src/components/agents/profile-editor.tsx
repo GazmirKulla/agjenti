@@ -98,7 +98,7 @@ export function ProfileEditor({ initial, updatedAt, requestId, timezone, suggest
 
     <section className="panel section-pad profile-group" id="profile-hours" aria-labelledby="profile-hours-title">
       <h2 id="profile-hours-title">Orari i hapjes</h2>
-      <p className="muted-copy">Kur është i hapur biznesi. Orari i rezervimeve është veçmas, te Kalendari. Një ditë “Pa caktuar” Agjenti e thotë si të panjohur, jo si mbyllur.{timezone ? ` Zona kohore: ${timezone}.` : ""}</p>
+      <p className="muted-copy">Kur është i hapur biznesi. Orari i rezervimeve është veçmas, te Rezervimet → Orari. Një ditë “Pa caktuar” Agjenti e thotë si të panjohur, jo si mbyllur.{timezone ? ` Zona kohore: ${timezone}.` : ""}</p>
       <div className="profile-hours">
         {weekOrder.map(day => {
           const state = dayState(day);

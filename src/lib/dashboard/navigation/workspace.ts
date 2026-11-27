@@ -21,7 +21,8 @@ const ownEntryIds = new Set(["activity", "reports"]);
 /** Presentation only: keep module permissions, URLs and page implementations intact. */
 export function organizeWorkspace(allItems: NavItem[]) {
   // Sources live inside Knowledge ("Nga ku mëson Agjenti"); the page stays reachable from there.
-  const items = allItems.filter(item => item.id !== "sources");
+  // The calendar is a tab of Rezervimet (its old URL redirects there), never an entry of its own.
+  const items = allItems.filter(item => item.id !== "sources" && item.id !== "calendar");
   const hasAgent = items.some(item => item.id === "agents");
   // Topics the owner thinks in, shown only when the business uses them: its own profile, what it offers, orders and
   // bookings, how the agent talks; then the test. Knowledge, sources, memory and history live inside these topics.
@@ -47,7 +48,7 @@ export function organizeWorkspace(allItems: NavItem[]) {
   const business = items.filter(item => !agentIds.has(item.id) && !settingsIds.has(item.id) && !integrationIds.has(item.id) && !ownEntryIds.has(item.id) && !["dashboard", "inbox", ...standaloneIds].includes(item.id));
   const groups = [
     { label: "Oferta", items: business.filter(item => ["products", "services", "catalogs"].includes(item.id)) },
-    { label: "Operacionet", items: business.filter(item => ["orders", "bookings", "calendar"].includes(item.id)) },
+    { label: "Operacionet", items: business.filter(item => ["orders", "bookings"].includes(item.id)) },
     { label: "Marrëdhëniet", items: business.filter(item => ["customers", "leads"].includes(item.id)) },
     { label: "Të tjera", items: business.filter(item => !["products", "services", "catalogs", "orders", "bookings", "calendar", "customers", "leads"].includes(item.id)) },
   ].filter(group => group.items.length);
@@ -89,7 +90,7 @@ export function businessWorkspaceGroups(navigation: ReturnType<typeof organizeWo
     { id: "knowledge", label: "Biznesi dhe oferta", description: "Profili publik i biznesit, oferta dhe informacioni që përdor Agjenti.", paths: ["agents/business", "knowledge", "sources"] },
     { id: "channels", label: "Kanalet", description: "Lidhjet me Instagram dhe WhatsApp.", paths: ["integrations"] },
     { id: "behavior", label: "Agjenti me klientët", description: "Porositë, rezervimet, si komunikon Agjenti dhe ku e provon.", paths: ["agents/orders", "agents/bookings", "agents", "agents/test"] },
-    { id: "operations", label: "Porosi dhe rezervime", description: "Puna e përditshme dhe kërkesat e klientëve.", paths: ["orders", "bookings", "calendar", "leads"] },
+    { id: "operations", label: "Porosi dhe rezervime", description: "Puna e përditshme dhe kërkesat e klientëve.", paths: ["orders", "bookings", "leads"] },
   ];
   const links = [...navigation.agent, ...navigation.search];
   return definitions.map(group => ({ ...group, items: group.paths.flatMap(path => {

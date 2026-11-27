@@ -104,12 +104,12 @@ export async function AgentCapabilities({ slug, businessId, sections }: { slug: 
       part("calendar", "Rezervimet nga Agjenti", <>
         {calendar.error ? <p className="muted-copy">Kalendari nuk u lexua. Rifresko faqen.</p>
           : <AgentBookingSwitch slug={slug} enabled={calendar.data?.agent_booking_enabled === true} />}
-        {!calendar.error && !calendar.data && <small className="muted-copy">Pa orar të ruajtur, Agjenti përdor orarin bazë: e hënë–e premte, 09:00–17:00. E ndryshon te Kalendari.</small>}
+        {!calendar.error && !calendar.data && <small className="muted-copy">Pa orar të ruajtur, Agjenti përdor orarin bazë: e hënë–e premte, 09:00–17:00. E ndryshon te Rezervimet → Orari.</small>}
       </>),
       part("knowledge", "Shërbimet",
         bookableServices.error ? <p className="muted-copy">Shërbimet nuk u lexuan. Rifresko faqen.</p> : <ServiceBookingSwitches slug={slug} services={bookableServices.data ?? []} />),
       <nav key="links" className="capability-links" aria-label="Cilësimet e rezervimeve">
-        <Link className="inline-link" href={`${base}/calendar`}><Icon name="calendar" size={15} />Orari te Kalendari →</Link>
+        <Link className="inline-link" href={`${base}/bookings?tab=settings`}><Icon name="calendar" size={15} />Orari i rezervimeve →</Link>
         <Link className="inline-link" href={`${base}/services`}><Icon name="knowledge" size={15} />Kohëzgjatja te Shërbimet →</Link>
       </nav>,
     ])}

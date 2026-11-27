@@ -63,14 +63,14 @@ export const moduleRegistry: Record<ModuleId, ModuleDefinition> = {
     label: "Rezervime",
     icon: "orders",
     mobilePriority: 4,
-    description: "Rezervimet dhe kërkesat",
+    description: "Rezervimet, kalendari dhe orari",
   },
   calendar: {
     id: "calendar",
     path: "calendar",
     label: "Kalendari",
     icon: "calendar",
-    description: "Orari dhe slotet",
+    description: "Orari dhe slotet (pjesë e Rezervimeve)",
   },
   catalogs: {
     id: "catalogs",
@@ -142,7 +142,8 @@ export const moduleRegistry: Record<ModuleId, ModuleDefinition> = {
   },
 };
 
-/** Sidebar order when multiple modules are enabled. */
+/** Sidebar order when multiple modules are enabled. The calendar is part of Rezervimet: its module stays
+ * for permissions and stored data, but it has no menu entry or switch of its own. */
 export const navigationOrder: ModuleId[] = [
   "dashboard",
   "inbox",
@@ -153,7 +154,6 @@ export const navigationOrder: ModuleId[] = [
   "catalogs",
   "orders",
   "bookings",
-  "calendar",
   "leads",
   "customers",
   "agents",
@@ -193,7 +193,6 @@ export const toggleableModules: ModuleId[] = [
   "services",
   "orders",
   "bookings",
-  "calendar",
   "catalogs",
   "customers",
   "knowledge",

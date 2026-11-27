@@ -11,7 +11,7 @@ const menuLabels: Partial<Record<ModuleId, string>> = {
 const groups: { title: string; description: string; ids: ModuleId[] }[] = [
   { title: "Kryesore", description: "Në krye të menusë.", ids: ["activity", "reports", "customers"] },
   { title: "Oferta", description: "Te Menaxhimi: çfarë shet ose ofron biznesi.", ids: ["products", "services", "catalogs"] },
-  { title: "Operacionet", description: "Te Menaxhimi: porositë dhe takimet.", ids: ["orders", "bookings", "calendar"] },
+  { title: "Operacionet", description: "Te Menaxhimi: porositë dhe takimet.", ids: ["orders", "bookings"] },
   { title: "Agjenti", description: "Te Agjenti i klientëve: çfarë di dhe si punon.", ids: ["knowledge", "workflows"] },
 ];
 

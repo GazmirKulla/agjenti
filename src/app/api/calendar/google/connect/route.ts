@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     return response;
   } catch {
     return NextResponse.redirect(
-      `${origin}/b/${encodeURIComponent(access.business.slug)}/calendar?google=unavailable`,
+      `${origin}/b/${encodeURIComponent(access.business.slug)}/bookings?google=unavailable`,
       303,
     );
   }

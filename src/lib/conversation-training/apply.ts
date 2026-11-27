@@ -151,7 +151,7 @@ async function applyTo(businessId: string, userId: string, row: ApplyRow) {
       // Calendar hours drive bookings: they are changed only in the calendar, by the owner.
       const toKnowledge = row.target_table === "knowledge_entries" ? row : { ...row, operation: "create", target_id: null };
       const done = await knowledge(businessId, userId, toKnowledge, String(row.proposed.title ?? row.title), text(row, "body", "body"));
-      return row.target_table === "business_calendar_settings" ? { ...done, message: `${done.message} Orari i kalendarit nuk u ndryshua: ndryshoje te Kalendari nëse duhet.` } : done;
+      return row.target_table === "business_calendar_settings" ? { ...done, message: `${done.message} Orari i kalendarit nuk u ndryshua: ndryshoje te Rezervimet → Orari nëse duhet.` } : done;
     }
     case "workflow": {
       const steps = Array.isArray(row.proposed.steps) ? (row.proposed.steps as string[]).map((s, i) => `${i + 1}. ${s}`).join("\n") : "";

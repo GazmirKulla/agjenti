@@ -6,7 +6,7 @@ export const moduleDetails: Partial<Record<ModuleId, string>> = {
   products: "Menaxhon produktet e biznesit, çmimet, përshkrimet dhe lidhjet e tyre me proceset e porosisë. Produktet përdoren nga katalogu dhe agjenti gjatë bisedave me klientët.",
   services: "Menaxhon shërbimet që ofron biznesi dhe të dhënat e tyre. Shërbimet që mbështesin rezervime mund të lidhen me rrjedhën e rezervimit.",
   orders: "Shfaq porositë e klientëve, detajet dhe statusin e tyre. Lidhet me produktet dhe procesin e konfirmimit të porosisë.",
-  bookings: "Menaxhon rezervimet për shërbimet e biznesit, oraret dhe statuset e tyre. Kërkon që moduli Shërbime të jetë aktiv.",
+  bookings: "Menaxhon rezervimet për shërbimet e biznesit: kërkesat që presin vendim, kalendarin (ditë, javë, muaj, listë), orarin e punës dhe Google Calendar. Kërkon që moduli Shërbime të jetë aktiv.",
   calendar: "Shfaq rezervimet sipas datës dhe orarit. Përdoret për të parë planifikimin e takimeve dhe lidhet me modulin Rezervime.",
   catalogs: "Menaxhon katalogë dhe dokumente të biznesit nga skedarë ose lidhje web. Përmbajtja analizohet dhe konfirmohet përpara se të aktivizohet për përdorim nga agjenti.",
   leads: "Mbledh klientët që pyetën për çmime, disponueshmëri ose kontakt dhe ende nuk kanë blerë. Lead-i shënohet i fituar vetë kur klienti porosit ose rezervon, dhe ti e ndjek statusin te faqja Leads.",

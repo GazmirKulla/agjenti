@@ -101,7 +101,7 @@ export async function loadHomeModules(
       detail: `${n(tomorrow)} nesër`,
       attention: n(unconfirmed) ? { text: `${n(unconfirmed)} pa konfirmuar`, href: `${base}/bookings`, tone: "warning" } : undefined,
       empty: used.has("bookings") ? undefined : { text: "Klientët rezervojnë në bisedë sipas shërbimeve dhe orarit tënd.",
-        actions: [{ label: "Cakto orarin", href: `${base}/calendar` }] } };
+        actions: [{ label: "Cakto orarin", href: `${base}/bookings?tab=settings` }] } };
   })());
   // Leads are the conversations whose customer showed buying interest (conversations.lead_status).
   if (on("leads")) cards.push((async () => {
@@ -144,17 +144,18 @@ export async function loadHomeModules(
         actions: [{ label: "Ngarko katalog", href: `${base}/catalogs` }] } };
   })());
 
-  if (on("calendar")) cards.push((async () => {
+  // The hours card belongs to Rezervimet: the calendar has no menu entry of its own.
+  if (on("bookings")) cards.push((async () => {
     const [{ data: calendar, error }, { data: google }] = await Promise.all([
       db.from("business_calendar_settings").select("hours,agent_booking_enabled").eq("business_id", id).maybeSingle(),
       db.from("google_calendar_connections").select("connected").eq("business_id", id).maybeSingle(),
     ]);
     if (error) throw error;
     const days = new Set((Array.isArray(calendar?.hours) ? calendar.hours : []).map((slot: { day?: unknown }) => slot?.day)).size;
-    return { id: "calendar", label: "Kalendari", icon: moduleRegistry.calendar.icon, href: `${base}/calendar`, value: days, caption: "ditë pune në javë",
+    return { id: "calendar", label: "Orari i rezervimeve", icon: moduleRegistry.calendar.icon, href: `${base}/bookings?tab=settings`, value: days, caption: "ditë pune në javë",
       detail: google?.connected ? "Google Calendar i lidhur" : undefined,
-      attention: calendar && !calendar.agent_booking_enabled ? { text: "Agjenti nuk rezervon vetë", href: `${base}/calendar`, tone: "warning" } : undefined,
-      empty: calendar ? undefined : { text: "Cakto ditët dhe orët kur pranon rezervime.", actions: [{ label: "Cakto orarin", href: `${base}/calendar` }] } };
+      attention: calendar && !calendar.agent_booking_enabled ? { text: "Agjenti nuk rezervon vetë", href: `${base}/agents/bookings`, tone: "warning" } : undefined,
+      empty: calendar ? undefined : { text: "Cakto ditët dhe orët kur pranon rezervime.", actions: [{ label: "Cakto orarin", href: `${base}/bookings?tab=settings` }] } };
   })());
   if (on("workflows")) cards.push((async () => {
     const [{ data: row, error }, linear] = await Promise.all([

@@ -8,18 +8,19 @@ export async function CalendarPageContent({
   slug,
   date: requestedDate,
   mode: requestedMode,
-  view,
+  tab,
   google,
   service,
 }: {
   slug: string;
   date?: string;
   mode?: string;
-  view: "calendar" | "bookings";
+  tab?: string;
   google?: string;
   service?: string;
 }) {
-  const { access } = await requireEnabledModule(slug, view);
+  // One page for bookings and their calendar; the calendar module is allowed exactly when bookings are.
+  const { access } = await requireEnabledModule(slug, "bookings");
   const [data, pending] = await Promise.all([
     loadCalendar(access.business.id),
     loadPendingBookings(access.business.id).catch(() => null),
@@ -43,7 +44,8 @@ export async function CalendarPageContent({
       slug={access.business.slug}
       date={date}
       mode={mode}
-      view={view}
+      // Returning from Google opens where the connection is managed.
+      tab={tab === "settings" || google ? "settings" : "bookings"}
       googleConfigured={googleConfigured()}
       initialService={
         service && data.services.some((s) => s.id === service && s.is_active && s.booking_enabled !== false)

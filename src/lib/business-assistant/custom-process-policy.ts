@@ -4,7 +4,7 @@ import { ownProcessPublished } from "@/lib/orchestration/automatic-process";
 const writes = new Set(["linear_draft", "linear_link", "linear_publish", "orderflow_create", "orderflow_update", "orderflow_assign",
   "workflow_draft", "workflow_restore", "workflow_publish", "workflow_enable", "workflow.configure"]);
 export const settingsInstead = "Agjenti i merr vetë porositë, rezervimet dhe kalimin te stafi nga produktet dhe cilësimet e tua, pa proces të vizatuar. "
-  + "Ndryshimin bëje te cilësimi përkatës (Komunikimi, Struktura, produkti, Porositë, Kalendari); i gjen te temat e Agjentit (Biznesi, Oferta, Porositë, Rezervimet, Komunikimi).";
+  + "Ndryshimin bëje te cilësimi përkatës (Komunikimi, Struktura, produkti, Porositë, orari i Rezervimeve); i gjen te temat e Agjentit (Biznesi, Oferta, Porositë, Rezervimet, Komunikimi).";
 
 /**
  * The Assistant no longer creates processes: a business without a published process of its own runs the

@@ -16,7 +16,9 @@ it("highlights what the onboarding answers point to and lists the rest", () => {
 
 it("differs by business: a salon gets services and bookings, not orders", () => {
   const { highlighted } = homeModuleSplit({ source: "generated", signals: salon, enabledModules: all }, new Set());
-  expect(highlighted).toEqual(expect.arrayContaining(["services", "bookings", "calendar"]));
+  expect(highlighted).toEqual(expect.arrayContaining(["services", "bookings"]));
+  // The calendar is part of Rezervimet, never a card or entry of its own.
+  expect(highlighted).not.toContain("calendar");
   expect(highlighted).not.toContain("orders");
 });
 

@@ -70,7 +70,7 @@ export function AgentBookingSwitch({ slug, enabled }: { slug: string; enabled: b
   });
   return <div className="grid gap-2">
     <label className="toggle-label">
-      <span>Agjenti rezervon vetë<small>Sipas orarit të Kalendarit, për shërbimet që pranojnë rezervime. Konfirmon me klientin para çdo rezervimi.</small></span>
+      <span>Agjenti rezervon vetë<small>Sipas orarit të rezervimeve, për shërbimet që pranojnë rezervime. Konfirmon me klientin para çdo rezervimi.</small></span>
       <input className="switch-input" type="checkbox" checked={enabled} disabled={pending} onChange={e => toggle(e.target.checked)} />
     </label>
     <Feedback result={result} />

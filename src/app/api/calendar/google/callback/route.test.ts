@@ -104,7 +104,7 @@ it("stores encrypted tokens only for the authorized business and expires the non
     }),
   );
   expect(response.headers.get("location")).toContain(
-    "/b/demo/calendar?google=connected",
+    "/b/demo/bookings?google=connected",
   );
   expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
 });

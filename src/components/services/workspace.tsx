@@ -187,7 +187,7 @@ function ServiceEditor({
               {!custom && (
                 <p className="muted-copy service-wide">
                   Përdor orarin e biznesit nga{" "}
-                  <Link href={`/b/${slug}/calendar`}>Kalendari</Link>.
+                  <Link href={`/b/${slug}/bookings?tab=settings`}>Rezervimet → Orari</Link>.
                 </p>
               )}
               {custom && (
@@ -334,7 +334,7 @@ export function ServicesWorkspace({
     const binding = flowBindings.find((item) => item.id === s.id);
     return [
       { label: "Ndrysho shërbimin", onSelect: () => setEditor(s) },
-      ...(s.booking_enabled && s.is_active ? [{ label: "Rezervo", href: `/b/${slug}/calendar?service=${s.id}` }] : []),
+      ...(s.booking_enabled && s.is_active ? [{ label: "Rezervo", href: `/b/${slug}/bookings?service=${s.id}` }] : []),
       { label: binding ? `Ndrysho procesin e posaçëm: ${binding.name}` : "Shto proces të posaçëm (opsional)", href: entityWorkflowHref(slug, "service", s.id, binding?.flowId) },
     ];
   }
