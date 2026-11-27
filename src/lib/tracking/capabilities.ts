@@ -97,7 +97,7 @@ const scheduledCapabilities: Record<string, CapabilitySpec> = Object.fromEntries
 /** Platform work behind the agents: background jobs of one business and integrations with other services. */
 export const systemCapabilities: Record<string, CapabilitySpec> = {
   "system.transport_wake": { agent: "system", module: "jobs", label: "Vazhdimi i dërgimeve pa klient të hapur", entry: null,
-    exits: { scheduled: "success", waiting: "neutral", failed: "failure" }, emittedBy: ["src/lib/conversations/continue.ts"] },
+    exits: { scheduled: "success", waiting: "neutral", expired: "neutral", failed: "failure" }, emittedBy: ["src/lib/conversations/continue.ts"] },
   "system.realtime": { agent: "system", module: "integrations", label: "Njoftimet realtime", entry: null,
     exits: { failed: "failure" }, emittedBy: ["supabase/migrations/20261123120000_realtime_invalidations.sql"] },
   "system.discovery": { agent: "system", module: "jobs", label: "Analiza e biznesit (Instagram, website)", entry: null,

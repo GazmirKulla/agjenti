@@ -6,6 +6,31 @@ import { runPanelChat, type PanelScope } from "@/lib/agents/panel-chat/execute";
 
 export type TransportWork = { kind: "inbound" } | { kind: "test" | "panel"; scope: PanelScope };
 export const MAX_TRANSPORT_HOPS = 100;
+/** A staff message not sent within this time is closed: it is never sent late and never blocks the next one. */
+export const STAFF_SEND_MAX_AGE_MS = 24 * 3600_000;
+
+/**
+ * Staff messages that waited too long. One still queued or prepared was never sent: it is closed as not sent.
+ * One left uncertain (the channel did not confirm it) is closed without sending it again, so it stops blocking
+ * the staff's later messages to the same customer. The thread keeps its own delivery status; staff rewrite if needed.
+ */
+export async function closeStaleStaffSends(now = Date.now()) {
+  const db = createServiceSupabase();
+  const cutoff = new Date(now - STAFF_SEND_MAX_AGE_MS).toISOString();
+  const [unsent, unconfirmed] = await Promise.all([
+    db.from("workflow_inbound_queue").update({ status: "failed", leased_until: null,
+      error: "Mesazhi nuk u dërgua brenda 24 orëve dhe u mbyll pa u dërguar. Rishkruaje nëse duhet." })
+      .eq("operation_kind", "staff").in("status", ["queued", "prepared"]).lt("created_at", cutoff).select("id,business_id"),
+    db.from("workflow_inbound_queue").update({ status: "failed", leased_until: null,
+      error: "Dërgimi nuk u konfirmua nga kanali dhe u mbyll pas 24 orësh pa u ridërguar. Kontrollo te klienti nëse e mori." })
+      .eq("operation_kind", "staff").eq("status", "uncertain").lt("created_at", cutoff).select("id,business_id"),
+  ]);
+  if (unsent.error || unconfirmed.error) throw new Error("stale_staff_close_failed");
+  await Promise.all([
+    ...(unsent.data ?? []).map(job => recordSystem("system.transport_wake", "expired", { businessId: job.business_id, reason: "staff_send:not_sent", ref: `job:${job.id}` })),
+    ...(unconfirmed.data ?? []).map(job => recordSystem("system.transport_wake", "expired", { businessId: job.business_id, reason: "staff_send:unconfirmed", ref: `job:${job.id}` })),
+  ]);
+}
 
 /** Resume persisted work after a batch or an expired lease, independently of a
  * browser GET. One handoff per completed batch; no recurring status polling.
@@ -15,6 +40,9 @@ export async function continueTransport(work: TransportWork = { kind: "inbound" 
   const started = Date.now();
   const businessId = work.kind === "inbound" ? undefined : work.scope.businessId;
   try {
+    // Closing old staff messages never holds up the queue: a failure is recorded and the work goes on.
+    if (work.kind === "inbound") await closeStaleStaffSends().catch(error =>
+      recordSystem("system.transport_wake", "failed", { reason: stepFailure("system.transport_wake", "close_stale", error) }));
     const processed = work.kind === "panel" ? await runPanelChat(work.scope)
       : await runWorkflowQueue(10, work.kind === "test" ? work.scope : undefined);
     let query = createServiceSupabase().from("workflow_inbound_queue").select("id,leased_until")
