@@ -33,7 +33,7 @@ export function validateTrainingInput(input: TrainingInput) {
   if (input.visualFlowId && (input.workflowId || input.stepKey)) throw new Error("Zgjidh vetëm një rrjedhë për mësimin.");
   if (input.kind === "workflow" && !input.workflowId && !input.visualFlowId) throw new Error("Zgjidh workflow-n ku do të përdoret udhëzimi.");
   // Tone and style for the whole business live in the agent's instructions, so one setting is managed in one place.
-  if (input.kind === "style" && input.id === undefined) throw new Error("Toni dhe stili për gjithë biznesin ruhen te Udhëzimet e Agjentit (Agjenti → Komunikimi), jo si mësim.");
+  if (input.kind === "style" && input.id === undefined) throw new Error("Toni dhe stili për gjithë biznesin ruhen te Udhëzimet e Agjentit (Agjenti → Si flet dhe kur thërret stafin), jo si mësim.");
   if (input.kind === "style" && (input.workflowId || input.stepKey || input.visualFlowId || input.visualNodeId)) throw new Error("Preferencat e stilit vlejnë për të gjithë biznesin.");
   if (input.stepKey != null && (typeof input.stepKey !== "string" || !input.stepKey.trim() || input.stepKey.length > 100 || !input.workflowId)) throw new Error("Zgjidh një hap të vlefshëm të workflow-t.");
   if (input.id !== undefined && (!isUuid(input.id) || !Number.isInteger(input.revision) || input.revision! < 1)) throw new Error("Versioni i mësimit nuk është i vlefshëm. Rifresko listën.");

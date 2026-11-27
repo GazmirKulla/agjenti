@@ -6,7 +6,7 @@ vi.mock("@/lib/supabase/service", () => ({ createServiceSupabase: () => ({ from:
 } }) }));
 import { prepareManagedAgent } from "./manage";
 it("prevents metadata operations from bypassing communication publication", async () => {
-  await expect(prepareManagedAgent("tenant", { id, instructions: "Unreviewed" })).rejects.toThrow("draft");
+  await expect(prepareManagedAgent("tenant", { id, instructions: "Unreviewed" })).rejects.toThrow("Si flet dhe kur thërret stafin");
 });
 it("preserves name/activation editing and creation with initial instructions", async () => {
   expect(await prepareManagedAgent("tenant", { id, name: "Renamed", is_active: false })).toMatchObject({ values: { name: "Renamed", instructions: "Published", is_active: false } });

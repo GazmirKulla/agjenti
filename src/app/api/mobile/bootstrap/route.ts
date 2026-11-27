@@ -13,7 +13,7 @@ import { loadReadiness, readinessSummary } from "@/lib/setup/readiness";
 /** The Agent's spaces, as on the web: knowledge (sources live inside it), behavior and actions, test and check, then advanced processes. */
 const agentSpaces: Record<string, { label: string; description: string }> = {
   knowledge: { label: "Oferta", description: "Çfarë ofron biznesi dhe informacioni që përdor Agjenti" },
-  agents: { label: "Komunikimi", description: "Si flet Agjenti me klientët" },
+  agents: { label: "Si flet dhe kur thërret stafin", description: "Si flet Agjenti me klientët dhe kur ia kalon bisedën stafit" },
   workflows: { label: "Proceset e avancuara", description: "Workflow-t e publikuara të biznesit" },
 };
 function mobileNavigation(slug: string, enabled: string[], t: (text: string) => string) {
@@ -24,8 +24,8 @@ function mobileNavigation(slug: string, enabled: string[], t: (text: string) => 
     const item = { id, label: t(space?.label ?? moduleRegistry[id].label), description: t(space?.description ?? moduleRegistry[id].description),
       path: `${base}${moduleRegistry[id].path ? `/${moduleRegistry[id].path}` : ""}`, ...(space ? { group: "agent" as const } : {}) };
     return id === "agents" ? [topic("agent-business", "Biznesi", "Kontaktet, adresa dhe orari që u jep Agjenti klientëve", "agents/business"),
-      ...(enabled.includes("orders") ? [topic("agent-orders", "Porositë", "Si merr Agjenti porosi dhe kur ia kalon stafit", "agents/orders")] : []),
-      ...(enabled.includes("bookings") || enabled.includes("services") ? [topic("agent-bookings", "Rezervimet", "Nëse Agjenti rezervon vetë dhe për cilat shërbime", "agents/bookings")] : []),
+      ...(enabled.includes("orders") ? [topic("agent-orders", "Kur klienti porosit", "Si e merr Agjenti porosinë dhe çfarë e pyet klientin", "agents/orders")] : []),
+      ...(enabled.includes("bookings") || enabled.includes("services") ? [topic("agent-bookings", "Kur klienti rezervon", "Nëse Agjenti rezervon vetë dhe për cilat shërbime", "agents/bookings")] : []),
       item, topic("agent-test", "Prova dhe kontrolli", "Provo një përgjigje dhe shiko çfarë informacioni u lexua", "agents/test")] : [item];
   });
   // The agent spaces keep their own order, whatever the module order is.

@@ -23,7 +23,7 @@ const titles: Record<AutomaticCapability, string> = {
 export type CapabilitySection = "orders" | "orderStatus" | "bookings" | "bookingChanges" | "handoff" | "voice" | "notes";
 /**
  * What the customer agent does, one card per capability: whether it is ready (or why not) and the business settings
- * that shape it, changed here. A topic shows only its own cards (Porositë, Rezervimet, Komunikimi); the settings
+ * that shape it, changed here. A topic shows only its own cards (Kur klienti porosit, Kur klienti rezervon, Si flet dhe kur thërret stafin); the settings
  * stay in their own editors and sources, so every topic that shows one changes the same data.
  */
 export async function AgentCapabilities({ slug, businessId, sections }: { slug: string; businessId: string; sections: CapabilitySection[] }) {

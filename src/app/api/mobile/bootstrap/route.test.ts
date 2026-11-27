@@ -65,7 +65,7 @@ it("sends the agent as its own group by topic: business, offer, communication, t
   const data = await (await GET(new Request("https://app.test/api/mobile/bootstrap"))).json();
   const navigation = data.businesses[0].navigation as { id: string; group?: string; path: string; label: string }[];
   expect(navigation.filter((item) => item.group === "agent").map((item) => [item.id, item.label])).toEqual([
-    ["agent-business", "Biznesi"], ["knowledge", "Oferta"], ["agent-bookings", "Rezervimet"], ["agents", "Komunikimi"], ["agent-test", "Prova dhe kontrolli"], ["workflows", "Proceset e avancuara"]]);
+    ["agent-business", "Biznesi"], ["knowledge", "Oferta"], ["agent-bookings", "Kur klienti rezervon"], ["agents", "Si flet dhe kur thërret stafin"], ["agent-test", "Prova dhe kontrolli"], ["workflows", "Proceset e avancuara"]]);
   expect(navigation.find((item) => item.id === "agent-test")?.path).toMatch(/\/agents\/test$/);
   expect(navigation.some((item) => item.id === "sources")).toBe(false);
   expect(navigation.find((item) => item.id === "products")?.group).toBeUndefined();

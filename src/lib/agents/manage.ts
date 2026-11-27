@@ -9,7 +9,7 @@ export async function prepareManagedAgent(businessId: string, input: Record<stri
   const before = input.id ? loaded.data?.find(agent => agent.id === input.id) : null;
   if (input.id && !before) throw Error("Agjenti nuk u gjet në këtë biznes.");
   if (before && input.instructions !== undefined && input.instructions !== before.instructions)
-    throw Error("Ndrysho udhëzimet te Komunikimi si draft dhe publikoji pasi t’i rishikosh.");
+    throw Error("Ndrysho udhëzimet te Agjenti → Si flet dhe kur thërret stafin; ruajtja zbatohet menjëherë dhe mund të rikthehet.");
   const values = { name: before?.name ?? "", instructions: before?.instructions ?? "", is_active: before?.is_active ?? false, ...input };
   if (typeof values.name !== "string" || !values.name.trim() || values.name.length > 120 || typeof values.instructions !== "string" || !values.instructions.trim() || values.instructions.length > 8000 || typeof values.is_active !== "boolean") throw Error("Plotëso emrin, udhëzimet dhe gjendjen e agjentit.");
   return { id: before?.id ?? randomUUID(), before: before ?? null,

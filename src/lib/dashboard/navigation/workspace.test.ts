@@ -27,13 +27,13 @@ it("groups workflow and its deep links under the agent while keeping the origina
 
 it("organizes the agent by the owner's topics, with inner pages kept in their topic", () => {
   expect(navigation.agent.map(item => [item.path, item.label])).toEqual([
-    ["agents/business", "Biznesi"], ["knowledge", "Oferta"], ["agents/orders", "Porositë"], ["agents/bookings", "Rezervimet"], ["agents", "Komunikimi"],
+    ["agents/business", "Biznesi"], ["knowledge", "Oferta"], ["agents/orders", "Kur klienti porosit"], ["agents/bookings", "Kur klienti rezervon"], ["agents", "Si flet dhe kur thërret stafin"],
     ["agents/test", "Prova dhe kontrolli"], ["workflows", moduleRegistry.workflows.label]]);
   // Only the topics the business uses.
   const servicesOnly = organizeWorkspace(allItems.filter(item => ["agents", "knowledge", "services"].includes(item.id)));
-  expect(servicesOnly.agent.map(item => item.label)).toEqual(["Biznesi", "Oferta", "Rezervimet", "Komunikimi", "Prova dhe kontrolli"]);
+  expect(servicesOnly.agent.map(item => item.label)).toEqual(["Biznesi", "Oferta", "Kur klienti rezervon", "Si flet dhe kur thërret stafin", "Prova dhe kontrolli"]);
   const neither = organizeWorkspace(allItems.filter(item => ["agents", "knowledge"].includes(item.id)));
-  expect(neither.agent.map(item => item.label)).toEqual(["Biznesi", "Oferta", "Komunikimi", "Prova dhe kontrolli"]);
+  expect(neither.agent.map(item => item.label)).toEqual(["Biznesi", "Oferta", "Si flet dhe kur thërret stafin", "Prova dhe kontrolli"]);
   expect(activeWorkspaceLink("/b/shop/agents/process", "/b/shop", neither.agent)).toBe("agents");
   expect(activeWorkspaceLink("/b/shop/agents/bookings", "/b/shop", navigation.agent)).toBe("agents/bookings");
   expect(activeWorkspaceLink("/b/shop/agents/training", "/b/shop", navigation.agent)).toBe("knowledge");

@@ -145,7 +145,7 @@ export default async function AgentsPage({
   return (
     <>
       <PageHeading
-        title="Komunikimi"
+        title="Si flet dhe kur thërret stafin"
         description={`Si flet dhe çfarë bën Agjenti me klientët e ${access.business.name} në Instagram dhe WhatsApp. Kontaktet dhe orari janë te Biznesi, oferta dhe faktet te Oferta.`}
       >
         <div className="agent-heading-actions">

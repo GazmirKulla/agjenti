@@ -46,7 +46,7 @@ export function TestKnowledgeUsed({ slug, configuration, knowledge, focus }: {
     {entries.length
       ? <p><span>Informacioni i përzgjedhur:</span> {entries.map((entry, index) => <Fragment key={entry.id}>{index ? " · " : ""}<Link href={knowledgeHref(slug, entry.id)}>{entry.title}</Link></Fragment>)}</p>
       : !focused && !failed && <p>Asnjë njohuri nuk u përzgjodh për këtë përgjigje.</p>}
-    <p className="test-knowledge-fix">Diçka nuk shkon? <Link href={`/b/${slug}/knowledge`}>Korrigjo te Oferta</Link>, te <Link href={`/b/${slug}/agents/business`}>Biznesi</Link> ose te <Link href={`/b/${slug}/agents`}>Komunikimi</Link>.</p>
+    <p className="test-knowledge-fix">Diçka nuk shkon? <Link href={`/b/${slug}/knowledge`}>Korrigjo te Oferta</Link>, te <Link href={`/b/${slug}/agents/business`}>Biznesi</Link> ose te <Link href={`/b/${slug}/agents`}>Si flet dhe kur thërret stafin</Link>.</p>
   </div>;
 }
 

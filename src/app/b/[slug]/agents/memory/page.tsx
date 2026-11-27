@@ -17,7 +17,7 @@ export default async function AgentMemoryPage({ params, searchParams }: {
   const fromLab = (await searchParams).from === "chat-lab" && await isPlatformAdmin(user.id);
   return <>
     <PageHeading title="Preferencat dhe shembujt" description="Shembuj përgjigjesh dhe mësime për procese të caktuara. Toni dhe stili për gjithë biznesin ndryshohen te Udhëzimet.">
-      <BackLink href={fromLab ? "/admin/chat-lab" : `/b/${slug}/agents`}>{fromLab ? "Chat Lab" : "Komunikimi"}</BackLink>
+      <BackLink href={fromLab ? "/admin/chat-lab" : `/b/${slug}/agents`}>{fromLab ? "Chat Lab" : "Si flet dhe kur thërret stafin"}</BackLink>
     </PageHeading>
     <TrainingMemory target={{ slug }} />
   </>;

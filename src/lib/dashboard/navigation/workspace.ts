@@ -5,7 +5,7 @@ export type WorkspaceLink = { id: string; path: string; label: string; icon: str
 const workspaceLabels: Record<string, string> = {
   products: "Produktet", services: "Shërbimet", catalogs: "Katalogët",
   orders: "Porositë", bookings: "Rezervimet", leads: "Leads",
-  agents: "Komunikimi", knowledge: "Oferta", sources: "Burimet", workflows: "Workflow Designer",
+  agents: "Si flet dhe kur thërret stafin", knowledge: "Oferta", sources: "Burimet", workflows: "Workflow Designer",
 };
 export function workspaceLabel(item: WorkspaceLink & { custom?: true }) { return item.custom ? item.label : workspaceLabels[item.id] ?? item.label; }
 export type WorkspaceSection = "home" | "conversations" | "agent" | "activity" | "reports" | "settings" | "integrations" | "business" | "products" | "services" | "orders" | "leads" | "customers";
@@ -31,10 +31,10 @@ export function organizeWorkspace(allItems: NavItem[]) {
   const agent: WorkspaceLink[] = [
     ...(hasAgent ? [{ id: "agent-business", path: "agents/business", label: "Biznesi", icon: "briefcase" }] : []),
     ...items.filter(item => item.id === "knowledge").map(item => ({ ...item, label: "Oferta", also: ["sources", ...(hasAgent ? ["agents/training"] : [])] })),
-    ...(hasAgent && sells ? [{ id: "agent-orders", path: "agents/orders", label: "Porositë", icon: "orders" }] : []),
-    ...(hasAgent && books ? [{ id: "agent-bookings", path: "agents/bookings", label: "Rezervimet", icon: "calendar" }] : []),
-    // "Çfarë bën Agjenti" (every capability on one page) stays for older links, inside Komunikimi.
-    ...items.filter(item => item.id === "agents").map(item => ({ ...item, label: "Komunikimi", also: ["agents/memory", "agents/process"] })),
+    ...(hasAgent && sells ? [{ id: "agent-orders", path: "agents/orders", label: "Kur klienti porosit", icon: "orders" }] : []),
+    ...(hasAgent && books ? [{ id: "agent-bookings", path: "agents/bookings", label: "Kur klienti rezervon", icon: "calendar" }] : []),
+    // "Çfarë bën Agjenti" (every capability on one page) stays for older links, inside this topic.
+    ...items.filter(item => item.id === "agents").map(item => ({ ...item, label: "Si flet dhe kur thërret stafin", also: ["agents/memory", "agents/process"] })),
     ...(hasAgent ? [{ id: "agent-test", path: "agents/test", label: "Prova dhe kontrolli", icon: "spark" }] : []),
     // The workflow editor stays under "Avancuar".
     ...items.filter(item => item.id === "workflows"),
