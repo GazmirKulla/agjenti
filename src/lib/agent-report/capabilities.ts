@@ -59,7 +59,7 @@ export const customerCapabilities: CapabilityModule[] = [
   {
     name: "Klientët",
     items: [
-      ["po", "Mban mend emrin, telefonin dhe adresën"],
+      ["pjes", "Mban mend emrin, telefonin dhe adresën: live më 27 nëntor profili i ruajtur i klientit ishte bosh dhe porosia e pyeti sërish për emrin; tani emri dhe kontakti i dhënë më parë në të njëjtën bisedë ripërdoren për porosinë ose rezervimin tjetër (pret provën live)"],
       ["po", "Njeh klientin që kthehet"],
       ["pjes", "Përditëson të dhënat kur klienti i ndryshon"],
     ],
@@ -161,7 +161,7 @@ export const businessCapabilities: CapabilityModule[] = [
       ["po", "Kërko rezervime"],
       ["po", "Konfirmo ose anulo kërkesat në pritje; klientit i shkon mesazh brenda 24 orëve"],
       ["po", "Njoftim te Kreu për çdo rezervim, anulim ose zhvendosje nga Agjenti"],
-      ["jo", "Lidhja me Google Calendar: e bën vetëm pronari te Kalendari, me qëllim"],
+      ["jo", "Lidhja me Google Calendar: e bën vetëm pronari te Rezervimet → Orari, me qëllim"],
     ],
   },
   {
@@ -248,8 +248,8 @@ export const businessCapabilities: CapabilityModule[] = [
   {
     name: "Kalendari",
     items: [
-      ["po", "Cilësimet e kalendarit"],
-      ["jo", "Lidhja me Google: vetëm pronari te Kalendari, me qëllim; sinkronizimi dhe oraret e zëna punojnë pasi lidhet"],
+      ["po", "Cilësimet e kalendarit (orari, ditët e mbyllura, konfirmimi), që në panel janë te Rezervimet → Orari"],
+      ["jo", "Lidhja me Google: vetëm pronari te Rezervimet → Orari, me qëllim; sinkronizimi dhe oraret e zëna punojnë pasi lidhet"],
     ],
   },
   {
