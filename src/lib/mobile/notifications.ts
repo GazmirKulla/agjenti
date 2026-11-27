@@ -39,9 +39,24 @@ async function expo(path: string, body: unknown) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Expo's reply shape differs per endpoint; read defensively below.
   return json as { data?: any };
 }
+/**
+ * Notifications too old to be news are dropped together before the queue is claimed (20 at a time, oldest
+ * first), so a backlog never delays a new one and never arrives at once on the phone.
+ */
+async function dropStaleDeliveries(db: ReturnType<typeof createServiceSupabase>) {
+  const cutoff = new Date(Date.now() - MAX_NOTIFICATION_AGE_MS).toISOString();
+  const { data: stale, error } = await db.from("mobile_notification_events").select("id,business_id").lt("created_at", cutoff)
+    .order("created_at", { ascending: false }).limit(500);
+  if (error || !stale?.length) return;
+  const { data: dropped } = await db.from("mobile_notification_deliveries").update({ status: "failed" })
+    .in("event_id", stale.map(e => e.id)).in("status", ["pending", "sending", "receipt"]).select("id,event_id");
+  const business = new Map(stale.map(e => [e.id, e.business_id as string]));
+  await Promise.all((dropped ?? []).map(d => recordSystem("system.mobile_push", "expired", { businessId: business.get(d.event_id) ?? null, ref: d.id })));
+}
 /** At-least-once delivery; notification IDs allow client deduplication. Never carries approval credentials. */
 export async function deliverMobileNotifications() {
   const db = createServiceSupabase();
+  await dropStaleDeliveries(db);
   const { data, error } = await db.rpc("claim_mobile_deliveries");
   if (error) throw Error("Notification queue unavailable");
   await Promise.all(

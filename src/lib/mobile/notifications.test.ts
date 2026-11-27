@@ -47,6 +47,10 @@ beforeEach(() => {
       select: () => chain,
       eq: () => chain,
       is: () => chain,
+      lt: () => chain,
+      in: () => chain,
+      order: () => chain,
+      limit: () => chain,
       single: async () => ({ data: rows[table] }),
       maybeSingle: async () => ({ data: rows[table] }),
       update: (value: unknown) => {
@@ -118,7 +122,8 @@ it("drops a notification older than six hours instead of sending it late", async
   mocks.from.mockImplementation((table: string) => {
     const chain = from(table);
     if (table !== "mobile_notification_events") return chain;
-    return { ...chain, select: () => ({ eq: () => ({ single: async () => ({ data: { id: "event", user_id: "owner", business_id: "business", conversation_id: "conversation", kind: "assistant",
+    return { ...chain, select: () => ({ lt: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }),
+      eq: () => ({ single: async () => ({ data: { id: "event", user_id: "owner", business_id: "business", conversation_id: "conversation", kind: "assistant",
       created_at: new Date(Date.now() - 7 * 3600_000).toISOString() } }) }) }) };
   });
   await deliverMobileNotifications();
@@ -138,4 +143,23 @@ it.each([
   expect(mocks.record).toHaveBeenCalledWith("system.mobile_push", "step_failed", expect.objectContaining({ reason }));
   expect(JSON.stringify(mocks.record.mock.calls)).not.toMatch(/secret|ExpoPushToken/);
   expect(mocks.updates).toContainEqual(expect.objectContaining({ status: "pending" }));
+});
+
+it("drops the whole stale backlog before claiming, so a new notification is not left behind it", async () => {
+  const from = mocks.from.getMockImplementation()!;
+  const dropped: unknown[] = [];
+  mocks.from.mockImplementation((table: string) => {
+    const chain = from(table) as Record<string, unknown>;
+    if (table === "mobile_notification_events") return { ...chain, select: (columns: string) => columns === "id,business_id"
+      ? { lt: () => ({ order: () => ({ limit: async () => ({ data: [{ id: "old", business_id: "business" }], error: null }) }) }) }
+      : (chain.select as () => unknown)() };
+    if (table === "mobile_notification_deliveries") return { ...chain, update: (value: unknown) => ({ in: (_c: string, ids: string[]) => ({ in: () => ({ select: async () => { dropped.push({ value, ids }); return { data: [{ id: "d-old", event_id: "old" }] }; },
+      eq: () => ({ then: (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve) }) }), eq: () => chain }), eq: () => chain }) };
+    return chain;
+  });
+  await deliverMobileNotifications();
+  expect(dropped).toEqual([{ value: { status: "failed" }, ids: ["old"] }]);
+  expect(mocks.record).toHaveBeenCalledWith("system.mobile_push", "expired", { businessId: "business", ref: "d-old" });
+  // The claimed (fresh) notification is still sent.
+  expect(mocks.fetch).toHaveBeenCalled();
 });
