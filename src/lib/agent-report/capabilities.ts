@@ -61,8 +61,8 @@ export const customerCapabilities: CapabilityModule[] = [
   {
     name: "Klientët",
     items: [
-      ["pjes", "Mban mend emrin, telefonin dhe adresën: live më 27 nëntor profili i ruajtur i klientit ishte bosh dhe porosia e pyeti sërish për emrin; tani emri dhe kontakti i dhënë më parë në të njëjtën bisedë ripërdoren për porosinë ose rezervimin tjetër (pret provën live)"],
-      ["po", "Njeh klientin që kthehet"],
+      ["pjes", "Mban mend emrin, telefonin dhe adresën: deri më 27 nëntor kujtesa e Agjentit nuk ruhej kurrë me procesin e ri (të gjitha profilet bosh), ndaj klienti pyetej sërish. Tani Agjenti lexon të njëjtin kontakt që tregon Inbox-i (klienti i ruajtur, porosia e fundit, kujtesa) dhe ripërdor atë që klienti dha në të njëjtën bisedë; verifikuar me të dhëna reale, pret provën live në kanal"],
+      ["pjes", "Njeh klientin që kthehet: nga klienti i ruajtur dhe porosia e fundit e tij (korrigjuar 27 nëntor, pret provën live)"],
       ["pjes", "Përditëson të dhënat kur klienti i ndryshon"],
     ],
   },

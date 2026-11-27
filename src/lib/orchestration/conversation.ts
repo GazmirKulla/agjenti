@@ -46,7 +46,7 @@ import { catalogPresentationFromReply, visibleCatalogPresentation } from "./cata
 import { loadBusinessProcess } from "@/lib/discovery/load-process";
 import { businessProcessContext } from "@/lib/discovery/business-process";
 import { agentProfileContext, readProfile, statedSections } from "@/lib/business-profile/model";
-import { readProcessProfile } from "@/lib/conversations/profile";
+import { readAgentContact } from "@/lib/conversations/profile";
 import { prospectTurnContext } from "@/lib/prospects/turn-context";
 import { replyProductPhotos } from "@/lib/conversations/reply-photos";
 import { loadAutomaticVersion } from "./automatic-process";
@@ -102,7 +102,6 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
   const hasBookings = [...versions.values()].some(v => v.graph.nodes.some(n => n.kind === "booking"));
   const hasBookingCalendar = hasBookings || hasManage;
   let state: Snapshot = existing ? structuredClone(existing) : { ...initialSnapshot(params.businessId, transport?.conversationId ?? randomUUID(), mode), revision: transport?.revision ?? 0 };
-  const identity = params.customerIdentity;
   const catalogPins = [
     ...(state.catalogPresentation?.entities.map(entity => ({ kind: state.catalogPresentation!.kind, id: entity.id })) ?? []),
     ...Object.values(state.instances).flatMap(instance => {
@@ -122,7 +121,8 @@ export async function processConversation(params: AgentTurnParams): Promise<Agen
     readBusinessGrounding(db, params.businessId, modules, catalogPins),
     hasBookingCalendar ? db.from("business_calendar_settings").select("timezone,agent_booking_enabled").eq("business_id", params.businessId).maybeSingle() : { data: null, error: null },
     loadBusinessProcess(params.businessId),
-    identity?.instagramParticipantId ? readProcessProfile(params.businessId, identity.instagramParticipantId, identity.channel ?? "instagram") : Promise.resolve(undefined),
+    // The same contact the Inbox shows (saved customer, latest order, agent memory), for this verified conversation only.
+    ownIdentity?.instagramParticipantId ? readAgentContact(params.businessId, ownIdentity) : Promise.resolve(undefined),
     // The public profile (contacts, address, opening hours) is read from its one source, every turn.
     db.from("businesses").select("name,timezone,public_profile").eq("id", params.businessId).maybeSingle(),
   ]);
