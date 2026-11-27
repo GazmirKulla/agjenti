@@ -127,6 +127,20 @@ const systemFields: Record<string, { label: string | null; missing?: string }> =
   confirmationMode: { label: null },
 };
 const customerFields: Record<string, string> = { name: "Emri", phone: "Telefoni", email: "Email", city: "Qyteti", address: "Adresa" };
+/** A change to a booking the customer already has (bookingManageFields): the request, the booking and the new time. */
+const bookingChangeFields: Record<string, { label: string | null; missing?: string; reschedule?: true }> = {
+  action: { label: "Kërkesa" },
+  serviceName: { label: "Shërbimi" },
+  startsAt: { label: "Rezervimi aktual" },
+  date: { label: "Data e re", reschedule: true },
+  time: { label: "Ora e re", reschedule: true },
+  bookingId: { label: null, missing: "Rezervimi" },
+  serviceId: { label: null },
+  status: { label: null },
+  bookingRevision: { label: null },
+  changeable: { label: null },
+};
+const bookingChangeActions: Record<string, string> = { status: "Pyet për rezervimin", cancel: "Anulim", reschedule: "Zhvendosje" };
 
 /** The owner-facing label of a field, null to hide it, and the label to list when it is missing. */
 /** The item photo and file fields of a product's catalog declaration (products.external_spec). */
@@ -143,7 +157,13 @@ export function pendingPhotoFields(spec: unknown): PendingPhotoField[] {
   });
 }
 
-export function fieldPresentation(field: Field): { label: string | null; missing: string | null } {
+export function fieldPresentation(field: Field): { label: string | null; missing: string | null; values?: Record<string, string>; onlyWhenMoving?: true } {
+  const change = /^bookingm_[0-9a-f]{16}_([A-Za-z]+)$/.exec(field.id);
+  if (change) {
+    const spec = bookingChangeFields[change[1]] ?? { label: null };
+    return { label: spec.label, missing: field.source === "server" ? null : spec.missing ?? spec.label,
+      ...(change[1] === "action" ? { values: bookingChangeActions } : {}), ...(spec.reschedule ? { onlyWhenMoving: true as const } : {}) };
+  }
   const customer = /^customer_([a-z]+)$/.exec(field.id);
   if (customer) {
     const label = customerFields[customer[1]] ?? field.label;
@@ -260,9 +280,12 @@ export async function loadConversationContext(db: SupabaseClient, businessId: st
       for (const field of definition?.fields ?? []) {
         const presentation = fieldPresentation(field);
         const fact = instance.facts[field.id];
-        const value = fact && presentation.label ? display(fact.value) : null;
+        // A new date and time belong only to moving a booking; a cancellation or a question never shows them.
+        const moving = Object.entries(instance.facts).some(([id, f]) => /^bookingm_[0-9a-f]{16}_action$/.test(id) && f.value === "reschedule");
+        const shown = !presentation.onlyWhenMoving || moving;
+        const value = fact && presentation.label && shown ? presentation.values?.[String(fact.value)] ?? display(fact.value) : null;
         if (value && presentation.label) fields.push({ label: presentation.label, value });
-        else if (!fact && field.required && presentation.missing && !instance.skippedFields?.[field.id] && !missing.includes(presentation.missing)
+        else if (!fact && field.required && presentation.missing && shown && !instance.skippedFields?.[field.id] && !missing.includes(presentation.missing)
           // The runtime fills customer fields from the person's saved profile.
           && !memory[field.id.replace(/^customer_/, "") as keyof typeof memory])
           missing.push(presentation.missing);

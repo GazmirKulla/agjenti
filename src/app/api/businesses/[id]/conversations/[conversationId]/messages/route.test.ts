@@ -3,7 +3,7 @@ const m = vi.hoisted(() => ({ access: vi.fn(), rpc: vi.fn(), run: vi.fn(), after
 vi.mock("@/lib/conversations/transport-access", async original => ({ ...await original<typeof import("@/lib/conversations/transport-access")>(), transportAccess: m.access }));
 vi.mock("@/lib/conversations/workflow-queue", () => ({ runWorkflowQueue: m.run }));
 vi.mock("next/server", async original => ({ ...await original<typeof import("next/server")>(), after: m.after }));
-import { POST } from "./route";
+import { GET, POST } from "./route";
 const business = "10000000-0000-4000-8000-000000000001", conversation = "20000000-0000-4000-8000-000000000001", requestId = "30000000-0000-4000-8000-000000000001";
 const call = (body: unknown = { requestId, body: "Përshëndetje nga stafi" }) => POST(new Request("https://example.test/messages", {method:"POST",body:JSON.stringify(body)}), {params:Promise.resolve({id:business,conversationId:conversation})});
 beforeEach(() => {
@@ -64,4 +64,23 @@ it("sends a photo by the URL the server resolves and fingerprints it by its stab
  resolved.mockResolvedValue(null);
  expect((await call({requestId,body:"",media:{kind:"product",productId:"x"}})).status).toBe(400);
  resolved.mockRestore();
+});
+
+it("marks a send whose message is already stored, so the thread shows it at its own time and not as pending", async () => {
+ const stored = "30000000-0000-4000-8000-000000000009";
+ const reads: Record<string, unknown> = {
+  conversations: { data: { id: conversation }, error: null },
+  workflow_inbound_queue: { data: [{ client_request_id: stored, status: "failed", error: "Token i Instagramit është i pavlefshëm.", reply: "test", created_at: "2026-11-20T11:41:43Z", attempts: 1 },
+   { client_request_id: requestId, status: "prepared", error: null, reply: "në radhë", created_at: "2026-11-27T10:00:00Z", attempts: 0 }], error: null },
+  messages: { data: [{ transport_request_id: stored }], error: null },
+ };
+ const scoped: string[] = [];
+ const from = (table: string) => { const q: Record<string, unknown> = {}; for (const k of ["select", "order", "limit", "in"]) q[k] = () => q;
+  q.eq = (column: string, value: string) => { scoped.push(`${table}.${column}=${value}`); return q; };
+  q.maybeSingle = () => Promise.resolve(reads[table]); q.then = (resolve: (v: unknown) => unknown) => Promise.resolve(reads[table]).then(resolve); return q; };
+ m.access.mockResolvedValue({ userId: "operator", db: { from } });
+ const response = await GET(new Request("https://example.test/messages"), { params: Promise.resolve({ id: business, conversationId: conversation }) });
+ const { jobs } = await response.json();
+ expect(jobs.map((j: { requestId: string; stored: boolean }) => [j.requestId, j.stored])).toEqual([[requestId, false], [stored, true]]);
+ expect(scoped).toContain(`messages.business_id=${business}`);
 });

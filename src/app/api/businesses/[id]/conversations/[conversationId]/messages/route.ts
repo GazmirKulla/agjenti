@@ -53,7 +53,15 @@ export async function GET(request: Request, context: Context) {
   if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { data, error } = jobs;
   if (error) return NextResponse.json({ error: "Statusi nuk u ngarkua." }, { status: 503 });
+  // A send whose message is already in the thread shows there, at its own time (with its error if it failed);
+  // only the ones not stored yet are shown as in progress under the latest message.
+  const requestIds = (data ?? []).flatMap(j => typeof j.client_request_id === "string" ? [j.client_request_id] : []);
+  const storedRead = requestIds.length ? await access.db.from("messages").select("transport_request_id")
+    .eq("business_id", businessId).eq("conversation_id", conversationId).in("transport_request_id", requestIds) : { data: [], error: null };
+  if (storedRead.error) return NextResponse.json({ error: "Statusi nuk u ngarkua." }, { status: 503 });
+  const stored = new Set((storedRead.data ?? []).map(m => m.transport_request_id));
   return NextResponse.json({ jobs: (data ?? []).reverse().map(j => ({ requestId: j.client_request_id, status: j.status, error: j.error, body: j.reply, createdAt: j.created_at, attempts: j.attempts,
+    stored: stored.has(j.client_request_id),
     canRetry: j.operator_user_id === access.userId && j.status === "uncertain" && j.attempts < 3 && j.message_transport_parts?.length === 1 && j.message_transport_parts[0].part_index === 0 && j.message_transport_parts[0].status === "failed" && !j.message_transport_parts[0].external_message_id,
   })) }, { headers: { "Cache-Control": "no-store" } });
 }

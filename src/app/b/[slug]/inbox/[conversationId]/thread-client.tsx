@@ -134,7 +134,8 @@ export function ThreadClient(props: {
   const [pending, setPending] = useState(false);
   const outbox = useReplyOutbox(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/messages`, `agjenti:reply:${props.userId}:${props.businessId}:${props.conversationId}`, () => router.refresh());
   // Sends not yet stored show their own progress; the receipt waits until they are.
-  const pendingSends = outbox.operations.filter(o => !props.messages.some(m => m.transport_request_id === o.requestId));
+  // A stored send is part of the thread (at its own time, maybe on an older page), never pending at the bottom.
+  const pendingSends = outbox.operations.filter(o => !o.stored && !props.messages.some(m => m.transport_request_id === o.requestId));
   const receipt = pendingSends.length ? null : threadReceipt(messages);
   const reactions = useMessageReactions(`/api/businesses/${props.businessId}/conversations/${props.conversationId}/reactions`, `agjenti:reaction:${props.userId}:${props.businessId}:${props.conversationId}`);
   async function request(path: string, body?: object) {

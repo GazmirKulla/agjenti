@@ -2,7 +2,9 @@
 import { subscribeChanges } from "@/lib/realtime/browser";
 import { invalidationTask } from "@/lib/realtime/invalidation";
 import { useEffect, useRef, useState } from "react";
-export type ReplyOperation = { requestId: string; body: string; status: string; error?: string; accepted?: boolean; canRetry?: boolean; attempts?: number };
+export type ReplyOperation = { requestId: string; body: string; status: string; error?: string; accepted?: boolean; canRetry?: boolean; attempts?: number;
+  /** The server already stored this send as a message in the thread. */
+  stored?: boolean };
 /** Transport UI only: persisted IDs are reconciled with the authoritative outbox. */
 export function useReplyOutbox(url: string, storageKey: string, onRefresh: () => void) {
   const [operations, setOperations] = useState<ReplyOperation[]>([]);
